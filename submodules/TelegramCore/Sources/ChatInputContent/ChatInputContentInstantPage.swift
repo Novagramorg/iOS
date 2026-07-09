@@ -86,9 +86,9 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                     media[mediaId] = item.media
                     switch item.kind {
                     case .image:
-                        innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil))
+                        innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil, spoiler: item.isSpoiler))
                     case .video:
-                        innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false))
+                        innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false, spoiler: item.isSpoiler))
                     default:
                         // audio / location are never grouped into a collage (single-item only); skip defensively.
                         continue
@@ -110,13 +110,13 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 media[mediaId] = item.media
                 switch item.kind {
                 case .image:
-                    result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
+                    result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil, spoiler: item.isSpoiler))
                 case .audio:
                     // music & voice both serialize as `.audio`; the file's `.Audio(isVoice:)` attribute (carried on
                     // the stored Media) drives the music-vs-voice render. No size/alignment is representable.
                     result.append(.audio(id: mediaId, caption: caption))
                 default:
-                    result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+                    result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false, spoiler: item.isSpoiler))
                 }
             case .location:
                 // A location is a `TelegramMediaMap` (id-less): the InstantPage `.map` block carries its coordinates
@@ -289,21 +289,24 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             result.append(.paragraph(ChatInputParagraph(style: .body, runs: [
                 ChatInputRun(text: latex, attributes: attributes)
             ])))
-        case let .image(id, caption, _, _):
+        case let .image(id, caption, _, _, spoiler):
             // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
             // so this is defensive against a malformed page) drops the block. The InstantPage image block carries no
             // size, so `naturalSize` is recovered from the `Media` itself (`chatInputNaturalSize(fromMedia:)`) — the
             // dimensions the editor also derives at insertion, so the aspect survives the round-trip. `displayWidth`
             // (a user resize) and `alignment` are genuinely not representable, so they canonicalize to `nil` / `.center`
-            // (the editor's `ChatInputMedia` default; a documented limitation, pinned by the media tests).
+            // (the editor's `ChatInputMedia` default; a documented limitation, pinned by the media tests). `spoiler`
+            // threads through onto the item's `isSpoiler`.
             if let media = media[id] {
-                result.append(.media(ChatInputMedia(media: media, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+                let item = ChatInputMediaItem(media: media, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: media), isSpoiler: spoiler)
+                result.append(.media(ChatInputMedia(items: [item], displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
-        case let .video(id, caption, _, _):
+        case let .video(id, caption, _, _, spoiler):
             // Same as `.image` (see above): `naturalSize` recovered from the file's `.Video`/`.ImageSize` dimensions,
-            // `displayWidth`/`alignment` canonicalized to the defaults.
+            // `displayWidth`/`alignment` canonicalized to the defaults, `spoiler` threads through onto `isSpoiler`.
             if let media = media[id] {
-                result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+                let item = ChatInputMediaItem(media: media, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: media), isSpoiler: spoiler)
+                result.append(.media(ChatInputMedia(items: [item], displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .collage(innerBlocks, caption):
             // Rebuild a multi-item container. Each inner .image/.video resolves its Media from the page dict;
@@ -312,13 +315,13 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             var items: [ChatInputMediaItem] = []
             for inner in innerBlocks {
                 switch inner {
-                case let .image(id, _, _, _):
+                case let .image(id, _, _, _, spoiler):
                     if let m = media[id] {
-                        items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m)))
+                        items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
                     }
-                case let .video(id, _, _, _):
+                case let .video(id, _, _, _, spoiler):
                     if let m = media[id] {
-                        items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m)))
+                        items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
                     }
                 default:
                     break   // collage only ever carries image/video from the forward

@@ -519,5 +519,25 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertTrue(decoded.items[0].media.isEqual(to: img))
         XCTAssertEqual(decoded.items[0].kind, .image)
         XCTAssertEqual(decoded.naturalSize, size)
+        XCTAssertFalse(decoded.items[0].isSpoiler) // legacy payload has no isSpoiler key -> back-compat false
+    }
+
+    // MARK: - ChatInputMediaItem.isSpoiler
+
+    func test_chatInputMediaItem_spoiler_roundTripsViaAdaptedPostbox() throws {
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 42), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        var item = ChatInputMediaItem(media: image, kind: .image, naturalSize: ChatInputSize(width: 4, height: 3))
+        item.isSpoiler = true
+        let data = try AdaptedPostboxEncoder().encode(item)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputMediaItem.self, from: data)
+        XCTAssertTrue(decoded.isSpoiler)
+        XCTAssertEqual(decoded, item)
+    }
+
+    func test_chatInputMediaItem_defaultsSpoilerFalse() throws {
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 7), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let item = ChatInputMediaItem(media: image, kind: .image, naturalSize: ChatInputSize(width: 1, height: 1))
+        let data = try AdaptedPostboxEncoder().encode(item)
+        XCTAssertFalse(try AdaptedPostboxDecoder().decode(ChatInputMediaItem.self, from: data).isSpoiler)
     }
 }

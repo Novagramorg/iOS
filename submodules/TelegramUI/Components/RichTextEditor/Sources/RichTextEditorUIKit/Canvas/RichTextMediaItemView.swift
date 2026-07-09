@@ -8,10 +8,14 @@ public struct MediaProviderItem {
     public let mediaID: String
     public let kind: MediaKind
     public let naturalSize: CGSize
-    public init(mediaID: String, kind: MediaKind, naturalSize: CGSize) {
+    /// Telegram-style spoiler flag for this medium — drives the non-revealable dust cover the host draws
+    /// over the cell in the editor authoring preview. No default: every construction site must thread it.
+    public let isSpoiler: Bool
+    public init(mediaID: String, kind: MediaKind, naturalSize: CGSize, isSpoiler: Bool) {
         self.mediaID = mediaID
         self.kind = kind
         self.naturalSize = naturalSize
+        self.isSpoiler = isSpoiler
     }
 }
 

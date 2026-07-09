@@ -750,7 +750,8 @@ private func parseImage(_ input: [String: Any], _ media: inout [EngineMedia.Id: 
         id: id,
         caption: caption,
         url: nil,
-        webpageId: nil
+        webpageId: nil,
+        spoiler: false
     )
 }
 
@@ -820,8 +821,8 @@ private func parseFigure(_ input: [String: Any], _ media: inout [EngineMedia.Id:
     guard var block else {
         return nil
     }
-    if let caption, case let .image(id, _, url, webpageId) = block {
-        block = .image(id: id, caption: InstantPageCaption(text: caption, credit: .empty), url: url, webpageId: webpageId)
+    if let caption, case let .image(id, _, url, webpageId, spoiler) = block {
+        block = .image(id: id, caption: InstantPageCaption(text: caption, credit: .empty), url: url, webpageId: webpageId, spoiler: spoiler)
     }
     return block
 }

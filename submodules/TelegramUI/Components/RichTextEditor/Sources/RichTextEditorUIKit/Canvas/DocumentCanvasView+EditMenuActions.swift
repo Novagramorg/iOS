@@ -17,7 +17,7 @@ extension DocumentCanvasView {
     func editMenuInteraction(_ interaction: UIEditMenuInteraction,
                              menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
-        if imageSelection != nil { return imageSelectionMenu() }   // image atom: Delete only (Cut/Copy → Phase 5d)
+        if imageSelection != nil { return nil }   // media atom: no edit menu — Spoiler/Delete live in the host's "•••" media menu; delete is also Backspace on the selected atom
         let defaults = suggestedActions + customEditMenuElements()
         if selFrom < selTo, let provider = hostContextMenuItemsProvider {
             return UIMenu(children: provider(defaults))

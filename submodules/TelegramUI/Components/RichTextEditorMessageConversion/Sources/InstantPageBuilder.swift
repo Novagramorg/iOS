@@ -50,9 +50,9 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                     pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
                     switch item.kind {
                     case .image:
-                        innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil))
+                        innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil, spoiler: item.isSpoiler))
                     case .video:
-                        innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false))
+                        innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false, spoiler: item.isSpoiler))
                     case .audio, .location:
                         // Audio/location are documented as permanently single-item; never grouped into a collage.
                         continue
@@ -65,14 +65,17 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                     // Media.id is optional on the protocol; real TelegramMedia* image/video/audio always return non-nil.
                     if let mediaId = resolved.id {
                         pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
+                        // The single-item convenience accessors (`mediaBlock.mediaID`/`.kind`) resolve to `items.first`;
+                        // read the spoiler flag from the same source item (mirrors ChatInputContentInstantPage's single path).
+                        let spoiler = mediaBlock.items.first?.isSpoiler ?? false
                         switch mediaBlock.kind {
                         case .image:
-                            pageBlocks.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
+                            pageBlocks.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil, spoiler: spoiler))
                         case .audio:
                             // music & voice both → `.audio`; the file's `.Audio(isVoice:)` attribute drives the render.
                             pageBlocks.append(.audio(id: mediaId, caption: caption))
                         default:
-                            pageBlocks.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+                            pageBlocks.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false, spoiler: spoiler))
                         }
                     }
                 case .location:

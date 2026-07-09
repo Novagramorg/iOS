@@ -521,6 +521,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         canvas.insertDocument(document)
     }
 
+    /// Paste the richest representation on the system pasteboard at the caret (private fragment UTI → RTF →
+    /// plain), via the editor's own reader + fragment splice — mirrors the built-in Paste command.
+    public func pasteFromPasteboard() { canvas.paste(nil) }
+
     /// Registers the closure that turns a container's items (in order) into a `RichTextMediaItemView`. Called
     /// on first realization and on every items-change; the editor owns/positions/resizes/culls it. `existing`
     /// is the currently-hosted view on an items-change (nil on first realization) — the host may update it in

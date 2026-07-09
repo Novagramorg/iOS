@@ -89,15 +89,15 @@ func applyMediaResourceChanges(from: InstantPageBlock, fromMedia: [MediaId: Medi
             return
         }
         applyMediaResourceChanges(from: lhsBlocks, fromMedia: fromMedia, to: rhsBlocks, toMedia: toMedia, postbox: postbox, force: force, skipPreviews: skipPreviews)
-    case let .image(lhsId, _, _, _):
-        guard case let .image(rhsId, _, _, _) = to else {
+    case let .image(lhsId, _, _, _, _):
+        guard case let .image(rhsId, _, _, _, _) = to else {
             return
         }
         if let lhsMedia = fromMedia[lhsId], let rhsMedia = toMedia[rhsId] {
             applyMediaResourceChanges(from: lhsMedia, to: rhsMedia, postbox: postbox, force: force, skipPreviews: skipPreviews)
         }
-    case let .video(lhsId, _, _, _):
-        guard case let .video(rhsId, _, _, _) = to else {
+    case let .video(lhsId, _, _, _, _):
+        guard case let .video(rhsId, _, _, _, _) = to else {
             return
         }
         if let lhsMedia = fromMedia[lhsId], let rhsMedia = toMedia[rhsId] {

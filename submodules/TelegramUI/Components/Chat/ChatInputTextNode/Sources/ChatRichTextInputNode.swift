@@ -69,11 +69,15 @@ public struct MediaControlContext {
     public let sourceView: UIView?
     public let sourceRect: CGRect
     public let delete: () -> Void
+    public let isSpoiler: Bool
+    public let toggleSpoiler: () -> Void
     public let replace: ((String, CGSize, MediaKind) -> Void)?
     public let addMore: ((String, CGSize, MediaKind) -> Void)?
 
     public init(media: EngineMedia, control: RichTextMediaControlKind, sourceView: UIView?, sourceRect: CGRect,
                 delete: @escaping () -> Void,
+                isSpoiler: Bool,
+                toggleSpoiler: @escaping () -> Void,
                 replace: ((String, CGSize, MediaKind) -> Void)?,
                 addMore: ((String, CGSize, MediaKind) -> Void)?) {
         self.media = media
@@ -81,6 +85,8 @@ public struct MediaControlContext {
         self.sourceView = sourceView
         self.sourceRect = sourceRect
         self.delete = delete
+        self.isSpoiler = isSpoiler
+        self.toggleSpoiler = toggleSpoiler
         self.replace = replace
         self.addMore = addMore
     }
@@ -100,7 +106,7 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// native backend forwards it to the editor's media-view provider, resolving its private `mediaByID` →
     /// this factory; the legacy `UITextView` backend stores it but never uses it (no media). `naturalSize` is
     /// the medium's natural size, for aspect-correct display. Mirrors `emojiViewProvider`'s host-owned seam.
-    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? { get set }
+    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? { get set }
 
     /// Host-provided formula renderer. The native backend forwards it to `RichTextEditorView`; the legacy
     /// backend stores it but never uses it, matching the media seam.
@@ -329,6 +335,11 @@ public protocol ChatRichTextInputNode: AnyObject {
     var canPasteMedia: (() -> Bool)? { get set }
     var onPasteMedia: (() -> Bool)? { get set }
 
+    /// Paste the richest representation currently on the system pasteboard at the caret using the editor's own
+    /// reader + fragment splice (private fragment UTI → RTF → plain). Native backend only; the legacy backend is
+    /// a no-op (the host routes its paste through the `NSAttributedString` path instead).
+    func performRichPaste()
+
     /// Fired on a genuine user TEXT edit (typing/delete/paste/IME) so the host can report the "typing…" chat
     /// activity. Set by the PANEL, wired to its `updateActivity`. It must NOT fire on a caret/selection move or
     /// on a programmatic content set (draft restore / send-clear / state echo) — otherwise the chat partner
@@ -522,7 +533,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
     // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
-    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
+    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
     // Stored-but-unused: the legacy backend has no formula atoms to render. The native backend wires this into
     // `RichTextEditorView`.
@@ -1004,6 +1015,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     public var onPasteMedia: (() -> Bool)?
 
     func performFormatAction(_ action: ChatRichTextFormatAction) {}
+    func performRichPaste() {}
     func currentRichTextLinkURL() -> String? { return nil }
     func selectedRichText() -> String { return "" }
     func applyRichTextLink(_ url: String?) {}

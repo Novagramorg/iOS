@@ -63,7 +63,8 @@ public func chatInputContent(
                 return ChatInputMediaItem(
                     media: resolved,
                     kind: chatInputMediaKind(fromKind: item.kind),
-                    naturalSize: ChatInputSize(width: item.naturalSize.width, height: item.naturalSize.height))
+                    naturalSize: ChatInputSize(width: item.naturalSize.width, height: item.naturalSize.height),
+                    isSpoiler: item.isSpoiler)
             }
             guard !resolvedItems.isEmpty else { continue }
             blocks.append(.media(ChatInputMedia(
@@ -334,7 +335,8 @@ private func documentBlocks(
                 MediaItem(
                     mediaID: registerMedia(item.media),
                     kind: mediaKind(fromChatInputKind: item.kind),
-                    naturalSize: Size2D(width: item.naturalSize.width, height: item.naturalSize.height))
+                    naturalSize: Size2D(width: item.naturalSize.width, height: item.naturalSize.height),
+                    isSpoiler: item.isSpoiler)
             },
             displayWidth: media.displayWidth,
             alignment: mediaAlignment(fromChatInputAlignment: media.alignment),

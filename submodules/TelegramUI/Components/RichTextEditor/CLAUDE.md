@@ -547,6 +547,19 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   per block), so `nodeSize`/`textStart`/caret/select-all/covered-delete below are unaffected —
   multiplicity lives only in `items` and the mosaic render (`RichTextEditorMediaView`'s `CLAUDE.md`;
   send/edit round-trip in `docs/richtext-composer.md` §4 and `docs/instantpage-richtext.md`).
+- **`MediaItem.isSpoiler` — per-item media spoiler** (added 2026-07-08): optional-Codable `Bool` (absent ⇒
+  `false`, back-compat). Toggled by `DocumentCanvasView.toggleMediaSpoiler(blockID:itemIndex:)` (in-place
+  `MediaBlockBox` rebuild, ONE undo step — same mechanism as `deleteMediaItem`); `itemIndex` in range flips
+  that one cell, nil/out-of-range flips the whole block to `!first.isSpoiler`. Surfaced via the façade
+  `RichTextEditorView.toggleMediaSpoiler(itemIndex:)` → `toggleSelectedMediaSpoiler` (reads `imageSelection`).
+  **Authoring:** the single-media tap-select edit menu (`imageSelectionMenu` gains a "Spoiler" `UIAction`)
+  and, for albums, the per-cell "•••" menu (via `MediaControlRequest.isSpoiler`/`toggleSpoiler`, host-built).
+  **In-editor render is a NON-revealable cover:** `MediaProviderItem.isSpoiler` is folded into the
+  `syncMediaItemViews` items-signature (so a toggle re-provides the cell), and `MediaItemNodeView`
+  (`RichTextEditorMediaView`) hosts a `MediaDustNode` per spoiler cell with `revealOnTap = false`,
+  non-interactive so taps still select. The revealable message-side render + wire/persistence round-trip are
+  in `docs/instantpage-richtext.md` + `docs/richtext-composer.md` §4. Design/plan:
+  `docs/superpowers/{specs,plans}/2026-07-08-richtext-media-spoiler*`.
 - **Backspace targeting a media block replaces it with an empty body paragraph IN PLACE** (2026-06-27, supersedes
   the older per-case media-backspace rules). `replaceMediaWithEmptyParagraph(at:)` removes the media block and
   drops a fresh empty `.body` paragraph in its slot, caret there — NOT the old delete-and-merge-into-the-block-above

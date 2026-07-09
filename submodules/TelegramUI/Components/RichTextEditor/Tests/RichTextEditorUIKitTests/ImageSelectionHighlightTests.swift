@@ -204,20 +204,13 @@ final class ImageSelectionHighlightTests: XCTestCase {
         XCTAssertEqual(v.imageSelection, i.id)
     }
 
-    func test_imageSelectionMenu_hasDeleteOnly() {
-        let v = canvas(); let i = img(v)
-        v.selectImage(i)
-        let titles = (v.imageSelectionMenu()?.children ?? []).compactMap { ($0 as? UIAction)?.title }
-        XCTAssertEqual(titles, ["Delete"])
-    }
-    func test_menuForHook_returnsImageMenu_whenImageSelected() {
+    func test_menuForHook_returnsNoMenu_whenImageSelected() {
+        // Media has no tap-select edit menu — Spoiler/Delete live in the host's per-media "•••" menu.
         let v = canvas(); let i = img(v)
         v.selectImage(i)
         let interaction = UIEditMenuInteraction(delegate: nil)
         let cfg = UIEditMenuConfiguration(identifier: nil, sourcePoint: .zero)
-        let menu = v.editMenuInteraction(interaction, menuFor: cfg, suggestedActions: [])
-        let titles = (menu?.children ?? []).compactMap { ($0 as? UIAction)?.title }
-        XCTAssertEqual(titles, ["Delete"])
+        XCTAssertNil(v.editMenuInteraction(interaction, menuFor: cfg, suggestedActions: []))
     }
     func test_deleteBackward_whileImageSelected_removesBlock_andClearsSelection() {
         let v = canvas(); let i = img(v)

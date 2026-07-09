@@ -29,7 +29,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
     private let imageView: StandaloneInstantPageImageView?   // location (.geo) only
     private let audioView: StandaloneInstantPageAudioView?   // audio (music/voice) only
     // Photo/video → a mosaic cell pool. count==1 is a single full-bounds cell (mosaic engine has no 1-item case).
-    private var mosaicItems: [(media: EngineMedia, naturalSize: CGSize)] = []
+    private var mosaicItems: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = []
     private var mosaicCells: [MosaicCellDiff.PooledKey: (host: ComponentHostView<Empty>, component: RichTextMediaContentComponent)] = [:]
     private var mosaicOccurrenceCounter: [EngineMedia.Id: Int] = [:]
     private let mosaicContext: AccountContext?   // set for photo/video; nil for audio/location
@@ -48,7 +48,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
     private var showsAddButton: Bool { self.showsControls && self.mosaicContext != nil }
 
     public init(context: AccountContext,
-                items: [(media: EngineMedia, naturalSize: CGSize)],
+                items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)],
                 audioColorOverride: InstantPageAudioColorOverride? = nil,
                 cornerRadius: CGFloat = 0,
                 showsControls: Bool = true) {
@@ -90,7 +90,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
 
     /// Re-render with a NEW resolved item list (add-more / delete-one), reusing surviving cells via
     /// `MosaicCellDiff` so their bound fetch is preserved (no re-flash). No-op for audio/location.
-    public func updateResolvedItems(_ items: [(media: EngineMedia, naturalSize: CGSize)]) {
+    public func updateResolvedItems(_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)]) {
         guard self.mosaicContext != nil else { return }
         self.mosaicItems = items
         self.updateMosaic(size: self.bounds.size)
@@ -192,7 +192,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
         // Diff by media identity so surviving cells are reused (fetch bound once), not rebuilt.
         let incomingIds: [EngineMedia.Id] = self.mosaicItems.compactMap { $0.media.id }
         let plan = MosaicCellDiff.plan(poolKeys: Array(self.mosaicCells.keys), incoming: incomingIds)
-        // Tear down removed cells.
+        // Tear down removed cells (their spoiler blur/dust are inside the cell's component, torn down with it).
         for key in plan.removed {
             self.mosaicCells[key]?.host.removeFromSuperview()
             self.mosaicCells[key] = nil
@@ -206,28 +206,31 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
             guard let mediaId = item.media.id else { continue }
             let frame = index < frames.count ? frames[index] : CGRect(origin: .zero, size: size)
             let host: ComponentHostView<Empty>
-            let component: RichTextMediaContentComponent
-            if let reusedKey = plan.reuse[reuseIndex], let existing = self.mosaicCells[reusedKey] {
-                host = existing.host; component = existing.component
+            let cellKey: MosaicCellDiff.PooledKey
+            if let reusedKey = plan.reuse[reuseIndex], let existingHost = self.mosaicCells[reusedKey]?.host {
+                host = existingHost   // reuse the fetch-bound host (the cell's poster stays bound once)
+                cellKey = reusedKey
             } else {
                 // Fresh cell: unique occurrence key so duplicate media get distinct pool slots.
                 let occurrence = self.mosaicOccurrenceCounter[mediaId, default: 0]
                 self.mosaicOccurrenceCounter[mediaId] = occurrence + 1
-                let key = MosaicCellDiff.PooledKey(id: mediaId, occurrence: occurrence)
+                cellKey = MosaicCellDiff.PooledKey(id: mediaId, occurrence: occurrence)
                 let newHost = ComponentHostView<Empty>()
-                let newComponent = RichTextMediaContentComponent(context: context, media: item.media, showsMoreButton: self.showsControls)
                 self.addSubview(newHost)
-                self.mosaicCells[key] = (newHost, newComponent)
-                host = newHost; component = newComponent
+                host = newHost
             }
             reuseIndex += 1
-            component.usesAspectFit = usesAspectFit   // set every pass — a cell reused across 1↔2 switches mode
-            // Refresh every pass (reused AND fresh) so a reused cell forwards the CURRENT loop `index` (or nil
-            // for a single container), not the stale index captured when it was first created.
             let reportedIndex: Int? = reportNilIndex ? nil : index
+            // A FRESH component each pass (reusing only the fetch-bound host): `ComponentHostView` skips
+            // `update` when the component compares equal at an unchanged size, so mutating a reused
+            // instance's `isSpoiler` in place would be a no-op on a same-size spoiler toggle. Passing a new
+            // component whose `isSpoiler` (part of `==`) reflects the current state is what makes the toggle
+            // re-render. `usesAspectFit` rides a size change (1↔mosaic), so it needn't be in `==`.
+            let component = RichTextMediaContentComponent(context: context, media: item.media, showsMoreButton: self.showsControls, usesAspectFit: usesAspectFit, isSpoiler: item.isSpoiler)
             component.onControlTapped = { [weak self] kind, anchorView, rect in
                 self?.onControlTapped?(kind, reportedIndex, anchorView, rect)
             }
+            self.mosaicCells[cellKey] = (host, component)
             host.frame = frame
             _ = host.update(transition: .immediate, component: AnyComponent(component),
                             environment: {}, containerSize: frame.size)

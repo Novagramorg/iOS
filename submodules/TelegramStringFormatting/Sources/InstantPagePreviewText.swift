@@ -128,9 +128,9 @@ extension InstantPageBlock {
             return body + caption.previewText(strings: strings)
         case let .pullQuote(text, caption):
             return text.previewText(strings: strings) + caption.previewText(strings: strings)
-        case .image(_, _, _, _):
+        case .image(_, _, _, _, _):
             return strings.Message_Photo
-        case .video(_, _, _, _):
+        case .video(_, _, _, _, _):
             return strings.Message_Video
         case let .audio(id, _):
             if let file = media[id] as? TelegramMediaFile, file.isVoice {
