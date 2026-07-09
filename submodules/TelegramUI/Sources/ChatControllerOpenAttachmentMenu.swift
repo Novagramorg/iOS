@@ -901,11 +901,11 @@ extension ChatControllerImpl {
                                 strongSelf.sendMessages([message], postpone: postpone)
                             })
                         },
-                        presentAttachmentMenu: { [weak self] completion in
+                        presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
                             guard let self else {
                                 return
                             }
-                            self.presentRichTextAttachmentMenu(completion: completion)
+                            self.presentRichTextAttachmentMenu(photoVideoOnly: photoVideoOnly, completion: completion)
                         },
                         presentFormulaEditor: { [weak self] initialValue, completion in
                             guard let self else {
@@ -959,12 +959,12 @@ extension ChatControllerImpl {
     }
     
     @available(iOS 13.0, *)
-    func presentRichTextAttachmentMenu(completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
-        presentPollAttachmentScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, subject: .richText, availableButtons: [
-            .gallery,
-            .audio,
-            .location
-        ], inputMediaNodeData: nil, present: { [weak self] c, push in
+    func presentRichTextAttachmentMenu(photoVideoOnly: Bool, completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
+        // The gallery tab is inherently photos/videos only; audio + location are the only tabs that surface
+        // non-photo/video media, so restricting to just `.gallery` yields a photo/video-only picker (used when
+        // creating or extending a mosaic group).
+        let availableButtons: [AttachmentButtonType] = photoVideoOnly ? [.gallery] : [.gallery, .audio, .location]
+        presentPollAttachmentScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, subject: .richText, availableButtons: availableButtons, inputMediaNodeData: nil, present: { [weak self] c, push in
             guard let self else {
                 return
             }

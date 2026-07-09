@@ -252,7 +252,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
-        presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.init(
@@ -276,7 +276,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
-        presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.context = context
@@ -377,10 +377,10 @@ final class RichTextAttachmentScreenComponent: Component {
     let initialMedia: [String: Media]
     let initialEmojiFiles: [Int64: TelegramMediaFile]
     let overNavigationContainer: UIView
-    let presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
+    let presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
 
-    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
         self.context = context
         self.initialContents = initialContents
         self.initialMedia = initialMedia
@@ -472,11 +472,11 @@ final class RichTextAttachmentScreenComponent: Component {
         /// Picks one medium via the host attachment menu, registers its raw `Media` in `attachedMedia` (so the
         /// media-view provider can resolve it), and hands back the editor-facing `(mediaID, naturalSize, kind,
         /// caption)`. Callers decide what to do with it (insert a new block, or append to an existing one).
-        private func pickMedia(completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
+        private func pickMedia(photoVideoOnly: Bool, completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
             guard let component = self.component else {
                 return
             }
-            component.presentAttachmentMenu?({ [weak self] attachment in
+            component.presentAttachmentMenu?(photoVideoOnly, { [weak self] attachment in
                 guard let self else {
                     return
                 }
@@ -522,7 +522,7 @@ final class RichTextAttachmentScreenComponent: Component {
         }
 
         private func presentImagePicker() {
-            self.pickMedia { [weak self] mediaID, naturalSize, kind, caption in
+            self.pickMedia(photoVideoOnly: false) { [weak self] mediaID, naturalSize, kind, caption in
                 self?.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
             }
         }
@@ -720,7 +720,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         }
                     case .add:
                         guard let addMore = request.addMore else { break }
-                        self.pickMedia { mediaID, naturalSize, kind, _ in
+                        self.pickMedia(photoVideoOnly: true) { mediaID, naturalSize, kind, _ in
                             guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
                             addMore(mediaID, naturalSize, kind)
                         }
