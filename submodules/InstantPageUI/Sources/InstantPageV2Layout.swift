@@ -554,6 +554,41 @@ public func lastTextLineFrameIfLastItemIsText(in layout: InstantPageV2Layout) ->
     return (lineFrame, isInflatedByAttachment ? 0.0 : 5.0)
 }
 
+/// Returns the frame of the bottom-most laid-out item when that item is full-width visual media
+/// (image / video / cover image / map / slideshow / media placeholder), else nil. Used by the
+/// rich-message bubble to overlay the date/status as an image-style pill on the media's bottom-right
+/// corner instead of reserving a status strip below the content. The "full-width" gate excludes a
+/// rare narrow/centered trailing media, which keeps the below-content bubble status.
+public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
+    guard let bottomItem = layout.items.max(by: { $0.frame.maxY < $1.frame.maxY }) else {
+        return nil
+    }
+    switch bottomItem {
+    case .mediaImage, .mediaVideo, .mediaCoverImage, .mediaMap, .slideshow:
+        break
+    case let .mediaPlaceholder(placeholder):
+        // Only a still-loading image/video placeholder should get the overlaid pill (so the style
+        // doesn't flip when it resolves). Web/post-embed, channel-banner, and audio placeholders must
+        // NOT — they aren't visual media the pill is designed for, and the prepare-phase structural
+        // detector doesn't externalize their reactions, which would otherwise make reactions vanish.
+        switch placeholder.kind {
+        case .image, .video:
+            break
+        default:
+            return nil
+        }
+    default:
+        return nil
+    }
+    let frame = bottomItem.frame
+    // Full-width gate: the media must span (approximately) the content width. The tolerance absorbs
+    // the right-margin inset that `contentSize.width` reserves (see the `fitToWidth` maxX computation).
+    if frame.width >= layout.contentSize.width - 12.0 {
+        return frame
+    }
+    return nil
+}
+
 // MARK: - Layout context
 
 private final class DateUpdateAccumulator {

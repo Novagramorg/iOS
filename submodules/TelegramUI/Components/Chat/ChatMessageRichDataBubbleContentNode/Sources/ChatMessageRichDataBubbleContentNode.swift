@@ -243,7 +243,23 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         let currentMaxGlyphCount: Int? = self.textRevealController?.currentGlyphCount
 
         return { [weak self] item, layoutConstants, _, _, _, _ in
-            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none)
+            // Structural detector (model-only): does the effective rich page end with full-width
+            // visual media? This is emitted BEFORE the page is laid out, so it inspects the block
+            // model rather than laid-out items. Its only job is to push non-inline reactions outside
+            // the bubble (the overlaid pill can't host multi-row reactions). The authoritative
+            // full-width placement decision happens later, in the layout phase.
+            var wantsReactionsOutside = false
+            if let attribute = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText) {
+                let showMoreExpanded = (showMoreExpandedState?.messageId == item.message.id) ? (showMoreExpandedState?.value ?? false) : false
+                let page = (showMoreExpanded ? attribute.fullInstantPage : nil) ?? attribute.instantPage
+                if let lastBlock = page.blocks.last, richDataBlockEndsWithVisualMedia(lastBlock) {
+                    let reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId))
+                    let hasReactions = !(reactions?.reactions.isEmpty ?? true)
+                    let inline = shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions)
+                    wantsReactionsOutside = hasReactions && !inline
+                }
+            }
+            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
                 let suggestedBoundingWidth: CGFloat = constrainedSize.width
@@ -471,6 +487,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     boundingSize.height = effectiveSize.height + 2.0
                 }
 
+                // Authoritative detector: the bottom-most laid-out item is full-width visual media,
+                // so the status becomes an image-style pill overlaid on it (no reserved strip).
+                // Captured by the nested measure/apply closures below.
+                let mediaStatusFrame: CGRect? = pageLayout.flatMap(lastFullWidthMediaFrame(in:))
+
                 // The hardcoded "Thinking…" header was removed in favor of server-sent
                 // InstantPageBlock.thinking blocks (rendered inside the pageView). There is no
                 // header strip anymore, so the page content starts at the top of the bubble.
@@ -554,16 +575,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 }
                 
                 if displayStatus {
-                    if incoming {
-                        statusType = .BubbleIncoming
+                    let outgoingStatus: ChatMessageDateAndStatusOutgoingType
+                    if message.flags.contains(.Failed) {
+                        outgoingStatus = .Failed
+                    } else if (message.flags.isSending && !message.isSentOrAcknowledged) || item.attributes.updatingMedia != nil {
+                        outgoingStatus = .Sending
                     } else {
-                        if message.flags.contains(.Failed) {
-                            statusType = .BubbleOutgoing(.Failed)
-                        } else if (message.flags.isSending && !message.isSentOrAcknowledged) || item.attributes.updatingMedia != nil {
-                            statusType = .BubbleOutgoing(.Sending)
-                        } else {
-                            statusType = .BubbleOutgoing(.Sent(read: item.read))
-                        }
+                        outgoingStatus = .Sent(read: item.read)
+                    }
+                    if mediaStatusFrame != nil {
+                        statusType = incoming ? .ImageIncoming : .ImageOutgoing(outgoingStatus)
+                    } else {
+                        statusType = incoming ? .BubbleIncoming : .BubbleOutgoing(outgoingStatus)
                     }
                 } else {
                     statusType = nil
@@ -637,9 +660,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     // place the date inline with the line — on top of it. `pageHorizontalInset`
                     // is the offset between page-coords and status-node-local coords (the status
                     // node sits at x=pageHorizontalInset in self, and pageView sits at self-x 0).
-                    let trailingWidthToMeasure: CGFloat = lastTextLineFrame.map { $0.maxX - pageHorizontalInset } ?? 10000.0
-
-                    let dateLayoutInput: ChatMessageDateAndStatusNode.LayoutInput = .trailingContent(contentWidth: trailingWidthToMeasure, reactionSettings: ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false))
+                    let dateLayoutInput: ChatMessageDateAndStatusNode.LayoutInput
+                    if mediaStatusFrame != nil {
+                        // Overlaid pill: reactions live outside the bubble. Inline reactions, if any,
+                        // render inside the pill via reactionSettings — mirroring media messages.
+                        let inlineReactionSettings = shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) ? ChatMessageDateAndStatusNode.StandaloneReactionSettings() : nil
+                        dateLayoutInput = .standalone(reactionSettings: item.presentationData.isPreview ? nil : inlineReactionSettings)
+                    } else {
+                        let trailingWidthToMeasure: CGFloat = lastTextLineFrame.map { $0.maxX - pageHorizontalInset } ?? 10000.0
+                        dateLayoutInput = .trailingContent(contentWidth: trailingWidthToMeasure, reactionSettings: ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false))
+                    }
 
                     statusSuggestedWidthAndContinue = statusLayout(ChatMessageDateAndStatusNode.Arguments(
                         context: item.context,
@@ -652,8 +682,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         constrainedSize: CGSize(width: suggestedBoundingWidth, height: .greatestFiniteMagnitude),
                         availableReactions: item.associatedData.availableReactions,
                         savedMessageTags: item.associatedData.savedMessageTags,
-                        reactions: item.presentationData.isPreview ? [] : dateReactionsAndPeers.reactions,
-                        reactionPeers: dateReactionsAndPeers.peers,
+                        // Empty the status node's own reactions exactly when they are externalized
+                        // (wantsReactionsOutside), NOT when the pill is shown — otherwise a structural
+                        // "externalize" that the layout declines to pillify (e.g. a narrow collage cell)
+                        // would render reactions both inline here AND in the external buttons node. When
+                        // the pill IS shown, its `.standalone` input renders no reaction list regardless.
+                        reactions: (item.presentationData.isPreview || wantsReactionsOutside) ? [] : dateReactionsAndPeers.reactions,
+                        reactionPeers: wantsReactionsOutside ? [] : dateReactionsAndPeers.peers,
                         displayAllReactionPeers: item.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
                         areReactionsTags: item.topMessage.areReactionsTags(accountPeerId: item.context.account.peerId),
                         areStarReactionsEnabled: item.associatedData.areStarReactionsEnabled,
@@ -668,17 +703,24 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     ))
                 }
 
-                if let statusSuggestedWidthAndContinue, !hasDraft {
+                if let statusSuggestedWidthAndContinue, !hasDraft, mediaStatusFrame == nil {
                     // Mirrors TextBubble: max(contentWidth, statusWidth + sideInsets), where
                     // sideInsets = left + right text inset (= pageHorizontalInset on each side).
+                    // Skipped for the overlaid pill — the media already defines the bubble width.
                     boundingSize.width = max(boundingSize.width, statusSuggestedWidthAndContinue.0 + pageHorizontalInset * 2.0)
                 }
 
                 return (boundingSize.width, { boundingWidth in
-                    // Mirrors TextBubble's `boundingWidth - sideInsets` so the right-aligned date
-                    // lands at the right text inset rather than past the bubble's right edge.
-                    let statusSizeAndApply = statusSuggestedWidthAndContinue?.1(boundingWidth - pageHorizontalInset * 2.0)
-                    if let statusSizeAndApply, !hasDraft {
+                    // Non-pill: pass `boundingWidth - sideInsets` (mirrors TextBubble) so the
+                    // right-aligned date lands at the right text inset. For the overlaid pill,
+                    // pass the status node's own suggested width so its internal `leftOffset`
+                    // (= passedWidth - layoutSize.width) is 0 — otherwise the date is shoved right
+                    // of its backdrop pill (the pill is anchored at the node's own bounds). This
+                    // mirrors ChatMessageInteractiveMediaNode, which calls the continue closure with
+                    // the suggested width for the standalone image status.
+                    let statusContinueWidth: CGFloat = mediaStatusFrame != nil ? (statusSuggestedWidthAndContinue?.0 ?? 0.0) : (boundingWidth - pageHorizontalInset * 2.0)
+                    let statusSizeAndApply = statusSuggestedWidthAndContinue?.1(statusContinueWidth)
+                    if let statusSizeAndApply, !hasDraft, mediaStatusFrame == nil {
                         // Status node anchor Y in the content node's space — mirrors the apply
                         // closure below.
                         let statusAnchorY: CGFloat
@@ -736,19 +778,34 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             // left edge (not the last line's minX, which is large for nested
                             // content and shoves the right-aligned date off the bubble). The status
                             // node positions the date trailing/below relative to this origin.
-                            let statusFrameY: CGFloat
-                            if let lastTextLineFrame {
-                                // Apply the text-rect pad (baseline → visible text bottom) for both
-                                // the trailing and wrapped cases, so the date references the visible
-                                // text bottom rather than the baseline. Mirrors the measure closure
-                                // and TextBubble. Without it the wrapped date crowded the last line.
-                                statusFrameY = 1.0 + lastTextLineFrame.maxY + lastTextLineTrailingPadding
-                            } else if let pageLayout {
-                                statusFrameY = 1.0 + pageLayout.contentSize.height
+                            let statusFrame: CGRect
+                            if let mediaStatusFrame {
+                                // Overlaid pill: anchor to the media item's bottom-right corner,
+                                // inset by the standard image status insets. page-coord (px,py)
+                                // maps to self-coord (px, 1.0 + py).
+                                let insets = layoutConstants.image.statusInsets
+                                // Full-width flush media frames are widened by instantPageV2MediaEdgeBleed
+                                // (4pt) past the visible/clipped right edge; clamp to the content width so
+                                // the pill's trailing inset matches image messages (6pt, not 2pt).
+                                let visibleMaxX = min(mediaStatusFrame.maxX, pageLayout?.contentSize.width ?? mediaStatusFrame.maxX)
+                                let statusX = visibleMaxX - insets.right - statusSizeAndApply.0.width
+                                let statusY = 1.0 + mediaStatusFrame.maxY - insets.bottom - statusSizeAndApply.0.height
+                                statusFrame = CGRect(origin: CGPoint(x: statusX, y: statusY + streamingHeaderOffset), size: statusSizeAndApply.0)
                             } else {
-                                statusFrameY = 1.0
+                                let statusFrameY: CGFloat
+                                if let lastTextLineFrame {
+                                    // Apply the text-rect pad (baseline → visible text bottom) for both
+                                    // the trailing and wrapped cases, so the date references the visible
+                                    // text bottom rather than the baseline. Mirrors the measure closure
+                                    // and TextBubble. Without it the wrapped date crowded the last line.
+                                    statusFrameY = 1.0 + lastTextLineFrame.maxY + lastTextLineTrailingPadding
+                                } else if let pageLayout {
+                                    statusFrameY = 1.0 + pageLayout.contentSize.height
+                                } else {
+                                    statusFrameY = 1.0
+                                }
+                                statusFrame = CGRect(origin: CGPoint(x: pageHorizontalInset, y: statusFrameY + streamingHeaderOffset), size: statusSizeAndApply.0)
                             }
-                            let statusFrame = CGRect(origin: CGPoint(x: pageHorizontalInset, y: statusFrameY + streamingHeaderOffset), size: statusSizeAndApply.0)
                             let statusNode = statusSizeAndApply.1(self.statusNode == nil ? .None : animation)
 
                             if self.statusNode !== statusNode {
@@ -1573,5 +1630,24 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             self.showMoreLoadingView = nil
             loadingView.removeFromSuperview()
         }
+    }
+}
+
+private func richDataBlockEndsWithVisualMedia(_ block: InstantPageBlock) -> Bool {
+    func captionIsEmpty(_ caption: InstantPageCaption) -> Bool {
+        return caption.text == .empty && caption.credit == .empty
+    }
+    switch block {
+    case let .image(_, caption, _, _, _),
+         let .video(_, caption, _, _, _),
+         let .map(_, _, _, _, caption):
+        return captionIsEmpty(caption)
+    case let .collage(_, caption),
+         let .slideshow(_, caption):
+        return captionIsEmpty(caption)
+    case let .cover(inner):
+        return richDataBlockEndsWithVisualMedia(inner)
+    default:
+        return false
     }
 }

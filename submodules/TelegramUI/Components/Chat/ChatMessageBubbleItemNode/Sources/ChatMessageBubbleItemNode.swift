@@ -2251,6 +2251,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         var hidesHeaders = false
+        var forceReactionsOutside = false
         var shareButtonOffset: CGPoint?
         var avatarOffset: CGFloat?
         var index = 0
@@ -2315,6 +2316,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if properties.hidesHeaders {
                 hidesHeaders = true
             }
+            if properties.wantsReactionsOutside {
+                forceReactionsOutside = true
+            }
             if let offset = properties.avatarOffset {
                 avatarOffset = offset
                 if !offset.isZero {
@@ -2351,7 +2355,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var bottomNodeMergeStatus: ChatMessageBubbleMergeStatus = mergedBottom.merged ? (incoming ? .Left : .Right) : .None(incoming ? .Incoming : .Outgoing)
         
         let bubbleReactions: ReactionsMessageAttribute
-        if needReactions {
+        if needReactions || forceReactionsOutside {
             bubbleReactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
         } else {
             bubbleReactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
