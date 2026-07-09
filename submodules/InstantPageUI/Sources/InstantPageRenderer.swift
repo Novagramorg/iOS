@@ -64,6 +64,15 @@ public final class InstantPageV2RenderContext {
     /// message reference (so a stale file reference can revalidate); `nil` in the send preview,
     /// which falls back to the webpage-keyed playlist id + webpage file reference.
     public let message: MessageReference?
+    /// Per-media auto-download decision for a photo, computed by the host (chat bubble) from the
+    /// message's download settings. Default `{ _ in false }` — V1/web-IV and the send preview keep
+    /// their existing behavior (the node's own global-settings gate). See the video/autodownload spec.
+    public let shouldAutoDownloadImage: (TelegramMediaImage) -> Bool
+    /// Per-media auto-download decision for a file/video. Default `{ _ in false }`.
+    public let shouldAutoDownloadFile: (TelegramMediaFile) -> Bool
+    /// Whether a video file should auto-play inline (energy-usage autoplay setting AND already
+    /// downloaded), computed by the host. Default `{ _ in false }` — no inline autoplay.
+    public let shouldAutoplayVideo: (TelegramMediaFile) -> Bool
 
     public init(
         context: AccountContext,
@@ -75,6 +84,9 @@ public final class InstantPageV2RenderContext {
         push: @escaping (ViewController) -> Void,
         openUrl: @escaping (InstantPageUrlItem) -> Void,
         baseNavigationController: @escaping () -> NavigationController?,
+        shouldAutoDownloadImage: @escaping (TelegramMediaImage) -> Bool = { _ in false },
+        shouldAutoDownloadFile: @escaping (TelegramMediaFile) -> Bool = { _ in false },
+        shouldAutoplayVideo: @escaping (TelegramMediaFile) -> Bool = { _ in false },
         message: MessageReference?
     ) {
         self.context = context
@@ -87,6 +99,9 @@ public final class InstantPageV2RenderContext {
         self.openUrl = openUrl
         self.baseNavigationController = baseNavigationController
         self.message = message
+        self.shouldAutoDownloadImage = shouldAutoDownloadImage
+        self.shouldAutoDownloadFile = shouldAutoDownloadFile
+        self.shouldAutoplayVideo = shouldAutoplayVideo
     }
 
     /// Update the content-bearing fields for a later chunk of the SAME message. Enables the
@@ -158,6 +173,7 @@ public final class InstantPageV2View: UIView {
         didSet {
             if oldValue != self.visibilityRect {
                 self.updateEmojiVisibility()
+                self.updateItemVisibility()
             }
         }
     }
@@ -572,6 +588,21 @@ public final class InstantPageV2View: UIView {
         self.propagateVisibilityRect()
     }
 
+    // Tells each direct item view whether it currently intersects the visibility rect, so inline
+    // players (video) attach/detach with scroll. Nested details/table views run their own pass when
+    // their `visibilityRect` is set by `propagateVisibilityRect` (which `updateEmojiVisibility` calls).
+    func updateItemVisibility() {
+        for view in self.itemViews {
+            let onScreen: Bool
+            if let visibilityRect = self.visibilityRect {
+                onScreen = view.frame.intersects(visibilityRect)
+            } else {
+                onScreen = false
+            }
+            view.instantPageUpdateIsVisible(onScreen)
+        }
+    }
+
     // Pushes this view's `visibilityRect` down into every nested V2 view (details body, table
     // title + cells), converted into each child's coordinate space. Each child's `visibilityRect`
     // didSet re-runs `updateEmojiVisibility`, which propagates one level further — so a single
@@ -895,12 +926,16 @@ protocol InstantPageItemView: UIView {
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))?
     /// Gallery hidden-media tick: hide/show the source for `media`. Default no-op.
     func instantPageUpdateHiddenMedia(_ media: InstantPageMedia?)
+    /// Visibility tick for players/animations that must attach only while on screen. Default no-op;
+    /// the inline video view (`InstantPageV2MediaVideoView`) toggles `canAttachContent`.
+    func instantPageUpdateIsVisible(_ isVisible: Bool)
 }
 
 extension InstantPageItemView {
     var subLayoutView: InstantPageV2View? { return nil }
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? { return nil }
     func instantPageUpdateHiddenMedia(_ media: InstantPageMedia?) { }
+    func instantPageUpdateIsVisible(_ isVisible: Bool) { }
 }
 
 // MARK: - Text view (port of V1 InstantPageTextItem.drawInTile)

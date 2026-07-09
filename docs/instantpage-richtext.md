@@ -180,6 +180,67 @@ hidden behind an animated "dust" cover until the recipient taps it, mirroring th
 - **The long-press-Send options preview** renders through the same `InstantPageV2View`, so a spoiler'd media
   shows the dust cover in the preview bubble automatically.
 
+## InstantPage V2 rich-message video (auto-download & inline autoplay)
+
+Video block media in a **rich message** (`RichTextMessageAttribute` → InstantPage V2, drawn by
+`ChatMessageRichDataBubbleContentNode`) now auto-downloads and auto-plays inline like regular chat
+media (`ChatMessageInteractiveMediaNode`) — previously it was a static poster + play glyph that only
+downloaded/played on tap-to-gallery, and image auto-download ignored per-message settings. The fix is
+**layering-safe**: it lives entirely in `InstantPageUI` + the chat bubble, with **no** dependency on
+`ChatMessageInteractiveMediaNode` (that would invert the module layering — `InstantPageUI` is a
+low-level module also used by web Instant View / `BrowserUI`). HLS inline-range preloading and
+live-photo are deliberately **out of scope** (they fall back to tap-to-gallery).
+
+Spec: [`docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md`](docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md).
+Plan: [`docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md`](docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md).
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2RenderContext` gains 3 policy closures — `shouldAutoDownloadImage`/`shouldAutoDownloadFile`/`shouldAutoplayVideo` (all default `{ _ in false }`). `InstantPageItemView` gains `instantPageUpdateIsVisible(_:)` (default no-op), driven by `updateItemVisibility()` on every `visibilityRect` change (alongside `updateEmojiVisibility`). |
+| `submodules/InstantPageUI/Sources/InstantPageImageNode.swift` | `init` gains optional `autoDownloadImage`/`autoDownloadFile` overrides (default `nil` ⇒ current V1/web-IV global-settings behavior); the image + image-file fetch gates consult them. The video (`else`) branch stays poster-only. |
+| `submodules/InstantPageUI/Sources/InstantPageV2MediaViews.swift` | `makeMediaWrapper` forwards the two download overrides. `InstantPageV2MediaVideoView` hosts an inline `UniversalVideoNode`/`NativeVideoContent` (`updateInlineVideo`/`tearDownVideoNode`) layered above the poster. |
+| `…/Chat/ChatMessageRichDataBubbleContentNode/…` | Computes the 3 closures from the chat item and sets a real `sourceLocation`. |
+| `ChatSendMessageRichTextPreview.swift` | Unchanged — keeps the defaults (`message: nil` + off closures) → static poster. |
+
+### Non-obvious invariants
+
+- **Policy is computed in the bubble, consumed as booleans in `InstantPageUI`.** The bubble has the
+  chat item, so it computes download via `shouldDownloadMediaAutomatically(settings:
+  item.controllerInteraction.automaticMediaDownloadSettings, peerType:
+  associatedData.automaticDownloadPeerType, networkType: …automaticDownloadNetworkType, authorPeerId:
+  message.author?.id, contactsPeerIds: …, media:)` and autoplay via `(file.isAnimated ?
+  energyUsageSettings.autoplayGif : .autoplayVideo) && completedResourcePath(file) != nil`.
+  `InstantPageUI` never learns chat semantics — it just calls the closures. The closure types mirror the
+  existing `imageReference`/`fileReference` split (concrete `TelegramCore` types) because `EngineMedia`'s
+  wrap/unwrap helpers are `internal` to `TelegramCore`.
+- **Video content id MUST be message-scoped, not webpage-scoped.** Every rich message synthesizes the
+  same webpage id `(0,0)`, so keying the player by webpage would make two on-screen rich-message videos
+  collide in the universal video manager. `InstantPageV2MediaVideoView` uses the existing
+  `NativeVideoContentId.message(UInt32(bitPattern: messageId.id), file.fileId)` — same trap the V2 audio
+  port hit (`.richMessage(messageId)`). The inline player is only built when `renderContext.message?.id`
+  exists, so the send-preview (nil message) never needs one.
+- **Visibility gating has no dead-attach window.** The player's `canAttachContent` is toggled by
+  `instantPageUpdateIsVisible` (from the root's `visibilityRect` → `updateItemVisibility`). A player
+  built *before* the first visibility tick starts with `canAttachContent = false`, but first display
+  always flips `visibilityRect` nil→rect (a *change*) → the tick attaches it. A player built on a *later*
+  update (e.g. after a fetch completes, with no visibility change) is seeded `canAttachContent =
+  self.localIsVisible`, which is already true for an on-screen view. Both orderings attach.
+- **Auto-download is decoupled from autoplay (fixes the "never downloads" gap).** When
+  `shouldAutoDownloadFile(file)` is true the video bytes are fetched (once per media id, via
+  `freeMediaFileInteractiveFetched` with the render-context `.message` `fileReference`) **even if
+  autoplay is off** — so a rich-message video prefetches per settings instead of only on tap.
+  `videoFetchMediaId` dedups; the `MetaDisposable` `set()` cancels a stale fetch on media switch and is
+  disposed in `deinit`.
+- **Reuse & spoiler.** Positional reuse keeps the player only when `videoNodeMediaId == mediaId`
+  (else teardown + rebuild); a concealed spoiler cover suppresses the player (`wantAutoplay =
+  shouldAutoplayVideo && !concealed`), and the spoiler reveal path re-runs `updateInlineVideo` so
+  autoplay starts after the dust clears. Gallery transition hides the player via
+  `instantPageUpdateHiddenMedia`.
+- **Collage cells inherit this for free** — `.collage` flattens into ordinary `.mediaVideo` items, so
+  each cell is an `InstantPageV2MediaVideoView` with no collage-specific code.
+
 ## InstantPage V2 text item height (true font line box)
 
 `layoutTextItem` (`InstantPageV2Layout.swift`) sizes a `.text` item to the **true font line height**, not the cap box. A single-line item measures exactly `fontAscent + fontDescentBelowBaseline` (`A + D`); the old behavior was the cap box `fontLineHeight = floor(fontAscent + fontDescent)` (`A − D`).

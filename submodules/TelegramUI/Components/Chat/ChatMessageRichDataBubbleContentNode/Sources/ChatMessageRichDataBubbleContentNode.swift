@@ -141,10 +141,17 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // render context which is owned by the V2View, so we must avoid making them retain
         // the bubble (`self`) or the message indirectly via `item`.
         let messageReference = MessageReference(item.message)
+        let policyContext = item.context
+        let autoDownloadSettings = item.controllerInteraction.automaticMediaDownloadSettings
+        let autoDownloadPeerType = item.associatedData.automaticDownloadPeerType
+        let autoDownloadNetworkType = item.associatedData.automaticDownloadNetworkType
+        let autoDownloadContactsPeerIds = item.associatedData.contactsPeerIds
+        let messageAuthorPeerId = item.message.author?.id
+        let messagePeerId = item.message.id.peerId
         let renderContext = InstantPageV2RenderContext(
             context: item.context,
             webpage: webpage,
-            sourceLocation: InstantPageSourceLocation(userLocation: .other, peerType: .channel),
+            sourceLocation: InstantPageSourceLocation(userLocation: .peer(messagePeerId), peerType: autoDownloadPeerType),
             imageReference: { image in
                 return ImageMediaReference.message(message: messageReference, media: image)
             },
@@ -162,6 +169,17 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             },
             baseNavigationController: { [weak self] in
                 self?.item?.controllerInteraction.navigationController()
+            },
+            shouldAutoDownloadImage: { image in
+                return shouldDownloadMediaAutomatically(settings: autoDownloadSettings, peerType: autoDownloadPeerType, networkType: autoDownloadNetworkType, authorPeerId: messageAuthorPeerId, contactsPeerIds: autoDownloadContactsPeerIds, media: image)
+            },
+            shouldAutoDownloadFile: { file in
+                return shouldDownloadMediaAutomatically(settings: autoDownloadSettings, peerType: autoDownloadPeerType, networkType: autoDownloadNetworkType, authorPeerId: messageAuthorPeerId, contactsPeerIds: autoDownloadContactsPeerIds, media: file)
+            },
+            shouldAutoplayVideo: { file in
+                let enabled = file.isAnimated ? policyContext.sharedContext.energyUsageSettings.autoplayGif : policyContext.sharedContext.energyUsageSettings.autoplayVideo
+                guard enabled else { return false }
+                return policyContext.engine.resources.completedResourcePath(id: EngineMediaResource.Id(file.resource.id)) != nil
             },
             message: messageReference
         )

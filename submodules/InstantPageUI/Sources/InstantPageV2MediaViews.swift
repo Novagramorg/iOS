@@ -8,6 +8,7 @@ import TelegramCore
 import TelegramPresentationData
 import GalleryUI
 import UniversalMediaPlayer
+import TelegramUniversalVideoContent
 import InvisibleInkDustNode
 
 // Mutable weak box: lets a wrapper hand its `openMedia` closure a back-reference to itself,
@@ -108,6 +109,8 @@ func makeMediaWrapper(
         pinchPreviewFinished: nil,
         imageReferenceForMedia: renderContext.imageReference,
         fileReferenceForMedia: renderContext.fileReference,
+        autoDownloadImage: renderContext.shouldAutoDownloadImage,
+        autoDownloadFile: renderContext.shouldAutoDownloadFile,
         getPreloadedResource: { _ in nil }
     )
     imageNode.frame = CGRect(origin: .zero, size: frame.size)
@@ -281,6 +284,20 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
     let wrappedNode: InstantPageImageNode
     // Revealable spoiler dust cover (nil unless `item.spoiler`); see `MediaSpoilerDustOverlay`.
     private var spoilerOverlay: MediaSpoilerDustOverlay?
+    // Inline autoplay player, present only when `shouldAutoplayVideo` is true for the current file
+    // and (if spoilered) the cover has been revealed. Layered ABOVE the poster `wrappedNode`.
+    private var videoNode: UniversalVideoNode?
+    // The media id the current `videoNode` was built for; drives teardown/rebuild on positional reuse.
+    private var videoNodeMediaId: EngineMedia.Id?
+    // Whether the view currently intersects the visibility rect; gates `canAttachContent`.
+    private var localIsVisible = false
+    // One-shot auto-download fetch (download even when not autoplaying), keyed by media id.
+    private let videoFetchDisposable = MetaDisposable()
+    private var videoFetchMediaId: EngineMedia.Id?
+
+    deinit {
+        self.videoFetchDisposable.dispose()
+    }
 
     init(item: InstantPageV2MediaVideoItem, renderContext: InstantPageV2RenderContext, theme: InstantPageTheme) {
         self.item = item
@@ -293,6 +310,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
             // the gallery; once revealed, taps fall through to the normal open path.
             if let overlay = wrapper.spoilerOverlay, overlay.concealed {
                 overlay.reveal()
+                wrapper.updateInlineVideo(renderContext: renderContextRef)
                 return
             }
             handleOpenMediaTap(tapped: tapped, wrapper: wrapper, renderContext: renderContextRef)
@@ -327,6 +345,8 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
     override func layoutSubviews() {
         super.layoutSubviews()
         self.wrappedNode.frame = self.bounds
+        self.videoNode?.frame = self.bounds
+        self.videoNode?.updateLayout(size: self.bounds.size, transition: .immediate)
         if let overlay = self.spoilerOverlay {
             overlay.updateLayout(size: self.bounds.size)
             if let blurNode = overlay.blurredImageNode {
@@ -343,6 +363,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
         self.updateSpoiler(renderContext: renderContext)
+        self.updateInlineVideo(renderContext: renderContext)
     }
 
     // Reconciles the spoiler dust cover with the current item. A reused view drops a stale cover
@@ -367,12 +388,97 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
         }
     }
 
+    // Reconciles the inline autoplay player + one-shot auto-download with the current item/policy.
+    private func updateInlineVideo(renderContext: InstantPageV2RenderContext) {
+        guard case let .file(file) = self.item.media.media, let messageId = renderContext.message?.id else {
+            self.tearDownVideoNode()
+            return
+        }
+        let mediaId = self.item.media.media.id
+
+        // Auto-download the video bytes per settings, once per media id, regardless of autoplay.
+        if renderContext.shouldAutoDownloadFile(file), self.videoFetchMediaId != mediaId {
+            self.videoFetchMediaId = mediaId
+            let fileReference = renderContext.fileReference(file)
+            self.videoFetchDisposable.set(freeMediaFileInteractiveFetched(account: renderContext.context.account, userLocation: renderContext.sourceLocation.userLocation, fileReference: fileReference).start())
+        }
+
+        // Autoplay only when enabled AND no concealed spoiler cover is hiding the media.
+        let spoilerBlocks = (self.spoilerOverlay?.concealed ?? false)
+        let wantAutoplay = renderContext.shouldAutoplayVideo(file) && !spoilerBlocks
+
+        if wantAutoplay {
+            if self.videoNode != nil, self.videoNodeMediaId == mediaId {
+                return
+            }
+            self.tearDownVideoNode()
+
+            var streamVideo = false
+            if isMediaStreamable(media: file) {
+                streamVideo = true
+            }
+            var imageReference: ImageMediaReference?
+            if let presentation = smallestImageRepresentation(file.previewRepresentations) {
+                let image = TelegramMediaImage(imageId: EngineMedia.Id(namespace: 0, id: 0), representations: [presentation], immediateThumbnailData: file.immediateThumbnailData, reference: nil, partialReference: nil, flags: [])
+                imageReference = renderContext.imageReference(image)
+            }
+            let content = NativeVideoContent(
+                id: .message(UInt32(bitPattern: messageId.id), file.fileId),
+                userLocation: renderContext.sourceLocation.userLocation,
+                fileReference: renderContext.fileReference(file),
+                imageReference: imageReference,
+                streamVideo: streamVideo ? .conservative : .none,
+                loopVideo: file.isAnimated,
+                enableSound: false,
+                fetchAutomatically: true,
+                placeholderColor: .clear,
+                storeAfterDownload: nil
+            )
+            let videoNode = UniversalVideoNode(
+                context: renderContext.context,
+                postbox: renderContext.context.account.postbox,
+                audioSession: renderContext.context.sharedContext.mediaManager.audioSession,
+                manager: renderContext.context.sharedContext.mediaManager.universalVideoManager,
+                decoration: GalleryVideoDecoration(),
+                content: content,
+                priority: .embedded,
+                autoplay: true
+            )
+            videoNode.isUserInteractionEnabled = false
+            videoNode.frame = self.bounds
+            self.addSubview(videoNode.view)
+            self.videoNode = videoNode
+            self.videoNodeMediaId = mediaId
+            videoNode.canAttachContent = self.localIsVisible
+            self.setNeedsLayout()
+        } else {
+            self.tearDownVideoNode()
+        }
+    }
+
+    private func tearDownVideoNode() {
+        if let videoNode = self.videoNode {
+            videoNode.canAttachContent = false
+            videoNode.view.removeFromSuperview()
+            self.videoNode = nil
+            self.videoNodeMediaId = nil
+        }
+    }
+
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
         return self.wrappedNode.transitionNode(media: media)
     }
 
     func instantPageUpdateHiddenMedia(_ media: InstantPageMedia?) {
         self.wrappedNode.updateHiddenMedia(media: media)
+        self.videoNode?.isHidden = (media == self.item.media)
+    }
+
+    func instantPageUpdateIsVisible(_ isVisible: Bool) {
+        if self.localIsVisible != isVisible {
+            self.localIsVisible = isVisible
+            self.videoNode?.canAttachContent = isVisible
+        }
     }
 }
 
