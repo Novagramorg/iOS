@@ -5302,6 +5302,16 @@ Sorry for the inconvenience.";
 "PeerInfo.AddToContacts" = "Add to Contacts";
 
 "PeerInfo.BioExpand" = "more";
+"PeerInfo.HiddenCommunityStatus" = "Hidden • %@";
+"PeerInfo.Community.RemoveBot" = "Remove Bot from Community";
+"PeerInfo.Community.AddBot" = "Add Bot to a Community";
+"PeerInfo.Community.BotInfo" = "Make your bot part of a community with multiple related chats";
+"PeerInfo.Community.RemoveChannel" = "Remove Channel from Community";
+"PeerInfo.Community.AddChannel" = "Add Channel to a Community";
+"PeerInfo.Community.ChannelInfo" = "Make your channel part of a community with multiple related chats";
+"PeerInfo.Community.RemoveGroup" = "Remove Group from Community";
+"PeerInfo.Community.AddGroup" = "Add Group to a Community";
+"PeerInfo.Community.GroupInfo" = "Make your group part of a community with multiple related chats";
 
 "External.OpenIn" = "Open in %@";
 
@@ -16346,6 +16356,7 @@ Error: %8$@";
 
 "MediaPicker.SetNewGroupPhoto" = "Set new group photo";
 "MediaPicker.SetNewChannelPhoto" = "Set new channel photo";
+"MediaPicker.SetNewCommunityPhoto" = "Set new community photo";
 
 "Attachment.Link" = "Link";
 
@@ -16401,3 +16412,159 @@ Error: %8$@";
 "Message.EditTodayFullDateFormat" = "edited at %1$@";
 
 "WebBrowser.Exceptions.Create.ExternalText" = "Enter a domain that you don't want to be opened in the external browser.";
+
+"Settings.SetPhoto" = "Set Photo";
+"Settings.ChangePhoto" = "Change Photo";
+
+"ChatList.Context.Ungroup" = "Ungroup";
+"ChatList.UngroupCommunity.Title" = "Ungroup Chats?";
+"ChatList.UngroupCommunity.Text" = "Chats from this community will appear separately in your chat list.";
+"ChatList.UngroupCommunity.Action" = "Ungroup";
+
+"Community.RemoveChat.Title" = "Remove chat from community?";
+"Community.RemoveChat.Text" = "This chat will be removed from the community.";
+"Community.RemoveChat.Remove" = "Remove";
+
+"Community.View.Title" = "Community";
+"Community.View.SectionJoined" = "CHATS YOU ARE IN";
+"Community.View.SectionVisible" = "CHATS YOU CAN VIEW";
+"Community.View.SectionRequestable" = "CHATS YOU CAN REQUEST TO JOIN";
+"Community.View.SectionHidden" = "HIDDEN CHATS";
+"Community.View.PendingRequests" = "Pending Requests";
+"Community.View.PendingRequestHeader" = "PENDING REQUEST";
+"Community.View.ShowAsOneChat" = "Show as One Chat";
+"Community.View.ShowAsOneChatInfo" = "Group all community chats into one item in the chat list.";
+"Community.View.AddChatButton" = "Add a Chat to Community";
+"Community.View.PendingRequestApprovedToast" = "You've added the group to the community.";
+"Community.View.PendingRequestDeclinedToast" = "You declined adding the group to the community.";
+"Community.View.ChatsLimitReached" = "Sorry, this community has reached the maximum number of chats.";
+"Community.Request.UnknownRequester" = "Someone";
+"Community.Request.RequesterSuggestsGroup" = "%@ suggests this group:";
+"Community.Request.PrivateStatus" = "visible only to its members";
+"Community.Request.Decline" = "Decline";
+"Community.Request.Add" = "Add";
+"Community.Request.Title" = "Pending Requests";
+"Community.Request.EmptyTitle" = "No Pending Requests";
+"Community.Request.EmptyText" = "There are no more chats suggested for this community.";
+"Community.Request.AddAll" = "Add All";
+"Community.Request.AddAllChats" = "Add All Chats";
+"Community.Request.AddAllConfirmation" = "Do you want to add %@ chats to the community?";
+"Community.Request.DeclineAll" = "Decline All";
+"Community.Request.DeclineAllConfirmation" = "Do you want to decline all %@ requests to join the community?";
+"Community.Request.ApprovalInfo" = "Chats require admin approval before they're added to the community. [Change Settings >](settings)";
+"Community.Request.SectionTitle_1" = "%@ CHAT SUGGESTED FOR THIS COMMUNITY";
+"Community.Request.SectionTitle_any" = "%@ CHATS SUGGESTED FOR THIS COMMUNITY";
+"Community.Request.ApprovedToast" = "You've added the group to the community.";
+"Community.Request.DeclinedToast" = "You declined adding the group to the community.";
+
+"Community.Edit.DeleteCommunity" = "Delete Community";
+"Community.Edit.DeleteConfirmationText" = "Are you sure you want to delete this community?";
+"Community.Edit.AddChat" = "Add Chat to Community";
+"Community.Edit.CommunityNamePlaceholder" = "Community Name";
+"Community.Edit.WhoCanAddChats" = "WHO CAN ADD CHATS";
+"Community.Edit.PermissionAllMembers" = "All Members";
+"Community.Edit.PermissionAllMembersInfo" = "Allow members to add their groups and channels to the community.";
+"Community.Edit.PermissionOnlyAdmins" = "Only Admins";
+"Community.Edit.PermissionOnlyAdminsInfo" = "Chats suggested by community members require admin approval.";
+"Community.Edit.Administrators" = "Administrators";
+"Community.Edit.PendingRequests" = "Pending Requests";
+"Community.Edit.RemovedUsers" = "Removed Users";
+"Community.Edit.ChatsLimitReached" = "Sorry, this community has reached the maximum number of chats.";
+"Community.Edit.ChatsHeader_1" = "%@ CHAT";
+"Community.Edit.ChatsHeader_any" = "%@ CHATS";
+
+"Community.EditAdmin.PermissionChangeInfo" = "Edit Community Info";
+"Community.EditAdmin.PermissionManageLinkedPeers" = "Edit Chat List";
+"Community.EditAdmin.PermissionBanUsers" = "Ban Members";
+"Community.EditAdmin.PermissionAddAdmins" = "Add Community Admins";
+
+"Community.Admins.Title" = "Admins";
+"Community.Admins.SectionTitle" = "COMMUNITY ADMINS";
+"Community.Admins.AddAdmin" = "Add Admin";
+"Community.Admins.Info" = "You can add admins to help you manage your community.";
+
+"Community.Blacklist.Title" = "Removed Users";
+"Community.Blacklist.RemoveUser" = "Remove User";
+"Community.Blacklist.Info" = "Users removed from the community by admins cannot rejoin it via invite links.";
+"Community.Blacklist.UsersSectionTitle" = "REMOVED USERS";
+
+"Community.AdminActions.Footer_1" = "The user will be removed from [%@ chat >](community)";
+"Community.AdminActions.Footer_any" = "The user will be removed from [%@ chats >](community)";
+"Community.AdminActions.BanFromCommunity" = "Ban from the Community";
+"Community.AdminActions.WarningTitle" = "Warning";
+"Community.AdminActions.WarningChatCount_1" = "%@ chat";
+"Community.AdminActions.WarningChatCount_any" = "%@ chats";
+"Community.AdminActions.WarningText" = "Banning **%@** will also remove **%@** they created from the community.";
+
+"Community.List.Title" = "Community";
+"Community.List.SubtitleGroup" = "Make your group a part of community with multiple related chats.";
+"Community.List.SubtitleChannel" = "Make your channel a part of community with multiple related chats.";
+"Community.List.SubtitleBot" = "Make your bot a part of community with multiple related chats.";
+"Community.List.CreateCommunity" = "Create Community";
+"Community.List.ChatCount_1" = "%@ chat";
+"Community.List.ChatCount_any" = "%@ chats";
+"Community.List.AddToExistingHeader" = "ADD TO AN EXISTING COMMUNITY";
+
+"Community.Add.Title" = "Add Chat";
+"Community.Add.VisibilityHeader" = "CHAT VISIBILITY";
+"Community.Add.VisibilityInfo" = "You won't be able to change this later.";
+"Community.Add.VisibilityVisible" = "Visible";
+"Community.Add.VisibilityVisibleInfo" = "Anyone in the community will be able to see this chat.";
+"Community.Add.VisibilityHidden" = "Hidden";
+"Community.Add.VisibilityHiddenInfo" = "Only invited members and community admins will see this chat.";
+"Community.Add.ActionAddToCommunity" = "Add to Community";
+
+"Community.PrivateChat.Info" = "This group is invite-only.\nOnly its members can view it.";
+"Community.PrivateChat.MessageOwner" = "Message Group Owner";
+
+"Privacy.GroupsAndChannels.InviteToCommunityError" = "Sorry, you cannot add %@ to the community because of %@'s privacy settings.";
+
+"Notification.CommunityAddedGroup" = "%1$@ added this group to %2$@ community";
+"Notification.CommunityAddedGroupYou" = "You added this group to %1$@ community";
+"Notification.CommunityRemovedGroup" = "%1$@ removed this group from a community";
+"Notification.CommunityRemovedGroupYou" = "You removed this group from a community";
+
+"Notification.CommunityAddedChannel" = "The channel was added to %1$@ community";
+"Notification.CommunityRemovedChannel" = "The channel was removed from a community";
+
+"Notification.CommunityAddedBot" = "The bot was added to %1$@ community";
+"Notification.CommunityRemovedBot" = "The bot was removed from a community";
+
+"AvatarEditor.SetCommunityPhoto" = "Set as Community Photo";
+
+"Premium.RichText" = "Formatting Tools";
+"Premium.RichTextInfo" = "Add headers, tables, lists, AI and inline media to messages.";
+
+"ChatList.Remove" = "Remove";
+
+"Premium.Limits.Messages" = "Messages";
+"Premium.Limits.MessagesInfo" = "Express yourself with longer messages";
+
+"Attachment.Article" = "Article";
+"RichText.AddMediaTitle" = "Add Media";
+"RichText.TableMenu.Alignment" = "Alignment";
+"RichText.FormulaAdd" = "Add Formula";
+"RichText.FormulaEdit" = "Edit Formula";
+"RichText.FormulaSectionSourceTitle" = "LATEX";
+"RichText.FormulaSectionResultTitle" = "RESULT";
+"RichText.TitleArticle" = "Text";
+"RichText.MenuHeading" = "Heading";
+"RichText.MenuHeadingItem" = "Heading %@";
+"RichText.MenuText" = "Text";
+"RichText.MenuQuote" = "Quote";
+"RichText.MenuPullquote" = "Pullquote";
+"RichText.MenuCode" = "Code";
+"RichText.MenuFormula" = "Formula";
+"RichText.Menu.List.None" = "None";
+"RichText.Menu.List.Bullet" = "Bulleted List";
+"RichText.Menu.List.Numbered" = "Numbered List";
+"RichText.Menu.List.Checklist" = "Checklist";
+"RichText.Menu.Table.Copy" = "Copy Table";
+"RichText.Menu.Table.ConvertToText" = "Convert to Text";
+"RichText.Menu.Table.Delete" = "Delete Table";
+
+"TextProcessing.TitleAICompose" = "Create with AI";
+"TextProcessing.ActionAddToPage" = "Add to Page";
+"TextProcessing.ActionGenerate" = "Generate";
+"TextProcessing.StyleList.Prompt" = "Prompt";
+"TextProcessing.PromptPlaceholder" = "Generate text, formulas, or tables...";

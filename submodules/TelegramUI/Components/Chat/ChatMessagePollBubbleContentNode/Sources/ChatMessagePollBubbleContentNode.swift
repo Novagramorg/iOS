@@ -3730,7 +3730,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                     if case .tap = gesture {
                         if optionNode.isUserInteractionEnabled {
                             return ChatMessageBubbleContentTapAction(content: .ignore)
-                        } else if let item = self.item, !Namespaces.Message.allNonRegular.contains(item.message.id.namespace), let poll = self.poll, let option = optionNode.option, !isBotChat {
+                        } else if let item = self.item, !Namespaces.Message.allNonRegular.contains(item.message.id.namespace), !Namespaces.Message.allEphemeral.contains(item.message.id.namespace), let poll = self.poll, let option = optionNode.option, !isBotChat {
                             switch poll.publicity {
                             case .anonymous:
                                 return ChatMessageBubbleContentTapAction(content: .none)

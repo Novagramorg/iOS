@@ -35,6 +35,9 @@ import ComposeTodoScreen
 import ComposePollScreen
 import Photos
 import AttachmentFileController
+import RichTextAttachmentScreen
+import RichTextEditorMessageConversion
+import ChatRichTextEditorComposer
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -260,6 +263,7 @@ extension ChatControllerImpl {
             if !premiumGiftOptions.isEmpty {
                 buttons.insert(.gift, at: 1)
             }
+            buttons.insert(.richText, at: 1)   // rich text is default-on (legacy is the opt-out)
 
             guard let initialButton = initialButton else {
                 if case let .bot(botId, botPayload, botJustInstalled) = subject {
@@ -831,6 +835,88 @@ extension ChatControllerImpl {
                         strongSelf.controllerNavigationDisposable.set(nil)
                     })
                     return true
+                case .richText:
+                    let controller = RichTextAttachmentScreen(
+                        context: context,
+                        sendMessage: { [weak self] document, media, emojiFiles, sendWithoutFormatting in
+                            guard let strongSelf = self else {
+                                return
+                            }
+                            let text: String
+                            let attributes: [EngineMessage.Attribute]
+                            if sendWithoutFormatting {
+                                let peerSpecificEmojiPack = (strongSelf.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
+                                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                                let inputText = trimChatInputText(entityPreservingFallbackAttributedString(from: content, preserveCustomEmoji: { _, file in
+                                    if strongSelf.context.isPremium {
+                                        return true
+                                    }
+                                    guard let file else {
+                                        return false
+                                    }
+                                    if !file.isPremiumEmoji {
+                                        return true
+                                    }
+                                    for attribute in file.attributes {
+                                        if case let .CustomEmoji(_, _, _, packReference) = attribute, case let .id(id, _) = packReference {
+                                            return id == peerSpecificEmojiPack?.id.id
+                                        }
+                                    }
+                                    return false
+                                }))
+                                if inputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    return
+                                }
+                                let entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText))
+                                text = inputText.string
+                                attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
+                            } else {
+                                // Send a quote-bearing document as a rich message (InstantPage) too, even though a
+                                // blockquote is entity-expressible — the rich preview renders the quote faithfully.
+                                switch composeRichMessage(from: document, media: media, forSendPreview: true) {
+                                case let .rich(instantPage):
+                                    text = ""
+                                    attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
+                                case let .plain(plainText, entities):
+                                    text = plainText
+                                    attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
+                                case .empty:
+                                    return
+                                }
+                            }
+                            let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
+                            let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                            strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
+                                guard let strongSelf = self else {
+                                    return
+                                }
+                                strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
+                                    if let strongSelf = self {
+                                        strongSelf.chatDisplayNode.collapseInput()
+                                        strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                        })
+                                    }
+                                }, nil)
+                                strongSelf.sendMessages([message], postpone: postpone)
+                            })
+                        },
+                        presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
+                            guard let self else {
+                                return
+                            }
+                            self.presentRichTextAttachmentMenu(photoVideoOnly: photoVideoOnly, completion: completion)
+                        },
+                        presentFormulaEditor: { [weak self] initialValue, completion in
+                            guard let self else {
+                                return
+                            }
+                            self.presentFormulaEditor(initialValue: initialValue, completion: completion)
+                        }
+                    )
+                    completion(controller, controller.mediaPickerContext)
+                    strongSelf.controllerNavigationDisposable.set(nil)
+                    return true
                 default:
                     break
                 }
@@ -870,6 +956,41 @@ extension ChatControllerImpl {
                 present()
             }
         })
+    }
+    
+    @available(iOS 13.0, *)
+    func presentRichTextAttachmentMenu(photoVideoOnly: Bool, completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
+        // The gallery tab is inherently photos/videos only; audio + location are the only tabs that surface
+        // non-photo/video media, so restricting to just `.gallery` yields a photo/video-only picker (used when
+        // creating or extending a mosaic group).
+        let availableButtons: [AttachmentButtonType] = photoVideoOnly ? [.gallery] : [.gallery, .audio, .location]
+        presentPollAttachmentScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, subject: .richText, availableButtons: availableButtons, inputMediaNodeData: nil, present: { [weak self] c, push in
+            guard let self else {
+                return
+            }
+            if push {
+                self.push(c)
+            } else {
+                self.present(c, in: .window(.root))
+            }
+        }, completion: { result in
+            if let image = result.concrete(TelegramMediaImage.self) {
+                completion(.image(image))
+            } else if let file = result.concrete(TelegramMediaFile.self) {
+                completion(.file(file))
+            } else if let mapReference = result.concrete(TelegramMediaMap.self) {
+                completion(.location(mapReference.media))
+            }
+        })
+    }
+
+    func presentFormulaEditor(initialValue: String?, completion: @escaping (String) -> Void) {
+        let controller = FormulaEditorScreen(
+            context: self.context,
+            initialValue: initialValue,
+            completion: completion
+        )
+        self.present(controller, in: .window(.root))
     }
 
     func presentEditingAttachmentMenu(editMediaOptions: MessageMediaEditingOptions?, editMediaReference: AnyMediaReference?) {

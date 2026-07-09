@@ -86,6 +86,11 @@ import OldChannelsController
 import InviteLinksUI
 import GiftStoreScreen
 import SendInviteLinkScreen
+import CommunitiesScreen
+import CommunityAddScreen
+import CommunityEditScreen
+import CommunityRequestsScreen
+import CommunityViewScreen
 import PostSuggestionsSettingsScreen
 import ForumSettingsScreen
 import ForumCreateTopicScreen
@@ -2709,10 +2714,32 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         completion: @escaping (UIImage?) -> Void,
         completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
     ) {
+        self.displaySetPhoto(
+            parentController: parentController,
+            context: context,
+            peer: peer,
+            canDelete: !peer.profileImageRepresentations.isEmpty,
+            performDelete: {},
+            completion: completion,
+            completedWithUploadingImage: completedWithUploadingImage
+        )
+    }
+
+    public func displaySetPhoto(
+        parentController: ViewController,
+        context: AccountContext,
+        peer: EnginePeer,
+        canDelete: Bool,
+        performDelete: @escaping () -> Void,
+        completion: @escaping (UIImage?) -> Void,
+        completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
+    ) {
         PeerInfoScreenImpl.displaySetPhoto(
             parentController: parentController,
             context: context,
             peer: peer,
+            canDelete: canDelete,
+            performDelete: performDelete,
             completion: completion,
             completedWithUploadingImage: completedWithUploadingImage
         )
@@ -2983,6 +3010,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSource = .copyProtection
         case .aiTools:
             mappedSource = .aiTools
+        case .richText:
+            mappedSource = .richText
         case let .auth(price, days):
             mappedSource = .auth(price, days)
         case let .premiumGift(file):
@@ -3067,6 +3096,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSubject = .copyProtection
         case .aiTools:
             mappedSubject = .aiTools
+        case .richText:
+            mappedSubject = .richText
         case .business:
             mappedSubject = .business
             buttonText = presentationData.strings.Chat_EmptyStateIntroFooterPremiumActionButton
@@ -4311,7 +4342,39 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController {
         return SendInviteLinkScreen(context: context, subject: subject, peers: peers, theme: theme)
     }
-    
+
+    public func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController {
+        return CommunitiesScreen(context: context, peerId: peerId)
+    }
+
+    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, completed: completed)
+    }
+
+    public func makeCommunityAddScreen(context: AccountContext, peerId: EnginePeer.Id, initialVisibility: Bool, completed: @escaping (Bool) -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, peerId: peerId, initialVisibility: initialVisibility, completed: completed)
+    }
+
+    public func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
+        return CommunityEditScreen(context: context, communityId: communityId)
+    }
+
+    public func makeCommunityEditScreen(context: AccountContext, mode: CommunityEditScreenMode, completed: @escaping () -> Void) -> ViewController {
+        return CommunityEditScreen(context: context, mode: mode, completed: completed)
+    }
+
+    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {
+        return CommunityRequestsScreen(context: context, communityId: communityId, existingContext: existingContext)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, mode: CommunityViewScreenMode) -> ViewController {
+        return CommunityViewScreenImpl(context: context, communityId: communityId, mode: mode)
+    }
+
+    public func makeCommunityPeerSelectionScreen(context: AccountContext, communityId: EnginePeer.Id, selectionOptions: CommunityPeerSelectionOptions) -> ViewController {
+        return CommunityViewScreenImpl(context: context, communityId: communityId, mode: .fullscreen, selectionOptions: selectionOptions)
+    }
+
     public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {
         return CocoonInfoScreen(context: context)
     }
@@ -4404,8 +4467,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         context: AccountContext,
         theme: PresentationTheme?,
         mode: TextProcessingScreenMode,
-        inputText: TextWithEntities,
-        copyResult: ((TextWithEntities) -> Void)?,
+        inputText: ComposedRichMessage,
+        copyResult: ((ComposedRichMessage) -> Void)?,
         translateChat: ((String) -> Void)?
     ) async -> ViewController {
         return await TextProcessingScreen(

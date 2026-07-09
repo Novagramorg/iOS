@@ -41,6 +41,8 @@ The `ChatMessageDateAndStatusNode` mirrors TextBubble's placement, adapted to th
 - **InstantPage draws the baseline at the line frame's `maxY`** (`InstantPageRenderer` draws each line at `lineOrigin.y + lineFrame.height`), so the visible text of a plain line sits ~5pt below `maxY`. A date that **trails** on the line (`statusHeight == 0`) adds `trailingBottomPadding` (5pt) to align with the text; a date that **wraps** onto its own line below (`statusHeight > 0`) sits at the bare `maxY`. The pad is 0 for lines taller than their font line height (a tall inline attachment, e.g. a formula, already pushes `maxY` down). `lastTextLineFrameIfLastItemIsText` returns `(frame, trailingBottomPadding)`; the bubble applies the pad only in the trailing case.
 - **Bubble height leaves ~6pt below the date.** One unified formula for all cases: `boundingSize.height = max(boundingSize.height, statusBottomEdge + 6.0)`, where `statusBottomEdge = statusAnchorY + max(1, statusHeight)`. The `statusAnchorY` in the measure (`continue`) closure must mirror the `statusFrameY` in the apply closure exactly, or the date will be clipped/misplaced. (`streamingHeaderOffset` is `0.0` — there is no header offset to add.) 6pt matches TextBubble's bottom bubble inset.
 - **`hasDraft` adds the same 6pt at the streaming site.** The status max() above is gated by `!hasDraft`, so during streaming (status hidden, alpha=0) it can't supply the bubble's bottom inset. A separate `boundingSize.height += 6.0` inside `if hasDraft` in the SizeBlock closure does it instead — same 6pt, so the streaming bubble's bottom breathing room matches its post-stream height and there's no 6pt grow-pop when the status node fades in at finalize. The `hadDraft && !hasDraft` finalize pass doesn't need it because `!hasDraft` re-enables the status max(). If you ever refactor the `+6.0` constant out of the status max() into a `bottomInset` (TextBubble's pattern), kill this separate term at the same time — they're two ends of the same invariant.
+- **Trailing full-width media → overlaid pill, no reserved space.** When the bottom-most laid-out item is full-width visual media (`.mediaImage`/`.mediaVideo`/`.mediaCoverImage`/`.mediaMap`/`.slideshow`/`.mediaPlaceholder`), `lastFullWidthMediaFrame(in:)` (`InstantPageV2Layout.swift`) returns its frame and the status switches from `.Bubble{Incoming,Outgoing}` to the image-style `.Image{Incoming,Outgoing}` pill, positioned at the media's bottom-right corner (`layoutConstants.image.statusInsets`, with the X anchor clamped to `contentSize.width` to drop the 4pt `instantPageV2MediaEdgeBleed`), and reserving **no** vertical space — the width-growth and the `statusBottomEdge + 6.0` height reservation are both gated on `mediaStatusFrame == nil`, and the status layout input becomes `.standalone(reactionSettings:)`. The full-width gate (`frame.width >= contentSize.width - 12.0`) excludes a narrow/centered trailing media, which keeps the normal below-content bubble status.
+- **A pill can't host multi-row reactions, so non-inline reactions move outside the bubble.** The `wantsReactionsOutside` decision must be made *before* layout (it feeds `ChatMessageBubbleItemNode`'s pre-layout `needReactions`), so it can't consult laid-out items — hence two detectors. The **prepare phase** does a model-only structural check (the effective `InstantPage`'s last block is empty-caption visual media) and reports `ChatMessageBubbleContentProperties.wantsReactionsOutside = endsWithMedia && hasNonInlineReactions`; `ChatMessageBubbleItemNode` ORs that flag into `needReactions` (`if needReactions || forceReactionsOutside`), routing reactions to the external reaction-buttons node. The **layout phase** does the authoritative full-width check for the visual pill (above) and passes empty `reactions`/`reactionPeers` to the status node. Inline reactions stay *in* the pill via the `.standalone` reaction settings, mirroring `ChatMessageInteractiveMediaNode`. The two detectors can disagree only for a pathologically narrow trailing media (structural says "external", layout declines the pill) — accepted and documented, does not occur with server rich media (always full-width).
 
 ## InstantPage V2 table — flush frame, inset borders, rounded corners
 
@@ -75,6 +77,7 @@ Every V2 block-media kind lays out **flush** with the bubble interior (0 inset, 
 - **Captions stay inset.** `layoutCaptionAndCredit` is still called with the page `horizontalInset` and offset by the **un-bled** `scaledSize.height`; the caption/credit text is inset under a full-bleed image. The `isCover && captionHeight > 0` cover-padding block is unchanged.
 - **Audio is no longer routed through this helper.** As of the V2 audio port it has a dedicated `layoutAudio` arm emitting a typed `.mediaAudio` item at a full-width (x = 0), height-48 frame (matching V1 `InstantPageLayout.swift`); the wrapped `InstantPageAudioNode` self-insets its content by 17pt, and audio does **not** participate in `instantPageV2MediaEdgeBleed` (its node background is transparent). See the dedicated "InstantPage V2 audio/music" section below.
 - **`.map` blocks get a 600×300 (2:1) fallback when the sender omits dimensions.** AI/server-sent `.map` blocks can arrive with `dimensions == 0×0` (the wire `w`/`h` are *required* `Int32`, but the sender may put 0; our `pageBlockMap` parse and both serializers — Postbox `sw`/`sh`, FlatBuffers `required dimensions` — preserve whatever arrives, so the zero originates upstream). A zero `naturalSize.height` hits `instantPageV2MediaFrame`'s `else` branch and returns a **height-0** frame: the map collapses to no space, the caption slides up into it, and the V1 node's pin (positioned at `size.height*0.5 − 10 − pinSize/2`) floats over the caption. **The `.map` arm in `InstantPageV2Layout.swift` substitutes `PixelDimensions(600, 300)` whenever `width <= 0 || height <= 0`, and feeds that `effectiveDimensions` to BOTH the layout `naturalSize` AND the `InstantPageMapAttribute`** — the latter is essential because a `MapSnapshotMediaResource(width:0,height:0)` makes `MKMapSnapshotter` render nothing, so fixing only the frame would yield a correctly-sized *blank* box. Real web-article maps (the V1 renderer) always carry real dimensions, so V1 never trips this; the fallback is deliberately scoped to the V2 `.map` arm rather than V1 or the wire/parse layer.
+- **`.map` blocks show a theme placeholder while the snapshot loads (2026-06-27).** The map image is generated on-demand by `MKMapSnapshotter` (`chatMapSnapshotImage` → `chatMapSnapshotData` self-fetches via `engine.resources.custom`), which takes ~seconds; the pin (`ChatMessageLiveLocationPositionNode`) draws immediately, so the map area was **blank (pin over transparent)** until the fetch completed. `InstantPageImageNode.layout()`'s `.geo` arm now passes `emptyColor: theme.list.mediaPlaceholderColor`, and `chatMapSnapshotImage` emits an **initial `nil`** frame that fills `emptyColor` when there's no image yet — **corner-safe** (`addCorners` runs after the fill, unlike a node `backgroundColor` which would bleed past rounded corners) and **gated on `emptyColor`** so callers that don't opt in keep the prior transparent loading state. Shared, so it applies to every map render: web instant pages, rich messages, AND the RichTextEditor's own **`.location` blocks**, which now author `.map` (`MediaKind.location` → `.map`; see `richtext-composer.md`).
 
 ## InstantPage V2 audio/music
 
@@ -111,7 +114,16 @@ Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026
 
 ## InstantPage V2 collage & slideshow blocks
 
-`InstantPageBlock.collage` and `.slideshow` (grouped photos/videos with a caption — only ever produced by **real web Instant View articles**; nothing on the markdown/AI path emits them) render in V2 by porting V1. Collage flattens into the existing media-item machinery; slideshow is a dedicated interactive carousel.
+`InstantPageBlock.collage` and `.slideshow` (grouped photos/videos with a caption) render in V2 by porting V1. Collage flattens into the existing media-item machinery; slideshow is a dedicated interactive carousel.
+
+**`.collage` is no longer web-IV-only (added 2026-07-08).** The RichText editor's multi-media containers
+(a `MediaBlock`/`ChatInputMedia` holding `items.count >= 2` photos/videos with one shared caption — see
+`docs/richtext-composer.md` §4 "Inline media") now also emit `.collage` on send/edit/draft, from both the
+composer (`ChatInputContentInstantPage`) and the article editor (`RichTextEditorMessageConversion`'s
+`InstantPageBuilder`) converters — the first editor/rich-message path to produce a `.collage` block
+(needed zero codec work; it was already first-class through Postbox/FlatBuffers/upload). A container of
+exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before. `.slideshow`
+remains produced only by real web Instant View articles.
 
 ### Where things live
 
@@ -130,6 +142,106 @@ Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026
 - **Slideshow pages are created eagerly, deviating from V1's lazy central±1 paging.** In a chat bubble a slideshow is a handful of images, so eager creation avoids V1's index bookkeeping and makes the gallery transition source available for **every** page (even off-screen). Height = the tallest image `fitted(boundingWidth × 1200)`; only `.image` inner blocks render (matches V1 — videos become empty pages).
 - **The slideshow registers under EVERY contained media index, and re-registers on an in-window rebuild.** Its stableId is positional (`.positional(.slideshow, position)`, not `.media(index)` like the static media views), so it can be reused for a *different* slideshow at the same block position; `rebuildPages()` re-runs `registerMedias()` (guarded by `window != nil`) so the new indices land in the registry. The gallery hooks iterate the live page nodes and match by `InstantPageMedia` identity, so registering one view under N indices is idempotent.
 - **The 4 static media views answer the gallery hooks with explicit per-class witnesses, NOT a shared protocol-extension override** — an extension-only implementation is statically dispatched and would silently bind to the nil default when invoked through the `InstantPageItemView`-typed registry wrapper.
+
+## InstantPage V2 media spoiler (revealable dust)
+
+A `pageBlockPhoto`/`pageBlockVideo` (and thus a collage cell) can carry a **spoiler** flag — the medium is
+hidden behind an animated "dust" cover until the recipient taps it, mirroring the regular
+`MediaSpoilerMessageAttribute` path in `ChatMessageInteractiveMediaNode`. This is how a rich message
+(`RichTextMessageAttribute` → InstantPage) carries a media spoiler; the composer-authoring side is in
+`docs/richtext-composer.md` §4.
+
+### Where things live
+
+| Concern | Location |
+|---|---|
+| model flag | `InstantPageBlock.image`/`.video` gain `spoiler: Bool` (`SyncCore_InstantPage.swift`); Postbox key `"sp"`, flatBuffers `Models/InstantPageBlock.fbs` `spoiler:bool (id:4)` |
+| wire | `ApiUtils/InstantPage.swift` reads/ORs `pageBlockPhoto` `flags.1` / `pageBlockVideo` `flags.2` — **no `TelegramApi` change** (the bit rides the existing `flags` Int32; constructor ids `1759c560`/`7c8fe7b6` unchanged) |
+| laid-out item | `InstantPageV2MediaImageItem`/`VideoItem` gain `spoiler: Bool` (`InstantPageV2Layout.swift`); single-media + collage item-constructing cases thread it |
+| render | `InstantPageV2MediaViews.swift` — `MediaSpoilerDustOverlay` hosts a `MediaDustNode` (import `InvisibleInkDustNode`) in both `InstantPageV2MediaImageView`/`VideoView` |
+
+### Non-obvious invariants
+
+- **The dust cover is NON-interactive; reveal is driven through the wrapped node's own tap.** The overlay
+  (`containerNode` + `dustNode`) is `isUserInteractionEnabled = false`, so taps fall through to the sibling
+  `InstantPageImageNode` below it. Each view's `openMedia` closure is **gated**: while `overlay.concealed`,
+  the first tap calls `overlay.reveal()` (which sets `concealed = false` synchronously and drives
+  `MediaDustNode.tap(at:)` → the wipe animation → the `revealed` callback removes the cover) and returns
+  **without** opening the gallery; once revealed, taps fall through to `handleOpenMediaTap` (gallery). This
+  mirrors `ExtendedMediaOverlayNode.reveal(animated:)` but with a non-interactive cover instead of an
+  interactive button.
+- **Reuse resets reveal state by media id.** A positionally-reused media view (`stableId = .media(index)`,
+  reconciled through `update(item:)` → `updateSpoiler`) keyed on `EngineMedia.Id`: a different id or
+  `spoiler == false` tears down the cover; the same spoiler medium keeps its (possibly already-revealed)
+  state — so scrolling can't bleed a stale reveal onto a different photo, and a re-layout of the same photo
+  doesn't re-hide it. **No `InstantPageRenderer.reuse(existingView:)` change** was needed — it already routes
+  through `update(item:)`.
+- **Collage cells inherit spoiler for free.** `layoutCollage` flattens inner `.image`/`.video` into ordinary
+  top-level `.mediaImage`/`.mediaVideo` items (see the collage section above), threading each inner block's
+  `spoiler` — so an album with one spoiler cell just works, with no collage-specific spoiler code.
+- **The long-press-Send options preview** renders through the same `InstantPageV2View`, so a spoiler'd media
+  shows the dust cover in the preview bubble automatically.
+
+## InstantPage V2 rich-message video (auto-download & inline autoplay)
+
+Video block media in a **rich message** (`RichTextMessageAttribute` → InstantPage V2, drawn by
+`ChatMessageRichDataBubbleContentNode`) now auto-downloads and auto-plays inline like regular chat
+media (`ChatMessageInteractiveMediaNode`) — previously it was a static poster + play glyph that only
+downloaded/played on tap-to-gallery, and image auto-download ignored per-message settings. The fix is
+**layering-safe**: it lives entirely in `InstantPageUI` + the chat bubble, with **no** dependency on
+`ChatMessageInteractiveMediaNode` (that would invert the module layering — `InstantPageUI` is a
+low-level module also used by web Instant View / `BrowserUI`). HLS inline-range preloading and
+live-photo are deliberately **out of scope** (they fall back to tap-to-gallery).
+
+Spec: [`docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md`](docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md).
+Plan: [`docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md`](docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md).
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2RenderContext` gains 3 policy closures — `shouldAutoDownloadImage`/`shouldAutoDownloadFile`/`shouldAutoplayVideo` (all default `{ _ in false }`). `InstantPageItemView` gains `instantPageUpdateIsVisible(_:)` (default no-op), driven by `updateItemVisibility()` on every `visibilityRect` change (alongside `updateEmojiVisibility`). |
+| `submodules/InstantPageUI/Sources/InstantPageImageNode.swift` | `init` gains optional `autoDownloadImage`/`autoDownloadFile` overrides (default `nil` ⇒ current V1/web-IV global-settings behavior); the image + image-file fetch gates consult them. The video (`else`) branch stays poster-only. |
+| `submodules/InstantPageUI/Sources/InstantPageV2MediaViews.swift` | `makeMediaWrapper` forwards the two download overrides. `InstantPageV2MediaVideoView` hosts an inline `UniversalVideoNode`/`NativeVideoContent` (`updateInlineVideo`/`tearDownVideoNode`) layered above the poster. |
+| `…/Chat/ChatMessageRichDataBubbleContentNode/…` | Computes the 3 closures from the chat item and sets a real `sourceLocation`. |
+| `ChatSendMessageRichTextPreview.swift` | Unchanged — keeps the defaults (`message: nil` + off closures) → static poster. |
+
+### Non-obvious invariants
+
+- **Policy is computed in the bubble, consumed as booleans in `InstantPageUI`.** The bubble has the
+  chat item, so it computes download via `shouldDownloadMediaAutomatically(settings:
+  item.controllerInteraction.automaticMediaDownloadSettings, peerType:
+  associatedData.automaticDownloadPeerType, networkType: …automaticDownloadNetworkType, authorPeerId:
+  message.author?.id, contactsPeerIds: …, media:)` and autoplay via `(file.isAnimated ?
+  energyUsageSettings.autoplayGif : .autoplayVideo) && completedResourcePath(file) != nil`.
+  `InstantPageUI` never learns chat semantics — it just calls the closures. The closure types mirror the
+  existing `imageReference`/`fileReference` split (concrete `TelegramCore` types) because `EngineMedia`'s
+  wrap/unwrap helpers are `internal` to `TelegramCore`.
+- **Video content id MUST be message-scoped, not webpage-scoped.** Every rich message synthesizes the
+  same webpage id `(0,0)`, so keying the player by webpage would make two on-screen rich-message videos
+  collide in the universal video manager. `InstantPageV2MediaVideoView` uses the existing
+  `NativeVideoContentId.message(UInt32(bitPattern: messageId.id), file.fileId)` — same trap the V2 audio
+  port hit (`.richMessage(messageId)`). The inline player is only built when `renderContext.message?.id`
+  exists, so the send-preview (nil message) never needs one.
+- **Visibility gating has no dead-attach window.** The player's `canAttachContent` is toggled by
+  `instantPageUpdateIsVisible` (from the root's `visibilityRect` → `updateItemVisibility`). A player
+  built *before* the first visibility tick starts with `canAttachContent = false`, but first display
+  always flips `visibilityRect` nil→rect (a *change*) → the tick attaches it. A player built on a *later*
+  update (e.g. after a fetch completes, with no visibility change) is seeded `canAttachContent =
+  self.localIsVisible`, which is already true for an on-screen view. Both orderings attach.
+- **Auto-download is decoupled from autoplay (fixes the "never downloads" gap).** When
+  `shouldAutoDownloadFile(file)` is true the video bytes are fetched (once per media id, via
+  `freeMediaFileInteractiveFetched` with the render-context `.message` `fileReference`) **even if
+  autoplay is off** — so a rich-message video prefetches per settings instead of only on tap.
+  `videoFetchMediaId` dedups; the `MetaDisposable` `set()` cancels a stale fetch on media switch and is
+  disposed in `deinit`.
+- **Reuse & spoiler.** Positional reuse keeps the player only when `videoNodeMediaId == mediaId`
+  (else teardown + rebuild); a concealed spoiler cover suppresses the player (`wantAutoplay =
+  shouldAutoplayVideo && !concealed`), and the spoiler reveal path re-runs `updateInlineVideo` so
+  autoplay starts after the dust clears. Gallery transition hides the player via
+  `instantPageUpdateHiddenMedia`.
+- **Collage cells inherit this for free** — `.collage` flattens into ordinary `.mediaVideo` items, so
+  each cell is an `InstantPageV2MediaVideoView` with no collage-specific code.
 
 ## InstantPage V2 text item height (true font line box)
 

@@ -1922,8 +1922,13 @@ func openResolvedUrlImpl(
                                 }
                                 
                                 if case let .accepted(url) = acceptResult, let url {
+                                    var clientData: MessageActionUrlAuthResult.ClientData?
+                                    if case let .request(_, _, value, _, _, _) = result {
+                                        clientData = value
+                                    }
+                                    
                                     var browserIdentifier = "safari"
-                                    if case let .request(_, _, clientData, _, _, _) = result, let browser = clientData?.browser {
+                                    if let browser = clientData?.browser {
                                         if browser.hasPrefix("Safari") {
                                             browserIdentifier = "safari"
                                         } else if browser.hasPrefix("Opera") {
@@ -1949,12 +1954,24 @@ func openResolvedUrlImpl(
                                         }
                                     }
                                     
-                                    let isWebUrl = url.hasPrefix("http:") || url.hasPrefix("https:")
-                                    let openInOptions = availableOpenInOptions(context: context, item: .url(url: url))
-                                    if isWebUrl, let match = openInOptions.first(where: { $0.identifier == browserIdentifier }), case let .openUrl(openUrl) = match.action() {
-                                        context.sharedContext.openExternalUrl(context: context, urlContext: .external, url: openUrl, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+                                    let openInBrowser: () -> Void = {
+                                        let isWebUrl = url.hasPrefix("http:") || url.hasPrefix("https:")
+                                        let openInOptions = availableOpenInOptions(context: context, item: .url(url: url))
+                                        if isWebUrl, let match = openInOptions.first(where: { $0.identifier == browserIdentifier }), case let .openUrl(openUrl) = match.action() {
+                                            context.sharedContext.openExternalUrl(context: context, urlContext: .external, url: openUrl, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+                                        } else {
+                                            context.sharedContext.openExternalUrl(context: context, urlContext: .external, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+                                        }
+                                    }
+                                    
+                                    if clientData?.isApp == true, URL(string: url)?.scheme?.lowercased() == "https" {
+                                        context.sharedContext.applicationBindings.openUniversalUrl(url, TelegramApplicationOpenUrlCompletion(completion: { success in
+                                            if !success {
+                                                openInBrowser()
+                                            }
+                                        }))
                                     } else {
-                                        context.sharedContext.openExternalUrl(context: context, urlContext: .external, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+                                        openInBrowser()
                                     }
                                 }
                             }, error: { _ in
@@ -2060,7 +2077,7 @@ func openResolvedUrlImpl(
                             return true
                         }), nil)
                     }
-                }), inputText: TextWithEntities(text: "", entities: []), copyResult: nil, translateChat: nil)
+                }), inputText: .plain(text: "", entities: []), copyResult: nil, translateChat: nil)
                 navigationController?.pushViewController(controller)
             }
     }

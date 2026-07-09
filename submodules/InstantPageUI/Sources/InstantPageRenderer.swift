@@ -36,7 +36,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, mediaPlaceholder, table, anchor, formula, slideshow
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame
 }
 
 // MARK: - Render context
@@ -64,6 +64,15 @@ public final class InstantPageV2RenderContext {
     /// message reference (so a stale file reference can revalidate); `nil` in the send preview,
     /// which falls back to the webpage-keyed playlist id + webpage file reference.
     public let message: MessageReference?
+    /// Per-media auto-download decision for a photo, computed by the host (chat bubble) from the
+    /// message's download settings. Default `{ _ in false }` — V1/web-IV and the send preview keep
+    /// their existing behavior (the node's own global-settings gate). See the video/autodownload spec.
+    public let shouldAutoDownloadImage: (TelegramMediaImage) -> Bool
+    /// Per-media auto-download decision for a file/video. Default `{ _ in false }`.
+    public let shouldAutoDownloadFile: (TelegramMediaFile) -> Bool
+    /// Whether a video file should auto-play inline (energy-usage autoplay setting AND already
+    /// downloaded), computed by the host. Default `{ _ in false }` — no inline autoplay.
+    public let shouldAutoplayVideo: (TelegramMediaFile) -> Bool
 
     public init(
         context: AccountContext,
@@ -75,6 +84,9 @@ public final class InstantPageV2RenderContext {
         push: @escaping (ViewController) -> Void,
         openUrl: @escaping (InstantPageUrlItem) -> Void,
         baseNavigationController: @escaping () -> NavigationController?,
+        shouldAutoDownloadImage: @escaping (TelegramMediaImage) -> Bool = { _ in false },
+        shouldAutoDownloadFile: @escaping (TelegramMediaFile) -> Bool = { _ in false },
+        shouldAutoplayVideo: @escaping (TelegramMediaFile) -> Bool = { _ in false },
         message: MessageReference?
     ) {
         self.context = context
@@ -87,6 +99,9 @@ public final class InstantPageV2RenderContext {
         self.openUrl = openUrl
         self.baseNavigationController = baseNavigationController
         self.message = message
+        self.shouldAutoDownloadImage = shouldAutoDownloadImage
+        self.shouldAutoDownloadFile = shouldAutoDownloadFile
+        self.shouldAutoplayVideo = shouldAutoplayVideo
     }
 
     /// Update the content-bearing fields for a later chunk of the SAME message. Enables the
@@ -158,6 +173,7 @@ public final class InstantPageV2View: UIView {
         didSet {
             if oldValue != self.visibilityRect {
                 self.updateEmojiVisibility()
+                self.updateItemVisibility()
             }
         }
     }
@@ -572,6 +588,21 @@ public final class InstantPageV2View: UIView {
         self.propagateVisibilityRect()
     }
 
+    // Tells each direct item view whether it currently intersects the visibility rect, so inline
+    // players (video) attach/detach with scroll. Nested details/table views run their own pass when
+    // their `visibilityRect` is set by `propagateVisibilityRect` (which `updateEmojiVisibility` calls).
+    func updateItemVisibility() {
+        for view in self.itemViews {
+            let onScreen: Bool
+            if let visibilityRect = self.visibilityRect {
+                onScreen = view.frame.intersects(visibilityRect)
+            } else {
+                onScreen = false
+            }
+            view.instantPageUpdateIsVisible(onScreen)
+        }
+    }
+
     // Pushes this view's `visibilityRect` down into every nested V2 view (details body, table
     // title + cells), converted into each child's coordinate space. Each child's `visibilityRect`
     // didSet re-runs `updateEmojiVisibility`, which propagates one level further — so a single
@@ -643,9 +674,17 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2BlockQuoteBarView else { return nil }
             v.update(item: bar, theme: theme)
             return v
+        case let .quoteFrame(frame):
+            guard let v = existingView as? InstantPageV2QuoteFrameView else { return nil }
+            v.update(item: frame, theme: theme)
+            return v
         case let .shape(shape):
             guard let v = existingView as? InstantPageV2ShapeView else { return nil }
             v.update(item: shape, theme: theme)
+            return v
+        case let .imageOrnament(ornament):
+            guard let v = existingView as? InstantPageV2ImageOrnamentView else { return nil }
+            v.update(item: ornament, theme: theme)
             return v
         case let .mediaPlaceholder(media):
             guard let v = existingView as? InstantPageV2MediaPlaceholderView else { return nil }
@@ -711,7 +750,9 @@ public final class InstantPageV2View: UIView {
         case .divider:                 return .positional(.divider, position)
         case .listMarker:              return .positional(.listMarker, position)
         case .blockQuoteBar:           return .positional(.blockQuoteBar, position)
+        case .quoteFrame:              return .positional(.quoteFrame, position)
         case .shape:                   return .positional(.shape, position)
+        case .imageOrnament:           return .positional(.imageOrnament, position)
         case .mediaPlaceholder:        return .positional(.mediaPlaceholder, position)
         case .table:                   return .positional(.table, position)
         case .anchor:                  return .positional(.anchor, position)
@@ -770,8 +811,12 @@ public final class InstantPageV2View: UIView {
             return InstantPageV2CodeBlockView(item: block, theme: theme)
         case let .blockQuoteBar(bar):
             return InstantPageV2BlockQuoteBarView(item: bar, theme: theme)
+        case let .quoteFrame(frame):
+            return InstantPageV2QuoteFrameView(item: frame, theme: theme)
         case let .shape(shape):
             return InstantPageV2ShapeView(item: shape, theme: theme)
+        case let .imageOrnament(ornament):
+            return InstantPageV2ImageOrnamentView(item: ornament)
         case let .mediaPlaceholder(media):
             return InstantPageV2MediaPlaceholderView(item: media, theme: theme)
         case let .details(details):
@@ -881,12 +926,16 @@ protocol InstantPageItemView: UIView {
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))?
     /// Gallery hidden-media tick: hide/show the source for `media`. Default no-op.
     func instantPageUpdateHiddenMedia(_ media: InstantPageMedia?)
+    /// Visibility tick for players/animations that must attach only while on screen. Default no-op;
+    /// the inline video view (`InstantPageV2MediaVideoView`) toggles `canAttachContent`.
+    func instantPageUpdateIsVisible(_ isVisible: Bool)
 }
 
 extension InstantPageItemView {
     var subLayoutView: InstantPageV2View? { return nil }
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? { return nil }
     func instantPageUpdateHiddenMedia(_ media: InstantPageMedia?) { }
+    func instantPageUpdateIsVisible(_ isVisible: Bool) { }
 }
 
 // MARK: - Text view (port of V1 InstantPageTextItem.drawInTile)
@@ -1637,6 +1686,36 @@ final class InstantPageV2BlockQuoteBarView: UIView, InstantPageItemView {
     }
 }
 
+// MARK: - Quote frame view (accent bar + accent-tinted rounded fill, for block quotes & code)
+
+final class InstantPageV2QuoteFrameView: UIView, InstantPageItemView {
+    private(set) var item: InstantPageV2QuoteFrameItem
+    var itemFrame: CGRect { return self.item.frame }
+    private let imageView: UIImageView
+
+    init(item: InstantPageV2QuoteFrameItem, theme: InstantPageTheme) {
+        self.item = item
+        self.imageView = UIImageView()
+        super.init(frame: item.frame)
+        self.isUserInteractionEnabled = false
+        self.addSubview(self.imageView)
+        self.update(item: item, theme: theme)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(item: InstantPageV2QuoteFrameItem, theme: InstantPageTheme) {
+        let _ = theme
+        self.item = item
+        self.imageView.image = instantPageV2QuoteFillImage(accent: item.accentColor, barWidth: item.barWidth, cornerRadius: item.cornerRadius, fillAlpha: item.fillAlpha)
+        self.imageView.frame = CGRect(origin: .zero, size: item.frame.size)
+        // RTL: mirror horizontally so the leading bar sits on the trailing (right) edge; the fill is
+        // otherwise symmetric, so the mirror only moves the bar + swaps which corners the arc rounds.
+        self.imageView.transform = item.barOnTrailing ? CGAffineTransform(scaleX: -1.0, y: 1.0) : .identity
+    }
+}
+
 // MARK: - Shape view (for pullQuote line ornaments)
 
 final class InstantPageV2ShapeView: UIView, InstantPageItemView {
@@ -1667,6 +1746,44 @@ final class InstantPageV2ShapeView: UIView, InstantPageItemView {
             self.backgroundColor = self.item.color
             self.layer.cornerRadius = 0.0
         }
+    }
+}
+
+// MARK: - Image ornament view (for pullQuote corner marks)
+
+final class InstantPageV2ImageOrnamentView: UIView, InstantPageItemView {
+    private(set) var item: InstantPageV2ImageOrnamentItem
+    var itemFrame: CGRect { return self.item.frame }
+    private let imageView: UIImageView
+
+    init(item: InstantPageV2ImageOrnamentItem) {
+        self.item = item
+        let iv = UIImageView(image: UIImage(bundleImageName: item.imageName)?.withRenderingMode(.alwaysTemplate))
+        iv.tintColor = item.color
+        iv.frame = CGRect(origin: .zero, size: item.frame.size)
+        iv.contentMode = .scaleAspectFit
+        if item.rotated { iv.transform = CGAffineTransform(rotationAngle: .pi) }
+        self.imageView = iv
+        super.init(frame: item.frame)
+        addSubview(iv)
+        isUserInteractionEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(item: InstantPageV2ImageOrnamentItem, theme: InstantPageTheme) {
+        let _ = theme
+        let previous = self.item
+        self.item = item
+        if previous.imageName != item.imageName {
+            self.imageView.image = UIImage(bundleImageName: item.imageName)?.withRenderingMode(.alwaysTemplate)
+        }
+        self.imageView.tintColor = item.color
+        // Reset transform before writing frame (frame under a live transform is undefined), then re-apply.
+        self.imageView.transform = .identity
+        self.imageView.frame = CGRect(origin: .zero, size: item.frame.size)
+        self.imageView.transform = item.rotated ? CGAffineTransform(rotationAngle: .pi) : .identity
     }
 }
 
@@ -1867,15 +1984,16 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2CodeBlockItem
     var itemFrame: CGRect { return self.item.frame }
 
-    private let backgroundLayer: CALayer
+    private let backgroundImageView: UIImageView
+    private let languageLabel: UILabel
     let textView: InstantPageV2TextView
 
     init(item: InstantPageV2CodeBlockItem, theme: InstantPageTheme) {
         self.item = item
+        self.backgroundImageView = UIImageView()
+        self.languageLabel = UILabel()
 
-        self.backgroundLayer = CALayer()
-
-        // item.textItem.frame is already in code-block content-area coords (x=17, y=backgroundInset).
+        // item.textItem.frame is already in code-block content-area coords (x=leadingInset, y=verticalInset).
         let innerV2TextItem = InstantPageV2TextItem(
             frame: item.textItem.frame,
             textItem: item.textItem
@@ -1883,9 +2001,10 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
         self.textView = InstantPageV2TextView(item: innerV2TextItem, theme: theme)
 
         super.init(frame: item.frame)
-        self.backgroundColor = .clear                 // structural
-        self.layer.addSublayer(self.backgroundLayer)  // structural
-        self.addSubview(self.textView)                // structural
+        self.backgroundColor = .clear
+        self.addSubview(self.backgroundImageView)
+        self.addSubview(self.languageLabel)
+        self.addSubview(self.textView)
         self.update(item: item, theme: theme)
     }
 
@@ -1894,9 +2013,24 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
 
     func update(item: InstantPageV2CodeBlockItem, theme: InstantPageTheme) {
         self.item = item
-        self.backgroundLayer.backgroundColor = item.backgroundColor.cgColor
-        self.backgroundLayer.cornerRadius = item.cornerRadius
-        self.backgroundLayer.frame = CGRect(origin: .zero, size: item.frame.size)
+
+        self.backgroundImageView.image = instantPageV2QuoteFillImage(accent: item.accentColor, barWidth: item.barWidth, cornerRadius: item.cornerRadius, fillAlpha: item.fillAlpha)
+        self.backgroundImageView.frame = CGRect(origin: .zero, size: item.frame.size)
+        self.backgroundImageView.transform = item.barOnTrailing ? CGAffineTransform(scaleX: -1.0, y: 1.0) : .identity
+
+        if let language = item.language, !language.isEmpty {
+            self.languageLabel.isHidden = false
+            self.languageLabel.attributedText = NSAttributedString(string: language, attributes: [
+                .font: UIFont(name: "Menlo", size: 11.0) ?? Font.regular(11.0),
+                .foregroundColor: item.languageLabelColor
+            ])
+            self.languageLabel.sizeToFit()
+            let labelWidth = self.languageLabel.bounds.width
+            let labelHeight = self.languageLabel.bounds.height
+            self.languageLabel.frame = CGRect(x: item.frame.width - 8.0 - labelWidth, y: 2.0, width: labelWidth, height: labelHeight)
+        } else {
+            self.languageLabel.isHidden = true
+        }
 
         let innerV2TextItem = InstantPageV2TextItem(
             frame: item.textItem.frame,

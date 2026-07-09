@@ -459,74 +459,90 @@ func openJoinChatWebViewImpl(
 
     let peerId = webView.peerId ?? webView.botPeer.id
     let botName = webView.botPeer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
-    let params = WebAppParameters(source: .button, peerId: peerId, botId: webView.botPeer.id, botName: botName, botVerified: webView.botPeer.isVerified, botAddress: webView.botPeer.addressName ?? "", appName: nil, url: webView.url, queryId: webView.queryId, payload: nil, buttonText: "", keepAliveSignal: nil, forceHasSettings: false, fullSize: false)
 
     let openWebView: () -> Void = { [weak parentController] in
         guard let parentController else {
             return
         }
 
-        let decisionDisposable = MetaDisposable()
-        let webAppControllerHolder = JoinChatWebViewControllerHolder()
-        var pendingUrl: String?
-        var didHandleTerminalResult = false
-        var presentImpl: ((ViewController, Any?) -> Void)?
-
-        let controller = standaloneWebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, threadId: nil, openUrl: { [weak parentController] url, concealed, forceUpdate, commit in
-            ChatControllerImpl.botOpenUrl(context: context, peerId: peerId, controller: parentController as? ChatControllerImpl, url: url, concealed: concealed, forceUpdate: forceUpdate, present: { c, a in
-                presentImpl?(c, a)
-            }, commit: commit)
-        }, requestSwitchInline: { [weak parentController] query, chatTypes, completion in
-            ChatControllerImpl.botRequestSwitchInline(context: context, controller: parentController as? ChatControllerImpl, peerId: peerId, botAddress: webView.botPeer.addressName ?? "", query: query, chatTypes: chatTypes, completion: completion)
-        }, didDismiss: {
-            decisionDisposable.dispose()
-        }, getNavigationController: { [weak parentController] in
-            var navigationController: NavigationController?
-            if let parentController = parentController as? ChatControllerImpl {
-                navigationController = parentController.effectiveNavigationController
+        let openResolvedWebView: (RequestWebViewResult) -> Void = { [weak parentController] result in
+            guard let parentController else {
+                return
             }
-            return navigationController ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
-        }, onControllerCreated: { controller in
-            webAppControllerHolder.controller = controller
-            if let pendingUrl {
-                controller.loadExternal(url: pendingUrl)
-            }
-            pendingUrl = nil
-        })
-        controller.navigationPresentation = .flatModal
 
-        presentImpl = { [weak controller] c, a in
-            controller?.present(c, in: .window(.root), with: a)
+            let params = WebAppParameters(source: .button, peerId: peerId, botId: webView.botPeer.id, botName: botName, botVerified: webView.botPeer.isVerified, botAddress: webView.botPeer.addressName ?? "", appName: nil, url: result.url, queryId: result.queryId ?? webView.queryId, payload: nil, buttonText: "", keepAliveSignal: result.keepAliveSignal, forceHasSettings: false, fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin))
+
+            let decisionDisposable = MetaDisposable()
+            let webAppControllerHolder = JoinChatWebViewControllerHolder()
+            var pendingUrl: String?
+            var didHandleTerminalResult = false
+            var presentImpl: ((ViewController, Any?) -> Void)?
+
+            let controller = standaloneWebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, threadId: nil, openUrl: { [weak parentController] url, concealed, forceUpdate, commit in
+                ChatControllerImpl.botOpenUrl(context: context, peerId: peerId, controller: parentController as? ChatControllerImpl, url: url, concealed: concealed, forceUpdate: forceUpdate, present: { c, a in
+                    presentImpl?(c, a)
+                }, commit: commit)
+            }, requestSwitchInline: { [weak parentController] query, chatTypes, completion in
+                ChatControllerImpl.botRequestSwitchInline(context: context, controller: parentController as? ChatControllerImpl, peerId: peerId, botAddress: webView.botPeer.addressName ?? "", query: query, chatTypes: chatTypes, completion: completion)
+            }, didDismiss: {
+                decisionDisposable.dispose()
+            }, getNavigationController: { [weak parentController] in
+                var navigationController: NavigationController?
+                if let parentController = parentController as? ChatControllerImpl {
+                    navigationController = parentController.effectiveNavigationController
+                }
+                return navigationController ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
+            }, onControllerCreated: { controller in
+                webAppControllerHolder.controller = controller
+                if let pendingUrl {
+                    controller.loadExternal(url: pendingUrl)
+                }
+                pendingUrl = nil
+            })
+            controller.navigationPresentation = .flatModal
+
+            presentImpl = { [weak controller] c, a in
+                controller?.present(c, in: .window(.root), with: a)
+            }
+
+            decisionDisposable.set((context.account.stateManager.joinChatWebViewDecisions
+            |> deliverOnMainQueue).start(next: { [weak controller, weak parentController] decisions in
+                for decision in decisions {
+                    guard decision.queryId == webView.queryId else {
+                        continue
+                    }
+                    switch decision.result {
+                    case let .webView(url):
+                        if let webAppController = webAppControllerHolder.controller {
+                            webAppController.loadExternal(url: url)
+                        } else {
+                            pendingUrl = url
+                        }
+                    case .approved, .declined, .queued:
+                        if didHandleTerminalResult {
+                            return
+                        }
+                        didHandleTerminalResult = true
+                        decisionDisposable.set(nil)
+                        controller?.dismiss(animated: true)
+                        if let parentController {
+                            presentJoinChatWebViewDecisionToast(context: context, parentController: parentController, presentationData: presentationData, decision: decision)
+                        }
+                    }
+                }
+            }))
+
+            parentController.push(controller)
         }
 
-        decisionDisposable.set((context.account.stateManager.joinChatWebViewDecisions
-        |> deliverOnMainQueue).start(next: { [weak controller, weak parentController] decisions in
-            for decision in decisions {
-                guard decision.queryId == webView.queryId else {
-                    continue
-                }
-                switch decision.result {
-                case let .webView(url):
-                    if let webAppController = webAppControllerHolder.controller {
-                        webAppController.loadExternal(url: url)
-                    } else {
-                        pendingUrl = url
-                    }
-                case .approved, .declined, .queued:
-                    if didHandleTerminalResult {
-                        return
-                    }
-                    didHandleTerminalResult = true
-                    decisionDisposable.set(nil)
-                    controller?.dismiss(animated: true)
-                    if let parentController {
-                        presentJoinChatWebViewDecisionToast(context: context, parentController: parentController, presentationData: presentationData, decision: decision)
-                    }
-                }
-            }
-        }))
-
-        parentController.push(controller)
+        if let url = webView.url {
+            openResolvedWebView(RequestWebViewResult(flags: [], queryId: webView.queryId, url: url, keepAliveSignal: nil))
+        } else {
+            let _ = (context.engine.messages.requestChatJoinWebView(queryId: webView.queryId, themeParams: generateWebAppThemeParams(presentationData.theme))
+            |> deliverOnMainQueue).start(next: { result in
+                openResolvedWebView(result)
+            })
+        }
     }
 
     let _ = (ApplicationSpecificNotice.getBotGameNotice(accountManager: context.sharedContext.accountManager, peerId: webView.botPeer.id)

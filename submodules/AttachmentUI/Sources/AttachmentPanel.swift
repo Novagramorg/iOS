@@ -264,6 +264,9 @@ private final class AttachButtonComponent: CombinedComponent {
             case .quickReply:
                 name = strings.Attachment_Reply
                 imageName = "Chat/Attach Menu/Reply"
+            case .richText:
+                name = strings.Attachment_Article
+                imageName = "Chat/Attach Menu/Article"
             }
 
             let tintColor: UIColor
@@ -1385,7 +1388,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                         hasEntityKeyboard: hasEntityKeyboard,
                         gesture: gesture,
                         sourceSendButton: node.view,
-                        textInputView: textInputNode.textView,
+                        textInputSource: textInputNode.textView,
                         emojiViewProvider: textInputPanelNode.emojiViewProvider,
                         completion: {
                         },
@@ -1463,6 +1466,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         }, presentInputTextTranslation: { _, _ in
         }, sendEmoji: { _, _, _ in
         }, openAICompose: {
+        }, openExpandedInput: {
         }, openSetPeerAvatar: {
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in
@@ -2193,6 +2197,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 accessibilityTitle = ""
             case .quickReply:
                 accessibilityTitle = self.presentationData.strings.Attachment_Reply
+            case .richText:
+                accessibilityTitle = self.presentationData.strings.Attachment_Article
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle
@@ -2520,7 +2526,10 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
 
         let glassPanelHeight: CGFloat = 62.0
         var bounds = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: topAccessoryHeight + self.buttonSize.height + insets.bottom))
-        if (buttons.count == 1 || hideButtons) && topAccessoryHeight > 0.0 {
+        // With a single tab the button chips are removed entirely (see updateViews), so the button row is
+        // dead space: collapse it. When there's a media-accessory panel the bar shrinks to just that panel;
+        // with no accessory (topAccessoryHeight == 0) the whole panel collapses to zero.
+        if buttons.count == 1 || hideButtons {
             bounds.size.height -= self.buttonSize.height
         }
         var mediaAccessoryPanelFrame: CGRect?
@@ -2568,7 +2577,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
 
             let basePanelHeight = isSelecting ? max(0.0, visualTextPanelHeight - 11.0) : glassPanelHeight
             var panelSize = CGSize(width: isSelecting ? textPanelWidth : buttonsPanelWidth, height: basePanelHeight + topAccessoryHeight)
-            if !isSelecting && (buttons.count == 1 || hideButtons) && topAccessoryHeight > 0.0 {
+            if !isSelecting && (buttons.count == 1 || hideButtons) {
+                // Collapse the empty button row to the accessory height (zero when there's no accessory panel),
+                // so a single-tab picker doesn't render an empty glass bar.
                 panelSize.height = topAccessoryHeight
             }
 
