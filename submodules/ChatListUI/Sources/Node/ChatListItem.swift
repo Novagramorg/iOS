@@ -2704,6 +2704,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 case todo
                 case game
                 case voiceMessage
+                case audio
             }
             var messageTypeIcon: MessageTypeIcon?
             var ignoreForwardedIcon = false
@@ -3028,6 +3029,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                     if let file = media as? TelegramMediaFile {
                                         if file.isVoice {
                                             messageTypeIcon = .voiceMessage
+                                        } else if file.isMusic {
+                                            messageTypeIcon = .audio
                                         }
                                     } else if let _ = media as? TelegramMediaPoll {
                                         messageTypeIcon = .poll
@@ -3242,6 +3245,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 currentMessageTypeIconOffset.y = -1.0
             case .voiceMessage:
                 currentMessageTypeIcon = PresentationResourcesChatList.voiceMessageIcon(item.presentationData.theme)
+                currentMessageTypeIconOffset.y = -1.0
+            case .audio:
+                currentMessageTypeIcon = PresentationResourcesChatList.audioIcon(item.presentationData.theme)
                 currentMessageTypeIconOffset.y = -1.0
             default:
                 break
@@ -3983,8 +3989,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             if actions.contains(.delete) {
                                 peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.Common_Delete, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
                             } else if actions.contains(.remove) {
-                                //TODO:localize
-                                peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: "Remove", icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
+                                peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.ChatList_Remove, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
                             }
                         }
                     } else {

@@ -981,12 +981,6 @@ private final class AdminUserActionsContentComponent: Component {
                     self.cachedChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: component.theme.list.itemAccentColor)!, component.theme)
                 }
 
-                let footerChatCountText: String
-                if communityBanContext.chatCount == 1 {
-                    footerChatCountText = "1 chat >"
-                } else {
-                    footerChatCountText = "\(communityBanContext.chatCount) chats >"
-                }
                 let linkAttributeKey = NSAttributedString.Key(rawValue: "URL")
                 let footerAttributes = MarkdownAttributes(
                     body: MarkdownAttributeSet(font: Font.regular(component.presentationData.listsFontSize.itemListBaseHeaderFontSize), textColor: component.theme.list.freeTextColor),
@@ -996,7 +990,7 @@ private final class AdminUserActionsContentComponent: Component {
                         return ("URL", link)
                     }
                 )
-                let footerRawText = "The user will be removed from [\(footerChatCountText)](community)".replacingOccurrences(of: " >]", with: "\u{00A0}>]")
+                let footerRawText = component.strings.Community_AdminActions_Footer(Int32(clamping: communityBanContext.chatCount)).replacingOccurrences(of: " >]", with: "\u{00A0}>]")
                 let footerText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(footerRawText, attributes: footerAttributes))
                 if let range = footerText.string.range(of: ">"), let chevronImage = self.cachedChevronImage?.0 {
                     footerText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: footerText.string))
@@ -1033,7 +1027,7 @@ private final class AdminUserActionsContentComponent: Component {
                                 style: .glass,
                                 title: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        string: "Ban from the Community",
+                                        string: component.strings.Community_AdminActions_BanFromCommunity,
                                         font: Font.regular(component.presentationData.listsFontSize.baseDisplaySize),
                                         textColor: component.theme.list.itemPrimaryTextColor
                                     )),
@@ -1474,18 +1468,18 @@ private final class AdminUserActionsSheetComponent: Component {
                 }
 
                 if self.banFromCommunity, let communityBanContext = self.communityBanContext, !communityBanContext.creatorChatIds.isEmpty, let peer = component.peers.first {
-                    //TODO:localize
+                    let warningChatCount = environmentValue.strings.Community_AdminActions_WarningChatCount(Int32(clamping: communityBanContext.creatorChatIds.count))
                     var alertContent: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                         AnyComponentWithIdentity(
                             id: "title",
                             component: AnyComponent(
-                                AlertTitleComponent(title: "Warning")
+                                AlertTitleComponent(title: environmentValue.strings.Community_AdminActions_WarningTitle)
                             )
                         ),
                         AnyComponentWithIdentity(
                             id: "text",
                             component: AnyComponent(
-                                AlertTextComponent(content: .plain("Banning **\(peer.peer.compactDisplayTitle)** will also remove **\(communityBanContext.creatorChatIds.count)** their chats from the community."))
+                                AlertTextComponent(content: .plain(environmentValue.strings.Community_AdminActions_WarningText(peer.peer.compactDisplayTitle, warningChatCount).string))
                             )
                         )
                     ]
@@ -1509,7 +1503,7 @@ private final class AdminUserActionsSheetComponent: Component {
                         content: alertContent,
                         actions: [
                             .init(title: environmentValue.strings.Common_Cancel),
-                            .init(title: "Ban", type: .defaultDestructive, action: {
+                            .init(title: environmentValue.strings.Conversation_ContextMenuBanFull, type: .defaultDestructive, action: {
                                 commitMainAction()
                             })
                         ]

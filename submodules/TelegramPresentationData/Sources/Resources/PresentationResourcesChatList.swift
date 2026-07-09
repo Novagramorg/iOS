@@ -361,6 +361,12 @@ public struct PresentationResourcesChatList {
         })
     }
     
+    public static func audioIcon(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.chatListAudioIcon.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat List/AudioIcon"), color: theme.chatList.muteIconColor)
+        })
+    }
+    
     public static func verifiedIcon(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.chatListVerifiedIcon.rawValue, { theme in
             if let backgroundImage = UIImage(bundleImageName: "Chat List/PeerVerifiedIconBackground"), let foregroundImage = UIImage(bundleImageName: "Chat List/PeerVerifiedIconForeground") {

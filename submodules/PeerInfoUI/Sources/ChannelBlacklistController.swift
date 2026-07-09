@@ -251,13 +251,18 @@ private func channelBlacklistControllerEntries(presentationData: PresentationDat
             isGroup = false
         }
     }
+    let isCommunity: Bool
+    if case .community = peer {
+        isCommunity = true
+    } else {
+        isCommunity = false
+    }
     
     if let participants = participants {
-        entries.append(.add(presentationData.theme, presentationData.strings.GroupRemoved_Remove))
+        entries.append(.add(presentationData.theme, isCommunity ? presentationData.strings.Community_Blacklist_RemoveUser : presentationData.strings.GroupRemoved_Remove))
         let infoText: String
-        if case .community = peer {
-            //TODO:localize
-            infoText = "Users removed from the community by admins cannot rejoin it via invite links."
+        if isCommunity {
+            infoText = presentationData.strings.Community_Blacklist_Info
         } else {
             infoText = isGroup ? presentationData.strings.GroupRemoved_RemoveInfo : presentationData.strings.ChannelRemoved_RemoveInfo
         }
@@ -265,7 +270,7 @@ private func channelBlacklistControllerEntries(presentationData: PresentationDat
         
         var index: Int32 = 0
         if !participants.isEmpty {
-            entries.append(.bannedHeader(presentationData.theme, presentationData.strings.GroupRemoved_UsersSectionTitle))
+            entries.append(.bannedHeader(presentationData.theme, isCommunity ? presentationData.strings.Community_Blacklist_UsersSectionTitle : presentationData.strings.GroupRemoved_UsersSectionTitle))
         }
         for participant in participants {
             entries.append(.peerItem(presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, presentationData.nameDisplayOrder, index, participant, ItemListPeerItemEditing(editable: true, editing: state.editing, revealed: participant.peer.id == state.peerIdWithRevealedOptions), state.removingPeerId != participant.peer.id))
@@ -518,7 +523,13 @@ public func channelBlacklistController(context: AccountContext, updatedPresentat
             })
         }
         
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.GroupRemoved_Title), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
+        let title: String
+        if case .community = peer {
+            title = presentationData.strings.Community_Blacklist_Title
+        } else {
+            title = presentationData.strings.GroupRemoved_Title
+        }
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: channelBlacklistControllerEntries(presentationData: presentationData, peer: peer, state: state, participants: participants), style: .blocks, emptyStateItem: emptyStateItem, searchItem: searchItem, animateChanges: previous != nil && participants != nil && previous!.count >= participants!.count)
         
         return (controllerState, (listState, arguments))

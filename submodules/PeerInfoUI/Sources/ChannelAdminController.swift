@@ -630,19 +630,15 @@ private func stringForRight(strings: PresentationStrings, right: TelegramChatAdm
     }
 }
 
-private func stringForCommunityRight(_ right: TelegramChatAdminRightsFlags) -> String {
+private func stringForCommunityRight(strings: PresentationStrings, right: TelegramChatAdminRightsFlags) -> String {
     if right.contains(.canChangeInfo) {
-        //TODO:localize
-        return "Edit Community Info"
+        return strings.Community_EditAdmin_PermissionChangeInfo
     } else if right.contains(.canManageLinkedPeers) {
-        //TODO:localize
-        return "Edit Group List"
+        return strings.Community_EditAdmin_PermissionManageLinkedPeers
     } else if right.contains(.canBanUsers) {
-        //TODO:localize
-        return "Ban Members"
+        return strings.Community_EditAdmin_PermissionBanUsers
     } else if right.contains(.canAddAdmins) {
-        //TODO:localize
-        return "Add Community Admins"
+        return strings.Community_EditAdmin_PermissionAddAdmins
     } else {
         return ""
     }
@@ -1147,7 +1143,7 @@ private func channelAdminControllerEntries(presentationData: PresentationData, s
                 for right in rightsOrder {
                     if accountUserRightsFlags.contains(right) {
                         let enabled = !state.updating && admin.id != accountPeerId
-                        entries.append(.rightItem(presentationData.theme, index, stringForCommunityRight(right), .direct(right), currentRightsFlags, currentRightsFlags.contains(right), enabled, [], false))
+                        entries.append(.rightItem(presentationData.theme, index, stringForCommunityRight(strings: presentationData.strings, right: right), .direct(right), currentRightsFlags, currentRightsFlags.contains(right), enabled, [], false))
                         index += 1
                     }
                 }
@@ -1155,7 +1151,7 @@ private func channelAdminControllerEntries(presentationData: PresentationData, s
                 var index = 0
                 for right in rightsOrder {
                     if maskRightsFlags.contains(right) {
-                        entries.append(.rightItem(presentationData.theme, index, stringForCommunityRight(right), .direct(right), adminInfo.rights.rights, adminInfo.rights.rights.contains(right), false, [], false))
+                        entries.append(.rightItem(presentationData.theme, index, stringForCommunityRight(strings: presentationData.strings, right: right), .direct(right), adminInfo.rights.rights, adminInfo.rights.rights.contains(right), false, [], false))
                         index += 1
                     }
                 }
@@ -2088,10 +2084,8 @@ public func channelAdminController(context: AccountContext, updatedPresentationD
             }
                 
             if case .community = channelPeer {
-                //TODO:localize
-                title = "Add Admin"
-                //TODO:localize
-                footerButtonTitle = "Add Admin"
+                title = presentationData.strings.Channel_Management_AddAdmin
+                footerButtonTitle = presentationData.strings.Channel_Management_AddAdmin
             } else if case let .user(admin) = adminPeer, admin.botInfo != nil && invite {
                 title = presentationData.strings.Bot_AddToChat_Add_Title
                 footerItem = ChannelParticipantFooterItem(theme: presentationData.theme, title: state.adminRights ? presentationData.strings.Bot_AddToChat_Add_AddAsAdmin : presentationData.strings.Bot_AddToChat_Add_AddAsMember, displayProgress: state.updating, action: {

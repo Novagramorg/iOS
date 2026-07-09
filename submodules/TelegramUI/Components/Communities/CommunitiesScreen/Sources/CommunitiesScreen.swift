@@ -361,7 +361,7 @@ private final class CommunitiesScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Community",
+                        string: environment.strings.Community_List_Title,
                         font: Font.bold(24.0),
                         textColor: theme.rootController.navigationBar.primaryTextColor
                     )),
@@ -412,12 +412,11 @@ private final class CommunitiesScreenComponent: Component {
             }
             contentHeight += navigationTitleSize.height + 13.0
 
-            //TODO:localize
-            var subtitleText: String = "Make your group a part of community with multiple related chats."
+            var subtitleText: String = environment.strings.Community_List_SubtitleGroup
             if case let .channel(channel) = self.subjectPeer, case .broadcast = channel.info {
-                subtitleText = "Make your channel a part of community with multiple related chats."
+                subtitleText = environment.strings.Community_List_SubtitleChannel
             } else if case .user = self.subjectPeer {
-                subtitleText = "Make your bot a part of community with multiple related chats."
+                subtitleText = environment.strings.Community_List_SubtitleBot
             }
             
             let subtitleSize = self.subtitle.update(
@@ -456,7 +455,7 @@ private final class CommunitiesScreenComponent: Component {
                         style: .glass,
                         title: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Create Community",
+                                string: environment.strings.Community_List_CreateCommunity,
                                 font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                 textColor: theme.list.itemAccentColor
                             )),
@@ -506,8 +505,7 @@ private final class CommunitiesScreenComponent: Component {
             for (index, community) in self.communities.enumerated() {
                 let chatCountText: String?
                 if let chatCount = community.cachedData?.linkedPeers.count {
-                    let formattedCount = presentationStringsFormattedNumber(Int32(clamping: chatCount), presentationData.dateTimeFormat.groupingSeparator)
-                    chatCountText = chatCount == 1 ? "\(formattedCount) chat" : "\(formattedCount) chats"
+                    chatCountText = environment.strings.Community_List_ChatCount(Int32(clamping: chatCount))
                 } else {
                     chatCountText = nil
                 }
@@ -552,7 +550,7 @@ private final class CommunitiesScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "ADD TO AN EXISTING COMMUNITY",
+                                string: environment.strings.Community_List_AddToExistingHeader,
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                                 textColor: theme.list.freeTextColor
                             )),

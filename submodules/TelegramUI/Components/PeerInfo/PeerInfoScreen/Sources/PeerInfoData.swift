@@ -392,6 +392,18 @@ final class PeerInfoLinkedCommunityData {
     }
 }
 
+private func peerInfoStatusWithHiddenCommunityPrefix(_ status: PeerInfoStatusData, strings: PresentationStrings) -> PeerInfoStatusData {
+    var status = status
+    let statusComponents = status.text.components(separatedBy: ", ")
+    var statusText = status.text
+    if statusComponents.count > 1 {
+        statusText = statusComponents[0]
+    }
+    status.text = strings.PeerInfo_HiddenCommunityStatus(statusText).string
+    status.hasHiddenCommunityPrefix = true
+    return status
+}
+
 final class PeerInfoScreenData {
     let peer: EnginePeer?
     let chatPeer: EnginePeer?
@@ -1662,16 +1674,8 @@ func peerInfoScreenData(
                 return linkedCommunityData
                 |> map { linkedCommunityData -> PeerInfoScreenData in
                     var effectiveStatus = status
-                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == userPeerId }), linkedPeer.visible == false, var status = effectiveStatus {
-                        //TODO:localize
-                        let statusComponents = status.text.components(separatedBy: ", ")
-                        var statusText = status.text
-                        if statusComponents.count > 1 {
-                            statusText = statusComponents[0]
-                        }
-                        status.text = "Hidden • \(statusText)"
-                        status.hasHiddenCommunityPrefix = true
-                        effectiveStatus = status
+                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == userPeerId }), linkedPeer.visible == false, let status = effectiveStatus {
+                        effectiveStatus = peerInfoStatusWithHiddenCommunityPrefix(status, strings: strings)
                     }
                     
                     return PeerInfoScreenData(
@@ -1954,16 +1958,8 @@ func peerInfoScreenData(
                 return linkedCommunityData
                 |> map { linkedCommunityData -> PeerInfoScreenData in
                     var effectiveStatus = status
-                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == peerId }), linkedPeer.visible == false, var status = effectiveStatus {
-                        //TODO:localize
-                        let statusComponents = status.text.components(separatedBy: ", ")
-                        var statusText = status.text
-                        if statusComponents.count > 1 {
-                            statusText = statusComponents[0]
-                        }
-                        status.text = "Hidden • \(statusText)"
-                        status.hasHiddenCommunityPrefix = true
-                        effectiveStatus = status
+                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == peerId }), linkedPeer.visible == false, let status = effectiveStatus {
+                        effectiveStatus = peerInfoStatusWithHiddenCommunityPrefix(status, strings: strings)
                     }
                     
                     return PeerInfoScreenData(
@@ -2329,16 +2325,8 @@ func peerInfoScreenData(
                 return linkedCommunityData
                 |> map { linkedCommunityData -> PeerInfoScreenData in
                     var effectiveStatus = status
-                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == groupId }), linkedPeer.visible == false, var status = effectiveStatus {
-                        //TODO:localize
-                        let statusComponents = status.text.components(separatedBy: ", ")
-                        var statusText = status.text
-                        if statusComponents.count > 1 {
-                            statusText = statusComponents[0]
-                        }
-                        status.text = "Hidden • \(statusText)"
-                        status.hasHiddenCommunityPrefix = true
-                        effectiveStatus = status
+                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == groupId }), linkedPeer.visible == false, let status = effectiveStatus {
+                        effectiveStatus = peerInfoStatusWithHiddenCommunityPrefix(status, strings: strings)
                     }
 
                     return PeerInfoScreenData(

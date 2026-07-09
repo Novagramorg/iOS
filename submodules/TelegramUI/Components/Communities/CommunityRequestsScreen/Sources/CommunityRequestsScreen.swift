@@ -61,7 +61,7 @@ private final class CommunityRequestsEmptyPlaceholderView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(theme: PresentationTheme, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+    func update(theme: PresentationTheme, strings: PresentationStrings, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
         let imageSpacing: CGFloat = 10.0
         let textSpacing: CGFloat = 8.0
         let imageSize = CGSize(width: 112.0, height: 112.0)
@@ -72,7 +72,7 @@ private final class CommunityRequestsEmptyPlaceholderView: UIView {
             transition: transition,
             component: AnyComponent(MultilineTextComponent(
                 text: .plain(NSAttributedString(
-                    string: "No Pending Requests",
+                    string: strings.Community_Request_EmptyTitle,
                     font: Font.bold(17.0),
                     textColor: theme.list.freeTextColor
                 )),
@@ -86,7 +86,7 @@ private final class CommunityRequestsEmptyPlaceholderView: UIView {
             transition: transition,
             component: AnyComponent(MultilineTextComponent(
                 text: .plain(NSAttributedString(
-                    string: "There are no more chats suggested for this community.",
+                    string: strings.Community_Request_EmptyText,
                     font: Font.regular(14.0),
                     textColor: theme.list.freeTextColor
                 )),
@@ -427,20 +427,20 @@ private final class CommunityRequestsScreenComponent: Component {
             self.commitCurrentRequestUndoOverlay(animateAsReplacement: false)
 
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            let countText = "\(count)"
+            let countText = presentationStringsFormattedNumber(Int32(clamping: count), presentationData.dateTimeFormat.groupingSeparator)
             let title: String
             let text: String
             let actionTitle: String
             let actionType: AlertScreen.Action.ActionType
             if approve {
-                title = "Add All Chats"
-                text = "Do you want to add \(countText) chats to the community?"
-                actionTitle = "Add"
+                title = environment.strings.Community_Request_AddAllChats
+                text = environment.strings.Community_Request_AddAllConfirmation(countText).string
+                actionTitle = environment.strings.Community_Request_Add
                 actionType = .default
             } else {
-                title = "Decline All"
-                text = "Do you want to decline all \(countText) requests to join the community?"
-                actionTitle = "Decline"
+                title = environment.strings.Community_Request_DeclineAll
+                text = environment.strings.Community_Request_DeclineAllConfirmation(countText).string
+                actionTitle = environment.strings.Community_Request_Decline
                 actionType = .defaultDestructive
             }
 
@@ -539,9 +539,9 @@ private final class CommunityRequestsScreenComponent: Component {
             let title: String = peer.compactDisplayTitle
             let text: String
             if approve {
-                text = "You've added the group to the community."
+                text = environment.strings.Community_Request_ApprovedToast
             } else {
-                text = "You declined adding the group to the community."
+                text = environment.strings.Community_Request_DeclinedToast
             }
 
             let undoController = UndoOverlayController(
@@ -678,7 +678,7 @@ private final class CommunityRequestsScreenComponent: Component {
                 let linkAttributeKey = NSAttributedString.Key(rawValue: "URL")
                 let body = MarkdownAttributeSet(font: Font.regular(13.0), textColor: theme.list.freeTextColor)
                 let link = MarkdownAttributeSet(font: Font.regular(13.0), textColor: theme.list.itemAccentColor)
-                let approvalInfoRawText = "Chats require admin approval before they're added to the community. [Change Settings >](settings)".replacingOccurrences(of: " >]", with: "\u{00A0}>]")
+                let approvalInfoRawText = environment.strings.Community_Request_ApprovalInfo.replacingOccurrences(of: " >]", with: "\u{00A0}>]")
                 let approvalInfoAttributedText = NSMutableAttributedString(attributedString: parseMarkdownIntoAttributedString(approvalInfoRawText, attributes: MarkdownAttributes(
                     body: body,
                     bold: body,
@@ -751,12 +751,7 @@ private final class CommunityRequestsScreenComponent: Component {
                     ))
                 }
 
-                var requestsSectionTitle: String
-                if rows.count == 1 {
-                    requestsSectionTitle = "1 CHAT SUGGESTED FOR THIS COMMUNITY"
-                } else {
-                    requestsSectionTitle = "\(rows.count) CHATS SUGGESTED FOR THIS COMMUNITY"
-                }
+                let requestsSectionTitle = environment.strings.Community_Request_SectionTitle(Int32(clamping: rows.count))
 
                 var sectionTransition = transition
                 if self.requestsSection.view == nil {
@@ -823,6 +818,7 @@ private final class CommunityRequestsScreenComponent: Component {
                     let placeholderWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right)
                     let _ = emptyPlaceholderView.update(
                         theme: theme,
+                        strings: environment.strings,
                         availableSize: CGSize(width: placeholderWidth, height: placeholderHeight),
                         transition: emptyPlaceholderTransition
                     )
@@ -877,7 +873,7 @@ private final class CommunityRequestsScreenComponent: Component {
                         content: AnyComponentWithIdentity(
                             id: "title",
                             component: AnyComponent(ButtonTextContentComponent(
-                                text: "Decline All",
+                                text: environment.strings.Community_Request_DeclineAll,
                                 badge: 0,
                                 textColor: theme.list.itemPrimaryTextColor,
                                 badgeBackground: theme.list.itemPrimaryTextColor,
@@ -906,7 +902,7 @@ private final class CommunityRequestsScreenComponent: Component {
                         content: AnyComponentWithIdentity(
                             id: "title",
                             component: AnyComponent(ButtonTextContentComponent(
-                                text: "Add All",
+                                text: environment.strings.Community_Request_AddAll,
                                 badge: 0,
                                 textColor: theme.list.itemCheckColors.foregroundColor,
                                 badgeBackground: theme.list.itemCheckColors.foregroundColor,
@@ -1001,9 +997,10 @@ public final class CommunityRequestsScreen: ViewControllerComponentContainer {
             updatedPresentationData: nil
         )
 
-        self.title = "Pending Requests"
-        self.navigationItem.title = "Pending Requests"
-        self.navigationItem.backBarButtonItem = UIBarButtonItem(title: context.sharedContext.currentPresentationData.with { $0 }.strings.Common_Back, style: .plain, target: nil, action: nil)
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        self.title = presentationData.strings.Community_Request_Title
+        self.navigationItem.title = presentationData.strings.Community_Request_Title
+        self.navigationItem.backBarButtonItem = UIBarButtonItem(title: presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         self.scrollToTop = { [weak self] in
             guard let self, let componentView = self.node.hostView.componentView as? CommunityRequestsScreenComponent.View else {
                 return

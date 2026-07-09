@@ -265,6 +265,7 @@ private final class CommunityAvatarComponent: Component {
 
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let peer: EnginePeer
     let isEnabled: Bool
     let uploadingImage: UIImage?
@@ -274,6 +275,7 @@ private final class CommunityAvatarComponent: Component {
     init(
         context: AccountContext,
         theme: PresentationTheme,
+        strings: PresentationStrings,
         peer: EnginePeer,
         isEnabled: Bool,
         uploadingImage: UIImage?,
@@ -282,6 +284,7 @@ private final class CommunityAvatarComponent: Component {
     ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.peer = peer
         self.isEnabled = isEnabled
         self.uploadingImage = uploadingImage
@@ -294,6 +297,9 @@ private final class CommunityAvatarComponent: Component {
             return false
         }
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.peer != rhs.peer {
@@ -426,8 +432,7 @@ private final class CommunityAvatarComponent: Component {
                 self.statusNode.transitionToState(.none)
             }
 
-            //TODO:localize
-            let actionButtonText = hasAvatar ? "Change Photo" : "Set Photo"
+            let actionButtonText = hasAvatar ? component.strings.Settings_ChangePhoto : component.strings.Settings_SetPhoto
             let actionButtonSize = self.actionButton.update(
                 transition: .immediate,
                 component: AnyComponent(PlainButtonComponent(
@@ -1256,11 +1261,11 @@ private final class CommunityEditScreenComponent: Component {
             }
             environment.controller()?.present(AlertScreen(
                 context: component.context,
-                title: "Delete Community",
-                text: "Are you sure you want to delete this community?",
+                title: environment.strings.Community_Edit_DeleteCommunity,
+                text: environment.strings.Community_Edit_DeleteConfirmationText,
                 actions: [
                     AlertScreen.Action(title: environment.strings.Common_Cancel, type: .generic),
-                    AlertScreen.Action(title: "Delete", type: .defaultDestructive, action: { [weak self] in
+                    AlertScreen.Action(title: environment.strings.Common_Delete, type: .defaultDestructive, action: { [weak self] in
                         self?.deleteCommunity()
                     })
                 ]
@@ -1422,7 +1427,7 @@ private final class CommunityEditScreenComponent: Component {
                 environment.controller()?.present(AlertScreen(
                     context: component.context,
                     title: nil,
-                    text: "Sorry, this community has reached the maximum number of chats.",
+                    text: environment.strings.Community_Edit_ChatsLimitReached,
                     actions: [
                         AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
                     ]
@@ -1798,8 +1803,7 @@ private final class CommunityEditScreenComponent: Component {
             } else {
                 count = self.cachedData?.linkedPeers.count ?? 0
             }
-            let formattedCount = presentationStringsFormattedNumber(Int32(clamping: count), presentationData.dateTimeFormat.groupingSeparator)
-            return count == 1 ? "\(formattedCount) CHAT" : "\(formattedCount) CHATS"
+            return presentationData.strings.Community_Edit_ChatsHeader(Int32(clamping: count))
         }
 
         private func memberCountString(peerId: EnginePeer.Id, presentationData: PresentationData) -> String? {
@@ -1829,7 +1833,7 @@ private final class CommunityEditScreenComponent: Component {
                 style: .glass,
                 title: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Add Chat to Community",
+                        string: presentationData.strings.Community_Edit_AddChat,
                         font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                         textColor: theme.list.itemAccentColor
                     )),
@@ -1934,7 +1938,7 @@ private final class CommunityEditScreenComponent: Component {
                 style: .glass,
                 title: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Delete Community",
+                        string: presentationData.strings.Community_Edit_DeleteCommunity,
                         font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                         textColor: theme.list.itemDestructiveColor
                     )),
@@ -2008,6 +2012,7 @@ private final class CommunityEditScreenComponent: Component {
                     component: AnyComponent(CommunityAvatarComponent(
                         context: component.context,
                         theme: theme,
+                        strings: presentationData.strings,
                         peer: avatarPeer,
                         isEnabled: !(self.isSaving || self.isDeleting || self.isUpdatingAvatar),
                         uploadingImage: self.uploadingAvatarImage,
@@ -2041,7 +2046,7 @@ private final class CommunityEditScreenComponent: Component {
                             theme: theme,
                             initialText: self.currentTitle,
                             resetText: resetTitleText.flatMap { ListTextFieldItemComponent.ResetText(value: $0) },
-                            placeholder: self.isCreateMode ? "Community Name" : "",
+                            placeholder: self.isCreateMode ? presentationData.strings.Community_Edit_CommunityNamePlaceholder : "",
                             characterLimit: 128,
                             autocapitalizationType: .words,
                             autocorrectionType: .yes,
@@ -2082,7 +2087,7 @@ private final class CommunityEditScreenComponent: Component {
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "WHO CAN ADD CHATS",
+                            string: presentationData.strings.Community_Edit_WhoCanAddChats,
                             font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                             textColor: theme.list.freeTextColor
                         )),
@@ -2092,16 +2097,16 @@ private final class CommunityEditScreenComponent: Component {
                     items: [
                         self.permissionItem(
                             id: "allMembers",
-                            title: "All Members",
-                            subtitle: "Allow members to add their groups and channels to the community.",
+                            title: presentationData.strings.Community_Edit_PermissionAllMembers,
+                            subtitle: presentationData.strings.Community_Edit_PermissionAllMembersInfo,
                             mode: .allMembers,
                             theme: theme,
                             presentationData: presentationData
                         ),
                         self.permissionItem(
                             id: "onlyAdmins",
-                            title: "Only Admins",
-                            subtitle: "Chats suggested by community members require admin approval.",
+                            title: presentationData.strings.Community_Edit_PermissionOnlyAdmins,
+                            subtitle: presentationData.strings.Community_Edit_PermissionOnlyAdminsInfo,
                             mode: .onlyAdmins,
                             theme: theme,
                             presentationData: presentationData
@@ -2126,7 +2131,7 @@ private final class CommunityEditScreenComponent: Component {
             var managementItems: [AnyComponentWithIdentity<Empty>] = [
                 self.managementItem(
                     id: "administrators",
-                    title: "Administrators",
+                    title: presentationData.strings.Community_Edit_Administrators,
                     icon: self.cachedAdminsIcon,
                     count: adminsCount,
                     countStyle: .plain,
@@ -2140,7 +2145,7 @@ private final class CommunityEditScreenComponent: Component {
             if let pendingRequests, pendingRequests > 0 {
                 managementItems.append(self.managementItem(
                     id: "pendingRequests",
-                    title: "Pending Requests",
+                    title: presentationData.strings.Community_Edit_PendingRequests,
                     icon: self.cachedRequestsIcon,
                     count: pendingRequests,
                     countStyle: .badge,
@@ -2153,7 +2158,7 @@ private final class CommunityEditScreenComponent: Component {
             }
             managementItems.append(self.managementItem(
                 id: "removedUsers",
-                title: "Removed Users",
+                title: presentationData.strings.Community_Edit_RemovedUsers,
                 icon: self.cachedBannedIcon,
                 count: removedUsersCount,
                 countStyle: .plain,

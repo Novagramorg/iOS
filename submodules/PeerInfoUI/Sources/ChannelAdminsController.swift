@@ -430,11 +430,10 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
     var entries: [ChannelAdminsEntry] = []
     if case let .community(peer) = peer {
         if let participants {
-            //TODO:localize
-            entries.append(.adminsHeader(presentationData.theme, "COMMUNITY ADMINS"))
+            entries.append(.adminsHeader(presentationData.theme, presentationData.strings.Community_Admins_SectionTitle))
             
             if peer.hasPermission(.addAdmins) {
-                entries.append(.addAdmin(presentationData.theme, presentationData.strings.Channel_Management_AddModerator, state.editing))
+                entries.append(.addAdmin(presentationData.theme, presentationData.strings.Community_Admins_AddAdmin, state.editing))
             }
             
             var existingParticipantIds = Set<EnginePeer.Id>()
@@ -494,8 +493,7 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
             }
             
             if peer.hasPermission(.addAdmins) {
-                //TODO:localize
-                let info = "You can add admins to help you manage your community."
+                let info = presentationData.strings.Community_Admins_Info
                 entries.append(.adminsInfo(presentationData.theme, info))
             }
         }
@@ -846,8 +844,7 @@ public func channelAdminsController(
             .start(next: { peerView, accountPeer in
                 updateState { current in
                     if case .community = peerView.peer {
-                        //TODO:localize
-                        let title = "Add Admin"
+                        let title = context.sharedContext.currentPresentationData.with { $0 }.strings.Community_Admins_AddAdmin
                         let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(
                             context: context,
                             updatedPresentationData: updatedPresentationData,
@@ -1150,8 +1147,7 @@ public func channelAdminsController(
         
         let title: String
         if isCommunity {
-            //TODO:localize
-            title = "Admins"
+            title = presentationData.strings.Community_Admins_Title
         } else {
             title = isGroup ? presentationData.strings.ChatAdmins_Title : presentationData.strings.Channel_Management_Title
         }

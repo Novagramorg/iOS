@@ -217,9 +217,7 @@ private enum Limit: CaseIterable {
         case .about:
             return strings.Premium_Limits_Bio
         case .message:
-            //TODO:localize
-            return "Messages"
-            //return strings.Premium_Limits_Captions
+            return strings.Premium_Limits_Messages
         case .captions:
             return strings.Premium_Limits_Captions
         case .folders:
@@ -248,8 +246,7 @@ private enum Limit: CaseIterable {
             case .about:
                 return strings.Premium_Limits_BioInfo
             case .message:
-                //TODO:localize
-                return "Express yourself with longer messages"
+                return strings.Premium_Limits_MessagesInfo
             case .captions:
                 return strings.Premium_Limits_CaptionsInfo
             case .folders:
