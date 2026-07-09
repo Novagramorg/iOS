@@ -16539,3 +16539,32 @@ Error: %8$@";
 
 "Premium.Limits.Messages" = "Messages";
 "Premium.Limits.MessagesInfo" = "Express yourself with longer messages";
+
+"Attachment.Article" = "Article";
+"RichText.AddMediaTitle" = "Add Media";
+"RichText.TableMenu.Alignment" = "Alignment";
+"RichText.FormulaAdd" = "Add Formula";
+"RichText.FormulaEdit" = "Edit Formula";
+"RichText.FormulaSectionSourceTitle" = "LATEX";
+"RichText.FormulaSectionResultTitle" = "RESULT";
+"RichText.TitleArticle" = "Text";
+"RichText.MenuHeading" = "Heading";
+"RichText.MenuHeadingItem" = "Heading %@";
+"RichText.MenuText" = "Text";
+"RichText.MenuQuote" = "Quote";
+"RichText.MenuPullquote" = "Pullquote";
+"RichText.MenuCode" = "Code";
+"RichText.MenuFormula" = "Formula";
+"RichText.Menu.List.None" = "None";
+"RichText.Menu.List.Bullet" = "Bulleted List";
+"RichText.Menu.List.Numbered" = "Numbered List";
+"RichText.Menu.List.Checklist" = "Checklist";
+"RichText.Menu.Table.Copy" = "Copy Table";
+"RichText.Menu.Table.ConvertToText" = "Convert to Text";
+"RichText.Menu.Table.Delete" = "Delete Table";
+
+"TextProcessing.TitleAICompose" = "Create with AI";
+"TextProcessing.ActionAddToPage" = "Add to Page";
+"TextProcessing.ActionGenerate" = "Generate";
+"TextProcessing.StyleList.Prompt" = "Prompt";
+"TextProcessing.PromptPlaceholder" = "Generate text, formulas, or tables...";

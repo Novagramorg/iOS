@@ -3975,7 +3975,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     }
                 }
             }
-            if !foundItemNodes.isEmpty {
+            if !foundItemNodes.isEmpty && foundItemNodes.allSatisfy({ $0.bounds.height <= 1800.0 }) {
                 if self.dustEffectLayer == nil {
                     let dustEffectLayer = DustEffectLayer()
                     dustEffectLayer.position = self.bounds.center

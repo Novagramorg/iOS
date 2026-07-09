@@ -823,7 +823,6 @@ final class TextProcessingTranslateContentComponent: Component {
                     transition.setAlpha(layer: promptSeparatorLayer, alpha: displayTargetText ? 1.0 : 0.0)
                 }
                 
-                //TODO:localize
                 let promptFieldSize = promptField.update(
                     transition: promptFieldTransition,
                     component: AnyComponent(TextFieldComponent(
@@ -837,7 +836,7 @@ final class TextProcessingTranslateContentComponent: Component {
                         insets: UIEdgeInsets(top: topInset, left: 0.0, bottom: bottomInset, right: 0.0),
                         hideKeyboard: false,
                         customInputView: nil,
-                        placeholder: NSAttributedString(string: "Generate text, formulas, or tables...", font: Font.regular(17.0), textColor: component.theme.list.itemPlaceholderTextColor),
+                        placeholder: NSAttributedString(string: component.strings.TextProcessing_PromptPlaceholder, font: Font.regular(17.0), textColor: component.theme.list.itemPlaceholderTextColor),
                         placeholderVerticalOffset: 3.0,
                         resetText: nil,
                         isOneLineWhenUnfocused: false,

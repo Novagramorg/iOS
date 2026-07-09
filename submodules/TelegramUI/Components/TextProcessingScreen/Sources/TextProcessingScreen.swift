@@ -1652,17 +1652,16 @@ private final class TextProcessingSheetComponent: Component {
                 }
                 
                 if isPrompt {
-                    //TODO:localize
                     if let _ = self.contentExternalState.result {
                         if case .generate = component.mode {
-                            actionButtonTitle = "Add to Page"
+                            actionButtonTitle = environmentValue.strings.TextProcessing_ActionAddToPage
                         } else {
-                            actionButtonTitle = "Apply"
+                            actionButtonTitle = environmentValue.strings.TextProcessing_ActionApply
                             secondaryActionIcon = .refresh
                         }
                         isMainActionEnabled = !self.contentExternalState.isProcessing
                     } else {
-                        actionButtonTitle = "Generate"
+                        actionButtonTitle = environmentValue.strings.TextProcessing_ActionGenerate
                         isMainActionEnabled = !self.contentExternalState.isProcessing && !self.contentExternalState.promptText.isEmpty
                         
                         if case .generate = component.mode {
@@ -1735,8 +1734,7 @@ private final class TextProcessingSheetComponent: Component {
                 titleString = ""
                 displayInfoButton = false
             case .generate:
-                //TODO:localize
-                titleString = "Create with AI"
+                titleString = environmentValue.strings.TextProcessing_TitleAICompose
                 displayInfoButton = false
             }
             
