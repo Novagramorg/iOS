@@ -58,25 +58,13 @@ private final class CommunityPrivateChatContentComponent: Component {
     final class View: UIView {
         private let avatar = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
-        private let subtitle = ComponentView<Empty>()
         private let infoText = ComponentView<Empty>()
         private let messageOwnerButton = ComponentView<Empty>()
         private let cancelButton = ComponentView<Empty>()
 
         private var hiddenIconImage: UIImage?
 
-        private func subtitleText(component: CommunityPrivateChatContentComponent) -> String {
-            if let memberCount = component.memberCount {
-                if memberCount == 1 {
-                    return "1 member"
-                } else {
-                    return "\(memberCount) members"
-                }
-            }
-            return "private group"
-        }
-
-        private func infoAttributedText(theme: PresentationTheme) -> NSAttributedString {
+        private func infoAttributedText(theme: PresentationTheme, strings: PresentationStrings) -> NSAttributedString {
             if self.hiddenIconImage == nil {
                 self.hiddenIconImage = generateTintedImage(
                     image: generateScaledImage(image: UIImage(bundleImageName: "Chat/Message/Hidden"), size: CGSize(width: 20.0, height: 20.0), opaque: false),
@@ -85,7 +73,7 @@ private final class CommunityPrivateChatContentComponent: Component {
             }
 
             let text = NSMutableAttributedString(
-                string: "#  This group is invite-only.\nOnly its members can view it.",
+                string: "#  \(strings.Community_PrivateChat_Info)",
                 font: Font.regular(15.0),
                 textColor: theme.list.itemPrimaryTextColor
             )
@@ -153,35 +141,10 @@ private final class CommunityPrivateChatContentComponent: Component {
             }
             contentHeight += titleSize.height + 17.0
 
-//            let subtitleSize = self.subtitle.update(
-//                transition: transition,
-//                component: AnyComponent(MultilineTextComponent(
-//                    text: .plain(NSAttributedString(
-//                        string: self.subtitleText(component: component),
-//                        font: Font.regular(15.0),
-//                        textColor: theme.list.itemSecondaryTextColor
-//                    )),
-//                    horizontalAlignment: .center,
-//                    maximumNumberOfLines: 1
-//                )),
-//                environment: {},
-//                containerSize: CGSize(width: contentWidth, height: 100.0)
-//            )
-//            if let subtitleView = self.subtitle.view {
-//                if subtitleView.superview == nil {
-//                    self.addSubview(subtitleView)
-//                }
-//                transition.setFrame(view: subtitleView, frame: CGRect(
-//                    origin: CGPoint(x: floorToScreenPixels((availableSize.width - subtitleSize.width) / 2.0), y: contentHeight),
-//                    size: subtitleSize
-//                ))
-//            }
-//            contentHeight += subtitleSize.height + 30.0
-
             let infoSize = self.infoText.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(self.infoAttributedText(theme: theme)),
+                    text: .plain(self.infoAttributedText(theme: theme, strings: environment.strings)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -215,7 +178,7 @@ private final class CommunityPrivateChatContentComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(ButtonTextContentComponent(
-                            text: "Message Group Owner",
+                            text: environment.strings.Community_PrivateChat_MessageOwner,
                             badge: 0,
                             textColor: theme.list.itemCheckColors.foregroundColor,
                             fontSize: 17.0,
@@ -254,7 +217,7 @@ private final class CommunityPrivateChatContentComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(ButtonTextContentComponent(
-                            text: "Cancel",
+                            text: environment.strings.Common_Cancel,
                             badge: 0,
                             textColor: theme.list.itemPrimaryTextColor,
                             fontSize: 17.0,

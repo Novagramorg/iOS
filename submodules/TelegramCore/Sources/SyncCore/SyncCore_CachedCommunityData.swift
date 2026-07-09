@@ -4,8 +4,6 @@ public final class CachedCommunityData: CachedPeerData {
     public struct CommunityLinkedPeer: PostboxCoding, Equatable {
         public let peerId: PeerId
         public let visible: Bool?
-        /// The user can read this chat's message history right now, without joining (layer 228
-        /// `communityPeer.can_view_history`). When false, joining (or a join request) is required.
         public let canViewHistory: Bool
 
         public init(peerId: PeerId, visible: Bool?, canViewHistory: Bool = false) {

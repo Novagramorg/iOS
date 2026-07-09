@@ -342,7 +342,6 @@ private func webBrowserSettingsControllerEntries(context: AccountContext, presen
     entries.append(.clearCookies(presentationData.theme, presentationData.strings.WebBrowser_ClearCookies))
     entries.append(.clearCookiesInfo(presentationData.theme, presentationData.strings.WebBrowser_ClearCookies_Info))
     
-    //TODO:localize
     if accountSettings.openExternalBrowser {
         entries.append(.neverHeader(presentationData.theme, presentationData.strings.WebBrowser_Exceptions_OpenInApp))
         entries.append(.neverAdd(presentationData.theme, presentationData.strings.WebBrowser_Exceptions_AddException))

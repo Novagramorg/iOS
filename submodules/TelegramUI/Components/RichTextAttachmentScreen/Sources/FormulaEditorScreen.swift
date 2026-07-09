@@ -397,6 +397,7 @@ private final class FormulaEditorSheetContent: Component {
                 transition.setFrame(view: doneButtonView, frame: CGRect(origin: CGPoint(x: availableSize.width - sideInset - doneButtonSize.width, y: 16.0), size: doneButtonSize))
             }
 
+            //TODO:localize
             let constrainedTitleWidth = availableSize.width - (sideInset + barButtonSize.width + 8.0) * 2.0
             let titleSize = self.title.update(
                 transition: .immediate,
@@ -420,6 +421,7 @@ private final class FormulaEditorSheetContent: Component {
             contentSize.height += titleSize.height
             contentSize.height += 40.0
 
+            //TODO:localize
             let headerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             let sectionWidth = availableSize.width - sideInset * 2.0
             let latexSectionSize = self.latexSection.update(
@@ -491,6 +493,7 @@ private final class FormulaEditorSheetContent: Component {
                 previewIsPlaceholder = false
             }
 
+            //TODO:localize
             let resultSectionSize = self.resultSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(

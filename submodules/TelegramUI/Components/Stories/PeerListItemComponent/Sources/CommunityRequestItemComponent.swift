@@ -176,21 +176,22 @@ public final class CommunityRequestItemComponent: Component {
             if let requestedByPeer = component.requestedByPeer, !requestedByPeer.compactDisplayTitle.isEmpty {
                 requesterName = requestedByPeer.compactDisplayTitle
             } else {
-                requesterName = "Someone"
+                requesterName = component.strings.Community_Request_UnknownRequester
             }
 
-            //TODO:localize
-            let text = "\(requesterName) suggests this group:"
+            let text = component.strings.Community_Request_RequesterSuggestsGroup(requesterName)
             let result = NSMutableAttributedString(
-                string: text,
+                string: text.string,
                 font: Font.regular(15.0),
                 textColor: component.theme.list.itemSecondaryTextColor
             )
-            result.addAttribute(
-                .foregroundColor,
-                value: component.theme.list.itemAccentColor,
-                range: NSRange(location: 0, length: (requesterName as NSString).length)
-            )
+            for range in text.ranges where range.index == 0 {
+                result.addAttribute(
+                    .foregroundColor,
+                    value: component.theme.list.itemAccentColor,
+                    range: range.range
+                )
+            }
             return result
         }
 
@@ -246,13 +247,7 @@ public final class CommunityRequestItemComponent: Component {
 
             var memberSize: CGSize?
             if let memberCount = component.memberCount {
-                let memberCountText: String
-                //TODO:localize
-                if memberCount == 1 {
-                    memberCountText = "1 member"
-                } else {
-                    memberCountText = "\(memberCount) members"
-                }
+                let memberCountText = component.strings.Conversation_StatusMembers(memberCount)
 
                 let memberText: ComponentView<Empty>
                 if let current = self.memberText {
@@ -308,7 +303,7 @@ public final class CommunityRequestItemComponent: Component {
                             AnyComponentWithIdentity(id: "label", component: AnyComponent(
                                 MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        string: "visible only to its members",
+                                        string: component.strings.Community_Request_PrivateStatus,
                                         font: Font.regular(15.0),
                                         textColor: component.theme.list.itemSecondaryTextColor
                                     )),
@@ -440,7 +435,9 @@ public final class CommunityRequestItemComponent: Component {
 
             var nextTextY = topInset + requesterSize.height + 3.0 + titleSize.height
             if let memberView = self.memberText?.view, let memberSize {
+                var transition = transition
                 if memberView.superview == nil {
+                    transition = .immediate
                     memberView.isUserInteractionEnabled = false
                     self.containerButton.addSubview(memberView)
                 }
@@ -449,7 +446,9 @@ public final class CommunityRequestItemComponent: Component {
                 nextTextY += memberSize.height
             }
             if let privateView = self.privateText?.view, let privateSize {
+                var transition = transition
                 if privateView.superview == nil {
+                    transition = .immediate
                     privateView.isUserInteractionEnabled = false
                     self.containerButton.addSubview(privateView)
                 }
@@ -472,7 +471,7 @@ public final class CommunityRequestItemComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(ButtonTextContentComponent(
-                            text: "Decline",
+                            text: component.strings.Community_Request_Decline,
                             badge: 0,
                             textColor: component.theme.list.itemPrimaryTextColor,
                             fontSize: 15.0,
@@ -507,7 +506,7 @@ public final class CommunityRequestItemComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(ButtonTextContentComponent(
-                            text: "Add",
+                            text: component.strings.Community_Request_Add,
                             badge: 0,
                             textColor: component.theme.list.itemCheckColors.foregroundColor,
                             fontSize: 15.0,

@@ -37,17 +37,6 @@ private enum CommunityAddScreenSubject: Equatable {
     case draft(initialVisibility: Bool)
 }
 
-private func communityAddMemberCountText(_ memberCount: Int32?) -> String? {
-    guard let memberCount, memberCount > 0 else {
-        return nil
-    }
-    if memberCount == 1 {
-        return "1 member"
-    } else {
-        return "\(memberCount) members"
-    }
-}
-
 private func communityAddMemberCount(cachedData: EngineCachedPeerData?) -> Int32? {
     if let cachedData = cachedData as? CachedChannelData {
         return cachedData.participantsSummary.memberCount
@@ -61,12 +50,14 @@ private func communityAddMemberCount(cachedData: EngineCachedPeerData?) -> Int32
 private final class CommunityAddPeerItemComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let peer: EnginePeer
     let memberCount: Int32?
 
-    init(context: AccountContext, theme: PresentationTheme, peer: EnginePeer, memberCount: Int32?) {
+    init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, peer: EnginePeer, memberCount: Int32?) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.peer = peer
         self.memberCount = memberCount
     }
@@ -76,6 +67,9 @@ private final class CommunityAddPeerItemComponent: Component {
             return false
         }
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
             return false
         }
         if lhs.peer != rhs.peer {
@@ -143,12 +137,12 @@ private final class CommunityAddPeerItemComponent: Component {
             )
 
             var subtitleSize = CGSize()
-            if let subtitleText = communityAddMemberCountText(component.memberCount) {
+            if let memberCount = component.memberCount {
                 subtitleSize = self.subtitle.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: subtitleText,
+                            string: component.strings.Conversation_StatusMembers(memberCount),
                             font: Font.regular(15.0),
                             textColor: component.theme.list.itemSecondaryTextColor
                         )),
@@ -344,7 +338,7 @@ private final class CommunityAddContentComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Add Chat",
+                        string: environment.strings.Community_Add_Title,
                         font: Font.semibold(17.0),
                         textColor: theme.list.itemPrimaryTextColor
                     )),
@@ -382,6 +376,7 @@ private final class CommunityAddContentComponent: Component {
                             AnyComponentWithIdentity(id: "peer", component: AnyComponent(CommunityAddPeerItemComponent(
                                 context: component.context,
                                 theme: theme,
+                                strings: environment.strings,
                                 peer: peer,
                                 memberCount: component.memberCount
                             )))
@@ -406,7 +401,7 @@ private final class CommunityAddContentComponent: Component {
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "CHAT VISIBILITY",
+                            string: environment.strings.Community_Add_VisibilityHeader,
                             font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                             textColor: theme.list.freeTextColor
                         )),
@@ -414,7 +409,7 @@ private final class CommunityAddContentComponent: Component {
                     )),
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "You won't be able to change this later.",
+                            string: environment.strings.Community_Add_VisibilityInfo,
                             font: Font.regular(13.0),
                             textColor: theme.list.freeTextColor
                         )),
@@ -424,8 +419,8 @@ private final class CommunityAddContentComponent: Component {
                         self.visibilityItem(
                             component: component,
                             id: "visible",
-                            title: "Visible",
-                            subtitle: "Anyone in the community will be able to see this chat.",
+                            title: environment.strings.Community_Add_VisibilityVisible,
+                            subtitle: environment.strings.Community_Add_VisibilityVisibleInfo,
                             visibility: .visible,
                             theme: theme,
                             presentationData: presentationData
@@ -433,8 +428,8 @@ private final class CommunityAddContentComponent: Component {
                         self.visibilityItem(
                             component: component,
                             id: "hidden",
-                            title: "Hidden",
-                            subtitle: "Only invited members and community admins will see this chat.",
+                            title: environment.strings.Community_Add_VisibilityHidden,
+                            subtitle: environment.strings.Community_Add_VisibilityHiddenInfo,
                             visibility: .hidden,
                             theme: theme,
                             presentationData: presentationData
@@ -632,6 +627,8 @@ private final class CommunityAddScreenComponent: Component {
                     self.dismiss(animated: true, completion: {
                         component.completed()
                     })
+                } else if case .serverProvided = error {
+                    self.state?.updated(transition: .spring(duration: 0.35))
                 } else {
                     let text: String
                     switch error {
@@ -693,7 +690,7 @@ private final class CommunityAddScreenComponent: Component {
                         memberCount: communityAddMemberCount(cachedData: self.cachedData),
                         visibility: self.visibility,
                         isSaving: self.isSaving,
-                        buttonTitle: isDraft ? "Done" : "Add to Community",
+                        buttonTitle: isDraft ? environment.strings.Common_Done : environment.strings.Community_Add_ActionAddToCommunity,
                         dismiss: { [weak self] in
                             self?.dismiss(animated: true)
                         },

@@ -1019,16 +1019,15 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                                 controller.push(communityController)
                             }
                         ))
-                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Bot from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
+                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: presentationData.strings.PeerInfo_Community_RemoveBot, color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
                             interaction.editingRemoveFromCommunity(linkedCommunityId)
                         }))
                     }
                 } else {
-                    //TODO:localize
-                    items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Bot to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                    items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: presentationData.strings.PeerInfo_Community_AddBot, color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
                         interaction.editingOpenAddToCommunity()
                     }))
-                    items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your bot part of a community with multiple related chats"))
+                    items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: presentationData.strings.PeerInfo_Community_BotInfo))
                 }
             } else if !user.flags.contains(.isSupport) {
                 let compactName = EnginePeer(user).compactDisplayTitle
@@ -1380,16 +1379,15 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                                     controller.push(communityController)
                                 }
                             ))
-                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Channel from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
+                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: presentationData.strings.PeerInfo_Community_RemoveChannel, color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
                                 interaction.editingRemoveFromCommunity(linkedCommunityId)
                             }))
                         }
                     } else {
-                        //TODO:localize
-                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Channel to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: presentationData.strings.PeerInfo_Community_AddChannel, color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
                             interaction.editingOpenAddToCommunity()
                         }))
-                        items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your channel part of a community with multiple related chats"))
+                        items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: presentationData.strings.PeerInfo_Community_ChannelInfo))
                     }
 
                     items[.peerActions]!.append(PeerInfoScreenActionItem(id: ItemDeleteChannel, text: presentationData.strings.ChannelInfo_DeleteChannel, color: .destructive, icon: nil, alignment: .natural, action: {
@@ -1657,16 +1655,15 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                                         controller.push(communityController)
                                     }
                                 ))
-                                items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Group from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
+                                items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: presentationData.strings.PeerInfo_Community_RemoveGroup, color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
                                     interaction.editingRemoveFromCommunity(linkedCommunityId)
                                 }))
                             }
                         } else {
-                            //TODO:localize
-                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Group to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: presentationData.strings.PeerInfo_Community_AddGroup, color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
                                 interaction.editingOpenAddToCommunity()
                             }))
-                            items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your group part of a community with multiple related chats"))
+                            items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: presentationData.strings.PeerInfo_Community_GroupInfo))
                         }
                         
                         items[.peerActions]!.append(PeerInfoScreenActionItem(id: ItemDeleteGroup, text: presentationData.strings.Group_DeleteGroup, color: .destructive, icon: nil, alignment: .natural, action: {
@@ -1829,10 +1826,10 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
             }
             
             if case .creator = group.role {
-                items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Group to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: presentationData.strings.PeerInfo_Community_AddGroup, color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
                     interaction.editingOpenAddToCommunity()
                 }))
-                items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your group part of a community with multiple related chats"))
+                items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: presentationData.strings.PeerInfo_Community_GroupInfo))
             }
         }
     }

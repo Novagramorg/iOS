@@ -1202,6 +1202,7 @@ private final class CommunityViewContentComponent: Component {
                 }
                 let isPrivate = peer.addressName == nil
                 let isHidden = linkedPeer.visible == false
+                let canView = linkedPeer.canViewHistory
                 let isBot = self.isBot(peer: peer)
                 let botHasPreview = isBot && self.botHasPreview(peerId: peer.id, component: component)
                 
@@ -1217,11 +1218,11 @@ private final class CommunityViewContentComponent: Component {
                         result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
                     }
                 case .visible:
-                    if !isJoined && !isBot && !isPrivate {
+                    if !isJoined && !isBot && canView {
                         result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
                     }
                 case .requestable:
-                    if !isJoined && !isBot && isPrivate && !isHidden {
+                    if !isJoined && !isBot && !canView && !isHidden {
                         result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
                     }
                     if isBot && !botHasPreview {
@@ -1244,14 +1245,12 @@ private final class CommunityViewContentComponent: Component {
             }.map(\.element)
         }
 
-        private func memberCountString(component: CommunityViewContentComponent, peerId: EnginePeer.Id) -> String? {
+        private func memberCountString(component: CommunityViewContentComponent, peerId: EnginePeer.Id, presentationData: PresentationData) -> String? {
             guard let count = communityCachedMemberCounts(component.cachedPeerData)[peerId] else {
                 return nil
             }
-            if count > 1 {
-                return "\(count) members"
-            } else if count == 1 {
-                return "\(count) member"
+            if count > 0 {
+                return presentationData.strings.Conversation_StatusMembers(count)
             }
             return nil
         }
@@ -1316,16 +1315,16 @@ private final class CommunityViewContentComponent: Component {
             environment.controller()?.present(controller, in: .window(.root))
         }
 
-        private func sectionTitle(_ section: CommunityViewSection) -> String {
+        private func sectionTitle(_ section: CommunityViewSection, presentationData: PresentationData) -> String {
             switch section {
             case .joined:
-                return "CHATS YOU ARE IN"
+                return presentationData.strings.Community_View_SectionJoined
             case .visible:
-                return "CHATS YOU CAN VIEW"
+                return presentationData.strings.Community_View_SectionVisible
             case .requestable:
-                return "CHATS YOU CAN REQUEST TO JOIN"
+                return presentationData.strings.Community_View_SectionRequestable
             case .hidden:
-                return "HIDDEN CHATS"
+                return presentationData.strings.Community_View_SectionHidden
             }
         }
 
@@ -1366,7 +1365,7 @@ private final class CommunityViewContentComponent: Component {
                     guard selectionState.isVisible else {
                         continue
                     }
-                    let subtitle = self.memberCountString(component: component, peerId: row.peer.id).flatMap {
+                    let subtitle = self.memberCountString(component: component, peerId: row.peer.id, presentationData: presentationData).flatMap {
                         PeerListItemComponent.Subtitle(text: $0, color: .neutral)
                     }
                     items.append(AnyComponentWithIdentity(id: row.peer.id, component: AnyComponent(PeerListItemComponent(
@@ -1444,7 +1443,7 @@ private final class CommunityViewContentComponent: Component {
                         actionMode: .gesture
                     ))))
                 case .requestable, .hidden:
-                    let subtitle = self.memberCountString(component: component, peerId: row.peer.id).flatMap {
+                    let subtitle = self.memberCountString(component: component, peerId: row.peer.id, presentationData: presentationData).flatMap {
                         PeerListItemComponent.Subtitle(text: $0, color: .neutral)
                     }
                     items.append(AnyComponentWithIdentity(id: row.peer.id, component: AnyComponent(PeerListItemComponent(
@@ -1482,7 +1481,7 @@ private final class CommunityViewContentComponent: Component {
                     style: component.mode.usesPlainStyle ? .plain : .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: self.sectionTitle(section),
+                            string: self.sectionTitle(section, presentationData: presentationData),
                             font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                             textColor: theme.list.freeTextColor
                         )),
@@ -1549,7 +1548,7 @@ private final class CommunityViewContentComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Pending Requests",
+                            string: presentationData.strings.Community_View_PendingRequests,
                             font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                             textColor: theme.list.itemPrimaryTextColor
                         )),
@@ -1578,7 +1577,7 @@ private final class CommunityViewContentComponent: Component {
             if totalCount == 1 {
                 header = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "PENDING REQUEST",
+                        string: presentationData.strings.Community_View_PendingRequestHeader,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                         textColor: theme.list.freeTextColor
                     )),
@@ -1645,7 +1644,7 @@ private final class CommunityViewContentComponent: Component {
                                 style: .glass,
                                 title: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        string: "Show as One Chat",
+                                        string: presentationData.strings.Community_View_ShowAsOneChat,
                                         font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
                                         textColor: theme.list.itemPrimaryTextColor
                                     )),
@@ -1679,7 +1678,7 @@ private final class CommunityViewContentComponent: Component {
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Group all community chats into one item in the chat list.",
+                            string: presentationData.strings.Community_View_ShowAsOneChatInfo,
                             font: Font.regular(13.0),
                             textColor: theme.list.freeTextColor
                         )),
@@ -2616,9 +2615,9 @@ private final class CommunityViewScreenComponent: Component {
             let title: String = peer.compactDisplayTitle
             let text: String
             if approve {
-                text = "You've added the group to the community."
+                text = environment.strings.Community_View_PendingRequestApprovedToast
             } else {
-                text = "You declined adding the group to the community."
+                text = environment.strings.Community_View_PendingRequestDeclinedToast
             }
 
             let undoController = UndoOverlayController(
@@ -2682,9 +2681,9 @@ private final class CommunityViewScreenComponent: Component {
             let communitiesConfiguration = CommunitiesConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
             let linkedPeersCount = Int32(self.cachedData?.linkedPeers.count ?? 0)
             if linkedPeersCount >= communitiesConfiguration.peersLimit {
-                let alertText = "Sorry, this community has reached the maximum number of chats."
+                let alertText = environment.strings.Community_View_ChatsLimitReached
                 let alertScreen = textAlertController(context: component.context, title: nil, text: alertText, actions: [
-                    TextAlertAction(type: .defaultAction, title: "OK", action: {})
+                    TextAlertAction(type: .defaultAction, title: environment.strings.Common_OK, action: {})
                 ])
                 environment.controller()?.present(alertScreen, in: .window(.root))
                 return
@@ -2776,7 +2775,7 @@ private final class CommunityViewScreenComponent: Component {
                 theme = environment.theme
             }
 
-            let title = self.community?.title ?? "Community"
+            let title = self.community?.title ?? environment.strings.Community_View_Title
                         
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
             let backPressed: (() -> Void)?
@@ -3060,10 +3059,10 @@ private final class CommunityViewScreenComponent: Component {
             )
         }
 
-        private func makeBottomButtonComponent(theme: PresentationTheme, safeInsets: UIEdgeInsets) -> CommunityViewBottomButtonComponent {
+        private func makeBottomButtonComponent(theme: PresentationTheme, strings: PresentationStrings, safeInsets: UIEdgeInsets) -> CommunityViewBottomButtonComponent {
             return CommunityViewBottomButtonComponent(
                 theme: theme,
-                title: "Add a Chat to Community",
+                title: strings.Community_View_AddChatButton,
                 iconName: "Item List/Icons/Add",
                 safeInsets: safeInsets,
                 isEnabled: !self.isAddActionInProgress,
@@ -3140,7 +3139,7 @@ private final class CommunityViewScreenComponent: Component {
                 let theme = environment.theme.withModalBlocksBackground()
                 let isSheetSearchFullscreen = self.isSheetSearchFullscreen
                 let displaysBottomItem = !isSheetSearchFullscreen && !component.mode.isPreview && component.selectionOptions == nil && self.canAddChatsToCommunity
-                let bottomItem: AnyComponent<Empty>? = displaysBottomItem ? AnyComponent(self.makeBottomButtonComponent(theme: theme, safeInsets: environment.safeInsets)) : nil
+                let bottomItem: AnyComponent<Empty>? = displaysBottomItem ? AnyComponent(self.makeBottomButtonComponent(theme: theme, strings: environment.strings, safeInsets: environment.safeInsets)) : nil
                 let sheetBackgroundColor = isSheetSearchFullscreen ? theme.list.modalPlainBackgroundColor : theme.list.modalBlocksBackgroundColor
                 let contentTopInset = contentNavigationHeight + self.sheetNavigationTopInset
                 let sheetSize = self.sheet.update(
@@ -3231,7 +3230,7 @@ private final class CommunityViewScreenComponent: Component {
                     let bottomPanelWidth = max(1.0, availableSize.width - environment.safeInsets.left * 2.0 - buttonInsets.left - buttonInsets.right)
                     bottomSize = self.fullscreenBottomItem.update(
                         transition: transition,
-                        component: AnyComponent(self.makeBottomButtonComponent(theme: theme, safeInsets: UIEdgeInsets())),
+                        component: AnyComponent(self.makeBottomButtonComponent(theme: theme, strings: environment.strings, safeInsets: UIEdgeInsets())),
                         environment: {},
                         containerSize: CGSize(width: bottomPanelWidth, height: 52.0)
                     )

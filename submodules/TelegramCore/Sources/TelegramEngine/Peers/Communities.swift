@@ -19,12 +19,14 @@ public enum CommunityPeerLinkError {
     case adminRequired
     case requestCreated
     case peersTooMuch
+    case serverProvided(text: String)
 }
 
 public enum CommunityPeerRequestApprovalError {
     case generic
     case adminRequired
     case peersTooMuch
+    case serverProvided(text: String)
 }
 
 public enum CommunityParticipantBannedError {
@@ -280,6 +282,9 @@ func _internal_toggleCommunityPeerLink(account: Account, communityId: PeerId, pe
 
         return account.network.request(Api.functions.communities.togglePeerLink(flags: flags, community: inputCommunity, peer: inputPeer))
         |> mapError { error -> CommunityPeerLinkError in
+            if error.errorCode == 406 {
+                return .serverProvided(text: error.errorDescription)
+            }
             switch error.errorDescription {
             case "COMMUNITY_REQUEST_CREATED":
                 return .requestCreated
@@ -376,6 +381,9 @@ func _internal_toggleCommunityPeerLinkRequestApproval(account: Account, communit
         let flags: Int32 = approve ? 0 : (1 << 0)
         return account.network.request(Api.functions.communities.togglePeerLinkRequestApproval(flags: flags, community: inputCommunity, peer: inputPeer))
         |> mapError { error -> CommunityPeerRequestApprovalError in
+            if error.errorCode == 406 {
+                return .serverProvided(text: error.errorDescription)
+            }
             switch error.errorDescription {
             case "CHAT_ADMIN_REQUIRED":
                 return .adminRequired
