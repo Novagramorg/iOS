@@ -94,7 +94,17 @@ extension DocumentCanvasView: UITextInput {
                                                                    baseWritingDirection: m.baseWritingDirection)
             return attrs
         }
-        return storage.attributes(at: min(max(0, location - 1), storage.length - 1), effectiveRange: nil)
+        var attrs = storage.attributes(at: min(max(0, location - 1), storage.length - 1), effectiveRange: nil)
+        // A formula is an atomic inline value, not a typing style. At either edge of the atom the normal
+        // "inherit from the preceding character" rule picks up its semantic marker; NSTextStorage removes
+        // an attachment from newly-inserted non-U+FFFC text, but leaves our custom rtFormula attribute in
+        // place. That makes the text look plain while read-back/send serializes it as another formula.
+        // Strip only the atom-specific metadata, preserving its ambient font/colour/paragraph attributes.
+        attrs.removeValue(forKey: .rtFormula)
+        if attrs[.attachment] is FormulaTextAttachment {
+            attrs.removeValue(forKey: .attachment)
+        }
+        return attrs
     }
 
     /// Bold caption typing attributes for an empty quote author region: resolves the owning PullQuoteBox /

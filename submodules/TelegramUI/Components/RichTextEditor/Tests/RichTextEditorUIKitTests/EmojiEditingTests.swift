@@ -35,6 +35,12 @@ final class EmojiEditingTests: XCTestCase {
         }.flatMap { $0 }.first { $0.attributes.formula != nil }
     }
 
+    private func firstParagraphRuns(_ c: DocumentCanvasView) -> [TextRun] {
+        c.currentBlocks().compactMap { block -> [TextRun]? in
+            if case let .paragraph(p) = block { return p.runs }; return nil
+        }.first ?? []
+    }
+
     private func firstFormulaRect(_ c: DocumentCanvasView) -> CGRect? {
         for region in c.allLeafRegions() {
             let attr = region.layout.attributedString
@@ -122,6 +128,49 @@ final class EmojiEditingTests: XCTestCase {
         c.insertFormula(latex: "x^2")
         c.deleteBackward()
         XCTAssertNil(firstFormulaRun(c))
+    }
+
+    func test_typingAfterRenderedFormulaDoesNotInheritFormula() {
+        let c = makeCanvas(text: "")
+        installFormulaRenderer(c)
+        c.anchor = c.boxes[0].textStart; c.head = c.anchor
+
+        c.insertFormula(latex: "x^2")
+        c.insertText(" after")
+
+        let runs = firstParagraphRuns(c)
+        XCTAssertEqual(runs.compactMap(\.attributes.formula), ["x^2"])
+        XCTAssertEqual(runs.last?.text, " after")
+        XCTAssertNil(runs.last?.attributes.formula, "plain text after a rendered formula must stay plain")
+    }
+
+    func test_typingAfterRawLatexFormulaDoesNotInheritFormula() {
+        let c = makeCanvas(text: "")   // no renderer: the formula is visible as raw LaTeX
+        c.anchor = c.boxes[0].textStart; c.head = c.anchor
+
+        c.insertFormula(latex: "x^2")
+        c.insertText(" after")
+
+        let runs = firstParagraphRuns(c)
+        XCTAssertEqual(runs.compactMap(\.attributes.formula), ["x^2"])
+        XCTAssertEqual(runs.last?.text, " after")
+        XCTAssertNil(runs.last?.attributes.formula, "plain text after raw-LaTeX fallback must stay plain")
+    }
+
+    func test_typingBeforeFormulaAtLineStartDoesNotInheritFormula() {
+        let c = makeCanvas(text: "")
+        installFormulaRenderer(c)
+        let lineStart = c.boxes[0].textStart
+        c.anchor = lineStart; c.head = lineStart
+        c.insertFormula(latex: "x^2")
+
+        c.anchor = lineStart; c.head = lineStart
+        c.insertText("before ")
+
+        let runs = firstParagraphRuns(c)
+        XCTAssertEqual(runs.first?.text, "before ")
+        XCTAssertNil(runs.first?.attributes.formula, "plain text before a leading formula must stay plain")
+        XCTAssertEqual(runs.compactMap(\.attributes.formula), ["x^2"])
     }
 
     func test_tapFormula_requestsEditAndReplacesAtom() throws {
