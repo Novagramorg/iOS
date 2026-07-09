@@ -2893,7 +2893,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                             if let translation = message.attributes.first(where: { $0 is TranslationMessageAttribute }) as? TranslationMessageAttribute, translation.toLang == translateToLanguage {
                                 continue
                             }
-                            if !message.text.isEmpty {
+                            if !message.text.isEmpty || message.richText != nil {
                                 messageIdsToTranslate.append(message.id)
                             } else if let _ = message.media.first(where: { $0 is TelegramMediaPoll }) {
                                 messageIdsToTranslate.append(message.id)
@@ -2911,7 +2911,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                                 if let translation = message.attributes.first(where: { $0 is TranslationMessageAttribute }) as? TranslationMessageAttribute, translation.toLang == translateToLanguage {
                                     continue
                                 }
-                                if !message.text.isEmpty {
+                                if !message.text.isEmpty || message.richText != nil {
                                     messageIdsToTranslate.append(message.id)
                                 }
                             }

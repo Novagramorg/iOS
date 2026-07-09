@@ -15,9 +15,24 @@ import TelegramUIPreferences
 import TextLoadingEffect
 import TextSelectionNode
 import StreamingTextReveal
+import ShimmeringLinkNode
 
 public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode {
     public final class ContainerNode: ASDisplayNode {
+    }
+
+    private enum ResolvedRichDataPageKey: Equatable {
+        case pendingEdit(attribute: ObjectIdentifier, page: ObjectIdentifier)
+        case translated(language: String, attribute: ObjectIdentifier, page: ObjectIdentifier)
+        case original(attribute: ObjectIdentifier, page: ObjectIdentifier)
+    }
+
+    private struct ResolvedRichDataContent {
+        let instantPage: InstantPage
+        let originalAttribute: RichTextMessageAttribute?
+        let key: ResolvedRichDataPageKey
+        let isTranslated: Bool
+        let isTranslating: Bool
     }
     
     private let containerNode: ContainerNode
@@ -29,7 +44,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // The synthesized webpage uses a sentinel id (namespace 0, id 0) shared across all richText
     // messages, so we key cache invalidation on the message itself. When the bubble is recycled
     // with a different message we must discard pageView (render context is constructor-fixed).
-    private var pageViewMessageKey: (id: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, showMoreExpanded: Bool)?
+    private var pageViewMessageKey: (id: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
     // messageStableVersion is in the cache key because the synthesized instantPage content
     // mutates between streamed AI message chunks (each chunk bumps stableVersion); without
     // this, the cached layout would shadow newly-arrived content during streaming.
@@ -38,6 +53,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                     expandedDetails: [Int: Bool],
                                     messageStableVersion: UInt32,
                                     pendingEditKey: ObjectIdentifier?,
+                                    richPageKey: ResolvedRichDataPageKey,
                                     showMoreExpanded: Bool,
                                     layout: InstantPageV2Layout)?
     private var currentExpandedDetails: [Int: Bool] = [:]
@@ -49,6 +65,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     private var linkProgressRects: [CGRect]?
     private var linkHighlightingNode: LinkHighlightingNode?
     private var linkProgressView: TextLoadingEffectView?
+    private var shimmeringNode: ShimmeringLinkNode?
+    private var shimmeringNodeIsSkeleton: Bool = false
     private var textSelectionAdapter: InstantPageMultiTextAdapter?
     private var textSelectionNode: TextSelectionNode?
 
@@ -116,13 +134,65 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         self.addSubnode(self.containerNode)
     }
 
+    private static func resolvedRichDataContent(item: ChatMessageBubbleContentItem, showMoreExpanded: Bool) -> ResolvedRichDataContent? {
+        if let attribute = item.attributes.updatingMedia?.richText {
+            let instantPage = (showMoreExpanded ? attribute.fullInstantPage : nil) ?? attribute.instantPage
+            return ResolvedRichDataContent(
+                instantPage: instantPage,
+                originalAttribute: attribute,
+                key: .pendingEdit(attribute: ObjectIdentifier(attribute), page: ObjectIdentifier(instantPage)),
+                isTranslated: false,
+                isTranslating: false
+            )
+        }
+
+        guard let attribute = item.message.richText else {
+            return nil
+        }
+
+        let isIncoming = item.message.effectivelyIncoming(item.context.account.peerId)
+        var canDisplayTranslation = isIncoming
+        if let subject = item.associatedData.subject, case .messageOptions = subject {
+            canDisplayTranslation = false
+        }
+
+        if canDisplayTranslation, let translateToLanguage = item.associatedData.translateToLanguage {
+            if let translation = item.message.attributes.first(where: { ($0 as? TranslationMessageAttribute)?.toLang == translateToLanguage }) as? TranslationMessageAttribute, let instantPage = translation.instantPage {
+                return ResolvedRichDataContent(
+                    instantPage: instantPage,
+                    originalAttribute: attribute,
+                    key: .translated(language: translateToLanguage, attribute: ObjectIdentifier(translation), page: ObjectIdentifier(instantPage)),
+                    isTranslated: true,
+                    isTranslating: false
+                )
+            } else {
+                return ResolvedRichDataContent(
+                    instantPage: attribute.instantPage,
+                    originalAttribute: attribute,
+                    key: .original(attribute: ObjectIdentifier(attribute), page: ObjectIdentifier(attribute.instantPage)),
+                    isTranslated: false,
+                    isTranslating: true
+                )
+            }
+        }
+
+        let instantPage = (showMoreExpanded ? attribute.fullInstantPage : nil) ?? attribute.instantPage
+        return ResolvedRichDataContent(
+            instantPage: instantPage,
+            originalAttribute: attribute,
+            key: .original(attribute: ObjectIdentifier(attribute), page: ObjectIdentifier(instantPage)),
+            isTranslated: false,
+            isTranslating: false
+        )
+    }
+
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
     /// the existing view, updating only the webpage content in place. The view is rebuilt only when
     /// the bubble is recycled with a different message/webpage (different message id).
-    private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, showMoreExpanded: Bool) -> InstantPageV2View {
-        let key = (id: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), showMoreExpanded: showMoreExpanded)
+    private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool) -> InstantPageV2View {
+        let key = (id: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
         if let existing = self.pageView, let current = self.pageViewMessageKey, current.id == key.id {
-            if current.stableVersion == key.stableVersion && current.pendingEditKey == key.pendingEditKey && current.showMoreExpanded == key.showMoreExpanded {
+            if current.stableVersion == key.stableVersion && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
                 return existing
             }
             // Same message, new chunk: reuse the view. Update only the content-bearing webpage on
@@ -376,16 +446,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
 
                 // Resolve the node-local expand state for THIS message (collapsed for any other).
                 let showMoreExpanded = (showMoreExpandedState?.messageId == item.message.id) ? (showMoreExpandedState?.value ?? false) : false
+                let resolvedContent = ChatMessageRichDataBubbleContentNode.resolvedRichDataContent(item: item, showMoreExpanded: showMoreExpanded)
 
-                if let attribute = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText) {
+                if let resolvedContent {
                     #if DEBUG && false
                     let instantPage = InstantPage(blocks: [.thinking(.concat([
                         .textCustomEmoji(fileId: 5384559872899555845, alt: "a"),
                         .plain("Thinking...")
                     ]))], media: [:], isComplete: true, rtl: false, url: "", views: nil)
                     #else
-                    // Show the full page only while expanded (after a "Show more" tap); otherwise the partial.
-                    let instantPage = (showMoreExpanded ? attribute.fullInstantPage : nil) ?? attribute.instantPage
+                    let instantPage = resolvedContent.instantPage
                     #endif
 
                     let webpage = TelegramMediaWebpage(webpageId: EngineMedia.Id(namespace: 0, id: 0), content: .Loaded(TelegramMediaWebpageLoadedContent(
@@ -421,6 +491,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                        current.showMoreExpanded == showMoreExpanded,
                        current.messageStableVersion == currentMessageStableVersion,
                        current.pendingEditKey == currentPendingEditKey,
+                       current.richPageKey == resolvedContent.key,
                        current.layout.formattedDateUpdatePeriod == nil {
                         // Reuse the cached layout only when it has no relative `textDate`. A relative
                         // date's formatted string ("N minutes ago") is baked into the laid-out text at
@@ -430,14 +501,6 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         // Forcing a recompute for relative-date pages keeps the timer's tick visible.
                         pageLayout = current.layout
                     } else {
-                        #if DEBUG && false
-                        let instantPage = InstantPage(blocks: [.thinking(.concat([
-                            .textCustomEmoji(fileId: 5384559872899555845, alt: "a"),
-                            .plain("Thinking...")
-                        ]))], media: [:], isComplete: true, rtl: false, url: "", views: nil)
-                        #else
-                        let instantPage = (showMoreExpanded ? attribute.fullInstantPage : nil) ?? attribute.instantPage
-                        #endif
                         pageLayout = layoutInstantPageV2(
                             webpage: webpage,
                             instantPage: instantPage,
@@ -586,7 +649,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 // a preview / messageOptions context. When present, the date trails the link's line
                 // by substituting its frame for the last-text-line frame the status machinery consumes.
                 var showMore = false
-                if let attribute = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText),
+                if let attribute = resolvedContent?.originalAttribute,
+                   resolvedContent?.isTranslated != true,
+                   resolvedContent?.isTranslating != true,
                    !showMoreExpanded,
                    !attribute.instantPage.isComplete,
                    !hasDraft,
@@ -791,17 +856,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             self.statusNode?.pressed = nil
                         }
 
-                        if let pageLayout, let pageWebpage, let _ = (item.attributes.updatingMedia?.richText ?? item.message.richText) {
+                        if let pageLayout, let pageWebpage, let resolvedContent {
                             self.currentPageLayout = (
                                 suggestedBoundingWidth,
                                 ObjectIdentifier(item.presentationData.theme.theme),
                                 self.currentExpandedDetails,
                                 item.message.stableVersion,
                                 (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }),
+                                resolvedContent.key,
                                 showMoreExpanded,
                                 pageLayout
                             )
-                            let pageView = self.ensurePageView(item: item, webpage: pageWebpage, showMoreExpanded: showMoreExpanded)
+                            let pageView = self.ensurePageView(item: item, webpage: pageWebpage, richPageKey: resolvedContent.key, showMoreExpanded: showMoreExpanded)
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
                             pageView.frame = CGRect(
                                 origin: CGPoint(x: -1.0, y: streamingHeaderOffset),
@@ -811,6 +877,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             if self.displayContentsUnderSpoilers {
                                 pageView.setDisplayContentsUnderSpoilers(true, atLocation: nil, animated: false)
                             }
+                            let showTextAsPlaceholder = item.associatedData.showTextAsPlaceholder
+                            var isTranslating = resolvedContent.isTranslating
+                            if showTextAsPlaceholder {
+                                isTranslating = true
+                            }
+                            self.updateIsTranslating(isTranslating, showTextAsPlaceholder: showTextAsPlaceholder)
                             // Continue an in-flight anchor scroll that is waiting on a <details>
                             // expansion to re-lay-out. This runs on EVERY apply pass (not only the
                             // expand-triggered one), but only does anything while a scroll is pending
@@ -829,6 +901,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             }
                         } else {
                             self.currentPageLayout = nil
+                            self.updateIsTranslating(false, showTextAsPlaceholder: false)
                             self.pageView?.update(
                                 layout: InstantPageV2Layout(contentSize: .zero, items: [], detailsIndices: []),
                                 theme: pageTheme,
@@ -1006,6 +1079,93 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         self.requestFullUpdate?(ControlledTransition(duration: 0.15, curve: .easeInOut, interactive: false))
                     }
                 }
+            }
+        }
+    }
+
+    private func translationShimmerRects(pageView: InstantPageV2View) -> [CGRect] {
+        let pageOrigin = pageView.frame.origin
+        let entries = pageView.selectableTextItems()
+            .filter { $0.item.selectable && !$0.item.attributedString.string.isEmpty }
+            .map { entry in
+                InstantPageMultiTextAdapter.Entry(
+                    item: entry.item,
+                    frameOrigin: CGPoint(
+                        x: entry.parentOffset.x + pageOrigin.x,
+                        y: entry.parentOffset.y + pageOrigin.y
+                    )
+                )
+            }
+        guard !entries.isEmpty else {
+            return []
+        }
+
+        let adapter = InstantPageMultiTextAdapter(entries: entries)
+        guard let text = adapter.currentText, text.length > 0, let rects = adapter.textRangeRects(in: NSRange(location: 0, length: text.length))?.rects else {
+            return []
+        }
+        return rects
+    }
+
+    private func updateIsTranslating(_ isTranslating: Bool, showTextAsPlaceholder: Bool) {
+        guard let item = self.item, let pageView = self.pageView else {
+            if let shimmeringNode = self.shimmeringNode {
+                self.shimmeringNode = nil
+                self.shimmeringNodeIsSkeleton = false
+                shimmeringNode.removeFromSupernode()
+            }
+            return
+        }
+
+        var rects = self.translationShimmerRects(pageView: pageView)
+        if isTranslating, !rects.isEmpty {
+            pageView.isHidden = showTextAsPlaceholder
+
+            let isIncoming = item.message.effectivelyIncoming(item.context.account.peerId)
+            let messageTheme = item.presentationData.theme.theme.chat.message
+            let color: UIColor
+            if showTextAsPlaceholder {
+                rects = rects.map { $0.insetBy(dx: 0.0, dy: 6.0 + UIScreenPixel) }
+                if rects.count == 2 {
+                    rects[0].origin.y += 1.0
+                    rects[1].origin.y -= 1.0
+                }
+                color = isIncoming ? messageTheme.incoming.secondaryTextColor.withMultipliedAlpha(0.25) : messageTheme.outgoing.secondaryTextColor.withMultipliedAlpha(0.25)
+            } else if item.presentationData.theme.theme.overallDarkAppearance {
+                color = isIncoming ? messageTheme.incoming.primaryTextColor.withAlphaComponent(0.1) : messageTheme.outgoing.primaryTextColor.withAlphaComponent(0.1)
+            } else {
+                color = isIncoming ? messageTheme.incoming.accentTextColor.withAlphaComponent(0.1) : messageTheme.outgoing.secondaryTextColor.withAlphaComponent(0.1)
+            }
+
+            let shimmeringNode: ShimmeringLinkNode
+            let isNew: Bool
+            if let current = self.shimmeringNode, self.shimmeringNodeIsSkeleton == showTextAsPlaceholder {
+                shimmeringNode = current
+                isNew = false
+            } else {
+                self.shimmeringNode?.removeFromSupernode()
+                shimmeringNode = ShimmeringLinkNode(color: color, isSkeleton: showTextAsPlaceholder)
+                self.shimmeringNode = shimmeringNode
+                self.shimmeringNodeIsSkeleton = showTextAsPlaceholder
+                self.containerNode.insertSubnode(shimmeringNode, at: 0)
+                isNew = true
+            }
+
+            shimmeringNode.updateRects(rects, color: color)
+            shimmeringNode.frame = self.containerNode.bounds
+            shimmeringNode.updateLayout(self.containerNode.bounds.size)
+            if isNew {
+                shimmeringNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+            }
+        } else {
+            pageView.isHidden = false
+            if let shimmeringNode = self.shimmeringNode {
+                self.shimmeringNode = nil
+                self.shimmeringNodeIsSkeleton = false
+                shimmeringNode.alpha = 0.0
+                shimmeringNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, completion: { [weak shimmeringNode] _ in
+                    shimmeringNode?.removeFromSupernode()
+                })
             }
         }
     }
@@ -1469,8 +1629,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // 2. Not laid out — it may be buried in a collapsed <details>. Find the path and expand
         //    the first collapsed details on it, then retry after the relayout (post-relayout hook).
         let anchorExpanded = (self.showMoreExpanded?.messageId == item.message.id) ? (self.showMoreExpanded?.value ?? false) : false
-        guard let instantPage = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText).map({ (anchorExpanded ? $0.fullInstantPage : nil) ?? $0.instantPage }),
-              let path = instantPageAnchorPath(in: instantPage, name: anchor),
+        guard let resolvedContent = ChatMessageRichDataBubbleContentNode.resolvedRichDataContent(item: item, showMoreExpanded: anchorExpanded),
+              let path = instantPageAnchorPath(in: resolvedContent.instantPage, name: anchor),
               !path.isEmpty,
               let collapsedIndex = self.pageView?.firstCollapsedDetails(forOrdinalPath: path)
         else {

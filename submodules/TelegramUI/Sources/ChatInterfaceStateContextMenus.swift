@@ -1303,11 +1303,21 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         let message = messages[0]
         var richMessageMarkdown: String?
         var richMessageInstantPage: InstantPage?
+        var activeTranslateToLang: String?
+        if let translationState = chatPresentationInterfaceState.translationState, translationState.isEnabled {
+            activeTranslateToLang = translationState.toLang
+        }
         if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
-            let markdown = markdownStringFromInstantPage(richTextAttribute.instantPage)
+            let instantPage: InstantPage
+            if let activeTranslateToLang, let translation = message.attributes.first(where: { ($0 as? TranslationMessageAttribute)?.toLang == activeTranslateToLang }) as? TranslationMessageAttribute, let translatedInstantPage = translation.instantPage {
+                instantPage = translatedInstantPage
+            } else {
+                instantPage = richTextAttribute.instantPage
+            }
+            let markdown = markdownStringFromInstantPage(instantPage)
             if !markdown.isEmpty {
                 richMessageMarkdown = markdown
-                richMessageInstantPage = richTextAttribute.instantPage
+                richMessageInstantPage = instantPage
             }
         }
         var isExpired = false
