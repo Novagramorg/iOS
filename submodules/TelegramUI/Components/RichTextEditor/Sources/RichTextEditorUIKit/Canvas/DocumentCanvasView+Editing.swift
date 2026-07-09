@@ -753,36 +753,56 @@ extension DocumentCanvasView {
     /// caret lands at the end of the inserted content. A no-op for an empty document. Mirrors `insertMedia`'s
     /// splice, building boxes with the same `makeBox` factory `setBlocks` uses.
     func insertDocument(_ document: Document) {
-        let blocks = document.blocks
-        guard !blocks.isEmpty else { return }
-        editing {
-            let newBoxes = blocks.compactMap {
-                makeBox(for: $0, mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
-                        expandImage: quoteCollapseIcons?.expand, collapseImage: quoteCollapseIcons?.collapse,
-                        horizontalBleed: mediaBlockStyle.horizontalBleed, width: effectiveWidth)
-            }
-            guard !newBoxes.isEmpty else { return }
-            var updated = boxes
-            let firstInserted: Int
-            // Find the TOP-LEVEL block whose structural span contains the caret. This uses `nodeStart`/`nodeSize`
-            // (which cover nested content) rather than `resolveBox`, whose text-span loop mis-resolves a caret
-            // INSIDE a quote/table to the FOLLOWING top-level block — see the note in `insertMedia`.
-            if let index = boxes.firstIndex(where: { head >= $0.nodeStart && head < $0.nodeStart + $0.nodeSize }) {
-                if let p = boxes[index] as? BlockBox, p.textLength == 0 {
-                    updated.replaceSubrange(index...index, with: newBoxes)           // empty paragraph → replace it
-                    firstInserted = index
-                } else {
-                    updated.insert(contentsOf: newBoxes, at: index + 1)              // else insert AFTER the block
-                    firstInserted = index + 1
-                }
+        guard !document.blocks.isEmpty else { return }
+        editing { insertDocumentBlocks(document.blocks) }
+    }
+
+    /// Box-level insert of `blocks` at the caret (NO `editing{}` — the caller owns the undo step): the caret's
+    /// block is REPLACED if it's an empty paragraph, otherwise the blocks are inserted AFTER it (never
+    /// splitting it). Caret lands at the end of the inserted content. Shared by `insertDocument` and by
+    /// `replaceRange`'s non-text-gap fallback.
+    func insertDocumentBlocks(_ blocks: [Block]) {
+        let newBoxes = blocks.compactMap {
+            makeBox(for: $0, mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                    expandImage: quoteCollapseIcons?.expand, collapseImage: quoteCollapseIcons?.collapse,
+                    horizontalBleed: mediaBlockStyle.horizontalBleed, width: effectiveWidth)
+        }
+        guard !newBoxes.isEmpty else { return }
+        var updated = boxes
+        let firstInserted: Int
+        // Find the TOP-LEVEL block whose structural span contains the caret. This uses `nodeStart`/`nodeSize`
+        // (which cover nested content) rather than `resolveBox`, whose text-span loop mis-resolves a caret
+        // INSIDE a quote/table to the FOLLOWING top-level block — see the note in `insertMedia`.
+        if let index = boxes.firstIndex(where: { head >= $0.nodeStart && head < $0.nodeStart + $0.nodeSize }) {
+            if let p = boxes[index] as? BlockBox, p.textLength == 0 {
+                updated.replaceSubrange(index...index, with: newBoxes)           // empty paragraph → replace it
+                firstInserted = index
             } else {
-                updated.append(contentsOf: newBoxes)                                 // caret past the last block → append
-                firstInserted = updated.count - newBoxes.count
+                updated.insert(contentsOf: newBoxes, at: index + 1)              // else insert AFTER the block
+                firstInserted = index + 1
             }
-            boxes = updated
-            recomputeSpans()
-            let last = boxes[firstInserted + newBoxes.count - 1]                     // caret at end of inserted content
-            anchor = last.textStart + last.textLength; head = anchor
+        } else {
+            updated.append(contentsOf: newBoxes)                                 // caret past the last block → append
+            firstInserted = updated.count - newBoxes.count
+        }
+        boxes = updated
+        recomputeSpans()
+        let last = boxes[firstInserted + newBoxes.count - 1]                      // caret at end of inserted content
+        anchor = last.textStart + last.textLength; head = anchor
+    }
+
+    /// Replaces the global range `[globalFrom, globalTo)` with `document`'s blocks as ONE undo step, via the
+    /// pure-Core `Document.replacingRange` (structural delete of the complement + the tested `insertingFragment`
+    /// splice). Because the delete is computed structurally rather than through a caret-based cross-block walk,
+    /// a fully-covered table/media is dropped at EITHER end of a mixed range — unlike `applySelectionReplace`,
+    /// whose `resolveBox` routing mishandles a leading-edge container (the documented degenerate-container tech
+    /// debt). An empty `document` deletes the range. The caret collapses to the end of the inserted content.
+    func replaceRange(globalFrom: Int, globalTo: Int, with document: Document) {
+        editing {
+            let (newDoc, caret) = Document(blocks: currentBlocks())
+                .replacingRange(globalFrom: globalFrom, globalTo: globalTo, with: document)
+            setBlocks(newDoc.blocks, width: effectiveWidth)
+            anchor = min(caret, documentSize); head = anchor
         }
     }
 

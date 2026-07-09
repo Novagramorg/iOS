@@ -38,5 +38,29 @@ final class EditorFormatFacadeTests: XCTestCase {
         e.undo()
         XCTAssertTrue(runs(e).allSatisfy { !$0.attributes.bold }, "facade undo reverts bold")
     }
+
+    func test_facade_selectedGlobalRange_nilWhenCollapsed() {
+        let e = editor()
+        e.canvas.anchor = 3; e.canvas.head = 3
+        XCTAssertNil(e.selectedGlobalRange(), "a collapsed selection has no range")
+    }
+    func test_facade_selectedGlobalRange_reportsOffsets() {
+        let e = editor()
+        e.canvas.anchor = 1; e.canvas.head = 4
+        let r = e.selectedGlobalRange()
+        XCTAssertEqual(r?.from, 1); XCTAssertEqual(r?.to, 4)
+    }
+    func test_facade_selectedGlobalRange_ordersEndpoints() {
+        let e = editor()
+        e.canvas.anchor = 4; e.canvas.head = 1   // dragged backwards
+        let r = e.selectedGlobalRange()
+        XCTAssertEqual(r?.from, 1); XCTAssertEqual(r?.to, 4)
+    }
+    func test_facade_replaceRange_replacesAndCollapses() {
+        let e = editor()   // "Hello" → text global 1..6
+        e.replaceRange(from: 1, to: 6, with: Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("n"), runs: [TextRun(text: "Bye")]))]))
+        guard case .paragraph(let p)? = e.document.blocks.first else { return XCTFail("expected paragraph") }
+        XCTAssertEqual(p.text, "Bye")
+    }
 }
 #endif

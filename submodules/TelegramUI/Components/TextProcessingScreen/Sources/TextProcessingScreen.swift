@@ -1681,6 +1681,9 @@ private final class TextProcessingSheetComponent: Component {
                             if case let .generate(completion) = component.mode {
                                 completion(result)
                                 dismiss(true)
+                            } else if case let .edit(_, completion, _, _) = component.mode {
+                                completion(result)
+                                dismiss(true)
                             }
                         } else {
                             guard !self.contentExternalState.promptText.isEmpty else {
