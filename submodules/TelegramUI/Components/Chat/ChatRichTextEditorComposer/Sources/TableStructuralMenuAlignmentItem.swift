@@ -88,11 +88,10 @@ private final class TableStructuralMenuAlignmentItemNode: ASDisplayNode, Context
         return (size, { size, transition in
             self.validLayout = (constrainedWidth, constrainedHeight, size)
             
-            //TODO:localize
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Alignment", font: Font.regular(13.0), textColor: self.presentationData.theme.contextMenu.secondaryColor))
+                    text: .plain(NSAttributedString(string: self.presentationData.strings.RichText_TableMenu_Alignment, font: Font.regular(13.0), textColor: self.presentationData.theme.contextMenu.secondaryColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: 1000.0, height: 100.0)

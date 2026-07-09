@@ -432,6 +432,21 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         return canvas.text(in: range) ?? ""
     }
 
+    /// The current selection as global position offsets, or `nil` when the selection is collapsed. Used by a
+    /// host (the attachment screen's AI-edit-on-selection) to scope an edit to the selected range.
+    public func selectedGlobalRange() -> (from: Int, to: Int)? {
+        guard let range = canvas.selectedTextRange as? DocumentTextRange else { return nil }
+        let from = range.from.offset, to = range.to.offset
+        guard from != to else { return nil }
+        return (min(from, to), max(from, to))
+    }
+
+    /// Replaces the global range `[from, to)` with `document`'s blocks as ONE undo step (delete + fragment
+    /// splice; caret collapses to the end of the inserted content). An empty `document` deletes the range.
+    public func replaceRange(from: Int, to: Int, with document: Document) {
+        canvas.replaceRange(globalFrom: from, globalTo: to, with: document)
+    }
+
     /// Increases the list nesting level of the touched list items (no-op on non-list paragraphs).
     public func indent() { canvas.indent() }
     /// Decreases the list nesting level of the touched list items (clamps at 0; no-op on non-list).

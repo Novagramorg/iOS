@@ -2111,8 +2111,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     self.titleView.isEnabled = true
                 case .richText:
                     self.titleView.title = presentationData.strings.MediaPicker_Recents
-                    //TODO:localize
-                    self.titleView.subtitle = "Add media"
+                    self.titleView.subtitle = presentationData.strings.RichText_AddMediaTitle
                     self.titleView.isEnabled = true
                 }
             }

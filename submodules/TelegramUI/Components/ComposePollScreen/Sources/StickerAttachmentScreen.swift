@@ -1190,8 +1190,7 @@ final class StickerAttachmentScreen: ViewControllerComponentContainer, Attachmen
                 case .option:
                     subtitle = presentationData.strings.StickerPicker_PollSubtitle_PollOption
                 case .richText:
-                    //TODO:localize
-                    subtitle = "Add media"
+                    subtitle = presentationData.strings.RichText_AddMediaTitle
                 }
             case .emoji:
                 title = "Emoji"

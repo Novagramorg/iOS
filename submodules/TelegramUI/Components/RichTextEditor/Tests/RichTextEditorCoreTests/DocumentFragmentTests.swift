@@ -458,4 +458,254 @@ final class DocumentFragmentTests: XCTestCase {
         // "wisdom" is 6 UTF-16 units → true end-of-text caret is 13.
         XCTAssertEqual(r.caret, 13)
     }
+
+    // Task 1: block-carrying extraction (AI-edit-on-selection).
+    private func mediaBlock(_ id: String) -> Block {
+        .media(MediaBlock(id: BlockID(id), mediaID: "content-\(id)", naturalSize: Size2D(width: 100, height: 100)))
+    }
+    private func table1(_ id: String, _ cellText: String) -> Block {
+        .table(TableBlock(id: BlockID(id), columns: [ColumnSpec(width: 90)],
+            rows: [Row(id: BlockID(id + "r"), cells: [Cell(id: BlockID(id + "c"),
+                blocks: [para(id + "cp", cellText)])])]))
+    }
+
+    func test_extract_default_dropsMediaAndTable() {
+        let d = doc(para("a", "A"), mediaBlock("m"), table1("t", "x"), para("b", "B"))
+        let size = DocumentTree.documentSize(d)
+        let f = d.extractFragment(globalFrom: 0, globalTo: size)   // default carryingNonTextBlocks == false
+        XCTAssertEqual(f.blocks.compactMap { if case .paragraph(let p) = $0 { return p.text } else { return nil } }, ["A", "B"])
+        XCTAssertFalse(f.blocks.contains { if case .media = $0 { return true } else { return false } }, "media dropped by default")
+        XCTAssertFalse(f.blocks.contains { if case .table = $0 { return true } else { return false } }, "table dropped by default")
+    }
+
+    func test_extract_carrying_capturesFullyCoveredMediaAndTable_freshIDs() {
+        let d = doc(para("a", "A"), mediaBlock("m"), table1("t", "x"), para("b", "B"))
+        let size = DocumentTree.documentSize(d)
+        let f = d.extractFragment(globalFrom: 0, globalTo: size, carryingNonTextBlocks: true)
+        XCTAssertEqual(f.blocks.count, 4, "A, media, table, B all carried")
+        guard case .media(let m) = f.blocks[1] else { return XCTFail("media carried") }
+        XCTAssertNotEqual(m.id, BlockID("m"), "carried media gets a fresh block id")
+        XCTAssertEqual(m.mediaID, "content-m", "content key preserved")
+        guard case .table(let t) = f.blocks[2] else { return XCTFail("table carried") }
+        XCTAssertNotEqual(t.id, BlockID("t"), "carried table gets a fresh block id")
+    }
+
+    func test_extract_carrying_dropsPartiallyCoveredMedia() {
+        // A range that starts in "A" and ends ONE position INTO the media's span (so the media is partially,
+        // not fully, covered) must still drop the media — only a fully-covered media/table is carried.
+        let d = doc(para("a", "A"), mediaBlock("m"), para("b", "B"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))     // media span starts at global aSize
+        let mSize = DocumentTree.documentSize(doc(mediaBlock("m")))
+        XCTAssertGreaterThan(mSize, 1, "precondition: media spans more than one position, so aSize+1 is strictly inside it")
+        let f = d.extractFragment(globalFrom: 1, globalTo: aSize + 1, carryingNonTextBlocks: true)   // ends inside the media
+        XCTAssertFalse(f.blocks.contains { if case .media = $0 { return true } else { return false } },
+                       "a partially-covered media is not carried even with the flag")
+    }
+
+    // Task 2: expand a selection so a partial table/image becomes a whole-block selection, both directions.
+    func test_expand_endpointInsideTable_snapsToWholeTable() {
+        let d = doc(para("a", "A"), table1("t", "xyz"), para("b", "B"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let tStart = aSize, tEnd = aSize + tSize
+        let (lo, hi) = d.expandingRangeOverNonTextBlocks(globalFrom: tStart + 2, globalTo: tEnd - 1)
+        XCTAssertEqual(lo, tStart, "lo inside the table snaps down to the table's span start")
+        XCTAssertEqual(hi, tEnd, "hi inside the table snaps up to the table's span end")
+    }
+
+    func test_expand_endpointInsideMedia_snapsToWholeMedia() {
+        let d = doc(para("a", "A"), mediaBlock("m"), para("b", "B"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let mSize = DocumentTree.documentSize(doc(mediaBlock("m")))
+        let mStart = aSize, mEnd = aSize + mSize
+        let (lo, hi) = d.expandingRangeOverNonTextBlocks(globalFrom: mStart + 1, globalTo: mEnd - 1)
+        XCTAssertEqual(lo, mStart)
+        XCTAssertEqual(hi, mEnd)
+    }
+
+    func test_expand_paragraphEndpoints_untouched() {
+        let d = twoParas()   // "Hello"(text 1..6), "World"(text 8..13)
+        let (lo, hi) = d.expandingRangeOverNonTextBlocks(globalFrom: 3, globalTo: 10)
+        XCTAssertEqual(lo, 3, "a text endpoint is never expanded")
+        XCTAssertEqual(hi, 10, "a text endpoint is never expanded")
+    }
+
+    func test_expand_wholeBlockAlreadyCovered_isNoOp() {
+        let d = doc(para("a", "A"), table1("t", "xyz"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let (lo, hi) = d.expandingRangeOverNonTextBlocks(globalFrom: aSize, globalTo: aSize + tSize)
+        XCTAssertEqual(lo, aSize)
+        XCTAssertEqual(hi, aSize + tSize)
+    }
+
+    func test_expand_mixedEndpoints_onlyTheInBlockEndpointSnaps() {
+        // lo is in the first paragraph's text; hi is inside the table → only hi snaps (to the table end), lo stays.
+        let d = doc(para("a", "AA"), table1("t", "xyz"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "AA")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let (lo, hi) = d.expandingRangeOverNonTextBlocks(globalFrom: 1, globalTo: aSize + 1)   // hi one into the table
+        XCTAssertEqual(lo, 1, "text endpoint untouched")
+        XCTAssertEqual(hi, aSize + tSize, "the in-table endpoint snaps to the table end")
+    }
+
+    // MARK: - replacingRange (AI-edit-on-selection)
+
+    private func texts(_ d: Document) -> [String] {
+        d.blocks.compactMap { if case .paragraph(let p) = $0 { return p.text } else { return nil } }
+    }
+    private func hasTable(_ d: Document) -> Bool {
+        d.blocks.contains { if case .table = $0 { return true } else { return false } }
+    }
+
+    func test_replacingRange_withinParagraph_replacesText() {
+        let d = doc(para("h", "Hello world"))   // text global [1,12)
+        let (out, caret) = d.replacingRange(globalFrom: 7, globalTo: 12, with: doc(para("x", "there")))
+        XCTAssertEqual(texts(out), ["Hello there"])
+        XCTAssertEqual(caret, 12, "caret at end of the inserted text")
+    }
+
+    func test_replacingRange_withinParagraph_interiorReplace() {
+        let d = doc(para("h", "Hello"))   // text [1,6)
+        let (out, caret) = d.replacingRange(globalFrom: 3, globalTo: 5, with: doc(para("x", "X")))   // replace "ll"
+        XCTAssertEqual(texts(out), ["HeXo"])
+        XCTAssertEqual(caret, 4, "caret after the inserted X")
+    }
+
+    func test_replacingRange_emptyFragment_withinParagraph_deletes() {
+        let d = doc(para("h", "Hello world"))
+        let (out, _) = d.replacingRange(globalFrom: 6, globalTo: 12, with: Document(blocks: []))
+        XCTAssertEqual(texts(out), ["Hello"])
+    }
+
+    func test_replacingRange_emptyFragment_crossParagraph_joins() {
+        // "AB": open@0, text A@1 B@2, close@3 (size 4). "CD": open@4, text C@5 D@6, close@7.
+        // Deleting global [2,6) removes "B", the paragraph break, and "C" → the two paragraphs join to "AD".
+        let d = doc(para("a", "AB"), para("b", "CD"))
+        let (out, caret) = d.replacingRange(globalFrom: 2, globalTo: 6, with: Document(blocks: []))
+        XCTAssertEqual(texts(out), ["AD"], "the two paragraphs join across the deleted break")
+        XCTAssertEqual(caret, 2)
+    }
+
+    func test_replacingRange_wholeTable_replacedWithParagraph_dropsTable_keepsNeighboursSeparate() {
+        let d = doc(para("a", "A"), table1("t", "xyz"), para("b", "B"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let (out, _) = d.replacingRange(globalFrom: aSize, globalTo: aSize + tSize, with: doc(para("n", "N")))
+        XCTAssertFalse(hasTable(out), "the whole table is dropped")
+        XCTAssertEqual(texts(out), ["A", "N", "B"], "N replaces the table as its own block; A/B stay separate")
+    }
+
+    func test_replacingRange_wholeTable_replacedWithEmpty_deletesTable() {
+        let d = doc(para("a", "A"), table1("t", "xyz"), para("b", "B"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let (out, _) = d.replacingRange(globalFrom: aSize, globalTo: aSize + tSize, with: Document(blocks: []))
+        XCTAssertFalse(hasTable(out), "the whole table is deleted")
+        XCTAssertEqual(texts(out), ["A", "B"])
+    }
+
+    func test_replacingRange_textThenWholeTable_dropsTable() {
+        // Range: from mid-first-paragraph THROUGH the whole table (table at the TRAILING end).
+        let d = doc(para("a", "AABB"), table1("t", "xyz"), para("b", "C"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "AABB")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let (out, _) = d.replacingRange(globalFrom: 3, globalTo: aSize + tSize, with: doc(para("n", "N")))
+        XCTAssertFalse(hasTable(out), "trailing-edge table dropped")
+        let joined = texts(out).joined(separator: "|")
+        XCTAssertTrue(joined.contains("AA") && joined.contains("N") && joined.contains("C"), "got \(joined)")
+        XCTAssertFalse(joined.contains("BB"), "covered tail of the first paragraph is gone: \(joined)")
+    }
+
+    func test_replacingRange_wholeTableThenText_dropsTable() {
+        // MIRROR orientation (the previously-failing case): table at the LEADING end of a mixed range.
+        let d = doc(para("a", "A"), table1("t", "xyz"), para("b", "CCDD"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let tSize = DocumentTree.documentSize(doc(table1("t", "xyz")))
+        let cTextStart = aSize + tSize + 1   // "CCDD" text start; +2 is after "CC"
+        let (out, _) = d.replacingRange(globalFrom: aSize, globalTo: cTextStart + 2, with: doc(para("n", "N")))
+        XCTAssertFalse(hasTable(out), "leading-edge table dropped (the mirror orientation)")
+        let joined = texts(out).joined(separator: "|")
+        XCTAssertTrue(joined.contains("A") && joined.contains("N") && joined.contains("DD"), "got \(joined)")
+        XCTAssertFalse(joined.contains("CC"), "covered head of the trailing paragraph is gone: \(joined)")
+    }
+
+    // Regression: a boundary at a NON-first paragraph's text start must not merge into the preceding block.
+    func test_replacingRange_rewriteWholeSecondParagraph_keepsSeparate() {
+        let d = doc(para("a", "A"), para("b", "Hello"))   // "A" [1,2); "Hello" text starts at global 4
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let bText = aSize + 1                              // "Hello" text start
+        let (out, _) = d.replacingRange(globalFrom: bText, globalTo: bText + 5, with: doc(para("n", "N")))
+        XCTAssertEqual(texts(out), ["A", "N"], "rewriting the 2nd paragraph must not corrupt into [\"AN\"]")
+    }
+
+    func test_replacingRange_partialFromSecondParagraphStart_mergesIntoTail() {
+        let d = doc(para("a", "A"), para("b", "Hello"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let bText = aSize + 1
+        let (out, _) = d.replacingRange(globalFrom: bText, globalTo: bText + 3, with: doc(para("x", "X")))   // replace "Hel"
+        XCTAssertEqual(texts(out), ["A", "Xlo"], "fragment folds into the surviving tail of the 2nd paragraph")
+    }
+
+    func test_replacingRange_secondParagraphStartThroughFollowingTable_dropsTable() {
+        let d = doc(para("a", "A"), para("b", "Hello"), table1("t", "xyz"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let bSize = DocumentTree.documentSize(doc(para("b", "Hello")))
+        let bText = aSize + 1
+        let (out, _) = d.replacingRange(globalFrom: bText, globalTo: aSize + bSize + DocumentTree.documentSize(doc(table1("t", "xyz"))), with: doc(para("n", "N")))
+        XCTAssertFalse(hasTable(out), "the trailing table is dropped")
+        XCTAssertEqual(texts(out), ["A", "N"], "2nd paragraph rewritten, table gone, 1st paragraph intact")
+    }
+
+    func test_replacingRange_rewriteWholeMiddleParagraph_keepsAllThreeSeparate() {
+        // Select the ENTIRE text of the MIDDLE paragraph and replace it → the fragment must stay its own
+        // paragraph; neither neighbour may absorb it (symmetric head/tail boundary check).
+        let d = doc(para("a", "A"), para("b", "Hello"), para("c", "World"))
+        let aSize = DocumentTree.documentSize(doc(para("a", "A")))
+        let bText = aSize + 1                        // "Hello" text start
+        let (out, _) = d.replacingRange(globalFrom: bText, globalTo: bText + 5, with: doc(para("n", "N")))
+        XCTAssertEqual(texts(out), ["A", "N", "World"], "middle paragraph rewritten; neighbours stay separate")
+    }
+
+    // Standard multi-paragraph-delete semantics: the head of the lo-paragraph and the tail of the hi-paragraph
+    // MERGE into one paragraph, even when whole blocks (a table) sat between them (all deleted).
+    func test_replacingRange_deleteAcrossTable_joinsHeadAndTail() {
+        let d = doc(para("a", "aa"), table1("t", "xyz"), para("c", "cc"))   // aa | table | cc
+        let aText = 1                                        // "aa" text start
+        let cSize = DocumentTree.documentSize(doc(para("c", "cc")))
+        let size = DocumentTree.documentSize(d)
+        let cTailFrom = size - cSize + 1 + 1                 // one into "cc" (after first "c")
+        let (out, _) = d.replacingRange(globalFrom: aText + 1, globalTo: cTailFrom, with: Document(blocks: []))
+        XCTAssertFalse(hasTable(out), "the table between the two paragraphs is deleted")
+        XCTAssertEqual(texts(out), ["ac"], "head 'a' + tail 'c' merge into one paragraph")
+    }
+
+    func test_replacingRange_replaceAcrossTable_joinsWithFragmentBetween() {
+        let d = doc(para("a", "aa"), table1("t", "xyz"), para("c", "cc"))
+        let aText = 1
+        let cSize = DocumentTree.documentSize(doc(para("c", "cc")))
+        let size = DocumentTree.documentSize(d)
+        let cTailFrom = size - cSize + 1 + 1
+        let (out, _) = d.replacingRange(globalFrom: aText + 1, globalTo: cTailFrom, with: doc(para("n", "N")))
+        XCTAssertFalse(hasTable(out), "table dropped")
+        XCTAssertEqual(texts(out), ["aNc"], "head + fragment + tail collapse into one paragraph")
+    }
+
+    func test_replacingRange_deleteAcrossThreeParagraphs_joinsFirstAndLast() {
+        let d = doc(para("a", "aa"), para("b", "bb"), para("c", "cc"))
+        // Delete from after the first "a" through before the last "c": "a"+break+"bb"+break+"c" removed.
+        let bSize = DocumentTree.documentSize(doc(para("b", "bb")))
+        let size = DocumentTree.documentSize(d)
+        let cTailFrom = size - DocumentTree.documentSize(doc(para("c", "cc"))) + 1 + 1
+        let _ = bSize
+        let (out, _) = d.replacingRange(globalFrom: 2, globalTo: cTailFrom, with: Document(blocks: []))
+        XCTAssertEqual(texts(out), ["ac"], "middle paragraph fully removed; first head + last tail join")
+    }
+
+    func test_replacingRange_wholeDocument_replacedWithParagraph() {
+        let d = doc(para("a", "A"), para("b", "B"))
+        let size = DocumentTree.documentSize(d)
+        let (out, _) = d.replacingRange(globalFrom: 0, globalTo: size, with: doc(para("n", "New")))
+        XCTAssertEqual(texts(out), ["New"])
+    }
 }

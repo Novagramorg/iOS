@@ -265,8 +265,7 @@ private final class AttachButtonComponent: CombinedComponent {
                 name = strings.Attachment_Reply
                 imageName = "Chat/Attach Menu/Reply"
             case .richText:
-                //TODO:localize
-                name = "Article"
+                name = strings.Attachment_Article
                 imageName = "Chat/Attach Menu/Article"
             }
 
@@ -2199,8 +2198,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             case .quickReply:
                 accessibilityTitle = self.presentationData.strings.Attachment_Reply
             case .richText:
-                //TODO:localize
-                accessibilityTitle = "Article"
+                accessibilityTitle = self.presentationData.strings.Attachment_Article
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle

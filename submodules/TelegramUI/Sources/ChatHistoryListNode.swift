@@ -3975,7 +3975,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     }
                 }
             }
-            if !foundItemNodes.isEmpty {
+            if !foundItemNodes.isEmpty && foundItemNodes.allSatisfy({ $0.bounds.height <= 1800.0 }) {
                 if self.dustEffectLayer == nil {
                     let dustEffectLayer = DustEffectLayer()
                     dustEffectLayer.position = self.bounds.center
@@ -4004,6 +4004,13 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                         itemNode.isHidden = true
                     }
                 }
+            } else {
+                // The batch is not eligible for the dust effect (empty, or a found item is too tall to snapshot).
+                // The ids were tentatively marked applied above, which would give them the custom 0.8s delete
+                // duration (getCustomItemDeleteAnimationDuration) WITHOUT any dust — a slow, dust-less collapse
+                // with the item never hidden. Drop them so they fall back to the default list delete animation.
+                // They stay consumed from currentDeleteAnimationCorrelationIds, so they are not re-processed.
+                appliedDeleteAnimationCorrelationIds.removeAll()
             }
         }
         

@@ -912,13 +912,12 @@ final class RichTextAttachmentScreenComponent: Component {
             }
 
             if component.initialContents == nil {
-                //TODO:localize
                 let titleSize = self.title.update(
                     transition: .immediate,
                     component: AnyComponent(
                         MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Text",
+                                string: environment.strings.RichText_TitleArticle,
                                 font: Font.semibold(17.0),
                                 textColor: environment.theme.rootController.navigationBar.primaryTextColor
                             ))
@@ -1004,11 +1003,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         var items: [ContextMenuItem] = []
                         
-                        /*marker == current
-                         ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
-                         : UIImage()*/
-                        
-                        items.append(.action(ContextMenuActionItem(text: "Heading", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeading, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
                             return UIImage(bundleImageName: "Premium/ContextStar")
@@ -1064,7 +1059,7 @@ final class RichTextAttachmentScreenComponent: Component {
                                     mappedStyle = .heading1
                                 }
                                 
-                                subItems.append(.action(ContextMenuActionItem(text: "Heading \(level + 1)", textFont: .custom(font: Font.with(size: fontSize, design: .serif, weight: .semibold), height: nil, verticalOffset: nil), icon: { theme in
+                                subItems.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeadingItem("\(level + 1)").string, textFont: .custom(font: Font.with(size: fontSize, design: .serif, weight: .semibold), height: nil, verticalOffset: nil), icon: { theme in
                                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading\(level + 1)"), color: theme.contextMenu.primaryColor)
                                 }, additionalLeftIcon: { theme in
                                     return live.paragraphStyle == mappedStyle ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
@@ -1082,7 +1077,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Text", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuText, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatText"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] c, _ in
                             guard let self else {
@@ -1094,7 +1089,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             c?.dismiss(completion: nil)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Quote", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuQuote, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatQuote"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] c, _ in
                             guard let self else {
@@ -1111,7 +1106,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             c?.dismiss(completion: nil)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Pullquote", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuPullquote, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatPullquote"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
                             return UIImage(bundleImageName: "Premium/ContextStar")
@@ -1132,7 +1127,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             c?.dismiss(completion: nil)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Code", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuCode, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatCode"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
                             return UIImage(bundleImageName: "Premium/ContextStar")
@@ -1153,7 +1148,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             c?.dismiss(completion: nil)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Formula", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuFormula, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
                             return UIImage(bundleImageName: "Premium/ContextStar")
@@ -1201,7 +1196,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         var items: [ContextMenuItem] = []
                         
-                        items.append(.action(ContextMenuActionItem(text: "None", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_None, icon: { theme in
                             UIImage()
                         }, additionalLeftIcon: { theme in
                             return current == nil ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
@@ -1213,7 +1208,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             self.editor.setList(nil)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Bulleted List", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Bullet, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatBulletList"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: { theme in
                             return current == .bullet ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
@@ -1225,7 +1220,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             self.editor.setList(.bullet)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Numbered List", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Numbered, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatNumberList"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: { theme in
                             return current == .ordered ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
@@ -1237,7 +1232,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             self.editor.setList(.ordered)
                         })))
                         
-                        items.append(.action(ContextMenuActionItem(text: "Checklist", icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Checklist, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatChecklist"), color: theme.contextMenu.primaryColor)
                         }, additionalLeftIcon: { theme in
                             return current == .checklist ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
@@ -1264,30 +1259,18 @@ final class RichTextAttachmentScreenComponent: Component {
                 barActions.append(RichTextActionBarComponent.Action(
                     id: AnyHashable("table"), icon: "RichText/ToolTable",
                     action: { [weak self] sourceView in
-                        guard let self else { return }
+                        guard let self, let environment = self.environment else { return }
                         var items: [ContextMenuItem] = []
                         if self.editor.currentState().isInTable {
-                            items.append(.action(ContextMenuActionItem(text: "Copy Table", icon: { _ in nil }, action: { [weak self] _, f in
+                            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_Table_Copy, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default)
                                 self?.editor.copyCurrentTable()
                             })))
-                            items.append(.action(ContextMenuActionItem(text: "Convert to Text", icon: { _ in nil }, action: { [weak self] _, f in
+                            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_Table_ConvertToText, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default)
                                 self?.editor.convertCurrentTableToText()
                             })))
-                            /*items.append(.action(ContextMenuActionItem(text: "Delete Row", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.deleteTableRow()
-                            })))
-                            items.append(.action(ContextMenuActionItem(text: "Insert Column Left", icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.insertTableColumnLeft()
-                            })))
-                            items.append(.action(ContextMenuActionItem(text: "Insert Column Right", icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.insertTableColumnRight()
-                            })))
-                            items.append(.action(ContextMenuActionItem(text: "Delete Column", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.deleteTableColumn()
-                            })))*/
-                            items.append(.action(ContextMenuActionItem(text: "Delete Table", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
+                            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_Table_Delete, textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTable()
                             })))
                         } else {
@@ -1337,48 +1320,61 @@ final class RichTextAttachmentScreenComponent: Component {
                                     return
                                 }
                                 
-                                let currentContent = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
-                                let currentPage = instantPage(from: currentContent)
-                                let _ = currentPage
-                                
-                                /*if !self.editor.selectedText().isEmpty {
-                                    let initialText = ComposedRichMessage.rich(instantPage: currentPage)
-                                    let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
-                                        context: component.context,
-                                        theme: environment.theme,
-                                        mode: .edit(
-                                            saveRestoreStateId: nil,
-                                            completion: { [weak self] result in
-                                                guard let self else {
-                                                    return
-                                                }
-                                                let content: ChatInputContent
-                                                switch result {
-                                                case let .rich(instantPage):
-                                                    content = chatInputContent(fromInstantPage: instantPage)
-                                                case let .plain(text, entities):
-                                                    content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
-                                                case .empty:
-                                                    return
-                                                }
-                                                let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
-                                                self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
-                                                self.attachedMedia.merge(media) { _, new in new }
-                                                self.editor.document = document
-                                            },
-                                            send: nil,
-                                            sendContextActions: nil
-                                        ),
-                                        inputText: initialText,
-                                        copyResult: nil,
-                                        translateChat: nil
-                                    )
-                                    if let parentController = controller.parentController() {
-                                        parentController.push(textProcessingScreen)
-                                    } else {
-                                        controller.push(textProcessingScreen)
+                                // AI edit on the current selection: seed the edit screen with only the
+                                // selected sub-document (partial table/image coverage expanded to the whole
+                                // block, both directions) and replace that same range with the result. The
+                                // gate is CONTENT-based (`ChatInputContent.isEmpty`), not text-based, so a
+                                // selection covering only an image / empty-caption still enters here.
+                                if let sel = self.editor.selectedGlobalRange() {
+                                    let doc = self.editor.document
+                                    let (lo, hi) = doc.expandingRangeOverNonTextBlocks(globalFrom: sel.from, globalTo: sel.to)
+                                    let subDoc = doc.extractFragment(globalFrom: lo, globalTo: hi, carryingNonTextBlocks: true)
+                                    let subContent = chatInputContent(fromDocument: subDoc, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
+                                    if !subContent.isEmpty {
+                                        let initialText = ComposedRichMessage.rich(instantPage: instantPage(from: subContent))
+                                        let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
+                                            context: component.context,
+                                            theme: environment.theme,
+                                            mode: .edit(
+                                                saveRestoreStateId: nil,
+                                                completion: { [weak self] result in
+                                                    guard let self else {
+                                                        return
+                                                    }
+                                                    let content: ChatInputContent
+                                                    switch result {
+                                                    case let .rich(instantPage):
+                                                        content = chatInputContent(fromInstantPage: instantPage)
+                                                    case let .plain(text, entities):
+                                                        content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
+                                                    case .empty:
+                                                        // An empty result deletes the (expanded) selection.
+                                                        self.editor.replaceRange(from: lo, to: hi, with: Document(blocks: []))
+                                                        return
+                                                    }
+                                                    let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
+                                                    self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
+                                                    self.attachedMedia.merge(media) { _, new in new }
+                                                    self.editor.replaceRange(from: lo, to: hi, with: document)
+                                                },
+                                                send: nil,
+                                                sendContextActions: nil
+                                            ),
+                                            inputText: initialText,
+                                            copyResult: nil,
+                                            translateChat: nil
+                                        )
+                                        if let parentController = controller.parentController() {
+                                            parentController.push(textProcessingScreen)
+                                        } else {
+                                            controller.push(textProcessingScreen)
+                                        }
+                                        return
                                     }
-                                } else*/ do {
+                                }
+
+                                // No usable selection → generate content and insert it at the caret.
+                                do {
                                     let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
                                         context: component.context,
                                         theme: environment.theme,

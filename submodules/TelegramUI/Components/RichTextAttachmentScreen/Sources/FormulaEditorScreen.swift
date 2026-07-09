@@ -397,12 +397,11 @@ private final class FormulaEditorSheetContent: Component {
                 transition.setFrame(view: doneButtonView, frame: CGRect(origin: CGPoint(x: availableSize.width - sideInset - doneButtonSize.width, y: 16.0), size: doneButtonSize))
             }
 
-            //TODO:localize
             let constrainedTitleWidth = availableSize.width - (sideInset + barButtonSize.width + 8.0) * 2.0
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(Text(
-                    text: component.isEditing ? "Edit Formula" : "Add Formula",
+                    text: component.isEditing ? environment.strings.RichText_FormulaEdit : environment.strings.RichText_FormulaAdd,
                     font: Font.bold(17.0),
                     color: theme.list.itemPrimaryTextColor
                 )),
@@ -421,7 +420,6 @@ private final class FormulaEditorSheetContent: Component {
             contentSize.height += titleSize.height
             contentSize.height += 40.0
 
-            //TODO:localize
             let headerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             let sectionWidth = availableSize.width - sideInset * 2.0
             let latexSectionSize = self.latexSection.update(
@@ -431,7 +429,7 @@ private final class FormulaEditorSheetContent: Component {
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "LATEX",
+                            string: environment.strings.RichText_FormulaSectionSourceTitle,
                             font: headerFont,
                             textColor: theme.list.freeTextColor
                         )),
@@ -493,7 +491,6 @@ private final class FormulaEditorSheetContent: Component {
                 previewIsPlaceholder = false
             }
 
-            //TODO:localize
             let resultSectionSize = self.resultSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
@@ -501,7 +498,7 @@ private final class FormulaEditorSheetContent: Component {
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "RESULT",
+                            string: environment.strings.RichText_FormulaSectionResultTitle,
                             font: headerFont,
                             textColor: theme.list.freeTextColor
                         )),
