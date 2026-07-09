@@ -126,6 +126,7 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
 
                 var authorName = ""
                 var text = ""
+                var previewText = NSAttributedString()
                 var isText = true
                 if let forwardInfo = message?.forwardInfo, forwardInfo.flags.contains(.isImported) {
                     if let author = forwardInfo.author {
@@ -147,6 +148,7 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
                     }
                     let (attributedText, _, isTextValue) = descriptionStringForMessage(contentSettings: context.currentContentSettings.with { $0 }, message: EngineMessage(message), strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, accountPeerId: context.account.peerId)
                     text = attributedText.string
+                    previewText = attributedText
                     isText = isTextValue
                 } else {
                     isMedia = false
@@ -172,7 +174,13 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
                         messageText = NSAttributedString(string: text, font: textFont, textColor: isMedia ? strongSelf.theme.chat.inputPanel.secondaryTextColor : strongSelf.theme.chat.inputPanel.primaryTextColor)
                     }
                 } else {
-                    messageText = NSAttributedString(string: text, font: textFont, textColor: isMedia ? strongSelf.theme.chat.inputPanel.secondaryTextColor : strongSelf.theme.chat.inputPanel.primaryTextColor)
+                    let textColor = isMedia ? strongSelf.theme.chat.inputPanel.secondaryTextColor : strongSelf.theme.chat.inputPanel.primaryTextColor
+                    let mutablePreviewText = NSMutableAttributedString(attributedString: previewText)
+                    mutablePreviewText.addAttributes([
+                        .font: textFont,
+                        .foregroundColor: textColor
+                    ], range: NSRange(location: 0, length: mutablePreviewText.length))
+                    messageText = renderInstantPagePreviewIcons(mutablePreviewText, font: textFont, textColor: textColor)
                 }
                 
                 var updatedMediaReference: AnyMediaReference?
