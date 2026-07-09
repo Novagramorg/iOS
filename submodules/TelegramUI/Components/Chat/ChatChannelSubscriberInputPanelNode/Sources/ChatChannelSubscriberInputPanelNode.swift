@@ -497,16 +497,18 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
         }
         
         var rightPanelItems: [GlassControlGroupComponent.Item] = []
-        rightPanelItems.append(GlassControlGroupComponent.Item(
-            id: "search",
-            content: .icon("Chat List/SearchIcon"),
-            action: { [weak self] in
-                guard let self else {
-                    return
+        if !canJoinInaccessibleCommunityChat(interfaceState) {
+            rightPanelItems.append(GlassControlGroupComponent.Item(
+                id: "search",
+                content: .icon("Chat List/SearchIcon"),
+                action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.interfaceInteraction?.beginMessageSearch(.everything, "")
                 }
-                self.interfaceInteraction?.beginMessageSearch(.everything, "")
-            }
-        ))
+            ))
+        }
         
         let panelHeight = defaultHeight(metrics: metrics)
         let _ = isFirstTime

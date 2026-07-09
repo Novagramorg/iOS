@@ -3729,7 +3729,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             if let peer = chatPresentationInterfaceState.renderedPeer?.peer, let restrictionTextValue = peer.restrictionText(platform: "ios", contentSettings: self.context.currentContentSettings.with { $0 }), !restrictionTextValue.isEmpty {
                 restrictionText = restrictionTextValue
             } else if chatPresentationInterfaceState.isNotAccessible {
-                if case .replyThread = self.chatLocation {
+                if canJoinInaccessibleCommunityChat(chatPresentationInterfaceState) {
+                    restrictionText = chatPresentationInterfaceState.strings.Community_Chat_JoinToView
+                } else if case .replyThread = self.chatLocation {
                     restrictionText = chatPresentationInterfaceState.strings.CommentsGroup_ErrorAccessDenied
                 } else if let peer = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, case .broadcast = peer.info {
                     restrictionText = chatPresentationInterfaceState.strings.Channel_ErrorAccessDenied
