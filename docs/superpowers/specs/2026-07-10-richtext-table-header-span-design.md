@@ -112,14 +112,23 @@ Two composer models change identically. Both use `Codable` with `decodeIfPresent
   through (1 is tolerated end-to-end); reverse maps an InstantPage `0` **or** `1` back to editor `1`.
   Covered by the `colspan`/`rowspan` round-trip test.
 
-### Consequence — lossless span pass-through before Phase 2
+### Phase boundary — what each phase touches
 
-Because the data layers carry `colspan`/`rowspan` from Phase 1's model work, a Phase-1-only build already
-round-trips merged tables losslessly through the *data* path: a received merged table survives
-edit-and-resend without corruption; the editor simply displays it un-merged (full grid) until Phase 2.
-**Phase-1 acceptance criterion.**
+- **Phase 1 adds `isHeader` only**, end-to-end (both composer models + bridge + both conversion
+  directions + editor UI/render). It does **not** touch `colspan`/`rowspan` anywhere; the
+  `ChatInputContentInstantPage` forward keeps emitting `colspan: 1, rowspan: 1` and the reverse keeps
+  dropping spans, exactly as today.
+- **Phase 2 adds `colspan`/`rowspan`** to both composer models, the bridge, both conversion directions,
+  and the editor geometry together — because the composer's live `TableBlockBox` is a dense grid that
+  cannot represent a merge until Phase 2's sparse-grid work lands. There is no partial "data-only" span
+  support in the composer: a value that can't survive the editor box is not worth persisting through it.
 
-Everything below the ChatInputContent layer is untouched — it already carries all three fields.
+**Independent of both phases:** received rich **messages** carrying merged/header InstantPage tables
+already render correctly via the V2 renderer today (§4) — that path never goes through the editor, so it
+is unaffected by the composer's phasing.
+
+Everything below the ChatInputContent layer (`InstantPageTableCell`, API, Postbox/FlatBuffers, V2 layout)
+is untouched throughout — it already carries all three fields.
 
 ---
 
