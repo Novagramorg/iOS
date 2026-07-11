@@ -1440,6 +1440,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeProxySettingsController(context: AccountContext) -> ViewController
     func makeLocalizationListController(context: AccountContext) -> ViewController
     func makeCreateGroupController(context: AccountContext, peerIds: [EnginePeer.Id], initialTitle: String?, mode: CreateGroupMode, completion: ((EnginePeer.Id, @escaping () -> Void) -> Void)?) -> ViewController
+    func makeCreateChannelController(context: AccountContext, completion: @escaping (EnginePeer.Id, @escaping () -> Void) -> Void) -> ViewController
     func makeChatRecentActionsController(context: AccountContext, peer: EnginePeer, adminPeerId: EnginePeer.Id?, starsState: StarsRevenueStats?) -> ViewController
     func makePrivacyAndSecurityController(context: AccountContext) -> ViewController
     func makeBioPrivacyController(context: AccountContext, settings: Promise<AccountPrivacySettings?>, present: @escaping (ViewController) -> Void)

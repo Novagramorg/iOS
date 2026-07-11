@@ -1050,6 +1050,21 @@ private final class CommunityViewContentComponent: Component {
             ), in: .window(.root))
         }
 
+        private func presentHiddenChatToast() {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            controller.present(UndoOverlayController(
+                presentationData: presentationData,
+                content: .banned(text: presentationData.strings.Community_View_HiddenChatToast),
+                elevatedLayout: true,
+                position: .bottom,
+                animateInAsReplacement: false,
+                action: { _ in return true }
+            ), in: .current)
+        }
+
         private func activateChatPreview(item: ChatListItem, sourceNode: ASDisplayNode, gesture: ContextGesture?) {
             guard let component = self.component, let environment = self.environment, let controller = environment.controller() else {
                 gesture?.cancel()
@@ -1467,8 +1482,15 @@ private final class CommunityViewContentComponent: Component {
                             background: component.mode.usesPlainStyle ? theme.chatList.itemBackgroundColor : theme.list.itemBlocksBackgroundColor
                         ),
                         insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0),
-                        action: { peer, _, _ in
-                            component.openPeer(peer)
+                        action: { [weak self] peer, _, _ in
+                            switch section {
+                            case .requestable:
+                                component.openPeer(peer)
+                            case .hidden:
+                                self?.presentHiddenChatToast()
+                            default:
+                                break
+                            }
                         }
                     ))))
                 }

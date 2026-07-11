@@ -4879,18 +4879,19 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
             if requiresPremiumRichContent && !sendWithoutFormatting {
                 if let controller = self.controller {
-                    controller.present(textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
-                        TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
+                    let strings = controller.presentationData.strings
+                    controller.present(textAlertController(context: self.context, title: strings.RichText_RemoveFormattingTitle, text: strings.RichText_RemoveFormattingText, actions: [
+                        TextAlertAction(type: .defaultAction, title: strings.RichText_SubscribeToPremium, action: { [weak self] in
                             guard let self else {
                                 return
                             }
                             let premiumController = self.context.sharedContext.makePremiumIntroController(context: self.context, source: .richText, forceDark: false, dismissed: nil)
                             self.controller?.push(premiumController)
                         }),
-                        TextAlertAction(type: .genericAction, title: "Send Without Formatting", action: { [weak self] in
+                        TextAlertAction(type: .genericAction, title: strings.RichText_SendWithoutFormatting, action: { [weak self] in
                             self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: true, completion: completion)
                         }),
-                        TextAlertAction(type: .genericAction, title: "Cancel", action: {
+                        TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {
                         })
                     ], actionLayout: .vertical), in: .window(.root))
                 }
