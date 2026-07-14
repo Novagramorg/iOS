@@ -1490,7 +1490,7 @@ private final class CommunityEditScreenComponent: Component {
                                 context: component.context,
                                 communityId: communityId,
                                 peerId: channel.peer.id,
-                                completed: { [weak self] in
+                                completed: { [weak self] immediate in
                                     guard let self, let component = self.component, let communityId = self.editCommunityId else {
                                         return
                                     }

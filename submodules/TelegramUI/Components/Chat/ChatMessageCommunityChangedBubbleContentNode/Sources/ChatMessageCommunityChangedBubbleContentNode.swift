@@ -141,7 +141,11 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                     if item.message.author?.id == item.context.account.peerId {
                         text = item.presentationData.strings.Notification_CommunityAddedGroupYou("**\(community?.title ?? "")**").string
                     } else {
-                        text = item.presentationData.strings.Notification_CommunityAddedGroup("**\(authorName)**","**\(community?.title ?? "")**").string
+                        if item.message.author?.id.namespace != Namespaces.Peer.CloudUser {
+                            text = item.presentationData.strings.Notification_CommunityAddedGroupUnknown("**\(community?.title ?? "")**").string
+                        } else {
+                            text = item.presentationData.strings.Notification_CommunityAddedGroup("**\(authorName)**", "**\(community?.title ?? "")**").string
+                        }
                     }
                 } else {
                     text = item.presentationData.strings.Notification_CommunityAddedChannel("**\(community?.title ?? "")**").string
@@ -158,7 +162,7 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                 
                 let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 
-                let (buttonTitleLayout, buttonTitleApply) = makeButtonTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: "View", font: Font.semibold(15.0), textColor: primaryTextColor, paragraphAlignment: .center), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
+                let (buttonTitleLayout, buttonTitleApply) = makeButtonTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.presentationData.strings.Community_CommunityAdded_View, font: Font.semibold(15.0), textColor: primaryTextColor, paragraphAlignment: .center), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 
                 let backgroundSize = CGSize(width: width, height: subtitleLayout.size.height + 165.0)
                 
@@ -183,7 +187,7 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
 
                             let aspectRatio = shadowImage.size.width / shadowImage.size.height
                             let shadowSize = CGSize(width: imageSize.width * aspectRatio, height: imageSize.width)
-                            strongSelf.avatarShadowNode.frame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -12.0, dy: 0.0)
+                            strongSelf.avatarShadowNode.frame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -11.0, dy: 0.0)
                         } else {
                             strongSelf.avatarShadowNode.isHidden = true
                         }

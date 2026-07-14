@@ -110,8 +110,7 @@ private final class PeerInfoScreenCommunityItemNode: PeerInfoScreenItemNode {
 
         let subtitle: String?
         if let chatCount = item.chatCount {
-            let formattedCount = presentationStringsFormattedNumber(Int32(clamping: chatCount), presentationData.dateTimeFormat.groupingSeparator)
-            subtitle = chatCount == 1 ? "Community with \(formattedCount) chat" : "Community with \(formattedCount) chats"
+            subtitle = presentationData.strings.PeerInfo_Community(Int32(clamping: chatCount))
         } else {
             subtitle = nil
         }

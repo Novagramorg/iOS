@@ -327,8 +327,9 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
             return
         }
 
-        let controller = textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
-            TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
+        let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+        let controller = textAlertController(context: self.context, title: strings.RichText_RemoveFormattingTitle, text: strings.RichText_RemoveFormattingText, actions: [
+            TextAlertAction(type: .defaultAction, title: strings.RichText_SubscribeToPremium, action: { [weak self] in
                 guard let self else {
                     return
                 }
@@ -339,10 +340,10 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
                     self.push(premiumController)
                 }
             }),
-            TextAlertAction(type: .genericAction, title: "Send Without Formatting", action: { [weak self] in
+            TextAlertAction(type: .genericAction, title: strings.RichText_SendWithoutFormatting, action: { [weak self] in
                 self?.complete(withoutFormatting: true)
             }),
-            TextAlertAction(type: .genericAction, title: "Cancel", action: {
+            TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {
             })
         ], actionLayout: .vertical)
         self.present(controller, in: .window(.root))
@@ -533,7 +534,8 @@ final class RichTextAttachmentScreenComponent: Component {
             }
             
             let existing = editor.currentLink()
-            let alert = UIAlertController(title: "Link", message: "Set a URL for the selected text", preferredStyle: .alert)
+            let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
+            let alert = UIAlertController(title: strings.RichText_LinkTitle, message: strings.RichText_LinkText, preferredStyle: .alert)
             alert.addTextField { tf in
                 tf.placeholder = "https://example.com"
                 tf.text = existing
@@ -541,18 +543,18 @@ final class RichTextAttachmentScreenComponent: Component {
                 tf.autocapitalizationType = .none
                 tf.autocorrectionType = .no
             }
-            alert.addAction(UIAlertAction(title: "Set", style: .default) { [weak self, weak alert] _ in
+            alert.addAction(UIAlertAction(title: strings.RichText_LinkSet, style: .default) { [weak self, weak alert] _ in
                 guard let url = alert?.textFields?.first?.text, !url.isEmpty else { return }
                 self?.editor.becomeFirstResponder()
                 self?.editor.setLink(url)
             })
             if existing != nil {
-                alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+                alert.addAction(UIAlertAction(title: strings.RichText_LinkRemove, style: .destructive) { [weak self] _ in
                     self?.editor.becomeFirstResponder()
                     self?.editor.removeLink()
                 })
             }
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: strings.Common_Cancel, style: .cancel))
             component.context.sharedContext.mainWindow?.presentNative(alert)
         }
 
@@ -609,7 +611,7 @@ final class RichTextAttachmentScreenComponent: Component {
 
             let overlayController = UndoOverlayController(
                 presentationData: presentationData,
-                content: .premiumPaywall(title: nil, text: "Sending a message with this formatting will require [Telegram Premium]().", customUndoText: nil, timeout: nil, linkAction: nil),
+                content: .premiumPaywall(title: nil, text: presentationData.strings.RichText_PremiumToastText, customUndoText: nil, timeout: nil, linkAction: nil),
                 elevatedLayout: true,
                 action: { action in
                     if case .info = action {
@@ -709,7 +711,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             action: { _, f in f(.default); request.toggleSpoiler() }
                         )))
                         items.append(.action(ContextMenuActionItem(
-                            text: "Delete",
+                            text: presentationData.strings.Common_Delete,
                             textColor: .destructive,
                             icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) },
                             action: { _, f in f(.default); request.delete() }

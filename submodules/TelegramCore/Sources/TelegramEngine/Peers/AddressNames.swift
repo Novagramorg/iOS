@@ -591,6 +591,8 @@ func _internal_adminedPublicChannels(account: Account, scope: AdminedPublicChann
                     if case let .channel(channelData) = chat {
                         let participantsCount = channelData.participantsCount
                         subscriberCounts[chat.peerId] = participantsCount.flatMap(Int.init)
+                    } else if case let .chat(chatData) = chat {
+                        subscriberCounts[chat.peerId] = Int(chatData.participantsCount)
                     }
                 }
             case let .chatsSlice(chatsSliceData):

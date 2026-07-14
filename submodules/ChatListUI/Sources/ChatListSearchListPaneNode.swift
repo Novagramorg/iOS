@@ -960,7 +960,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                     } else if case .apps = key {
                         headerType = .text(strings.ChatList_Search_SectionApps, AnyHashable("apps"))
                     } else {
-                        if filter.contains(.onlyGroups) {
+                        if communityId != nil || filter.contains(.onlyGroups) {
                             headerType = .chats
                         } else {
                             if let _ = requestPeerType {

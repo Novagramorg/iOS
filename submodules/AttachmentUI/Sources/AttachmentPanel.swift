@@ -2525,11 +2525,12 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         self.updateViews(transition: .immediate)
 
         let glassPanelHeight: CGFloat = 62.0
+        let shouldCollapseTabRow = buttons.count == 1 || hideButtons
         var bounds = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: topAccessoryHeight + self.buttonSize.height + insets.bottom))
         // With a single tab the button chips are removed entirely (see updateViews), so the button row is
-        // dead space: collapse it. When there's a media-accessory panel the bar shrinks to just that panel;
-        // with no accessory (topAccessoryHeight == 0) the whole panel collapses to zero.
-        if buttons.count == 1 || hideButtons {
+        // dead space. Keep its layout height while an action button is visible, since the action button uses
+        // that space even though the tab row itself remains hidden.
+        if shouldCollapseTabRow && !isAnyButtonVisible {
             bounds.size.height -= self.buttonSize.height
         }
         var mediaAccessoryPanelFrame: CGRect?
@@ -2577,7 +2578,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
 
             let basePanelHeight = isSelecting ? max(0.0, visualTextPanelHeight - 11.0) : glassPanelHeight
             var panelSize = CGSize(width: isSelecting ? textPanelWidth : buttonsPanelWidth, height: basePanelHeight + topAccessoryHeight)
-            if !isSelecting && (buttons.count == 1 || hideButtons) {
+            if !isSelecting && shouldCollapseTabRow {
                 // Collapse the empty button row to the accessory height (zero when there's no accessory panel),
                 // so a single-tab picker doesn't render an empty glass bar.
                 panelSize.height = topAccessoryHeight
