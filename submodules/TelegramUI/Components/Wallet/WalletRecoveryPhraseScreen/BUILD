@@ -1,0 +1,27 @@
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "WalletRecoveryPhraseScreen",
+    module_name = "WalletRecoveryPhraseScreen",
+    srcs = glob([
+        "Sources/**/*.swift",
+    ]),
+    copts = [
+        "-warnings-as-errors",
+    ],
+    deps = [
+        "//submodules/Display",
+        "//submodules/AccountContext",
+        "//submodules/TelegramPresentationData",
+        "//submodules/ComponentFlow",
+        "//submodules/Components/ViewControllerComponent",
+        "//submodules/Components/MultilineTextComponent",
+        "//submodules/Components/BalancedTextComponent",
+        "//submodules/TelegramUI/Components/LottieComponent",
+        "//submodules/TelegramUI/Components/ButtonComponent",
+        "//submodules/TelegramUI/Components/EdgeEffect",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)

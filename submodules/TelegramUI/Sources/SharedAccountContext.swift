@@ -76,6 +76,13 @@ import MiniAppListScreen
 import GiftOptionsScreen
 import GiftViewScreen
 import StarsIntroScreen
+import WalletScreen
+import WalletReceiveScreen
+import WalletSettingsScreen
+import WalletRecoveryPhraseScreen
+import WalletInfoScreen
+import WalletContext
+import WalletTransactionScreen
 import ContentReportScreen
 import AffiliateProgramSetupScreen
 import GalleryUI
@@ -4138,7 +4145,31 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeStarsIntroScreen(context: AccountContext) -> ViewController {
         return StarsIntroScreen(context: context)
     }
+
+    public func makeWalletScreen(context: AccountContext) -> ViewController {
+        return WalletScreen(context: context)
+    }
+
+    public func makeWalletReceiveScreen(context: AccountContext, address: String) -> ViewController {
+        return WalletReceiveScreen(context: context, address: address)
+    }
+
+    public func makeWalletSettingsScreen(context: AccountContext) -> ViewController {
+        return WalletSettingsScreen(context: context)
+    }
+
+    public func makeWalletRecoveryPhraseScreen(context: AccountContext, words: [String]) -> ViewController {
+        return WalletRecoveryPhraseScreen(context: context, words: words)
+    }
     
+    public func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletInfoScreen(context: context, mode: mode, completion: completion)
+    }
+
+    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction) -> ViewController {
+        return WalletTransactionScreen(context: context, transaction: transaction)
+    }
+
     public func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController {
         return GiftViewScreen(context: context, subject: .message(message), shareStory: shareStory)
     }

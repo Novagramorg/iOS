@@ -14,6 +14,7 @@ import AnimationCache
 import MultiAnimationRenderer
 import Photos
 import TextFormat
+import WalletContext
 
 public final class TelegramApplicationOpenUrlCompletion {
     public let completion: (Bool) -> Void
@@ -1361,6 +1362,12 @@ public enum EmojiStatusSelectionControllerMode {
     case quickReactionSelection(completion: () -> Void)
 }
 
+public enum WalletInfoScreenMode: Equatable, CaseIterable {
+    case wallet
+    case gram
+    case recovery
+}
+
 public protocol SharedAccountContext: AnyObject {
     var sharedContainerPath: String { get }
     var basePath: String { get }
@@ -1555,6 +1562,12 @@ public protocol SharedAccountContext: AnyObject {
     func makeStarsGiftScreen(context: AccountContext, message: EngineMessage) -> ViewController
     func makeStarsGiveawayBoostScreen(context: AccountContext, peerId: EnginePeer.Id, boost: ChannelBoostersContext.State.Boost) -> ViewController
     func makeStarsIntroScreen(context: AccountContext) -> ViewController
+    func makeWalletScreen(context: AccountContext) -> ViewController
+    func makeWalletReceiveScreen(context: AccountContext, address: String) -> ViewController
+    func makeWalletSettingsScreen(context: AccountContext) -> ViewController
+    func makeWalletRecoveryPhraseScreen(context: AccountContext, words: [String]) -> ViewController
+    func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
+    func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction) -> ViewController
     func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController
     func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]?) -> ViewController
