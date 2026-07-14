@@ -16443,6 +16443,8 @@ Error: %8$@";
 "Community.View.ChatsLimitReached" = "Sorry, this community has reached the maximum number of chats.";
 "Community.Request.UnknownRequester" = "Someone";
 "Community.Request.RequesterSuggestsGroup" = "%@ suggests this group:";
+"Community.Request.RequesterSuggestsChannel" = "%@ suggests this channel:";
+"Community.Request.RequesterSuggestsBot" = "%@ suggests this bot:";
 "Community.Request.PrivateStatus" = "visible only to its members";
 "Community.Request.Decline" = "Decline";
 "Community.Request.Add" = "Add";
@@ -16517,6 +16519,11 @@ Error: %8$@";
 "Community.Add.VisibilityHiddenInfo" = "Only invited members and community admins will see this chat.";
 "Community.Add.ActionAddToCommunity" = "Add to Community";
 
+"Community.Add.Confirm.TextGroup" = "If this group is approved by a community admin, its members will be able to join or request to join other chats in the community.";
+"Community.Add.Confirm.TextChannel" = "If this channel is approved by a community admin, its subscribers will be able to join or request to join other chats in the community.";
+"Community.Add.Confirm.TextBot" = "If this bot is approved by a community admin, community members will be able to see and use it.";
+"Community.Add.Confirm.Add" = "Add";
+
 "Community.AddChat.Title" = "Add a Chat";
 "Community.AddChat.Description" = "Select a chat to add to this community";
 
@@ -16528,6 +16535,7 @@ Error: %8$@";
 "Privacy.GroupsAndChannels.InviteToCommunityError" = "Sorry, you cannot add %@ to the community because of %@'s privacy settings.";
 
 "Notification.CommunityAddedGroup" = "%1$@ added this group to %2$@ community";
+"Notification.CommunityAddedGroupUnknown" = "This group was added to %1$@ community";
 "Notification.CommunityAddedGroupYou" = "You added this group to %1$@ community";
 "Notification.CommunityRemovedGroup" = "%1$@ removed this group from a community";
 "Notification.CommunityRemovedGroupYou" = "You removed this group from a community";

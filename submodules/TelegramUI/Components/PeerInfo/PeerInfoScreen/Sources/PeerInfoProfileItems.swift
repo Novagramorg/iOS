@@ -707,7 +707,7 @@ func infoItems(
                     }))
                 }
                 
-                if let linkedCommunityData = data.linkedCommunityData {
+                if let linkedCommunityData = data.linkedCommunityData, case .member = linkedCommunityData.peer.participationStatus {
                     items[.community]!.append(PeerInfoScreenCommunityItem(
                         id: ItemCommunity,
                         context: context,
@@ -1005,7 +1005,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 }))
                 
                 if let linkedCommunityId = user.linkedCommunityId {
-                    if let linkedCommunityData = data.linkedCommunityData {
+                    if let linkedCommunityData = data.linkedCommunityData, case .member = linkedCommunityData.peer.participationStatus {
                         items[.community]!.append(PeerInfoScreenCommunityItem(
                             id: ItemCommunity,
                             context: context,

@@ -141,7 +141,11 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                     if item.message.author?.id == item.context.account.peerId {
                         text = item.presentationData.strings.Notification_CommunityAddedGroupYou("**\(community?.title ?? "")**").string
                     } else {
-                        text = item.presentationData.strings.Notification_CommunityAddedGroup("**\(authorName)**","**\(community?.title ?? "")**").string
+                        if item.message.author?.id.namespace != Namespaces.Peer.CloudUser {
+                            text = item.presentationData.strings.Notification_CommunityAddedGroupUnknown("**\(community?.title ?? "")**").string
+                        } else {
+                            text = item.presentationData.strings.Notification_CommunityAddedGroup("**\(authorName)**", "**\(community?.title ?? "")**").string
+                        }
                     }
                 } else {
                     text = item.presentationData.strings.Notification_CommunityAddedChannel("**\(community?.title ?? "")**").string
@@ -183,7 +187,7 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
 
                             let aspectRatio = shadowImage.size.width / shadowImage.size.height
                             let shadowSize = CGSize(width: imageSize.width * aspectRatio, height: imageSize.width)
-                            strongSelf.avatarShadowNode.frame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -12.0, dy: 0.0)
+                            strongSelf.avatarShadowNode.frame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -11.0, dy: 0.0)
                         } else {
                             strongSelf.avatarShadowNode.isHidden = true
                         }

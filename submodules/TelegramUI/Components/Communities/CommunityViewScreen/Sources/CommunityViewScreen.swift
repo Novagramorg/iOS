@@ -1058,7 +1058,6 @@ private final class CommunityViewContentComponent: Component {
             controller.present(UndoOverlayController(
                 presentationData: presentationData,
                 content: .banned(text: presentationData.strings.Community_View_HiddenChatToast),
-                elevatedLayout: true,
                 position: .bottom,
                 animateInAsReplacement: false,
                 action: { _ in return true }
@@ -1076,6 +1075,7 @@ private final class CommunityViewContentComponent: Component {
             }
 
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            var dismissPreviewingImpl: ((Bool) -> (() -> Void))?
             let previewController: ViewController
             if case let .channel(channel) = peer, channel.isForum {
                 let chatListController = ChatListControllerImpl(context: component.context, location: .forum(peerId: channel.id), controlsHistoryPreload: false, hideNetworkActivityStatus: true, previewing: true, enableDebugActions: false)
@@ -1085,6 +1085,9 @@ private final class CommunityViewContentComponent: Component {
                 let chatController = component.context.sharedContext.makeChatController(context: component.context, chatLocation: .peer(id: peer.id), subject: nil, botStart: nil, mode: .standard(.previewing), params: nil)
                 chatController.customNavigationController = controller.navigationController as? NavigationController
                 chatController.canReadHistory.set(false)
+                chatController.dismissPreviewing = { animateIn in
+                    return dismissPreviewingImpl?(animateIn) ?? {}
+                }
                 previewController = chatController
             }
 
@@ -1103,6 +1106,22 @@ private final class CommunityViewContentComponent: Component {
                 }
             ) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
             controller.presentInGlobalOverlay(contextController)
+
+            dismissPreviewingImpl = { [weak controller, weak contextController] animateIn in
+                if let controller, let contextController {
+                    if animateIn {
+                        contextController.statusBar.statusBarStyle = .Ignore
+                        contextController.animateDismissalIfNeeded()
+                        controller.present(contextController, in: .window(.root))
+                        return {
+                            contextController.dismissNow()
+                        }
+                    } else {
+                        contextController.dismiss()
+                    }
+                }
+                return {}
+            }
         }
 
         private func makeInteraction(component: CommunityViewContentComponent) -> ChatListNodeInteraction {
@@ -2652,7 +2671,6 @@ private final class CommunityViewScreenComponent: Component {
                     action: environment.strings.Undo_Undo,
                     duration: 3.0
                 ),
-                elevatedLayout: true,
                 animateInAsReplacement: animateInAsReplacement,
                 action: { [weak self] action in
                     guard let self else {
@@ -2744,7 +2762,8 @@ private final class CommunityViewScreenComponent: Component {
                             context: component.context,
                             communityId: component.communityId,
                             peerId: channel.peer.id,
-                            completed: { [weak self] in
+                            requiresConfirmation: !self.isAdmin,
+                            completed: { [weak self] immediate in
                                 guard let self, let component = self.component else {
                                     return
                                 }
@@ -3150,6 +3169,9 @@ private final class CommunityViewScreenComponent: Component {
                 self.lastInactiveNavigationHeight = navigationHeight
             }
             let contentNavigationHeight = self.lastInactiveNavigationHeight ?? navigationHeight
+            let displaysBottomItem = !self.isSheetSearchFullscreen && !component.mode.isPreview && component.selectionOptions == nil && self.canAddChatsToCommunity
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
+            let bottomPanelHeight = 52.0 + buttonInsets.bottom
 
             switch component.mode {
             case .sheet:
@@ -3160,7 +3182,6 @@ private final class CommunityViewScreenComponent: Component {
 
                 let theme = environment.theme.withModalBlocksBackground()
                 let isSheetSearchFullscreen = self.isSheetSearchFullscreen
-                let displaysBottomItem = !isSheetSearchFullscreen && !component.mode.isPreview && component.selectionOptions == nil && self.canAddChatsToCommunity
                 let bottomItem: AnyComponent<Empty>? = displaysBottomItem ? AnyComponent(self.makeBottomButtonComponent(theme: theme, strings: environment.strings, safeInsets: environment.safeInsets)) : nil
                 let sheetBackgroundColor = isSheetSearchFullscreen ? theme.list.modalPlainBackgroundColor : theme.list.modalBlocksBackgroundColor
                 let contentTopInset = contentNavigationHeight + self.sheetNavigationTopInset
@@ -3243,12 +3264,9 @@ private final class CommunityViewScreenComponent: Component {
                 let theme = environment.theme
                 self.backgroundColor = theme.chatList.backgroundColor
 
-                let displaysBottomItem = !component.mode.isPreview && component.selectionOptions == nil && self.canAddChatsToCommunity
                 let bottomFrame: CGRect
                 let bottomSize: CGSize
                 if displaysBottomItem {
-                    let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
-                    let bottomPanelHeight = 52.0 + buttonInsets.bottom
                     let bottomPanelWidth = max(1.0, availableSize.width - environment.safeInsets.left * 2.0 - buttonInsets.left - buttonInsets.right)
                     bottomSize = self.fullscreenBottomItem.update(
                         transition: transition,
@@ -3352,6 +3370,15 @@ private final class CommunityViewScreenComponent: Component {
                 }
             }
 
+            if let controller = environment.controller(), !controller.automaticallyControlPresentationContextLayout, var presentationContextLayout = controller.currentlyAppliedLayout {
+                if displaysBottomItem {
+                    let baseBottomInset = presentationContextLayout.intrinsicInsets.bottom + presentationContextLayout.safeInsets.bottom
+                    presentationContextLayout.intrinsicInsets.bottom = max(baseBottomInset, bottomPanelHeight)
+                    presentationContextLayout.safeInsets.bottom = 0.0
+                }
+                controller.presentationContext.containerLayoutUpdated(presentationContextLayout, transition: transition.containedViewLayoutTransition)
+            }
+
             return availableSize
         }
     }
@@ -3374,6 +3401,8 @@ public final class CommunityViewScreenImpl: ViewControllerComponentContainer, Co
             theme: .default,
             updatedPresentationData: nil
         )
+
+        self.automaticallyControlPresentationContextLayout = false
 
         switch mode {
         case .sheet:
