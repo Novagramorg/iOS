@@ -1,4 +1,5 @@
 import Foundation
+import Camera
 import UIKit
 import AVFoundation
 import CoreImage

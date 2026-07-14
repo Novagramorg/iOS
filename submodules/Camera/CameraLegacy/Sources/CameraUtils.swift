@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import Camera
 import Foundation
 import Accelerate
 import CoreImage
@@ -81,7 +82,7 @@ extension AVCaptureVideoOrientation {
     }
 }
 
-extension CameraPreviewView.Rotation {
+extension LegacyCameraPreviewView.Rotation {
     init?(with interfaceOrientation: UIInterfaceOrientation, videoOrientation: AVCaptureVideoOrientation, cameraPosition: AVCaptureDevice.Position) {
         switch videoOrientation {
         case .portrait:

@@ -8,6 +8,7 @@ import MetalKit
 import CoreMedia
 import Vision
 import ImageBlur
+import Camera
 
 private extension UIInterfaceOrientation {
    var videoOrientation: AVCaptureVideoOrientation {
@@ -22,8 +23,8 @@ private extension UIInterfaceOrientation {
 }
 
 private class SimpleCapturePreviewLayer: AVCaptureVideoPreviewLayer {
-    public var didEnterHierarchy: (() -> Void)?
-    public var didExitHierarchy: (() -> Void)?
+    var didEnterHierarchy: (() -> Void)?
+    var didExitHierarchy: (() -> Void)?
     
     override open func action(forKey event: String) -> CAAction? {
         if event == kCAOnOrderIn {
@@ -34,17 +35,17 @@ private class SimpleCapturePreviewLayer: AVCaptureVideoPreviewLayer {
         return nullAction
     }
     
-    override public init(layer: Any) {
+    override init(layer: Any) {
         super.init(layer: layer)
     }
     
-    required public init?(coder: NSCoder) {
+    required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 }
 
 
-public class CameraSimplePreviewView: UIView {
+final class LegacyCameraSimplePreviewView: UIView, CameraSimplePreviewView {
     func updateOrientation() {
         guard self.videoPreviewLayer.connection?.isVideoOrientationSupported == true else {
             return
@@ -95,7 +96,7 @@ public class CameraSimplePreviewView: UIView {
     private var previewingDisposable: Disposable?
     private let placeholderView = UIImageView()
     
-    public init(frame: CGRect, main: Bool, roundVideo: Bool = false) {
+    init(frame: CGRect, main: Bool, roundVideo: Bool = false) {
         super.init(frame: frame)
         
         if roundVideo {
@@ -117,21 +118,21 @@ public class CameraSimplePreviewView: UIView {
         self.previewingDisposable?.dispose()
     }
     
-    public override func layoutSubviews() {
+    override func layoutSubviews() {
         super.layoutSubviews()
         
         self.updateOrientation()
         self.placeholderView.frame = self.bounds.insetBy(dx: -1.0, dy: -1.0)
     }
     
-    public func removePlaceholder(delay: Double = 0.0) {
+    func removePlaceholder(delay: Double = 0.0) {
         UIView.animate(withDuration: 0.3, delay: delay) {
             self.placeholderView.alpha = 0.0
         }
     }
     
-    public func resetPlaceholder(front: Bool) {
-        self.placeholderView.image = front ? CameraSimplePreviewView.lastFrontImage() : CameraSimplePreviewView.lastBackImage()
+    func resetPlaceholder(front: Bool) {
+        self.placeholderView.image = front ? LegacyCameraSimplePreviewView.lastFrontImage() : LegacyCameraSimplePreviewView.lastBackImage()
         self.placeholderView.alpha = 1.0
     }
         
@@ -159,18 +160,18 @@ public class CameraSimplePreviewView: UIView {
         }
     }
     
-    public var isEnabled: Bool = true {
+    var isEnabled: Bool = true {
         didSet {
             self.videoPreviewLayer.connection?.isEnabled = self.isEnabled
         }
     }
     
-    public override class var layerClass: AnyClass {
+    override class var layerClass: AnyClass {
         return AVCaptureVideoPreviewLayer.self
     }
     
     @available(iOS 13.0, *)
-    public var isPreviewing: Signal<Bool, NoError> {
+    var isPreviewing: Signal<Bool, NoError> {
         return Signal { [weak self] subscriber in
             guard let self else {
                 return EmptyDisposable
@@ -186,12 +187,12 @@ public class CameraSimplePreviewView: UIView {
         |> distinctUntilChanged
     }
     
-    public func cameraPoint(for location: CGPoint) -> CGPoint {
+    func cameraPoint(for location: CGPoint) -> CGPoint {
         return self.videoPreviewLayer.captureDevicePointConverted(fromLayerPoint: location)
     }
 }
 
-public class CameraPreviewView: MTKView {
+final class LegacyCameraPreviewView: MTKView {
     private let queue = DispatchQueue(label: "CameraPreview", qos: .userInitiated, attributes: [], autoreleaseFrequency: .workItem)
     private let commandQueue: MTLCommandQueue
     private var textureCache: CVMetalTextureCache?
@@ -208,7 +209,7 @@ public class CameraPreviewView: MTKView {
     private var textureTranform: CGAffineTransform?
     private var _bounds = CGRectNull
     
-    public enum Rotation: Int {
+    enum Rotation: Int {
         case rotate0Degrees
         case rotate90Degrees
         case rotate180Degrees
@@ -217,7 +218,7 @@ public class CameraPreviewView: MTKView {
     
     private var _mirroring: Bool?
     private var _scheduledMirroring: Bool?
-    public var mirroring = false {
+    var mirroring = false {
         didSet {
             self.queue.sync {
                 if self._mirroring != nil {
@@ -230,7 +231,7 @@ public class CameraPreviewView: MTKView {
     }
     
     private var _rotation: Rotation = .rotate0Degrees
-    public var rotation: Rotation = .rotate0Degrees {
+    var rotation: Rotation = .rotate0Degrees {
         didSet {
             self.queue.sync {
                 self._rotation = rotation
@@ -251,8 +252,8 @@ public class CameraPreviewView: MTKView {
         }
     }
     
-    public init?(test: Bool) {
-        let mainBundle = Bundle(for: CameraPreviewView.self)
+    init?(test: Bool) {
+        let mainBundle = Bundle(for: LegacyCameraPreviewView.self)
         
         guard let path = mainBundle.path(forResource: "CameraBundle", ofType: "bundle") else {
             return nil
@@ -418,7 +419,7 @@ public class CameraPreviewView: MTKView {
         self.textureTranform = transform.inverted()
     }
     
-    public override func draw(_ rect: CGRect) {
+    override func draw(_ rect: CGRect) {
         var pixelBuffer: CVPixelBuffer?
         var mirroring = false
         var rotation: Rotation = .rotate0Degrees
