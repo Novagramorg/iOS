@@ -22,6 +22,7 @@ import TelegramCore
 import CheckNode
 import GlassControls
 import ChatRichTextEditorComposer
+import ChatTextLinkEditUI
 import TextFormat
 import UndoUI
 
@@ -538,32 +539,32 @@ final class RichTextAttachmentScreenComponent: Component {
         }
 
         private func presentLinkPrompt() {
-            guard let component = self.component else {
+            guard let component = self.component, let environment = self.environment,
+                  let controller = environment.controller() as? RichTextAttachmentScreen else {
                 return
             }
-            
-            let existing = editor.currentLink()
-            let alert = UIAlertController(title: "Link", message: "Set a URL for the selected text", preferredStyle: .alert)
-            alert.addTextField { tf in
-                tf.placeholder = "https://example.com"
-                tf.text = existing
-                tf.keyboardType = .URL
-                tf.autocapitalizationType = .none
-                tf.autocorrectionType = .no
-            }
-            alert.addAction(UIAlertAction(title: "Set", style: .default) { [weak self, weak alert] _ in
-                guard let url = alert?.textFields?.first?.text, !url.isEmpty else { return }
-                self?.editor.becomeFirstResponder()
-                self?.editor.setLink(url)
-            })
-            if existing != nil {
-                alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
-                    self?.editor.becomeFirstResponder()
-                    self?.editor.removeLink()
-                })
-            }
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            component.context.sharedContext.mainWindow?.presentNative(alert)
+
+            // Reuse the shared chat link-editing UI (title/selected-text label/URL field + webpage preview),
+            // reading the current selection + existing link from the editor's native API and applying the
+            // result back through it — mirrors the chat composer's `openLinkEditing` rich-text branch.
+            let selectedText = self.editor.selectedText()
+            let existingLink = self.editor.currentLink()
+
+            let linkController = chatTextLinkEditController(
+                context: component.context,
+                text: environment.strings.TextFormat_AddLinkText(selectedText).string,
+                link: existingLink,
+                apply: { [weak self] link, _ in
+                    guard let self, let link else { return }
+                    self.editor.becomeFirstResponder()
+                    if link.isEmpty {
+                        self.editor.removeLink()
+                    } else {
+                        self.editor.setLink(link)
+                    }
+                }
+            )
+            controller.present(linkController, in: .window(.root))
         }
 
         /// Presents the list-marker picker (None / Bullet / Numbered / Checklist), applying the choice to
