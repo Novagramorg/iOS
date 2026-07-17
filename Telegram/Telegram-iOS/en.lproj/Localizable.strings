@@ -16565,6 +16565,9 @@ Error: %8$@";
 "RichText.Menu.Table.Delete" = "Delete Table";
 "RichText.Menu.Table.HighlightOn" = "Highlight";
 "RichText.Menu.Table.HighlightOff" = "Remove Highlight";
+"RichText.PlaceholderBody" = "Type something...";
+"RichText.PlaceholderQuote" = "Type a quote here";
+"RichText.PlaceholderCode" = "Type code here";
 
 "TextProcessing.TitleAICompose" = "Create with AI";
 "TextProcessing.ActionAddToPage" = "Add to Page";

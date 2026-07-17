@@ -307,6 +307,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private var accessoryItemButtons: [(ChatTextInputAccessoryItem, AccessoryItemIconButton)] = []
     
+    private var isUpdating: Bool = false
     private var validLayout: (CGFloat, CGFloat, CGFloat, CGFloat, UIEdgeInsets, CGFloat, CGFloat, LayoutMetrics, Bool, Bool, DeviceMetrics)?
     private var leftMenuInset: CGFloat = 0.0
     private var rightSlowModeInset: CGFloat = 0.0
@@ -1189,7 +1190,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private func loadTextInputNode(useNative: Bool = false) {
         let richTextInputNode: ChatRichTextInputNode
         if useNative {
-            richTextInputNode = RichTextEditorChatInputNode()
+            richTextInputNode = RichTextEditorChatInputNode(strings: self.presentationInterfaceState?.strings ?? defaultPresentationStrings)
         } else {
             richTextInputNode = makeChatRichTextInputNode()
         }
@@ -1617,6 +1618,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func requestLayout(transition: ContainedViewLayoutTransition = .immediate) {
+        if self.isUpdating {
+            return
+        }
         guard let presentationInterfaceState = self.presentationInterfaceState, let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded, deviceMetrics) = self.validLayout else {
             return
         }
@@ -1638,6 +1642,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         deviceMetrics: DeviceMetrics,
         isMediaInputExpanded: Bool
     ) -> CGFloat {
+        self.isUpdating = true
+        defer {
+            self.isUpdating = false
+        }
+        
         let isFirstTime = self.validLayout == nil
         
         let previousAdditionalSideInsets = self.validLayout?.4
@@ -3538,7 +3547,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         // grows UPWARD into a pill (bottom edge stays at textInputFrame.maxY): + at the bottom slot, AI at the top.
         var isAIButtonVisible = false
         var attachmentPillHeight: CGFloat = 40.0
-        if self.isAIEnabled, let node = self.richTextInputNode {
+        let inputHasNonWhitespaceText = !(self.richTextInputNode?.inputContentIsEmptyWhitespaceTrimmed ?? true)
+        if self.isAIEnabled, inputHasNonWhitespaceText, let node = self.richTextInputNode {
             let threeLineHeight = self.threeLineFieldHeight(forWidth: baseWidth, node: node, metrics: metrics, bottomInset: bottomInset, textFieldInsets: textFieldInsets)
             if textInputHeight >= threeLineHeight - 0.5 {
                 isAIButtonVisible = true
@@ -3823,7 +3833,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             )
         }
         
-        let isExpandInputEnabled = self.enableRichTextInput
+        let isExpandInputEnabled = self.enableRichTextInput && self.isAIEnabled
 
         if isExpandInputEnabled {
             let expandButton: (button: HighlightTrackingButton, icon: UIImageView)
@@ -4779,6 +4789,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if !self.bounds.size.height.isEqual(to: panelHeight) {
                 self.updateHeight(animated)
             } else {
+                self.requestLayout(transition: .immediate)
                 if let richTextInputNode = self.richTextInputNode {
                     self.updateInputField(textInputFrame: richTextInputNode.textFieldFrame, transition: .immediate)
                 }

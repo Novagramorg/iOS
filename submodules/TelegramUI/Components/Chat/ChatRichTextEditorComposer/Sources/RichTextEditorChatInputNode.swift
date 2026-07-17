@@ -10,6 +10,7 @@ import RichTextEditorCore
 import RichTextEditorUIKit
 import ChatInputTextNode
 import CheckNode
+import TelegramPresentationData
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -37,6 +38,8 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
 /// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`.
 @available(iOS 13.0, *)
 public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInputNode {
+    private let strings: PresentationStrings
+    
     private let editorView = RichTextEditorView()
     private let baseFontSize: CGFloat = 17.0
 
@@ -103,10 +106,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     public var asNode: ASDisplayNode { self }
 
-    public override init() {
+    public init(strings: PresentationStrings) {
         #if DEBUG && false
         RichTextEditorView.debugShowLayoutOverlay = true
         #endif
+        
+        self.strings = strings
         
         super.init()
     }
@@ -142,7 +147,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         RichTextEditorChatInputNode.applyComposerLayoutMetrics(to: self.editorView)
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "Type a quote here", blockQuote: "Type a quote here", codeBlock: "Type code here")
+        
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode)
         // The composer sits over the input panel's own background — clear the editor's document "page"
         // background (`.systemBackground`, opaque white in light mode) so the panel shows through. `nil`
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
