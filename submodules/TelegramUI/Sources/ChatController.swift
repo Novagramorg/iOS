@@ -6967,6 +6967,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return
         }
         self.mode = .standard(.default)
+        self.updateRightNavigationButtons(presentationInterfaceState: self.presentationInterfaceState.updatedMode(self.mode), transition: .immediate)
         let completion = self.dismissPreviewing?(true)
         
         let initialLayout = self.validLayout
@@ -7006,7 +7007,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let nodes = [
                 navigationBar.backButtonNode,
                 navigationBar.backButtonArrow,
-                navigationBar.badgeNode
+                navigationBar.badgeNode,
+                navigationBar.rightButtonNode
             ]
             for node in nodes {
                 node.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)

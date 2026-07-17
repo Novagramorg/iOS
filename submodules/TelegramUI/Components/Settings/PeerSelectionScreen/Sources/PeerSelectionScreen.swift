@@ -111,6 +111,7 @@ final class PeerSelectionScreenComponent: Component {
             case .hide:
                 return ItemListPeerActionItem(
                     presentationData: ItemListPresentationData(listNode.presentationData),
+                    systemStyle: .glass,
                     icon: PresentationResourcesItemList.hideIconImage(listNode.presentationData.theme),
                     iconSignal: nil,
                     title: listNode.presentationData.strings.Settings_PersonalChannelRemove,
@@ -131,6 +132,7 @@ final class PeerSelectionScreenComponent: Component {
             case .createGroup:
                 return ItemListPeerActionItem(
                     presentationData: ItemListPresentationData(listNode.presentationData),
+                    systemStyle: .glass,
                     icon: generateTintedImage(image: UIImage(bundleImageName: "Contact List/CreateGroupActionIcon"), color: listNode.presentationData.theme.list.itemAccentColor),
                     iconSignal: nil,
                     title: listNode.presentationData.strings.Compose_NewGroup,
@@ -151,6 +153,7 @@ final class PeerSelectionScreenComponent: Component {
             case .createChannel:
                 return ItemListPeerActionItem(
                     presentationData: ItemListPresentationData(listNode.presentationData),
+                    systemStyle: .glass,
                     icon: generateTintedImage(image: UIImage(bundleImageName: "Contact List/CreateChannelActionIcon"), color: listNode.presentationData.theme.list.itemAccentColor),
                     iconSignal: nil,
                     title: listNode.presentationData.strings.Compose_NewChannel,

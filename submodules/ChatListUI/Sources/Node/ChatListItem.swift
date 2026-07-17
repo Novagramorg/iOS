@@ -4217,8 +4217,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.communityAvatarShadowNode.image = generateTintedImage(image: shadowImage, color: theme.titleColor.withAlphaComponent(0.9))
 
                         let aspectRatio = shadowImage.size.width / shadowImage.size.height
-                        let shadowSize = CGSize(width: floor(avatarFrame.width * aspectRatio * 0.9), height: floor(avatarFrame.width * 0.93))
-                        transition.updatePosition(node: strongSelf.communityAvatarShadowNode, position: CGPoint(x: avatarFrame.width * 0.5 + avatarScaleOffset - 10.0, y: avatarFrame.height * 0.5))
+                        let shadowSize = CGSize(width: floor(avatarFrame.width * aspectRatio * 0.84), height: floor(avatarFrame.width * 0.97))
+                        transition.updatePosition(node: strongSelf.communityAvatarShadowNode, position: CGPoint(x: avatarFrame.width * 0.5 + avatarScaleOffset - 12.0 + UIScreenPixel, y: avatarFrame.height * 0.5))
                         transition.updateBounds(node: strongSelf.communityAvatarShadowNode, bounds: CGRect(origin: CGPoint(), size: shadowSize))
                         transition.updateTransformScale(node: strongSelf.communityAvatarShadowNode, scale: avatarScale)
                     } else {

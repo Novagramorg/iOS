@@ -179,7 +179,15 @@ public final class CommunityRequestItemComponent: Component {
                 requesterName = component.strings.Community_Request_UnknownRequester
             }
 
-            let text = component.strings.Community_Request_RequesterSuggestsGroup(requesterName)
+            let text: PresentationStrings.FormattedString
+            if case let .channel(channel) = component.chatPeer, case .broadcast = channel.info {
+                text = component.strings.Community_Request_RequesterSuggestsChannel(requesterName)
+            } else if case .user = component.chatPeer {
+                text = component.strings.Community_Request_RequesterSuggestsBot(requesterName)
+            } else {
+                text = component.strings.Community_Request_RequesterSuggestsGroup(requesterName)
+            }
+
             let result = NSMutableAttributedString(
                 string: text.string,
                 font: Font.regular(15.0),
