@@ -309,6 +309,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
             
             self.lineView = UIImageView()
             self.titleNode = CompositeTextNode()
+            self.titleNode.displaysAsynchronously = false
             
             super.init(frame: frame)
             

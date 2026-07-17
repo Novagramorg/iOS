@@ -4789,10 +4789,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if !self.bounds.size.height.isEqual(to: panelHeight) {
                 self.updateHeight(animated)
             } else {
-                self.requestLayout(transition: .immediate)
                 if let richTextInputNode = self.richTextInputNode {
                     self.updateInputField(textInputFrame: richTextInputNode.textFieldFrame, transition: .immediate)
                 }
+                self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
             }
         }
     }

@@ -4878,11 +4878,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let requiresPremiumRichContent = isNewMessage
                 && !self.context.isPremium
                 && !composeContent.isEmpty
-                && !composeContent.isEntityExpressible(options: [.quotesRequireRichContent])
+                && !composeContent.isEntityExpressible(options: [])
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
 
             if requiresPremiumRichContent && !sendWithoutFormatting {
                 if let controller = self.controller {
+                    //TODO:localize
                     controller.present(textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
                         TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
                             guard let self else {
