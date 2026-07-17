@@ -20,12 +20,15 @@ public final class TableStructuralMenuRequest {
     /// The alignment control for the selected cells (present for both row and column selections): the
     /// data is carried now, the host renders it as a custom control (deferred).
     public let alignment: Alignment?
+    /// The header/highlight toggle for the selected cells (present for both row and column selections).
+    public let header: Header?
 
-    public init(view: UIView?, sourceRect: CGRect, actions: [Action], alignment: Alignment?) {
+    public init(view: UIView?, sourceRect: CGRect, actions: [Action], alignment: Alignment?, header: Header?) {
         self.view = view
         self.sourceRect = sourceRect
         self.actions = actions
         self.alignment = alignment
+        self.header = header
     }
 
     /// One menu action. `kind` is a stable semantic identity from which the host derives the (localizable)
@@ -43,6 +46,10 @@ public final class TableStructuralMenuRequest {
     public enum Kind: Equatable {
         case addColumnLeft, addColumnRight, deleteColumn
         case addRowAbove, addRowBelow, deleteRow
+        /// Merge the `.cells` selection's covered cells into one spanning cell (offered when the
+        /// selection covers ≥2 anchors); split a single merged cell back into a dense grid (offered
+        /// when the selection resolves to exactly one already-merged anchor). Phase 2c.
+        case mergeCells, splitCell
     }
 
     /// The alignment control for the selected cells: the uniform current value per axis (nil = the selected
@@ -55,6 +62,18 @@ public final class TableStructuralMenuRequest {
         public init(horizontal: TextAlignment?, vertical: VerticalAlignment?, apply: @escaping (TextAlignment?, VerticalAlignment?) -> Void) {
             self.horizontal = horizontal
             self.vertical = vertical
+            self.apply = apply
+        }
+    }
+
+    /// The header/highlight toggle for the selected cells: the uniform current value (nil = the cells
+    /// disagree, "mixed"/indeterminate), and `apply` to toggle every selected cell. Present for both
+    /// row and column selections.
+    public struct Header {
+        public let isHeader: Bool?
+        public let apply: () -> Void
+        public init(isHeader: Bool?, apply: @escaping () -> Void) {
+            self.isHeader = isHeader
             self.apply = apply
         }
     }

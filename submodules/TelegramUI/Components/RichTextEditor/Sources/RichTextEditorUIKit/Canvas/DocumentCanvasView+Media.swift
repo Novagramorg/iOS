@@ -18,7 +18,7 @@ extension DocumentCanvasView {
             // A change (add / remove / reorder / natural-size change) invalidates the reused host view so the
             // provider rebuilds it for the new items (the seam is one-shot: a reused view can't be re-fed a
             // changed item list in place — that cross-mutation cell-reuse path is a deferred follow-up).
-            let signature = media.items.map {
+            let signature = media.displayMode.rawValue + "|" + media.items.map {
                 "\($0.mediaID)#\($0.kind.rawValue)#\(Int($0.naturalSize.width.rounded()))x\(Int($0.naturalSize.height.rounded()))#s\($0.isSpoiler ? 1 : 0)"
             }.joined(separator: "|")
             let hosted: HostedMediaItem
@@ -33,7 +33,7 @@ extension DocumentCanvasView {
                     MediaProviderItem(mediaID: $0.mediaID, kind: $0.kind,
                                       naturalSize: CGSize(width: $0.naturalSize.width, height: $0.naturalSize.height),
                                       isSpoiler: $0.isSpoiler)
-                }, media.id, existingView) {
+                }, media.id, media.displayMode, existingView) {
                     // Tear down a DIFFERENT prior instance (provider returned a fresh view, recreate fallback).
                     if let old = mediaItemViews[media.id], old.view !== v {
                         old.view.removeFromSuperview()
@@ -115,7 +115,8 @@ extension DocumentCanvasView {
             addMore: { [weak self] mediaID, naturalSize, kind in
                 self?.addMediaItem(blockID: blockID, mediaID: mediaID,
                                    naturalSize: naturalSize, kind: kind)
-            }
+            },
+            toggleLayout: { [weak self] in self?.toggleMediaDisplayMode(blockID: blockID) }
         )
         onRequestMediaControl?(request)
     }
@@ -201,6 +202,26 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Flips a multi-item media container's layout mode (mosaic ↔ slideshow) as ONE undo step. Same
+    /// rebuild-in-place shape as `toggleMediaSpoiler` / `addMediaItem`: read the current `MediaBlock`, flip
+    /// `displayMode`, rebuild the `MediaBlockBox` reusing the old mapper/horizontalBleed/width, splice into
+    /// `boxes`, `recomputeSpans()`, inside `editing { }`. The mode is not a position-model concern
+    /// (`nodeSize`/`textStart` are caption-derived only), so the caret is undisturbed. No-op if `blockID`
+    /// isn't found or the block has fewer than 2 items (a single item has no album layout).
+    func toggleMediaDisplayMode(blockID: BlockID) {
+        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+              case .media(let currentMedia) = mediaBox.currentBlock(), currentMedia.items.count >= 2 else { return }
+        editing {
+            var newMedia = currentMedia
+            newMedia.displayMode = (currentMedia.displayMode == .mosaic) ? .slideshow : .mosaic
+            let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
+                                       horizontalBleed: mediaBox.horizontalBleed)
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(index...index, with: [newBox])
+            boxes = newBoxes
+            recomputeSpans()
+        }
+    }
 
     // MARK: Test accessors
     var hostedMediaCountForTesting: Int { mediaItemViews.count }

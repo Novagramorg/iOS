@@ -9,7 +9,7 @@ final class MediaControlTests: XCTestCase {
     /// touch the other (the mediaID-is-not-unique guard).
     func test_deleteMediaBlock_removesOnlyTheGivenOccurrence() {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("img1"), mediaID: "x",
                               naturalSize: Size2D(width: 100, height: 60), caption: [])),
@@ -37,7 +37,7 @@ extension MediaControlTests {
     /// control/mediaID, and the request's `delete()` removes that block.
     func test_moreControlTap_emitsRequest_andDeletes() {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in StubMediaView() }
+        v.mediaViewProvider = { _, _, _, _ in StubMediaView() }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("img"), mediaID: "x",
                               naturalSize: Size2D(width: 100, height: 60), caption: [])),
@@ -70,7 +70,7 @@ extension MediaControlTests {
 extension MediaControlTests {
     func test_addMediaItem_growsContainer() {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), mediaID: "m1", kind: .image,
                               naturalSize: Size2D(width: 100, height: 100))),
@@ -88,7 +88,7 @@ extension MediaControlTests {
 
     func test_deleteMediaItem_collapsesToSingle() {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), items: [
                 MediaItem(mediaID: "m1", kind: .image, naturalSize: Size2D(width: 100, height: 100)),
@@ -105,7 +105,7 @@ extension MediaControlTests {
 
     func test_deleteMediaItem_lastItemRemovesBlock() {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), mediaID: "m1", kind: .image,
                               naturalSize: Size2D(width: 100, height: 100))),
@@ -124,7 +124,7 @@ extension MediaControlTests {
     /// which silently dropped `items[1...]`.
     func test_enterInCaption_ofMultiItemContainer_preservesAllItems() {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), items: [
                 MediaItem(mediaID: "m1", kind: .image, naturalSize: Size2D(width: 100, height: 100)),
@@ -161,7 +161,7 @@ extension MediaControlTests {
     func test_syncMediaItemViews_recreatesHostedView_onItemsChange_notOnUnchangedRelayout() {
         let v = DocumentCanvasView()
         var provideCount = 0
-        v.mediaViewProvider = { _, _, _ in provideCount += 1; return CountingStubMediaView() }
+        v.mediaViewProvider = { _, _, _, _ in provideCount += 1; return CountingStubMediaView() }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), mediaID: "m1", kind: .image,
                               naturalSize: Size2D(width: 100, height: 100))),
@@ -182,12 +182,12 @@ extension MediaControlTests {
         v.addMediaItem(blockID: BlockID("b1"), mediaID: "m2",
                        naturalSize: CGSize(width: 50, height: 50), kind: .video)
         XCTAssertEqual(provideCount, 2, "provider re-invoked after items grow from 1 to 2")
-        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "m1#image#100x100#s0|m2#video#50x50#s0")
+        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "mosaic|m1#image#100x100#s0|m2#video#50x50#s0")
 
         // Delete-one shrinks 2 -> 1 item: the signature changes again, so the view is recreated once more.
         v.deleteMediaItem(blockID: BlockID("b1"), itemIndex: 1)
         XCTAssertEqual(provideCount, 3, "provider re-invoked after items shrink from 2 to 1")
-        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "m1#image#100x100#s0")
+        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "mosaic|m1#image#100x100#s0")
     }
 }
 #endif

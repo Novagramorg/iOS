@@ -115,6 +115,18 @@ send-options preview and the attachment-menu rich-editor send — see §5).
   precedent — one value seen by undo/drafts/send/observers). Thin converters:
   `ChatRichTextEditorComposer/Sources/ComposerExpandedEditorBridge.swift`. Custom-emoji **files** (`[Int64:
   TelegramMediaFile]`) and media are threaded both ways (a fileId-only emoji ref renders blank).
+- **OUT back-fills emoji files the composer content only holds by fileId.** A `ChatInputContent` custom-emoji
+  run may carry the fileId **without** the `TelegramMediaFile` attached; the plain `documentMediaAndEmoji(...)`
+  then returns an `emojiFiles` map missing those ids, seeding the editor's emoji store (and, on the initial
+  `.edit`/`.standalone` seed, the keyboard's file set) empty — so the emoji renders blank and its file is dropped
+  on collapse-back / send. The OUT path therefore uses the **async** `documentMediaAndEmojiAsync(engine:…)`
+  (awaited inside `openExpandedInput`'s `Task { @MainActor }`), which resolves any fileId with no inline file from
+  the **local** sticker cache (`engine.stickers.resolveInlineStickersLocal`, a postbox `getMedia` over
+  `Namespaces.Media.CloudFile`). Local-only is deliberate — composer emoji are always already cached, so no
+  network round-trip stalls the expand; a fileId absent even locally simply stays unresolved (renders blank, as
+  before). Persisted **drafts** need no resolution (their `emojiFiles` are stored/decoded whole in
+  `RichTextDraft`); the in-editor AI-insert paths still use the sync `documentMediaAndEmoji` (their
+  completion closures are synchronous, and AI-generated content rarely carries custom emoji).
 
 > **Invariant — the cycle constraint.** `InstantPageUI` transitively deps `ChatTextInputPanelNode`, so the
 > panel/node **cannot** dep `InstantPageUI` / `RichTextEditorMediaView`. `TelegramUI` (above the cycle) builds
@@ -194,10 +206,17 @@ All inline / structural features round-trip losslessly through the native compos
   same one grouped album messages use), with per-cell view reuse keyed by media identity so surviving
   cells aren't rebuilt/re-fetched on an add/remove. A container of `items.count >= 2` sends as an
   InstantPage **`.collage`** rich message (see `instantpage-richtext.md`); `count == 1` still sends the
-  byte-identical `.image`/`.video` block. **Authoring is split:** per-cell delete-one is wired in both
-  hosts; "Add another photo/video" is wired in the **article editor**'s more-menu only — the composer's
-  in-place Add is a deferred follow-up (the composer already renders/edits multi-media from sent albums
-  and drafts). Design + plan: `docs/superpowers/{specs,plans}/2026-07-08-richtext-multi-media-container*`.
+  byte-identical `.image`/`.video` block. **Layout mode (added 2026-07-17).** A `MediaBlock`/`ChatInputMedia`
+  now carries a `displayMode` (`.mosaic` default / `.slideshow`, Codable back-compat → `.mosaic`); a
+  `count >= 2` container in `.slideshow` mode renders in-editor as a swipeable carousel + paging dots and
+  **sends as InstantPage `.slideshow`** instead of `.collage` (both forward converters branch on it; the
+  reverse recovers it on edit). The toggle button that flips the mode is **article-editor only** (left of
+  "+"); the composer stays mosaic-only. Design + plan:
+  `docs/superpowers/{specs,plans}/2026-07-17-richtext-media-layout-toggle*`. **Authoring is split:** per-cell
+  delete-one is wired in both hosts; "Add another photo/video" and the layout toggle are wired in the
+  **article editor**'s chrome only — the composer's in-place Add is a deferred follow-up (the composer
+  already renders/edits multi-media from sent albums and drafts). Design + plan:
+  `docs/superpowers/{specs,plans}/2026-07-08-richtext-multi-media-container*`.
   **Media spoilers (added 2026-07-08).** A photo/video can be marked a Telegram-style spoiler (dust-covered
   until tapped), per **item**: `MediaItem.isSpoiler` (editor Core) ↔ `ChatInputMediaItem.isSpoiler`
   (both additive, optional-Codable, absent ⇒ `false`, so all existing docs/drafts/messages decode

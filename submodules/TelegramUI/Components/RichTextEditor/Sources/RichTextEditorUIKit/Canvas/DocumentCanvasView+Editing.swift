@@ -811,6 +811,11 @@ extension DocumentCanvasView {
         // resolveBox, so `resolveBox(at: head)` below mis-resolves to the FOLLOWING top-level block and the media
         // would be inserted there. Media isn't supported inside quotes (v1) → no-op.
         guard !boxes.isEmpty, !isInsideBlockQuote(head) else { return }
+        // Focus the editor BEFORE the edit so the caret placed at/after the new media is immediately
+        // interactive — same first-responder-gated synchronous-layout reason as `insertTable` (the only
+        // synchronous caret-move layout, the façade's `scrollCaretIntoView`, is FR-gated; without focus the
+        // new block's frames stay stale until a later interaction).
+        if !isFirstResponder { _ = becomeFirstResponder() }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head) else { return }

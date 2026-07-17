@@ -94,7 +94,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                         continue
                     }
                 }
-                result.append(.collage(items: innerBlocks, caption: caption))
+                switch m.displayMode {
+                case .mosaic:    result.append(.collage(items: innerBlocks, caption: caption))
+                case .slideshow: result.append(.slideshow(items: innerBlocks, caption: caption))
+                }
                 break
             }
             // Single item: byte-identical to the pre-container output.
@@ -133,10 +136,13 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 }
             }
         case let .table(t):
-            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`colspan`/`rowspan`/cell-background
-            // of a table are NOT representable in the InstantPage projection (see the reverse for the documented
-            // defaults the round-trip restores). Forward each cell's own per-cell H+V alignment (the editor's
-            // `justified` has no InstantPage equivalent → CANONICALIZED to `.left`), header flag, and runs.
+            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/cell-background of a table are NOT
+            // representable in the InstantPage projection (see the reverse for the documented defaults the
+            // round-trip restores). Forward each cell's own per-cell H+V alignment (the editor's `justified` has
+            // no InstantPage equivalent → CANONICALIZED to `.left`), per-cell header flag, colspan/rowspan, and
+            // runs. `header` is carried PER CELL (not derived from the row), so a partial-header row (some
+            // cells header, some not) round-trips exactly. `colspan`/`rowspan` are `Int` (chat currency, default
+            // 1) forwarded as `Int32` (InstantPage's `0`/`1` = no span, `>1` = real span).
             let rows = t.rows.map { row -> InstantPageTableRow in
                 let cells = row.cells.map { cell -> InstantPageTableCell in
                     let alignment: TableHorizontalAlignment
@@ -157,7 +163,7 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                     case .bottom:
                         vAlignment = .bottom
                     }
-                    return InstantPageTableCell(text: richText(from: cell.runs), header: row.isHeader, alignment: alignment, verticalAlignment: vAlignment, colspan: 1, rowspan: 1)
+                    return InstantPageTableCell(text: richText(from: cell.runs), header: cell.isHeader, alignment: alignment, verticalAlignment: vAlignment, colspan: Int32(cell.colspan), rowspan: Int32(cell.rowspan))
                 }
                 return InstantPageTableRow(cells: cells)
             }
@@ -241,6 +247,29 @@ private func chatInputNaturalSize(fromMedia media: Media) -> ChatInputSize {
     return ChatInputSize(width: Double(dimensions.width), height: Double(dimensions.height))
 }
 
+/// Shared by the `.collage` (mosaic) and `.slideshow` reverse arms: resolve each inner `.image`/`.video` block's
+/// `Media` from the page dict and recover its `naturalSize`/`isSpoiler`, exactly as the single-item `.image`/`.video`
+/// arms do. The two container kinds differ ONLY in the resulting `ChatInputMedia.displayMode` (set by the caller),
+/// not in how their inner items are resolved.
+private func chatInputMediaItems(fromInnerBlocks innerBlocks: [InstantPageBlock], media: [MediaId: Media]) -> [ChatInputMediaItem] {
+    var items: [ChatInputMediaItem] = []
+    for inner in innerBlocks {
+        switch inner {
+        case let .image(id, _, _, _, spoiler):
+            if let m = media[id] {
+                items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
+            }
+        case let .video(id, _, _, _, spoiler):
+            if let m = media[id] {
+                items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
+            }
+        default:
+            break   // collage/slideshow only ever carry image/video from the forward
+        }
+    }
+    return items
+}
+
 func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [MediaId: Media] = [:]) -> [ChatInputBlock] {
     var result: [ChatInputBlock] = []
     for block in blocks {
@@ -311,24 +340,21 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
         case let .collage(innerBlocks, caption):
             // Rebuild a multi-item container. Each inner .image/.video resolves its Media from the page dict;
             // naturalSize is recovered from the resolved Media (as for single .image/.video). displayWidth /
-            // alignment canonicalize to nil / .center (not representable — same as the single case).
-            var items: [ChatInputMediaItem] = []
-            for inner in innerBlocks {
-                switch inner {
-                case let .image(id, _, _, _, spoiler):
-                    if let m = media[id] {
-                        items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
-                    }
-                case let .video(id, _, _, _, spoiler):
-                    if let m = media[id] {
-                        items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
-                    }
-                default:
-                    break   // collage only ever carries image/video from the forward
-                }
-            }
+            // alignment canonicalize to nil / .center (not representable — same as the single case). `.collage`
+            // is the mosaic-mode wire representation (see `.slideshow` below for the slideshow-mode twin).
+            let items = chatInputMediaItems(fromInnerBlocks: innerBlocks, media: media)
             if !items.isEmpty {
                 result.append(.media(ChatInputMedia(items: items, displayWidth: nil, alignment: .center,
+                                                    displayMode: .mosaic,
+                                                    caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .slideshow(innerBlocks, caption):
+            // Mirror of `.collage` above — the ONLY difference is `displayMode: .slideshow`. Shares the inner
+            // .image/.video → [ChatInputMediaItem] resolution via `chatInputMediaItems(fromInnerBlocks:media:)`.
+            let items = chatInputMediaItems(fromInnerBlocks: innerBlocks, media: media)
+            if !items.isEmpty {
+                result.append(.media(ChatInputMedia(items: items, displayWidth: nil, alignment: .center,
+                                                    displayMode: .slideshow,
                                                     caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .audio(id, caption):
@@ -346,18 +372,20 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             let map = TelegramMediaMap(latitude: latitude, longitude: longitude, heading: nil, accuracyRadius: nil, venue: nil)
             result.append(.media(ChatInputMedia(media: map, kind: .location, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
         case let .table(_, rows, _, _):
-            // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count; column
+            // Rebuild the `ChatInputTable`. Columns are inferred from the widest row's SPANNED cell count (each
+            // cell occupies `max(1, colspan)` grid columns, so a colspanning first cell no longer under-counts
+            // — a plain, no-span table still infers from the raw cell count, matching the prior behavior); column
             // `width` is NOT representable in InstantPage cells → restored as the DEFAULT `0.0`. The table
-            // `title`, per-cell `colspan`/`rowspan`, and cell `background` are likewise not in the editor
-            // model → dropped/fixed (title unused; background `nil`). Per-cell H+V alignment DOES round-trip
-            // (restored onto each `ChatInputTableCell` below). Identity therefore holds for a table whose
-            // columns use width `0.0` and whose cells use `background: nil` (the values the reverse yields).
-            var columns: [ChatInputColumnSpec] = []
-            if let firstRow = rows.first {
-                columns = firstRow.cells.map { _ in ChatInputColumnSpec(width: 0.0) }
-            }
+            // `title` and cell `background` are likewise not in the editor model → dropped/fixed (title unused;
+            // background `nil`). Per-cell H+V alignment, per-cell `header`, AND per-cell `colspan`/`rowspan` DO
+            // round-trip (restored onto each `ChatInputTableCell` below — no row-level derivation). `colspan`/
+            // `rowspan` are InstantPage `Int32` (`0`/`1` = no span) normalized back to the chat currency's `Int`
+            // (default 1): a span `> 1` is preserved, anything else canonicalizes to `1`. Identity therefore
+            // holds for a table whose columns use width `0.0` and whose cells use `background: nil` (the values
+            // the reverse yields).
+            let columnCount = rows.map { row in row.cells.reduce(0) { $0 + max(1, Int($1.colspan)) } }.max() ?? 0
+            let columns: [ChatInputColumnSpec] = Array(repeating: ChatInputColumnSpec(width: 0.0), count: columnCount)
             let outRows = rows.map { row -> ChatInputTableRow in
-                let isHeader = row.cells.first?.header ?? false
                 let cells = row.cells.map { cell -> ChatInputTableCell in
                     let alignment: ChatInputTextAlignment
                     switch cell.alignment {
@@ -371,9 +399,9 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
                     case .middle: vAlignment = .middle
                     case .bottom: vAlignment = .bottom
                     }
-                    return ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil, horizontalAlignment: alignment, verticalAlignment: vAlignment)
+                    return ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil, horizontalAlignment: alignment, verticalAlignment: vAlignment, isHeader: cell.header, colspan: cell.colspan > 1 ? Int(cell.colspan) : 1, rowspan: cell.rowspan > 1 ? Int(cell.rowspan) : 1)
                 }
-                return ChatInputTableRow(height: nil, isHeader: isHeader, cells: cells)
+                return ChatInputTableRow(height: nil, cells: cells)
             }
             result.append(.table(ChatInputTable(columns: columns, rows: outRows)))
         default:

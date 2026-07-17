@@ -13,19 +13,29 @@ public struct Cell: Codable, Equatable {
     public var background: RGBAColor?
     public var horizontalAlignment: TextAlignment
     public var verticalAlignment: VerticalAlignment
+    /// Per-cell header/highlight flag (fill + bold). Replaces the old whole-row header concept.
+    public var isHeader: Bool
+    /// Number of grid columns this cell spans (default 1).
+    public var colspan: Int
+    /// Number of grid rows this cell spans (default 1).
+    public var rowspan: Int
 
     public init(id: BlockID, blocks: [Block] = [], background: RGBAColor? = nil,
-                horizontalAlignment: TextAlignment = .center, verticalAlignment: VerticalAlignment = .top) {
+                horizontalAlignment: TextAlignment = .center, verticalAlignment: VerticalAlignment = .top,
+                isHeader: Bool = false, colspan: Int = 1, rowspan: Int = 1) {
         self.id = id
         self.blocks = blocks
         self.background = background
         self.horizontalAlignment = horizontalAlignment
         self.verticalAlignment = verticalAlignment
+        self.isHeader = isHeader
+        self.colspan = colspan
+        self.rowspan = rowspan
     }
 
-    private enum CodingKeys: String, CodingKey { case id, blocks, background, horizontalAlignment, verticalAlignment }
+    private enum CodingKeys: String, CodingKey { case id, blocks, background, horizontalAlignment, verticalAlignment, isHeader, colspan, rowspan }
 
-    // Custom decode so cells written before the alignment fields existed still load (defaults applied).
+    // Custom decode so cells written before these fields existed still load (defaults applied).
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(BlockID.self, forKey: .id)
@@ -33,20 +43,54 @@ public struct Cell: Codable, Equatable {
         background = try c.decodeIfPresent(RGBAColor.self, forKey: .background)
         horizontalAlignment = try c.decodeIfPresent(TextAlignment.self, forKey: .horizontalAlignment) ?? .center
         verticalAlignment = try c.decodeIfPresent(VerticalAlignment.self, forKey: .verticalAlignment) ?? .top
+        isHeader = try c.decodeIfPresent(Bool.self, forKey: .isHeader) ?? false
+        colspan = try c.decodeIfPresent(Int.self, forKey: .colspan) ?? 1
+        rowspan = try c.decodeIfPresent(Int.self, forKey: .rowspan) ?? 1
     }
 }
 
-public struct Row: Codable, Equatable {
+public struct Row: Equatable {
     public var id: BlockID
     public var height: Double?
-    public var isHeader: Bool
     public var cells: [Cell]
 
+    /// Whether EVERY cell is a header cell (and the row is non-empty). Derived — there is no stored
+    /// row-level header; per-cell `Cell.isHeader` is the single source of truth.
+    public var isHeader: Bool { !cells.isEmpty && cells.allSatisfy { $0.isHeader } }
+
+    /// `isHeader: true` seeds every cell as a header cell (convenience for callers/tests that think in
+    /// whole rows). `false` leaves each cell's own flag untouched.
     public init(id: BlockID, height: Double? = nil, isHeader: Bool = false, cells: [Cell] = []) {
         self.id = id
         self.height = height
-        self.isHeader = isHeader
-        self.cells = cells
+        self.cells = isHeader ? cells.map { var c = $0; c.isHeader = true; return c } : cells
+    }
+}
+
+extension Row: Codable {
+    private enum CodingKeys: String, CodingKey { case id, height, cells; case legacyIsHeader = "isHeader" }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(BlockID.self, forKey: .id)
+        height = try c.decodeIfPresent(Double.self, forKey: .height)
+        var decodedCells = try c.decodeIfPresent([Cell].self, forKey: .cells) ?? []
+        // Migration: a row written before per-cell header carried a row-level `isHeader`. Fold it in.
+        // Edge case: a legacy row with `isHeader: true` but ZERO cells folds into nothing, so it
+        // decodes to a non-header row (the computed getter's `!cells.isEmpty` guard). Acceptable —
+        // the grid invariant guarantees every row has ≥1 column, so this shape never occurs in practice.
+        if (try c.decodeIfPresent(Bool.self, forKey: .legacyIsHeader)) == true {
+            decodedCells = decodedCells.map { var cell = $0; cell.isHeader = true; return cell }
+        }
+        cells = decodedCells
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(height, forKey: .height)
+        try c.encode(cells, forKey: .cells)
+        // Deliberately does NOT encode `isHeader` — it is derived from the cells.
     }
 }
 

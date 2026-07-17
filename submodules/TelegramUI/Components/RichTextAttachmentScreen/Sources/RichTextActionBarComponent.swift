@@ -131,10 +131,11 @@ class RichTextActionBarComponent: Component {
             let previousComponent = self.component
             self.component = component
             
-            let size = CGSize(width: availableSize.width, height: 44.0)
-            
             let verticalInset: CGFloat = 4.0
             let horizontalInset: CGFloat = 4.0
+            
+            let size = CGSize(width: availableSize.width, height: 44.0)
+            let scrollFrame = CGRect(origin: CGPoint(x: horizontalInset, y: verticalInset), size: CGSize(width: size.width - horizontalInset * 2.0, height: size.height - verticalInset * 2.0))
             
             let itemSize = CGSize(width: 40.0, height: 36.0)
             let intrinsicContentWidth = itemSize.width * CGFloat(component.actions.count)
@@ -146,7 +147,21 @@ class RichTextActionBarComponent: Component {
                 spacing = floorToScreenPixels((areaWidth - intrinsicContentWidth) / CGFloat(max(1, component.actions.count - 1)))
             }
             
-            let contentSize = CGSize(width: itemSize.width * CGFloat(component.actions.count) + spacing * CGFloat(max(0, component.actions.count - 1)), height: itemSize.height)
+            var contentSize = CGSize(width: itemSize.width * CGFloat(component.actions.count) + spacing * CGFloat(max(0, component.actions.count - 1)), height: itemSize.height)
+            if contentSize.width > scrollFrame.width {
+                // The content overflows and scrolls. Calibrate the inter-item spacing so the scroll area's
+                // trailing edge bisects an item at rest — a half item peeks past the edge as a "there's more,
+                // scroll me" affordance. Ported from TextProcessingStyleSelectionComponent's half-item slot
+                // calibration: round the natural fit DOWN to a half-integer item count (X.5) — rounding down
+                // keeps the derived stride >= the item's own width, so spacing never goes negative — then
+                // derive the slot stride from that target and turn the surplus into inter-item spacing.
+                let viewport = scrollFrame.width
+                let naturalVisible = viewport / itemSize.width
+                let targetVisible = max(1.5, floor(naturalVisible - 0.5) + 0.5)
+                let calibratedStride = viewport / targetVisible
+                spacing = max(minSpacing, calibratedStride - itemSize.width)
+                contentSize.width = itemSize.width * CGFloat(component.actions.count) + spacing * CGFloat(max(0, component.actions.count - 1))
+            }
             
             let delayIncrement: Double = 0.02
             let maxAnimateBlur: CGFloat = "".isEmpty ? 0.0 : 1.0
@@ -266,7 +281,6 @@ class RichTextActionBarComponent: Component {
                 self.itemViews.removeValue(forKey: id)
             }
             
-            let scrollFrame = CGRect(origin: CGPoint(x: horizontalInset, y: verticalInset), size: CGSize(width: size.width - horizontalInset * 2.0, height: size.height - verticalInset * 2.0))
             self.scrollView.frame = scrollFrame
             self.scrollView.layer.cornerRadius = scrollFrame.height * 0.5
             self.scrollView.contentSize = contentSize

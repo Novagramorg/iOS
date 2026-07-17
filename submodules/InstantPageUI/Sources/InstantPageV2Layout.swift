@@ -205,6 +205,8 @@ public struct InstantPageV2ListMarkerItem {
     public var frame: CGRect
     public let kind: InstantPageV2ListMarkerKind
     public let color: UIColor
+    /// Structural path (root→list item) for a `.checklist` marker; nil for bullet/number markers.
+    public let checkboxPath: [Int]?
 }
 
 public struct InstantPageV2BarItem {
@@ -622,6 +624,7 @@ private func layoutBlockSequence(
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
     kind: BlockSequenceKind,
+    pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> InstantPageV2Layout {
     var items: [InstantPageV2LaidOutItem] = []
@@ -639,6 +642,7 @@ private func layoutBlockSequence(
             isCover: false,
             previousItems: items,
             isLast: i == blocks.count - 1,
+            pathPrefix: pathPrefix + [i],
             context: &context
         )
 
@@ -729,13 +733,14 @@ private func layoutBlock(
     isCover: Bool,
     previousItems: [InstantPageV2LaidOutItem],
     isLast: Bool,
+    pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     let _ = isLast  // reserved for Tasks 7–9
     switch block {
     case let .cover(inner):
         return layoutBlock(inner, boundingWidth: boundingWidth, horizontalInset: horizontalInset, kind: kind,
-                           isCover: true, previousItems: previousItems, isLast: isLast, context: &context)
+                           isCover: true, previousItems: previousItems, isLast: isLast, pathPrefix: pathPrefix, context: &context)
     case let .title(text):
         let titleItems = layoutSimpleText(text, category: .header, boundingWidth: boundingWidth,
                                           horizontalInset: horizontalInset, context: &context)
@@ -772,7 +777,7 @@ private func layoutBlock(
 
     case let .list(items, ordered):
         return layoutList(items, ordered: ordered, boundingWidth: boundingWidth,
-                          horizontalInset: horizontalInset, kind: kind, context: &context)
+                          horizontalInset: horizontalInset, kind: kind, pathPrefix: pathPrefix, context: &context)
 
     case let .preformatted(text, language):
         return layoutCodeBlock(text, language: language, boundingWidth: boundingWidth,
@@ -781,7 +786,7 @@ private func layoutBlock(
     case let .blockQuote(blocks, caption, _):
         return layoutBlockQuote(blocks: blocks, caption: caption,
                                 boundingWidth: boundingWidth, horizontalInset: horizontalInset, kind: kind,
-                                isLast: isLast, context: &context)
+                                isLast: isLast, pathPrefix: pathPrefix, context: &context)
     case let .pullQuote(text, caption):
         return layoutQuoteText(text: text, caption: caption, isPull: true,
                                boundingWidth: boundingWidth, horizontalInset: horizontalInset,
@@ -1063,7 +1068,7 @@ private func layoutBlock(
     case let .details(title, blocks, expanded):
         return layoutDetails(title: title, blocks: blocks, defaultExpanded: expanded,
                              boundingWidth: boundingWidth, horizontalInset: horizontalInset,
-                             context: &context)
+                             pathPrefix: pathPrefix, context: &context)
 
     case let .table(title, rows, bordered, striped):
         return layoutTable(title: title, rows: rows, bordered: bordered, striped: striped,
@@ -1155,6 +1160,7 @@ private func layoutDetails(
     defaultExpanded: Bool,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
+    pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     let index = context.detailsIndexCounter
@@ -1192,6 +1198,7 @@ private func layoutDetails(
             boundingWidth: boundingWidth,
             horizontalInset: horizontalInset,
             kind: .detail,
+            pathPrefix: pathPrefix,
             context: &context
         )
         innerLayout = layout
@@ -2380,6 +2387,7 @@ private func layoutBlockQuote(
     horizontalInset: CGFloat,
     kind: BlockSequenceKind,
     isLast: Bool,
+    pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     // Legacy single-paragraph fast path: preserve today's italicized body styling.
@@ -2416,6 +2424,7 @@ private func layoutBlockQuote(
             isCover: false,
             previousItems: result,
             isLast: i == blocks.count - 1 && isLast,
+            pathPrefix: pathPrefix + [i],
             context: &context
         )
         let dy = contentHeight + spacing
@@ -2591,6 +2600,7 @@ private func layoutList(
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
     kind: BlockSequenceKind,
+    pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     // Determine marker characteristics.
@@ -2695,6 +2705,20 @@ private func layoutList(
 
         let markerInfo = markerInfos[i]
 
+        // Path to this list item (root→item), stamped onto checkbox markers only. Matches
+        // InstantPage.togglingCheckbox path semantics: list items are addressed by item index
+        // appended to the list block's own prefix.
+        //
+        // INVARIANT: `pathPrefix` is an absolute-from-root path only because every
+        // `layoutBlockSequence` call that can reach a list is entered from the page root with a
+        // correct prefix (top-level, details body, blockquote children, nested list-item blocks).
+        // The only OTHER `layoutBlockSequence` call sites — table cells (`kind == .cell`, layout
+        // hard-codes `[.paragraph]`) and the details title — contain no lists today, so no
+        // checkbox marker is produced there. The `kind != .cell` guard is belt-and-suspenders: if
+        // cells ever gain list content, their checkboxes stay non-interactive rather than
+        // misrouting an edit to a colliding top-level path.
+        let itemCheckboxPath: [Int]? = (item.checked != nil && kind != .cell) ? (pathPrefix + [i]) : nil
+
         // Effective item: if a .blocks item is empty, treat as a single space.
         var effectiveItem = item
         if case let .blocks(blocks, num, checked) = effectiveItem, blocks.isEmpty {
@@ -2751,7 +2775,8 @@ private func layoutList(
             result.append(.listMarker(InstantPageV2ListMarkerItem(
                 frame: markerFrame,
                 kind: markerInfo.kind,
-                color: context.theme.textCategories.paragraph.color
+                color: context.theme.textCategories.paragraph.color,
+                checkboxPath: itemCheckboxPath
             )))
             stampMarkdownContext(textLaidOutItems, kind: .listItem(ordered: ordered, marker: markdownMarker, checked: markdownChecked))
             result.append(contentsOf: textLaidOutItems)
@@ -2772,6 +2797,7 @@ private func layoutList(
                     isCover: false,
                     previousItems: result,
                     isLast: j == blocks.count - 1,
+                    pathPrefix: pathPrefix + [i, j],
                     context: &context
                 )
                 let subLocalMaxY: CGFloat = subItems.map { $0.frame.maxY }.max() ?? 0.0
@@ -2836,7 +2862,8 @@ private func layoutList(
             result.append(.listMarker(InstantPageV2ListMarkerItem(
                 frame: markerFrame,
                 kind: markerInfo.kind,
-                color: context.theme.textCategories.paragraph.color
+                color: context.theme.textCategories.paragraph.color,
+                checkboxPath: itemCheckboxPath
             )))
 
         default:

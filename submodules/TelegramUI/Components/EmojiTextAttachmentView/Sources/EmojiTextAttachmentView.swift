@@ -990,6 +990,14 @@ public final class EmojiTextAttachmentView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
+    /// The template-emoji tint, forwarded to the backing `InlineStickerItemLayer`. Lets a host that
+    /// only has this view (e.g. the rich-text editor's emoji provider) keep the tint synced to the text
+    /// color without knowing the layer. Equivalent to `updateTextColor(_:)`.
+    public var dynamicColor: UIColor? {
+        get { return self.contentLayer.dynamicColor }
+        set { self.contentLayer.dynamicColor = newValue }
+    }
+
     public func updateTextColor(_ textColor: UIColor) {
         self.contentLayer.dynamicColor = textColor
     }

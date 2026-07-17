@@ -43,6 +43,7 @@ swift_library(
         "//submodules/CheckNode",
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
+        "//submodules/ChatTextLinkEditUI",
         "//submodules/UndoUI",
     ],
     visibility = [

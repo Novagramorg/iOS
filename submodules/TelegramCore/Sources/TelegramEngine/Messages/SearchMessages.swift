@@ -537,7 +537,10 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 }
                 |> mapToSignal { (nextRate, lowerBound, inputPeer, inputCommunity) in
                     var flags = flags
+                    var folderId = folderId
                     if inputCommunity != nil {
+                        flags = 0
+                        folderId = nil
                         flags |= (1 << 4)
                     }
                     return account.network.request(Api.functions.messages.searchGlobal(flags: flags, folderId: folderId, community: inputCommunity, q: query, filter: filter, minDate: minDate ?? 0, maxDate: maxDate ?? (Int32.max - 1), offsetRate: nextRate, offsetPeer: inputPeer, offsetId: lowerBound?.id.id ?? 0, limit: limit), automaticFloodWait: false)

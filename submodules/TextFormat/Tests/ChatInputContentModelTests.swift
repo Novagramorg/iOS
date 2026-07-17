@@ -253,6 +253,35 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(decoded, content)
     }
 
+    /// Belt-and-suspenders: a table with NON-DEFAULT colspan/rowspan round-trips through the REAL
+    /// persistence path (`AdaptedPostbox*coder`). The structural test above only exercises the default
+    /// span (1); this pins that the span wire encoding (`Int` bridged as `Int32` — Postbox has no bare-`Int`
+    /// container, which `assertionFailure`s in debug) survives a non-1 value too.
+    func test_codable_tableWithSpans_roundTripsViaAdaptedPostbox() throws {
+        var merged = ChatInputTableCell(runs: [ChatInputRun(text: "M")])
+        merged.colspan = 2
+        merged.rowspan = 2
+        let table = ChatInputTable(
+            columns: [ChatInputColumnSpec(width: 100.0), ChatInputColumnSpec(width: 100.0)],
+            rows: [
+                // Row 0: one 2x2 anchor (covers both columns, both rows) — the other three slots are absent.
+                ChatInputTableRow(height: nil, cells: [merged]),
+                // Row 1: fully covered by the rowspan — no declared cells.
+                ChatInputTableRow(height: nil, cells: []),
+            ]
+        )
+        let content = ChatInputContent(schemaVersion: 3, blocks: [.table(table)])
+        let data = try AdaptedPostboxEncoder().encode(content)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputContent.self, from: data)
+        XCTAssertEqual(decoded, content)
+        // Explicitly confirm the spans survived (not just structural equality).
+        guard case .table(let out)? = decoded.blocks.first, let cell = out.rows.first?.cells.first else {
+            return XCTFail("expected a table with a spanning cell")
+        }
+        XCTAssertEqual(cell.colspan, 2)
+        XCTAssertEqual(cell.rowspan, 2)
+    }
+
     // MARK: - Per-cell H+V alignment (ChatInputTableCell)
 
     func testTableCellAlignmentRoundTrips() throws {
@@ -539,5 +568,49 @@ final class ChatInputContentModelTests: XCTestCase {
         let item = ChatInputMediaItem(media: image, kind: .image, naturalSize: ChatInputSize(width: 1, height: 1))
         let data = try AdaptedPostboxEncoder().encode(item)
         XCTAssertFalse(try AdaptedPostboxDecoder().decode(ChatInputMediaItem.self, from: data).isSpoiler)
+    }
+
+    // MARK: - ChatInputTableCell.isHeader / ChatInputTableRow derived header
+
+    func test_chatInputTableRow_headerIsDerivedFromCells_andNotEncoded() throws {
+        let hdr = ChatInputTableCell(runs: [ChatInputRun(text: "H")], isHeader: true)
+        let body = ChatInputTableCell(runs: [ChatInputRun(text: "B")])
+        XCTAssertTrue(ChatInputTableRow(cells: [hdr]).isHeader)
+        XCTAssertFalse(ChatInputTableRow(cells: [hdr, body]).isHeader)
+        let data = try JSONEncoder().encode(ChatInputTableRow(isHeader: true, cells: [ChatInputTableCell(runs: [])]))
+        // `ChatInputTableCell`'s synthesized `encode` always emits its own `isHeader` key, so a naive
+        // substring check on the whole payload would false-positive. Assert instead that the ROW object
+        // itself (the top-level JSON object) has no `isHeader` key — the per-cell keys are expected.
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertFalse(json.keys.contains("isHeader"))
+        XCTAssertTrue(json.keys.contains("cells"))
+    }
+
+    func test_chatInputTableRow_legacyHeader_migratesIntoCells() throws {
+        let json = #"{"cells":[{"runs":[]},{"runs":[]}],"isHeader":true}"#.data(using: .utf8)!
+        let row = try JSONDecoder().decode(ChatInputTableRow.self, from: json)
+        XCTAssertTrue(row.cells.allSatisfy { $0.isHeader })
+        XCTAssertTrue(row.isHeader)
+    }
+
+    func test_chatInputTableRow_initHeaderParam_seedsCells() {
+        let row = ChatInputTableRow(isHeader: true, cells: [ChatInputTableCell(runs: []), ChatInputTableCell(runs: [])])
+        XCTAssertTrue(row.cells.allSatisfy { $0.isHeader })
+    }
+
+    // MARK: - ChatInputTableCell.colspan / rowspan
+
+    func test_chatInputTableCell_spanDefaultsAndRoundTrips() throws {
+        XCTAssertEqual(ChatInputTableCell(runs: []).colspan, 1)
+        XCTAssertEqual(ChatInputTableCell(runs: []).rowspan, 1)
+        var c = ChatInputTableCell(runs: []); c.colspan = 2; c.rowspan = 3
+        let back = try JSONDecoder().decode(ChatInputTableCell.self, from: try JSONEncoder().encode(c))
+        XCTAssertEqual(back.colspan, 2); XCTAssertEqual(back.rowspan, 3)
+    }
+
+    func test_chatInputTableCell_legacyWithoutSpan_decodesToOne() throws {
+        let json = #"{"runs":[]}"#.data(using: .utf8)!
+        let c = try JSONDecoder().decode(ChatInputTableCell.self, from: json)
+        XCTAssertEqual(c.colspan, 1); XCTAssertEqual(c.rowspan, 1)
     }
 }

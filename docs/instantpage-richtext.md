@@ -122,8 +122,17 @@ Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026
 composer (`ChatInputContentInstantPage`) and the article editor (`RichTextEditorMessageConversion`'s
 `InstantPageBuilder`) converters — the first editor/rich-message path to produce a `.collage` block
 (needed zero codec work; it was already first-class through Postbox/FlatBuffers/upload). A container of
-exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before. `.slideshow`
-remains produced only by real web Instant View articles.
+exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before.
+
+**`.slideshow` is now editor-produced too (added 2026-07-17).** A multi-media container carries a
+`displayMode` (`.mosaic` default / `.slideshow`; mirrored `MediaBlock.displayMode` ↔
+`ChatInputMedia.displayMode`, Codable back-compat → `.mosaic`). Both forward converters branch on it:
+`.mosaic → .collage`, `.slideshow → .slideshow` (same inner `.image`/`.video` blocks); the reverse
+`chatInputBlocks(fromInstantPageBlocks:)` gained a `.slideshow` arm (sharing the collage arm's item
+helper) so the mode round-trips on edit. The mode is toggled in the **article editor** via a top-right
+button (mosaic↔slideshow); the composer stays mosaic-only. So `.slideshow` is now produced both by real
+web Instant View articles and by editor-authored slideshow albums. Design + plan:
+`docs/superpowers/{specs,plans}/2026-07-17-richtext-media-layout-toggle*`.
 
 ### Where things live
 
@@ -437,6 +446,29 @@ Spec: [`docs/superpowers/specs/2026-05-27-instantpage-list-checkbox-design.md`](
 - **V2 `CheckNode` is hosted directly in a plain `UIView`**, not an ASDisplayNode tree, so `checkNode.displaysAsynchronously = false` is set to avoid a first-draw blank flash. (The V2 pageView is now REUSED across streaming chunks via stable-id diffing — see the AI streaming section; `CheckNode` views survive across chunks as long as their list item is present.) `InstantPageV2CheckboxColors` (background←`panelAccentColor`, stroke←`pageBackgroundColor`, border←`controlColor`) is carried on the `.checklist` payload and mirrors the V1 `instantPageChecklistMarkerTheme`.
 - **Forward parser keeps `[ ]` detection but routes to `checked`.** `markdownApplyTaskListMarker`/`markdownStrippingTaskListMarker`/`markdownTaskListMarker` still strip the marker from the item text; the state flows into `checked` while ordered items keep their real `"\(ordinal)"` number. The reverse converter emits lowercase `[x]` / `[ ]`, which the forward `hasPrefix` guards re-parse — that is the round-trip contract.
 - **The enum-arity change is compile-enforced.** Adding the third associated value broke every `.text`/`.blocks` construction/destructure; the full build is the completeness gate. Read-only consumers outside the core set exist (`BrowserInstantPageContent.swift`, `CachedFaqInstantPage.swift`) — grep `\.(text|blocks)\(` repo-wide when touching the enum again.
+
+### Tap-to-toggle (editable rich messages)
+
+Task-list checkboxes in a rendered rich message are **interactive when the message is editable**: tapping one flips it and persists the change by editing the message.
+
+Where things live:
+
+| File | Responsibility |
+|---|---|
+| `submodules/TelegramCore/Sources/InstantPageCheckboxToggle.swift` | Pure transform `InstantPage.togglingCheckbox(at: [Int], to: Bool) -> InstantPage` — rebuilds the block tree following a structural path and flips the target list item's `checked` (no-op on an unresolvable/non-checkbox path). |
+| `submodules/InstantPageUI/Sources/InstantPageV2Layout.swift` | `InstantPageV2ListMarkerItem.checkboxPath: [Int]?`; a `pathPrefix: [Int]` threaded through `layoutBlockSequence`/`layoutBlock`/`layoutList`/`layoutDetails`/`layoutBlockQuote` stamps each `.checklist` marker with its path. |
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2ListMarkerView` installs a tap gesture when `interactive`, flips its own `CheckNode` optimistically, and fires `onCheckboxTapped(path, newValue)`; `InstantPageV2View.checkboxTapped` routes it up (mirrors `detailsTapped`). |
+| `submodules/TelegramUI/Components/ChatControllerInteraction/Sources/ChatControllerInteraction.swift` | `canEditMessageRichText: (EngineRawMessage) -> Bool` (sync gate, mirrors `canSetupReply`) + `toggleMessageRichTextCheckbox: (EngineMessage.Id, [Int], Bool) -> Void` (the edit action). Both have no-op defaults so only the real chat wires them. |
+| `submodules/TelegramUI/Sources/ChatController.swift` | Implements both closures. The toggle looks up the message, re-checks `canEditMessage`, applies `togglingCheckbox`, and submits via `pendingUpdateMessageManager.add(text: "", richText:)` — the composer's rich-edit path (mirrors the native-todo `requestToggleTodoMessageItem`). |
+| `submodules/TelegramUI/Components/Chat/.../ChatMessageRichDataBubbleContentNode.swift` | `checkboxesInteractive(item:resolved:)` gate + sets `pageView.checkboxTapped` per apply. |
+
+Non-obvious invariants:
+
+- **Checkbox identity is a structural `[Int]` path**, not an ordinal: each element indexes the current container's children — block-array index at page/`.details`/`.blockQuote`/list-item-`.blocks` levels; item index at `.list` level. The layout stamping (`InstantPageV2Layout`) and the toggle walker (`InstantPageCheckboxToggle`) MUST keep identical semantics — they were built and reviewed as a matched pair. Decoupled from `<details>` expand/collapse state.
+- **The path is absolute-from-root only because every `layoutBlockSequence` that can reach a list is entered with a correct prefix.** The two secondary `layoutBlockSequence` call sites (table cells, hard-coded `[.paragraph]`; and the details title) contain no lists, so no checkbox is produced there; a `kind != .cell` guard in `layoutList` is belt-and-suspenders against future misrouting.
+- **The toggle applies to `attribute.instantPage`, so taps must only ever fire against that page.** The bubble's `checkboxesInteractive` gate enforces this: interactive only when `resolved.key` is `.original` AND `resolved.instantPage === attribute.instantPage` (class identity — excludes the show-more `fullInstantPage` rendering, which shares the `.original` key but is a different `InstantPage` object) AND `canEditMessageRichText(item.message)`. Translations (`.translated`) and in-flight pending edits (`.pendingEdit`) are inert. Non-editable messages (incoming, past the edit window) are inert — and AI-streamed rich messages are incoming, hence never tappable.
+- **Optimistic flip, model supersedes.** The marker view flips its own `CheckNode` on tap; the pending/edited attribute re-render then supersedes (or, on failure, reverts, since the model was unchanged). Known minor edges of this state-free optimism: (1) an unrelated `update()` before the pending edit lands rebuilds the marker from the old `checked`, briefly reverting the visual; (2) a rapid double-tap re-reads the still-stale `checked` and re-sends the same value rather than toggling back — the pending-edit manager coalesces, so the net state is consistent, just not a double-toggle. Both are acceptable given the edit lands promptly.
+- **Gating uses closures because `canEditMessage` is `internal` to the `TelegramUI` module** and the rich-data bubble lives in a separate component module that cannot call it. The two closures bridge the boundary; **their init-parameter order must match the `ChatController` call-site order** (Swift requirement) — they sit between `displayTodoToggleUnavailable` and `openStarsPurchase`.
 
 ## InstantPageBlock.blockQuote nested blocks
 

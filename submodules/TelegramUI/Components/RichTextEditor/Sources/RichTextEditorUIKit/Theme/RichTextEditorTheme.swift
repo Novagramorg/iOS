@@ -35,6 +35,12 @@ public struct RichTextEditorTheme {
     public var inlineCodeBackground: UIColor
     /// IME marked-text (composing) underline. (Was hardcoded `.label`.)
     public var markedTextUnderline: UIColor
+    /// Misspelling underline (the red spelling squiggle). Own-drawn; render-only. (Was hardcoded `.systemRed`.)
+    public var misspellingUnderline: UIColor
+    /// Grammar-error underline (native `.grammar` flags). Own-drawn; render-only.
+    public var grammarUnderline: UIColor
+    /// Autocorrect/correction underline (native `.correction` flags — carry alternatives). Own-drawn; render-only.
+    public var correctionUnderline: UIColor
     /// Spoiler particle ("dust") color. (Was hardcoded `.secondaryLabel`.)
     public var spoilerDust: UIColor
     /// Quote AUTHOR (attribution) line text color — pull-quote and block-quote author runs. Render-only,
@@ -61,7 +67,10 @@ public struct RichTextEditorTheme {
         containerPlaceholder: UIColor = .placeholderText,
         shadowCursor: UIColor = UIColor(white: 0.7, alpha: 1.0),
         quoteAuthorText: UIColor? = nil,
-        quoteAuthorPlaceholder: UIColor? = nil
+        quoteAuthorPlaceholder: UIColor? = nil,
+        misspellingUnderline: UIColor = .systemRed,
+        grammarUnderline: UIColor = .systemGreen,
+        correctionUnderline: UIColor = UIColor(red: 153.0/255.0, green: 172.0/255.0, blue: 235.0/255.0, alpha: 1.0)
     ) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
@@ -78,6 +87,9 @@ public struct RichTextEditorTheme {
         self.shadowCursor = shadowCursor
         self.quoteAuthorText = quoteAuthorText ?? secondaryText
         self.quoteAuthorPlaceholder = quoteAuthorPlaceholder ?? placeholder
+        self.misspellingUnderline = misspellingUnderline
+        self.grammarUnderline = grammarUnderline
+        self.correctionUnderline = correctionUnderline
     }
 
     /// Reproduces the editor's prior hardcoded colors exactly (see the design doc's site inventory).

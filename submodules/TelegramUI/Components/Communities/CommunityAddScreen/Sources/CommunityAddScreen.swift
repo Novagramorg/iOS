@@ -16,6 +16,7 @@ import BundleIconComponent
 import ListActionItemComponent
 import ListSectionComponent
 import AlertComponent
+import PresentationDataUtils
 import ItemListUI
 
 private enum CommunityAddVisibility: Equatable {
@@ -502,19 +503,22 @@ private final class CommunityAddScreenComponent: Component {
     let context: AccountContext
     let subject: CommunityAddScreenSubject
     let peerId: EnginePeer.Id
-    let completed: () -> Void
+    let requiresConfirmation: Bool
+    let completed: (Bool) -> Void
     let draftCompleted: (Bool) -> Void
 
     init(
         context: AccountContext,
         subject: CommunityAddScreenSubject,
         peerId: EnginePeer.Id,
-        completed: @escaping () -> Void,
+        requiresConfirmation: Bool,
+        completed: @escaping (Bool) -> Void,
         draftCompleted: @escaping (Bool) -> Void
     ) {
         self.context = context
         self.subject = subject
         self.peerId = peerId
+        self.requiresConfirmation = requiresConfirmation
         self.completed = completed
         self.draftCompleted = draftCompleted
     }
@@ -527,6 +531,9 @@ private final class CommunityAddScreenComponent: Component {
             return false
         }
         if lhs.peerId != rhs.peerId {
+            return false
+        }
+        if lhs.requiresConfirmation != rhs.requiresConfirmation {
             return false
         }
         return true
@@ -592,10 +599,7 @@ private final class CommunityAddScreenComponent: Component {
         }
 
         private func performAdd() {
-            guard let component = self.component else {
-                return
-            }
-            if self.isSaving || self.peer == nil {
+            guard let component = self.component, let peer = self.peer, !self.isSaving else {
                 return
             }
 
@@ -607,12 +611,43 @@ private final class CommunityAddScreenComponent: Component {
                 return
             }
 
+            if !component.requiresConfirmation {
+                self.performExistingAdd()
+                return
+            }
+
+            guard let environment = self.environment, let controller = environment.controller() else {
+                return
+            }
+            let alertText: String
+            if case let .channel(channel) = peer, case .broadcast = channel.info {
+                alertText = environment.strings.Community_Add_Confirm_TextChannel
+            } else if case .user = peer {
+                alertText = environment.strings.Community_Add_Confirm_TextBot
+            } else {
+                alertText = environment.strings.Community_Add_Confirm_TextGroup
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: nil,
+                text: alertText,
+                actions: [
+                    TextAlertAction(type: .genericAction, title: environment.strings.Common_Cancel, action: {}),
+                    TextAlertAction(type: .defaultAction, title: environment.strings.Community_Add_Confirm_Add, action: { [weak self] in
+                        self?.performExistingAdd()
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func performExistingAdd() {
+            guard let component = self.component, self.peer != nil, !self.isSaving, case let .existing(communityId) = component.subject else {
+                return
+            }
+
             self.isSaving = true
             self.state?.updated(transition: .immediate)
 
-            guard case let .existing(communityId) = component.subject else {
-                return
-            }
             self.actionDisposable.set((component.context.engine.peers.toggleCommunityPeerLink(
                 communityId: communityId,
                 peerId: component.peerId,
@@ -625,7 +660,7 @@ private final class CommunityAddScreenComponent: Component {
                 self.isSaving = false
                 if case .requestCreated = error {
                     self.dismiss(animated: true, completion: {
-                        component.completed()
+                        component.completed(false)
                     })
                 } else if case .serverProvided = error {
                     self.state?.updated(transition: .spring(duration: 0.35))
@@ -654,7 +689,7 @@ private final class CommunityAddScreenComponent: Component {
                 }
                 self.isSaving = false
                 self.dismiss(animated: true, completion: {
-                    component.completed()
+                    component.completed(true)
                 })
             }))
         }
@@ -750,11 +785,27 @@ private final class CommunityAddScreenComponent: Component {
 }
 
 public final class CommunityAddScreen: ViewControllerComponentContainer {
+    public convenience init(
+        context: AccountContext,
+        communityId: EnginePeer.Id,
+        peerId: EnginePeer.Id,
+        completed: @escaping (Bool) -> Void
+    ) {
+        self.init(
+            context: context,
+            communityId: communityId,
+            peerId: peerId,
+            requiresConfirmation: false,
+            completed: completed
+        )
+    }
+
     public init(
         context: AccountContext,
         communityId: EnginePeer.Id,
         peerId: EnginePeer.Id,
-        completed: @escaping () -> Void
+        requiresConfirmation: Bool,
+        completed: @escaping (Bool) -> Void
     ) {
         super.init(
             context: context,
@@ -762,6 +813,7 @@ public final class CommunityAddScreen: ViewControllerComponentContainer {
                 context: context,
                 subject: .existing(communityId: communityId),
                 peerId: peerId,
+                requiresConfirmation: requiresConfirmation,
                 completed: completed,
                 draftCompleted: { _ in }
             ),
@@ -778,7 +830,7 @@ public final class CommunityAddScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peerId: EnginePeer.Id,
         initialVisibility: Bool,
-        completed: @escaping (Bool) -> Void
+        draftCompleted: @escaping (Bool) -> Void
     ) {
         super.init(
             context: context,
@@ -786,8 +838,9 @@ public final class CommunityAddScreen: ViewControllerComponentContainer {
                 context: context,
                 subject: .draft(initialVisibility: initialVisibility),
                 peerId: peerId,
-                completed: {},
-                draftCompleted: completed
+                requiresConfirmation: false,
+                completed: { _ in },
+                draftCompleted: draftCompleted
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,

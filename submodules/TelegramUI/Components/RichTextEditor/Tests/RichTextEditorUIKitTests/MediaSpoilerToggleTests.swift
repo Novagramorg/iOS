@@ -8,7 +8,7 @@ final class MediaSpoilerToggleTests: XCTestCase {
     /// A canvas seeded with a single-image media block (`BlockID("b1")`), mirroring `MediaControlTests`' setup.
     private func canvasWithSingleImageBlock() -> DocumentCanvasView {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), mediaID: "m1", kind: .image,
                               naturalSize: Size2D(width: 100, height: 100))),
@@ -20,7 +20,7 @@ final class MediaSpoilerToggleTests: XCTestCase {
     /// A canvas seeded with a 2-item (album) media block.
     private func canvasWithAlbumBlock() -> DocumentCanvasView {
         let v = DocumentCanvasView()
-        v.mediaViewProvider = { _, _, _ in nil }
+        v.mediaViewProvider = { _, _, _, _ in nil }
         v.setBlocks([
             .media(MediaBlock(id: BlockID("b1"), items: [
                 MediaItem(mediaID: "m1", kind: .image, naturalSize: Size2D(width: 100, height: 100)),

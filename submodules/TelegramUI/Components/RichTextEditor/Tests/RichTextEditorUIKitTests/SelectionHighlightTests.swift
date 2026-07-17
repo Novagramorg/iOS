@@ -123,7 +123,7 @@ final class SelectionHighlightTests: XCTestCase {
         func render(selected: Bool) -> [UInt8] {
             let c = DocumentCanvasView()
             c.emojiViewProvider = { _, size in
-                let v = UIView(frame: CGRect(origin: .zero, size: size)); v.backgroundColor = .black; return v }
+                let v = TestEmojiView(frame: CGRect(origin: .zero, size: size)); v.backgroundColor = .black; return v }
             c.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "ab")]))], width: 320)
             c.frame = CGRect(x: 0, y: 0, width: 320, height: 200); c.layoutIfNeeded()
             c.simulateParentLayout()   // parent re-lays-out on the emoji insert's content-size notification, so the emoji view is placed

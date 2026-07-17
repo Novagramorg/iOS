@@ -155,6 +155,7 @@ public struct Namespaces {
         public static let cachedGiftUpgradesAttributes: Int8 = 52
         public static let cachedCloudAITextStyles: Int8 = 53
         public static let cachedCommunityPeerLinkRequests: Int8 = 54
+        public static let richTextComposerDrafts: Int8 = 55
     }
     
     public struct UnorderedItemList {

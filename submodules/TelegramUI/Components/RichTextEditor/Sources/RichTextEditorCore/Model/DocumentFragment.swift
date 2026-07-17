@@ -33,8 +33,10 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             // source table's IDs verbatim, and block views are keyed by BlockID, so a duplicate-ID paste would
             // steal the original table's view and make the original disappear.
             return .table(TableBlock(id: .generate(), columns: t.columns, rows: t.rows.map { row in
-                Row(id: .generate(), height: row.height, isHeader: row.isHeader, cells: row.cells.map { cell in
-                    Cell(id: .generate(), blocks: regeneratingIDs(cell.blocks), background: cell.background)
+                Row(id: .generate(), height: row.height, cells: row.cells.map { cell in
+                    Cell(id: .generate(), blocks: regeneratingIDs(cell.blocks), background: cell.background,
+                         horizontalAlignment: cell.horizontalAlignment, verticalAlignment: cell.verticalAlignment,
+                         isHeader: cell.isHeader)
                 })
             }))
         case .media(let m):

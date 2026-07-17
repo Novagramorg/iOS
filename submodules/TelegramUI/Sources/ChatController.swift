@@ -358,7 +358,17 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var selectPollOptionFeedback: HapticFeedback?
     
     var updateMessageTodoDisposables: DisposableDict<MessageId>?
-    
+
+    // Rich-message checkbox tap-to-toggle. A running toggled page per message accumulates rapid
+    // taps (so an earlier toggle is never dropped by a later one computed against stale state), and
+    // a short debounce coalesces a burst into a single message edit. The completion observer clears
+    // the accumulator once the message's pending edit settles, so a later toggle re-bases from fresh
+    // server state (picking up composer/remote edits).
+    private var richTextCheckboxAccumulators: [MessageId: InstantPage] = [:]
+    private var richTextCheckboxDebounceTimers: [MessageId: SwiftSignalKit.Timer] = [:]
+    private var richTextCheckboxCompletionObserver: Disposable?
+    private let richTextCheckboxDebounceInterval: Double = 0.35
+
     var resolveUrlDisposable: MetaDisposable?
     
     var contextQueryStates: [ChatPresentationInputQueryKind: (ChatPresentationInputQuery, Disposable)] = [:]
@@ -5767,6 +5777,49 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 )
                 self.present(controller, in: .current)
             }
+        }, canEditMessageRichText: { [weak self] message in
+            guard let self else {
+                return false
+            }
+            return canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message)
+        }, toggleMessageRichTextCheckbox: { [weak self] messageId, path, value in
+            guard let self else {
+                return
+            }
+            guard let message = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage() else {
+                return
+            }
+            guard canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message) else {
+                return
+            }
+            guard let attribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute else {
+                return
+            }
+            // Start the completion observer before registering an accumulator, so its initial
+            // (empty) emission can't clear what we are about to add.
+            self.setupRichTextCheckboxCompletionObserverIfNeeded()
+            // Base off the running accumulator when mid-burst so a rapid earlier toggle is never
+            // dropped by a later one; otherwise start from fresh server state.
+            let basePage = self.richTextCheckboxAccumulators[messageId] ?? attribute.instantPage
+            let newPage = basePage.togglingCheckbox(at: path, to: value)
+            self.richTextCheckboxAccumulators[messageId] = newPage
+
+            if self.selectPollOptionFeedback == nil {
+                self.selectPollOptionFeedback = HapticFeedback()
+            }
+            if value {
+                self.selectPollOptionFeedback?.success()
+            } else {
+                self.selectPollOptionFeedback?.impact(.medium)
+            }
+
+            // Debounce: coalesce a rapid burst of taps into one edit once tapping quiesces.
+            self.richTextCheckboxDebounceTimers[messageId]?.invalidate()
+            let timer = SwiftSignalKit.Timer(timeout: self.richTextCheckboxDebounceInterval, repeat: false, completion: { [weak self] in
+                self?.flushRichTextCheckboxEdit(messageId: messageId)
+            }, queue: .mainQueue())
+            self.richTextCheckboxDebounceTimers[messageId] = timer
+            timer.start()
         }, openStarsPurchase: { [weak self] amount in
             self?.interfaceInteraction?.openStarsPurchase(amount)
         }, openRankInfo: { [weak self] peer, role, rank in
@@ -6862,11 +6915,62 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         fatalError("init(coder:) has not been implemented")
     }
     
+    private func flushRichTextCheckboxEdit(messageId: MessageId) {
+        self.richTextCheckboxDebounceTimers.removeValue(forKey: messageId)?.invalidate()
+        guard let page = self.richTextCheckboxAccumulators[messageId] else {
+            return
+        }
+        guard let message = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage() else {
+            // No `add` will fire (so the completion observer won't run) — drop the accumulator here,
+            // otherwise it lingers stale and a later toggle could revert an intervening edit.
+            self.richTextCheckboxAccumulators.removeValue(forKey: messageId)
+            return
+        }
+        guard canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message) else {
+            self.richTextCheckboxAccumulators.removeValue(forKey: messageId)
+            return
+        }
+        guard let attribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute else {
+            self.richTextCheckboxAccumulators.removeValue(forKey: messageId)
+            return
+        }
+        // Preserve the message's current layout attributes so a checkbox toggle changes nothing but
+        // the checkbox (matching the composer's rich-edit; these are typically absent on a rich
+        // message, so this is defensive).
+        let invertMediaAttribute = message.attributes.first(where: { $0 is InvertMediaMessageAttribute }) as? InvertMediaMessageAttribute
+        let newAttribute = RichTextMessageAttribute(instantPage: page, fullInstantPage: attribute.fullInstantPage)
+        self.context.account.pendingUpdateMessageManager.add(messageId: messageId, text: "", media: .keep, entities: nil, richText: newAttribute, inlineStickers: [:], webpagePreviewAttribute: message.webpagePreviewAttribute, invertMediaAttribute: invertMediaAttribute, disableUrlPreview: false)
+    }
+
+    private func setupRichTextCheckboxCompletionObserverIfNeeded() {
+        if self.richTextCheckboxCompletionObserver != nil {
+            return
+        }
+        self.richTextCheckboxCompletionObserver = (self.context.account.pendingUpdateMessageManager.updatingMessageMedia
+        |> deliverOnMainQueue).startStrict(next: { [weak self] pendingMap in
+            guard let self else {
+                return
+            }
+            for messageId in Array(self.richTextCheckboxAccumulators.keys) {
+                // Once the message is neither pending nor has a queued (debounced) toggle, the server
+                // state is authoritative — drop the accumulator so the next toggle re-bases from it.
+                if pendingMap[messageId] == nil && self.richTextCheckboxDebounceTimers[messageId] == nil {
+                    self.richTextCheckboxAccumulators.removeValue(forKey: messageId)
+                }
+            }
+        })
+    }
+
     deinit {
         let _ = ChatControllerCount.modify { value in
             return value - 1
         }
-        
+
+        self.richTextCheckboxCompletionObserver?.dispose()
+        for (_, timer) in self.richTextCheckboxDebounceTimers {
+            timer.invalidate()
+        }
+
         self.historyStateDisposable?.dispose()
         self.messageIndexDisposable.dispose()
         self.navigationActionDisposable.dispose()
@@ -6967,6 +7071,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return
         }
         self.mode = .standard(.default)
+        self.updateRightNavigationButtons(presentationInterfaceState: self.presentationInterfaceState.updatedMode(self.mode), transition: .immediate)
         let completion = self.dismissPreviewing?(true)
         
         let initialLayout = self.validLayout
@@ -7006,7 +7111,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let nodes = [
                 navigationBar.backButtonNode,
                 navigationBar.backButtonArrow,
-                navigationBar.badgeNode
+                navigationBar.badgeNode,
+                navigationBar.rightButtonNode
             ]
             for node in nodes {
                 node.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)

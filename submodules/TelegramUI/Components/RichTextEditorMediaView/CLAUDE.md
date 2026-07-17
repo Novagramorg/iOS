@@ -112,8 +112,41 @@ Spec/plan in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-add-button
   (`moreButtonPressed` is an empty stub) and tap / long-press (open / preview / context menu).
 - **Mosaic — implemented, see "Mosaic containers" above.** The single-medium component was built
   composable (no editor-seam coupling) specifically so the mosaic wrapper could reuse it directly, which
-  is exactly what landed. **Slideshow** (a swipeable carousel, distinct from the grid mosaic) is still
-  not implemented for editor-authored containers — grouping always renders as a mosaic today.
+  is exactly what landed.
+- **Slideshow — implemented (2026-07-17), see "Mosaic ↔ slideshow toggle" below.** A multi-media block
+  (`items.count >= 2`) can be toggled between the mosaic grid and a swipeable slideshow carousel; grouping
+  no longer always renders as a mosaic.
+
+## Mosaic ↔ slideshow toggle (photo/video containers, added 2026-07-17)
+
+A per-block `MediaBlock.displayMode` (`.mosaic` / `.slideshow`, default `.mosaic`, mirrored on the
+composer currency `ChatInputMedia.displayMode`) drives whether a `items.count >= 2` container renders as
+the packed `MosaicLayout` grid (sent as InstantPage `.collage`) or a swipeable carousel with paging dots
+(sent as `.slideshow` — the InstantPage V2 slideshow renderer already existed; the editor now *produces*
+it). **Article editor only** (`showsControls && mosaicContext != nil && count >= 2`); the composer stays
+mosaic-only.
+
+- **In-editor render (`MediaItemNodeView`):** `updatePhotoVideoLayout` dispatches to `updateMosaic` or
+  `updateSlideshow` by mode. Both reuse the SAME pooled `mosaicCells` via `applyCells(into:frames:…)` —
+  the slideshow path re-parents the cell hosts into a `HorizontalPagingScrollView` (one full-width page
+  each) + a `Display.PageControlNode` at `y = height - 20`; `teardownSlideshowChrome` moves cells back to
+  `self` before removing the scroll view so no fetch is torn down (no re-flash across a toggle).
+  `HorizontalPagingScrollView` begins its pan only for predominantly-horizontal drags so the editor's
+  vertical scroll still wins. `hitTest` order: add/toggle buttons → per-cell controls → the scroll view
+  (for paging).
+- **Toggle button:** a 36×36 glass button left of "+", shown only for a `count >= 2` article-editor
+  container; icon is `rectangle.stack` (while mosaic) / `square.grid.2x2` (while slideshow) — it depicts
+  the layout you switch TO. Fires `RichTextMediaControlKind.toggleLayout` through the media-control seam →
+  `MediaControlRequest.toggleLayout` → `DocumentCanvasView.toggleMediaDisplayMode(blockID:)` (one undo
+  step, rebuild-in-place like `toggleMediaSpoiler`). The composer's control switch handles `.toggleLayout`
+  as a no-op.
+- **Box height:** `MediaBlockBox.slideshowSize(maxWidth:)` = tallest item fitted to width, capped at
+  `min(1000, width)`; `nodeSize`/caret stay caption-derived.
+- **Reuse signature:** `syncMediaItemViews` folds `displayMode.rawValue` into the media-view items
+  signature, so a toggle re-provides the view; the provider seam is 4-param
+  `(items, blockID, displayMode, existing)`.
+
+Spec/plan in-tree: `docs/superpowers/{specs/2026-07-17-richtext-media-layout-toggle-design.md,plans/2026-07-17-richtext-media-layout-toggle.md}`.
 
 ## History
 

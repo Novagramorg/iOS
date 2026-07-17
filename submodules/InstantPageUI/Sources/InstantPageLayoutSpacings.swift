@@ -150,9 +150,9 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, fi
             } else if case .thinking = upper {
                 return 2.0
             } else if case .image = upper, fitToWidth {
-                return 2.0
+                return 0.0
             } else if case .video = upper, fitToWidth {
-                return 2.0
+                return 0.0
             } else if case .collage = upper, fitToWidth {
                 return 0.0
             } else if case .slideshow = upper, fitToWidth {

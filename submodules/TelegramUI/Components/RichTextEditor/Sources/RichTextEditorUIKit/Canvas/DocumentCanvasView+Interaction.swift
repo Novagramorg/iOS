@@ -256,6 +256,7 @@ extension DocumentCanvasView {
                 switch kind {
                 case .rows(let r): selectTableRows(r)
                 case .columns(let c): selectTableColumns(c)
+                case .cells: break   // Phase 2c-T3/T4: tapping a cell-rect handle lands with gestures (T4) — tableHandleTap() never returns .cells today
                 }
             case .menu:
                 // 2nd tap on the already-selected handle → ask the host to present the structural menu.
@@ -277,6 +278,12 @@ extension DocumentCanvasView {
             handleImageTap(img, wasMenuVisible: wasMenuVisible, wasFirstResponder: wasFirstResponder)
             return
         }
+        // A tap that lands on a spelling-flagged word toggles its correction menu (present the guesses, or close
+        // them on a repeat tap of the same word — see `beginSpellingCorrection`). This fires even on a FOCUSING
+        // tap: the field was just made first responder above, and a tap directly on a red word means "correct
+        // it", so the guesses appear on the first tap rather than the tap only placing the caret. A tap that
+        // misses every flagged word returns false and falls through to the normal caret/selection handling below.
+        if beginSpellingCorrection(at: point) { return }
         clearStructuralSelections()                        // a non-handle, non-image tap clears both structural selections
         switch tapOutcome(forResolvedPosition: p, point: point) {
         case .toggleMenu:
@@ -438,7 +445,13 @@ extension DocumentCanvasView {
         let pos = closestGlobalPosition(to: point)
         switch g.state {
         case .began:
-            if tableSelection != nil, let end = tableResizeKnob(at: point) {
+            if let corner = tableResizeCornerKnob(at: point) {
+                // A `.cells` corner-knob drag — either a committed `.cells` selection's knob, or the
+                // focused-cell "fake" chrome's (no committed selection yet; `extendCellSelection`'s first
+                // call promotes it). Checked before the row/column knob (which requires `tableSelection !=
+                // nil`) so the fake-chrome case is reachable at all.
+                draggingTableCornerKnob = corner
+            } else if tableSelection != nil, let end = tableResizeKnob(at: point) {
                 draggingTableKnob = end                       // table range-knob drag
             } else {
                 draggingEndpoint = nearerSelectionEndpoint(toGlobal: pos)   // text-selection handle drag
@@ -455,7 +468,9 @@ extension DocumentCanvasView {
                 }
             }
         case .changed:
-            if let end = draggingTableKnob {
+            if let corner = draggingTableCornerKnob {
+                extendCellSelection(corner: corner, toward: point)
+            } else if let end = draggingTableKnob {
                 extendTableSelection(end: end, toward: point)
             } else if let end = draggingEndpoint {
                 let target = selectionDragPosition(forTouch: point)   // touch + captured grab offset
@@ -466,19 +481,21 @@ extension DocumentCanvasView {
         case .ended, .cancelled, .failed:
             stopDragAutoScroll()
             endCoalescedSelectionDrag()   // sync the OS to the final selection before presenting the menu
-            if draggingTableKnob != nil || draggingEndpoint != nil {
-                presentMenuAfterSelectionDrag(tableKnob: draggingTableKnob != nil)
+            if draggingTableKnob != nil || draggingTableCornerKnob != nil || draggingEndpoint != nil {
+                presentMenuAfterSelectionDrag(tableKnob: draggingTableKnob != nil || draggingTableCornerKnob != nil)
             }
             draggingTableKnob = nil
+            draggingTableCornerKnob = nil
             draggingEndpoint = nil
         default:
             break
         }
     }
 
-    /// The drag-end menu decision (extracted for testability). A table resize-KNOB drag extended a row/column
-    /// STRUCTURAL selection → ask the host to present the structural menu (its `menuFor:` delegate no longer
-    /// handles the structural case). A text selection-HANDLE drag presents the normal edit menu.
+    /// The drag-end menu decision (extracted for testability). A table resize-KNOB drag (row/column range OR
+    /// a `.cells` corner) extended a STRUCTURAL selection → ask the host to present the structural menu (its
+    /// `menuFor:` delegate no longer handles the structural case). A text selection-HANDLE drag presents the
+    /// normal edit menu.
     func presentMenuAfterSelectionDrag(tableKnob: Bool) {
         if tableKnob {
             if let request = tableStructuralMenuRequest() { onRequestTableStructuralMenu?(request) }
@@ -536,7 +553,10 @@ extension DocumentCanvasView: UIGestureRecognizerDelegate {
     /// the canvas handle-pan gate (returns this) and the inner table scroll gate (begins only when this is
     /// FALSE), so a handle/knob drag always wins near a grip — gate-only, no require(toFail:).
     func isSelectionDragTouch(_ point: CGPoint) -> Bool {
-        if tableSelection != nil, tableResizeKnob(at: point) != nil { return true }   // a table knob drag
+        // A `.cells` corner-knob drag — committed `.cells` selection OR the focused-cell fake chrome (no
+        // committed selection yet); `tableResizeCornerKnob` covers both, so it isn't gated on `tableSelection`.
+        if tableResizeCornerKnob(at: point) != nil { return true }
+        if tableSelection != nil, tableResizeKnob(at: point) != nil { return true }   // a table row/column knob drag
         guard selFrom != selTo else { return false }          // no text selection → no handle drag → a drag scrolls
         let tol: CGFloat = 22
         let startRect = caretRect(for: DocumentTextPosition(selFrom))

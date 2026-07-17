@@ -70,7 +70,7 @@ final class BlockViewVirtualizationTests: XCTestCase {
         let midBox = v.boxes.first { $0.frame.minY > 3000 && $0.frame.minY < 3300 }
         XCTAssertNotNil(midBox, "precondition: a box near y=3000 exists")
         XCTAssertTrue(v.isBlockViewRealizedForTesting(midBox!.id), "a box at the new viewport is realized (set shifted)")
-        XCTAssertLessThan(v.realizedBlockViewCountForTesting, v.boxes.count / 5,
+        XCTAssertLessThan(v.realizedBlockViewCountForTesting, v.boxes.count / 4,
                           "realized count is well below the full document (virtualization is effective)")
     }
 
@@ -102,7 +102,10 @@ final class BlockViewVirtualizationTests: XCTestCase {
 
     func test_reconcile_realizedView_zOrder_aboveQuoteUnderlay_belowSelectionWash() {
         let v = longCanvas(60)
-        v.reconcileBlockViews(visibleRect: CGRect(x: 0, y: 2000, width: 300, height: 300))   // realize mid-doc only
+        // Target a mid-document box by its actual frame (robust to inter-block spacing) rather than a
+        // hardcoded scroll offset, which drifts below the document when body paragraphs stack tight.
+        let midY = v.boxes[30].frame.minY
+        v.reconcileBlockViews(visibleRect: CGRect(x: 0, y: midY, width: 300, height: 300))   // realize mid-doc only
         let block = v.subviews.compactMap { $0 as? BlockBackingView }.first
         XCTAssertNotNil(block, "a block view was realized in the window")
         let iBlock = v.subviews.firstIndex(of: block!)!

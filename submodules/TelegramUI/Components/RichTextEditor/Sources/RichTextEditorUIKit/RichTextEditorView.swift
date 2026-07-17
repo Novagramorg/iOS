@@ -14,6 +14,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// measured height hugs the actual text and the host owns the minimum field height.
     public var minimumContentHeight: CGFloat = 44
 
+    /// Enables OS spelling underlines + tap-to-correct (default on). Set false to disable entirely.
+    public var isSpellCheckingEnabled: Bool {
+        get { canvas.isSpellCheckingEnabled }
+        set { canvas.isSpellCheckingEnabled = newValue }
+    }
+
     /// Host-settable colors. Defaults to `.default` (today's look). Assigning re-applies colors to the live
     /// editor: the mapper (text/link), the caret/selection/blockquote accent, and a reload so boxes rebuild
     /// with the themed mapper. A reload resets the live selection — theme changes are host-driven (e.g. an
@@ -192,6 +198,11 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         public let link: String?
         public let hasSelection: Bool
         public let isInTable: Bool
+        /// True when a non-empty selection touches only paragraph text — no media or table block, and
+        /// neither endpoint is inside a table cell. A list marker can only be meaningfully applied to
+        /// paragraph blocks, so a host toolbar uses this to gate a per-selection List action. False for
+        /// a collapsed caret.
+        public let selectionIsTextOnly: Bool
         public let canUndo: Bool
         public let canRedo: Bool
         /// Number of `Block.blockQuote` containers enclosing the caret (0 = not in a quote; N = nested N levels
@@ -481,8 +492,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     }
 
     /// Registers the closure that turns an emoji `id` (+ requested square size) into a FRESH, non-
-    /// interactive view. The editor owns/positions/removes it and makes it ride scrolling.
-    public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> UIView?) {
+    /// interactive view. The editor owns/positions/removes it, makes it ride scrolling, and keeps its
+    /// `dynamicColor` synced to the current text color (so a template custom emoji tints to the text).
+    public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)?) {
         canvas.emojiViewProvider = provider
     }
 
@@ -545,7 +557,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// is the currently-hosted view on an items-change (nil on first realization) — the host may update it in
     /// place and return the SAME instance (surviving cells reused) or return a fresh one.
     public func registerMediaViewProvider(
-        _ provider: @escaping ([MediaProviderItem], BlockID, RichTextMediaItemView?) -> RichTextMediaItemView?
+        _ provider: @escaping ([MediaProviderItem], BlockID, MediaDisplayMode, RichTextMediaItemView?) -> RichTextMediaItemView?
     ) {
         canvas.mediaViewProvider = provider
     }
@@ -586,6 +598,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func selectAll() {
         canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(0),
                                                      DocumentTextPosition(canvas.documentSizeValue))
+    }
+
+    /// Collapses the selection to a caret at the last renderable position (end of the document). A host uses
+    /// this to target an UNFOCUSED editor's end with a subsequent format/insert command: the default caret
+    /// sits at offset 0 (a structural slot that touches no paragraph), so a command applied there no-ops /
+    /// lands at the start. `endOfDocument` already snaps past the closing structural token to a real slot.
+    public func moveCaretToDocumentEnd() {
+        guard let end = canvas.endOfDocument as? DocumentTextPosition else { return }
+        canvas.selectedTextRange = DocumentTextRange(end, end)
     }
 
     @discardableResult

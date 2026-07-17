@@ -141,8 +141,41 @@ final class TableBackingView: BlockBackingView, UIScrollViewDelegate {
     /// same transform the grid uses), so it lands in content space and rides the scroll.
     func drawCellSelection(in ctx: CGContext) {
         guard let box = box, let canvas = canvas else { return }
+        ctx.saveGState()
         ctx.translateBy(x: -box.blockViewFrame.minX, y: -box.blockViewFrame.minY)
         drawBlockSelection(in: ctx, box: box, from: canvas.selFrom, to: canvas.selTo)
+        ctx.restoreGState()
+    }
+
+    /// Draw spelling underlines for this table's cells, in the content view's own coordinate space (so they
+    /// ride horizontal overscroll). Mirrors `drawCellSelection`'s transform; ranges come from the canvas
+    /// `spellResults`, keyed by each cell paragraph's BlockID via `spellCheckableRef(region.ref)`.
+    func drawCellSpelling(in ctx: CGContext) {
+        guard let box = box, let canvas = canvas, canvas.isSpellCheckingEnabled else { return }
+        ctx.saveGState()
+        ctx.translateBy(x: -box.blockViewFrame.minX, y: -box.blockViewFrame.minY)
+        ctx.setLineCap(.round)
+        var byStyle: [DocumentCanvasView.SpellStyle: [CGRect]] = [:]
+        for region in box.leafRegions() {                            // cell paragraph regions (recurses cells)
+            guard let id = canvas.spellCheckableRef(region.ref), let entry = canvas.spellResults[id] else { continue }
+            for (range, style) in entry.ranges {
+                for seg in region.layout.selectionRects(start: range.location, end: range.location + range.length) {
+                    let line = seg.offsetBy(dx: region.canvasOrigin.x, dy: region.canvasOrigin.y)
+                    byStyle[style, default: []].append(line)
+                }
+            }
+        }
+        for (style, lines) in byStyle {
+            ctx.setStrokeColor(canvas.spellingUnderlineColor(style).cgColor)
+            ctx.setLineWidth(canvas.underlineWidth(for: style))
+            ctx.setLineDash(phase: 0, lengths: canvas.underlineDash(for: style))
+            for line in lines {
+                ctx.move(to: CGPoint(x: line.minX, y: line.maxY - 1))
+                ctx.addLine(to: CGPoint(x: line.maxX, y: line.maxY - 1))
+            }
+            ctx.strokePath()   // stroke per style group
+        }
+        ctx.restoreGState()
     }
 
 }

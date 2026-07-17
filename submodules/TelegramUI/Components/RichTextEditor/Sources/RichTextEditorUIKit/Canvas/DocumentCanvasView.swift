@@ -8,6 +8,16 @@ public protocol RichTextChecklistMarkerView: AnyObject {
     func setChecked(_ checked: Bool, animated: Bool)
 }
 
+/// A host-supplied inline custom-emoji view. The editor hosts/positions/culls it and keeps its
+/// `dynamicColor` synced to the current text color, so a "template" (single-color) custom emoji tints
+/// to match the surrounding text (mirrors how the legacy input tints template emoji). A host whose
+/// emoji is never a template can leave `dynamicColor` unused.
+public protocol RichTextEmojiView: AnyObject {
+    /// The tint the editor pushes for a custom *template* emoji — the current text color. `nil` means
+    /// untinted. Non-template (full-color) emoji ignore it; the editor assigns it regardless.
+    var dynamicColor: UIColor? { get set }
+}
+
 /// Shared factory: turns one `Block` into its `CanvasBlock` box. Used by the document root
 /// (`DocumentCanvasView.setBlocks`), table cells (`TableBlockBox.init`), and — once landed —
 /// `BlockQuoteBox` (Task 4), so all three build children through one recursive function.
@@ -50,8 +60,9 @@ final class DocumentCanvasView: UIView {
     var layoutDirectionModel: DocumentLayoutDirection = .auto
     var imageProvider: (String) -> UIImage? = { _ in nil }
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
-    /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
-    var emojiViewProvider: (_ id: String, _ size: CGSize) -> UIView? = { _, _ in nil }
+    /// The canvas owns/positions/removes it and keeps its `dynamicColor` synced to the current text color
+    /// (template-emoji tinting); a host with only a CALayer wraps it in a conforming `UIView`.
+    var emojiViewProvider: (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)? = { _, _ in nil }
     /// Returns a FRESH checkbox view for a checklist marker (host-side `CheckNode`). `nil` when unset —
     /// the editor falls back to the Unicode glyph marker. The canvas hosts/positions/animates the view.
     var checklistMarkerViewProvider: ((_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?)?
@@ -85,7 +96,7 @@ final class DocumentCanvasView: UIView {
     /// `existing` is the currently-hosted view for this block on an items-change (nil otherwise); the host
     /// may update it IN PLACE and return the SAME instance (surviving cells reused, fetch preserved) or
     /// return a fresh instance (recreate fallback). Returns nil = "not ready" (keep any existing view).
-    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _ in nil }
+    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ displayMode: MediaDisplayMode, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _, _ in nil }
     /// Hosted media views, keyed by the OWNING block's `BlockID` (the occurrence) so edits/undo reuse —
     /// not recreate — them, and two blocks sharing one `mediaID` get two independent views.
     var mediaItemViews: [BlockID: HostedMediaItem] = [:]
@@ -394,6 +405,10 @@ final class DocumentCanvasView: UIView {
     // knob is drawn offset from the text line). Applied at every drag map via `selectionDragPosition(forTouch:)`.
     var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
+    // A `.cells` corner-knob drag (Phase 2c-T4) — set in `.began` when the touch hits a corner knob, either a
+    // committed `.cells` selection's or the focused-cell "fake" chrome's (no committed selection yet). The
+    // FIRST `extendCellSelection` call promotes the fake chrome to a real committed `.cells` selection.
+    var draggingTableCornerKnob: TableCellCorner?
     var selectionHandlePan: UIPanGestureRecognizer?
     // The loupe / move-cursor long-press. Held so `gestureRecognizerShouldBegin` can fail it on a touch that
     // lands on an active selection handle (letting the handle pan grab the knob instead) — see that method.
@@ -443,6 +458,48 @@ final class DocumentCanvasView: UIView {
     var compositionAnchorHead: (Int, Int)?
     /// Injectable pasteboard (defaults to the system pasteboard; tests inject a fake — see TextPasteboard).
     var pasteboard: TextPasteboard = UIPasteboard.general
+    // MARK: Spell checking (see DocumentCanvasView+SpellCheck, +NativeTextCheckingClient)
+    /// Native-checking underline style per flagged range.
+    enum SpellStyle: Equatable { case spelling, grammar, correction }
+    /// Per-region flagged ranges in REGION-LOCAL UTF-16, keyed by the owning block's id (from the region's
+    /// `ref`). `contentHash` is reserved for a future content-keyed cache (native checking self-invalidates
+    /// via the controller, so it is currently unused — 0).
+    /// Accepted limitation: this is a side table edits do NOT shift, so a flagged word positioned after a
+    /// mid-region edit renders at a stale offset until the caret next re-traverses it (self-healing). The old
+    /// debounced full-region rescan used to mask this by rebuilding every flag on each pass.
+    var spellResults: [BlockID: (contentHash: Int, ranges: [(range: NSRange, style: SpellStyle)])] = [:]
+    /// Delivered `.correction` candidate replacements ("alternatives"), region-local — mirrors `spellResults`.
+    /// Stashed from `nativeReplace` via KVC on the delivered `NSTextAlternatives` (see
+    /// `+NativeTextCheckingClient.stashSpellingAlternatives`); best-effort (corrections were not observed firing
+    /// in the test host). `.spelling`/`.grammar` flags never populate this — those go through the public
+    /// `UITextChecker` guesses lookup instead (`+SpellCheck.nativeSpellingGuesses`).
+    var spellingAlternatives: [BlockID: [(range: NSRange, candidates: [String], primary: String?)]] = [:]
+    /// The native checking driver (nil ⇒ private class unavailable ⇒ checking off; no fallback).
+    var nativeChecker: NativeTextChecker?
+    /// Global caret position at the last selection-driven native check. nil until the first post-focus
+    /// selection settles: native does NOT scan on focus — only words the caret traverses are checked.
+    var lastCheckedCaret: Int?
+    /// Set only for the duration of a driven `checkSpellingForWord`/`checkGrammarForSentence` call. The
+    /// controller calls back `removeAnnotation:forRange:` SYNCHRONOUSLY within that call whenever the
+    /// checked word/sentence turns out clean (verified live) — without knowing which check triggered it,
+    /// `nativeRemoveAnnotation` can't tell a stale `.spelling` flag from an unrelated `.grammar` flag that
+    /// merely overlaps the checked word, and would wipe both (the same style-isolation bug `.spelling`
+    /// clears in `nativeCheckOnSelectionChange` have). Bracketed by `driveNativeCheck(style:_:)`.
+    var inFlightCheckStyle: SpellStyle?
+    /// Host toggle (façade `isSpellCheckingEnabled`). When false: no checking, no underlines, no tap override.
+    var isSpellCheckingEnabled = true {
+        didSet {
+            guard oldValue != isSpellCheckingEnabled else { return }
+            if isSpellCheckingEnabled { installNativeCheckingIfNeeded(); nativeChecker?.preheat() }
+            else { nativeChecker?.invalidate(); nativeChecker = nil; spellResults = [:]; spellingAlternatives = [:]; pendingSpellingMenu = nil; setNeedsSpellUnderlineDisplay() }
+            reloadInputViews()   // let the keyboard re-read the trait
+        }
+    }
+    /// Set while the tap-to-fix guesses menu is up; `range` is GLOBAL (same axis as the selection).
+    /// `revertTo` is the pre-correction original word — non-nil only for a `.correction` flag with a stashed
+    /// `spellingAlternatives` entry (best-effort; see that field's doc) — and drives the "Revert to …" menu
+    /// action added in N5.
+    var pendingSpellingMenu: (range: NSRange, guesses: [String], revertTo: String?)?
     var undoManagerOverride: UndoManager?
     /// The editor's OWN undo manager, used in production. We deliberately do NOT fall back to the
     /// responder-chain `UIResponder.undoManager`: that manager is shared app-wide, so OTHER responders'
@@ -487,6 +544,7 @@ final class DocumentCanvasView: UIView {
     private var inputModeObserver: NSObjectProtocol?
     deinit {
         if let inputModeObserver { NotificationCenter.default.removeObserver(inputModeObserver) }
+        nativeChecker?.invalidate(); nativeChecker = nil   // tear down the native checking controller explicitly
     }
 
     init(mapper: AttributedStringMapper = AttributedStringMapper()) {
@@ -590,6 +648,7 @@ final class DocumentCanvasView: UIView {
         let became = super.becomeFirstResponder()
         if became { refreshEmptyBoxWritingDirections(); updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
         if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
+        if became { installNativeCheckingIfNeeded(); nativeChecker?.preheat(); lastCheckedCaret = head }   // install+preheat; no scan (native checks only traversed words)
         return became
     }
 
@@ -720,6 +779,8 @@ final class DocumentCanvasView: UIView {
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
     /// cells the canvas reaches via `leafRegions()`.
     func setBlocks(_ blocks: [Block], width: CGFloat) {
+        spellResults = [:]   // stale per-block results (keyed by BlockID) must not linger across a document swap
+        spellingAlternatives = [:]   // same staleness risk (keyed by BlockID) as spellResults above
         if width > 0 { lastLayoutWidth = width }
         breakUndoCoalescing()   // a full document swap — programmatic set OR an undo/redo restore (the registerUndo closure calls setBlocks) — ends any open typing/deleting run
         tableSelection = nil
@@ -739,6 +800,7 @@ final class DocumentCanvasView: UIView {
         recomputeDocumentHasSpoilers()   // a fresh document may load spoilers, or none (gates syncSpoilers)
         anchor = min(anchor, documentSize); head = min(head, documentSize)
         notifyContentSizeChanged(); setNeedsDisplay()
+        lastCheckedCaret = nil   // a fresh document: nothing checked until the caret traverses it
     }
 
     /// A full-document replacement that NOTIFIES the input system (so the keyboard's shadow document
@@ -1367,6 +1429,7 @@ final class DocumentCanvasView: UIView {
         coalescingSelectionNotifications = false
         textInputDelegate?.selectionWillChange(self)
         textInputDelegate?.selectionDidChange(self)
+        nativeCheckOnSelectionChange()   // run once at the final caret of a coalesced drag
     }
 
     func refreshSelectionUI() {
@@ -1375,6 +1438,7 @@ final class DocumentCanvasView: UIView {
         updateCaretView()
         updateSelectionHandleViews()
         syncSpoilers()
+        nativeCheckOnSelectionChange()   // selection-driven native spell/grammar check (native-parity)
     }
 
     /// Positions the two own-drawn selection-handle views at the ranged selection's endpoints — each hosted
@@ -1556,9 +1620,9 @@ final class DocumentCanvasView: UIView {
 /// One pooled emoji: the host view plus its last canvas-space frame (for offscreen culling).
 @available(iOS 13.0, *)
 final class HostedEmoji {
-    let view: UIView
+    let view: UIView & RichTextEmojiView
     var canvasFrame: CGRect
-    init(view: UIView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
+    init(view: UIView & RichTextEmojiView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
 }
 
 /// One pooled media view: the host view plus its last canvas-space frame (for offscreen culling).

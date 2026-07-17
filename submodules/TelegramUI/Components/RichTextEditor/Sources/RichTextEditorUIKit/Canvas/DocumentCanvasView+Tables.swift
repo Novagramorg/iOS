@@ -160,6 +160,7 @@ extension DocumentCanvasView {
         switch sel.kind {
         case .rows(let range):    coversWholeTable = range.lowerBound <= 0 && range.upperBound >= a.box.rowCount - 1
         case .columns(let range): coversWholeTable = range.lowerBound <= 0 && range.upperBound >= a.box.columnCount - 1
+        case .cells:              coversWholeTable = false   // Phase 2c-T2: cell-rect delete lands with the structural commands (T2)
         }
         if coversWholeTable {
             editing {
@@ -175,6 +176,7 @@ extension DocumentCanvasView {
             switch sel.kind {
             case .rows:    deleteTableRow()      // reads structuralRowRange(); self-wraps in editing { }
             case .columns: deleteTableColumn()   // reads structuralColumnRange()
+            case .cells:   break                 // Phase 2c-T2: cell-rect delete lands with the structural commands (T2)
             }
         }
         clearTableSelection()
@@ -201,6 +203,9 @@ extension DocumentCanvasView {
         }
         if let cols = structuralColumnRange() {
             return cols.filter { (0..<colCount).contains($0) }.flatMap { c in (0..<rowCount).map { ($0, c) } }
+        }
+        if let rect = structuralCellRect() {
+            return box.tableMap().cellsInRect(rect).map { (row: $0.row, column: $0.column) }
         }
         if let a = activeTable(), a.box.id == box.id { return [(a.row, a.col)] }
         return []
@@ -229,6 +234,52 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Toggles the header/highlight flag on every cell of the current structural selection (or the caret's
+    /// single cell when there is none). Mixed/none → all ON; all-header → all OFF. One undo step; preserves
+    /// the structural selection. Mirrors `setSelectionAlignment`.
+    func toggleSelectionHeader() {
+        guard let a = activeTable() else { return }
+        editing {
+            guard case .table(var t) = a.box.currentBlock() else { return }
+            let coords = selectedCellCoords(in: a.box).filter { t.rows.indices.contains($0.row) && t.rows[$0.row].cells.indices.contains($0.column) }
+            guard !coords.isEmpty else { return }
+            let newValue = !coords.allSatisfy { t.rows[$0.row].cells[$0.column].isHeader }
+            for (r, c) in coords { t.rows[r].cells[c].isHeader = newValue }
+            replaceTable(at: a.index, with: t, caretRow: a.row, caretCol: a.col)
+        }
+    }
+
+    /// Merges the cells covered by the current `.cells` structural selection into one spanning cell — the
+    /// content of every covered cell is concatenated into the top-left (anchor) cell (see
+    /// `TableBlock.mergingCells`). No-op, registering NO undo step, when the caret isn't in a table, there
+    /// is no `.cells` selection, or the (already-expanded) rect resolves to a single cell (nothing to
+    /// merge) — the single-cell check runs BEFORE `editing { }` so a no-op can't register a step.
+    func mergeSelectedCells() {
+        guard let a = activeTable(), let rect = structuralCellRect() else { return }
+        guard a.box.tableMap().cellsInRect(rect).count > 1 else { return }   // no-op: already a single cell
+        editing {
+            guard case .table(let t) = a.box.currentBlock() else { return }
+            replaceTable(at: a.index, with: t.mergingCells(in: rect), caretRow: rect.top, caretCol: rect.left)
+        }
+    }
+
+    /// Splits the caret's merged cell back into a dense grid of single (empty, except the anchor which
+    /// keeps all the pooled content) cells (see `TableBlock.splittingCell`). Resolves the target via the
+    /// CARET's covering anchor (`activeTable().row/col`, already the anchor's physical origin — 2b made
+    /// `cellLocation` return physical), not a `.cells` selection, so it works equally from a bare caret
+    /// sitting in a merged cell and from a `.cells` selection that resolves to that one merged cell.
+    /// No-op when the caret isn't in a table or its cell isn't merged (`colspan == rowspan == 1`).
+    func splitSelectedCell() {
+        guard let a = activeTable(),
+              let anchor = a.box.tableMap().anchor(atRow: a.row, column: a.col),
+              anchor.colspan > 1 || anchor.rowspan > 1 else { return }
+        editing {
+            guard case .table(let t) = a.box.currentBlock() else { return }
+            replaceTable(at: a.index, with: t.splittingCell(at: (anchor.row, anchor.column)),
+                         caretRow: anchor.row, caretCol: anchor.column)
+        }
+    }
+
     /// Creates an empty `rows`×`columns` table (row 0 a header) at the caret, mirroring `insertMedia`:
     /// clears any selection, then splits the caret's paragraph if mid-text, else inserts at the block
     /// boundary. No-op unless the caret is in a top-level paragraph (no nested tables; not on an
@@ -240,6 +291,12 @@ extension DocumentCanvasView {
         // would be inserted there. Tables aren't supported inside quotes (v1) → no-op, like the in-table guard.
         guard !boxes.isEmpty, !isInsideTable(head), !isInsideBlockQuote(head),
               let resolved = resolveBox(at: head), resolved.box is BlockBox else { return }
+        // Focus the editor BEFORE the edit, so the caret placed in the new table's first cell is immediately
+        // interactive. The only synchronous caret-move layout (`editing` → onSelectionChange → the façade's
+        // `scrollCaretIntoView` → `performLayout`) is FR-gated; without focus, `onContentSizeChange` only
+        // relays layout to the host ASYNChronously, so the new table's cell frames stay stale until a later
+        // interaction — the "can't drag / first cell-tap does nothing until I tap again" bug.
+        if !isFirstResponder { _ = becomeFirstResponder() }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head), let p = pos.box as? BlockBox else { return }
