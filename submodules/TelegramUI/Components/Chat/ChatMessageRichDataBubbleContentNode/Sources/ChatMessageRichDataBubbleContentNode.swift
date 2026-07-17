@@ -268,6 +268,23 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         return view
     }
 
+    /// True when the rendered page is the message's primary (non-translated, non-full,
+    /// non-pending-edit) InstantPage — the only rendering whose checkbox paths are safe to
+    /// edit — AND the message is editable.
+    private func checkboxesInteractive(item: ChatMessageBubbleContentItem, resolved: ResolvedRichDataContent) -> Bool {
+        // Only the `.original` key is eligible; `.translated` and `.pendingEdit` are inert.
+        guard case .original = resolved.key else {
+            return false
+        }
+        // The primary page is `attribute.instantPage` (class identity). The show-more
+        // (`fullInstantPage`) rendering also carries an `.original` key but a different page
+        // object, so an identity check excludes it. `originalAttribute` is Optional.
+        guard let attribute = resolved.originalAttribute, resolved.instantPage === attribute.instantPage else {
+            return false
+        }
+        return item.controllerInteraction.canEditMessageRichText(item.message)
+    }
+
     private func defaultExpanded(forDetailsIndex index: Int) -> Bool {
         guard let layout = self.currentPageLayout?.layout else { return false }
         func search(_ items: [InstantPageV2LaidOutItem]) -> Bool? {
@@ -329,7 +346,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     wantsReactionsOutside = hasReactions && !inline
                 }
             }
-            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
+            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 8.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
                 let suggestedBoundingWidth: CGFloat = constrainedSize.width
@@ -925,6 +942,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 pageLayout
                             )
                             let pageView = self.ensurePageView(item: item, webpage: pageWebpage, richPageKey: resolvedContent.key, showMoreExpanded: showMoreExpanded)
+                            if self.checkboxesInteractive(item: item, resolved: resolvedContent) {
+                                pageView.checkboxTapped = { [weak self] path, newValue in
+                                    guard let self, let item = self.item else {
+                                        return
+                                    }
+                                    item.controllerInteraction.toggleMessageRichTextCheckbox(item.message.id, path, newValue)
+                                }
+                            } else {
+                                pageView.checkboxTapped = nil
+                            }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
                             pageView.frame = CGRect(
                                 origin: CGPoint(x: -1.0, y: streamingHeaderOffset),

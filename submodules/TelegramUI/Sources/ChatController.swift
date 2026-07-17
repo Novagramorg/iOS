@@ -5767,6 +5767,37 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 )
                 self.present(controller, in: .current)
             }
+        }, canEditMessageRichText: { [weak self] message in
+            guard let self else {
+                return false
+            }
+            return canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message)
+        }, toggleMessageRichTextCheckbox: { [weak self] messageId, path, value in
+            guard let self else {
+                return
+            }
+            guard let message = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage() else {
+                return
+            }
+            guard canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message) else {
+                return
+            }
+            guard let attribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute else {
+                return
+            }
+            let newPage = attribute.instantPage.togglingCheckbox(at: path, to: value)
+            let newAttribute = RichTextMessageAttribute(instantPage: newPage, fullInstantPage: attribute.fullInstantPage)
+
+            if self.selectPollOptionFeedback == nil {
+                self.selectPollOptionFeedback = HapticFeedback()
+            }
+            if value {
+                self.selectPollOptionFeedback?.success()
+            } else {
+                self.selectPollOptionFeedback?.impact(.medium)
+            }
+
+            self.context.account.pendingUpdateMessageManager.add(messageId: messageId, text: "", media: .keep, entities: nil, richText: newAttribute, inlineStickers: [:])
         }, openStarsPurchase: { [weak self] amount in
             self?.interfaceInteraction?.openStarsPurchase(amount)
         }, openRankInfo: { [weak self] peer, role, rank in

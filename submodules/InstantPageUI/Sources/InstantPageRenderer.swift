@@ -156,6 +156,9 @@ public final class InstantPageV2View: UIView {
 
     /// Invoked when a details title is tapped. Bubble routes to its expand-state mutation + requestUpdate.
     public var detailsTapped: ((_ index: Int) -> Void)?
+    /// Fired when an interactive checklist checkbox is tapped. `path` is the marker's
+    /// structural path (see InstantPage.togglingCheckbox); `newValue` is the toggled state.
+    public var checkboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
 
     var itemViews: [InstantPageItemView] = []
     private var itemViewStableIds: [InstantPageV2StableItemId] = []
@@ -668,7 +671,7 @@ public final class InstantPageV2View: UIView {
             return v
         case let .listMarker(marker):
             guard let v = existingView as? InstantPageV2ListMarkerView else { return nil }
-            v.update(item: marker, theme: theme)
+            v.update(item: marker, theme: theme, interactive: self.checkboxTapped != nil)
             return v
         case let .blockQuoteBar(bar):
             guard let v = existingView as? InstantPageV2BlockQuoteBarView else { return nil }
@@ -806,7 +809,12 @@ public final class InstantPageV2View: UIView {
         case let .anchor(anchor):
             return InstantPageV2AnchorView(item: anchor, theme: theme)
         case let .listMarker(marker):
-            return InstantPageV2ListMarkerView(item: marker, theme: theme)
+            let view = InstantPageV2ListMarkerView(item: marker, theme: theme)
+            view.onCheckboxTapped = { [weak self] path, newValue in
+                self?.checkboxTapped?(path, newValue)
+            }
+            view.update(item: marker, theme: theme, interactive: self.checkboxTapped != nil)
+            return view
         case let .codeBlock(block):
             return InstantPageV2CodeBlockView(item: block, theme: theme)
         case let .blockQuoteBar(bar):
@@ -1595,21 +1603,63 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2ListMarkerItem
     var itemFrame: CGRect { return self.item.frame }
 
+    /// Fired on tap of an interactive checkbox: (path, newValue).
+    var onCheckboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
+
+    private var checkNode: CheckNode?
+    private var tapRecognizer: UITapGestureRecognizer?
+    private var interactive: Bool = false
+
     init(item: InstantPageV2ListMarkerItem, theme: InstantPageTheme) {
         self.item = item
         super.init(frame: item.frame)
         self.backgroundColor = .clear   // structural
         self.isOpaque = false           // structural
-        self.update(item: item, theme: theme)
+        self.update(item: item, theme: theme, interactive: false)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(item: InstantPageV2ListMarkerItem, theme: InstantPageTheme) {
+    func update(item: InstantPageV2ListMarkerItem, theme: InstantPageTheme, interactive: Bool) {
         let _ = theme
         self.item = item
+        self.interactive = interactive
         self.rebuildContents()
+        self.updateInteractivity()
+    }
+
+    /// Whether this marker is an interactive checkbox (has a path and interactivity is enabled).
+    private var isInteractiveCheckbox: Bool {
+        if case .checklist = self.item.kind, self.interactive, self.item.checkboxPath != nil {
+            return true
+        }
+        return false
+    }
+
+    private func updateInteractivity() {
+        let shouldBeInteractive = self.isInteractiveCheckbox
+        self.isUserInteractionEnabled = shouldBeInteractive
+        if shouldBeInteractive {
+            if self.tapRecognizer == nil {
+                let recognizer = UITapGestureRecognizer(target: self, action: #selector(self.handleTap))
+                self.addGestureRecognizer(recognizer)
+                self.tapRecognizer = recognizer
+            }
+        } else if let recognizer = self.tapRecognizer {
+            self.removeGestureRecognizer(recognizer)
+            self.tapRecognizer = nil
+        }
+    }
+
+    @objc private func handleTap() {
+        guard case let .checklist(checked, _) = self.item.kind, let path = self.item.checkboxPath else {
+            return
+        }
+        let newValue = !checked
+        // Optimistic visual flip; the model re-render supersedes (or reverts) this.
+        self.checkNode?.setSelected(newValue, animated: true)
+        self.onCheckboxTapped?(path, newValue)
     }
 
     private func rebuildContents() {
@@ -1621,6 +1671,7 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
                 sublayer.removeFromSuperlayer()
             }
         }
+        self.checkNode = nil
 
         let item = self.item
         switch item.kind {
@@ -1659,6 +1710,7 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
             checkNode.frame = CGRect(origin: .zero, size: item.frame.size)
             checkNode.setSelected(checked, animated: false)
             self.addSubview(checkNode.view)
+            self.checkNode = checkNode
         }
     }
 }
