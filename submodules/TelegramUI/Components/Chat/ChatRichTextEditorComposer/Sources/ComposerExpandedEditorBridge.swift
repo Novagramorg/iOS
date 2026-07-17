@@ -48,6 +48,33 @@ public func documentMediaAndEmoji(fromChatInputContent content: ChatInputContent
     return (document: doc, media: media, emojiFiles: emojiFiles)
 }
 
+public func documentMediaAndEmojiAsync(engine: TelegramEngine, fromChatInputContent content: ChatInputContent) async -> (document: Document, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile]) {
+    var media: [String: Media] = [:]
+    var emojiFiles: [Int64: TelegramMediaFile] = [:]
+    var emojiFileIds = Set<Int64>()
+    let doc = document(
+        fromChatInputContent: content,
+        registerEmoji: { fileId, file in
+            emojiFileIds.insert(fileId)
+            if let file {
+                emojiFiles[fileId] = file
+            }
+            return EmojiRef(id: String(fileId), instanceID: BlockID.generate().rawValue, altText: nil)
+        },
+        registerMedia: { value in
+            let key = composerMediaKey(value)
+            media[key] = value
+            return key
+        }
+    )
+    let missingFileIds = emojiFileIds.subtracting(Set(emojiFiles.keys))
+    if !missingFileIds.isEmpty {
+        let addedFiles = await engine.stickers.resolveInlineStickersLocal(fileIds: Array(missingFileIds)).get()
+        emojiFiles.merge(addedFiles, uniquingKeysWith: { lhs, _ in lhs })
+    }
+    return (document: doc, media: media, emojiFiles: emojiFiles)
+}
+
 /// Convert an expanded article editor's `Document` + its media store + its custom-emoji file store back to the
 /// chat-layer `ChatInputContent` — the IN (collapse) half of the handoff (`RichTextAttachmentScreen.sendMessage`).
 /// The inverse of `documentMediaAndEmoji(fromChatInputContent:)`. A medium is resolved from `media` (an
