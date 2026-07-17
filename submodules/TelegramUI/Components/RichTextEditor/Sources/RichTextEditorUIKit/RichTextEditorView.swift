@@ -600,6 +600,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
                                                      DocumentTextPosition(canvas.documentSizeValue))
     }
 
+    /// Collapses the selection to a caret at the last renderable position (end of the document). A host uses
+    /// this to target an UNFOCUSED editor's end with a subsequent format/insert command: the default caret
+    /// sits at offset 0 (a structural slot that touches no paragraph), so a command applied there no-ops /
+    /// lands at the start. `endOfDocument` already snaps past the closing structural token to a real slot.
+    public func moveCaretToDocumentEnd() {
+        guard let end = canvas.endOfDocument as? DocumentTextPosition else { return }
+        canvas.selectedTextRange = DocumentTextRange(end, end)
+    }
+
     @discardableResult
     public override func becomeFirstResponder() -> Bool { canvas.becomeFirstResponder() }
 

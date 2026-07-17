@@ -669,13 +669,26 @@ final class RichTextAttachmentScreenComponent: Component {
             self.editor.setParagraphStyle(.body)
         }
 
+        /// When the editor is unfocused (no caret), an Add-menu format/insert action should target the END of
+        /// the document, not the default offset-0 start (which touches no paragraph, so the command no-ops).
+        /// Focuses the editor and drops the caret at the end so the following command applies there. No-op when
+        /// a caret already exists — the user's position is preserved.
+        private func focusEditorAtDocumentEndIfNeeded(hasCursor: Bool) {
+            guard !hasCursor else { return }
+            self.editor.becomeFirstResponder()
+            self.editor.moveCaretToDocumentEnd()
+        }
+
         private func presentAddMenu(from sourceView: UIView) {
             guard let component = self.component, let environment = self.environment, let controller = environment.controller() as? RichTextAttachmentScreen else {
                 return
             }
-            
+
             let editorState = self.editor.currentState()
-            
+            // Captured at menu-open time (before presenting can change first-responder state): whether the user
+            // has a live caret. When false, the Add-menu actions target the document end instead of offset 0.
+            let hasCursor = viewTreeContainsFirstResponder(view: self.editor)
+
             var items: [ContextMenuItem] = []
             
             if !editorState.hasSelection {
@@ -744,9 +757,16 @@ final class RichTextAttachmentScreenComponent: Component {
                                 f(.default)
                                 return
                             }
-                            
-                            self.editor.setParagraphStyle(mappedStyle)
-                            
+
+                            if hasCursor {
+                                self.editor.setParagraphStyle(mappedStyle)
+                            } else {
+                                // No caret: append a NEW empty paragraph with this heading style at the end and
+                                // focus it, rather than converting an existing paragraph (a no-op at offset 0).
+                                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                                self.editor.insertDocument(Document(blocks: [.paragraph(ParagraphBlock(id: BlockID.generate(), style: mappedStyle))]))
+                            }
+
                             f(.default)
                         })))
                     }
@@ -772,6 +792,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         return
                     }
 
+                    self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
                     self.convertToBodyText()
                     c?.dismiss(completion: nil)
                 })))
@@ -784,7 +805,8 @@ final class RichTextAttachmentScreenComponent: Component {
                     c?.dismiss(completion: nil)
                     return
                 }
-                
+
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
                 let live = self.editor.currentState()
                 if live.blockQuoteDepth > 0 {
                     self.editor.unwrapBlockQuoteLevel()
@@ -804,6 +826,7 @@ final class RichTextAttachmentScreenComponent: Component {
                     return
                 }
                 
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
                 let live = self.editor.currentState()
                 if live.blockQuoteDepth > 0 {
                     self.editor.unwrapBlockQuoteLevel()
@@ -825,6 +848,7 @@ final class RichTextAttachmentScreenComponent: Component {
                     return
                 }
                 
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
                 let live = self.editor.currentState()
                 if live.blockQuoteDepth > 0 {
                     self.editor.unwrapBlockQuoteLevel()
@@ -845,7 +869,8 @@ final class RichTextAttachmentScreenComponent: Component {
                     c?.dismiss(completion: nil)
                     return
                 }
-                
+
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
                 self.component?.presentFormulaEditor?(nil, { [weak self] latex in
                     guard let self else {
                         return
@@ -1353,6 +1378,9 @@ final class RichTextAttachmentScreenComponent: Component {
                                 f(.default); self?.editor.deleteTable()
                             })))
                         } else {
+                            // No caret: drop the table at the document end (become FR + caret to end), not at
+                            // the default offset-0 start. With a caret it inserts at the caret as before.
+                            self.focusEditorAtDocumentEndIfNeeded(hasCursor: viewTreeContainsFirstResponder(view: self.editor))
                             self.editor.insertTable(rows: 2, cols: 2)
                         }
                         self.presentActionMenu(from: sourceView, items: items)
