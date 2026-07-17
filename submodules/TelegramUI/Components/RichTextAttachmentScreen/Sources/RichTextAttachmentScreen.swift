@@ -214,6 +214,13 @@ private final class RichTextSendButtonComponent: Component {
 }
 
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
+    public typealias Document = RichTextEditorCore::Document
+    
+    public enum Mode {
+        case standalone(savedDraft: Document?, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile])
+        case edit(initialDocument: Document?, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile])
+    }
+    
     public enum RichTextAttachment {
         case image(ImageMediaReference)
         case file(FileMediaReference)
@@ -247,9 +254,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     public convenience init(
         context: AccountContext,
-        initialContents: Document? = nil,
-        initialMedia: [String: Media] = [:],
-        initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
+        mode: Mode,
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
@@ -257,9 +262,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     ) {
         self.init(
             context: context,
-            initialContents: initialContents,
-            initialMedia: initialMedia,
-            initialEmojiFiles: initialEmojiFiles,
+            mode: mode,
             sendMessage: { document, media, emojiFiles, _ in
                 sendMessage(document, media, emojiFiles)
             },
@@ -271,9 +274,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     public init(
         context: AccountContext,
-        initialContents: Document? = nil,
-        initialMedia: [String: Media] = [:],
-        initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
+        mode: Mode,
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
@@ -287,9 +288,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
         super.init(context: context, component: RichTextAttachmentScreenComponent(
             context: context,
-            initialContents: initialContents,
-            initialMedia: initialMedia,
-            initialEmojiFiles: initialEmojiFiles,
+            mode: mode,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu,
             presentFormulaEditor: presentFormulaEditor
@@ -316,6 +315,13 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    public func resetForReuse() {
+        guard let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+            return
+        }
+        syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
     }
     
     fileprivate func donePressed() {
@@ -373,18 +379,14 @@ final class RichTextAttachmentScreenComponent: Component {
     // Held for the next step: the RichTextEditor demo will read context and add
     // its editor view into the View's content container.
     let context: AccountContext
-    let initialContents: Document?
-    let initialMedia: [String: Media]
-    let initialEmojiFiles: [Int64: TelegramMediaFile]
+    let mode: RichTextAttachmentScreen.Mode
     let overNavigationContainer: UIView
     let presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
 
-    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
         self.context = context
-        self.initialContents = initialContents
-        self.initialMedia = initialMedia
-        self.initialEmojiFiles = initialEmojiFiles
+        self.mode = mode
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
         self.presentFormulaEditor = presentFormulaEditor
@@ -733,10 +735,25 @@ final class RichTextAttachmentScreenComponent: Component {
                 editor.disablesInteractiveKeyboardGestureRecognizer = true
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
-                editor.document = component.initialContents ?? Document()
+                
+                var initialContents: Document?
+                var initialMedia: [String: Media] = [:]
+                var initialEmojiFiles: [Int64: TelegramMediaFile] = [:]
+                switch component.mode {
+                case let .edit(documentValue, mediaValue, emojiFilesValue):
+                    initialContents = documentValue
+                    initialMedia = mediaValue
+                    initialEmojiFiles = emojiFilesValue
+                case let .standalone(documentValue, mediaValue, emojiFilesValue):
+                    initialContents = documentValue
+                    initialMedia = mediaValue
+                    initialEmojiFiles = emojiFilesValue
+                }
+                
+                editor.document = initialContents ?? Document()
                 // Seed the picked-media store alongside the document (before the media-view provider runs)
                 // so any media referenced by the initial document resolves on first layout.
-                self.attachedMedia = component.initialMedia
+                self.attachedMedia = initialMedia
 
                 let emojiKeyboard = RichTextEmojiKeyboardController(context: component.context, editor: editor, requestLayout: { [weak self] in
                     guard let self, !self.isUpdating else { return }
@@ -746,7 +763,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Seed the keyboard's file store with the files of any custom emoji the initial document
                 // references (the `Document` carries only fileIds) — before the editor's first layout, so a
                 // custom emoji carried in from the chat composer renders, and its file survives back out.
-                emojiKeyboard.seedEmojiFiles(component.initialEmojiFiles)
+                emojiKeyboard.seedEmojiFiles(initialEmojiFiles)
 
                 editor.registerEmojiViewProvider { [weak self] id, size in
                     return self?.emojiKeyboard?.customEmojiView(forId: id, size: size)
@@ -911,7 +928,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 transition.setFrame(view: rightNavActionsBarView, frame: rightNavActionsBarFrame)
             }
 
-            if component.initialContents == nil {
+            if case .standalone = component.mode {
                 let titleSize = self.title.update(
                     transition: .immediate,
                     component: AnyComponent(

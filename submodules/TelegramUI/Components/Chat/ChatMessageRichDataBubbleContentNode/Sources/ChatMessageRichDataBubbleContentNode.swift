@@ -272,13 +272,23 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     /// non-pending-edit) InstantPage — the only rendering whose checkbox paths are safe to
     /// edit — AND the message is editable.
     private func checkboxesInteractive(item: ChatMessageBubbleContentItem, resolved: ResolvedRichDataContent) -> Bool {
-        // Only the `.original` key is eligible; `.translated` and `.pendingEdit` are inert.
-        guard case .original = resolved.key else {
+        // `.original` (server state) and `.pendingEdit` (an in-flight edit) are both eligible —
+        // keeping checkboxes live during the pending round-trip lets the user toggle several boxes
+        // in a row. `.translated` is inert, as is the translation-pending fallback (which reports an
+        // `.original` key over the genuine original page but with `isTranslating == true`).
+        switch resolved.key {
+        case .original, .pendingEdit:
+            break
+        case .translated:
             return false
         }
-        // The primary page is `attribute.instantPage` (class identity). The show-more
-        // (`fullInstantPage`) rendering also carries an `.original` key but a different page
-        // object, so an identity check excludes it. `originalAttribute` is Optional.
+        if resolved.isTranslating {
+            return false
+        }
+        // The primary page is the resolved attribute's `instantPage` (class identity). The show-more
+        // (`fullInstantPage`) rendering carries the same key but a different page object, so an
+        // identity check excludes it. `originalAttribute` is Optional (it is the pending edit's
+        // attribute in the `.pendingEdit` case).
         guard let attribute = resolved.originalAttribute, resolved.instantPage === attribute.instantPage else {
             return false
         }
@@ -761,7 +771,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         dateText: dateText,
                         type: statusType,
                         layoutInput: dateLayoutInput,
-                        constrainedSize: CGSize(width: suggestedBoundingWidth, height: .greatestFiniteMagnitude),
+                        constrainedSize: CGSize(width: boundingSize.width, height: .greatestFiniteMagnitude),
                         availableReactions: item.associatedData.availableReactions,
                         savedMessageTags: item.associatedData.savedMessageTags,
                         // Empty the status node's own reactions exactly when they are externalized

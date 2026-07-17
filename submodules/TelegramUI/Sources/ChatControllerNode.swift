@@ -4612,9 +4612,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
         let editorScreen = RichTextAttachmentScreen(
             context: self.context,
-            initialContents: seedDocument,
-            initialMedia: seedMedia,
-            initialEmojiFiles: seedEmojiFiles,
+            mode: .edit(initialDocument: seedDocument, media: seedMedia, emojiFiles: seedEmojiFiles),
             sendMessage: { [weak self] document, media, emojiFiles, sendWithoutFormatting in
                 guard let self else {
                     return
