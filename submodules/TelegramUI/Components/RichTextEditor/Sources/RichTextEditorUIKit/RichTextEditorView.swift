@@ -198,6 +198,11 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         public let link: String?
         public let hasSelection: Bool
         public let isInTable: Bool
+        /// True when a non-empty selection touches only paragraph text — no media or table block, and
+        /// neither endpoint is inside a table cell. A list marker can only be meaningfully applied to
+        /// paragraph blocks, so a host toolbar uses this to gate a per-selection List action. False for
+        /// a collapsed caret.
+        public let selectionIsTextOnly: Bool
         public let canUndo: Bool
         public let canRedo: Bool
         /// Number of `Block.blockQuote` containers enclosing the caret (0 = not in a quote; N = nested N levels

@@ -31,6 +31,21 @@ extension DocumentCanvasView {
         return (ca.bold, ca.italic, ca.underline, ca.strikethrough, ca.inlineCode, ca.spoiler)
     }
 
+    /// Whether the current (non-empty) selection covers only paragraph text — no media or table block.
+    /// `isInsideTable` handles a selection whose endpoint sits inside a cell; the box scan also rejects a
+    /// top-level selection that spans a media/table block while both endpoints stay in paragraphs (where
+    /// neither endpoint is "in table"). Code blocks and quotes are left in scope — `setList` no-ops on a
+    /// code block and applies to quoted paragraphs, matching the caret-case List action.
+    private func selectionIsTextOnly() -> Bool {
+        guard selFrom < selTo else { return false }
+        if isInsideTable(head) || isInsideTable(anchor) { return false }
+        for box in boxes where box is MediaBlockBox || box is TableBlockBox {
+            let lo = box.nodeStart, hi = box.nodeStart + box.nodeSize
+            if selFrom < hi && selTo > lo { return false }
+        }
+        return true
+    }
+
     func currentState() -> RichTextEditorView.EditorState {
         let topBlock = headTopLevelBlock()
         let fmt = currentInlineFormats()
@@ -46,6 +61,7 @@ extension DocumentCanvasView {
             // "in table" for toolbar purposes (so table-structural commands can enable).
             hasSelection: selFrom < selTo,
             isInTable: isInsideTable(head) || isInsideTable(anchor),
+            selectionIsTextOnly: selectionIsTextOnly(),
             canUndo: effectiveUndoManager?.canUndo ?? false,
             canRedo: effectiveUndoManager?.canRedo ?? false,
             blockQuoteDepth: blockQuoteDepth(at: head)

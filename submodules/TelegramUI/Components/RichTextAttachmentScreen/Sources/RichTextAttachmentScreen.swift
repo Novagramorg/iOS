@@ -50,17 +50,22 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
 
 private final class RichTextSendButtonComponent: Component {
     let theme: PresentationTheme
+    let isEnabled: Bool
     let isLocked: Bool
     let action: () -> Void
 
-    init(theme: PresentationTheme, isLocked: Bool, action: @escaping () -> Void) {
+    init(theme: PresentationTheme, isEnabled: Bool, isLocked: Bool, action: @escaping () -> Void) {
         self.theme = theme
+        self.isEnabled = isEnabled
         self.isLocked = isLocked
         self.action = action
     }
 
     static func ==(lhs: RichTextSendButtonComponent, rhs: RichTextSendButtonComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.isEnabled != rhs.isEnabled {
             return false
         }
         if lhs.isLocked != rhs.isLocked {
@@ -104,9 +109,9 @@ private final class RichTextSendButtonComponent: Component {
                 component: AnyComponent(GlassControlGroupComponent(
                     theme: component.theme,
                     preferClearGlass: false,
-                    background: .activeTint(inset: false),
+                    background: component.isEnabled ? .activeTint(inset: false) : .color(component.theme.chat.inputPanel.panelControlDisabledColor),
                     items: [
-                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: component.action)
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: component.isEnabled ? component.action : nil)
                     ],
                     minWidth: 44.0
                 )),
@@ -214,7 +219,7 @@ private final class RichTextSendButtonComponent: Component {
 }
 
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
-    public typealias Document = RichTextEditorCore::Document
+    public typealias Document = RichTextEditorCoreDocument
     
     public enum Mode {
         case standalone(savedDraft: Document?, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile])
@@ -397,6 +402,7 @@ final class RichTextAttachmentScreenComponent: Component {
     }
 
     final class View: UIView {
+        private let navigationTapView: UIView
         private let title = ComponentView<Empty>()
         private let leftNavActionsBar = ComponentView<Empty>()
         private let rightNavActionsBar = ComponentView<Empty>()
@@ -452,6 +458,8 @@ final class RichTextAttachmentScreenComponent: Component {
         private var appliedTheme: PresentationTheme?
 
         override init(frame: CGRect) {
+            self.navigationTapView = UIView()
+            
             super.init(frame: frame)
         }
 
@@ -558,6 +566,308 @@ final class RichTextAttachmentScreenComponent: Component {
             component.context.sharedContext.mainWindow?.presentNative(alert)
         }
 
+        /// Presents the list-marker picker (None / Bullet / Numbered / Checklist), applying the choice to
+        /// the paragraphs the current caret or selection touches. Shared by the caret-case "add block"
+        /// bar and the text-only selection bar.
+        private func presentListMenu(from sourceView: UIView) {
+            guard let component = self.component, let environment = self.environment else {
+                return
+            }
+            guard let controller = environment.controller() as? RichTextAttachmentScreen else {
+                return
+            }
+
+            let current = self.editor.currentState().listMarker
+
+            var items: [ContextMenuItem] = []
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_None, icon: { theme in
+                UIImage()
+            }, additionalLeftIcon: { theme in
+                return current == nil ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(nil)
+            })))
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Bullet, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatBulletList"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: { theme in
+                return current == .bullet ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(.bullet)
+            })))
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Numbered, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatNumberList"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: { theme in
+                return current == .ordered ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(.ordered)
+            })))
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Checklist, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatChecklist"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: { theme in
+                return current == .checklist ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(.checklist)
+            })))
+
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let contextController = makeContextController(
+                presentationData: presentationData,
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            )
+            (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+        }
+        
+        /// Normalizes the caret's / selection's paragraph(s) to plain body text, stripping any block
+        /// container they sit in: a code block or pull quote is toggled back to body paragraphs; a list
+        /// marker and every enclosing block-quote level are removed; a heading (or any other non-body
+        /// style) is down-converted. Backs the "Text" item in `presentAddMenu`.
+        private func convertToBodyText() {
+            let live = self.editor.currentState()
+            // Code blocks and pull quotes are standalone box types, each with its own toggle-off that
+            // splits back into body paragraphs — so they replace, rather than compose with, the steps below.
+            if live.isCodeBlock {
+                self.editor.makeCodeBlock()
+                return
+            }
+            if live.isPullQuote {
+                self.editor.makePullQuote()
+                return
+            }
+            // Unwrap every enclosing block-quote level FIRST: `setList` only mutates top-level boxes, so a
+            // quoted list item must be promoted to a top-level paragraph before its list marker can be cleared.
+            var guardCount = 0
+            while self.editor.currentState().blockQuoteDepth > 0 && guardCount < 32 {
+                self.editor.unwrapBlockQuoteLevel()
+                guardCount += 1
+            }
+            if self.editor.currentState().listMarker != nil {
+                self.editor.setList(nil)
+            }
+            self.editor.setParagraphStyle(.body)
+        }
+
+        private func presentAddMenu(from sourceView: UIView) {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() as? RichTextAttachmentScreen else {
+                return
+            }
+            
+            let editorState = self.editor.currentState()
+            
+            var items: [ContextMenuItem] = []
+            
+            if !editorState.hasSelection {
+                items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeading, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
+                }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                    return UIImage(bundleImageName: "Premium/ContextStar")
+                }, action: { [weak self] c, _ in
+                    guard let self, let environment = self.environment else {
+                        c?.dismiss(completion: nil)
+                        return
+                    }
+                    
+                    let live = self.editor.currentState()
+                    
+                    var subItems: [ContextMenuItem] = []
+                    subItems.append(.action(ContextMenuActionItem(text: environment.strings.ChatList_Context_Back, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                    }, iconPosition: .left, action: { c, _ in
+                        c?.popItems()
+                    })))
+                    subItems.append(.separator)
+                    for level in 0 ..< 6 {
+                        let fontSize: CGFloat
+                        switch level {
+                        case 0:
+                            fontSize = 24
+                        case 1:
+                            fontSize = 21
+                        case 2:
+                            fontSize = 19
+                        case 3:
+                            fontSize = 18
+                        case 4:
+                            fontSize = 17
+                        case 5:
+                            fontSize = 16
+                        default:
+                            fontSize = 24
+                        }
+                        
+                        let mappedStyle: ParagraphStyleName
+                        switch level {
+                        case 0:
+                            mappedStyle = .heading1
+                        case 1:
+                            mappedStyle = .heading2
+                        case 2:
+                            mappedStyle = .heading3
+                        case 3:
+                            mappedStyle = .heading4
+                        case 4:
+                            mappedStyle = .heading5
+                        case 5:
+                            mappedStyle = .heading6
+                        default:
+                            mappedStyle = .heading1
+                        }
+                        
+                        subItems.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeadingItem("\(level + 1)").string, textFont: .custom(font: Font.with(size: fontSize, design: .serif, weight: .semibold), height: nil, verticalOffset: nil), icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading\(level + 1)"), color: theme.contextMenu.primaryColor)
+                        }, additionalLeftIcon: { theme in
+                            return live.paragraphStyle == mappedStyle ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+                        }, iconPosition: .left, action: { [weak self] _, f in
+                            guard let self else {
+                                f(.default)
+                                return
+                            }
+                            
+                            self.editor.setParagraphStyle(mappedStyle)
+                            
+                            f(.default)
+                        })))
+                    }
+                    c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+                })))
+            }
+            
+            // "Text" normalizes to a plain body paragraph. Offer it whenever there is no selection (so the
+            // caret's paragraph can always be reset — e.g. a heading down-converted), or when the selection
+            // is not already plain body text: it sits in a block container (quote / code / list / pull quote)
+            // or carries a non-body paragraph style (a heading). Tapping it strips that container/style.
+            let isPlainBody = !editorState.isCodeBlock
+                && !editorState.isPullQuote
+                && editorState.listMarker == nil
+                && editorState.blockQuoteDepth == 0
+                && (editorState.paragraphStyle == nil || editorState.paragraphStyle == .body)
+            if !editorState.hasSelection || !isPlainBody {
+                items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuText, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatText"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] c, _ in
+                    guard let self else {
+                        c?.dismiss(completion: nil)
+                        return
+                    }
+
+                    self.convertToBodyText()
+                    c?.dismiss(completion: nil)
+                })))
+            }
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuQuote, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatQuote"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+                
+                let live = self.editor.currentState()
+                if live.blockQuoteDepth > 0 {
+                    self.editor.unwrapBlockQuoteLevel()
+                } else {
+                    self.editor.wrapInBlockQuote()
+                }
+                c?.dismiss(completion: nil)
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuPullquote, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatPullquote"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                return UIImage(bundleImageName: "Premium/ContextStar")
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+                
+                let live = self.editor.currentState()
+                if live.blockQuoteDepth > 0 {
+                    self.editor.unwrapBlockQuoteLevel()
+                }
+                if live.isPullQuote {
+                } else {
+                    self.editor.makePullQuote()
+                }
+                c?.dismiss(completion: nil)
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuCode, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatCode"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                return UIImage(bundleImageName: "Premium/ContextStar")
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+                
+                let live = self.editor.currentState()
+                if live.blockQuoteDepth > 0 {
+                    self.editor.unwrapBlockQuoteLevel()
+                }
+                if live.isCodeBlock {
+                } else {
+                    self.editor.makeCodeBlock()
+                }
+                c?.dismiss(completion: nil)
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuFormula, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                return UIImage(bundleImageName: "Premium/ContextStar")
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+                
+                self.component?.presentFormulaEditor?(nil, { [weak self] latex in
+                    guard let self else {
+                        return
+                    }
+                    self.editor.insertFormula(latex: latex)
+                    DispatchQueue.main.async { [weak self] in
+                        self?.editor.becomeFirstResponder()
+                    }
+                })
+                
+                c?.dismiss(completion: nil)
+            })))
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let contextController = makeContextController(
+                presentationData: presentationData,
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            )
+            (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+        }
+
         private func presentActionMenu(from sourceView: UIView, items: [ContextMenuItem]) {
             guard let component = self.component else { return }
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
@@ -632,31 +942,8 @@ final class RichTextAttachmentScreenComponent: Component {
             defer { self.isUpdating = false }
 
             if self.component == nil {
-                /*let table = TableBlock(id: BlockID("t"),
-                    columns: [ColumnSpec(width: 140), ColumnSpec(width: 110), ColumnSpec(width: 110)],
-                    rows: [
-                        Row(id: BlockID("r0"), isHeader: true, cells: [textCell("h0", ["Name"]), textCell("h1", ["Mass (suns)"]), textCell("h2", ["Distance"])]),
-                        Row(id: BlockID("r1"), cells: [
-                            Cell(id: BlockID("c0"), blocks: [.paragraph(ParagraphBlock(id: BlockID("c0p"),
-                                runs: [TextRun(text: "Sagittarius A*")]))]),
-                            textCell("c1", ["4.3 M"]), textCell("c2", ["26,000 ly"])]),
-                        Row(id: BlockID("r2"), cells: [textCell("d0", ["M87*"]), textCell("d1", ["6.5 B"]), textCell("d2", ["53M ly"])]),
-                    ])
-                let wideTable = TableBlock(id: BlockID("wt"),
-                    columns: [ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100),
-                              ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100)],
-                    rows: [
-                        Row(id: BlockID("wr0"), isHeader: true, cells: [
-                            textCell("w00", ["Col 1"]), textCell("w01", ["Col 2"]), textCell("w02", ["Col 3"]),
-                            textCell("w03", ["Col 4"]), textCell("w04", ["Col 5"]), textCell("w05", ["Col 6"]),
-                            textCell("w06", ["Col 7"]),
-                        ]),
-                        Row(id: BlockID("wr1"), cells: [
-                            textCell("w10", ["A"]), textCell("w11", ["B"]), textCell("w12", ["C"]),
-                            textCell("w13", ["D"]), textCell("w14", ["E"]), textCell("w15", ["F"]),
-                            textCell("w16", ["G"]),
-                        ]),
-                    ])*/
+                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode)
+                
                 // The screen paints `list.plainBackgroundColor` (below); clear the editor's opaque default
                 // `.systemBackground` so that themed surface shows through.
                 editor.canvasBackgroundColor = .clear
@@ -878,6 +1165,11 @@ final class RichTextAttachmentScreenComponent: Component {
             
             let editorState = self.editor.currentState()
             
+            if self.navigationTapView.superview == nil {
+                component.overNavigationContainer.addSubview(self.navigationTapView)
+            }
+            transition.setFrame(view: self.navigationTapView, frame: CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: environment.navigationHeight)))
+            
             let leftNavActionsBarSize = self.leftNavActionsBar.update(
                 transition: transition,
                 component: AnyComponent(GlassControlGroupComponent(
@@ -1007,270 +1299,37 @@ final class RichTextAttachmentScreenComponent: Component {
                     action: editorState.hasSelection ? { [weak self] _ in self?.presentLinkPrompt() } : nil,
                     isSelected: editorState.link != nil
                 ))
+                // A list/quote/etc. marker can only apply to paragraph text, so offer it only when the selection
+                // covers no media or table block (see `EditorState.selectionIsTextOnly`).
+                if editorState.selectionIsTextOnly {
+                    barActions.append(RichTextActionBarComponent.Action(
+                        id: AnyHashable("list"), icon: "RichText/ToolList",
+                        action: { [weak self] sourceView in self?.presentListMenu(from: sourceView) },
+                        isSelected: editorState.listMarker != nil,
+                        showsPremiumBadge: !component.context.isPremium
+                    ))
+                    
+                    barActions.append(RichTextActionBarComponent.Action(
+                        id: AnyHashable("quote"), icon: "RichText/ToolQuote",
+                        action: { [weak self] sourceView in self?.presentAddMenu(from: sourceView) },
+                        isSelected: editorState.listMarker != nil,
+                        showsPremiumBadge: !component.context.isPremium
+                    ))
+                }
             } else {
                 barActionsId = 0
                 
                 barActions.append(RichTextActionBarComponent.Action(
                     id: AnyHashable("add"), icon: "Chat/Context Menu/Add",
                     action: editorState.isInTable ? nil : { [weak self] sourceView in
-                        guard let self else {
-                            return
-                        }
-                        guard let controller = environment.controller() as? RichTextAttachmentScreen else {
-                            return
-                        }
-                        
-                        var items: [ContextMenuItem] = []
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeading, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self, let environment = self.environment else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            
-                            var subItems: [ContextMenuItem] = []
-                            subItems.append(.action(ContextMenuActionItem(text: environment.strings.ChatList_Context_Back, icon: { theme in
-                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
-                            }, iconPosition: .left, action: { c, _ in
-                                c?.popItems()
-                            })))
-                            subItems.append(.separator)
-                            for level in 0 ..< 6 {
-                                let fontSize: CGFloat
-                                switch level {
-                                case 0:
-                                    fontSize = 24
-                                case 1:
-                                    fontSize = 21
-                                case 2:
-                                    fontSize = 19
-                                case 3:
-                                    fontSize = 18
-                                case 4:
-                                    fontSize = 17
-                                case 5:
-                                    fontSize = 16
-                                default:
-                                    fontSize = 24
-                                }
-                                
-                                let mappedStyle: ParagraphStyleName
-                                switch level {
-                                case 0:
-                                    mappedStyle = .heading1
-                                case 1:
-                                    mappedStyle = .heading2
-                                case 2:
-                                    mappedStyle = .heading3
-                                case 3:
-                                    mappedStyle = .heading4
-                                case 4:
-                                    mappedStyle = .heading5
-                                case 5:
-                                    mappedStyle = .heading6
-                                default:
-                                    mappedStyle = .heading1
-                                }
-                                
-                                subItems.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeadingItem("\(level + 1)").string, textFont: .custom(font: Font.with(size: fontSize, design: .serif, weight: .semibold), height: nil, verticalOffset: nil), icon: { theme in
-                                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading\(level + 1)"), color: theme.contextMenu.primaryColor)
-                                }, additionalLeftIcon: { theme in
-                                    return live.paragraphStyle == mappedStyle ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                                }, iconPosition: .left, action: { [weak self] _, f in
-                                    guard let self else {
-                                        f(.default)
-                                        return
-                                    }
-                                    
-                                    self.editor.setParagraphStyle(mappedStyle)
-                                    
-                                    f(.default)
-                                })))
-                            }
-                            c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuText, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatText"), color: theme.contextMenu.primaryColor)
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            self.editor.setParagraphStyle(.body)
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuQuote, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatQuote"), color: theme.contextMenu.primaryColor)
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            if live.blockQuoteDepth > 0 {
-                                self.editor.unwrapBlockQuoteLevel()
-                            } else {
-                                self.editor.wrapInBlockQuote()
-                            }
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuPullquote, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatPullquote"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            if live.blockQuoteDepth > 0 {
-                                self.editor.unwrapBlockQuoteLevel()
-                            }
-                            if live.isPullQuote {
-                            } else {
-                                self.editor.makePullQuote()
-                            }
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuCode, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatCode"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            if live.blockQuoteDepth > 0 {
-                                self.editor.unwrapBlockQuoteLevel()
-                            }
-                            if live.isCodeBlock {
-                            } else {
-                                self.editor.makeCodeBlock()
-                            }
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuFormula, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            self.component?.presentFormulaEditor?(nil, { [weak self] latex in
-                                guard let self else {
-                                    return
-                                }
-                                self.editor.insertFormula(latex: latex)
-                                DispatchQueue.main.async { [weak self] in
-                                    self?.editor.becomeFirstResponder()
-                                }
-                            })
-                            
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                        let contextController = makeContextController(
-                            presentationData: presentationData,
-                            source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
-                            items: .single(ContextController.Items(content: .list(items))),
-                            gesture: nil
-                        )
-                        (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+                        self?.presentAddMenu(from: sourceView)
                     },
                     isSelected: false
                 ))
                 barActions.append(RichTextActionBarComponent.Action(
                     id: AnyHashable("list"), icon: "RichText/ToolList",
                     action: editorState.isInTable ? nil : { [weak self] sourceView in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        guard let controller = environment.controller() as? RichTextAttachmentScreen else {
-                            return
-                        }
-                        
-                        let current = self.editor.currentState().listMarker
-                        
-                        var items: [ContextMenuItem] = []
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_None, icon: { theme in
-                            UIImage()
-                        }, additionalLeftIcon: { theme in
-                            return current == nil ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Bullet, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatBulletList"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { theme in
-                            return current == .bullet ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, iconPosition: .left, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(.bullet)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Numbered, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatNumberList"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { theme in
-                            return current == .ordered ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, iconPosition: .left, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(.ordered)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Checklist, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatChecklist"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { theme in
-                            return current == .checklist ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, iconPosition: .left, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(.checklist)
-                        })))
-                        
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                        let contextController = makeContextController(
-                            presentationData: presentationData,
-                            source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
-                            items: .single(ContextController.Items(content: .list(items))),
-                            gesture: nil
-                        )
-                        (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+                        self?.presentListMenu(from: sourceView)
                     },
                     isSelected: false,
                     showsPremiumBadge: !component.context.isPremium
@@ -1435,10 +1494,17 @@ final class RichTextAttachmentScreenComponent: Component {
                 containerSize: CGSize(width: 44.0, height: 44.0)
             )
             
+            var isSendEnabled = true
+            let content = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
+            if content.isEmptyWhitespaceTrimmed {
+                isSendEnabled = false
+            }
+            
             let sendButtonSize = self.sendButton.update(
                 transition: transition,
                 component: AnyComponent(RichTextSendButtonComponent(
                     theme: environment.theme,
+                    isEnabled: isSendEnabled,
                     isLocked: isSendRichFormattingLocked,
                     action: { [weak self] in
                         guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
