@@ -405,8 +405,9 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView, UIScrollVie
         background.frame = CGRect(origin: .zero, size: buttonSize)
         background.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: true, tintColor: .init(kind: .panel), transition: .immediate)
         button.frame = CGRect(origin: .zero, size: buttonSize)
-        let symbolName = self.displayMode == .slideshow ? "square.grid.2x2" : "rectangle.stack"
-        iconView.image = generateTintedImage(image: UIImage(systemName: symbolName), color: .white)
+        let imageName = self.displayMode == .slideshow ? "RichText/ToolCollage" : "RichText/ToolSlideshow"
+        iconView.image = UIImage(bundleImageName: imageName)?.withRenderingMode(.alwaysTemplate)
+        iconView.tintColor = .white
         iconView.frame = CGRect(origin: .zero, size: buttonSize)
         self.bringSubviewToFront(container)
     }
