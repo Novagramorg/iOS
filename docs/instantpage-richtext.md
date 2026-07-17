@@ -122,8 +122,17 @@ Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026
 composer (`ChatInputContentInstantPage`) and the article editor (`RichTextEditorMessageConversion`'s
 `InstantPageBuilder`) converters — the first editor/rich-message path to produce a `.collage` block
 (needed zero codec work; it was already first-class through Postbox/FlatBuffers/upload). A container of
-exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before. `.slideshow`
-remains produced only by real web Instant View articles.
+exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before.
+
+**`.slideshow` is now editor-produced too (added 2026-07-17).** A multi-media container carries a
+`displayMode` (`.mosaic` default / `.slideshow`; mirrored `MediaBlock.displayMode` ↔
+`ChatInputMedia.displayMode`, Codable back-compat → `.mosaic`). Both forward converters branch on it:
+`.mosaic → .collage`, `.slideshow → .slideshow` (same inner `.image`/`.video` blocks); the reverse
+`chatInputBlocks(fromInstantPageBlocks:)` gained a `.slideshow` arm (sharing the collage arm's item
+helper) so the mode round-trips on edit. The mode is toggled in the **article editor** via a top-right
+button (mosaic↔slideshow); the composer stays mosaic-only. So `.slideshow` is now produced both by real
+web Instant View articles and by editor-authored slideshow albums. Design + plan:
+`docs/superpowers/{specs,plans}/2026-07-17-richtext-media-layout-toggle*`.
 
 ### Where things live
 

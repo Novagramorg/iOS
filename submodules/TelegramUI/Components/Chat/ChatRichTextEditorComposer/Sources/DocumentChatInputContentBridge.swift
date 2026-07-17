@@ -71,6 +71,7 @@ public func chatInputContent(
                 items: resolvedItems,
                 displayWidth: media.displayWidth,
                 alignment: chatInputMediaAlignment(fromAlignment: media.alignment),
+                displayMode: media.displayMode == .slideshow ? .slideshow : .mosaic,
                 caption: chatInputRuns(fromRuns: media.caption, resolveEmoji: resolveEmoji)
             )))
         case let .table(table):
@@ -343,6 +344,7 @@ private func documentBlocks(
             },
             displayWidth: media.displayWidth,
             alignment: mediaAlignment(fromChatInputAlignment: media.alignment),
+            displayMode: media.displayMode == .slideshow ? .slideshow : .mosaic,
             caption: runs(fromChatInputRuns: media.caption, registerEmoji: registerEmoji)
         ))]
     case let .table(table):

@@ -726,6 +726,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         }
                     case .delete:
                         request.delete()
+                    case .toggleLayout:
+                        request.toggleLayout?()
                     }
                 }
                 editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
@@ -781,7 +783,7 @@ final class RichTextAttachmentScreenComponent: Component {
                     })
                 }
 
-                editor.registerMediaViewProvider { [weak self] items, _, existing in
+                editor.registerMediaViewProvider { [weak self] items, _, displayMode, existing in
                     guard let self, let component = self.component else { return nil }
                     // Theme an audio row to the editor's accent/text scheme (same `list.item*` sources as
                     // `mapEditorTheme` / the table); ignored for image/map media.
@@ -800,10 +802,10 @@ final class RichTextAttachmentScreenComponent: Component {
                     // In-place update: reuse the existing container (surviving photo/video cells keep their bound
                     // fetch, no re-flash) across add-more / delete-one; else build a fresh one.
                     if let view = existing as? MediaItemNodeView {
-                        view.updateResolvedItems(resolved)
+                        view.updateResolvedItems(resolved, displayMode: displayMode)
                         return view
                     }
-                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors)
+                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors, displayMode: displayMode)
                 }
 
                 // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette

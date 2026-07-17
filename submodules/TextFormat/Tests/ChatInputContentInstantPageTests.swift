@@ -706,4 +706,42 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         XCTAssertTrue(m.items[0].isSpoiler)
         XCTAssertFalse(m.items[1].isSpoiler)
     }
+
+    // 27. Task 5: a mosaic-mode multi-item container forwards to `.collage` (not `.slideshow`) and the reverse
+    // recovers `displayMode: .mosaic` explicitly (not just the Codable default — see the slideshow test below for
+    // the case that actually distinguishes the two).
+    func test_displayMode_mosaic_roundTripsViaCollage() {
+        let img1 = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [imageRep(100, 100)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let img2 = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 2), representations: [imageRep(60, 90)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(items: [
+            ChatInputMediaItem(media: img1, kind: .image, naturalSize: ChatInputSize(width: 100, height: 100)),
+            ChatInputMediaItem(media: img2, kind: .image, naturalSize: ChatInputSize(width: 60, height: 90)),
+        ], displayWidth: nil, alignment: .center, displayMode: .mosaic, caption: []))])
+        let page = instantPage(from: content)
+        guard case .collage = page.blocks.first else { return XCTFail("expected .collage for mosaic mode") }
+        let back = chatInputContent(fromInstantPage: page)
+        guard case let .media(m)? = back.blocks.first else { return XCTFail("expected .media") }
+        XCTAssertEqual(m.displayMode, .mosaic)
+        XCTAssertEqual(back, content)
+    }
+
+    // 28. Task 5: a slideshow-mode multi-item container forwards to a `.slideshow` InstantPage block (NOT
+    // `.collage`), and the reverse recovers `displayMode: .slideshow` — the round-trip that actually exercises
+    // the new `.slideshow` production/consumption added by Task 5.
+    func test_displayMode_slideshow_roundTripsViaSlideshowBlock() {
+        let img1 = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 3), representations: [imageRep(100, 100)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let img2 = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 4), representations: [imageRep(60, 90)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(items: [
+            ChatInputMediaItem(media: img1, kind: .image, naturalSize: ChatInputSize(width: 100, height: 100)),
+            ChatInputMediaItem(media: img2, kind: .video, naturalSize: ChatInputSize(width: 60, height: 90)),
+        ], displayWidth: nil, alignment: .center, displayMode: .slideshow, caption: []))])
+        // Forward produces a `.slideshow` block, not `.collage`.
+        let page = instantPage(from: content)
+        guard case .slideshow = page.blocks.first else { return XCTFail("expected .slideshow for slideshow mode") }
+        // Reverse recovers `displayMode: .slideshow` and the full round-trip is identity.
+        let back = chatInputContent(fromInstantPage: page)
+        guard case let .media(m)? = back.blocks.first else { return XCTFail("expected .media") }
+        XCTAssertEqual(m.displayMode, .slideshow)
+        XCTAssertEqual(back, content)
+    }
 }

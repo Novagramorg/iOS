@@ -268,7 +268,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // but never renders. Both `mediaItemViewFactory` and `mediaByID` are read LAZILY, so the panel may set
         // the factory after this registration. The returned `(UIView & RichTextMediaItemView)?` is assignable
         // to the provider's `RichTextMediaItemView?` return type.
-        self.editorView.registerMediaViewProvider { [weak self] items, _, existing in
+        self.editorView.registerMediaViewProvider { [weak self] items, _, _, existing in
             guard let self, let factory = self.mediaItemViewFactory else { return nil }
             let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
                 guard let media = self.mediaByID[item.mediaID] else { return nil }

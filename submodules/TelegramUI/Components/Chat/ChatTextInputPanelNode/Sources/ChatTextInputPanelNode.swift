@@ -1255,6 +1255,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 break   // the "+" button is not built yet
             case .delete:
                 context.delete()
+            case .toggleLayout:
+                break   // mosaic↔slideshow toggle is article-editor only; the composer is mosaic-only
             }
         }
         // Report "typing…" chat activity on a genuine text edit. The legacy backend gets this from

@@ -94,7 +94,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                         continue
                     }
                 }
-                result.append(.collage(items: innerBlocks, caption: caption))
+                switch m.displayMode {
+                case .mosaic:    result.append(.collage(items: innerBlocks, caption: caption))
+                case .slideshow: result.append(.slideshow(items: innerBlocks, caption: caption))
+                }
                 break
             }
             // Single item: byte-identical to the pre-container output.
@@ -244,6 +247,29 @@ private func chatInputNaturalSize(fromMedia media: Media) -> ChatInputSize {
     return ChatInputSize(width: Double(dimensions.width), height: Double(dimensions.height))
 }
 
+/// Shared by the `.collage` (mosaic) and `.slideshow` reverse arms: resolve each inner `.image`/`.video` block's
+/// `Media` from the page dict and recover its `naturalSize`/`isSpoiler`, exactly as the single-item `.image`/`.video`
+/// arms do. The two container kinds differ ONLY in the resulting `ChatInputMedia.displayMode` (set by the caller),
+/// not in how their inner items are resolved.
+private func chatInputMediaItems(fromInnerBlocks innerBlocks: [InstantPageBlock], media: [MediaId: Media]) -> [ChatInputMediaItem] {
+    var items: [ChatInputMediaItem] = []
+    for inner in innerBlocks {
+        switch inner {
+        case let .image(id, _, _, _, spoiler):
+            if let m = media[id] {
+                items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
+            }
+        case let .video(id, _, _, _, spoiler):
+            if let m = media[id] {
+                items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
+            }
+        default:
+            break   // collage/slideshow only ever carry image/video from the forward
+        }
+    }
+    return items
+}
+
 func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [MediaId: Media] = [:]) -> [ChatInputBlock] {
     var result: [ChatInputBlock] = []
     for block in blocks {
@@ -314,24 +340,21 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
         case let .collage(innerBlocks, caption):
             // Rebuild a multi-item container. Each inner .image/.video resolves its Media from the page dict;
             // naturalSize is recovered from the resolved Media (as for single .image/.video). displayWidth /
-            // alignment canonicalize to nil / .center (not representable — same as the single case).
-            var items: [ChatInputMediaItem] = []
-            for inner in innerBlocks {
-                switch inner {
-                case let .image(id, _, _, _, spoiler):
-                    if let m = media[id] {
-                        items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
-                    }
-                case let .video(id, _, _, _, spoiler):
-                    if let m = media[id] {
-                        items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m), isSpoiler: spoiler))
-                    }
-                default:
-                    break   // collage only ever carries image/video from the forward
-                }
-            }
+            // alignment canonicalize to nil / .center (not representable — same as the single case). `.collage`
+            // is the mosaic-mode wire representation (see `.slideshow` below for the slideshow-mode twin).
+            let items = chatInputMediaItems(fromInnerBlocks: innerBlocks, media: media)
             if !items.isEmpty {
                 result.append(.media(ChatInputMedia(items: items, displayWidth: nil, alignment: .center,
+                                                    displayMode: .mosaic,
+                                                    caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .slideshow(innerBlocks, caption):
+            // Mirror of `.collage` above — the ONLY difference is `displayMode: .slideshow`. Shares the inner
+            // .image/.video → [ChatInputMediaItem] resolution via `chatInputMediaItems(fromInnerBlocks:media:)`.
+            let items = chatInputMediaItems(fromInnerBlocks: innerBlocks, media: media)
+            if !items.isEmpty {
+                result.append(.media(ChatInputMedia(items: items, displayWidth: nil, alignment: .center,
+                                                    displayMode: .slideshow,
                                                     caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .audio(id, caption):

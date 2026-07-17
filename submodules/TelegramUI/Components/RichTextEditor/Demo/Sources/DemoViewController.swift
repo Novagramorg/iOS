@@ -78,7 +78,7 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
                 .paragraph(ParagraphBlock(id: BlockID("end"), runs: [TextRun(text: "")])),
             ])
 
-        editor.registerMediaViewProvider { items, _, _ in DemoMediaItemView(mediaID: items.first?.mediaID ?? "") }
+        editor.registerMediaViewProvider { items, _, _, _ in DemoMediaItemView(mediaID: items.first?.mediaID ?? "") }
 
         editor.registerEmojiViewProvider { id, size in
             switch id {

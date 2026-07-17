@@ -782,6 +782,13 @@ extension ChatInputMediaItem: Codable {
     }
 }
 
+/// Mirrors the editor's `MediaDisplayMode` — how a multi-item container lays out (mosaic → `.collage`,
+/// slideshow → `.slideshow`). Meaningful only for `items.count >= 2`; default `.mosaic`.
+public enum ChatInputMediaDisplayMode: String, Codable, Equatable {
+    case mosaic
+    case slideshow
+}
+
 /// An attached media container (one or more images/videos) with a single inline caption. Mirrors the editor
 /// `MediaBlock` — items carry concrete `Media` (resolved from the editor's opaque `mediaID` at conversion time).
 public struct ChatInputMedia: Equatable {
@@ -790,22 +797,27 @@ public struct ChatInputMedia: Equatable {
     public var displayWidth: Double?
     /// Honored only when `items.count == 1`.
     public var alignment: ChatInputMediaAlignment
+    /// Layout mode for a multi-item container; honored only when `items.count >= 2`. Default `.mosaic`.
+    public var displayMode: ChatInputMediaDisplayMode
     public var caption: [ChatInputRun]
 
     public init(items: [ChatInputMediaItem], displayWidth: Double? = nil,
-                alignment: ChatInputMediaAlignment = .center, caption: [ChatInputRun] = []) {
+                alignment: ChatInputMediaAlignment = .center, displayMode: ChatInputMediaDisplayMode = .mosaic,
+                caption: [ChatInputRun] = []) {
         self.items = items
         self.displayWidth = displayWidth
         self.alignment = alignment
+        self.displayMode = displayMode
         self.caption = caption
     }
 
     /// Convenience single-media initializer — reproduces the pre-container API.
     public init(media: Media, kind: ChatInputMediaKind, naturalSize: ChatInputSize,
                 displayWidth: Double? = nil, alignment: ChatInputMediaAlignment = .center,
+                displayMode: ChatInputMediaDisplayMode = .mosaic,
                 caption: [ChatInputRun] = []) {
         self.init(items: [ChatInputMediaItem(media: media, kind: kind, naturalSize: naturalSize)],
-                  displayWidth: displayWidth, alignment: alignment, caption: caption)
+                  displayWidth: displayWidth, alignment: alignment, displayMode: displayMode, caption: caption)
     }
 
     // Single-media convenience accessors (FIRST item).
@@ -817,13 +829,14 @@ public struct ChatInputMedia: Equatable {
         return lhs.items == rhs.items
             && lhs.displayWidth == rhs.displayWidth
             && lhs.alignment == rhs.alignment
+            && lhs.displayMode == rhs.displayMode
             && lhs.caption == rhs.caption
     }
 }
 
 extension ChatInputMedia: Codable {
     private enum CodingKeys: String, CodingKey {
-        case items, displayWidth, alignment, caption
+        case items, displayWidth, alignment, displayMode, caption
         // Legacy (pre-container) single-media keys:
         case media, mediaType, kind, naturalSize
     }
@@ -833,6 +846,7 @@ extension ChatInputMedia: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.displayWidth = try container.decodeIfPresent(Double.self, forKey: .displayWidth)
         self.alignment = try container.decode(ChatInputMediaAlignment.self, forKey: .alignment)
+        self.displayMode = try container.decodeIfPresent(ChatInputMediaDisplayMode.self, forKey: .displayMode) ?? .mosaic
         self.caption = try container.decode([ChatInputRun].self, forKey: .caption)
         if let items = try container.decodeIfPresent([ChatInputMediaItem].self, forKey: .items) {
             self.items = items
@@ -861,6 +875,7 @@ extension ChatInputMedia: Codable {
         try container.encode(self.items, forKey: .items)
         try container.encodeIfPresent(self.displayWidth, forKey: .displayWidth)
         try container.encode(self.alignment, forKey: .alignment)
+        try container.encode(self.displayMode, forKey: .displayMode)
         try container.encode(self.caption, forKey: .caption)
     }
 }

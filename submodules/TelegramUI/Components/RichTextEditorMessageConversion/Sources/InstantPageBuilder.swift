@@ -58,7 +58,10 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                         continue
                     }
                 }
-                pageBlocks.append(.collage(items: innerBlocks, caption: caption))
+                switch mediaBlock.displayMode {
+                case .mosaic:    pageBlocks.append(.collage(items: innerBlocks, caption: caption))
+                case .slideshow: pageBlocks.append(.slideshow(items: innerBlocks, caption: caption))
+                }
             } else if let resolved = media[mediaBlock.mediaID] {
                 switch mediaBlock.kind {
                 case .image, .video, .audio:

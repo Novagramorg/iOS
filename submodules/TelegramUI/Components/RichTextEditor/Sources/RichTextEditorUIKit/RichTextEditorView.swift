@@ -551,7 +551,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// is the currently-hosted view on an items-change (nil on first realization) — the host may update it in
     /// place and return the SAME instance (surviving cells reused) or return a fresh one.
     public func registerMediaViewProvider(
-        _ provider: @escaping ([MediaProviderItem], BlockID, RichTextMediaItemView?) -> RichTextMediaItemView?
+        _ provider: @escaping ([MediaProviderItem], BlockID, MediaDisplayMode, RichTextMediaItemView?) -> RichTextMediaItemView?
     ) {
         canvas.mediaViewProvider = provider
     }

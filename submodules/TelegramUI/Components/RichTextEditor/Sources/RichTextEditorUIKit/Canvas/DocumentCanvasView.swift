@@ -85,7 +85,7 @@ final class DocumentCanvasView: UIView {
     /// `existing` is the currently-hosted view for this block on an items-change (nil otherwise); the host
     /// may update it IN PLACE and return the SAME instance (surviving cells reused, fetch preserved) or
     /// return a fresh instance (recreate fallback). Returns nil = "not ready" (keep any existing view).
-    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _ in nil }
+    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ displayMode: MediaDisplayMode, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _, _ in nil }
     /// Hosted media views, keyed by the OWNING block's `BlockID` (the occurrence) so edits/undo reuse —
     /// not recreate — them, and two blocks sharing one `mediaID` get two independent views.
     var mediaItemViews: [BlockID: HostedMediaItem] = [:]
