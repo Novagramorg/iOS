@@ -58,7 +58,110 @@ extension ChatControllerImpl {
                 return
             }
             
-            var richTextDraft: (document: RichTextAttachmentScreen.Document?, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile])?
+            struct RichTextDraft: Codable {
+                enum LoadError: Error {
+                    case generic
+                }
+
+                private enum CodingKeys: String, CodingKey {
+                    case document
+                    case mediaKeys
+                    case mediaValues
+                    case emojiFilesKeys
+                    case emojiFilesValues
+                }
+
+                let document: RichTextAttachmentScreen.Document
+                let media: [String: Media]
+                let emojiFiles: [Int64: TelegramMediaFile]
+
+                init(document: RichTextAttachmentScreen.Document, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile]) {
+                    self.document = document
+                    self.media = media
+                    self.emojiFiles = emojiFiles
+                }
+
+                init(from decoder: Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+
+                    let documentData = try container.decode(Data.self, forKey: .document)
+                    self.document = try JSONDecoder().decode(RichTextAttachmentScreen.Document.self, from: documentData)
+
+                    // `Media`/`TelegramMediaFile` are Postbox-coded (not `Codable`), so each value is stored as a
+                    // self-describing root object (its concrete type is recovered from the embedded type hash).
+                    let mediaKeys = try container.decode([String].self, forKey: .mediaKeys)
+                    let mediaValues = try container.decode([Data].self, forKey: .mediaValues)
+                    if mediaKeys.count != mediaValues.count {
+                        throw LoadError.generic
+                    }
+                    var media: [String: Media] = [:]
+                    for i in 0 ..< mediaKeys.count {
+                        guard let mediaValue = PostboxDecoder(buffer: MemoryBuffer(data: mediaValues[i])).decodeRootObject() as? Media else {
+                            throw LoadError.generic
+                        }
+                        media[mediaKeys[i]] = mediaValue
+                    }
+                    self.media = media
+
+                    let emojiFilesKeys = try container.decode([Int64].self, forKey: .emojiFilesKeys)
+                    let emojiFilesValues = try container.decode([Data].self, forKey: .emojiFilesValues)
+                    if emojiFilesKeys.count != emojiFilesValues.count {
+                        throw LoadError.generic
+                    }
+                    var emojiFiles: [Int64: TelegramMediaFile] = [:]
+                    for i in 0 ..< emojiFilesKeys.count {
+                        guard let emojiFileValue = PostboxDecoder(buffer: MemoryBuffer(data: emojiFilesValues[i])).decodeRootObject() as? TelegramMediaFile else {
+                            throw LoadError.generic
+                        }
+                        emojiFiles[emojiFilesKeys[i]] = emojiFileValue
+                    }
+                    self.emojiFiles = emojiFiles
+                }
+
+                func encode(to encoder: Encoder) throws {
+                    var container = encoder.container(keyedBy: CodingKeys.self)
+
+                    let documentData = try JSONEncoder().encode(self.document)
+                    try container.encode(documentData, forKey: .document)
+
+                    var mediaKeys: [String] = []
+                    var mediaValues: [Data] = []
+                    for (key, value) in self.media {
+                        let mediaEncoder = PostboxEncoder()
+                        mediaEncoder.encodeRootObject(value)
+                        mediaKeys.append(key)
+                        mediaValues.append(mediaEncoder.makeData())
+                    }
+                    try container.encode(mediaKeys, forKey: .mediaKeys)
+                    try container.encode(mediaValues, forKey: .mediaValues)
+
+                    var emojiFilesKeys: [Int64] = []
+                    var emojiFilesValues: [Data] = []
+                    for (key, value) in self.emojiFiles {
+                        let fileEncoder = PostboxEncoder()
+                        fileEncoder.encodeRootObject(value)
+                        emojiFilesKeys.append(key)
+                        emojiFilesValues.append(fileEncoder.makeData())
+                    }
+                    try container.encode(emojiFilesKeys, forKey: .emojiFilesKeys)
+                    try container.encode(emojiFilesValues, forKey: .emojiFilesValues)
+                }
+            }
+
+            var richTextDraft: RichTextDraft?
+
+            var richTextDraftKey: EngineDataBuffer?
+            if let peerId = self.chatLocation.peerId {
+                let key = EngineDataBuffer(length: 8 + 8)
+                key.setInt64(0, value: peerId.toInt64())
+                key.setInt64(8, value: self.chatLocation.threadId ?? 0)
+                richTextDraftKey = key
+                if let entry = await self.context.engine.data.get(
+                    TelegramEngine.EngineData.Item.ItemCache.Item(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: key)
+                ).get() {
+                    richTextDraft = entry.get(RichTextDraft.self)
+                }
+            }
             
             let context = self.context
             let inputIsActive = self.presentationInterfaceState.inputMode == .text
@@ -852,9 +955,11 @@ extension ChatControllerImpl {
                                     return
                                 }
                                 
-                                //TODO:clear draft in db
                                 richTextDraft = nil
-                                
+                                if let richTextDraftKey {
+                                    let _ = strongSelf.context.engine.itemCache.remove(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: richTextDraftKey).start()
+                                }
+
                                 let text: String
                                 let attributes: [EngineMessage.Attribute]
                                 if sendWithoutFormatting {
@@ -918,8 +1023,11 @@ extension ChatControllerImpl {
                                 guard let self else {
                                     return
                                 }
-                                let _ = self
-                                richTextDraft = (document, media, emojiFiles)
+                                let draft = RichTextDraft(document: document, media: media, emojiFiles: emojiFiles)
+                                richTextDraft = draft
+                                if let richTextDraftKey {
+                                    let _ = self.context.engine.itemCache.put(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: richTextDraftKey, item: draft).start()
+                                }
                             },
                             presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
                                 guard let self else {
