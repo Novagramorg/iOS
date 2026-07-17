@@ -8,6 +8,16 @@ public protocol RichTextChecklistMarkerView: AnyObject {
     func setChecked(_ checked: Bool, animated: Bool)
 }
 
+/// A host-supplied inline custom-emoji view. The editor hosts/positions/culls it and keeps its
+/// `dynamicColor` synced to the current text color, so a "template" (single-color) custom emoji tints
+/// to match the surrounding text (mirrors how the legacy input tints template emoji). A host whose
+/// emoji is never a template can leave `dynamicColor` unused.
+public protocol RichTextEmojiView: AnyObject {
+    /// The tint the editor pushes for a custom *template* emoji — the current text color. `nil` means
+    /// untinted. Non-template (full-color) emoji ignore it; the editor assigns it regardless.
+    var dynamicColor: UIColor? { get set }
+}
+
 /// Shared factory: turns one `Block` into its `CanvasBlock` box. Used by the document root
 /// (`DocumentCanvasView.setBlocks`), table cells (`TableBlockBox.init`), and — once landed —
 /// `BlockQuoteBox` (Task 4), so all three build children through one recursive function.
@@ -50,8 +60,9 @@ final class DocumentCanvasView: UIView {
     var layoutDirectionModel: DocumentLayoutDirection = .auto
     var imageProvider: (String) -> UIImage? = { _ in nil }
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
-    /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
-    var emojiViewProvider: (_ id: String, _ size: CGSize) -> UIView? = { _, _ in nil }
+    /// The canvas owns/positions/removes it and keeps its `dynamicColor` synced to the current text color
+    /// (template-emoji tinting); a host with only a CALayer wraps it in a conforming `UIView`.
+    var emojiViewProvider: (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)? = { _, _ in nil }
     /// Returns a FRESH checkbox view for a checklist marker (host-side `CheckNode`). `nil` when unset —
     /// the editor falls back to the Unicode glyph marker. The canvas hosts/positions/animates the view.
     var checklistMarkerViewProvider: ((_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?)?
@@ -1609,9 +1620,9 @@ final class DocumentCanvasView: UIView {
 /// One pooled emoji: the host view plus its last canvas-space frame (for offscreen culling).
 @available(iOS 13.0, *)
 final class HostedEmoji {
-    let view: UIView
+    let view: UIView & RichTextEmojiView
     var canvasFrame: CGRect
-    init(view: UIView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
+    init(view: UIView & RichTextEmojiView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
 }
 
 /// One pooled media view: the host view plus its last canvas-space frame (for offscreen culling).

@@ -60,6 +60,11 @@ import ChatInputContextPanelNode
 import RasterizedCompositionComponent
 import RichTextEditorUIKit
 
+/// The chat composer's inline custom-emoji view already exposes `dynamicColor` (forwarding to its backing
+/// `InlineStickerItemLayer`), so it satisfies the editor's emoji-view contract as-is. Declared here (the one
+/// module importing both) to keep `EmojiTextAttachmentView` free of a rich-text-editor dependency.
+extension EmojiTextAttachmentView: @retroactive RichTextEmojiView {}
+
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
 
 public let chatTextInputMinFontSize: CGFloat = 5.0

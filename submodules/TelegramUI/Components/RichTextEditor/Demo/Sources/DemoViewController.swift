@@ -83,7 +83,7 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
         editor.registerEmojiViewProvider { id, size in
             switch id {
             case "spinner":
-                let v = UIView(frame: CGRect(origin: .zero, size: size))
+                let v = DemoEmojiView(frame: CGRect(origin: .zero, size: size))
                 v.backgroundColor = .clear
                 let dot = CALayer()
                 dot.frame = CGRect(x: size.width * 0.15, y: size.height * 0.15,
@@ -97,7 +97,7 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
                 v.layer.addSublayer(dot)
                 return v
             default: // a static colored square ("star")
-                let v = UIView(frame: CGRect(origin: .zero, size: size))
+                let v = DemoEmojiView(frame: CGRect(origin: .zero, size: size))
                 v.backgroundColor = .systemYellow
                 v.layer.cornerRadius = 3
                 return v
@@ -279,4 +279,10 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(alert, animated: true)
     }
+}
+
+/// A trivial emoji host view for the Demo. Conforms to `RichTextEmojiView`; `dynamicColor` (the
+/// template-emoji tint the editor pushes) is stored but unused by these opaque placeholder squares.
+private final class DemoEmojiView: UIView, RichTextEmojiView {
+    var dynamicColor: UIColor?
 }

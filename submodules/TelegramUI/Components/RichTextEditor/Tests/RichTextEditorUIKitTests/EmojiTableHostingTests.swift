@@ -8,7 +8,7 @@ final class EmojiTableHostingTests: XCTestCase {
     private func canvasWithTableEmoji() -> DocumentCanvasView {
         let c = DocumentCanvasView()
         c.emojiViewProvider = { id, size in
-            let v = UIView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
+            let v = TestEmojiView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
         }
         // One 1×2 table (row 0 header). Cell (0,0) gets the caret.
         // Cells default to CENTER alignment (Task 2, per-cell alignment); this test asserts the emoji's

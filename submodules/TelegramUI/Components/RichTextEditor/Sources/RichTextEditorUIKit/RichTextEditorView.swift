@@ -487,8 +487,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     }
 
     /// Registers the closure that turns an emoji `id` (+ requested square size) into a FRESH, non-
-    /// interactive view. The editor owns/positions/removes it and makes it ride scrolling.
-    public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> UIView?) {
+    /// interactive view. The editor owns/positions/removes it, makes it ride scrolling, and keeps its
+    /// `dynamicColor` synced to the current text color (so a template custom emoji tints to the text).
+    public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)?) {
         canvas.emojiViewProvider = provider
     }
 

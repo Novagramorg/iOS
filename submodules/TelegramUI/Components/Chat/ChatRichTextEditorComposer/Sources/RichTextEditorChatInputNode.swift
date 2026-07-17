@@ -254,7 +254,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             guard let self, let fileId = Int64(id), let provider = self.emojiViewProvider else { return nil }
             let attribute = self.customEmojiAttributes[fileId]
                 ?? ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil)
-            return provider(attribute)
+            guard let view = provider(attribute) else { return nil }
+            // The panel-supplied provider is typed `-> UIView?` (the `ChatRichTextInputNode` protocol seam),
+            // but it hands back an `EmojiTextAttachmentView` — a `RichTextEmojiView` (conformance declared in
+            // `ChatTextInputPanelNode`) — so the editor can keep its `dynamicColor` synced to the text color.
+            // A non-conforming fallback view resolves to nil (the editor retries on the next layout pass).
+            return view as? (UIView & RichTextEmojiView)
         }
 
         // Formula rendering is owned by the chat host; math-rendering dependencies live above this module.

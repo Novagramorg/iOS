@@ -218,6 +218,22 @@ wired **consumer-side** in `RichTextAttachmentScreen` (`RichTextEmojiKeyboardCon
 insert via the existing `insertEmoji(id:altText:)` (id = the Telegram fileId string) + a host
 `registerEmojiViewProvider` that renders an `InlineStickerItemLayer`.
 
+**Emoji-view template tinting (`RichTextEmojiView`, added 2026-07-17).** `registerEmojiViewProvider` returns a
+`(UIView & RichTextEmojiView)?` (not a bare `UIView?`) — `RichTextEmojiView` (in `DocumentCanvasView.swift`,
+alongside `RichTextChecklistMarkerView`) requires one settable `var dynamicColor: UIColor?`. The editor keeps it
+synced to the current text color (`mapper.theme.primaryText`) on **every** `syncEmojiViews` pass (cheap — the
+host setter no-ops on an unchanged value; self-healing across theme changes, since a theme reload relays out), so
+a Telegram **custom *template* emoji** (single-color, `file.isCustomTemplateEmoji`) mask-tints to the surrounding
+text — matching the legacy input. Both hosts conform their view: the **chat composer** builds an
+`EmojiTextAttachmentView` (which gained a `dynamicColor` property forwarding to its `InlineStickerItemLayer`;
+the `RichTextEmojiView` conformance is declared retroactively in `ChatTextInputPanelNode`, the one module importing
+both — so `EmojiTextAttachmentView` stays free of a rich-text-editor dep). The `ChatRichTextInputNode` protocol
+seam that carries the provider stays `-> UIView?` (unchanged; the legacy backend shares it), so
+`RichTextEditorChatInputNode`'s registration closure `as?`-casts the returned view to the conforming type (the
+runtime finds the panel-module conformance in the linked app). The **article editor**
+(`RichTextEmojiKeyboardController.customEmojiView`) returns a small `RichTextInlineEmojiView` wrapper forwarding
+`dynamicColor` to its `InlineStickerItemLayer`. A non-template (full-color) emoji ignores `dynamicColor`.
+
 **Parent-driven layout + state query (added 2026-06-12, branch `feature/richtext-message-serialization`).**
 The façade is now driven by its host rather than self-laying-out:
 - `update(size:insets:) -> CGFloat` — the parent supplies the frame `size` and scroll `insets` (it owns the
