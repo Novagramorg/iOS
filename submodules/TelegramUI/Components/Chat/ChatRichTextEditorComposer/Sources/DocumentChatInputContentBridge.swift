@@ -194,10 +194,13 @@ private func chatInputTable(
                 runs: chatInputRuns(fromRuns: cellRuns(fromBlocks: cell.blocks), resolveEmoji: resolveEmoji),
                 background: cell.background.map(chatInputColor(fromColor:)),
                 horizontalAlignment: chatInputTextAlignment(fromAlignment: cell.horizontalAlignment),
-                verticalAlignment: chatInputTableVerticalAlignment(fromCore: cell.verticalAlignment)
+                verticalAlignment: chatInputTableVerticalAlignment(fromCore: cell.verticalAlignment),
+                isHeader: cell.isHeader,
+                colspan: cell.colspan,
+                rowspan: cell.rowspan
             )
         }
-        return ChatInputTableRow(height: row.height, isHeader: row.isHeader, cells: cells)
+        return ChatInputTableRow(height: row.height, cells: cells)
     }
     return ChatInputTable(columns: columns, rows: rows)
 }
@@ -453,10 +456,13 @@ private func tableBlock(
                 ))],
                 background: cell.background.map(color(fromChatInputColor:)),
                 horizontalAlignment: textAlignment(fromChatInputAlignment: cell.horizontalAlignment),
-                verticalAlignment: verticalAlignment(fromChatInput: cell.verticalAlignment)
+                verticalAlignment: verticalAlignment(fromChatInput: cell.verticalAlignment),
+                isHeader: cell.isHeader,
+                colspan: cell.colspan,
+                rowspan: cell.rowspan
             )
         }
-        return Row(id: BlockID.generate(), height: row.height, isHeader: row.isHeader, cells: cells)
+        return Row(id: BlockID.generate(), height: row.height, cells: cells)
     }
     return TableBlock(id: BlockID.generate(), columns: columns, rows: rows)
 }

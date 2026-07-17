@@ -78,6 +78,18 @@ extension TableBlockEditingTests {
         }
     }
 
+    func test_insertingColumn_preservesHeaderRow() {
+        // Row 0 of table2x2() is a full header row. Inserting a column must keep it a header row —
+        // the new cell inherits the row's header status (regression: a plain inserted cell flipped
+        // the derived Row.isHeader to false and defeated removingRows' header protection).
+        let t = table2x2().insertingColumn(at: 1, width: 90)
+        XCTAssertTrue(t.rows[0].isHeader, "the header row stays a header row after a column insert")
+        XCTAssertEqual(t.rows[0].cells.count, 3, "the header row gained the inserted cell")
+        XCTAssertFalse(t.rows[1].isHeader, "the body row stays a body row")
+        // The header protection still holds: a range over the (now un-flippable) header is a no-op.
+        XCTAssertEqual(t.removingRows(in: 0...0).rowCount, 2, "header row remains delete-protected")
+    }
+
     func test_removingColumn_dropsColumnAndACellPerRow() {
         let t = table2x2().removingColumn(at: 0)
         XCTAssertEqual(t.columnCount, 1)

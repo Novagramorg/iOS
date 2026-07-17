@@ -708,4 +708,19 @@ final class DocumentFragmentTests: XCTestCase {
         let (out, _) = d.replacingRange(globalFrom: 0, globalTo: size, with: doc(para("n", "New")))
         XCTAssertEqual(texts(out), ["New"])
     }
+
+    func test_regeneratingIDs_preservesPerCellHeaderAndAlignment() {
+        var h = Cell(id: BlockID("a"), blocks: [.paragraph(ParagraphBlock(id: BlockID("ap")))],
+                     horizontalAlignment: .right, verticalAlignment: .bottom)
+        h.isHeader = true
+        let body = Cell(id: BlockID("b"), blocks: [.paragraph(ParagraphBlock(id: BlockID("bp")))])
+        let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 100), ColumnSpec(width: 100)],
+                               rows: [Row(id: BlockID("r"), cells: [h, body])])
+        let regen = Document(blocks: [.table(table)]).regeneratingTopLevelIDs()
+        guard case .table(let out) = regen.blocks[0] else { return XCTFail() }
+        XCTAssertTrue(out.rows[0].cells[0].isHeader)
+        XCTAssertEqual(out.rows[0].cells[0].horizontalAlignment, .right)
+        XCTAssertEqual(out.rows[0].cells[0].verticalAlignment, .bottom)
+        XCTAssertFalse(out.rows[0].cells[1].isHeader)
+    }
 }

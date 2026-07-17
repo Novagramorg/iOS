@@ -270,6 +270,39 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         assertRoundTrips(ChatInputContent(blocks: [.table(table)]), "2x2 table with header row + per-cell H+V alignment")
     }
 
+    // 13b. Per-cell header: a table whose header cells do NOT form a whole row still round-trips each cell's
+    //      `isHeader` independently (the InstantPage layer carries per-cell `header`).
+    func test_table_perCellHeader() {
+        func c(_ t: String, header: Bool) -> ChatInputTableCell {
+            ChatInputTableCell(runs: [ChatInputRun(text: t)], background: nil, horizontalAlignment: .left, verticalAlignment: .top, isHeader: header)
+        }
+        let table = ChatInputTable(
+            columns: [ChatInputColumnSpec(width: 0.0), ChatInputColumnSpec(width: 0.0)],
+            rows: [
+                ChatInputTableRow(height: nil, cells: [c("H", header: true), c("x", header: false)]),  // partial header row
+                ChatInputTableRow(height: nil, cells: [c("y", header: false), c("z", header: true)])
+            ])
+        assertRoundTrips(ChatInputContent(blocks: [.table(table)]), "2x2 table with per-cell (non-row-aligned) header cells")
+    }
+
+    // 13c. Per-cell colspan/rowspan round-trip through the InstantPage `Int32` seam (normalized back to the
+    //      chat currency's `Int`, default 1).
+    func test_table_colspanRowspan_roundTrips() {
+        func c(_ t: String, cs: Int = 1, rs: Int = 1) -> ChatInputTableCell {
+            var cell = ChatInputTableCell(runs: [ChatInputRun(text: t)], background: nil, horizontalAlignment: .left, verticalAlignment: .top, isHeader: false)
+            cell.colspan = cs; cell.rowspan = rs
+            return cell
+        }
+        // Top-left cell spans the whole first row (colspan 2); second row two normal cells.
+        let table = ChatInputTable(
+            columns: [ChatInputColumnSpec(width: 0.0), ChatInputColumnSpec(width: 0.0)],
+            rows: [
+                ChatInputTableRow(height: nil, cells: [c("H", cs: 2)]),
+                ChatInputTableRow(height: nil, cells: [c("a"), c("b")])
+            ])
+        assertRoundTrips(ChatInputContent(blocks: [.table(table)]), "table with a colspan cell")
+    }
+
     // 14. An image medium and a video medium round-trip identically — built with the default
     //     naturalSize/displayWidth/alignment the reverse restores (the InstantPage image/video block carries
     //     none of those, so they canonicalize to natural size .zero, nil display width, .center alignment).

@@ -16563,6 +16563,8 @@ Error: %8$@";
 "RichText.Menu.Table.Copy" = "Copy Table";
 "RichText.Menu.Table.ConvertToText" = "Convert to Text";
 "RichText.Menu.Table.Delete" = "Delete Table";
+"RichText.Menu.Table.HighlightOn" = "Highlight";
+"RichText.Menu.Table.HighlightOff" = "Remove Highlight";
 
 "TextProcessing.TitleAICompose" = "Create with AI";
 "TextProcessing.ActionAddToPage" = "Add to Page";

@@ -647,5 +647,27 @@ final class TableControlsTests: XCTestCase {
         XCTAssertEqual(range?.to.offset, t.cellTextStart(row: 0, column: 2),
                        "the synced OS selection sits in the selected column's first cell")
     }
+
+    // MARK: - structural menu header descriptor (Task 5)
+
+    func test_structuralMenu_carriesHeaderDescriptor_reflectingMixedState() {
+        func cell(_ id: String) -> Cell { Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p")))]) }
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(TableBlock(id: BlockID("t"),
+            columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [cell("a"), cell("b")]),
+                   Row(id: BlockID("r1"), cells: [cell("c"), cell("d")])]))], width: 390)
+        v.frame = CGRect(x: 0, y: 0, width: 390, height: 400); v.layoutIfNeeded()
+        let t = v.boxes[0] as! TableBlockBox
+        v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
+        v.selectTableColumn(0)   // column 0: r0 header, r1 body → mixed
+        let req = v.tableStructuralMenuRequest()
+        XCTAssertNotNil(req?.header)
+        XCTAssertNil(req?.header?.isHeader, "mixed selection reports nil (indeterminate)")
+        // Applying flips the mixed column ON.
+        req?.header?.apply()
+        guard case .table(let out) = v.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertTrue(out.rows[0].cells[0].isHeader && out.rows[1].cells[0].isHeader)
+    }
 }
 #endif

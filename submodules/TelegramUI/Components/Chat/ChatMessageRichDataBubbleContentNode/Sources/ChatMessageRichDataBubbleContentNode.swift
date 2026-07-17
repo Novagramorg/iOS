@@ -547,7 +547,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         effectiveSize = pageLayout.contentSize
                     }
                     boundingSize.width = effectiveSize.width
-                    boundingSize.height = effectiveSize.height + 2.0
+                    boundingSize.height = effectiveSize.height
                 }
 
                 // Authoritative detector: the bottom-most laid-out item is full-width visual media,
@@ -835,7 +835,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         }
                         self.appliedShowMoreExpanded = showMoreExpanded
 
-                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: 1.0, y: 1.0), size: CGSize(width: boundingWidth - 2.0, height: boundingSize.height)), completion: nil)
+                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: 1.0, y: 0.0), size: CGSize(width: boundingWidth - 2.0, height: boundingSize.height)), completion: nil)
                         self.containerNode.cornerRadius = layoutConstants.image.defaultCornerRadius
 
                         if let statusSizeAndApply {

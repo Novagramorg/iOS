@@ -15,7 +15,7 @@ final class CanvasCharacterFormatTests: XCTestCase {
             .paragraph(ParagraphBlock(id: BlockID("h"), runs: [TextRun(text: "Hello")])),
             .paragraph(ParagraphBlock(id: BlockID("w"), runs: [TextRun(text: "World")])),
             .table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
-                rows: [Row(id: BlockID("r0"), cells: [cell("a", "Alpha"), cell("b", "Beta")])])),
+                rows: [Row(id: BlockID("r0"), isHeader: true, cells: [cell("a", "Alpha"), cell("b", "Beta")])])),
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
         return v

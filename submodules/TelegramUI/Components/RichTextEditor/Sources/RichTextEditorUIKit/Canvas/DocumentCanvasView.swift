@@ -394,6 +394,10 @@ final class DocumentCanvasView: UIView {
     // knob is drawn offset from the text line). Applied at every drag map via `selectionDragPosition(forTouch:)`.
     var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
+    // A `.cells` corner-knob drag (Phase 2c-T4) — set in `.began` when the touch hits a corner knob, either a
+    // committed `.cells` selection's or the focused-cell "fake" chrome's (no committed selection yet). The
+    // FIRST `extendCellSelection` call promotes the fake chrome to a real committed `.cells` selection.
+    var draggingTableCornerKnob: TableCellCorner?
     var selectionHandlePan: UIPanGestureRecognizer?
     // The loupe / move-cursor long-press. Held so `gestureRecognizerShouldBegin` can fail it on a touch that
     // lands on an active selection handle (letting the handle pan grab the knob instead) — see that method.
