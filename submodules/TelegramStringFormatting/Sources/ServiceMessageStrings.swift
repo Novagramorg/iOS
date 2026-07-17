@@ -1935,7 +1935,12 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         let stringWithRanges = strings.Notification_CommunityRemovedGroup(peerName)._tuple
                         attributedString = NSAttributedString(attributedString: addAttributesToStringWithRanges(stringWithRanges, body: bodyAttributes, argumentAttributes: attributes))
                     } else {
-                        let rawText = strings.Notification_CommunityAddedGroup(peerName, communityName).string
+                        let rawText: String
+                        if message.author?.id.namespace != Namespaces.Peer.CloudUser {
+                            rawText = strings.Notification_CommunityAddedGroupUnknown(communityName).string
+                        } else {
+                            rawText = strings.Notification_CommunityAddedGroup(peerName, communityName).string
+                        }
                         attributedString = NSAttributedString(string: rawText, font: titleFont, textColor: primaryTextColor)
                     }
                 }

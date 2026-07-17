@@ -283,7 +283,7 @@ private final class CommunitiesScreenComponent: Component {
                 context: component.context,
                 communityId: community.id,
                 peerId: peerId,
-                completed: { [weak self] in
+                completed: { [weak self] immediate in
                     self?.dismissController()
                 }
             )

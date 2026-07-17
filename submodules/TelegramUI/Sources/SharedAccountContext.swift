@@ -2343,6 +2343,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeCreateGroupController(context: AccountContext, peerIds: [PeerId], initialTitle: String?, mode: CreateGroupMode, completion: ((PeerId, @escaping () -> Void) -> Void)?) -> ViewController {
         return createGroupControllerImpl(context: context, peerIds: peerIds, initialTitle: initialTitle, mode: mode, completion: completion)
     }
+
+    public func makeCreateChannelController(context: AccountContext, completion: @escaping (PeerId, @escaping () -> Void) -> Void) -> ViewController {
+        return createChannelController(context: context, mode: .community, completion: completion)
+    }
     
     public func makeChatListController(context: AccountContext, location: ChatListControllerLocation, controlsHistoryPreload: Bool, hideNetworkActivityStatus: Bool, previewing: Bool, enableDebugActions: Bool) -> ChatListController {
         return ChatListControllerImpl(context: context, location: location, controlsHistoryPreload: controlsHistoryPreload, hideNetworkActivityStatus: hideNetworkActivityStatus, previewing: previewing, enableDebugActions: enableDebugActions)
@@ -4347,12 +4351,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return CommunitiesScreen(context: context, peerId: peerId)
     }
 
-    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController {
+    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping (Bool) -> Void) -> ViewController {
         return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, completed: completed)
     }
 
+    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, requiresConfirmation: Bool, completed: @escaping (Bool) -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, requiresConfirmation: requiresConfirmation, completed: completed)
+    }
+
     public func makeCommunityAddScreen(context: AccountContext, peerId: EnginePeer.Id, initialVisibility: Bool, completed: @escaping (Bool) -> Void) -> ViewController {
-        return CommunityAddScreen(context: context, peerId: peerId, initialVisibility: initialVisibility, completed: completed)
+        return CommunityAddScreen(context: context, peerId: peerId, initialVisibility: initialVisibility, draftCompleted: completed)
     }
 
     public func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {

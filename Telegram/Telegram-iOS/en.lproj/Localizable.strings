@@ -5303,6 +5303,8 @@ Sorry for the inconvenience.";
 
 "PeerInfo.BioExpand" = "more";
 "PeerInfo.HiddenCommunityStatus" = "Hidden • %@";
+"PeerInfo.Community_1" = "Community with %@ chat";
+"PeerInfo.Community_any" = "Community with %@ chats";
 "PeerInfo.Community.RemoveBot" = "Remove Bot from Community";
 "PeerInfo.Community.AddBot" = "Add Bot to a Community";
 "PeerInfo.Community.BotInfo" = "Make your bot part of a community with multiple related chats";
@@ -16430,6 +16432,7 @@ Error: %8$@";
 "Community.View.SectionVisible" = "CHATS YOU CAN VIEW";
 "Community.View.SectionRequestable" = "CHATS YOU CAN REQUEST TO JOIN";
 "Community.View.SectionHidden" = "HIDDEN CHATS";
+"Community.View.HiddenChatToast" = "You can't join or view this chat until an admin invites you.";
 "Community.View.PendingRequests" = "Pending Requests";
 "Community.View.PendingRequestHeader" = "PENDING REQUEST";
 "Community.View.ShowAsOneChat" = "Show as One Chat";
@@ -16440,6 +16443,8 @@ Error: %8$@";
 "Community.View.ChatsLimitReached" = "Sorry, this community has reached the maximum number of chats.";
 "Community.Request.UnknownRequester" = "Someone";
 "Community.Request.RequesterSuggestsGroup" = "%@ suggests this group:";
+"Community.Request.RequesterSuggestsChannel" = "%@ suggests this channel:";
+"Community.Request.RequesterSuggestsBot" = "%@ suggests this bot:";
 "Community.Request.PrivateStatus" = "visible only to its members";
 "Community.Request.Decline" = "Decline";
 "Community.Request.Add" = "Add";
@@ -16514,13 +16519,23 @@ Error: %8$@";
 "Community.Add.VisibilityHiddenInfo" = "Only invited members and community admins will see this chat.";
 "Community.Add.ActionAddToCommunity" = "Add to Community";
 
+"Community.Add.Confirm.TextGroup" = "If this group is approved by a community admin, its members will be able to join or request to join other chats in the community.";
+"Community.Add.Confirm.TextChannel" = "If this channel is approved by a community admin, its subscribers will be able to join or request to join other chats in the community.";
+"Community.Add.Confirm.TextBot" = "If this bot is approved by a community admin, community members will be able to see and use it.";
+"Community.Add.Confirm.Add" = "Add";
+
+"Community.AddChat.Title" = "Add a Chat";
+"Community.AddChat.Description" = "Select a chat to add to this community";
+
 "Community.Chat.JoinToView" = "You need to join this group to view its messages.";
 "Community.PrivateChat.Info" = "This group is invite-only.\nOnly its members can view it.";
 "Community.PrivateChat.MessageOwner" = "Message Group Owner";
+"Community.CommunityAdded.View" = "View";
 
 "Privacy.GroupsAndChannels.InviteToCommunityError" = "Sorry, you cannot add %@ to the community because of %@'s privacy settings.";
 
 "Notification.CommunityAddedGroup" = "%1$@ added this group to %2$@ community";
+"Notification.CommunityAddedGroupUnknown" = "This group was added to %1$@ community";
 "Notification.CommunityAddedGroupYou" = "You added this group to %1$@ community";
 "Notification.CommunityRemovedGroup" = "%1$@ removed this group from a community";
 "Notification.CommunityRemovedGroupYou" = "You removed this group from a community";
@@ -16543,6 +16558,15 @@ Error: %8$@";
 
 "Attachment.Article" = "Article";
 "RichText.AddMediaTitle" = "Add Media";
+"RichText.RemoveFormattingTitle" = "Remove Formatting?";
+"RichText.RemoveFormattingText" = "This message includes rich formatting, which requires Telegram Premium.";
+"RichText.SubscribeToPremium" = "Subscribe to Premium";
+"RichText.SendWithoutFormatting" = "Send Without Formatting";
+"RichText.LinkTitle" = "Link";
+"RichText.LinkText" = "Set a URL for the selected text";
+"RichText.LinkSet" = "Set";
+"RichText.LinkRemove" = "Remove";
+"RichText.PremiumToastText" = "Sending a message with this formatting will require [Telegram Premium]().";
 "RichText.TableMenu.Alignment" = "Alignment";
 "RichText.FormulaAdd" = "Add Formula";
 "RichText.FormulaEdit" = "Edit Formula";
