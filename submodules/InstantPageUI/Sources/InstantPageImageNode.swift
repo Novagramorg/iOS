@@ -59,6 +59,9 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     private let interactive: Bool
     private let roundCorners: Bool
     private let fit: Bool
+    /// When set, overrides the per-media-type placeholder/letterbox `emptyColor` (e.g. the slideshow uses
+    /// black instead of the panel/placeholder color). nil = keep the per-type default.
+    private let emptyColorOverride: UIColor?
     private let openMedia: (InstantPageMedia) -> Void
     private let longPressMedia: (InstantPageMedia) -> Void
     private let getPreloadedResource: (String) -> Data?
@@ -91,7 +94,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     // enclosing V2 media view drives the dust cover + reveal timing. Default off (no effect on web IV).
     private var contentBlurredSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>?
     
-    init(context: AccountContext, sourceLocation: InstantPageSourceLocation, theme: InstantPageTheme, webPage: TelegramMediaWebpage, media: InstantPageMedia, attributes: [InstantPageImageAttribute], interactive: Bool, roundCorners: Bool, fit: Bool, openMedia: @escaping (InstantPageMedia) -> Void, longPressMedia: @escaping (InstantPageMedia) -> Void, activatePinchPreview: ((PinchSourceContainerNode) -> Void)?, pinchPreviewFinished: ((InstantPageNode) -> Void)?, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)? = nil, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)? = nil, autoDownloadImage: ((TelegramMediaImage) -> Bool)? = nil, autoDownloadFile: ((TelegramMediaFile) -> Bool)? = nil, getPreloadedResource: @escaping (String) -> Data?) {
+    init(context: AccountContext, sourceLocation: InstantPageSourceLocation, theme: InstantPageTheme, webPage: TelegramMediaWebpage, media: InstantPageMedia, attributes: [InstantPageImageAttribute], interactive: Bool, roundCorners: Bool, fit: Bool, openMedia: @escaping (InstantPageMedia) -> Void, longPressMedia: @escaping (InstantPageMedia) -> Void, activatePinchPreview: ((PinchSourceContainerNode) -> Void)?, pinchPreviewFinished: ((InstantPageNode) -> Void)?, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)? = nil, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)? = nil, autoDownloadImage: ((TelegramMediaImage) -> Bool)? = nil, autoDownloadFile: ((TelegramMediaFile) -> Bool)? = nil, emptyColor: UIColor? = nil, getPreloadedResource: @escaping (String) -> Data?) {
         self.context = context
         self.theme = theme
         self.webPage = webPage
@@ -100,6 +103,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         self.interactive = interactive
         self.roundCorners = roundCorners
         self.fit = fit
+        self.emptyColorOverride = emptyColor
         self.openMedia = openMedia
         self.longPressMedia = longPressMedia
         self.getPreloadedResource = getPreloadedResource
@@ -418,17 +422,17 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
                 let boundingSize = size
                 let radius: CGFloat = self.roundCorners ? floor(min(imageSize.width, imageSize.height) / 2.0) : 0.0
                 let makeLayout = self.imageNode.asyncLayout()
-                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: self.theme.panelBackgroundColor))
+                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: self.emptyColorOverride ?? self.theme.panelBackgroundColor))
                 apply()
-                
+
                 self.linkIconNode.frame = CGRect(x: size.width - 38.0, y: 14.0, width: 24.0, height: 24.0)
             } else if case let .file(file) = self.media.media, let dimensions = self.effectiveMediaDimensions() {
                 let emptyColor = file.mimeType.hasPrefix("image/") ? self.theme.imageTintColor : nil
-                
+
                 let imageSize = dimensions.cgSize.aspectFilled(size)
                 let boundingSize = size
                 let makeLayout = self.imageNode.asyncLayout()
-                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: emptyColor))
+                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: self.emptyColorOverride ?? emptyColor))
                 apply()
             } else if case .geo = self.media.media {
                 let presentationTheme = self.context.sharedContext.currentPresentationData.with { $0 }.theme
