@@ -36,7 +36,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
 
         super.init(frame: item.frame)
 
-        self.backgroundColor = theme.panelSecondaryColor   // structural
+        self.backgroundColor = .black                      // structural — slideshow backdrop is black (gallery look), not the media placeholder color
         self.clipsToBounds = true                          // structural
 
         self.scrollView.disablesInteractiveTransitionGestureRecognizer = true
@@ -77,6 +77,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
         for media in self.item.medias {
             let pageView = UIView()
             pageView.clipsToBounds = true
+            pageView.backgroundColor = .black   // black letterbox behind each page, not the media placeholder color
             if case .image = media.media {
                 let node = makeMediaWrapper(
                     frame: CGRect(origin: .zero, size: self.item.frame.size),
@@ -154,7 +155,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
         let mediasChanged = self.item.medias.map { $0.index } != item.medias.map { $0.index }
         self.item = item
         self.theme = theme
-        self.backgroundColor = theme.panelSecondaryColor
+        self.backgroundColor = .black
         if mediasChanged {
             self.rebuildPages()
         } else {
