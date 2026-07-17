@@ -1474,7 +1474,7 @@ final class RichTextAttachmentScreenComponent: Component {
             // Only one of (system keyboard / emoji panel) is up at a time (the emoji panel uses an
             // EmptyInputView, so inputHeight ≈ 0 while it shows); the home-indicator safe area is the floor.
             _ = self.editor.update(size: editorFrame.size,
-                                   insets: UIEdgeInsets(top: editorTop, left: 0.0, bottom: bottomInset, right: 0.0),
+                                   insets: UIEdgeInsets(top: editorTop, left: 0.0, bottom: bottomInset + 16.0, right: 0.0),
                                    contentMargins: UIEdgeInsets(top: 12.0, left: 0.0, bottom: 12.0, right: 0.0))
 
             // Top edge effect (mirrors ComposePollScreen): a blurred gradient at the screen top that content
