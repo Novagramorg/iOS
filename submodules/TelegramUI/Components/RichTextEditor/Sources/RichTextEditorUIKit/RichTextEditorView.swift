@@ -14,6 +14,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// measured height hugs the actual text and the host owns the minimum field height.
     public var minimumContentHeight: CGFloat = 44
 
+    /// Enables OS spelling underlines + tap-to-correct (default on). Set false to disable entirely.
+    public var isSpellCheckingEnabled: Bool {
+        get { canvas.isSpellCheckingEnabled }
+        set { canvas.isSpellCheckingEnabled = newValue }
+    }
+
     /// Host-settable colors. Defaults to `.default` (today's look). Assigning re-applies colors to the live
     /// editor: the mapper (text/link), the caret/selection/blockquote accent, and a reload so boxes rebuild
     /// with the themed mapper. A reload resets the live selection — theme changes are host-driven (e.g. an

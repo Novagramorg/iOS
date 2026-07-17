@@ -71,8 +71,9 @@ extension DocumentCanvasView {
 
     /// The resize knobs (◇) for the current chrome, in canvas coordinates: TWO knobs at the structural
     /// selection's ends for `.rows`/`.columns` (column → left/right edges, vertically centered; row →
-    /// top/bottom edges, horizontally centered); FOUR corner knobs for a committed `.cells` selection OR
-    /// — when there is no committed selection but the caret sits in a table cell — the caret cell's
+    /// top/bottom edges, horizontally centered); FOUR knobs — drawn at the CENTER OF EACH SIDE (see
+    /// `cornerKnobs`, which keeps their corner identity for the 2D drag) — for a committed `.cells` selection
+    /// OR, when there is no committed selection but the caret sits in a table cell, the caret cell's
     /// "fake" outline (Phase 2c-T3; `focusedOrSelectedCellRect()`). `rect` is a generous square hit/anchor
     /// rect centered on the knob. `end` is set for the row/column case (nil for a corner knob); `corner`
     /// is set for the `.cells`/fake-chrome case (nil for a row/column knob) — T4 wires the corner drag.
@@ -82,7 +83,13 @@ extension DocumentCanvasView {
         func box(_ center: CGPoint) -> CGRect {
             CGRect(x: center.x - hit / 2, y: center.y - hit / 2, width: hit, height: hit)
         }
-        if let sel = tableSelection, let outline = tableSelectionOutlineRect() {
+        // Center knobs on the outline STROKE's centerline, not the raw outline rect. The stroke is drawn on
+        // `outer.insetBy(lineWidth/2)` (its outer edge flush with the table border — see
+        // `drawTableSelectionOutline`), so a knob placed on the raw rect sits ~half-a-line-width (1pt) OUTSET
+        // from the visible line. Insetting by the same amount lands every knob on the drawn line.
+        let strokeInset = DocumentCanvasView.selectionOutlineWidth / 2
+        if let sel = tableSelection, let raw = tableSelectionOutlineRect() {
+            let outline = raw.insetBy(dx: strokeInset, dy: strokeInset)
             switch sel.kind {
             case .columns:
                 let y = outline.midY
@@ -98,17 +105,25 @@ extension DocumentCanvasView {
         }
         // No committed selection but the caret sits in a table cell → FAKE chrome's 4 corner knobs.
         guard tableSelection == nil, focusedOrSelectedCellRect() != nil,
-              let outline = tableSelectionOutlineRect() else { return [] }
-        return cornerKnobs(outline, box: box)
+              let raw = tableSelectionOutlineRect() else { return [] }
+        return cornerKnobs(raw.insetBy(dx: strokeInset, dy: strokeInset), box: box)
     }
 
-    /// The four corner knobs of `outline` (top-left/top-right/bottom-left/bottom-right), shared by the
-    /// committed `.cells` and the focused-cell "fake" chrome paths.
+    /// Stroke width of the table selection outline. Shared by the stroke draw (`drawTableSelectionOutline`)
+    /// and the knob geometry (`tableResizeKnobs`), so a knob centers on the drawn line rather than 1pt outset.
+    static let selectionOutlineWidth: CGFloat = 2
+
+    /// The four resize knobs of `outline`, shared by the committed `.cells` and the focused-cell "fake"
+    /// chrome paths. They are drawn at the CENTER OF EACH SIDE (not the geometric corners), but each keeps
+    /// its `TableCellCorner` identity so the 2D corner drag (`extendCellSelection`, which pins the opposite
+    /// corner) is unchanged — only the draw/hit anchor moves. Each corner slides to the midpoint of one
+    /// adjacent edge, so opposite corners map to opposite sides and all four land on distinct edges:
+    /// topLeft → top-center, bottomRight → bottom-center, topRight → right-center, bottomLeft → left-center.
     private func cornerKnobs(_ outline: CGRect, box: (CGPoint) -> CGRect) -> [(rect: CGRect, end: TableRangeEnd?, corner: TableCellCorner?)] {
-        [(box(CGPoint(x: outline.minX, y: outline.minY)), nil, .topLeft),
-         (box(CGPoint(x: outline.maxX, y: outline.minY)), nil, .topRight),
-         (box(CGPoint(x: outline.minX, y: outline.maxY)), nil, .bottomLeft),
-         (box(CGPoint(x: outline.maxX, y: outline.maxY)), nil, .bottomRight)]
+        [(box(CGPoint(x: outline.midX, y: outline.minY)), nil, .topLeft),     // top edge center
+         (box(CGPoint(x: outline.maxX, y: outline.midY)), nil, .topRight),    // right edge center
+         (box(CGPoint(x: outline.minX, y: outline.midY)), nil, .bottomLeft),  // left edge center
+         (box(CGPoint(x: outline.midX, y: outline.maxY)), nil, .bottomRight)] // bottom edge center
     }
 
     /// Which resize knob (if any) `point` hits — the row/column `end`, for chrome that has one.
@@ -344,7 +359,7 @@ extension DocumentCanvasView {
 
     func drawTableSelectionOutline(in ctx: CGContext) {
         guard let outer = tableSelectionOutlineRect() else { return }
-        let lineWidth: CGFloat = 2
+        let lineWidth = DocumentCanvasView.selectionOutlineWidth
         // CG centers a stroke on its path, so inset by half the line width to keep the stroke's OUTER
         // edge flush with the table's outer border (the rect that `tableSelectionOutlineRect` aligns to).
         let rect = outer.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)

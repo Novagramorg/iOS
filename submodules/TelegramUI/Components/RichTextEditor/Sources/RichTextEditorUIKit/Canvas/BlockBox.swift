@@ -62,7 +62,7 @@ final class BlockBox {
     let textInset = CGPoint(x: 0, y: BlockBox.defaultVerticalInset)
     // Vertical insets above/below the text, set per-layout by the owning `BlockStack`. They default to
     // `defaultVerticalInset`, but the facing inset shrinks between adjacent blocks (0 between list items
-    // so they stack like paragraph lines; half between two body paragraphs).
+    // and 0 between two plain body paragraphs, so both stack like paragraph lines).
     var topInset: CGFloat = BlockBox.defaultVerticalInset
     var bottomInset: CGFloat = BlockBox.defaultVerticalInset
 
@@ -76,10 +76,10 @@ final class BlockBox {
     /// where placeholders are a top-level-only concern). Default false.
     var isTopLevelBlock = false
 
-    /// True only for the LAST top-level block in the document (set by the canvas during layout). Gates the
-    /// body "Type something…" placeholder so it shows only on the document's last line, not on every empty
-    /// body paragraph. Default false.
-    var isLastBlock = false
+    /// True only when this is the document's SOLE top-level block (set by the canvas during layout). Gates
+    /// the body "Type something…" placeholder so it shows only in an otherwise-empty document — never when
+    /// any other block exists. Default false.
+    var isOnlyBlock = false
 
     /// The placeholder strings to draw in this box when empty. Stamped by the canvas during layout
     /// (`stampListMarkers`) from its configurable `placeholders`. Default = the editor's built-in hints.
@@ -108,6 +108,9 @@ final class BlockBox {
         h.combine(frame.size.width); h.combine(frame.size.height)
         h.combine(resolvedListMarker)
         h.combine(isTopLevelBlock)
+        // Sole-block-ness gates the body placeholder and can flip on a SURVIVING box instance (another
+        // block added/removed) without a renderVersion bump, so capture it structurally.
+        h.combine(isOnlyBlock)
         // Defensive: a STYLE or list-LEVEL change on an EMPTY paragraph (where `restyle()` early-returns
         // and renderVersion may not bump) changes the placeholder text / marker indent. Capture it
         // structurally rather than coincidentally.
@@ -222,7 +225,7 @@ final class BlockBox {
             return nonEmpty(list.level > 0 ? placeholders.listOutdent : placeholders.listEnd)
         }
         switch style {
-        case .body: return isLastBlock ? nonEmpty(placeholders.body) : nil   // only on the document's last line
+        case .body: return isOnlyBlock ? nonEmpty(placeholders.body) : nil   // only when it's the document's sole block
         default:    return nil
         }
     }

@@ -278,6 +278,12 @@ extension DocumentCanvasView {
             handleImageTap(img, wasMenuVisible: wasMenuVisible, wasFirstResponder: wasFirstResponder)
             return
         }
+        // A tap that lands on a spelling-flagged word toggles its correction menu (present the guesses, or close
+        // them on a repeat tap of the same word — see `beginSpellingCorrection`). This fires even on a FOCUSING
+        // tap: the field was just made first responder above, and a tap directly on a red word means "correct
+        // it", so the guesses appear on the first tap rather than the tap only placing the caret. A tap that
+        // misses every flagged word returns false and falls through to the normal caret/selection handling below.
+        if beginSpellingCorrection(at: point) { return }
         clearStructuralSelections()                        // a non-handle, non-image tap clears both structural selections
         switch tapOutcome(forResolvedPosition: p, point: point) {
         case .toggleMenu:

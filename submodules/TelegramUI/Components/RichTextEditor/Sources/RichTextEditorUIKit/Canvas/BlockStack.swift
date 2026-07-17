@@ -31,6 +31,12 @@ final class BlockStack {
     /// block), since a quote/code/table fills its own frame; the framed block's own inset is its internal padding.
     private static let framedNeighborMargin: CGFloat = 8
 
+    /// The external inset any block reserves on the side facing an adjacent media (image/video/audio/
+    /// location) block — the body↔image spacing rule. Kept as its own constant, DECOUPLED from
+    /// `verticalInsetBase` (the inter-paragraph gap), so tuning body↔body spacing never moves body↔image.
+    /// The media block itself keeps its own internal `MediaBlockBox.verticalInset` padding around the image.
+    private static let mediaNeighborInset: CGFloat = 6
+
     /// A block that draws its own bounded fill and is NOT a `BlockBox`, so `facingInset` never runs for
     /// it: a code block, a table, a pull quote, or a block-quote box. Its own top/bottom insets are INTERNAL
     /// padding (fill→text), not external margin — so two of these adjacent would sit with their fills flush.
@@ -52,10 +58,17 @@ final class BlockStack {
         // A table, a code block, a pull quote, and a block-quote box all draw their own bounded fill,
         // so a neighbor reserves extra framed margin for visible separation.
         if neighbor is TableBlockBox || neighbor is CodeBlockBox || neighbor is PullQuoteBox || neighbor is BlockQuoteBox { return base + BlockStack.framedNeighborMargin }
+        // Any block facing a media (image/video/audio/location) block uses the dedicated body↔image inset,
+        // independent of `base`. (Media is not a `BlockBox`, so it would otherwise fall through to `base`.)
+        if neighbor is MediaBlockBox { return BlockStack.mediaNeighborInset }
         guard let n = neighbor as? BlockBox else { return base }
         // Two list items stack tight (0).
         if box.listMembership != nil && n.listMembership != nil { return 0 }
-        if box.isBodyParagraph && n.isBodyParagraph { return base / 2 }
+        // Any two adjacent body-style flow boxes stack tight (no inter-paragraph gap) — this covers a plain
+        // body↔body pair, a body↔list-item boundary, and body-styled list items. The visible break is the
+        // line advance alone, not a block inset. The document's outer top/bottom margins are unaffected
+        // (they face a nil neighbor → `base`), and non-body flows (headings, quotes) keep `base`.
+        if box.style == .body && n.style == .body { return 0 }
         return base
     }
 

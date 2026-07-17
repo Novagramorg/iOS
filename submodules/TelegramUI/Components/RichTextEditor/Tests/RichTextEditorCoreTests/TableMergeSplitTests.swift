@@ -31,6 +31,11 @@ final class TableMergeSplitTests: XCTestCase {
              colspan: colspan, rowspan: rowspan)
     }
 
+    /// A cell containing a single empty (default) paragraph — the shape of a freshly-created empty cell.
+    private func emptyCell(_ id: String) -> Cell {
+        Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "_p")))])
+    }
+
     /// The plain texts of a cell's paragraph blocks, in declaration order.
     private func texts(of cell: Cell) -> [String] {
         cell.blocks.compactMap { block -> String? in
@@ -57,6 +62,39 @@ final class TableMergeSplitTests: XCTestCase {
 
         let anchorCell = merged.rows[0].cells[0]
         XCTAssertEqual(texts(of: anchorCell), ["A", "B", "C", "D"])
+    }
+
+    // MARK: 1b. Empty cells contribute NO blank paragraph to the merged cell
+
+    func test_mergingCells_dropsEmptyCells_noBlankParagraphs() {
+        // Row: "A" | (empty) | "C" — merging all three must not pool the empty cell's blank paragraph.
+        let table = TableBlock(id: BlockID("t"),
+            columns: (0..<3).map { _ in ColumnSpec(width: 100) },
+            rows: [Row(id: BlockID("r0"), cells: [labelledCell("A"), emptyCell("e"), labelledCell("C")])])
+        let merged = table.mergingCells(in: TableRect(top: 0, left: 0, bottom: 0, right: 2))
+        XCTAssertEqual(texts(of: merged.rows[0].cells[0]), ["A", "C"],
+                       "the empty middle cell adds no blank paragraph between A and C")
+    }
+
+    func test_mergingCells_emptyAnchor_keepsOnlyNonEmptyContent() {
+        // Anchor empty, neighbor "B": the anchor's own blank must be dropped, not lead the content.
+        let table = TableBlock(id: BlockID("t"),
+            columns: (0..<2).map { _ in ColumnSpec(width: 100) },
+            rows: [Row(id: BlockID("r0"), cells: [emptyCell("a"), labelledCell("B")])])
+        let merged = table.mergingCells(in: TableRect(top: 0, left: 0, bottom: 0, right: 1))
+        XCTAssertEqual(texts(of: merged.rows[0].cells[0]), ["B"],
+                       "an empty anchor contributes no blank; only the neighbor's content survives")
+    }
+
+    func test_mergingCells_allEmpty_keepsSingleEmptyParagraph() {
+        // Every cell empty → the merged cell must stay valid with exactly one empty paragraph (never blank-less).
+        let table = TableBlock(id: BlockID("t"),
+            columns: (0..<2).map { _ in ColumnSpec(width: 100) },
+            rows: [Row(id: BlockID("r0"), cells: [emptyCell("a"), emptyCell("b")])])
+        let merged = table.mergingCells(in: TableRect(top: 0, left: 0, bottom: 0, right: 1))
+        let anchorCell = merged.rows[0].cells[0]
+        XCTAssertEqual(anchorCell.blocks.count, 1, "an all-empty merge keeps exactly one paragraph")
+        XCTAssertEqual(texts(of: anchorCell), [""], "and it is an empty paragraph")
     }
 
     // MARK: 2a. Merge a row pair (colspan only)

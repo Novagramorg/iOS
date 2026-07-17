@@ -229,6 +229,9 @@ extension TableBlock {
         guard let anchorLoc = TableBlock.location(of: anchorAnchor.cellID, in: t) else { return self }
 
         var mergedBlocks = t.rows[anchorLoc.row].cells[anchorLoc.index].blocks
+        // The anchor's original first block, kept as the fallback so an all-empty merge stays ONE empty
+        // paragraph rather than a block-less (invalid) cell.
+        let fallbackBlock = mergedBlocks.first ?? .paragraph(ParagraphBlock(id: BlockID.generate()))
         // Collect removal indices per row before mutating (removal happens after the anchor is
         // rewritten, so indices captured here stay valid).
         var removalIndicesByRow: [Int: [Int]] = [:]
@@ -237,6 +240,12 @@ extension TableBlock {
             mergedBlocks.append(contentsOf: t.rows[loc.row].cells[loc.index].blocks)
             removalIndicesByRow[loc.row, default: []].append(loc.index)
         }
+
+        // Don't pool empty cells' filler paragraphs into the merged cell — an empty cell contributes no
+        // content, so it shouldn't inject a blank paragraph between the non-empty cells' text. Keep ≥1
+        // block: if EVERY merged cell was empty, the result is the anchor's single empty paragraph.
+        let nonEmpty = mergedBlocks.filter { !TableBlock.isEmptyFillerParagraph($0) }
+        mergedBlocks = nonEmpty.isEmpty ? [fallbackBlock] : nonEmpty
 
         var anchorCell = t.rows[anchorLoc.row].cells[anchorLoc.index]
         anchorCell.blocks = mergedBlocks
@@ -281,6 +290,14 @@ extension TableBlock {
             }
         }
         return t
+    }
+
+    /// A block that carries no content and is not a list item — the shape of an empty cell's default
+    /// paragraph (`emptyCell()`), so merging empty cells drops these rather than pooling blank paragraphs.
+    /// A list item (has a marker) or any non-paragraph block is never treated as empty filler.
+    private static func isEmptyFillerParagraph(_ block: Block) -> Bool {
+        if case .paragraph(let p) = block { return p.text.isEmpty && p.list == nil }
+        return false
     }
 
     /// Locates a cell by id: its row index and its declaration index within that row's `cells`.

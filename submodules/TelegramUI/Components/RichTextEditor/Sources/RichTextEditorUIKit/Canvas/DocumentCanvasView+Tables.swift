@@ -291,6 +291,12 @@ extension DocumentCanvasView {
         // would be inserted there. Tables aren't supported inside quotes (v1) → no-op, like the in-table guard.
         guard !boxes.isEmpty, !isInsideTable(head), !isInsideBlockQuote(head),
               let resolved = resolveBox(at: head), resolved.box is BlockBox else { return }
+        // Focus the editor BEFORE the edit, so the caret placed in the new table's first cell is immediately
+        // interactive. The only synchronous caret-move layout (`editing` → onSelectionChange → the façade's
+        // `scrollCaretIntoView` → `performLayout`) is FR-gated; without focus, `onContentSizeChange` only
+        // relays layout to the host ASYNChronously, so the new table's cell frames stay stale until a later
+        // interaction — the "can't drag / first cell-tap does nothing until I tap again" bug.
+        if !isFirstResponder { _ = becomeFirstResponder() }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head), let p = pos.box as? BlockBox else { return }

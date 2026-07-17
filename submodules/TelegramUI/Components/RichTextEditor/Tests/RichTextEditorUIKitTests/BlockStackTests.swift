@@ -56,13 +56,6 @@ final class BlockStackTests: XCTestCase {
                  mapper: AttributedStringMapper(), width: 300)
     }
 
-    /// The advance between two consecutive bullet list items (which carry no paragraph spacing between them).
-    private func consecutiveListItemAdvance() -> CGFloat {
-        let s = BlockStack(boxes: [listBox("la"), listBox("lb")])
-        s.layout(origin: .zero, width: 300)
-        return (s.boxes[1] as! BlockBox).textOrigin.y - (s.boxes[0] as! BlockBox).textOrigin.y
-    }
-
     func test_consecutiveListItems_spacedLikeIntraParagraphLines() {
         let stack = BlockStack(boxes: [listBox("a"), listBox("b")])
         stack.layout(origin: .zero, width: 300)
@@ -81,7 +74,7 @@ final class BlockStackTests: XCTestCase {
         XCTAssertEqual(stack.boxes[1].frame.minY, stack.boxes[0].frame.maxY, accuracy: 0.5)
     }
 
-    func test_consecutiveBodyBlocks_haveReducedGap() {
+    func test_consecutiveBodyBlocks_haveNoGap() {
         let mapper = AttributedStringMapper()
         let stack = BlockStack(boxes: [
             BlockBox(paragraph: ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "One")]), mapper: mapper, width: 300),
@@ -91,7 +84,7 @@ final class BlockStackTests: XCTestCase {
         let a = stack.boxes[0] as! BlockBox, b = stack.boxes[1] as! BlockBox
         // The whitespace between the bottom of A's text and the top of B's text.
         let gap = b.textOrigin.y - (a.textOrigin.y + a.layout.boundingHeight)
-        XCTAssertEqual(gap, 8, accuracy: 0.5)   // reduced from the previous 16 (two full 8pt insets)
+        XCTAssertEqual(gap, 0, accuracy: 0.5)   // two adjacent body paragraphs now stack tight (was 8)
     }
 
     func test_codeBlockNeighbors_reserveExtraExternalMargin() {
@@ -130,23 +123,40 @@ final class BlockStackTests: XCTestCase {
         XCTAssertEqual(above.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5)  // far side unaffected
     }
 
-    func test_listItemToParagraphBoundary_keepsParagraphSpacing() {
+    func test_blockToMediaBoundary_usesDedicatedMediaInset_decoupledFromBase() {
+        let mapper = AttributedStringMapper()
+        func body(_ id: String) -> BlockBox {
+            BlockBox(paragraph: ParagraphBlock(id: BlockID(id), runs: [TextRun(text: "x")]), mapper: mapper, width: 300)
+        }
+        let media = MediaBlockBox(media: MediaBlock(id: BlockID("m"), mediaID: "x",
+                                                    naturalSize: Size2D(width: 100, height: 50), caption: []),
+                                  mapper: mapper, width: 300)
+        let heading = BlockBox(paragraph: ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "H")]),
+                               mapper: mapper, width: 300)
+        let below = body("below")
+        let stack = BlockStack(boxes: [heading, media, below])
+        stack.verticalInsetBase = 30   // deliberately unrelated to the media inset — proves decoupling from base
+        stack.layout(origin: .zero, width: 300)
+        // Any block (heading here) facing the image reserves the dedicated media inset (6pt), not `base` (30).
+        XCTAssertEqual(heading.bottomInset, 6, accuracy: 0.5, "block above the image uses the dedicated media inset")
+        XCTAssertEqual(below.topInset, 6, accuracy: 0.5, "block below the image uses the dedicated media inset")
+        // The far sides (facing the stack edge) still use `base`.
+        XCTAssertEqual(heading.topInset, 30, accuracy: 0.5, "far side unaffected — still base")
+        XCTAssertEqual(below.bottomInset, 30, accuracy: 0.5, "far side unaffected — still base")
+    }
+
+    func test_listItemToParagraphBoundary_stacksTight() {
         let mapper = AttributedStringMapper()
         let stack = BlockStack(boxes: [
             listBox("a"),
             BlockBox(paragraph: ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Plain")]), mapper: mapper, width: 300),
         ])
         stack.layout(origin: .zero, width: 300)
-        let advance = (stack.boxes[1] as! BlockBox).textOrigin.y - (stack.boxes[0] as! BlockBox).textOrigin.y
-        // The list-item→paragraph boundary is NOT collapsed: it carries real paragraph spacing. On TextKit 2
-        // that's well above one line's advance; TextKit 1's single-line blocks are shorter, so assert the
-        // engine-relative invariant — the boundary advances clearly MORE than two tight consecutive list
-        // items would (which have no paragraph gap between them).
-        if stack.boxes[0].textLayout is BlockLayoutTK1 {
-            XCTAssertGreaterThan(advance, consecutiveListItemAdvance() + 10)
-        } else {
-            XCTAssertGreaterThan(advance, intraParagraphLineAdvance() + 10)
-        }
+        let a = stack.boxes[0] as! BlockBox, b = stack.boxes[1] as! BlockBox
+        // The list-item→body boundary now collapses to NO inter-block gap, exactly like a body↔body or
+        // list↔list boundary — the body paragraph's text starts immediately after the list item's text.
+        let gap = b.textOrigin.y - (a.textOrigin.y + a.layout.boundingHeight)
+        XCTAssertEqual(gap, 0, accuracy: 0.5)
     }
 }
 #endif

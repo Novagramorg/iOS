@@ -417,10 +417,12 @@ final class TableControlsTests: XCTestCase {
         v.selectTableColumn(1)
         let knobs = v.tableResizeKnobs()
         XCTAssertEqual(knobs.count, 2)
-        let outline = v.tableSelectionOutlineRect()!
+        // Knobs center on the outline STROKE's centerline (the raw rect inset by half the line width).
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
         let lower = knobs.first { $0.end == .lower }!.rect
         let upper = knobs.first { $0.end == .upper }!.rect
-        XCTAssertEqual(lower.midX, outline.minX, accuracy: 0.5)   // left edge
+        XCTAssertEqual(lower.midX, outline.minX, accuracy: 0.5)   // left edge (on the stroke line)
         XCTAssertEqual(upper.midX, outline.maxX, accuracy: 0.5)   // right edge
         XCTAssertEqual(lower.midY, outline.midY, accuracy: 0.5)
     }
@@ -430,8 +432,9 @@ final class TableControlsTests: XCTestCase {
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
         v.selectTableRow(1)
         let knobs = v.tableResizeKnobs()
-        let outline = v.tableSelectionOutlineRect()!
-        XCTAssertEqual(knobs.first { $0.end == .lower }!.rect.midY, outline.minY, accuracy: 0.5)   // top
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
+        XCTAssertEqual(knobs.first { $0.end == .lower }!.rect.midY, outline.minY, accuracy: 0.5)   // top (on the stroke line)
         XCTAssertEqual(knobs.first { $0.end == .upper }!.rect.midY, outline.maxY, accuracy: 0.5)   // bottom
     }
 
@@ -440,12 +443,14 @@ final class TableControlsTests: XCTestCase {
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
         v.selectTableColumns(0...1)
         let knobs = v.tableResizeKnobs()
-        let outline = v.tableSelectionOutlineRect()!
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
         let lower = knobs.first { $0.end == .lower }!.rect
         let upper = knobs.first { $0.end == .upper }!.rect
-        // lower knob at the left edge of col 0; upper at the right edge of col 1 (range ends, not one cell)
-        XCTAssertEqual(lower.midX, t.cellRect(row: 0, column: 0)!.minX - TableBlockBox.border, accuracy: 0.5)
-        XCTAssertEqual(upper.midX, t.cellRect(row: 0, column: 1)!.maxX + TableBlockBox.border, accuracy: 0.5)
+        // lower knob at the left edge of col 0; upper at the right edge of col 1 (range ends, not one cell) —
+        // each on the stroke centerline, i.e. the cell-range edge pulled in by the half-line-width inset.
+        XCTAssertEqual(lower.midX, t.cellRect(row: 0, column: 0)!.minX - TableBlockBox.border + inset, accuracy: 0.5)
+        XCTAssertEqual(upper.midX, t.cellRect(row: 0, column: 1)!.maxX + TableBlockBox.border - inset, accuracy: 0.5)
         XCTAssertEqual(lower.midX, outline.minX, accuracy: 0.5)
         XCTAssertEqual(upper.midX, outline.maxX, accuracy: 0.5)
     }

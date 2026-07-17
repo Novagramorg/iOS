@@ -144,20 +144,24 @@ final class TableCellChromeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(outline.maxY, mergedCellRect.maxY - 0.5)
     }
 
-    // MARK: - 4. Corner knobs sit at the outline's corners (Correctness bar item 3)
+    // MARK: - 4. Cell-selection knobs are drawn at the CENTER OF EACH SIDE (keeping corner drag identity)
 
-    func test_cellSelection_cornerKnobs_atOutlineCorners() {
+    func test_cellSelection_knobs_atSideCenters() {
         let v = canvas(dense3x3()); let t = table(v)
         v.anchor = t.cellTextStart(row: 0, column: 0)!; v.head = v.anchor
         v.selectTableCells(TableRect(top: 0, left: 0, bottom: 1, right: 1))
-        let outline = v.tableSelectionOutlineRect()!
+        // Knobs center on the outline STROKE's centerline (raw rect inset by half the line width).
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
         let knobs = v.tableResizeKnobs()
         XCTAssertEqual(knobs.count, 4)
+        // Each corner-identity knob is DRAWN at a side midpoint (relocation only — the corner drives the drag):
+        // topLeft → top-center, topRight → right-center, bottomLeft → left-center, bottomRight → bottom-center.
         let expected: [TableCellCorner: CGPoint] = [
-            .topLeft: CGPoint(x: outline.minX, y: outline.minY),
-            .topRight: CGPoint(x: outline.maxX, y: outline.minY),
-            .bottomLeft: CGPoint(x: outline.minX, y: outline.maxY),
-            .bottomRight: CGPoint(x: outline.maxX, y: outline.maxY),
+            .topLeft: CGPoint(x: outline.midX, y: outline.minY),
+            .topRight: CGPoint(x: outline.maxX, y: outline.midY),
+            .bottomLeft: CGPoint(x: outline.minX, y: outline.midY),
+            .bottomRight: CGPoint(x: outline.midX, y: outline.maxY),
         ]
         for knob in knobs {
             guard let c = knob.corner, let pt = expected[c] else { return XCTFail("every cell knob carries a corner") }
@@ -165,6 +169,9 @@ final class TableCellChromeTests: XCTestCase {
             XCTAssertEqual(knob.rect.midY, pt.y, accuracy: 0.5)
             XCTAssertNil(knob.end, "a cell corner knob has no range end")
         }
+        // All four sit on distinct edges (not stacked): 2 share the vertical centerline, 2 share the horizontal.
+        XCTAssertEqual(Set(knobs.map { ($0.rect.midX * 2).rounded() }).count, 3, "x positions: minX, midX, maxX")
+        XCTAssertEqual(Set(knobs.map { ($0.rect.midY * 2).rounded() }).count, 3, "y positions: minY, midY, maxY")
     }
 
     // MARK: - 5. No fake chrome when the caret isn't in a table (Correctness bar item 4)
@@ -202,8 +209,11 @@ final class TableCellChromeTests: XCTestCase {
         assertRectsEqual(outline, expected)
         let knobs = v.tableResizeKnobs()
         XCTAssertEqual(knobs.count, 2)
-        XCTAssertEqual(knobs.first { $0.end == .lower }!.rect.midY, outline.minY, accuracy: 0.5)
-        XCTAssertEqual(knobs.first { $0.end == .upper }!.rect.midY, outline.maxY, accuracy: 0.5)
+        // Knob centers sit on the stroke centerline (outline inset by half the line width).
+        let strokeInset = DocumentCanvasView.selectionOutlineWidth / 2
+        let stroked = outline.insetBy(dx: strokeInset, dy: strokeInset)
+        XCTAssertEqual(knobs.first { $0.end == .lower }!.rect.midY, stroked.minY, accuracy: 0.5)
+        XCTAssertEqual(knobs.first { $0.end == .upper }!.rect.midY, stroked.maxY, accuracy: 0.5)
     }
 }
 #endif

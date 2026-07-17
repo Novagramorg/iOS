@@ -1308,11 +1308,11 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                 }).start()
             })
         case let .debugRichText(value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Legacy Text Input", value: value, sectionId: self.section, style: .blocks, updated: { value in
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Force Text Field v2", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
                     transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
                         var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
-                        settings.forceLegacyTextInput = value
+                        settings.forceNewTextInput = value
                         return EnginePreferencesEntry(settings)
                     })
                 }).start()
@@ -1595,7 +1595,7 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         entries.append(.fakeGlass(experimentalSettings.fakeGlass))
         entries.append(.forceClearGlass(experimentalSettings.forceClearGlass))
         entries.append(.debugRipple(experimentalSettings.debugRipple))
-        entries.append(.debugRichText(experimentalSettings.forceLegacyTextInput))
+        entries.append(.debugRichText(experimentalSettings.forceNewTextInput))
         #if DEBUG
         entries.append(.browserExperiment(experimentalSettings.browserExperiment))
         #else

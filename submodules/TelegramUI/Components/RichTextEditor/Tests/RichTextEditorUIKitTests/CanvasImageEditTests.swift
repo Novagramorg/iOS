@@ -31,6 +31,27 @@ final class CanvasImageEditTests: XCTestCase {
         XCTAssertEqual(v.head, v.boxes[1].textStart)     // caret in the caption
     }
 
+    func test_insertMedia_focusesEditor_soCaptionIsImmediatelyInteractive() {
+        // Mirror of the insertTable focus fix: the sole synchronous caret-move layout (scrollCaretIntoView)
+        // is FR-gated, so an unfocused insert leaves the new media's caption/frames stale until a later
+        // interaction. insertMedia must focus the editor itself.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 400))
+        window.makeKeyAndVisible()
+        let v = canvas(["Alpha"])
+        window.addSubview(v)
+        v.layoutIfNeeded()
+        caret(v, v.boxes[0].textStart + 5)
+        XCTAssertFalse(v.isFirstResponder, "precondition: not focused before the insert")
+        v.insertMedia(mediaID: "k1", naturalSize: imgSize(), kind: .image)
+        XCTAssertTrue(v.isFirstResponder, "inserting media focuses the editor so its caption is immediately interactive")
+        XCTAssertTrue(v.boxes.contains { $0 is MediaBlockBox }, "the media block was inserted")
+        // Hygiene: don't leak a key window + first-responder canvas into sibling tests.
+        _ = v.resignFirstResponder()
+        v.removeFromSuperview()
+        window.isHidden = true
+        window.resignKey()
+    }
+
     func test_typingIntoEmptyCaption_staysCentered() {
         let v = canvas(["Alpha"])
         caret(v, v.boxes[0].textStart + 5)               // end of "Alpha"

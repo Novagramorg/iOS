@@ -42,6 +42,28 @@ final class CanvasInsertTableTests: XCTestCase {
         XCTAssertTrue(v.isInsideTable(v.head), "caret lands inside the new table")
     }
 
+    func test_insertTable_focusesEditor_soCellsAreImmediatelyInteractive() {
+        // Regression: the caret-move layout that positions the new table's cells is FR-gated
+        // (scrollCaretIntoView), so an unfocused insert left cell frames stale — cell taps / knob drags
+        // missed until a later interaction focused the field. insertTable must focus the editor itself.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
+        window.makeKeyAndVisible()
+        let v = canvas()
+        window.addSubview(v)
+        v.layoutIfNeeded()
+        caretAtEndOf(v, "p")
+        XCTAssertFalse(v.isFirstResponder, "precondition: not focused before the insert")
+        v.insertTable(rows: 2, columns: 2)
+        XCTAssertTrue(v.isFirstResponder,
+                      "inserting a table focuses the editor so the new cells are immediately tappable/draggable")
+        XCTAssertNotNil(v.activeTable(), "the caret is live inside the new table")
+        // Hygiene: don't leak a key window + first-responder canvas into sibling tests.
+        _ = v.resignFirstResponder()
+        v.removeFromSuperview()
+        window.isHidden = true
+        window.resignKey()
+    }
+
     func test_insertTable_midParagraph_splitsParagraph() {
         let v = canvas()
         let r = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("p")) }!

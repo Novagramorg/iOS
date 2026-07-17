@@ -51,6 +51,9 @@ extension DocumentCanvasView: UITextInput {
         guard let r = range as? DocumentTextRange else { return }
         let lo = min(r.from.offset, r.to.offset)
         let hi = max(r.from.offset, r.to.offset)
+        // A keyboard autocorrection arrives here as `replace(word, correction)` — capture the original BEFORE the
+        // edit so we can flag the corrected word (below) with a "Revert to …" affordance.
+        let autocorrectOriginal = detectAutocorrection(oldText: self.text(in: range), newText: text)
         // Route through the 3-way selection logic, not applyReplace directly: a system-initiated
         // replacement (autocorrect/dictation/marked-text) can span a table boundary, which the
         // same-stack-guarded applyReplace would silently drop.
@@ -58,6 +61,9 @@ extension DocumentCanvasView: UITextInput {
         // (its own undo step) — coalescing is scoped to insertText/deleteBackward typing/deleting, so a
         // dictation utterance is one undo step. Intentional, not an oversight.
         editing { applySelectionReplace(globalFrom: lo, globalTo: hi, text: text) }
+        if let original = autocorrectOriginal, isSpellCheckingEnabled {
+            applyCorrectionFlag(global: NSRange(location: lo, length: (text as NSString).length), original: original)
+        }
     }
 
     func typingAttributeDict(region: LeafTextRegion, atLocal location: Int) -> [NSAttributedString.Key: Any] {

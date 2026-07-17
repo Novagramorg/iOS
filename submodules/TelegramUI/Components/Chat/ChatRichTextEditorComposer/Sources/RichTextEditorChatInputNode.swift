@@ -34,11 +34,7 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
     }
 }
 
-/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. The default composer on
-/// iOS 17+ (the `forceLegacyTextInput` flag opts back out to the legacy input — see
-/// `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
-/// display, layout, editing, and selection geometry; spoiler reveal, typing attributes, and the full
-/// delegate suite are safe stubs (Phase 2+).
+/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`.
 @available(iOS 13.0, *)
 public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInputNode {
     private let editorView = RichTextEditorView()

@@ -310,9 +310,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var enableBounceAnimations: Bool = false
     // Rich-input configuration from the server flag `ios_rich_input_mode` (Double): 0 / absent (default) is the
     // dual-field switch — the composer defaults to the legacy field and latches to native only when content
-    // becomes legacy-non-representable; 1 is always-native; 2 (or the `forceLegacyTextInput` experimental flag) is
-    // legacy-only. `enableRichTextInput` = native is permitted at all (false only in legacy-only mode);
-    // `alwaysUseNativeInput` = native from the start (mode 1). See `desiredUseNative(for:)`.
+    // becomes legacy-non-representable; 1 is always-native; 2 is legacy-only. The `forceNewTextInput` experimental
+    // flag (Debug Settings ▸ "Force Text Field v2") forces always-native regardless of `ios_rich_input_mode`.
+    // `enableRichTextInput` = native is permitted at all (false only in legacy-only mode);
+    // `alwaysUseNativeInput` = native from the start (mode 1 or `forceNewTextInput`). See `desiredUseNative(for:)`.
     private var enableRichTextInput: Bool = false
     private var alwaysUseNativeInput: Bool = false
     
@@ -843,7 +844,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }*/
         
         // `ios_rich_input_mode` (Double): 0 / absent = dual-field switch (legacy default, latch to native on
-        // non-representable content); 1 = always native; 2 = legacy only. `forceLegacyTextInput` forces legacy.
+        // non-representable content); 1 = always native; 2 = legacy only. The `forceNewTextInput` experimental
+        // flag (Debug Settings ▸ "Force Text Field v2") forces always-native (enableRichTextInput + alwaysUseNativeInput).
         self.enableRichTextInput = true
         self.alwaysUseNativeInput = false
         if let data = self.context?.currentAppConfiguration.with({ $0 }).data, let mode = data["ios_rich_input_mode"] as? Double {
@@ -853,9 +855,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.enableRichTextInput = false
             }
         }
-        if context.sharedContext.immediateExperimentalUISettings.forceLegacyTextInput {
-            self.enableRichTextInput = false
-            self.alwaysUseNativeInput = false
+        if context.sharedContext.immediateExperimentalUISettings.forceNewTextInput {
+            self.enableRichTextInput = true
+            self.alwaysUseNativeInput = true
         }
         
         self.sendAsAvatarContainerNode.activated = { [weak self] gesture, _ in
@@ -1132,9 +1134,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
     /// Decide which backend the given content requires. One-way latch: once the native rich-text backend is
     /// active it stays active for the panel's lifetime (never switches back to legacy). Legacy-only mode
-    /// (`ios_rich_input_mode == 2` / `forceLegacyTextInput`) always uses legacy; always-native mode
-    /// (`ios_rich_input_mode == 1`) always uses native; otherwise (dual-field switch) native is used only once the
-    /// content is not representable in the legacy backend.
+    /// (`ios_rich_input_mode == 2`) always uses legacy; always-native mode (`ios_rich_input_mode == 1` or the
+    /// `forceNewTextInput` experimental flag) always uses native; otherwise (dual-field switch) native is used
+    /// only once the content is not representable in the legacy backend.
     private func desiredUseNative(for content: ChatInputContent) -> Bool {
         if self.richTextInputNode?.usesNativeRichTextEngine == true {
             return true
