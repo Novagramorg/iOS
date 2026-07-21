@@ -44,7 +44,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // The synthesized webpage uses a sentinel id (namespace 0, id 0) shared across all richText
     // messages, so we key cache invalidation on the message itself. When the bubble is recycled
     // with a different message we must discard pageView (render context is constructor-fixed).
-    private var pageViewMessageKey: (id: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
+    // `stableId` (not `id`) is the reuse identity: it is preserved across the Local→Cloud send
+    // transition (whereas `id` flips namespace), so the pageView — and its media views' already-
+    // rendered pixels — survive send instead of being rebuilt (which caused the media blink). A
+    // genuinely recycled bubble carries a different stableId, so recycling still rebuilds.
+    // `messageId` is kept only to detect the Local→Cloud id flip, gating the reference refresh.
+    private var pageViewMessageKey: (stableId: UInt32, messageId: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
     // messageStableVersion is in the cache key because the synthesized instantPage content
     // mutates between streamed AI message chunks (each chunk bumps stableVersion); without
     // this, the cached layout would shadow newly-arrived content during streaming.
@@ -186,21 +191,42 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         )
     }
 
+    /// The message-scoped media-reference closures for the render context. Extracted so the
+    /// initial build and the Local→Cloud reference refresh construct identical closures.
+    private static func mediaReferenceClosures(messageReference: MessageReference) -> (image: (TelegramMediaImage) -> ImageMediaReference, file: (TelegramMediaFile) -> FileMediaReference) {
+        return (
+            image: { image in ImageMediaReference.message(message: messageReference, media: image) },
+            file: { file in FileMediaReference.message(message: messageReference, media: file) }
+        )
+    }
+
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
     /// the existing view, updating only the webpage content in place. The view is rebuilt only when
-    /// the bubble is recycled with a different message/webpage (different message id).
+    /// the bubble is recycled with a genuinely different message (different stableId).
     private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool) -> InstantPageV2View {
-        let key = (id: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
-        if let existing = self.pageView, let current = self.pageViewMessageKey, current.id == key.id {
-            if current.stableVersion == key.stableVersion && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
+        let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
+        if let existing = self.pageView, let current = self.pageViewMessageKey, current.stableId == key.stableId {
+            if current.stableVersion == key.stableVersion && current.messageId == key.messageId && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
                 return existing
             }
-            // Same message, new chunk: reuse the view. Update only the content-bearing webpage on
-            // the existing render context; the subsequent pageView.update(layout:) call diffs item
-            // views by stable id (content blocks keep their ids, so their views and in-flight
-            // reveal state persist; only added/removed blocks change). This replaces the old
-            // wholesale rebuild and eliminates the per-chunk full-text-then-mask flash.
-            existing.renderContext?.updateContent(webpage: webpage)
+            // Same logical message (stableId), new content. Two sub-cases:
+            //  - messageId unchanged (streamed AI chunk / pending edit): swap only the webpage;
+            //    the construction-time reference snapshot stays valid (media resolves by id). The
+            //    subsequent pageView.update(layout:) diffs item views by stable id, so content
+            //    blocks keep their views + in-flight reveal state (only added/removed blocks
+            //    change) — eliminating the per-chunk full-text-then-mask flash.
+            //  - messageId changed (Local→Cloud send flip): also refresh the render context's
+            //    MessageReference + reference closures, so live consumers (inline video/audio/
+            //    gallery) use the Cloud reference. The reused media VIEWS keep their init-time
+            //    (local) reference — their bytes are already local, so the poster does not reload
+            //    and there is no blink; a later scroll-recycle rebuilds them against the Cloud ref.
+            if current.messageId != key.messageId {
+                let messageReference = MessageReference(item.message)
+                let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
+                existing.renderContext?.updateContent(webpage: webpage, message: messageReference, imageReference: closures.image, fileReference: closures.file)
+            } else {
+                existing.renderContext?.updateContent(webpage: webpage)
+            }
             self.pageViewMessageKey = key
             return existing
         }
@@ -211,6 +237,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // render context which is owned by the V2View, so we must avoid making them retain
         // the bubble (`self`) or the message indirectly via `item`.
         let messageReference = MessageReference(item.message)
+        let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
         let policyContext = item.context
         let autoDownloadSettings = item.controllerInteraction.automaticMediaDownloadSettings
         let autoDownloadPeerType = item.associatedData.automaticDownloadPeerType
@@ -222,12 +249,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             context: item.context,
             webpage: webpage,
             sourceLocation: InstantPageSourceLocation(userLocation: .peer(messagePeerId), peerType: autoDownloadPeerType),
-            imageReference: { image in
-                return ImageMediaReference.message(message: messageReference, media: image)
-            },
-            fileReference: { file in
-                return FileMediaReference.message(message: messageReference, media: file)
-            },
+            imageReference: closures.image,
+            fileReference: closures.file,
             present: { [weak self] controller, args in
                 self?.item?.controllerInteraction.presentController(controller, args)
             },

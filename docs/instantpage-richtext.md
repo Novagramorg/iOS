@@ -32,6 +32,50 @@ These are detailed, non-obvious invariants — read the relevant section before 
 - **The hardcoded "Thinking…" header was removed.** `streamingStatusTextNode`, `streamingStatusShimmerView`, and the header-layout machinery no longer exist. `streamingHeaderOffset` is now a constant `0.0` — the pageView starts at the top of the bubble. The "Thinking…" indicator is now server-sent as `InstantPageBlock.thinking` and rendered inside the pageView (see "InstantPage thinking blocks" section below).
 - **Display-link tick re-layouts on extent change.** Tick reads `revealedContentSize` at the new cursor; if the height differs from the previous cursor, calls `requestFullUpdate`. So the bubble grows in flight when the cursor crosses a line/item boundary, not just between chunks. Tick passes `animated: true` to `applyReveal` to fire the snippet pop-in.
 
+### Send-time media continuity (no blink on Local→Cloud)
+
+A rich message with media used to **blink** on send because `ensurePageView` keyed pageView
+reuse on `message.id`, which flips namespace Local→Cloud at send time, forcing a full pageView
+rebuild → fresh `InstantPageImageNode`s → `setSignal` re-run → fade-in flash.
+
+- **The reuse key is `message.stableId`, NOT `message.id`.** `stableId` is preserved across the
+  Local→Cloud transition (it is also what `ChatMessageBubbleItemNode` uses to reuse the content
+  node instance), so the pageView and its positional `.media(index)` media views survive send;
+  the reused views keep their already-rendered pixels. A genuinely recycled bubble has a
+  different `stableId`, so recycling still rebuilds.
+- **The data layer already re-homes the bytes.** `ApplyUpdateMessage.swift` calls
+  `applyMediaResourceChanges` for `RichTextMessageAttribute`, moving the local upload bytes onto
+  the new Cloud resource ids — so even the reference node's pattern (reload only if not
+  semantically equal) would resolve from cache. Here we avoid the reload entirely by keeping the
+  views.
+- **The render context's `MessageReference` is refreshed on the id flip.**
+  `InstantPageV2RenderContext.updateContent(webpage:message:imageReference:fileReference:)` swaps
+  the message-scoped reference + closures when `messageId` changes (Local→Cloud), so LIVE
+  consumers — inline video `NativeVideoContentId.message`/fetch, audio playlist key/fetch,
+  gallery — use the Cloud reference immediately. The webpage-only `updateContent(webpage:)`
+  remains for streamed AI chunks (message id stable → no refresh).
+- **The reused media node's INTERACTIVE bindings are refreshed too — its image is NOT.** The
+  poster `InstantPageImageNode` is reused (its already-decoded pixels are byte-identical to the
+  Cloud image, since `ApplyUpdateMessage` *moved* the bytes onto the new resource id — so the
+  image signal is deliberately never re-set, which is what avoids the blink). But its `self.media`
+  identity and fetch-status subscription are still bound to the stale *local* resource, and
+  tap-to-open depends on both: `openInstantPageMedia`'s `centralIndex` match compares the tapped
+  `self.media` against the fresh (Cloud) gallery entries via `InstantPageMedia ==`
+  (full `EngineMedia` equality), and the image tap gate keys on `fetchStatus`. Left stale, tap
+  silently no-ops (image) or opens nothing (video) until a scroll-recycle rebuild. So the V2 media
+  views (`InstantPageV2MediaImageView`/`VideoView`/`CoverImageView`) call
+  `InstantPageImageNode.updateInteractiveMediaBinding(sourceLocation:media:imageReferenceForMedia:fileReferenceForMedia:)`
+  from `update(item:)` **only when `item.media.media.id` changed** — re-pointing `self.media`, the
+  status subscription, and `fetchControls` at the Cloud resource *without* touching the image
+  signal. (Gated on the id change so it never churns during AI-streaming relayouts, where the id
+  is stable.)
+- **Coverage.** Single image, video, and **collage** cells are covered — collage flattens into
+  ordinary positional `.mediaImage`/`.mediaVideo` views, so each cell gets the reuse + binding
+  refresh for free. **Slideshow** was verified to send with no blink and working tap-to-open with
+  **no slideshow-specific code** (its container view + pages reconcile through the same positional
+  reuse). If a future change makes a slideshow rich message blink or break tap-to-open on send,
+  apply the same `updateInteractiveMediaBinding` refresh to `InstantPageV2SlideshowView`'s pages.
+
 ### Status node (date/time/checks) positioning
 
 The `ChatMessageDateAndStatusNode` mirrors TextBubble's placement, adapted to the heterogeneous V2 layout. The node is a child of `self` (the content node), **not** of the clipping `containerNode`, so it is never clipped — the bubble height must be grown to contain it.

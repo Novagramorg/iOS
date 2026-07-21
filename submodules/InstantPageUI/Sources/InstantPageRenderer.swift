@@ -53,8 +53,8 @@ public final class InstantPageV2RenderContext {
     public let context: AccountContext
     public private(set) var webpage: TelegramMediaWebpage
     public let sourceLocation: InstantPageSourceLocation
-    public let imageReference: (TelegramMediaImage) -> ImageMediaReference
-    public let fileReference: (TelegramMediaFile) -> FileMediaReference
+    public private(set) var imageReference: (TelegramMediaImage) -> ImageMediaReference
+    public private(set) var fileReference: (TelegramMediaFile) -> FileMediaReference
     public let present: (ViewController, Any?) -> Void
     public let push: (ViewController) -> Void
     public let openUrl: (InstantPageUrlItem) -> Void
@@ -63,7 +63,7 @@ public final class InstantPageV2RenderContext {
     /// key audio playback per message (`.richMessage(message.id)`) AND to fetch audio files via a
     /// message reference (so a stale file reference can revalidate); `nil` in the send preview,
     /// which falls back to the webpage-keyed playlist id + webpage file reference.
-    public let message: MessageReference?
+    public private(set) var message: MessageReference?
     /// Per-media auto-download decision for a photo, computed by the host (chat bubble) from the
     /// message's download settings. Default `{ _ in false }` — V1/web-IV and the send preview keep
     /// their existing behavior (the node's own global-settings gate). See the video/autodownload spec.
@@ -104,13 +104,30 @@ public final class InstantPageV2RenderContext {
         self.shouldAutoplayVideo = shouldAutoplayVideo
     }
 
-    /// Update the content-bearing fields for a later chunk of the SAME message. Enables the
-    /// streaming bubble to reuse one V2View across `stableVersion` bumps instead of rebuilding.
-    /// Only `webpage` changes across chunks; the `imageReference`/`fileReference` closures keep
-    /// their construction-time `MessageReference` snapshot, which is acceptable because the message
-    /// id is stable across chunks (media resolves by id) and streamed AI content carries no media.
+    /// Update the content-bearing webpage for a later chunk of the SAME message with the SAME
+    /// server id (streamed AI `stableVersion` bumps). The `imageReference`/`fileReference`/`message`
+    /// snapshot is intentionally NOT refreshed here: the message id is stable across chunks (media
+    /// resolves by id) and streamed AI content carries no media. For the Local→Cloud send transition
+    /// (same stableId, NEW id, real media) use `updateContent(webpage:message:imageReference:fileReference:)`.
     public func updateContent(webpage: TelegramMediaWebpage) {
         self.webpage = webpage
+    }
+
+    /// Refresh content AND the message-scoped references when the SAME logical message (same
+    /// `stableId`) transitions to a new server id (Local→Cloud on send). Already-built media item
+    /// VIEWS keep their construction-time (local) reference — their bytes are already local
+    /// (`ApplyUpdateMessage` moved them), so the poster does not reload — but LIVE reads (inline
+    /// video content-id/fetch, audio playlist key/fetch, gallery) now use the Cloud reference.
+    public func updateContent(
+        webpage: TelegramMediaWebpage,
+        message: MessageReference?,
+        imageReference: @escaping (TelegramMediaImage) -> ImageMediaReference,
+        fileReference: @escaping (TelegramMediaFile) -> FileMediaReference
+    ) {
+        self.webpage = webpage
+        self.message = message
+        self.imageReference = imageReference
+        self.fileReference = fileReference
     }
 }
 
