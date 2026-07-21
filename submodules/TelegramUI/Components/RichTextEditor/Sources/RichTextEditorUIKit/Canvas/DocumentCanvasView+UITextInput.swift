@@ -580,8 +580,22 @@ extension DocumentCanvasView: UIKeyInput {
            posTo.local == 0, posTo.box.textLength == 0, posTo.index > 0,
            isNonParagraphAtom(boxes[posTo.index - 1]),
            selFrom >= prevTextPosition(before: selTo) {
+            if selectPrecedingTableOnBackspace(paragraphIndex: posTo.index) { return }   // table → select whole table
             editing { removeBlock(at: posTo.index, parkingCaretAt: prevTextPosition(before: selTo)) }
             return
+        }
+        // Object-replacement RANGE at the START of a NON-EMPTY paragraph whose previous block is a table
+        // (device-form parity with the empty-paragraph range above — iOS may deliver Backspace at this
+        // boundary as `[tableLastCellEnd … paragraphStart]`). Route it to the whole-table select helper.
+        // The `selFrom >= prevTextPosition(before: selTo)` gate admits ONLY the object-replacement range
+        // (its head anchors at the table's last-cell end), NOT a genuine selection that merely ends at the
+        // paragraph start (that must still delete-and-merge via the generic path below). `!isInsideBlockQuote`
+        // / `!isInsideTable` avoid the resolveBox degenerate-container misroute.
+        if selFrom != selTo, !isInsideBlockQuote(selTo), !isInsideTable(selTo), let posTo = resolveBox(at: selTo),
+           posTo.local == 0, posTo.box.textLength > 0, posTo.index > 0,
+           boxes[posTo.index - 1] is TableBlockBox,
+           selFrom >= prevTextPosition(before: selTo) {
+            if selectPrecedingTableOnBackspace(paragraphIndex: posTo.index) { return }
         }
         // iOS may deliver Backspace at the START (local 0) of a quote AUTHOR line as an object-replacement
         // RANGE anchored at the previous child's text end (the same offset geometry as an empty container /
@@ -814,11 +828,14 @@ extension DocumentCanvasView: UIKeyInput {
             let n = graphemeClusterLengthBeforeCaret(global: head)
             editing(coalescing: .deleting) { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
         } else if pos.index > 0, isNonParagraphAtom(boxes[pos.index - 1]) {
-            // Start of a paragraph after a NON-TEXT block (image / table / code) that can't absorb a text
+            // A TABLE gets the select-then-delete treatment: first Backspace moves in + selects the whole
+            // table, a second deletes it (deleteTableStructuralSelection at the top of deleteBackward).
+            if selectPrecedingTableOnBackspace(paragraphIndex: pos.index) { return }
+            // Start of a paragraph after a NON-TEXT block (image / code) that can't absorb a text
             // merge. Backspace must NOT delete that block. An EMPTY paragraph is removed — so "deleting the
             // last paragraph" is always possible; a non-empty one is kept. Either way the caret steps back
-            // to that block's nearest text slot (an image's caption end, a table's last cell end, a code
-            // block's end) via prevTextPosition — never the block's degenerate node-start boundary.
+            // to that block's nearest text slot (an image's caption end, a code block's end) via
+            // prevTextPosition — never the block's degenerate node-start boundary.
             let prev = prevTextPosition(before: head)
             if pos.box.textLength == 0 {
                 editing { removeBlock(at: pos.index, parkingCaretAt: prev) }

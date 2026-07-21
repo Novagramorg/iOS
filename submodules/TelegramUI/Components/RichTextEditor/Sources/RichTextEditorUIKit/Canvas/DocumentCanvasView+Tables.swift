@@ -182,6 +182,28 @@ extension DocumentCanvasView {
         clearTableSelection()
     }
 
+    /// Backspace at the START (local 0) of the top-level paragraph at `paragraphIndex` whose IMMEDIATELY
+    /// PRECEDING block is a table: move the caret into the table and structurally select the WHOLE table
+    /// (`.rows(0…last)`), so a SECOND Backspace deletes it via `deleteTableStructuralSelection`. An empty
+    /// trailing paragraph is removed first, so the two-press model matches the non-empty case. Returns
+    /// false (no-op) when the previous block isn't a `TableBlockBox` — the caller then handles the other
+    /// non-paragraph atoms (image / code) unchanged.
+    func selectPrecedingTableOnBackspace(paragraphIndex: Int) -> Bool {
+        let tableIndex = paragraphIndex - 1
+        guard tableIndex >= 0, boxes[tableIndex] is TableBlockBox else { return false }
+        // The table's last-cell end; computed before any removal. Removing a LATER block does not shift it.
+        let prev = prevTextPosition(before: boxes[paragraphIndex].textStart)
+        if boxes[paragraphIndex].textLength == 0 {
+            editing { removeBlock(at: paragraphIndex, parkingCaretAt: prev) }   // drop the empty trailing paragraph
+        } else {
+            anchor = prev; head = prev                                          // move the caret into the table
+        }
+        if let table = boxes[tableIndex] as? TableBlockBox {
+            selectTableRows(0...max(table.rowCount - 1, 0))                     // whole-table structural selection
+        }
+        return true
+    }
+
     func deleteTableColumn() {
         guard let a = activeTable() else { return }
         guard case .table(let table) = a.box.currentBlock() else { return }
