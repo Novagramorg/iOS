@@ -116,6 +116,7 @@ func presentLegacyMediaPickerGallery(
     threadTitle: String?,
     chatLocation: ChatLocation?,
     isScheduledMessages: Bool,
+    isActionButtonDone: Bool = false,
     presentationData: PresentationData,
     source: LegacyMediaPickerGallerySource,
     immediateThumbnail: UIImage?,
@@ -219,6 +220,7 @@ func presentLegacyMediaPickerGallery(
         hasCamera: false,
         recipientName: recipientName,
         isScheduledMessages: isScheduledMessages,
+        isActionButtonDone: isActionButtonDone,
         hasCoverButton: hasCoverButton
     )!
     model.stickersContext = paintStickersContext

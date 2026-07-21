@@ -4694,11 +4694,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                     )
                 } : nil),
-                presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
+                presentAttachmentMenu: { [weak self] request, completion in
                     guard let self else {
                         return
                     }
-                    self.controller?.presentRichTextAttachmentMenu(photoVideoOnly: photoVideoOnly, completion: completion)
+                    self.controller?.presentRichTextAttachmentMenu(request: request, completion: completion)
                 },
                 presentFormulaEditor: { [weak self] initialValue, completion in
                     guard let self else {

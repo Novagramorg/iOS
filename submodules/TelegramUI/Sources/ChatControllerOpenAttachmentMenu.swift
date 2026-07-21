@@ -1094,11 +1094,11 @@ extension ChatControllerImpl {
                                     }
                                 )
                             } : nil),
-                            presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
+                            presentAttachmentMenu: { [weak self] request, completion in
                                 guard let self else {
                                     return
                                 }
-                                self.presentRichTextAttachmentMenu(photoVideoOnly: photoVideoOnly, completion: completion)
+                                self.presentRichTextAttachmentMenu(request: request, completion: completion)
                             },
                             presentFormulaEditor: { [weak self] initialValue, completion in
                                 guard let self else {
@@ -1153,12 +1153,23 @@ extension ChatControllerImpl {
     }
     
     @available(iOS 13.0, *)
-    func presentRichTextAttachmentMenu(photoVideoOnly: Bool, completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
+    func presentRichTextAttachmentMenu(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
         // The gallery tab is inherently photos/videos only; audio + location are the only tabs that surface
         // non-photo/video media, so restricting to just `.gallery` yields a photo/video-only picker (used when
         // creating or extending a mosaic group).
-        let availableButtons: [AttachmentButtonType] = photoVideoOnly ? [.gallery] : [.gallery, .audio, .location]
-        presentPollAttachmentScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, subject: .richText, availableButtons: availableButtons, inputMediaNodeData: nil, present: { [weak self] c, push in
+        var availableButtons: [AttachmentButtonType] = []
+        var photoVideoSelectionLimit = 1
+        if let imageOrVideo = request.imageOrVideo {
+            photoVideoSelectionLimit = imageOrVideo.limit
+            availableButtons.append(.gallery)
+        }
+        if request.music {
+            availableButtons.append(.audio)
+        }
+        if request.location {
+            availableButtons.append(.location)
+        }
+        presentPollAttachmentScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, subject: .richText(PollAttachmentSubject.RichText(photoVideoSelectionLimit: photoVideoSelectionLimit)), availableButtons: availableButtons, inputMediaNodeData: nil, present: { [weak self] c, push in
             guard let self else {
                 return
             }

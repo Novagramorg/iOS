@@ -18,10 +18,18 @@ import ICloudResources
 import ChatTextLinkEditUI
 
 public enum PollAttachmentSubject {
+    public struct RichText: Equatable {
+        public var photoVideoSelectionLimit: Int
+        
+        public init(photoVideoSelectionLimit: Int) {
+            self.photoVideoSelectionLimit = photoVideoSelectionLimit
+        }
+    }
+    
     case description
     case quizAnswer
     case option
-    case richText
+    case richText(RichText)
 }
 
 func makePollAttachmentLinkWebpage(link: String) -> TelegramMediaWebpage {
@@ -98,6 +106,9 @@ public func presentPollAttachmentScreen(
         
         let locationPickerPollSubject: LocationPickerController.Source.PollMode
         let stickerPickerPollSubject: StickerAttachmentScreen.Source.PollMode
+        
+        var multiselectionLimit: Int?
+        
         switch subject {
         case .description:
             mediaPickerAssetsMode = .poll(mode: .description, asFile: false)
@@ -120,13 +131,17 @@ public func presentPollAttachmentScreen(
             
             locationPickerPollSubject = .option
             stickerPickerPollSubject = .option
-        case .richText:
+        case let .richText(richText):
             mediaPickerAssetsMode = .richText(asFile: false)
             filePickerAssetsMode = .richText(asFile: true)
             filePickerSource = .richText
             
             locationPickerPollSubject = .richText
             stickerPickerPollSubject = .richText
+            
+            if richText.photoVideoSelectionLimit > 1 {
+                multiselectionLimit = richText.photoVideoSelectionLimit
+            }
         }
 
         switch type {
@@ -138,7 +153,9 @@ public func presentPollAttachmentScreen(
                 peer: nil,
                 threadTitle: nil,
                 chatLocation: nil,
-                enableMultiselection: false,
+                isActionButtonDone: true,
+                enableMultiselection: multiselectionLimit != nil && multiselectionLimit != 1,
+                selectionLimit: multiselectionLimit,
                 subject: .assets(nil, mediaPickerAssetsMode)
             )
             controller.getCaptionPanelView = {

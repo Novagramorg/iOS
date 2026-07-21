@@ -222,11 +222,13 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     
     private let peer: EnginePeer?
     private let isScheduledMessages: Bool
+    private let isActionButtonDone: Bool
     private let threadTitle: String?
     private let chatLocation: ChatLocation?
     private let bannedSendPhotos: (Int32, Bool)?
     private let bannedSendVideos: (Int32, Bool)?
     private let enableMultiselection: Bool
+    private let selectionLimit: Int?
     private let canBoostToUnrestrict: Bool
     fileprivate let paidMediaAllowed: Bool
     fileprivate let subject: Subject
@@ -1364,7 +1366,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             
             self.openingMedia = true
             
-            self.currentGalleryController = presentLegacyMediaPickerGallery(context: controller.context, peer: controller.peer, threadTitle: controller.threadTitle, chatLocation: controller.chatLocation, isScheduledMessages: controller.isScheduledMessages, presentationData: self.presentationData, source: .fetchResult(fetchResult: fetchResult, index: index, reversed: reversed), immediateThumbnail: immediateThumbnail, selectionContext: interaction.selectionState?.selectionLimit == 1 ? nil : interaction.selectionState, editingContext: interaction.editingState, asFile: controller.subject.asFile, hasSilentPosting: true, hasSchedule: hasSchedule, hasTimer: hasTimer, updateHiddenMedia: { [weak self] id in
+            self.currentGalleryController = presentLegacyMediaPickerGallery(context: controller.context, peer: controller.peer, threadTitle: controller.threadTitle, chatLocation: controller.chatLocation, isScheduledMessages: controller.isScheduledMessages, isActionButtonDone: controller.isActionButtonDone, presentationData: self.presentationData, source: .fetchResult(fetchResult: fetchResult, index: index, reversed: reversed), immediateThumbnail: immediateThumbnail, selectionContext: interaction.selectionState?.selectionLimit == 1 ? nil : interaction.selectionState, editingContext: interaction.editingState, asFile: controller.subject.asFile, hasSilentPosting: true, hasSchedule: hasSchedule, hasTimer: hasTimer, updateHiddenMedia: { [weak self] id in
                 self?.hiddenMediaId.set(.single(id))
             }, initialLayout: layout, transitionHostView: { [weak self] in
                 return self?.gridNode.view
@@ -2022,9 +2024,11 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         threadTitle: String?,
         chatLocation: ChatLocation?,
         isScheduledMessages: Bool = false,
+        isActionButtonDone: Bool = false,
         bannedSendPhotos: (Int32, Bool)? = nil,
         bannedSendVideos: (Int32, Bool)? = nil,
         enableMultiselection: Bool = true,
+        selectionLimit: Int? = nil,
         canBoostToUnrestrict: Bool = false,
         paidMediaAllowed: Bool = false,
         subject: Subject,
@@ -2047,9 +2051,11 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         self.threadTitle = threadTitle
         self.chatLocation = chatLocation
         self.isScheduledMessages = isScheduledMessages
+        self.isActionButtonDone = isActionButtonDone
         self.bannedSendPhotos = bannedSendPhotos
         self.bannedSendVideos = bannedSendVideos
         self.enableMultiselection = enableMultiselection
+        self.selectionLimit = selectionLimit
         self.canBoostToUnrestrict = canBoostToUnrestrict
         self.paidMediaAllowed = paidMediaAllowed
         self.subject = subject
@@ -2059,7 +2065,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         self.mainButtonAction = mainButtonAction
         self.secondaryButtonAction = secondaryButtonAction
         
-        let selectionContext = selectionContext ?? TGMediaSelectionContext(groupingAllowed: false, selectionLimit: enableMultiselection ? 100 : 1)!
+        let selectionContext = selectionContext ?? TGMediaSelectionContext(groupingAllowed: false, selectionLimit: Int32(enableMultiselection ? (selectionLimit ?? 100) : 1))!
         let editingContext = editingContext ?? (subject.asFile ? TGMediaEditingContext.forCaptionsOnly() : TGMediaEditingContext())!
         
         self.titleView = MediaPickerTitleView(theme: self.presentationData.theme, glass: style == .glass, segments: [self.presentationData.strings.Attachment_AllMedia, self.presentationData.strings.Attachment_SelectedMedia(1)], selectedIndex: 0)
@@ -3206,7 +3212,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                                         return
                                     }
                                     if let selectionContext = self.interaction?.selectionState, let editingContext = self.interaction?.editingState {
-                                        selectionContext.selectionLimit = self.enableMultiselection ? 10 : 1
+                                        selectionContext.selectionLimit = Int32(self.enableMultiselection ? self.selectionLimit ?? 10 : 1)
                                         for case let item as TGMediaEditableItem in selectionContext.selectedItems() {
                                             editingContext.setPrice(NSNumber(value: amount), for: item)
                                         }

@@ -269,6 +269,26 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         case location(TelegramMediaMap)
     }
     
+    public struct MediaRequest {
+        public struct ImageOrVideo {
+            public let limit: Int
+            
+            public init(limit: Int) {
+                self.limit = limit
+            }
+        }
+        
+        public let imageOrVideo: ImageOrVideo?
+        public let music: Bool
+        public let location: Bool
+        
+        public init(imageOrVideo: ImageOrVideo?, music: Bool, location: Bool) {
+            self.imageOrVideo = imageOrVideo
+            self.music = music
+            self.location = location
+        }
+    }
+    
     public var requestAttachmentMenuExpansion: () -> Void = {}
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
     public var parentController: () -> ViewController? = { return nil }
@@ -301,7 +321,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
-        presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.init(
@@ -323,7 +343,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
-        presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.context = context
@@ -535,10 +555,10 @@ final class RichTextAttachmentScreenComponent: Component {
     let mode: RichTextAttachmentScreen.Mode
     let sendContextActions: RichTextAttachmentScreenSendContextActions?
     let overNavigationContainer: UIView
-    let presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
+    let presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
 
-    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
         self.context = context
         self.mode = mode
         self.sendContextActions = sendContextActions
@@ -633,11 +653,11 @@ final class RichTextAttachmentScreenComponent: Component {
         /// Picks one medium via the host attachment menu, registers its raw `Media` in `attachedMedia` (so the
         /// media-view provider can resolve it), and hands back the editor-facing `(mediaID, naturalSize, kind,
         /// caption)`. Callers decide what to do with it (insert a new block, or append to an existing one).
-        private func pickMedia(photoVideoOnly: Bool, completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
+        private func pickMedia(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
             guard let component = self.component else {
                 return
             }
-            component.presentAttachmentMenu?(photoVideoOnly, { [weak self] attachment in
+            component.presentAttachmentMenu?(request, { [weak self] attachment in
                 guard let self else {
                     return
                 }
@@ -683,7 +703,11 @@ final class RichTextAttachmentScreenComponent: Component {
         }
 
         private func presentImagePicker() {
-            self.pickMedia(photoVideoOnly: false) { [weak self] mediaID, naturalSize, kind, caption in
+            self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
+                imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
+                music: true,
+                location: true
+            )) { [weak self] mediaID, naturalSize, kind, caption in
                 self?.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
             }
         }
@@ -1185,7 +1209,11 @@ final class RichTextAttachmentScreenComponent: Component {
                         }
                     case .add:
                         guard let addMore = request.addMore else { break }
-                        self.pickMedia(photoVideoOnly: true) { mediaID, naturalSize, kind, _ in
+                        self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
+                            imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
+                            music: false,
+                            location: false
+                        )) { mediaID, naturalSize, kind, _ in
                             guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
                             addMore(mediaID, naturalSize, kind)
                         }
