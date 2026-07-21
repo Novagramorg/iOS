@@ -235,81 +235,85 @@ public func entityPreservingFallbackAttributedString(
     return result
 }
 
-/// NSAttributedString → ChatInputContent (two-pass: carve `.block`/code regions via `codeBlockRanges`,
-/// fill gaps with paragraphs, consuming one separator "\n" per boundary — mirrors
-/// `ComposerDocumentBridge.document(from:)`).
+/// NSAttributedString → ChatInputContent (two-pass: carve non-paragraph block regions — code, EXPANDED quotes,
+/// collapsed blockQuotes — via `enumerateAttribute`, fill gaps with paragraphs, consuming one separator "\n"
+/// per boundary — mirrors `ComposerDocumentBridge.document(from:)`).
+///
+/// A quote is carved as a **contiguous `.block`/.quote run** (exactly like a code block), NOT split per line.
+/// This is load-bearing: the legacy UITextView represents a multi-line quote as ONE `.block` object spanning
+/// the interior "\n"s, so carving by run keeps it a single multi-paragraph `.blockQuote`. Two genuinely
+/// separate quotes are separated by a "\n" that carries NO block attribute, so `enumerateAttribute` yields two
+/// runs → two `.blockQuote` blocks. (Parsing per-"\n" instead discarded that run boundary and fragmented every
+/// multi-line quote into one block per line, so a save/restore of the persisted `content` split one quote into
+/// several.)
 public func chatInputContent(from attributedText: NSAttributedString) -> ChatInputContent {
     let full = attributedText.string as NSString
     var blocks: [ChatInputBlock] = []
 
-    func appendParagraphs(in range: NSRange) {
-        guard range.length > 0 else { return }
-        var paraRanges: [NSRange] = []
+    // Build the inline runs for a single paragraph range. Block-level attributes (`.block`/`.collapsedBlock`)
+    // are NOT read here — the block kind is decided by the carve that owns the range, so gaps are always plain.
+    func paragraphRuns(in pr: NSRange) -> [ChatInputRun] {
+        var runs: [ChatInputRun] = []
+        guard pr.length > 0 else { return runs }
+        attributedText.enumerateAttributes(in: pr, options: []) { dict, r, _ in
+            var a = ChatInputInlineAttributes()
+            if dict[ChatTextInputAttributes.bold] != nil { a.bold = true }
+            if dict[ChatTextInputAttributes.italic] != nil { a.italic = true }
+            if dict[ChatTextInputAttributes.monospace] != nil { a.monospace = true }
+            if dict[ChatTextInputAttributes.strikethrough] != nil { a.strikethrough = true }
+            if dict[ChatTextInputAttributes.underline] != nil { a.underline = true }
+            if dict[ChatTextInputAttributes.spoiler] != nil { a.spoiler = true }
+            if let m = dict[ChatTextInputAttributes.textMention] as? ChatTextInputTextMentionAttribute {
+                a.entity = .mention(m.peerId)
+            } else if let d = dict[ChatTextInputAttributes.date] as? ChatTextInputTextDateAttribute {
+                a.entity = .date(d.date)
+            } else if let e = dict[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
+                a.entity = .customEmoji(fileId: e.fileId, file: e.file, enableAnimation: e.enableAnimation)
+            } else if let u = dict[ChatTextInputAttributes.textUrl] as? ChatTextInputTextUrlAttribute {
+                a.entity = .url(u.url)
+            }
+            runs.append(ChatInputRun(text: full.substring(with: r), attributes: a))
+        }
+        return runs
+    }
+
+    // Split a range into plain `.paragraph` blocks by interior "\n" (one paragraph per line, empty lines kept).
+    func paragraphBlocks(in range: NSRange) -> [ChatInputBlock] {
+        guard range.length > 0 else { return [] }
+        var result: [ChatInputBlock] = []
         var lineStart = range.location
         let end = range.location + range.length
         var i = range.location
         while i < end {
             if full.character(at: i) == 0x0A {
-                paraRanges.append(NSRange(location: lineStart, length: i - lineStart))
+                result.append(.paragraph(ChatInputParagraph(style: .body, runs: paragraphRuns(in: NSRange(location: lineStart, length: i - lineStart)))))
                 lineStart = i + 1
             }
             i += 1
         }
-        paraRanges.append(NSRange(location: lineStart, length: end - lineStart))
-        for pr in paraRanges {
-            var runs: [ChatInputRun] = []
-            var isQuote = false
-            var quoteCollapsed = false
-            if pr.length > 0 {
-                attributedText.enumerateAttributes(in: pr, options: []) { dict, r, _ in
-                    var a = ChatInputInlineAttributes()
-                    if dict[ChatTextInputAttributes.bold] != nil { a.bold = true }
-                    if dict[ChatTextInputAttributes.italic] != nil { a.italic = true }
-                    if dict[ChatTextInputAttributes.monospace] != nil { a.monospace = true }
-                    if dict[ChatTextInputAttributes.strikethrough] != nil { a.strikethrough = true }
-                    if dict[ChatTextInputAttributes.underline] != nil { a.underline = true }
-                    if dict[ChatTextInputAttributes.spoiler] != nil { a.spoiler = true }
-                    if let m = dict[ChatTextInputAttributes.textMention] as? ChatTextInputTextMentionAttribute {
-                        a.entity = .mention(m.peerId)
-                    } else if let d = dict[ChatTextInputAttributes.date] as? ChatTextInputTextDateAttribute {
-                        a.entity = .date(d.date)
-                    } else if let e = dict[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
-                        a.entity = .customEmoji(fileId: e.fileId, file: e.file, enableAnimation: e.enableAnimation)
-                    } else if let u = dict[ChatTextInputAttributes.textUrl] as? ChatTextInputTextUrlAttribute {
-                        a.entity = .url(u.url)
-                    }
-                    // A `.block`/`.quote`-kind attribute now maps to `.blockQuote` (Task 16b).
-                    if let q = dict[ChatTextInputAttributes.block] as? ChatTextInputTextQuoteAttribute,
-                       case .quote = q.kind {
-                        isQuote = true
-                        quoteCollapsed = q.isCollapsed
-                    }
-                    runs.append(ChatInputRun(text: full.substring(with: r), attributes: a))
-                }
-            }
-            if isQuote {
-                // A `.block`/`.quote`-kind attribute now maps to `.blockQuote` (Task 16b). Each quote
-                // paragraph on the legacy NSAttributedString path becomes its own `.blockQuote` block
-                // (multi-paragraph grouping is handled by the native Document ↔ ChatInputContent bridge).
-                blocks.append(.blockQuote(ChatInputBlockQuote(
-                    content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: runs))]),
-                    collapsed: quoteCollapsed)))
-            } else {
-                blocks.append(.paragraph(ChatInputParagraph(style: .body, runs: runs)))
-            }
-        }
+        result.append(.paragraph(ChatInputParagraph(style: .body, runs: paragraphRuns(in: NSRange(location: lineStart, length: end - lineStart)))))
+        return result
     }
 
-    // Carve out the non-paragraph block regions (code blocks + collapsed blockQuotes), then fill the
-    // gaps with paragraphs, consuming one separator "\n" per boundary — mirrors `ComposerDocumentBridge`.
+    // Carve out the non-paragraph block regions (code blocks + expanded quotes + collapsed blockQuotes), then
+    // fill the gaps with paragraphs, consuming one separator "\n" per boundary — mirrors `ComposerDocumentBridge`.
     enum CarveKind {
         case code(language: String?)
+        /// A contiguous `.block`/.quote run → an expanded `.blockQuote` whose interior "\n"s become inner paragraphs.
+        case quote(collapsed: Bool)
         /// A `.collapsedBlock`-attributed character: maps to `.blockQuote(collapsed: true)` (Task 16b).
         case collapsedBlock(content: NSAttributedString)
     }
     var carves: [(range: NSRange, kind: CarveKind)] = []
     for region in codeBlockRanges(in: attributedText) {
         carves.append((range: region.range, kind: .code(language: region.language)))
+    }
+    // Each maximal `.block`/.quote run becomes one carve (adjacent equal-valued runs are already merged by
+    // `enumerateAttribute`), so a multi-line quote stays one block and its interior "\n"s become inner paragraphs.
+    attributedText.enumerateAttribute(ChatTextInputAttributes.block, in: NSRange(location: 0, length: attributedText.length), options: []) { value, range, _ in
+        if let q = value as? ChatTextInputTextQuoteAttribute, case .quote = q.kind {
+            carves.append((range: range, kind: .quote(collapsed: q.isCollapsed)))
+        }
     }
     attributedText.enumerateAttribute(ChatTextInputAttributes.collapsedBlock, in: NSRange(location: 0, length: attributedText.length), options: []) { value, range, _ in
         if let nested = value as? NSAttributedString {
@@ -322,12 +326,16 @@ public func chatInputContent(from attributedText: NSAttributedString) -> ChatInp
     for carve in carves {
         var gapEnd = carve.range.location
         if gapEnd > cursor && full.character(at: gapEnd - 1) == 0x0A { gapEnd -= 1 }
-        if gapEnd > cursor { appendParagraphs(in: NSRange(location: cursor, length: gapEnd - cursor)) }
+        if gapEnd > cursor { blocks.append(contentsOf: paragraphBlocks(in: NSRange(location: cursor, length: gapEnd - cursor))) }
         switch carve.kind {
         case let .code(language):
             blocks.append(.code(ChatInputCode(
                 language: language,
                 runs: [ChatInputRun(text: full.substring(with: carve.range))])))
+        case let .quote(collapsed):
+            blocks.append(.blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: paragraphBlocks(in: carve.range)),
+                collapsed: collapsed)))
         case let .collapsedBlock(content):
             // `.collapsedBlock` attribute now maps to a collapsed `.blockQuote` (Task 16b).
             blocks.append(.blockQuote(ChatInputBlockQuote(
@@ -337,7 +345,7 @@ public func chatInputContent(from attributedText: NSAttributedString) -> ChatInp
         cursor = carve.range.location + carve.range.length
         if cursor < full.length && full.character(at: cursor) == 0x0A { cursor += 1 }
     }
-    if cursor < full.length { appendParagraphs(in: NSRange(location: cursor, length: full.length - cursor)) }
+    if cursor < full.length { blocks.append(contentsOf: paragraphBlocks(in: NSRange(location: cursor, length: full.length - cursor))) }
 
     if blocks.isEmpty { blocks = [.paragraph(ChatInputParagraph())] }
     return ChatInputContent(blocks: blocks)

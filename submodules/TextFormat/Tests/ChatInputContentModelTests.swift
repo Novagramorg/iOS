@@ -494,6 +494,22 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(decoded, media)
     }
 
+    /// `displayMode` is a `String`-raw enum: its synthesized `RawRepresentable` Codable uses a
+    /// `singleValueContainer`, which `AdaptedPostboxEncoder` does not support (it crashed on encode). Guards the
+    /// custom keyed Codable by round-tripping a NON-default `.slideshow` value through AdaptedPostbox.
+    func test_chatInputMedia_displayMode_codableViaAdaptedPostbox() throws {
+        let img = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        for mode in [ChatInputMediaDisplayMode.mosaic, .slideshow] {
+            let media = ChatInputMedia(items: [
+                ChatInputMediaItem(media: img, kind: .image, naturalSize: ChatInputSize(width: 100, height: 50)),
+            ], displayMode: mode)
+            let data = try AdaptedPostboxEncoder().encode(media)
+            let decoded = try AdaptedPostboxDecoder().decode(ChatInputMedia.self, from: data)
+            XCTAssertEqual(decoded.displayMode, mode)
+            XCTAssertEqual(decoded, media)
+        }
+    }
+
     func test_chatInputMedia_convenienceInit_isOneItem() {
         let img = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
         let media = ChatInputMedia(media: img, kind: .image, naturalSize: ChatInputSize(width: 1, height: 1))

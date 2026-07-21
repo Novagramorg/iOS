@@ -57,6 +57,13 @@ currency. It is a block/run tree mirroring the editor `Document` 1:1:
 Conversions:
 - **Display-neutral TextFormat utility** (`Sources/ChatInputContentConversion.swift`): `chatInputContent(from:)`
   / `attributedString(from:)`, round-trip-identity tested in `//submodules/TextFormat:TextFormatTests`.
+  **Contiguity is load-bearing for quotes:** `chatInputContent(from:)` carves each maximal contiguous
+  `.block`/.quote run (via `enumerateAttribute`, like `codeBlockRanges` for code) into ONE multi-paragraph
+  `.blockQuote` — it must NOT split per-`\n`. A multi-line quote is one `.block` object spanning its interior
+  newlines; splitting it produced one `.blockQuote` per line, which `attributedString(from:)` then re-emitted as
+  non-contiguous runs separated by plain `\n`s → multiple on-screen quote boxes (seen both on format-apply and,
+  since this feeds the persisted `"cm"` model, after re-opening a chat). Two *genuinely* separate quotes are
+  divided by a non-block `\n`, so they remain two runs → two blocks (no coalescing across a non-quote gap).
 - **Direct editor bridge** (`ChatRichTextEditorComposer/Sources/DocumentChatInputContentBridge.swift`):
   `Document ↔ ChatInputContent`, used by the native node — it **bypasses the `NSAttributedString` hop** where
   structural blocks (media/table/heading/list) would be flattened.
@@ -80,6 +87,11 @@ Conversions:
   numbers are explicit `Int32`/`Int64`. Test the model Codable via `AdaptedPostboxEncoder` (a JSON round-trip
   masks this). The polymorphic `Media` persists via a concrete-type discriminator + `TelegramMediaImage/File(decoder:)`,
   **not** `decodeRootObjectWithHash` (that needs the app-startup `declareEncodable` registry, empty in tests).
+  **This applies to *every* raw enum, `String`-raw included:** a `RawRepresentable` enum's *synthesized* Codable
+  uses a `singleValueContainer`, so each raw enum in `ChatInputContentModel.swift` carries a CUSTOM keyed Codable
+  encoding its `.rawValue` under a `"raw"` key. `ChatInputMediaDisplayMode` (a `String`-raw enum) was missed and
+  crashed at `AdaptedPostboxEncoder.swift:94` when a draft containing a `.media` block was persisted (it is
+  encoded by `ChatInputMedia.encode(to:)`) — fixed by giving it the same custom keyed Codable.
 
 `isEntityExpressible(options:)` is the routing switch: text / quote / collapsed-quote / code / mention / date /
 custom-emoji-in-body are entity-expressible (normal text+entities path); heading / list / table / media are

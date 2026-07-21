@@ -784,9 +784,32 @@ extension ChatInputMediaItem: Codable {
 
 /// Mirrors the editor's `MediaDisplayMode` — how a multi-item container lays out (mosaic → `.collage`,
 /// slideshow → `.slideshow`). Meaningful only for `items.count >= 2`; default `.mosaic`.
-public enum ChatInputMediaDisplayMode: String, Codable, Equatable {
+///
+/// Like the `Int32` raw enums above, this carries a CUSTOM keyed `Codable` that encodes its `String` `.rawValue`
+/// under a keyed container — never the synthesized `RawRepresentable` Codable, which uses a `singleValueContainer`
+/// the Postbox `AdaptedPostbox*coder` does not support (it crashes at runtime, e.g. when a draft's
+/// `ChatInputMedia` block is persisted).
+public enum ChatInputMediaDisplayMode: String, Equatable, Codable {
     case mosaic
     case slideshow
+
+    private enum CodingKeys: String, CodingKey {
+        case raw
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let value = try container.decode(String.self, forKey: .raw)
+        guard let v = ChatInputMediaDisplayMode(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(forKey: .raw, in: container, debugDescription: "Unknown ChatInputMediaDisplayMode \(value)")
+        }
+        self = v
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.rawValue, forKey: .raw)
+    }
 }
 
 /// An attached media container (one or more images/videos) with a single inline caption. Mirrors the editor
