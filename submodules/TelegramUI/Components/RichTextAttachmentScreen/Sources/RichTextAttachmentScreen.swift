@@ -25,6 +25,8 @@ import ChatRichTextEditorComposer
 import ChatTextLinkEditUI
 import TextFormat
 import UndoUI
+import SwiftSignalKit
+import ChatSendMessageActionUI
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -54,12 +56,14 @@ private final class RichTextSendButtonComponent: Component {
     let isEnabled: Bool
     let isLocked: Bool
     let action: () -> Void
+    let longPressAction: (() -> Void)?
 
-    init(theme: PresentationTheme, isEnabled: Bool, isLocked: Bool, action: @escaping () -> Void) {
+    init(theme: PresentationTheme, isEnabled: Bool, isLocked: Bool, action: @escaping () -> Void, longPressAction: (() -> Void)?) {
         self.theme = theme
         self.isEnabled = isEnabled
         self.isLocked = isLocked
         self.action = action
+        self.longPressAction = longPressAction
     }
 
     static func ==(lhs: RichTextSendButtonComponent, rhs: RichTextSendButtonComponent) -> Bool {
@@ -72,6 +76,9 @@ private final class RichTextSendButtonComponent: Component {
         if lhs.isLocked != rhs.isLocked {
             return false
         }
+        if (lhs.longPressAction == nil) != (rhs.longPressAction == nil) {
+            return false
+        }
         return true
     }
 
@@ -81,6 +88,7 @@ private final class RichTextSendButtonComponent: Component {
         private let buttonCutoutMaskView = UIImageView()
         private let lockBackgroundView = GlassBackgroundView()
         private let lockIconView = UIImageView()
+        private var longPressGestureRecognizer: UILongPressGestureRecognizer?
 
         private var component: RichTextSendButtonComponent?
 
@@ -96,14 +104,26 @@ private final class RichTextSendButtonComponent: Component {
             super.init(frame: frame)
 
             self.clipsToBounds = false
+            let longPressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:)))
+            longPressGestureRecognizer.isEnabled = false
+            self.longPressGestureRecognizer = longPressGestureRecognizer
+            self.addGestureRecognizer(longPressGestureRecognizer)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
+        @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, let component = self.component else {
+                return
+            }
+            component.longPressAction?()
+        }
+
         func update(component: RichTextSendButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
+            self.longPressGestureRecognizer?.isEnabled = component.longPressAction != nil
 
             let buttonSize = self.button.update(
                 transition: transition,
@@ -219,6 +239,22 @@ private final class RichTextSendButtonComponent: Component {
     }
 }
 
+public final class RichTextAttachmentScreenSendContextActions {
+    public let peerId: EnginePeer.Id
+    public let send: (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendMode, ChatSendMessageActionSheetController.SendParameters?) -> Void
+    public let schedule: (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendParameters?) -> Void
+
+    public init(
+        peerId: EnginePeer.Id,
+        send: @escaping (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendMode, ChatSendMessageActionSheetController.SendParameters?) -> Void,
+        schedule: @escaping (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendParameters?) -> Void
+    ) {
+        self.peerId = peerId
+        self.send = send
+        self.schedule = schedule
+    }
+}
+
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
     public typealias Document = RichTextEditorCoreDocument
     
@@ -257,12 +293,14 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     private let context: AccountContext
     private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void
     private let syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)?
+    private let sendContextActions: RichTextAttachmentScreenSendContextActions?
 
     public convenience init(
         context: AccountContext,
         mode: Mode,
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
+        sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
         presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
@@ -273,6 +311,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
                 sendMessage(document, media, emojiFiles)
             },
             syncContent: syncContent,
+            sendContextActions: sendContextActions,
             presentAttachmentMenu: presentAttachmentMenu,
             presentFormulaEditor: presentFormulaEditor
         )
@@ -283,18 +322,21 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         mode: Mode,
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
+        sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
         presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.context = context
         self.sendMessage = sendMessage
         self.syncContent = syncContent
+        self.sendContextActions = sendContextActions
 
         let overNavigationContainer = SparseContainerView()
 
         super.init(context: context, component: RichTextAttachmentScreenComponent(
             context: context,
             mode: mode,
+            sendContextActions: sendContextActions,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu,
             presentFormulaEditor: presentFormulaEditor
@@ -378,6 +420,110 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         self.dismiss()
     }
+
+    fileprivate func displayLongPressSendMenu(sourceSendButton: UIView) {
+        guard let sendContextActions = self.sendContextActions else {
+            return
+        }
+        let context = self.context
+        Task { @MainActor [weak self, weak sourceSendButton] in
+            guard let self, let sourceSendButton else {
+                return
+            }
+            let peerId = sendContextActions.peerId
+            let previousSupportedOrientations = self.supportedOrientations
+
+            let availableMessageEffects = await (context.availableMessageEffects |> take(1)).get()
+            let hasPremium = await (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+            |> map { peer -> Bool in
+                guard case let .user(user) = peer else {
+                    return false
+                }
+                return user.isPremium
+            }).get()
+
+            let peerStatus = await (context.engine.data.get(
+                TelegramEngine.EngineData.Item.Peer.Presence(id: peerId)
+            )).get()
+            guard let peer = await (context.engine.data.get(
+                TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
+            )).get() else {
+                return
+            }
+
+            let initialData = await ChatSendMessageContextScreen.initialData(context: context, currentMessageEffectId: nil).get()
+
+            var sendWhenOnlineAvailable = false
+            if let peerStatus, case let .present(until) = peerStatus.status {
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                if currentTime > until {
+                    sendWhenOnlineAvailable = true
+                }
+            }
+            if peerId.namespace == Namespaces.Peer.CloudUser && peerId.id._internalGetInt64Value() == 777000 {
+                sendWhenOnlineAvailable = false
+            }
+
+            let messageActionsController = makeChatSendMessageActionSheetController(
+                initialData: initialData,
+                context: context,
+                updatedPresentationData: nil,
+                peerId: peerId,
+                params: .sendMessage(SendMessageActionSheetControllerParams.SendMessage(
+                    isScheduledMessages: false,
+                    mediaPreview: nil,
+                    mediaCaptionIsAbove: nil,
+                    messageEffect: (nil, { _ in }),
+                    attachment: false,
+                    canSendWhenOnline: sendWhenOnlineAvailable,
+                    forwardMessageIds: [],
+                    canMakePaidContent: false,
+                    currentPrice: nil,
+                    hasTimers: false,
+                    sendPaidMessageStars: nil,
+                    isMonoforum: peer.isMonoForum
+                )),
+                hasEntityKeyboard: false,
+                gesture: nil,
+                sourceSendButton: sourceSendButton,
+                textInputSource: nil,
+                emojiViewProvider: nil,
+                completion: { [weak self] in
+                    self?.supportedOrientations = previousSupportedOrientations
+                },
+                sendMessage: { [weak self] mode, parameters in
+                    guard let self, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+                        return
+                    }
+                    sendContextActions.send(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, false, mode, parameters)
+                    self.dismiss()
+                },
+                schedule: { [weak self] params in
+                    guard let self, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+                        return
+                    }
+                    sendContextActions.schedule(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, false, params)
+                    self.dismiss()
+                },
+                editPrice: { _ in
+                },
+                openPremiumPaywall: { [weak self] c in
+                    guard let self else {
+                        return
+                    }
+                    if let parentController = self.parentController() {
+                        parentController.push(c)
+                    } else {
+                        self.push(c)
+                    }
+                },
+                reactionItems: nil,
+                availableMessageEffects: availableMessageEffects,
+                isPremium: hasPremium
+            )
+            self.present(messageActionsController, in: .window(.root))
+        }
+    }
 }
 
 final class RichTextAttachmentScreenComponent: Component {
@@ -387,13 +533,15 @@ final class RichTextAttachmentScreenComponent: Component {
     // its editor view into the View's content container.
     let context: AccountContext
     let mode: RichTextAttachmentScreen.Mode
+    let sendContextActions: RichTextAttachmentScreenSendContextActions?
     let overNavigationContainer: UIView
     let presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
 
-    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
         self.context = context
         self.mode = mode
+        self.sendContextActions = sendContextActions
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
         self.presentFormulaEditor = presentFormulaEditor
@@ -447,6 +595,7 @@ final class RichTextAttachmentScreenComponent: Component {
         private let actionBar = ComponentView<Empty>()
         private let aiButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
+        private let sendButtonExtractedContainer = ContextExtractedContentContainingView()
 
         private var emojiKeyboard: RichTextEmojiKeyboardController?
         private var componentState: EmptyComponentState?
@@ -1530,6 +1679,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 isSendEnabled = false
             }
             
+            let longPressSendAvailable = component.sendContextActions != nil && isSendEnabled && !isSendRichFormattingLocked
             let sendButtonSize = self.sendButton.update(
                 transition: transition,
                 component: AnyComponent(RichTextSendButtonComponent(
@@ -1541,7 +1691,13 @@ final class RichTextAttachmentScreenComponent: Component {
                             return
                         }
                         controller.donePressed()
-                    }
+                    },
+                    longPressAction: longPressSendAvailable ? { [weak self] in
+                        guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
+                            return
+                        }
+                        controller.displayLongPressSendMenu(sourceSendButton: self.sendButtonExtractedContainer)
+                    } : nil
                 )),
                 environment: {},
                 containerSize: CGSize(width: 44.0, height: 44.0)
@@ -1569,12 +1725,19 @@ final class RichTextAttachmentScreenComponent: Component {
             }
             
             let sendButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - (sideInset + environment.safeInsets.left) - sendButtonSize.width, y: availableSize.height - bottomInset - 6.0 - sendButtonSize.height), size: sendButtonSize)
+            if self.sendButtonExtractedContainer.superview == nil {
+                self.addSubview(self.sendButtonExtractedContainer)
+            }
             if let sendButtonView = self.sendButton.view {
                 if sendButtonView.superview == nil {
-                    self.addSubview(sendButtonView)
+                    self.sendButtonExtractedContainer.contentView.addSubview(sendButtonView)
                 }
-                transition.setFrame(view: sendButtonView, frame: sendButtonFrame)
+                sendButtonView.frame = CGRect(origin: CGPoint(), size: sendButtonFrame.size)
             }
+            transition.setPosition(view: self.sendButtonExtractedContainer, position: sendButtonFrame.center)
+            transition.setBounds(view: self.sendButtonExtractedContainer, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
+            transition.setPosition(view: self.sendButtonExtractedContainer.contentView, position: CGPoint(x: sendButtonFrame.width * 0.5, y: sendButtonFrame.height * 0.5))
+            transition.setBounds(view: self.sendButtonExtractedContainer.contentView, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
             
             let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + environment.safeInsets.left + aiButtonSize.width + actionBarSpacing, y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
             if let actionBarView = self.actionBar.view {

@@ -947,6 +947,68 @@ extension ChatControllerImpl {
                         })
                         return true
                     case .richText:
+                        let buildRichTextContent: (ChatControllerImpl, RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> (text: String, attributes: [EngineMessage.Attribute])? = { strongSelf, document, media, emojiFiles, sendWithoutFormatting in
+                            let text: String
+                            let attributes: [EngineMessage.Attribute]
+                            if sendWithoutFormatting {
+                                let peerSpecificEmojiPack = (strongSelf.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
+                                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                                let inputText = trimChatInputText(entityPreservingFallbackAttributedString(from: content, preserveCustomEmoji: { _, file in
+                                    if strongSelf.context.isPremium {
+                                        return true
+                                    }
+                                    guard let file else {
+                                        return false
+                                    }
+                                    if !file.isPremiumEmoji {
+                                        return true
+                                    }
+                                    for attribute in file.attributes {
+                                        if case let .CustomEmoji(_, _, _, packReference) = attribute, case let .id(id, _) = packReference {
+                                            return id == peerSpecificEmojiPack?.id.id
+                                        }
+                                    }
+                                    return false
+                                }))
+                                if inputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    return nil
+                                }
+                                let entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText))
+                                text = inputText.string
+                                attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
+                            } else {
+                                // Send a quote-bearing document as a rich message (InstantPage) too, even though a
+                                // blockquote is entity-expressible — the rich preview renders the quote faithfully.
+                                switch composeRichMessage(from: document, media: media, forSendPreview: true) {
+                                case let .rich(instantPage):
+                                    text = ""
+                                    attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
+                                case let .plain(plainText, entities):
+                                    text = plainText
+                                    attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
+                                case .empty:
+                                    return nil
+                                }
+                            }
+                            return (text, attributes)
+                        }
+                        let performRichTextSend: (ChatControllerImpl, [EnqueueMessage]) -> Void = { strongSelf, messages in
+                            strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak strongSelf] postpone in
+                                guard let strongSelf else {
+                                    return
+                                }
+                                strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({ [weak strongSelf] in
+                                    guard let strongSelf else {
+                                        return
+                                    }
+                                    strongSelf.chatDisplayNode.collapseInput()
+                                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                    })
+                                }, nil)
+                                strongSelf.sendMessages(messages, postpone: postpone)
+                            })
+                        }
                         let controller = RichTextAttachmentScreen(
                             context: context,
                             mode: .standalone(savedDraft: richTextDraft?.document, media: richTextDraft?.media ?? [:], emojiFiles: richTextDraft?.emojiFiles ?? [:]),
@@ -954,70 +1016,18 @@ extension ChatControllerImpl {
                                 guard let strongSelf = self else {
                                     return
                                 }
-                                
+
                                 richTextDraft = nil
                                 if let richTextDraftKey {
                                     let _ = strongSelf.context.engine.itemCache.remove(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: richTextDraftKey).start()
                                 }
 
-                                let text: String
-                                let attributes: [EngineMessage.Attribute]
-                                if sendWithoutFormatting {
-                                    let peerSpecificEmojiPack = (strongSelf.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
-                                    let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
-                                    let inputText = trimChatInputText(entityPreservingFallbackAttributedString(from: content, preserveCustomEmoji: { _, file in
-                                        if strongSelf.context.isPremium {
-                                            return true
-                                        }
-                                        guard let file else {
-                                            return false
-                                        }
-                                        if !file.isPremiumEmoji {
-                                            return true
-                                        }
-                                        for attribute in file.attributes {
-                                            if case let .CustomEmoji(_, _, _, packReference) = attribute, case let .id(id, _) = packReference {
-                                                return id == peerSpecificEmojiPack?.id.id
-                                            }
-                                        }
-                                        return false
-                                    }))
-                                    if inputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                        return
-                                    }
-                                    let entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText))
-                                    text = inputText.string
-                                    attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
-                                } else {
-                                    // Send a quote-bearing document as a rich message (InstantPage) too, even though a
-                                    // blockquote is entity-expressible — the rich preview renders the quote faithfully.
-                                    switch composeRichMessage(from: document, media: media, forSendPreview: true) {
-                                    case let .rich(instantPage):
-                                        text = ""
-                                        attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
-                                    case let .plain(plainText, entities):
-                                        text = plainText
-                                        attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
-                                    case .empty:
-                                        return
-                                    }
+                                guard let (text, attributes) = buildRichTextContent(strongSelf, document, media, emojiFiles, sendWithoutFormatting) else {
+                                    return
                                 }
                                 let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
                                 let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
-                                strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
-                                        if let strongSelf = self {
-                                            strongSelf.chatDisplayNode.collapseInput()
-                                            strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
-                                            })
-                                        }
-                                    }, nil)
-                                    strongSelf.sendMessages([message], postpone: postpone)
-                                })
+                                performRichTextSend(strongSelf, [message])
                             },
                             syncContent: { [weak self] document, media, emojiFiles in
                                 guard let self else {
@@ -1029,6 +1039,61 @@ extension ChatControllerImpl {
                                     let _ = self.context.engine.itemCache.put(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: richTextDraftKey, item: draft).start()
                                 }
                             },
+                            sendContextActions: (strongSelf.presentationInterfaceState.interfaceState.editMessage == nil ? strongSelf.chatLocation.peerId.flatMap { peerId in
+                                return RichTextAttachmentScreenSendContextActions(
+                                    peerId: peerId,
+                                    send: { [weak self] document, media, emojiFiles, sendWithoutFormatting, mode, _ in
+                                        guard let strongSelf = self else {
+                                            return
+                                        }
+                                        richTextDraft = nil
+                                        if let richTextDraftKey {
+                                            let _ = strongSelf.context.engine.itemCache.remove(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: richTextDraftKey).start()
+                                        }
+                                        guard let (text, attributes) = buildRichTextContent(strongSelf, document, media, emojiFiles, sendWithoutFormatting) else {
+                                            return
+                                        }
+                                        let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
+                                        let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                                        let silentPosting: Bool
+                                        let scheduleTime: Int32?
+                                        switch mode {
+                                        case .generic:
+                                            silentPosting = false
+                                            scheduleTime = nil
+                                        case .silently:
+                                            silentPosting = true
+                                            scheduleTime = nil
+                                        case .whenOnline:
+                                            silentPosting = false
+                                            scheduleTime = scheduleWhenOnlineTimestamp
+                                        }
+                                        let transformedMessages = strongSelf.transformEnqueueMessages([message], silentPosting: silentPosting, scheduleTime: scheduleTime)
+                                        performRichTextSend(strongSelf, transformedMessages)
+                                    },
+                                    schedule: { [weak self] document, media, emojiFiles, sendWithoutFormatting, _ in
+                                        guard let strongSelf = self else {
+                                            return
+                                        }
+                                        guard let (text, attributes) = buildRichTextContent(strongSelf, document, media, emojiFiles, sendWithoutFormatting) else {
+                                            return
+                                        }
+                                        let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
+                                        let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                                        strongSelf.presentScheduleTimePicker(completion: { [weak self] time, _ in
+                                            guard let strongSelf = self else {
+                                                return
+                                            }
+                                            richTextDraft = nil
+                                            if let richTextDraftKey {
+                                                let _ = strongSelf.context.engine.itemCache.remove(collectionId: Namespaces.CachedItemCollection.richTextComposerDrafts, id: richTextDraftKey).start()
+                                            }
+                                            let transformedMessages = strongSelf.transformEnqueueMessages([message], silentPosting: false, scheduleTime: time)
+                                            performRichTextSend(strongSelf, transformedMessages)
+                                        })
+                                    }
+                                )
+                            } : nil),
                             presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
                                 guard let self else {
                                     return

@@ -4645,6 +4645,55 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                     })
                 },
+                sendContextActions: (self.chatPresentationInterfaceState.interfaceState.editMessage == nil ? self.chatLocation.peerId.flatMap { peerId in
+                    return RichTextAttachmentScreenSendContextActions(
+                        peerId: peerId,
+                        send: { [weak self] document, media, emojiFiles, sendWithoutFormatting, mode, parameters in
+                            guard let self else {
+                                return
+                            }
+                            let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                            self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                                return state.updatedInterfaceState { interfaceState in
+                                    return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                                }
+                            }, completion: { [weak self] _ in
+                                guard let self else {
+                                    return
+                                }
+                                let messageEffect = parameters?.effect.flatMap(ChatSendMessageEffect.init)
+                                switch mode {
+                                case .generic:
+                                    self.sendCurrentMessage(messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting)
+                                case .silently:
+                                    self.sendCurrentMessage(silentPosting: true, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting)
+                                case .whenOnline:
+                                    self.sendCurrentMessage(scheduleTime: scheduleWhenOnlineTimestamp, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: { [weak self] in
+                                        guard let self, let controller = self.controller else {
+                                            return
+                                        }
+                                        controller.updateChatPresentationInterfaceState(animated: true, interactive: false, saveInterfaceState: controller.presentationInterfaceState.subject != .scheduledMessages, {
+                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil).withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil).withUpdatedComposeInputState(ChatTextInputState(inputText: NSAttributedString(string: ""))) }
+                                        })
+                                        controller.openScheduledMessages()
+                                    })
+                                }
+                            })
+                        },
+                        schedule: { [weak self] document, media, emojiFiles, _, parameters in
+                            guard let self else {
+                                return
+                            }
+                            let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                            self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                                return state.updatedInterfaceState { interfaceState in
+                                    return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                                }
+                            })
+                            self.controller?.controllerInteraction?.scheduleCurrentMessage(parameters)
+                        }
+                    )
+                } : nil),
                 presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
                     guard let self else {
                         return

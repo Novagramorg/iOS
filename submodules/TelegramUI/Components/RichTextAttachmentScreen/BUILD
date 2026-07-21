@@ -45,6 +45,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
         "//submodules/ChatTextLinkEditUI",
         "//submodules/UndoUI",
+        "//submodules/ChatSendMessageActionUI",
     ],
     visibility = [
         "//visibility:public",

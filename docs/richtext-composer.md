@@ -316,8 +316,9 @@ as a **`RichTextMessageAttribute`** carrying an `InstantPage`, rendered by the V
   `forSendPreview: true`, so a **blockquote forces the rich (InstantPage) path here** even though a quote is
   entity-expressible (`documentNeedsRichLayout` honors the same flag at the editor-`Document` level). The composer
   Send / Edit gates above pass **default** options, so a quote sent from the composer is still plain text + a
-  blockquote entity — a deliberate, localized divergence (this rich-editor send has no long-press preview; the
-  composer's preview opts into the same quote-as-rich rule, below).
+  blockquote entity — a deliberate, localized divergence (this rich-editor send's long-press now opens
+  send-options with no preview — see "Expanded-editor send-options" below; the composer's preview opts into the
+  same quote-as-rich rule, below).
 - **Pending edits display optimistically:** `ChatUpdatingMessageMedia` carries an optional `richText`; the
   bubble prefers `itemAttributes.updatingMedia.map(\.richText) ?? item.message.richText` (display `:360`,
   anchor `:1449`, "Show more" gate `:567` in `ChatMessageRichDataBubbleContentNode`). The render-cache key
@@ -375,6 +376,36 @@ the `ChatSendMessageContextScreenRichTextPreview` protocol (mirroring the existi
 - **Clipping:** the page content is clipped to the bubble's inner corner radius (15pt, matching the real rich
   bubble's `image.defaultCornerRadius`) within the tail-excluded content rect `[1, width − 7]` (same as the text
   path), so images/tables round to the bubble and stay clear of the outgoing tail.
+
+### Expanded-editor send-options (`RichTextAttachmentScreen`, no preview)
+
+The **expanded** rich-text editor's own **Send** button (`RichTextAttachmentScreen`, the full-screen article
+editor — *not* the chat composer's Send above) gained an optional long-press → send-options action (Send / Send
+silently / Schedule / Send when online) via `makeChatSendMessageActionSheetController(params: .sendMessage(…
+mediaPreview: nil …))` — **no message preview** (distinct from the composer's preview subsection above). It is
+**caller-supplied**: the screen takes an optional `RichTextAttachmentScreenSendContextActions` (a module-local
+type — `peerId` + `send`/`schedule` closures over the screen's native `(Document, [String: Media], [Int64:
+TelegramMediaFile], withoutFormatting: Bool, SendMode, SendParameters?)` tuple; kept out of `AccountContext` because
+that tuple's `RichTextEditorCoreDocument` must not pull `RichTextEditorCore` into `AccountContext`). When it is
+`nil` the button is tap-only (feature off). The long-press is offered only when `sendContextActions != nil &&
+isSendEnabled && !isSendRichFormattingLocked` — **suppressed while a non-premium formatting lock is active**, so the
+tap path's remove-formatting alert can't be side-stepped (⇒ `withoutFormatting` is always `false` on this path). The
+send button is wrapped in a `ContextExtractedContentContainingView` for the extract-out animation (mirrors
+`TextProcessingScreen`'s `ActionButtonsComponent`). Screen side: `displayLongPressSendMenu` in
+`RichTextAttachmentScreen.swift`.
+
+Two callers supply the actions, gated identically on `editMessage == nil && chatLocation.peerId != nil`:
+
+- **Composer handoff** (`ChatControllerNode.openExpandedInput`): `send`/`schedule` set the chat's effective input
+  state from the editor content, then route through the **same `self.sendCurrentMessage(...)` the tap path uses**
+  (`.generic`/`.silently`, `.whenOnline` → `scheduleTime: scheduleWhenOnlineTimestamp`) and
+  `controllerInteraction?.scheduleCurrentMessage` — so tap-Send and long-press-Send stay identical.
+- **Article route** (`ChatControllerOpenAttachmentMenu`'s `.richText` case, which sends by building an
+  `EnqueueMessage` directly, not via `sendCurrentMessage`): shared `buildRichTextContent` + `performRichTextSend`
+  locals feed `transformEnqueueMessages(silentPosting:scheduleTime:)` per mode (`.whenOnline` →
+  `scheduleWhenOnlineTimestamp`) with `presentScheduleTimePicker` for Schedule, then
+  `presentPaidMessageAlertIfNeeded` → `sendMessages`. Here message **effects are ignored** and **when-online just
+  sends** (no scheduled-view navigation).
 
 ---
 
@@ -459,6 +490,7 @@ also called by the incremental `updateDraftMessage` path) + `_internal_applyFetc
 | panel (GET/SET, node select) | `Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` |
 | state value-equality | `AccountContext/Sources/ChatController.swift` |
 | send / edit | `TelegramUI/Sources/ChatControllerNode.swift`, `Chat/ChatControllerLoadDisplayNode.swift` |
+| expanded-editor send-options | `RichTextAttachmentScreen/Sources/RichTextAttachmentScreen.swift`; callers `ChatControllerNode.swift` (`openExpandedInput`), `ChatControllerOpenAttachmentMenu.swift` (`.richText`) |
 | rich attribute + wire | `TelegramCore/Sources/SyncCore/SyncCore_RichTextMessageAttribute.swift` |
 | upload + assemble | `TelegramCore/Sources/PendingMessages/PendingMessageUploadedContent.swift` |
 | draft persistence | `TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift`, `ChatInterfaceState/Sources/ChatInterfaceState.swift` |
