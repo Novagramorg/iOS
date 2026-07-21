@@ -42,10 +42,10 @@ final class CanvasInsertTableTests: XCTestCase {
         XCTAssertTrue(v.isInsideTable(v.head), "caret lands inside the new table")
     }
 
-    func test_insertTable_focusesEditor_soCellsAreImmediatelyInteractive() {
-        // Regression: the caret-move layout that positions the new table's cells is FR-gated
-        // (scrollCaretIntoView), so an unfocused insert left cell frames stale — cell taps / knob drags
-        // missed until a later interaction focused the field. insertTable must focus the editor itself.
+    func test_insertTable_whenUnfocused_doesNotStealFocus_butCaretIsInTable() {
+        // Inserting a table must NOT grab first responder / pop the keyboard when the editor was unfocused.
+        // The table is still inserted and the MODEL caret lands live in the new table (first cell), so a
+        // later tap/focus operates on it — but the editor stays unfocused.
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
         window.makeKeyAndVisible()
         let v = canvas()
@@ -54,11 +54,9 @@ final class CanvasInsertTableTests: XCTestCase {
         caretAtEndOf(v, "p")
         XCTAssertFalse(v.isFirstResponder, "precondition: not focused before the insert")
         v.insertTable(rows: 2, columns: 2)
-        XCTAssertTrue(v.isFirstResponder,
-                      "inserting a table focuses the editor so the new cells are immediately tappable/draggable")
+        XCTAssertFalse(v.isFirstResponder, "inserting a table must NOT steal focus when the editor was unfocused")
         XCTAssertNotNil(v.activeTable(), "the caret is live inside the new table")
-        // Hygiene: don't leak a key window + first-responder canvas into sibling tests.
-        _ = v.resignFirstResponder()
+        // Hygiene: don't leak a key window into sibling tests.
         v.removeFromSuperview()
         window.isHidden = true
         window.resignKey()

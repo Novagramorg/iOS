@@ -31,10 +31,10 @@ final class CanvasImageEditTests: XCTestCase {
         XCTAssertEqual(v.head, v.boxes[1].textStart)     // caret in the caption
     }
 
-    func test_insertMedia_focusesEditor_soCaptionIsImmediatelyInteractive() {
-        // Mirror of the insertTable focus fix: the sole synchronous caret-move layout (scrollCaretIntoView)
-        // is FR-gated, so an unfocused insert leaves the new media's caption/frames stale until a later
-        // interaction. insertMedia must focus the editor itself.
+    func test_insertMedia_whenUnfocused_doesNotStealFocus_butSetsModelCaret() {
+        // Inserting media (e.g. from a picker) must NOT grab first responder / pop the keyboard when the
+        // editor was not focused. The media block is still inserted and the MODEL caret is placed at its
+        // caption, so a later tap/focus lands there — but the editor stays unfocused.
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 400))
         window.makeKeyAndVisible()
         let v = canvas(["Alpha"])
@@ -43,9 +43,32 @@ final class CanvasImageEditTests: XCTestCase {
         caret(v, v.boxes[0].textStart + 5)
         XCTAssertFalse(v.isFirstResponder, "precondition: not focused before the insert")
         v.insertMedia(mediaID: "k1", naturalSize: imgSize(), kind: .image)
-        XCTAssertTrue(v.isFirstResponder, "inserting media focuses the editor so its caption is immediately interactive")
+        XCTAssertFalse(v.isFirstResponder, "inserting media must NOT steal focus when the editor was unfocused")
         XCTAssertTrue(v.boxes.contains { $0 is MediaBlockBox }, "the media block was inserted")
-        // Hygiene: don't leak a key window + first-responder canvas into sibling tests.
+        let media = v.boxes.first { $0 is MediaBlockBox }!
+        XCTAssertEqual(v.head, media.textStart, "the model caret is placed at the new media's caption")
+        XCTAssertEqual(v.head, v.anchor, "collapsed caret")
+        // Hygiene: don't leak a key window into sibling tests.
+        v.removeFromSuperview()
+        window.isHidden = true
+        window.resignKey()
+    }
+
+    func test_insertMedia_whenFocused_keepsFocus() {
+        // When the editor IS focused, inserting media keeps focus (unchanged) and lands the caret in the caption.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 400))
+        window.makeKeyAndVisible()
+        let v = canvas(["Alpha"])
+        window.addSubview(v)
+        v.layoutIfNeeded()
+        _ = v.becomeFirstResponder()
+        XCTAssertTrue(v.isFirstResponder, "precondition: focused before the insert")
+        caret(v, v.boxes[0].textStart + 5)
+        v.insertMedia(mediaID: "k1", naturalSize: imgSize(), kind: .image)
+        XCTAssertTrue(v.isFirstResponder, "an already-focused editor stays focused")
+        let media = v.boxes.first { $0 is MediaBlockBox }!
+        XCTAssertEqual(v.head, media.textStart, "caret in the caption")
+        // Hygiene.
         _ = v.resignFirstResponder()
         v.removeFromSuperview()
         window.isHidden = true
