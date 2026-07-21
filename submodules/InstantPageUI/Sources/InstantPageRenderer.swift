@@ -2221,7 +2221,6 @@ final class InstantPageV2TableView: UIView, InstantPageItemView {
         self.scrollView.alwaysBounceHorizontal = false
         self.scrollView.alwaysBounceVertical = false
         self.scrollView.showsVerticalScrollIndicator = false
-        self.scrollView.disablesInteractiveTransitionGestureRecognizer = true
         self.addSubview(self.scrollView)
         self.scrollView.addSubview(self.contentView)
 
@@ -2266,6 +2265,7 @@ final class InstantPageV2TableView: UIView, InstantPageItemView {
 
         self.scrollView.frame = CGRect(origin: .zero, size: item.frame.size)
         self.scrollView.contentSize = CGSize(width: item.contentSize.width + item.contentInset * 2.0, height: item.contentSize.height)
+        self.scrollView.disablesInteractiveTransitionGestureRecognizer = self.scrollView.contentSize.width > item.frame.width
         self.scrollView.showsHorizontalScrollIndicator = item.contentSize.width + item.contentInset * 2.0 > item.frame.width
         self.contentView.frame = CGRect(x: item.contentInset, y: 0.0, width: item.contentSize.width, height: item.contentSize.height)
 
