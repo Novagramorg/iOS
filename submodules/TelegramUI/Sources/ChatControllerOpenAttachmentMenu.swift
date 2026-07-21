@@ -1153,7 +1153,7 @@ extension ChatControllerImpl {
     }
     
     @available(iOS 13.0, *)
-    func presentRichTextAttachmentMenu(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
+    func presentRichTextAttachmentMenu(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) {
         // The gallery tab is inherently photos/videos only; audio + location are the only tabs that surface
         // non-photo/video media, so restricting to just `.gallery` yields a photo/video-only picker (used when
         // creating or extending a mosaic group).
@@ -1178,14 +1178,18 @@ extension ChatControllerImpl {
             } else {
                 self.present(c, in: .window(.root))
             }
-        }, completion: { result in
-            if let image = result.concrete(TelegramMediaImage.self) {
-                completion(.image(image))
-            } else if let file = result.concrete(TelegramMediaFile.self) {
-                completion(.file(file))
-            } else if let mapReference = result.concrete(TelegramMediaMap.self) {
-                completion(.location(mapReference.media))
+        }, completion: { results in
+            let attachments: [RichTextAttachmentScreen.RichTextAttachment] = results.compactMap { result in
+                if let image = result.concrete(TelegramMediaImage.self) {
+                    return .image(image)
+                } else if let file = result.concrete(TelegramMediaFile.self) {
+                    return .file(file)
+                } else if let mapReference = result.concrete(TelegramMediaMap.self) {
+                    return .location(mapReference.media)
+                }
+                return nil
             }
+            completion(attachments)
         })
     }
 

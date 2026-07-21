@@ -56,12 +56,23 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView, UIScrollVie
     private var layoutToggleBackground: GlassBackgroundView?
     private var layoutToggleIconView: UIImageView?
 
+    /// Telegram albums cap at 10 media; the "+" add button is hidden once the container is full.
+    private static let maxContainerItemCount = 10
+
     /// Shown iff the add button is (article editor + photo/video container) AND this is a togglable album (>= 2).
+    /// Deliberately NOT gated on `canAddMoreItems` — the layout toggle stays available on a full (10-item) album.
     private var showsLayoutToggle: Bool { self.showsAddButton && self.mosaicItems.count >= 2 }
 
     /// True when this view should show the add button: article editor (`showsControls`) + a photo/video
     /// container (`mosaicContext != nil` — never audio/location).
     private var showsAddButton: Bool { self.showsControls && self.mosaicContext != nil }
+
+    /// The add button is offered only while the container can still grow (fewer than the max).
+    private var canAddMoreItems: Bool { self.mosaicItems.count < MediaItemNodeView.maxContainerItemCount }
+
+    /// The "+" add button is actually on-screen: an article-editor photo/video container that can still grow.
+    /// When false but `showsLayoutToggle` is true (a full album), the toggle button slides into the "+" slot.
+    private var addButtonVisible: Bool { self.showsAddButton && self.canAddMoreItems }
 
     public init(context: AccountContext,
                 items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)],
@@ -174,7 +185,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView, UIScrollVie
     /// Positions the add button top-right and shows/hides it (`showsAddButton`). Brought above the mosaic
     /// cells every pass since cell hosts are inserted after it may have been created.
     private func layoutAddButton(size: CGSize) {
-        guard self.showsAddButton else {
+        guard self.addButtonVisible else {
             self.addButtonContainer?.isHidden = true
             return
         }
@@ -397,9 +408,11 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView, UIScrollVie
         let buttonSize = CGSize(width: 36.0, height: 36.0)
         let inset: CGFloat = 8.0
         let spacing: CGFloat = 6.0
-        // Left of the add button (add button is at x = width - inset - 36).
-        let frame = CGRect(x: size.width - inset - buttonSize.width - spacing - buttonSize.width, y: inset,
-                           width: buttonSize.width, height: buttonSize.height)
+        // Normally sits left of the add button (which is at x = width - inset - 36); when the add button is
+        // hidden (a full album), slide right into its top-right slot so the corner isn't left empty.
+        let rightmostX = size.width - inset - buttonSize.width
+        let originX = self.addButtonVisible ? (rightmostX - spacing - buttonSize.width) : rightmostX
+        let frame = CGRect(x: originX, y: inset, width: buttonSize.width, height: buttonSize.height)
         container.frame = frame
         container.update(size: buttonSize, isDark: true, transition: .immediate)
         background.frame = CGRect(origin: .zero, size: buttonSize)
@@ -435,7 +448,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView, UIScrollVie
               self.point(inside: point, with: event) else {
             return nil
         }
-        if self.showsAddButton, let container = self.addButtonContainer, !container.isHidden {
+        if self.addButtonVisible, let container = self.addButtonContainer, !container.isHidden {
             let inContainer = container.convert(point, from: self)
             if let hit = container.hitTest(inContainer, with: event) {
                 return hit

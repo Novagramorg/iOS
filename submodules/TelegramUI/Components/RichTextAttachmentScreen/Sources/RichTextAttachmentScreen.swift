@@ -321,7 +321,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
-        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.init(
@@ -343,7 +343,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
-        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.context = context
@@ -555,10 +555,10 @@ final class RichTextAttachmentScreenComponent: Component {
     let mode: RichTextAttachmentScreen.Mode
     let sendContextActions: RichTextAttachmentScreenSendContextActions?
     let overNavigationContainer: UIView
-    let presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
+    let presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
 
-    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
         self.context = context
         self.mode = mode
         self.sendContextActions = sendContextActions
@@ -653,62 +653,83 @@ final class RichTextAttachmentScreenComponent: Component {
         /// Picks one medium via the host attachment menu, registers its raw `Media` in `attachedMedia` (so the
         /// media-view provider can resolve it), and hands back the editor-facing `(mediaID, naturalSize, kind,
         /// caption)`. Callers decide what to do with it (insert a new block, or append to an existing one).
-        private func pickMedia(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
+        private func pickMedia(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping (_ items: [(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun])]) -> Void) {
             guard let component = self.component else {
                 return
             }
-            component.presentAttachmentMenu?(request, { [weak self] attachment in
+            component.presentAttachmentMenu?(request, { [weak self] attachments in
                 guard let self else {
                     return
                 }
-                let media: Media
-                let kind: MediaKind
-                let naturalSize: CGSize
-                switch attachment {
-                case let .image(imageReference):
-                    let image = imageReference.media
-                    media = image
-                    kind = .image
-                    naturalSize = image.representations.last?.dimensions.cgSize ?? CGSize(width: 1, height: 1)
-                case let .file(fileReference):
-                    let file = fileReference.media
-                    if file.isVideo {
-                        media = file
-                        kind = .video
-                        naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
-                    } else if file.isMusic || file.isVoice {
-                        // Audio (music from the Audio picker; voice only via edit round-trips). The block is a
-                        // fixed-height row, so naturalSize is ignored by MediaBlockBox — pass a 1x1 placeholder.
-                        media = file
-                        kind = .audio
-                        naturalSize = CGSize(width: 1.0, height: 1.0)
-                    } else {
-                        return   // unsupported document type
+                var results: [(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun])] = []
+                for attachment in attachments {
+                    let media: Media
+                    let kind: MediaKind
+                    let naturalSize: CGSize
+                    switch attachment {
+                    case let .image(imageReference):
+                        let image = imageReference.media
+                        media = image
+                        kind = .image
+                        naturalSize = image.representations.last?.dimensions.cgSize ?? CGSize(width: 1, height: 1)
+                    case let .file(fileReference):
+                        let file = fileReference.media
+                        if file.isVideo {
+                            media = file
+                            kind = .video
+                            naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                        } else if file.isMusic || file.isVoice {
+                            // Audio (music from the Audio picker; voice only via edit round-trips). The block is a
+                            // fixed-height row, so naturalSize is ignored by MediaBlockBox — pass a 1x1 placeholder.
+                            media = file
+                            kind = .audio
+                            naturalSize = CGSize(width: 1.0, height: 1.0)
+                        } else {
+                            continue   // unsupported document type
+                        }
+                    case let .location(map):
+                        // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
+                        // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained, since
+                        // the shared `media.id` path below can't key an id-less medium.
+                        let mediaID = "map:\(map.latitude):\(map.longitude)"
+                        self.attachedMedia[mediaID] = map
+                        let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
+                        results.append((mediaID, CGSize(width: 600.0, height: 300.0), .location, caption))
+                        continue
                     }
-                case let .location(map):
-                    // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
-                    // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained insert,
-                    // since the shared `media.id` path below can't key an id-less medium.
-                    let mediaID = "map:\(map.latitude):\(map.longitude)"
-                    self.attachedMedia[mediaID] = map
-                    let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
-                    completion(mediaID, CGSize(width: 600.0, height: 300.0), .location, caption)
-                    return
+                    guard let mediaId = media.id else { continue }
+                    let mediaID = "\(mediaId.namespace):\(mediaId.id)"
+                    self.attachedMedia[mediaID] = media
+                    results.append((mediaID, naturalSize, kind, []))
                 }
-                guard let mediaId = media.id else { return }
-                let mediaID = "\(mediaId.namespace):\(mediaId.id)"
-                self.attachedMedia[mediaID] = media
-                completion(mediaID, naturalSize, kind, [])
+                completion(results)
             })
         }
 
         private func presentImagePicker() {
             self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
-                imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
+                imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 10),
                 music: true,
                 location: true
-            )) { [weak self] mediaID, naturalSize, kind, caption in
-                self?.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
+            )) { [weak self] items in
+                guard let self else { return }
+                if items.count == 1 {
+                    let item = items[0]
+                    self.editor.insertMedia(mediaID: item.mediaID, naturalSize: item.naturalSize, kind: item.kind, caption: item.caption)
+                } else if items.count >= 2 {
+                    // Multi-select only ever surfaces photos/videos (the gallery tab is the only
+                    // multiselect-enabled source; music/location are single). So a >=2 batch is always a
+                    // valid photo/video album -> one mosaic MediaBlock, inserted as one undo step.
+                    let mediaItems = items.map { item in
+                        MediaItem(
+                            mediaID: item.mediaID,
+                            kind: item.kind,
+                            naturalSize: Size2D(width: Double(item.naturalSize.width), height: Double(item.naturalSize.height))
+                        )
+                    }
+                    let block = MediaBlock(id: BlockID.generate(), items: mediaItems)
+                    self.editor.insertDocument(Document(blocks: [.media(block)]))
+                }
             }
         }
 
@@ -1213,9 +1234,9 @@ final class RichTextAttachmentScreenComponent: Component {
                             imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
                             music: false,
                             location: false
-                        )) { mediaID, naturalSize, kind, _ in
-                            guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
-                            addMore(mediaID, naturalSize, kind)
+                        )) { items in
+                            guard let item = items.first, item.kind == .image || item.kind == .video else { return }   // mosaic is photo/video only
+                            addMore(item.mediaID, item.naturalSize, item.kind)
                         }
                     case .delete:
                         request.delete()

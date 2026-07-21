@@ -67,7 +67,7 @@ public func presentPollAttachmentScreen(
     availableButtons: [AttachmentButtonType],
     inputMediaNodeData: Signal<ChatEntityKeyboardInputNode.InputData?, NoError>? = nil,
     present: @escaping (ViewController, Bool) -> Void,
-    completion: @escaping (AnyMediaReference) -> Void
+    completion: @escaping ([AnyMediaReference]) -> Void
 ) {
     let attachmentController = AttachmentController(
         context: context,
@@ -164,8 +164,14 @@ public func presentPollAttachmentScreen(
             controller.legacyCompletion = { _, signals, _, _, _, _, sendCompletion in
                 let _ = (legacyAssetPickerEnqueueMessages(context: context, account: context.account, signals: signals)
                 |> deliverOnMainQueue).start(next: { items in
-                    if let item = items.first, case let .message(_, _, _, mediaReference, _, _, _, _, _, _) = item.message, let mediaReference {
-                        completion(mediaReference)
+                    var references: [AnyMediaReference] = []
+                    for item in items {
+                        if case let .message(_, _, _, mediaReference, _, _, _, _, _, _) = item.message, let mediaReference {
+                            references.append(mediaReference)
+                        }
+                    }
+                    if !references.isEmpty {
+                        completion(references)
                         sendCompletion()
                     }
                 })
@@ -199,7 +205,7 @@ public func presentPollAttachmentScreen(
                         let _ = (legacyAssetPickerEnqueueMessages(context: context, account: context.account, signals: signals)
                         |> deliverOnMainQueue).start(next: { items in
                             if let item = items.first, case let .message(_, _, _, mediaReference, _, _, _, _, _, _) = item.message, let mediaReference {
-                                completion(mediaReference)
+                                completion([mediaReference])
                                 sendCompletion()
                             }
                         })
@@ -233,14 +239,14 @@ public func presentPollAttachmentScreen(
                             }
 
                             let file = TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: fileId), partialReference: nil, resource: ICloudFileResource(urlData: item.urlData, thumbnail: false), previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: nil, mimeType: mimeType, size: Int64(item.fileSize), attributes: attributes, alternativeRepresentations: [])
-                            completion(.standalone(media: file))
+                            completion([.standalone(media: file)])
                         })
                     })
                     present(controller, false)
                 },
                 presentDocumentScanner: nil,
                 send: { mediaReferences, _, _, _ in
-                    completion(mediaReferences.first!)
+                    completion([mediaReferences.first!])
                 }
             ) as! AttachmentFileControllerImpl
             controllerCompletion(controller, controller.mediaPickerContext)
@@ -253,7 +259,7 @@ public func presentPollAttachmentScreen(
                 mode: .share(peer: nil, selfPeer: nil, hasLiveLocation: false),
                 source: .poll(locationPickerPollSubject),
                 completion: { location, _, _, _, _ in
-                completion(.standalone(media: location))
+                completion([.standalone(media: location)])
             })
             controllerCompletion(controller, controller.mediaPickerContext)
             return true
@@ -270,7 +276,7 @@ public func presentPollAttachmentScreen(
                     mode: .stickers(content),
                     source: .poll(stickerPickerPollSubject),
                     completion: { sticker in
-                        completion(sticker)
+                        completion([sticker])
                     }
                 )
                 controllerCompletion(controller, controller.mediaPickerContext)
@@ -289,7 +295,7 @@ public func presentPollAttachmentScreen(
                     mode: .emoji(content),
                     source: .poll(stickerPickerPollSubject),
                     completion: { sticker in
-                        completion(sticker)
+                        completion([sticker])
                     }
                 )
                 controllerCompletion(controller, controller.mediaPickerContext)
@@ -310,10 +316,10 @@ public func presentPollAttachmentScreen(
                         return
                     }
                     if let webpage {
-                        completion(.standalone(media: webpage))
+                        completion([.standalone(media: webpage)])
                         return
                     }
-                    completion(.standalone(media: makePollAttachmentLinkWebpage(link: link)))
+                    completion([.standalone(media: makePollAttachmentLinkWebpage(link: link))])
                 }
             )
             present(controller, false)
