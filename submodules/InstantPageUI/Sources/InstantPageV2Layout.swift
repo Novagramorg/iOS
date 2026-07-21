@@ -2485,10 +2485,13 @@ private func layoutQuoteText(
 ) -> [InstantPageV2LaidOutItem] {
     // Bubble-tuned insets: block-quote text sits 9pt from the frame's left border, 6pt top/bottom;
     // the trailing inset is larger (16pt) so the text clears the top-right quote icon (9pt wide +
-    // 4pt corner inset). The pull-quote pill uses 12pt top/bottom.
+    // 4pt corner inset). The pull-quote pill uses 12pt top/bottom and reserves `pullQuotePadding`
+    // on each side so the centered body clears the top-left / bottom-right corner quote marks —
+    // this is the same value as the pill's own content-hugging horizontal padding below.
+    let pullQuotePadding: CGFloat = 30.0
     let verticalInset: CGFloat = isPull ? 12.0 : 6.0
-    let leadingInset: CGFloat = isPull ? 0.0 : 9.0
-    let trailingInset: CGFloat = isPull ? 0.0 : 16.0
+    let leadingInset: CGFloat = isPull ? pullQuotePadding : 9.0
+    let trailingInset: CGFloat = isPull ? pullQuotePadding : 16.0
 
     var result: [InstantPageV2LaidOutItem] = []
 
@@ -2501,8 +2504,11 @@ private func layoutQuoteText(
     }
 
     let textBoundingWidth = boundingWidth - horizontalInset * 2.0 - leadingInset - trailingInset
+    // Center the pull-quote text box within [horizontalInset+pad, boundingWidth-horizontalInset-pad]
+    // so the (symmetric) inner padding is applied on both sides; regular quotes anchor to the leading
+    // inset (mirrored for RTL).
     let textX: CGFloat = isPull
-        ? horizontalInset
+        ? horizontalInset + leadingInset
         : (context.rtl ? horizontalInset + trailingInset : horizontalInset + leadingInset)
     let textAlignment: NSTextAlignment = isPull ? .center : (context.rtl ? .right : .natural)
 
@@ -2557,14 +2563,16 @@ private func layoutQuoteText(
     let accent = context.theme.quoteAccentColor
     if isPull {
         // Content-hugging centered pill (behind text) + top-left / bottom-right corner marks.
-        let pad: CGFloat = 30.0
         let markSize = CGSize(width: 12.0, height: 10.0)
         let markInset: CGFloat = 6.0
         // Content-hugging: track the widest wrapped line. `bodySize.width` is the full bounding
         // width for centered text (layoutTextItem only shrinks to content width for `.natural`),
         // so it must NOT drive the pill — else the pill spans the whole column instead of hugging.
         let contentWidth = bodyTextItem?.lines.map { $0.frame.width }.max() ?? bodySize.width
-        let pillWidth = min(contentWidth + pad * 2.0, boundingWidth)
+        // Cap at the inset content width (not the full column), so the widest pill spans
+        // [horizontalInset, boundingWidth - horizontalInset] — the same side insets that the
+        // regular block-quote frame respects (see the `else` branch below).
+        let pillWidth = min(contentWidth + pullQuotePadding * 2.0, boundingWidth - horizontalInset * 2.0)
         let pillX = (boundingWidth - pillWidth) / 2.0
         let pill = InstantPageV2ShapeItem(
             frame: CGRect(x: pillX, y: 0.0, width: pillWidth, height: contentHeight),
@@ -2693,14 +2701,23 @@ private func layoutList(
     // loosens unordered-checkbox very slightly (6→8) so all four kinds match.
     let indexSpacing: CGFloat = 8.0
 
+    // Inter-item spacing: keep successive items close to the baseline rhythm of the body text,
+    // but slightly tighter (lists read denser than prose) — see `instantPageV2ListItemGap`.
+    // Derived from the list's paragraph style, the same style each `.text` item uses below.
+    // (This replaces the former fixed 18pt/12pt gap, which read as too airy.)
+    let interItemSpacingStyleStack = InstantPageTextStyleStack()
+    setupStyleStack(interItemSpacingStyleStack, theme: context.theme, category: .paragraph, link: false)
+    let interItemSpacingProbe = attributedStringForRichText(.plain("A"), styleStack: interItemSpacingStyleStack, formatDate: context.formatDate)
+    let interItemSpacing = instantPageV2ListItemGap(for: interItemSpacingProbe)
+
     // Layout each item.
     var result: [InstantPageV2LaidOutItem] = []
     var contentHeight: CGFloat = 0.0
 
     for (i, item) in listItems.enumerated() {
-        // Inter-item spacing (matches V1: 18pt normal, 12pt fitToWidth).
+        // Inter-item spacing: match the body text's line spacing (see `interItemSpacing` above).
         if i != 0 {
-            contentHeight += context.fitToWidth ? 12.0 : 18.0
+            contentHeight += interItemSpacing
         }
 
         let markerInfo = markerInfos[i]
@@ -2719,9 +2736,14 @@ private func layoutList(
         // misrouting an edit to a colliding top-level path.
         let itemCheckboxPath: [Int]? = (item.checked != nil && kind != .cell) ? (pathPrefix + [i]) : nil
 
-        // Effective item: if a .blocks item is empty, treat as a single space.
+        // Effective item: an empty item — an empty `.blocks`, or a `.text` with no textual content
+        // — is rendered as a single space so it still occupies a full text line. This matches the
+        // height an empty whitespace line of regular paragraph text would take, instead of
+        // collapsing to zero height (`layoutTextItem` returns a zero-height box for an empty string).
         var effectiveItem = item
         if case let .blocks(blocks, num, checked) = effectiveItem, blocks.isEmpty {
+            effectiveItem = .text(.plain(" "), num, checked)
+        } else if case let .text(text, num, checked) = effectiveItem, text.plainText.isEmpty {
             effectiveItem = .text(.plain(" "), num, checked)
         }
 
@@ -3101,6 +3123,43 @@ private struct PendingV2EmojiAttachment {
     let range: NSRange
     let emoji: ChatTextInputTextCustomEmojiAttribute
     let size: CGFloat
+}
+
+// The vertical gap to insert between two stacked text boxes (e.g. successive list items).
+//
+// Within one `layoutTextItem` box the inter-line baseline advance is `fontLineHeight +
+// fontLineSpacing`. Each box also reserves the full ascender (A) above its first baseline and the
+// descender (D) below its last (the box is shifted down by `A − fontLineHeight` and its height is
+// padded by D, so a single-line box measures exactly A + D). Stacking two boxes with gap `g`
+// gives a baseline advance of `A + g + D`, so the gap that makes items follow the SAME baseline
+// rhythm as body-text lines is `baselineGap = fontLineHeight + fontLineSpacing − A − D`.
+//
+// Lists are meant to read slightly tighter than body text, though: we reclaim half of the
+// invisible ascender headroom above the cap line (`A − capHeight`) — ink-free space that visually
+// overlaps the previous item's descender region — which pulls the gap ~2pt below exact line
+// rhythm at 17pt (≈3.98 → ≈1.75). Result clamped ≥ 0.
+func instantPageV2ListItemGap(for string: NSAttributedString) -> CGFloat {
+    guard string.length > 0 else { return 0.0 }
+    var font = string.attribute(NSAttributedString.Key.font, at: 0, effectiveRange: nil) as? UIFont
+    if font == nil {
+        string.enumerateAttributes(in: NSMakeRange(0, string.length), options: []) { attributes, _, _ in
+            if font == nil, let furtherFont = attributes[NSAttributedString.Key.font] as? UIFont {
+                font = furtherFont
+            }
+        }
+    }
+    guard let font else { return 0.0 }
+    var lineSpacingFactor: CGFloat = 1.12
+    if let lineSpacingFactorAttribute = string.attribute(NSAttributedString.Key(rawValue: InstantPageLineSpacingFactorAttribute), at: 0, effectiveRange: nil) {
+        lineSpacingFactor = CGFloat((lineSpacingFactorAttribute as! NSNumber).floatValue)
+    }
+    let ascent = font.ascender
+    let descentBelowBaseline = max(0.0, -font.descender)
+    let fontLineHeight = floor(ascent + font.descender)
+    let fontLineSpacing = floor(fontLineHeight * lineSpacingFactor)
+    let baselineGap = fontLineHeight + fontLineSpacing - ascent - descentBelowBaseline
+    let capHeadroom = max(0.0, ascent - font.capHeight)
+    return max(0.0, baselineGap - capHeadroom * 0.5)
 }
 
 func layoutTextItem(
