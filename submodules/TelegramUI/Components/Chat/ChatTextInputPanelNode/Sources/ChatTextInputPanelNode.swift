@@ -5487,16 +5487,32 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return false
         }
 
+        // External RTF carrying a TABLE or MEDIA (structure with no linear text form) latches the field to the
+        // native editor, which re-reads the pasteboard through its own structure-preserving importer. A LIST is
+        // deliberately NOT a latch trigger: it stays in the legacy field and renders bullet/number markers as
+        // literal text via `legacyChatInputAttributedString` in the RTF branch below. Headings/code/quotes
+        // likewise stay legacy (they flatten to text). Gated on `enableRichTextInput` (else no native backend).
+        if self.enableRichTextInput,
+           let rtfData = pasteboard.data(forPasteboardType: "public.rtf") ?? pasteboard.data(forPasteboardType: "com.apple.flat-rtfd"),
+           rtfRequiresNativeRichInput(rtfData) {
+            self.pasteRichFragmentFromPasteboard()
+            return false
+        }
+
         var attributedString: NSAttributedString?
         if let data = pasteboard.data(forPasteboardType: "private.telegramtext"), let value = chatInputStateStringFromAppSpecificString(data: data) {
             attributedString = value
         } else if let data = pasteboard.data(forPasteboardType: "public.rtf") {
-            attributedString = chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtf)
+            // A list-bearing RTF: iOS's NSAttributedString RTF import flattens lists (no NSTextList), so render
+            // the markers as literal text via the structure-preserving RTFImport path; otherwise keep the
+            // inline-preserving legacy conversion. (When rich input is enabled, the native-routing branch above
+            // has already claimed a list paste — this serves the legacy-only configuration.)
+            attributedString = legacyChatInputAttributedString(fromRTF: data) ?? chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtf)
         } else if let data = pasteboard.data(forPasteboardType: "com.apple.flat-rtfd") {
             if let _ = pasteboard.data(forPasteboardType: "com.apple.notes.richtext"), DeviceModel.current.isIpad, let htmlData = pasteboard.data(forPasteboardType: "public.html") {
                 attributedString = chatInputStateStringFromRTF(htmlData, type: NSAttributedString.DocumentType.html)
             } else {
-                attributedString = chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtfd)
+                attributedString = legacyChatInputAttributedString(fromRTF: data) ?? chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtfd)
             }
         }
 

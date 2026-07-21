@@ -56,6 +56,28 @@ final class ChatInputContentConversionTests: XCTestCase {
         XCTAssertNotNil(s.attribute(ChatTextInputAttributes.bold, at: 0, effectiveRange: nil))
     }
 
+    func test_attributedString_renderListMarkers_prependsBulletAndNumberText() {
+        let content = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "First")])),
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "Second")])),
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .ordered, level: 0), runs: [ChatInputRun(text: "One")])),
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .ordered, level: 0), runs: [ChatInputRun(text: "Two")])),
+        ])
+        // Default (unchanged legacy behavior): list membership is ignored, markers not rendered.
+        XCTAssertEqual(attributedString(from: content).string, "First\nSecond\nOne\nTwo")
+        // Opt-in: markers rendered as literal text (bullet, then a fresh 1./2. ordered run).
+        XCTAssertEqual(attributedString(from: content, renderListMarkers: true).string, "• First\n• Second\n1. One\n2. Two")
+    }
+
+    func test_attributedString_renderListMarkers_orderedResetsAfterNonListParagraph() {
+        let content = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .ordered, level: 0), runs: [ChatInputRun(text: "A")])),
+            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "gap")])),
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .ordered, level: 0), runs: [ChatInputRun(text: "B")])),
+        ])
+        XCTAssertEqual(attributedString(from: content, renderListMarkers: true).string, "1. A\ngap\n1. B")
+    }
+
     func test_attributedString_blocksJoinedByNewline_andCodeContiguous() {
         let content = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "a")])),

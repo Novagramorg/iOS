@@ -519,3 +519,35 @@ private func characterAttributes(
     }
     return result
 }
+
+/// True when pasted RTF carries a block the legacy input can't render even as text — a TABLE or MEDIA — and
+/// should therefore latch the composer to the native editor. Lists, headings, code and quotes are deliberately
+/// EXCLUDED: they have a linear text form, so they stay in the legacy field (a list renders its markers as text
+/// via `legacyChatInputAttributedString`). Returns false when the data isn't parseable as RTF.
+public func rtfRequiresNativeRichInput(_ data: Data) -> Bool {
+    guard let document = RTFImport.document(fromRTF: data) else { return false }
+    return document.blocks.contains { block in
+        switch block {
+        case .table, .media:
+            return true
+        case .paragraph, .code, .pullQuote, .blockQuote:
+            return false
+        }
+    }
+}
+
+/// Legacy-input paste of external RTF that carries a LIST. iOS's own `NSAttributedString(rtf:)` flattens block
+/// structure (no `NSTextList`), so `chatInputStateStringFromRTF` drops list markers entirely. This path instead
+/// parses the RTF with the structure-preserving `RTFImport`, then renders each list item's marker (•, 1., …) as
+/// LITERAL TEXT via `attributedString(from:renderListMarkers:)`, preserving inline formatting. Returns nil when
+/// the RTF has no list (or doesn't parse) so the caller keeps its existing inline-preserving conversion.
+public func legacyChatInputAttributedString(fromRTF data: Data) -> NSAttributedString? {
+    guard let document = RTFImport.document(fromRTF: data) else { return nil }
+    let hasList = document.blocks.contains { block in
+        if case .paragraph(let paragraph) = block, paragraph.list != nil { return true }
+        return false
+    }
+    guard hasList else { return nil }
+    let content = chatInputContent(fromDocument: document, resolveEmoji: { _ in nil }, resolveMedia: { _ in nil })
+    return attributedString(from: content, renderListMarkers: true)
+}

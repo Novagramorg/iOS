@@ -4,10 +4,30 @@ import TelegramCore
 /// Chat input content → a SEMANTIC NSAttributedString (text + `ChatTextInputAttributes` only; NO display
 /// decoration — no fonts/colors/spoiler-attachments/emoji views). Display-neutral on purpose; the node owns
 /// decoration. Tree-shaped successor to `ChatTextInputStateText.attributedText()`.
-public func attributedString(from content: ChatInputContent) -> NSAttributedString {
+/// List-item marker rendered as LITERAL TEXT for the legacy input, which cannot hold list structure. `counters`
+/// tracks per-level ordered numbering across successive items (reset by the caller on a non-list paragraph).
+private func listMarkerText(for list: ChatInputListMembership, counters: inout [Int32: Int]) -> String {
+    let indent = String(repeating: "\t", count: max(0, Int(list.level)))
+    switch list.marker {
+    case .bullet:
+        counters = counters.filter { $0.key < list.level }
+        return indent + "\u{2022} "                          // "• "
+    case .checklist:
+        counters = counters.filter { $0.key < list.level }
+        return indent + (list.checked == true ? "\u{2611} " : "\u{2610} ")   // "☑ " / "☐ "
+    case .ordered:
+        let n = (counters[list.level] ?? 0) + 1
+        counters[list.level] = n
+        counters = counters.filter { $0.key <= list.level }  // deeper levels restart under a new parent item
+        return indent + "\(n). "
+    }
+}
+
+public func attributedString(from content: ChatInputContent, renderListMarkers: Bool = false) -> NSAttributedString {
     let result = NSMutableAttributedString()
     let marker = true as NSNumber
     var isFirst = true
+    var orderedCounters: [Int32: Int] = [:]
 
     func appendSeparatorIfNeeded() {
         if !isFirst { result.append(NSAttributedString(string: "\n")) }
@@ -67,6 +87,13 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
             }
         case let .paragraph(paragraph):
             appendSeparatorIfNeeded()
+            if renderListMarkers {
+                if let list = paragraph.list {
+                    result.append(NSAttributedString(string: listMarkerText(for: list, counters: &orderedCounters)))
+                } else {
+                    orderedCounters.removeAll()   // a non-list paragraph ends any ordered run
+                }
+            }
             appendRuns(paragraph)
         case let .pullQuote(pq):
             // Legacy UITextView projection: render pull-quote text as a quote-attributed block, mirroring `.code`.
@@ -88,7 +115,7 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
             appendSeparatorIfNeeded()
             if bq.collapsed {
                 result.append(NSAttributedString(string: " ", attributes: [
-                    ChatTextInputAttributes.collapsedBlock: attributedString(from: bq.content)
+                    ChatTextInputAttributes.collapsedBlock: attributedString(from: bq.content, renderListMarkers: renderListMarkers)
                 ]))
             } else {
                 let start = result.length
