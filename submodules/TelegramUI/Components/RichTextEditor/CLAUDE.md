@@ -583,7 +583,9 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   drops a fresh empty `.body` paragraph in its slot, caret there — NOT the old delete-and-merge-into-the-block-above
   (`deleteImageBox`) nor the old "act on the previous paragraph" gap behavior. It unifies every way a Backspace
   "lands on" a media block, reached on FOUR paths in `deleteBackward` / `applySelectionReplace`:
-  - **collapsed caret at the media's leading gap** (`mediaBox(atGap: head)` branch);
+  - **collapsed caret at the media's leading gap** (`mediaBox(atGap: head)` branch) — **NOTE: narrowed
+    2026-07-21** to the TAP-SELECTED case only (`imageSelection == img.id`); a plain non-selected gap caret now
+    acts on the PREVIOUS block instead (see the "Backspace at a media block's leading gap" note below);
   - **collapsed caret at the start of the caption** (`pos.box is MediaBlockBox, pos.local == 0`) — empty OR
     non-empty caption (the caption text is **discarded**);
   - **a selection whose bounds EXACTLY equal a media node's span** (`from == nodeStart && to == textStart +
@@ -605,6 +607,21 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   A media delete never leaves a zero-block document (a lone-block replace yields the empty paragraph). The image
   edit-menu **"Delete"** still fully REMOVES the block (`deleteImageBox`, merges up) — only Backspace was
   respecified. (`deleteBlock(at:parkingCaretAtGapOf:)` was removed with its sole caller.)
+
+**Backspace at a media block's leading gap (2026-07-21).** A plain, NON-tap-selected caret at a media
+block's leading gap (`nodeStart`, the slot to the LEFT of the image) now acts on the PREVIOUS block
+rather than the media: it deletes the previous block's last grapheme (caret moves into that block), or,
+if the previous block is empty, deletes the empty block (caret stays at the image's shifted gap); a
+non-text previous atom (table / block quote whose boundary isn't renderable) is a safe no-op with the
+caret left at the gap; a LEADING image (no previous block) is a no-op. A TAP-SELECTED image (the tint;
+`imageSelection == img.id`, or the `imageObjectDeletePending` range path) still replaces the media with
+an empty paragraph on Backspace, as does Backspace at CAPTION start (offset 0). Both the collapsed-caret
+gap Backspace and the OS object-replacement RANGE `[prevEnd … gap]` (collapsed to a gap caret before the
+gap branch) route through the same logic. This keys on `mediaBox(atGap:)`, so it applies to EVERY
+`MediaBlockBox` including caption-less **audio** (`MediaKind.audio`) — consistent with images; audio stays
+deletable via tap-select + Backspace through the `imageSelection == img.id` branch. See `deleteBackward`
+(`DocumentCanvasView+UITextInput.swift`) and `CanvasImageEditTests` (`test_backspaceAtGap_*`).
+
 - **Backspace at the start of a paragraph AFTER a non-text block deletes the empty paragraph, never the block**
   (`deleteBackward`, the mirror of the leading-gap rule above). A collapsed caret at the start (`local == 0`) of
   a paragraph whose previous block is a non-text **atom** — an image (`MediaBlockBox`), a table (`TableBlockBox`),

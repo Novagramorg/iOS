@@ -512,6 +512,20 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         imageObjectDeletePending = nil
+        // iOS may deliver Backspace at a NON-tap-selected media block's leading gap as an object-
+        // replacement RANGE running from the previous block's text end to the gap ([prevEnd … gap]),
+        // NOT a collapsed caret. Left as a range it falls to the generic selection-replace below, which
+        // deletes only the structural break and strands the caret at the previous block's end without
+        // deleting anything (the reported "jumps to the end of the previous block, nothing happens"
+        // symptom). When the range only spans the structural slots before the gap (`selFrom >=
+        // prevTextPosition(before: selTo)`, which excludes a genuine text selection ending at the gap),
+        // COLLAPSE it to a caret at the gap so the gap branch below acts on the previous block. A
+        // tap-selected image is excluded (`imageSelection != img.id`) — it already returned above via
+        // `imageObjectDeletePending`.
+        if selFrom != selTo, let img = mediaBox(atGap: selTo), imageSelection != img.id,
+           selFrom >= prevTextPosition(before: selTo) {
+            anchor = selTo; head = selTo
+        }
         if tableSelection != nil {
             // A structural row/column selection is active → Backspace deletes those rows/columns (or the
             // whole table when every row/column is selected). The caret is parked in a cell, so the normal
@@ -608,15 +622,50 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        // Caret at a media block's leading gap → replace the media with an empty body paragraph in place.
+        // Caret at a media block's leading gap (the slot to the LEFT of the image).
         if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
-            // The gap caret is where a tap / structural image selection lands. The OS clears `imageSelection`
-            // via the `selectedTextRange` setter (which calls `clearStructuralSelections()`) BEFORE this runs,
-            // so the deletion can't be gated on it — a collapsed gap caret IS the structural-selection signal.
-            // Backspace replaces the media with an empty body paragraph in place (caret there), rather than
-            // acting on the previous paragraph.
-            editing { replaceMediaWithEmptyParagraph(at: i) }
-            clearImageSelection()
+            // (A) A TAP-SELECTED image (the tint highlight; `imageSelection` is still set because
+            // `selectImage` doesn't go through the `selectedTextRange` setter) → replace the media with an
+            // empty body paragraph in place, caret there. (The range-driven tap-select path returns earlier
+            // via `imageObjectDeletePending`.) Unchanged.
+            if imageSelection == img.id {
+                editing { replaceMediaWithEmptyParagraph(at: i) }
+                clearImageSelection()
+                return
+            }
+            // (B) A plain, non-selected caret at the gap → Backspace acts on the PREVIOUS block (delete
+            // leftward, like a text caret sitting just before the image), NOT on the media.
+            if i == 0 {
+                return   // no previous block — no-op (Backspace at document start). Tap-select to delete a leading image.
+            }
+            if let prev = boxes[i - 1] as? BlockBox {
+                if prev.textLength == 0 {
+                    // Empty previous paragraph → delete it; the caret stays at the image's (now-shifted) gap.
+                    editing {
+                        var newBoxes = boxes
+                        newBoxes.remove(at: i - 1)
+                        boxes = newBoxes
+                        recomputeSpans()
+                        let gap = boxes[i - 1].nodeStart   // the image is now at i-1
+                        anchor = gap; head = gap
+                    }
+                } else {
+                    // Non-empty → delete its last grapheme; the caret moves INTO it so subsequent
+                    // Backspaces keep deleting there.
+                    let prevEnd = prev.textStart + prev.textLength
+                    let n = graphemeClusterLengthBeforeCaret(global: prevEnd)
+                    editing(coalescing: .deleting) { applyReplace(globalFrom: prevEnd - n, globalTo: prevEnd, text: "") }
+                }
+            } else {
+                // Previous block is a non-text atom. Step the caret onto it WITHOUT deleting, but only to
+                // a RENDERABLE position (a media block's caption slot / a code block's text end). A table or
+                // block quote reports a non-renderable structural boundary (its own `nodeStart`,
+                // since its `textLength` is 0) from `prevTextPosition`; moving the caret there would HIDE it
+                // (and a follow-up Backspace could structurally delete the container). In that case leave the
+                // caret at the gap — a safe, visible no-op.
+                let dest = prevTextPosition(before: head)
+                if dest != head, isRenderablePosition(dest) { setCaret(global: dest) }
+            }
             return
         }
         // Collapsed caret with text before it inside a block quote (a child's body OR the author line) →
