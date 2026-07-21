@@ -188,6 +188,40 @@ extension Document {
         return nil
     }
 
+    /// The nearest top-level paragraph/code text position for a caret that falls OUTSIDE the document's
+    /// editable text range — below the first text block's start, or above the last text block's end. Returns
+    /// nil for a caret INSIDE the range that simply isn't a top-level text locus (e.g. a table cell / media
+    /// caption), so callers keep their in-cell behavior. Recovers a paste whose caret was reported as 0 — a
+    /// freshly-latched chat composer sets its selection before its layout boxes exist, so the flat→global map
+    /// yields 0 (below the first text start), which `insertingFragment` cannot resolve.
+    public func nearestTopLevelTextPosition(to caret: Int) -> Int? {
+        var cursor = 0
+        var firstStart: Int? = nil
+        var lastTextEnd: Int? = nil
+        for i in blocks.indices {
+            let size = DocumentTree.documentSize(Document(blocks: [blocks[i]]))
+            let textStart = cursor + 1
+            switch blocks[i] {
+            case .paragraph(let p):
+                if firstStart == nil { firstStart = textStart }
+                lastTextEnd = textStart + p.utf16Count
+            case .code(let c):
+                if firstStart == nil { firstStart = textStart }
+                lastTextEnd = textStart + c.utf16Count
+            default: break
+            }
+            cursor += size
+        }
+        let documentSize = cursor
+        guard let firstStart, let lastTextEnd else { return nil }   // no top-level text block to land in
+        if caret < firstStart { return firstStart }        // e.g. the freshly-latched composer caret == 0
+        if caret > documentSize { return lastTextEnd }      // beyond the whole document
+        // Inside the document but not a top-level text locus — e.g. a caret in a table cell / media caption,
+        // INCLUDING one that sits past the last text paragraph. Return nil so the caller keeps its in-cell
+        // (flatten) behavior rather than redirecting the paste to a paragraph.
+        return nil
+    }
+
     /// The global position of the first editable text offset of the top-level block at `index`.
     /// A paragraph/code block's text sits one token in (the block's own container-open token) —
     /// `cursor + 1`. A pull quote is a `.blockQuote(children: [pullTextPara, authorPara])`

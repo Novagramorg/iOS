@@ -58,6 +58,10 @@ extension DocumentCanvasView {
            let frag = RTFConversion.fragment(fromRTF: data) {
             return frag
         }
+        if let data = pb.data(forPasteboardType: "com.apple.flat-rtfd"),
+           let frag = RTFConversion.fragment(fromRTF: data) {
+            return frag
+        }
         if let s = pb.string, !s.isEmpty {
             return plainTextFragment(s)
         }
@@ -91,7 +95,13 @@ extension DocumentCanvasView {
             let caret = head
             // 2. splice on the model.
             let doc = Document(blocks: currentBlocks())
-            if let result = doc.insertingFragment(fragment, atGlobal: caret) {
+            // A freshly-latched chat composer can report `head == 0` — its selection was set before the canvas
+            // built its layout boxes, so the flat→global map yielded 0 (below the first text start). That caret
+            // can't be resolved, and the plain-text fallback below drops a table/media to "". Recover by
+            // retrying at the nearest real text position; only genuinely non-text loci (a caret inside a table
+            // cell / media caption) fall through to the flatten.
+            if let result = doc.insertingFragment(fragment, atGlobal: caret)
+                ?? doc.nearestTopLevelTextPosition(to: caret).flatMap({ doc.insertingFragment(fragment, atGlobal: $0) }) {
                 setBlocks(result.document.blocks, width: effectiveWidth)
                 anchor = min(result.caret, documentSize)
                 head = anchor

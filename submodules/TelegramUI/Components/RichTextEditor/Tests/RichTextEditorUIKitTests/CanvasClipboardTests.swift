@@ -285,6 +285,37 @@ final class CanvasClipboardTests: XCTestCase {
         XCTAssertEqual(item["public.utf8-plain-text"] as? String, "custom")
     }
 
+    func test_pasteFragment_caretBeforeFirstTextPosition_stillSplicesTable() {
+        // Reproduces the freshly-latched chat composer: its selection was set before layout, so head == 0
+        // (below the first paragraph's text start of 1). insertingFragment can't resolve that caret, and the
+        // plain-text fallback drops a table to "". The retry via nearestTopLevelTextPosition must rescue it.
+        let v = DocumentCanvasView()
+        v.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p"), runs: []))], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 200); v.layoutIfNeeded()
+        v.anchor = 0; v.head = 0
+        let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 100), ColumnSpec(width: 100)],
+            rows: [Row(id: BlockID("r"), cells: [cell("a", "Alpha"), cell("b", "Beta")])])
+        v.pasteFragment(Document(blocks: [.table(table)]))
+        XCTAssertTrue(v.currentBlocks().contains { if case .table = $0 { return true } else { return false } },
+            "a table pasted with caret reported before the first text position must survive")
+    }
+
+    func test_flatRtfd_isReadAsFragmentWithList() throws {
+        // A flat-rtfd-only clipboard (some iOS Notes) whose RTF stream carries a bullet list must import
+        // as a list fragment, not fall through to plain text.
+        let rtf = "{\\rtf1\\ansi\\ansicpg1252{\\fonttbl\\f0\\fswiss Helvetica;}"
+            + "\\pard\\li720\\fi-360 \\ls1\\ilvl0 {\\listtext\t\\uc0\\u8226 \t}Alpha\\\n"
+            + "{\\listtext\t\\uc0\\u8226 \t}Beta}"
+        let (v, pb) = canvas()
+        pb.items = ["com.apple.flat-rtfd": Data(rtf.utf8)]
+        let frag = try XCTUnwrap(v.fragment(fromPasteboard: pb))
+        let listParas = frag.blocks.compactMap { b -> ParagraphBlock? in
+            if case .paragraph(let p) = b, p.list != nil { return p } else { return nil }
+        }
+        XCTAssertEqual(listParas.count, 2)
+        XCTAssertTrue(listParas.allSatisfy { $0.list?.marker == .bullet })
+    }
+
     func test_facadeWrittenFragment_isReadByEditorPaste() throws {
         // A host-written fragment must be recognized by the editor's own paste reader (same UTI + codec).
         let doc = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("a"),
