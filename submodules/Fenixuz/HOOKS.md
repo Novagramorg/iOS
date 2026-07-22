@@ -3203,3 +3203,19 @@ Merged upstream `release-12.9.2` (254 commits, 994 files, MTProto layer 227→22
 - `TelegramUI/Sources/Chat/UpdateChatPresentationInterfaceState.swift`: `isEmbeddedBotMode` rightBarButtons suppression — after this merge it lives in the shared `updateRightNavigationButtons(...)` extension, so it now applies at both upstream call sites (intended).
 
 > ⚠️ Line numbers in sections written before 2026-07-22 may have shifted ±20-60 lines after this merge. The `// Fenixuz:` comment anchors remain authoritative — locate hooks by grep, not by line number.
+
+## 📌 2026-07-22 — Force per-message Translate always-on (NovagramPro)
+
+`submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (~line 1483). The pre-existing `showProTranslate` hook (reads `pro_messager` suite key `show_translate_messages`, default `true`) forces the `showTranslate:` argument of `canTranslateText(...)` true — BUT `canTranslateText` (upstream `TranslateUI/Sources/Translate.swift`, unchanged by us) still runs Apple `NLLanguageRecognizer` on the first 64 chars and hides Translate for short/undetectable text or the user's own languages. Users reported Translate appearing on some messages but not others ("small words yes, big words no") — that is upstream behavior, not a bug.
+
+Per user request (2026-07-22) Translate must appear on EVERY message. Added right after the `canTranslateText` call:
+
+```swift
+// Fenixuz: when the NovagramPro "translate messages" toggle is on, force Translate onto every
+// non-empty text message, bypassing Apple language detection ...
+if showProTranslate && !messageText.isEmpty {
+    canTranslate = true
+}
+```
+
+Ordering matters: the force is BEFORE the SecretChat `canTranslate = false` block, so secret chats stay excluded. Media with no caption stays excluded (`!messageText.isEmpty`). The translate action itself is Telegram's own `.translate` → `TextProcessingScreen` (server auto-detects source language), so translation works unchanged; only button visibility is forced. Toggle off `show_translate_messages` to restore native language-detection gating. No BUILD change.
