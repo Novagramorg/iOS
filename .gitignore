@@ -83,6 +83,7 @@ xcode-files
 /buildbox/*
 **/node_modules/
 tools/sim-watcher/dist/
+.mcp.json
 PROJECT_LOG.md
 FENIXUZ_PLAN.md
 WEBSITE_AUDIT_FENIXUZ.md

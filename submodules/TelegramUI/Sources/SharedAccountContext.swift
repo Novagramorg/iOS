@@ -8,6 +8,7 @@ import Display
 import TelegramPresentationData
 import TelegramCallsUI
 import TelegramUIPreferences
+import TelegramStringFormatting
 import AccountContext
 import AvatarNode
 import DeviceLocationManager
@@ -86,6 +87,11 @@ import OldChannelsController
 import InviteLinksUI
 import GiftStoreScreen
 import SendInviteLinkScreen
+import CommunitiesScreen
+import CommunityAddScreen
+import CommunityEditScreen
+import CommunityRequestsScreen
+import CommunityViewScreen
 import PostSuggestionsSettingsScreen
 import ForumSettingsScreen
 import ForumCreateTopicScreen
@@ -2523,6 +2529,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return createGroupControllerImpl(context: context, peerIds: peerIds, initialTitle: initialTitle, mode: mode, completion: completion)
     }
 
+    public func makeCreateChannelController(context: AccountContext, completion: @escaping (PeerId, @escaping () -> Void) -> Void) -> ViewController {
+        return createChannelController(context: context, mode: .community, completion: completion)
+    }
+
     public func makeChatListController(context: AccountContext, location: ChatListControllerLocation, controlsHistoryPreload: Bool, hideNetworkActivityStatus: Bool, previewing: Bool, enableDebugActions: Bool) -> ChatListController {
         return ChatListControllerImpl(context: context, location: location, controlsHistoryPreload: controlsHistoryPreload, hideNetworkActivityStatus: hideNetworkActivityStatus, previewing: previewing, enableDebugActions: enableDebugActions)
     }
@@ -2893,10 +2903,32 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         completion: @escaping (UIImage?) -> Void,
         completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
     ) {
+        self.displaySetPhoto(
+            parentController: parentController,
+            context: context,
+            peer: peer,
+            canDelete: !peer.profileImageRepresentations.isEmpty,
+            performDelete: {},
+            completion: completion,
+            completedWithUploadingImage: completedWithUploadingImage
+        )
+    }
+
+    public func displaySetPhoto(
+        parentController: ViewController,
+        context: AccountContext,
+        peer: EnginePeer,
+        canDelete: Bool,
+        performDelete: @escaping () -> Void,
+        completion: @escaping (UIImage?) -> Void,
+        completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
+    ) {
         PeerInfoScreenImpl.displaySetPhoto(
             parentController: parentController,
             context: context,
             peer: peer,
+            canDelete: canDelete,
+            performDelete: performDelete,
             completion: completion,
             completedWithUploadingImage: completedWithUploadingImage
         )
@@ -3167,6 +3199,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSource = .copyProtection
         case .aiTools:
             mappedSource = .aiTools
+        case .richText:
+            mappedSource = .richText
         case let .auth(price, days):
             mappedSource = .auth(price, days)
         case let .premiumGift(file):
@@ -3251,6 +3285,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             mappedSubject = .copyProtection
         case .aiTools:
             mappedSubject = .aiTools
+        case .richText:
+            mappedSubject = .richText
         case .business:
             mappedSubject = .business
             buttonText = presentationData.strings.Chat_EmptyStateIntroFooterPremiumActionButton
@@ -3701,7 +3737,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                                 Queue.mainQueue().after(0.3) {
                                     let tooltipController = UndoOverlayController(
                                         presentationData: presentationData,
-                                        content: .forward(savedMessages: false, text: presentationData.strings.Gift_Transfer_Success("\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))", peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)).string),
+                                        content: .forward(savedMessages: false, text: presentationData.strings.Gift_Transfer_Success("\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))", peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)).string),
                                         elevatedLayout: false,
                                         action: { _ in return true }
                                     )
@@ -3903,7 +3939,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }
         return controller
     }
-    
+
     public func makeStickerPackScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, mainStickerPack: StickerPackReference, stickerPacks: [StickerPackReference], loadedStickerPacks: [LoadedStickerPack], actionTitle: String?, isEditing: Bool, expandIfNeeded: Bool, parentNavigationController: NavigationController?, sendSticker: ((FileMediaReference, UIView?, CGRect?) -> Bool)?, actionPerformed: (([StickerPackScreenActionResult]) -> Void)?) -> ViewController {
         return StickerPackScreen(context: context, updatedPresentationData: updatedPresentationData, mainStickerPack: mainStickerPack, stickerPacks: stickerPacks, loadedStickerPacks: loadedStickerPacks, actionTitle: actionTitle, isEditing: isEditing, expandIfNeeded: expandIfNeeded, parentNavigationController: parentNavigationController, sendSticker: sendSticker, actionPerformed: { actions in
             guard let actionPerformed = actionPerformed else {
@@ -4151,7 +4187,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeStickerMediaPickerScreen(context: AccountContext, getSourceRect: @escaping () -> CGRect?, completion: @escaping (Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, dismissed: @escaping () -> Void) -> ViewController {
         return stickerMediaPickerController(context: context, getSourceRect: getSourceRect, completion: completion, dismissed: dismissed)
     }
-    
+
     public func makeAvatarMediaPickerScreen(context: AccountContext, peerType: PeerType, getSourceRect: @escaping () -> CGRect?, canDelete: Bool, performDelete: @escaping () -> Void, completion: @escaping (Any?, UIView?, CGRect, UIImage?, Bool, @escaping (Bool?) -> (UIView, CGRect)?, @escaping () -> Void) -> Void, dismissed: @escaping () -> Void) -> (ViewController?, Any?) {
         return avatarMediaPickerController(context: context, peerType: peerType, getSourceRect: getSourceRect, canDelete: canDelete, performDelete: performDelete, completion: completion, dismissed: dismissed)
     }
@@ -4454,9 +4490,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?) {
         openWebAppImpl(context: context, parentController: parentController, updatedPresentationData: updatedPresentationData, botPeer: botPeer, chatPeer: chatPeer, threadId: threadId, buttonText: buttonText, url: url, simple: simple, source: source, skipTermsOfService: skipTermsOfService, payload: payload, verifyAgeCompletion: verifyAgeCompletion)
     }
-    
-    public func openJoinChatWebView(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, webView: JoinChatWebView) {
-        openJoinChatWebViewImpl(context: context, parentController: parentController, updatedPresentationData: updatedPresentationData, webView: webView)
+
+    public func openJoinChatWebView(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, webView: JoinChatWebView, chatTitle: String) {
+        openJoinChatWebViewImpl(context: context, parentController: parentController, updatedPresentationData: updatedPresentationData, webView: webView, chatTitle: chatTitle)
     }
 
     public func makeAffiliateProgramSetupScreenInitialData(context: AccountContext, peerId: EnginePeer.Id, mode: AffiliateProgramSetupScreenMode) -> Signal<AffiliateProgramSetupScreenInitialData, NoError> {
@@ -4496,10 +4532,46 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return SendInviteLinkScreen(context: context, subject: subject, peers: peers, theme: theme)
     }
 
+    public func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController {
+        return CommunitiesScreen(context: context, peerId: peerId)
+    }
+
+    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping (Bool) -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, completed: completed)
+    }
+
+    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, requiresConfirmation: Bool, completed: @escaping (Bool) -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, requiresConfirmation: requiresConfirmation, completed: completed)
+    }
+
+    public func makeCommunityAddScreen(context: AccountContext, peerId: EnginePeer.Id, initialVisibility: Bool, completed: @escaping (Bool) -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, peerId: peerId, initialVisibility: initialVisibility, draftCompleted: completed)
+    }
+
+    public func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
+        return CommunityEditScreen(context: context, communityId: communityId)
+    }
+
+    public func makeCommunityEditScreen(context: AccountContext, mode: CommunityEditScreenMode, completed: @escaping () -> Void) -> ViewController {
+        return CommunityEditScreen(context: context, mode: mode, completed: completed)
+    }
+
+    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {
+        return CommunityRequestsScreen(context: context, communityId: communityId, existingContext: existingContext)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, mode: CommunityViewScreenMode) -> ViewController {
+        return CommunityViewScreenImpl(context: context, communityId: communityId, mode: mode)
+    }
+
+    public func makeCommunityPeerSelectionScreen(context: AccountContext, communityId: EnginePeer.Id, selectionOptions: CommunityPeerSelectionOptions) -> ViewController {
+        return CommunityViewScreenImpl(context: context, communityId: communityId, mode: .fullscreen, selectionOptions: selectionOptions)
+    }
+
     public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {
         return CocoonInfoScreen(context: context)
     }
-    
+
     public func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?, TelegramMediaWebpage?) -> Void) -> ViewController {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         return chatTextLinkEditController(context: context, updatedPresentationData: updatedPresentationData, text: presentationData.strings.TextFormat_AddLinkText(text).string, link: link, apply: apply)
@@ -4588,8 +4660,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         context: AccountContext,
         theme: PresentationTheme?,
         mode: TextProcessingScreenMode,
-        inputText: TextWithEntities,
-        copyResult: ((TextWithEntities) -> Void)?,
+        inputText: ComposedRichMessage,
+        copyResult: ((ComposedRichMessage) -> Void)?,
         translateChat: ((String) -> Void)?
     ) async -> ViewController {
         return await TextProcessingScreen(

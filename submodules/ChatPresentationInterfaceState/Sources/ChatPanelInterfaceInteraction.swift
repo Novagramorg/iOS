@@ -196,6 +196,7 @@ public final class ChatPanelInterfaceInteraction {
     public let presentInputTextTranslation: (NSAttributedString, @escaping (NSAttributedString) -> Void) -> Void
     public let sendEmoji: (String, ChatTextInputTextCustomEmojiAttribute, Bool) -> Void
     public let openAICompose: () -> Void
+    public let openExpandedInput: () -> Void
     public let openSetPeerAvatar: () -> Void
     public let requestLayout: (ContainedViewLayoutTransition) -> Void
     public let chatController: () -> ViewController?
@@ -324,6 +325,7 @@ public final class ChatPanelInterfaceInteraction {
         presentInputTextTranslation: @escaping (NSAttributedString, @escaping (NSAttributedString) -> Void) -> Void,
         sendEmoji: @escaping (String, ChatTextInputTextCustomEmojiAttribute, Bool) -> Void,
         openAICompose: @escaping () -> Void,
+        openExpandedInput: @escaping () -> Void,
         openSetPeerAvatar: @escaping () -> Void,
         updateHistoryFilter: @escaping ((ChatPresentationInterfaceState.HistoryFilter?) -> ChatPresentationInterfaceState.HistoryFilter?) -> Void,
         updateChatLocationThread: @escaping (Int64?, ChatControllerAnimateInnerChatSwitchDirection?) -> Void,
@@ -455,6 +457,7 @@ public final class ChatPanelInterfaceInteraction {
         self.presentInputTextTranslation = presentInputTextTranslation
         self.sendEmoji = sendEmoji
         self.openAICompose = openAICompose
+        self.openExpandedInput = openExpandedInput
         self.openSetPeerAvatar = openSetPeerAvatar
         self.updateHistoryFilter = updateHistoryFilter
         self.updateChatLocationThread = updateChatLocationThread
@@ -594,6 +597,7 @@ public final class ChatPanelInterfaceInteraction {
         }, presentInputTextTranslation: { _, _ in
         }, sendEmoji: { _, _, _ in
         }, openAICompose: {
+        }, openExpandedInput: {
         }, openSetPeerAvatar: {
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in
