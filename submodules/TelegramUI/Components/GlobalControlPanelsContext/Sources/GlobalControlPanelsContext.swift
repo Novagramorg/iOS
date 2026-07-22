@@ -7,6 +7,7 @@ import TelegramUIPreferences
 import TelegramCallsUI
 import Display
 import UndoUI
+import FenixNovagramAds
 
 public final class GlobalControlPanelsContext {
     public final class MediaPlayback: Equatable {
@@ -18,7 +19,7 @@ public final class GlobalControlPanelsContext {
         public let kind: MediaManagerPlayerType
         public let playlistLocation: SharedMediaPlaylistLocation
         public let account: Account
-        
+
         public init(version: Int, item: SharedMediaPlaylistItem, previousItem: SharedMediaPlaylistItem?, nextItem: SharedMediaPlaylistItem?, playbackOrder: MusicPlaybackSettingsOrder, kind: MediaManagerPlayerType, playlistLocation: SharedMediaPlaylistLocation, account: Account) {
             self.version = version
             self.item = item
@@ -29,27 +30,27 @@ public final class GlobalControlPanelsContext {
             self.playlistLocation = playlistLocation
             self.account = account
         }
-        
-        public static func ==(lhs: MediaPlayback, rhs: MediaPlayback) -> Bool {
+
+        public static func == (lhs: MediaPlayback, rhs: MediaPlayback) -> Bool {
             if lhs.version != rhs.version {
                 return false
             }
             return true
         }
     }
-    
+
     public enum LiveLocationMode {
         case all
         case peer(EnginePeer.Id)
     }
-    
+
     public final class LiveLocation: Equatable {
         public let mode: LiveLocationMode
         public let peers: [EnginePeer]
         public let messages: [EngineMessage.Id: EngineMessage]
         public let canClose: Bool
         public let version: Int
-        
+
         public init(mode: LiveLocationMode, peers: [EnginePeer], messages: [EngineMessage.Id: EngineMessage], canClose: Bool, version: Int) {
             self.mode = mode
             self.peers = peers
@@ -57,15 +58,15 @@ public final class GlobalControlPanelsContext {
             self.canClose = canClose
             self.version = version
         }
-        
-        public static func ==(lhs: LiveLocation, rhs: LiveLocation) -> Bool {
+
+        public static func == (lhs: LiveLocation, rhs: LiveLocation) -> Bool {
             if lhs.version != rhs.version {
                 return false
             }
             return true
         }
     }
-    
+
     public enum ChatListNotice: Equatable {
         case clearStorage(sizeFraction: Double)
         case setupPassword
@@ -83,7 +84,7 @@ public final class GlobalControlPanelsContext {
         case accountFreeze
         case link(id: String, url: String, title: ServerSuggestionInfo.Item.Text, subtitle: ServerSuggestionInfo.Item.Text)
     }
-    
+
     public final class GroupCall: Equatable {
         public let peerId: EnginePeer.Id
         public let isChannel: Bool
@@ -92,7 +93,7 @@ public final class GlobalControlPanelsContext {
         public let participantCount: Int
         public let activeSpeakers: Set<EnginePeer.Id>
         public let groupCall: PresentationGroupCall?
-        
+
         public init(
             peerId: EnginePeer.Id,
             isChannel: Bool,
@@ -110,8 +111,8 @@ public final class GlobalControlPanelsContext {
             self.activeSpeakers = activeSpeakers
             self.groupCall = groupCall
         }
-        
-        public static func ==(lhs: GroupCall, rhs: GroupCall) -> Bool {
+
+        public static func == (lhs: GroupCall, rhs: GroupCall) -> Bool {
             if lhs.peerId != rhs.peerId {
                 return false
             }
@@ -159,32 +160,32 @@ public final class GlobalControlPanelsContext {
     private final class Impl {
         let queue: Queue
         let context: AccountContext
-        
+
         private(set) var stateValue: State
         let statePipe = ValuePipe<State>()
-        
+
         private var nextVersion: Int = 0
 
         var tempVoicePlaylistEnded: (() -> Void)?
         var tempVoicePlaylistItemChanged: ((SharedMediaPlaylistItem?, SharedMediaPlaylistItem?) -> Void)?
         var tempVoicePlaylistCurrentItem: SharedMediaPlaylistItem?
-        
+
         var playlistStateAndType: (SharedMediaPlaylistItem, SharedMediaPlaylistItem?, SharedMediaPlaylistItem?, MusicPlaybackSettingsOrder, MediaManagerPlayerType, Account, SharedMediaPlaylistLocation, Int)?
         var mediaStatusDisposable: Disposable?
-        
+
         var liveLocationState: (mode: LiveLocationMode, peers: [EnginePeer], messages: [EngineMessage.Id: EngineMessage], canClose: Bool, version: Int)?
         var liveLocationDisposable: Disposable?
-        
+
         var chatListNotice: ChatListNotice?
         var suggestedChatListNoticeDisposable: Disposable?
-        
+
         var groupCall: GroupCall?
         var currentGroupCallDisposable: Disposable?
 
         init(queue: Queue, context: AccountContext, mediaPlayback: Bool, liveLocationMode: LiveLocationMode?, groupCalls: EnginePeer.Id?, chatListNotices: Bool) {
             self.queue = queue
             self.context = context
-            
+
             self.stateValue = State(mediaPlayback: nil, liveLocation: nil, chatListNotice: nil, groupCall: nil)
 
             if mediaPlayback {
@@ -213,12 +214,12 @@ public final class GlobalControlPanelsContext {
                         if let playlistStateAndType = strongSelf.playlistStateAndType, playlistStateAndType.4 == .voice {
                             previousVoiceItem = playlistStateAndType.0
                         }
-                        
+
                         var updatedVoiceItem: SharedMediaPlaylistItem?
                         if let playlistStateAndType = playlistStateAndType, playlistStateAndType.2 == .voice {
                             updatedVoiceItem = playlistStateAndType.1.item
                         }
-                        
+
                         strongSelf.tempVoicePlaylistCurrentItem = updatedVoiceItem
                         strongSelf.tempVoicePlaylistItemChanged?(previousVoiceItem, updatedVoiceItem)
                         if let playlistStateAndType = playlistStateAndType {
@@ -239,7 +240,7 @@ public final class GlobalControlPanelsContext {
                     }
                 })
             }
-            
+
             if let liveLocationMode, let liveLocationManager = context.liveLocationManager {
                 let signal: Signal<([EnginePeer]?, [EngineMessage.Id: EngineMessage]?), NoError>
                 switch liveLocationMode {
@@ -273,7 +274,7 @@ public final class GlobalControlPanelsContext {
                         }
                     }
                 }
-                
+
                 self.liveLocationDisposable = (signal
                 |> deliverOnMainQueue).start(next: { [weak self] peers, messages in
                     guard let self else {
@@ -285,7 +286,7 @@ public final class GlobalControlPanelsContext {
                     } else if (self.liveLocationState != nil) != (peers != nil) {
                         updated = true
                     }
-                    
+
                     if updated {
                         if let peers, let messages {
                             var canClose = true
@@ -297,7 +298,7 @@ public final class GlobalControlPanelsContext {
                                     }
                                 }
                             }
-                            
+
                             self.liveLocationState = (
                                 mode: liveLocationMode,
                                 peers: peers,
@@ -313,10 +314,10 @@ public final class GlobalControlPanelsContext {
                     }
                 })
             }
-            
+
             if chatListNotices {
                 let twoStepData: Signal<TwoStepVerificationConfiguration?, NoError> = .single(nil) |> then(context.engine.auth.twoStepVerificationConfiguration() |> map(Optional.init))
-                
+
                 let accountFreezeConfiguration = (context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: PreferencesKeys.appConfiguration))
                                                   |> map { view -> AppConfiguration in
                     let appConfiguration: AppConfiguration = view?.get(AppConfiguration.self) ?? AppConfiguration.defaultValue
@@ -326,9 +327,9 @@ public final class GlobalControlPanelsContext {
                 |> map { appConfiguration -> AccountFreezeConfiguration in
                     return AccountFreezeConfiguration.with(appConfiguration: appConfiguration)
                 })
-                
+
                 let starsSubscriptionsContextPromise = Promise<StarsSubscriptionsContext?>(nil)
-                
+
                 let suggestedChatListNoticeSignal: Signal<ChatListNotice?, NoError> = combineLatest(
                     context.engine.notices.getServerProvidedSuggestions(),
                     context.engine.notices.getServerDismissedSuggestions(),
@@ -341,11 +342,17 @@ public final class GlobalControlPanelsContext {
                     ),
                     context.account.stateManager.contactBirthdays,
                     starsSubscriptionsContextPromise.get(),
-                    accountFreezeConfiguration
+                    accountFreezeConfiguration,
+                    FenixNovagramBannerAds.bannerNotice(context: context)
                 )
-                |> mapToSignal { suggestions, dismissedSuggestions, configuration, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration -> Signal<ChatListNotice?, NoError> in
+                |> mapToSignal { suggestions, dismissedSuggestions, configuration, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration, bannerNotice -> Signal<ChatListNotice?, NoError> in
+                    if let bannerNotice = bannerNotice {
+                        // OURS — highest priority. Map the neutral FenixBannerNotice to a .link notice here
+                        // (mapping lives on this side so FenixNovagramAds needs no GlobalControlPanelsContext dep).
+                        return .single(.link(id: "novagram-banner:\(bannerNotice.id)", url: bannerNotice.url, title: ServerSuggestionInfo.Item.Text(string: bannerNotice.title, entities: []), subtitle: ServerSuggestionInfo.Item.Text(string: bannerNotice.text, entities: [])))
+                    }
                     let (accountPeer, birthday) = data
-                    
+
                     if let newSessionReview = newSessionReviews.first {
                         return .single(.reviewLogin(newSessionReview: newSessionReview, totalCount: newSessionReviews.count))
                     }
@@ -375,7 +382,7 @@ public final class GlobalControlPanelsContext {
                             return .single(.setupPassword)
                         }
                     }
-                    
+
                     let today = Calendar(identifier: .gregorian).component(.day, from: Date())
                     var todayBirthdayPeerIds: [EnginePeer.Id] = []
                     for (peerId, birthday) in birthdays {
@@ -386,11 +393,11 @@ public final class GlobalControlPanelsContext {
                     todayBirthdayPeerIds.sort { lhs, rhs in
                         return lhs < rhs
                     }
-                    
+
                     if dismissedSuggestions.contains(ServerProvidedSuggestion.todayBirthdays.id) {
                         todayBirthdayPeerIds = []
                     }
-                    
+
                     if let _ = accountFreezeConfiguration.freezeUntilDate {
                         return .single(.accountFreeze)
                     } else if suggestions.contains(.starsSubscriptionLowBalance) {
@@ -478,7 +485,7 @@ public final class GlobalControlPanelsContext {
                     }
                 }
                 |> distinctUntilChanged
-                
+
                 self.suggestedChatListNoticeDisposable = (suggestedChatListNoticeSignal
                 |> deliverOn(self.queue)).startStrict(next: { [weak self] chatListNotice in
                     guard let self else {
@@ -490,7 +497,7 @@ public final class GlobalControlPanelsContext {
                     }
                 })
             }
-            
+
             if let callManager = context.sharedContext.callManager, let peerId = groupCalls {
                 let currentGroupCall: Signal<PresentationGroupCall?, NoError> = callManager.currentGroupCallSignal
                 |> distinctUntilChanged(isEqual: { lhs, rhs in
@@ -505,7 +512,7 @@ public final class GlobalControlPanelsContext {
                     }
                     return call
                 }
-                
+
                 let availableGroupCall: Signal<AccountGroupCallContextImpl.GroupCallPanelData?, NoError>
                 if let peerId = groupCalls {
                     availableGroupCall = context.account.viewTracker.peerView(peerId)
@@ -531,14 +538,14 @@ public final class GlobalControlPanelsContext {
                         if let peer = peer, case let .channel(channel) = peer, case .broadcast = channel.info {
                             isChannel = true
                         }
-                        
+
                         return Signal { [weak context] subscriber in
                             guard let context = context, let callContextCache = context.cachedGroupCallContexts as? AccountGroupCallContextCacheImpl else {
                                 return EmptyDisposable
                             }
-                            
+
                             let disposable = MetaDisposable()
-                            
+
                             callContextCache.impl.syncWith { impl in
                                 let callContext = impl.get(account: context.account, engine: context.engine, peerId: peerId, isChannel: isChannel, call: EngineGroupCallDescription(activeCall))
                                 disposable.set((callContext.context.panelData
@@ -553,7 +560,7 @@ public final class GlobalControlPanelsContext {
                                     subscriber.putNext(updatedPanelData)
                                 }))
                             }
-                            
+
                             return ActionDisposable {
                                 disposable.dispose()
                             }
@@ -563,22 +570,22 @@ public final class GlobalControlPanelsContext {
                 } else {
                     availableGroupCall = .single(nil)
                 }
-                
+
                 let previousCurrentGroupCall = Atomic<PresentationGroupCall?>(value: nil)
                 self.currentGroupCallDisposable = combineLatest(queue: .mainQueue(), availableGroupCall, currentGroupCall).start(next: { [weak self] availableState, currentGroupCall in
                     guard let self else {
                         return
                     }
-                    
+
                     let previousCurrentGroupCall = previousCurrentGroupCall.swap(currentGroupCall)
-                    
+
                     let panelData: AccountGroupCallContextImpl.GroupCallPanelData?
                     if previousCurrentGroupCall != nil && currentGroupCall == nil && availableState?.participantCount == 1 {
                         panelData = nil
                     } else {
                         panelData = currentGroupCall != nil || (availableState?.participantCount == 0 && availableState?.info.scheduleTimestamp == nil && availableState?.info.isStream == false) ? nil : availableState
                     }
-                    
+
                     let groupCall = panelData.flatMap { panelData in
                         return GroupCall(
                             peerId: panelData.peerId,
@@ -604,7 +611,7 @@ public final class GlobalControlPanelsContext {
             self.suggestedChatListNoticeDisposable?.dispose()
             self.currentGroupCallDisposable?.dispose()
         }
-        
+
         private func notifyStateUpdated() {
             self.stateValue = State(
                 mediaPlayback: self.playlistStateAndType.flatMap { playlistStateAndType in
@@ -633,33 +640,37 @@ public final class GlobalControlPanelsContext {
             )
             self.statePipe.putNext(self.stateValue)
         }
-        
+
         func dismissChatListNotice(parentController: ViewController, notice: ChatListNotice) {
             let presentationData = self.context.sharedContext.currentPresentationData.with({ $0 })
             switch notice {
             case .xmasPremiumGift:
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.xmasPremiumGift.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.xmasPremiumGift.id).startStandalone()
                 parentController.present(UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_gift", scale: 0.058, colors: ["__allcolors__": UIColor.white], title: nil, text: presentationData.strings.ChatList_PremiumGiftInSettingsInfo, customUndoText: nil, timeout: 5.0), elevatedLayout: false, action: { _ in
                     return true
                 }), in: .current)
             case .setupBirthday:
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupBirthday.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupBirthday.id).startStandalone()
                 parentController.present(UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_gift", scale: 0.058, colors: ["__allcolors__": UIColor.white], title: nil, text: presentationData.strings.ChatList_BirthdayInSettingsInfo, customUndoText: nil, timeout: 5.0), elevatedLayout: false, action: { _ in
                     return true
                 }), in: .current)
             case .birthdayPremiumGift:
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.todayBirthdays.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.todayBirthdays.id).startStandalone()
                 parentController.present(UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_gift", scale: 0.058, colors: ["__allcolors__": UIColor.white], title: nil, text: presentationData.strings.ChatList_PremiumGiftInSettingsInfo, customUndoText: nil, timeout: 5.0), elevatedLayout: false, action: { _ in
                     return true
                 }), in: .current)
             case .premiumGrace:
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.gracePremium.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.gracePremium.id).startStandalone()
             case .setupPhoto:
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupPhoto.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupPhoto.id).startStandalone()
             case .starsSubscriptionLowBalance:
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.starsSubscriptionLowBalance.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.starsSubscriptionLowBalance.id).startStandalone()
             case let .link(id, _, _, _):
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: id).startStandalone()
+                if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
+                    FenixNovagramBannerAds.markDismissed(bannerId: uuid, viewerId: FenixNovagramBannerAds.viewerId(context: self.context), context: self.context)
+                } else {
+                    _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: id).startStandalone()
+                }
             default:
                 break
             }
@@ -679,31 +690,31 @@ public final class GlobalControlPanelsContext {
             return Impl(queue: .mainQueue(), context: context, mediaPlayback: mediaPlayback, liveLocationMode: liveLocationMode, groupCalls: groupCalls, chatListNotices: chatListNotices)
         })
     }
-    
+
     public func dismissChatListNotice(parentController: ViewController, notice: ChatListNotice) {
         self.impl.with { impl in
             impl.dismissChatListNotice(parentController: parentController, notice: notice)
         }
     }
-    
+
     public func setTempVoicePlaylistEnded(_ f: (() -> Void)?) {
         self.impl.with { impl in
             return impl.tempVoicePlaylistEnded = f
         }
     }
-    
+
     public func setTempVoicePlaylistItemChanged(_ f: ((SharedMediaPlaylistItem?, SharedMediaPlaylistItem?) -> Void)?) {
         self.impl.with { impl in
             return impl.tempVoicePlaylistItemChanged = f
         }
     }
-    
+
     public var tempVoicePlaylistCurrentItem: SharedMediaPlaylistItem? {
         return self.impl.syncWith { impl in
             return impl.tempVoicePlaylistCurrentItem
         }
     }
-    
+
     public var playlistStateAndType: (SharedMediaPlaylistItem, SharedMediaPlaylistItem?, SharedMediaPlaylistItem?, MusicPlaybackSettingsOrder, MediaManagerPlayerType, Account, SharedMediaPlaylistLocation, Int)? {
         return self.impl.syncWith { impl in
             return impl.playlistStateAndType

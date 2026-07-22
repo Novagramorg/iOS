@@ -62,6 +62,8 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     }
     public var loginWithNumber: ((String, Bool) -> Void)?
     public var loginWithPasskey: ((AuthorizationPasskeyData, Bool) -> Void)?
+    // Fenixuz: fired when the "Bot token bilan kirish" secondary button is tapped.
+    public var loginWithBotToken: (() -> Void)?
     var accountUpdated: ((UnauthorizedAccount) -> Void)?
 
     weak var confirmationController: PhoneConfirmationController?
@@ -128,6 +130,11 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         self.controllerNode.presentQrOverlay()
     }
 
+    // Fenixuz: nav-bar bot-token icon → start the bot-token login flow (same as the old bottom text button).
+    @objc private func botTokenIconPressed() {
+        self.loginWithBotToken?()
+    }
+
     // Fenixuz: nav-bar proxy entry → let a user in a blocked country enable NovagramProxy BEFORE
     // login (they cannot reach the in-app Settings until they are connected). Reflects on/off state.
     @objc private func novagramProxyPressed() {
@@ -186,9 +193,23 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         // (toolbar) as a QR icon. The small-layout "Next" item logic stays below.
         if layout.size.width >= 360.0 {
             if !self.inProgress, self.account != nil, let qrImage = UIImage(systemName: "qrcode") {
-                let item = UIBarButtonItem(image: qrImage, style: .plain, target: self, action: #selector(self.qrIconPressed))
-                item.accessibilityLabel = "Log in by QR code"
-                self.navigationItem.rightBarButtonItem = item
+                let qrItem = UIBarButtonItem(image: qrImage, style: .plain, target: self, action: #selector(self.qrIconPressed))
+                qrItem.accessibilityLabel = "Log in by QR code"
+                // Fenixuz: bot-token login as a nav-bar icon just LEFT of the QR icon. In this (Telegram custom)
+                // nav bar rightBarButtonItems render left-to-right by index, so the bot item goes first.
+                var items: [UIBarButtonItem] = []
+                if let baseBotImage = UIImage(bundleImageName: "Item List/Icons/Chatbot") {
+                    // Telegram's chatbot (robot) glyph is 30pt; scale to 24pt so it matches the QR icon.
+                    let botIconSize = CGSize(width: 24.0, height: 24.0)
+                    let botImage = UIGraphicsImageRenderer(size: botIconSize).image { _ in
+                        baseBotImage.draw(in: CGRect(origin: .zero, size: botIconSize))
+                    }.withRenderingMode(.alwaysTemplate)
+                    let botItem = UIBarButtonItem(image: botImage, style: .plain, target: self, action: #selector(self.botTokenIconPressed))
+                    botItem.accessibilityLabel = "Bot token bilan kirish"
+                    items.append(botItem)
+                }
+                items.append(qrItem)
+                self.navigationItem.rightBarButtonItems = items
             } else {
                 self.navigationItem.rightBarButtonItem = nil
             }
@@ -245,6 +266,10 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 return
             }
             self.loadAndPresentPasskey(force: true)
+        }
+        // Fenixuz: secondary "Bot token bilan kirish" button → let the sequence controller push the token screen.
+        self.controllerNode.botTokenPressed = { [weak self] in
+            self?.loginWithBotToken?()
         }
 
         if let (code, name, number) = self.currentData {
@@ -396,10 +421,18 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     }
 
     public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        guard let windowScene = self.view.window?.windowScene else {
-            preconditionFailure()
+        if let windowScene = self.view.window?.windowScene {
+            return ASPresentationAnchor(windowScene: windowScene)
         }
-        return ASPresentationAnchor(windowScene: windowScene)
+        // Fenixuz: don't crash (preconditionFailure) when this controller's view has no window/scene
+        // yet — passkey autofill (preferImmediatelyAvailableCredentials) can fire before the view is
+        // attached to a window, and on the simulator. Fall back to any active window scene.
+        for scene in UIApplication.shared.connectedScenes {
+            if let windowScene = scene as? UIWindowScene {
+                return ASPresentationAnchor(windowScene: windowScene)
+            }
+        }
+        return UIWindow()
     }
 
     public func updateCountryCode() {

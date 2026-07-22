@@ -7,58 +7,47 @@ private final class ManagedMessageHistoryHolesContext {
         var peerId: PeerId
         var threadId: Int64?
         var space: MessageHistoryHoleOperationSpace
-        
-        init(peerId: PeerId, threadId: Int64?, space: MessageHistoryHoleOperationSpace) {
-            self.peerId = peerId
-            self.threadId = threadId
-            self.space = space
-        }
     }
-    
+
     private struct PendingEntry: CustomStringConvertible {
         var id: Int
         var key: LocationKey
         var entry: MessageHistoryHolesViewEntry
         var disposable: MetaDisposable
-        
+
         init(id: Int, key: LocationKey, entry: MessageHistoryHolesViewEntry, disposable: MetaDisposable) {
             self.id = id
             self.key = key
             self.entry = entry
             self.disposable = disposable
         }
-        
+
         var description: String {
             return "entry: \(self.entry)"
         }
     }
-    
+
     private struct DiscardedEntry {
         var entry: PendingEntry
         var timestamp: Double
-        
-        init(entry: PendingEntry, timestamp: Double) {
-            self.entry = entry
-            self.timestamp = timestamp
-        }
     }
-    
+
     private let queue: Queue
     private let accountPeerId: PeerId
     private let postbox: Postbox
     private let network: Network
-    
+
     private var nextEntryId: Int = 0
     private var pendingEntries: [PendingEntry] = []
     private var discardedEntries: [DiscardedEntry] = []
-    
+
     private var oldEntriesTimer: SwiftSignalKit.Timer?
-    
+
     private var currentEntries: Set<MessageHistoryHolesViewEntry> = Set()
     private var currentEntriesDisposable: Disposable?
-    
+
     private var completedEntries: [MessageHistoryHolesViewEntry: Double] = [:]
-    
+
     init(
         queue: Queue,
         accountPeerId: PeerId,
@@ -70,7 +59,7 @@ private final class ManagedMessageHistoryHolesContext {
         self.accountPeerId = accountPeerId
         self.postbox = postbox
         self.network = network
-        
+
         self.currentEntriesDisposable = (entries |> deliverOn(self.queue)).start(next: { [weak self] entries in
             guard let self = self else {
                 return
@@ -78,14 +67,14 @@ private final class ManagedMessageHistoryHolesContext {
             self.update(entries: entries)
         })
     }
-    
+
     deinit {
         assert(self.queue.isCurrent())
-        
+
         self.oldEntriesTimer?.invalidate()
         self.currentEntriesDisposable?.dispose()
     }
-    
+
     func resetPeer(peerId: PeerId) {
         for entry in Array(self.completedEntries.keys) {
             switch entry.hole {
@@ -96,7 +85,7 @@ private final class ManagedMessageHistoryHolesContext {
             }
         }
     }
-    
+
     func clearDisposables() -> [Disposable] {
         var disposables = Array(self.pendingEntries.map(\.disposable))
         disposables.append(contentsOf: self.discardedEntries.map(\.entry.disposable))
@@ -104,7 +93,7 @@ private final class ManagedMessageHistoryHolesContext {
         self.discardedEntries.removeAll()
         return disposables
     }
-    
+
     private func updateNeedsTimer() {
         let needsTimer = !self.discardedEntries.isEmpty
         if needsTimer {
@@ -125,10 +114,10 @@ private final class ManagedMessageHistoryHolesContext {
             oldEntriesTimer.invalidate()
         }
     }
-    
+
     private func discardOldEntries() -> [Disposable] {
         let timestamp = CFAbsoluteTimeGetCurrent()
-        
+
         var result: [Disposable] = []
         for i in (0 ..< self.discardedEntries.count).reversed() {
             if self.discardedEntries[i].timestamp < timestamp - 0.5 {
@@ -137,17 +126,17 @@ private final class ManagedMessageHistoryHolesContext {
                 self.discardedEntries.remove(at: i)
             }
         }
-        
+
         return result
     }
-    
+
     func update(entries: Set<MessageHistoryHolesViewEntry>) {
-        //let removed: [Disposable] = []
+        // let removed: [Disposable] = []
         var added: [PendingEntry] = []
-        
+
         let timestamp = CFAbsoluteTimeGetCurrent()
-        let _ = timestamp
-        
+        _ = timestamp
+
         /*for i in (0 ..< self.pendingEntries.count).reversed() {
          if !entries.contains(self.pendingEntries[i].entry) {
          Logger.shared.log("ManagedMessageHistoryHoles", "Stashing entry \(self.pendingEntries[i])")
@@ -155,7 +144,7 @@ private final class ManagedMessageHistoryHolesContext {
          self.pendingEntries.remove(at: i)
          }
          }*/
-        
+
         for entry in entries {
             if let previousTimestamp = self.completedEntries[entry] {
                 if previousTimestamp >= CFAbsoluteTimeGetCurrent() - 20.0 {
@@ -163,7 +152,7 @@ private final class ManagedMessageHistoryHolesContext {
                     continue
                 }
             }
-            
+
             switch entry.hole {
             case let .peer(peerHole):
                 let key = LocationKey(peerId: peerHole.peerId, threadId: peerHole.threadId, space: entry.space)
@@ -184,19 +173,16 @@ private final class ManagedMessageHistoryHolesContext {
                 }
             }
         }
-        
+
         self.updateNeedsTimer()
-        
+
         for pendingEntry in added {
             let id = pendingEntry.id
             let entry = pendingEntry.entry
             switch pendingEntry.entry.hole {
             case let .peer(hole):
-                pendingEntry.disposable.set((fetchMessageHistoryHole(
-                    accountPeerId: self.accountPeerId,
-                    source: .network(self.network),
-                    postbox: self.postbox,
-                    peerInput: .direct(peerId: hole.peerId, threadId: hole.threadId), namespace: hole.namespace, direction: pendingEntry.entry.direction, space: pendingEntry.entry.space, count: pendingEntry.entry.count)
+                // Fenixuz hook: bot sessions remove the history hole instead of getHistory. See FenixuzBotSession.swift
+                pendingEntry.disposable.set((fenixuzManagedMessageHistoryHole(accountPeerId: self.accountPeerId, network: self.network, postbox: self.postbox, hole: hole, direction: pendingEntry.entry.direction, space: pendingEntry.entry.space, count: pendingEntry.entry.count)
                 |> deliverOn(self.queue)).start(completed: { [weak self] in
                     guard let self = self else {
                         return
@@ -212,7 +198,7 @@ private final class ManagedMessageHistoryHolesContext {
 
 func managedMessageHistoryHoles(accountPeerId: PeerId, network: Network, postbox: Postbox) -> ((PeerId) -> Void, Disposable) {
     let sharedQueue = Queue()
-    
+
     var context: QueueLocalObject<ManagedMessageHistoryHolesContext>? = QueueLocalObject<ManagedMessageHistoryHolesContext>(queue: sharedQueue, generate: {
         return ManagedMessageHistoryHolesContext(
             queue: sharedQueue,
@@ -224,7 +210,7 @@ func managedMessageHistoryHoles(accountPeerId: PeerId, network: Network, postbox
             }
         )
     })
-    
+
     return ({ [weak context] peerId in
         context?.with { context in
             context.resetPeer(peerId: peerId)

@@ -9,7 +9,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             Namespaces.Message.Cloud: Set(MessageTags.all)
         ]
     }
-    
+
     // To avoid upgrading the database, **new** tags can be added here
     // Uninitialized peers will fill the info using messageHoles
     var upgradedMessageHoles: [PeerId.Namespace: [MessageId.Namespace: Set<MessageTags>]] = [:]
@@ -21,12 +21,12 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             ])
         ]
     }
-    
+
     var globalMessageIdsPeerIdNamespaces = Set<GlobalMessageIdsNamespace>()
     for peerIdNamespace in [Namespaces.Peer.CloudUser, Namespaces.Peer.CloudGroup] {
         globalMessageIdsPeerIdNamespaces.insert(GlobalMessageIdsNamespace(peerIdNamespace: peerIdNamespace, messageIdNamespace: Namespaces.Message.Cloud))
     }
-    
+
     return SeedConfiguration(
         globalMessageIdsPeerIdNamespaces: globalMessageIdsPeerIdNamespaces,
         initializeChatListWithHole: (
@@ -136,7 +136,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     break
                 }
             }
-            
+
             if let audioTranscription {
                 var found = false
                 for i in 0 ..< updated.count {
@@ -172,6 +172,30 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                         }
                         break
                     }
+                }
+            }
+            // Fenixuz: EditedMessageHistoryAttribute is a local-only attribute (the server never
+            // sends it), so a re-synced/replaced message — notably channel & group messages that
+            // arrive again via getChannelDifference newMessages (.InsertExistingMessage) — would
+            // otherwise drop the captured edit history. Carry it forward. This is why the History
+            // viewer worked in private chats but not in groups/channels.
+            var previousEditedHistory: EditedMessageHistoryAttribute?
+            for attribute in previous {
+                if let attribute = attribute as? EditedMessageHistoryAttribute {
+                    previousEditedHistory = attribute
+                    break
+                }
+            }
+            if let previousEditedHistory {
+                var found = false
+                for i in 0 ..< updated.count {
+                    if let _ = updated[i] as? EditedMessageHistoryAttribute {
+                        found = true
+                        break
+                    }
+                }
+                if !found {
+                    updated.append(previousEditedHistory)
                 }
             }
         },
@@ -227,7 +251,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
         },
         customTagsFromAttributes: { attributes in
             var isTags = false
-            
+
             for attribute in attributes {
                 if let attribute = attribute as? PendingReactionsMessageAttribute, attribute.isTags {
                     isTags = true
@@ -237,17 +261,17 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     break
                 }
             }
-            
+
             if !isTags {
                 return []
             }
-            
+
             guard let reactions = mergedMessageReactions(attributes: attributes, isTags: isTags), !reactions.reactions.isEmpty else {
                 return []
             }
-            
+
             var result: [MemoryBuffer] = []
-            
+
             for reaction in reactions.reactions {
                 if reaction.isSelected {
                     let tag = ReactionsMessageAttribute.messageTag(reaction: reaction.value)
@@ -256,11 +280,11 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     }
                 }
             }
-            
+
             if !result.isEmpty {
                 result.sort()
             }
-            
+
             return result
         },
         displaySavedMessagesAsTopicListPreferencesKey: PreferencesKeys.displaySavedChatsAsTopics()

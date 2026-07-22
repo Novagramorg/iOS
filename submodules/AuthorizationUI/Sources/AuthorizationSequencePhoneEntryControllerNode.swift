@@ -320,6 +320,8 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     private let phoneAndCountryNode: PhoneAndCountryNode
     private let contactSyncNode: ContactSyncNode
     private let proceedNode: SolidRoundedButtonNode
+    // Fenixuz: secondary text button under Continue → opens the bot-token login screen.
+    private let botTokenButton: HighlightableButtonNode
 
     // Fenixuz: QR overlay — full-bleed container that covers the form when QR login is active.
     // qrNode lives inside the overlay so it never draws on top of the phone-entry form.
@@ -339,6 +341,9 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     var accountUpdated: ((UnauthorizedAccount) -> Void)?
 
     var retryPasskey: (() -> Void)?
+
+    // Fenixuz: fired when the "Bot token bilan kirish" secondary button is tapped.
+    var botTokenPressed: (() -> Void)?
 
     private let debugAction: () -> Void
 
@@ -442,6 +447,11 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         self.proceedNode.isEnabled = false
         self.proceedNode.accessibilityIdentifier = "Auth.PhoneEntry.ContinueButton"
 
+        self.botTokenButton = HighlightableButtonNode()
+        self.botTokenButton.setTitle("Bot token bilan kirish", with: Font.regular(16.0), with: theme.list.itemAccentColor, for: .normal)
+        self.botTokenButton.accessibilityTraits = [.button]
+        self.botTokenButton.accessibilityLabel = "Bot token bilan kirish"
+
         super.init()
 
         self.setViewBlock({
@@ -457,9 +467,12 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         self.addSubnode(self.phoneAndCountryNode)
         self.addSubnode(self.contactSyncNode)
         self.addSubnode(self.proceedNode)
+        self.addSubnode(self.botTokenButton)
         self.addSubnode(self.animationNode)
         self.addSubnode(self.managedAnimationNode)
         self.contactSyncNode.isHidden = true
+
+        self.botTokenButton.addTarget(self, action: #selector(self.botTokenButtonPressed), forControlEvents: .touchUpInside)
 
         self.noticeNode.highlightAttributeAction = { attributes in
             if let _ = attributes[NSAttributedString.Key(rawValue: "URL")] {
@@ -657,11 +670,13 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         if layout.size.width > 320.0 {
             items.insert(AuthorizationLayoutItem(node: self.animationNode, size: animationSize, spacingBefore: AuthorizationLayoutItemSpacing(weight: 10.0, maxValue: 10.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)), at: 0)
             self.proceedNode.isHidden = false
+            self.botTokenButton.isHidden = true // Fenixuz: bot-token login moved to a nav-bar icon (next to QR); hide the bottom text button.
             self.animationNode.isHidden = false
             self.animationNode.visibility = true
         } else {
             insets.top = navigationBarHeight
             self.proceedNode.isHidden = true
+            self.botTokenButton.isHidden = true
             self.animationNode.isHidden = true
             self.managedAnimationNode.isHidden = true
         }
@@ -683,6 +698,11 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
 
         transition.updateFrame(node: self.proceedNode, frame: buttonFrame)
 
+        // Fenixuz: sit the bot-token text button just above the Continue button.
+        let botTokenSize = self.botTokenButton.measure(CGSize(width: maximumWidth, height: 44.0))
+        let botTokenFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((layout.size.width - botTokenSize.width) / 2.0), y: buttonFrame.minY - 14.0 - botTokenSize.height), size: botTokenSize)
+        transition.updateFrame(node: self.botTokenButton, frame: botTokenFrame)
+
         self.animationNode.updateLayout(size: animationSize)
 
         _ = layoutAuthorizationItems(bounds: CGRect(origin: CGPoint(x: 0.0, y: insets.top), size: CGSize(width: layout.size.width, height: layout.size.height - insets.top - insets.bottom - additionalBottomInset)), items: items, transition: transition, failIfDoesNotFit: false)
@@ -701,6 +721,10 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     func animateError() {
         self.phoneAndCountryNode.phoneInputNode.countryCodeField.layer.addShakeAnimation()
         self.phoneAndCountryNode.phoneInputNode.numberField.layer.addShakeAnimation()
+    }
+
+    @objc private func botTokenButtonPressed() {
+        self.botTokenPressed?()
     }
 
     private var debugTapCounter: (Double, Int) = (0.0, 0)

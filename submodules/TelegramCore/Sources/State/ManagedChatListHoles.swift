@@ -5,7 +5,7 @@ import TelegramApi
 
 private final class ManagedChatListHolesState {
     private var currentHole: (ChatListHolesEntry, Disposable)?
-    
+
     func clearDisposables() -> [Disposable] {
         if let (_, disposable) = self.currentHole {
             self.currentHole = nil
@@ -14,24 +14,24 @@ private final class ManagedChatListHolesState {
             return []
         }
     }
-    
+
     func update(entries: [ChatListHolesEntry]) -> (removed: [Disposable], added: [ChatListHolesEntry: MetaDisposable]) {
         var removed: [Disposable] = []
         var added: [ChatListHolesEntry: MetaDisposable] = [:]
-        
+
         if let (entry, disposable) = self.currentHole {
             if !entries.contains(entry) {
                 removed.append(disposable)
                 self.currentHole = nil
             }
         }
-        
+
         if self.currentHole == nil, let entry = entries.first {
             let disposable = MetaDisposable()
             self.currentHole = (entry, disposable)
             added[entry] = disposable
         }
-        
+
         return (removed, added)
     }
 }
@@ -39,17 +39,17 @@ private final class ManagedChatListHolesState {
 func managedChatListHoles(network: Network, postbox: Postbox, accountPeerId: PeerId) -> Signal<Void, NoError> {
     return Signal { _ in
         let state = Atomic(value: ManagedChatListHolesState())
-        
+
         let topRootHoleKey: PostboxViewKey = .allChatListHoles(.root)
         let topArchiveHoleKey: PostboxViewKey = .allChatListHoles(Namespaces.PeerGroup.archive)
         let filtersKey: PostboxViewKey = .preferences(keys: Set([PreferencesKeys.chatListFilters]))
         let combinedView = postbox.combinedView(keys: [topRootHoleKey, topArchiveHoleKey, filtersKey])
-        
+
         let disposable = combineLatest(postbox.chatListHolesView(), combinedView).start(next: { view, combinedView in
             var entries = Array(view.entries).sorted(by: { lhs, rhs in
                 return lhs.hole.index > rhs.hole.index
             })
-            
+
             if let preferencesView = combinedView.views[filtersKey] as? PreferencesView, let filtersState = preferencesView.values[PreferencesKeys.chatListFilters]?.get(ChatListFiltersState.self), !filtersState.filters.isEmpty {
                 if let topRootHole = combinedView.views[topRootHoleKey] as? AllChatListHolesView, let hole = topRootHole.latestHole {
                     let entry = ChatListHolesEntry(groupId: .root, hole: hole)
@@ -66,20 +66,21 @@ func managedChatListHoles(network: Network, postbox: Postbox, accountPeerId: Pee
                     }
                 }
             }
-            
+
             let (removed, added) = state.with { state in
                 return state.update(entries: entries)
             }
-            
+
             for disposable in removed {
                 disposable.dispose()
             }
-            
+
             for (entry, disposable) in added {
-                disposable.set(fetchChatListHole(postbox: postbox, network: network, accountPeerId: accountPeerId, groupId: entry.groupId, hole: entry.hole).start())
+                // Fenixuz hook: bot sessions remove the hole instead of getDialogs. See FenixuzBotSession.swift
+                disposable.set(fenixuzManagedChatListHole(postbox: postbox, network: network, accountPeerId: accountPeerId, groupId: entry.groupId, hole: entry.hole).start())
             }
         })
-        
+
         return ActionDisposable {
             disposable.dispose()
             for disposable in state.with({ state -> [Disposable] in
@@ -93,17 +94,17 @@ func managedChatListHoles(network: Network, postbox: Postbox, accountPeerId: Pee
 
 private final class ManagedForumTopicListHolesState {
     private var currentHoles: [ForumTopicListHolesEntry: Disposable] = [:]
-    
+
     func clearDisposables() -> [Disposable] {
         let disposables = Array(self.currentHoles.values)
         self.currentHoles.removeAll()
         return disposables
     }
-    
+
     func update(entries: [ForumTopicListHolesEntry]) -> (removed: [Disposable], added: [ForumTopicListHolesEntry: MetaDisposable]) {
         var removed: [Disposable] = []
         var added: [ForumTopicListHolesEntry: MetaDisposable] = [:]
-        
+
         for entry in entries {
             if self.currentHoles[entry] == nil {
                 let disposable = MetaDisposable()
@@ -111,7 +112,7 @@ private final class ManagedForumTopicListHolesState {
                 self.currentHoles[entry] = disposable
             }
         }
-        
+
         var removedKeys: [ForumTopicListHolesEntry] = []
         for (entry, disposable) in self.currentHoles {
             if !entries.contains(entry) {
@@ -122,7 +123,7 @@ private final class ManagedForumTopicListHolesState {
         for key in removedKeys {
             self.currentHoles.removeValue(forKey: key)
         }
-        
+
         return (removed, added)
     }
 }
@@ -130,18 +131,18 @@ private final class ManagedForumTopicListHolesState {
 func managedForumTopicListHoles(network: Network, postbox: Postbox, accountPeerId: PeerId) -> Signal<Void, NoError> {
     return Signal { _ in
         let state = Atomic(value: ManagedForumTopicListHolesState())
-        
+
         let disposable = postbox.forumTopicListHolesView().start(next: { view in
             let entries = Array(view.entries)
-            
+
             let (removed, added) = state.with { state in
                 return state.update(entries: entries)
             }
-            
+
             for disposable in removed {
                 disposable.dispose()
             }
-            
+
             for (entry, disposable) in added {
                 disposable.set((_internal_requestMessageHistoryThreads(accountPeerId: accountPeerId, postbox: postbox, network: network, peerId: entry.peerId, query: nil, offsetIndex: entry.index, limit: 100)
                 |> mapToSignal { result -> Signal<Never, LoadMessageHistoryThreadsError> in
@@ -153,7 +154,7 @@ func managedForumTopicListHoles(network: Network, postbox: Postbox, accountPeerI
                 }).start())
             }
         })
-        
+
         return ActionDisposable {
             disposable.dispose()
             for disposable in state.with({ state -> [Disposable] in

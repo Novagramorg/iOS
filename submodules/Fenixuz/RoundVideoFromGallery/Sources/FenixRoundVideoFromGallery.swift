@@ -32,7 +32,7 @@ public final class FenixRoundVideoFromGallery {
     // Type-erased to NSObject to avoid an @available annotation on a stored property.
     private static var activeDelegate: NSObject?
 
-    public static func present(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, from parentController: ViewController) {
+    public static func present(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, replySubject: EngineMessageReplySubject?, from parentController: ViewController) {
         guard #available(iOS 14.0, *) else {
             return
         }
@@ -42,7 +42,7 @@ public final class FenixRoundVideoFromGallery {
         configuration.selectionLimit = 1
 
         let picker = PHPickerViewController(configuration: configuration)
-        let delegate = PickerDelegate(context: context, peerId: peerId, threadId: threadId)
+        let delegate = PickerDelegate(context: context, peerId: peerId, threadId: threadId, replySubject: replySubject)
         picker.delegate = delegate
         activeDelegate = delegate
 
@@ -61,7 +61,7 @@ public final class FenixRoundVideoFromGallery {
         activeDelegate = nil
     }
 
-    fileprivate static func sendAsRoundVideo(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, videoPath: String) {
+    fileprivate static func sendAsRoundVideo(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, replySubject: EngineMessageReplySubject?, videoPath: String) {
         let asset = AVURLAsset(url: URL(fileURLWithPath: videoPath))
         guard let track = asset.tracks(withMediaType: .video).first else {
             return
@@ -159,7 +159,7 @@ public final class FenixRoundVideoFromGallery {
             inlineStickers: [:],
             mediaReference: .standalone(media: media),
             threadId: threadId,
-            replyToMessageId: nil,
+            replyToMessageId: replySubject,
             replyToStoryId: nil,
             localGroupingKey: nil,
             correlationId: nil,
@@ -175,11 +175,13 @@ private final class PickerDelegate: NSObject, PHPickerViewControllerDelegate {
     private let context: AccountContext
     private let peerId: EnginePeer.Id
     private let threadId: Int64?
+    private let replySubject: EngineMessageReplySubject?
 
-    init(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?) {
+    init(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, replySubject: EngineMessageReplySubject?) {
         self.context = context
         self.peerId = peerId
         self.threadId = threadId
+        self.replySubject = replySubject
     }
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
@@ -192,6 +194,7 @@ private final class PickerDelegate: NSObject, PHPickerViewControllerDelegate {
         let context = self.context
         let peerId = self.peerId
         let threadId = self.threadId
+        let replySubject = self.replySubject
         let typeIdentifier = UTType.movie.identifier
 
         _ = result.itemProvider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, _ in
@@ -213,7 +216,7 @@ private final class PickerDelegate: NSObject, PHPickerViewControllerDelegate {
                 return
             }
             Queue.mainQueue().async {
-                FenixRoundVideoFromGallery.sendAsRoundVideo(context: context, peerId: peerId, threadId: threadId, videoPath: destination)
+                FenixRoundVideoFromGallery.sendAsRoundVideo(context: context, peerId: peerId, threadId: threadId, replySubject: replySubject, videoPath: destination)
                 FenixRoundVideoFromGallery.clearDelegate()
             }
         }

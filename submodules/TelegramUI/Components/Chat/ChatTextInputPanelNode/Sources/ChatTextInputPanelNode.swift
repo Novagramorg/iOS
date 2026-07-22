@@ -725,7 +725,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.sendActionButtons.micButtonTintMaskView.alpha = 0.0
         self.sendActionButtons.expandMediaInputButtonBackgroundView.alpha = 0.0
         self.sendActionButtons.stopButtonIcon.alpha = 0.0
-        
+
         self.mediaActionButtons = ChatTextInputActionButtonsNode(context: context, presentationInterfaceState: presentationInterfaceState, presentationContext: presentationContext, presentController: presentController)
         self.mediaActionButtons.sendContainerNode.alpha = 0.0
 
@@ -947,7 +947,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     fenixCameraItems.append(ActionSheetButtonItem(title: l10n.cameraPicker_gallery, color: .accent, action: { [weak actionSheet, weak strongSelf] in
                         actionSheet?.dismissAnimated()
                         if let strongSelf, let context = strongSelf.context, let presentationInterfaceState = strongSelf.presentationInterfaceState, let peerId = presentationInterfaceState.chatLocation.peerId, let controller = strongSelf.interfaceInteraction?.chatController() {
-                            FenixRoundVideoFromGallery.present(context: context, peerId: peerId, threadId: presentationInterfaceState.chatLocation.threadId, from: controller)
+                            FenixRoundVideoFromGallery.present(context: context, peerId: peerId, threadId: presentationInterfaceState.chatLocation.threadId, replySubject: presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, from: controller)
                         }
                     }))
                 }
@@ -4324,11 +4324,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         guard let itemLayer = maybeItemLayer else {
             return nil
         }
-        
-        let _ = chatPeerId
-        let _ = file
-        let _ = itemLayer
-        
+
+        _ = chatPeerId
+        _ = file
+        _ = itemLayer
+
         var collectionId: EngineItemCollectionId?
         for attribute in file.attributes {
             if case let .CustomEmoji(_, _, _, packReference) = attribute {
@@ -4340,7 +4340,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
         }
-        
+
         var bubbleUpEmojiOrStickersets: [EngineItemCollectionId] = []
         if let collectionId {
             bubbleUpEmojiOrStickersets.append(collectionId)
@@ -4397,7 +4397,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         switch attribute {
                         case let .CustomEmoji(_, _, displayText, stickerPackReference):
                             text = displayText
-                            
+
                             var packId: EngineItemCollectionId?
                             if case let .id(id, _) = stickerPackReference {
                                 packId = EngineItemCollectionId(namespace: Namespaces.ItemCollection.CloudEmojiPacks, id: id)
@@ -4688,7 +4688,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if mediaInputIsActive {
             hideMicButton = true
         }
-        
+
         var displayStop = false
         if let interfaceState = self.presentationInterfaceState {
             displayStop = interfaceState.canStopIncomingStreamingMessage
@@ -4703,14 +4703,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
         }
-        
+
         if displayStop {
             let alphaTransition = ComponentTransition(alphaTransition)
             alphaTransition.setAlpha(view: self.mediaActionButtons.micButton, alpha: 0.0)
             alphaTransition.setAlpha(view: self.mediaActionButtons.micButtonBackgroundView, alpha: 1.0)
             alphaTransition.setAlpha(view: self.mediaActionButtons.micButtonTintMaskView, alpha: 0.0)
             alphaTransition.setAlpha(view: self.mediaActionButtons.stopButtonIcon, alpha: 1.0)
-            
+
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.stopButtonIcon, scale: 1.0)
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.micButton, scale: 0.001)
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.micButtonTintMaskView, scale: 0.001)
@@ -4719,7 +4719,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.stopButtonIcon, scale: 0.001)
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.micButton, scale: 1.0)
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.micButtonTintMaskView, scale: 1.0)
-            
+
             if !self.mediaActionButtons.micButton.alpha.isZero {
                 alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButton.layer, alpha: 0.0)
                 alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButtonBackgroundView.layer, alpha: 0.0)
@@ -4730,7 +4730,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.stopButtonIcon, scale: 0.001)
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.micButton, scale: 1.0)
             ComponentTransition(transition).setScale(view: self.mediaActionButtons.micButtonTintMaskView, scale: 1.0)
-            
+
             let micAlpha: CGFloat = self.mediaActionButtons.micButton.fadeDisabled ? 0.5 : 1.0
             if !self.mediaActionButtons.micButton.alpha.isEqual(to: micAlpha) {
                 alphaTransition.updateAlpha(layer: self.mediaActionButtons.micButton.layer, alpha: micAlpha)

@@ -147,6 +147,26 @@ private enum FenixBotsEntry: ItemListNodeEntry {
 
 // MARK: - Entry builder
 
+// Pin the top social-media bots to the front of their category in a fixed order —
+// YouTube, Instagram, TikTok, Facebook — matched case-insensitively as a substring of
+// each bot's @username or display name. Every other bot keeps its original relative order.
+private let fenixBotPriorityKeywords = ["youtube", "instagram", "tiktok", "facebook"]
+
+private func fenixBotsPrioritized(_ bots: [NovagramBot]) -> [NovagramBot] {
+    func priority(_ bot: NovagramBot) -> Int {
+        let haystack = (bot.username + " " + bot.name).lowercased()
+        for (index, keyword) in fenixBotPriorityKeywords.enumerated() where haystack.contains(keyword) {
+            return index
+        }
+        return fenixBotPriorityKeywords.count
+    }
+    // Stable sort: priority-matched bots first (in keyword order), everything else keeps its order.
+    return bots.enumerated().sorted { lhs, rhs in
+        let lp = priority(lhs.element), rp = priority(rhs.element)
+        return lp != rp ? lp < rp : lhs.offset < rhs.offset
+    }.map { $0.element }
+}
+
 private func fenixBotsEntries(
     presentationData: PresentationData,
     categories: [NovagramBotCategory],
@@ -156,7 +176,7 @@ private func fenixBotsEntries(
     var entries: [FenixBotsEntry] = []
     for (catIndex, category) in categories.enumerated() {
         entries.append(.categoryHeader(catIndex, category.title.localized(langCode: langCode)))
-        for (botIndex, bot) in category.bots.enumerated() {
+        for (botIndex, bot) in fenixBotsPrioritized(category.bots).enumerated() {
             entries.append(.botRow(catIndex, botIndex, bot, presentationData.theme, avatarPeers[bot.username]))
         }
     }
@@ -186,7 +206,7 @@ private func resolveBotAvatarPeers(
     }
 
     let perBotSignals: [Signal<(String, EnginePeer?), NoError>] = usernames.map { username in
-        context.engine.peers.resolvePeerByName(name: username, referrer: nil)
+        let resolve = context.engine.peers.resolvePeerByName(name: username, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
             switch result {
             case let .result(peer): return .single(peer)
@@ -194,6 +214,10 @@ private func resolveBotAvatarPeers(
             }
         }
         |> map { (username, $0) }
+        // Emit (username, nil) immediately so combineLatest produces a first result at once — every bot
+        // shows its brand-icon fallback right away, and each real avatar swaps in the moment it resolves,
+        // instead of ALL avatars waiting for the single slowest resolvePeerByName to finish.
+        return .single((username, EnginePeer?.none)) |> then(resolve)
     }
 
     return combineLatest(perBotSignals)

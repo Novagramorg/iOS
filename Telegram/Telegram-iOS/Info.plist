@@ -30,32 +30,72 @@
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>FenixYellowIcon</key>
+			<key>NovaBlueIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>FenixYellowIcon</string>
-					<string>FenixYellowIconNotificationIcon</string>
+					<string>NovaBlueIcon</string>
+					<string>NovaBlueIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>FenixGreenIcon</key>
+			<key>NovaTealIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>FenixGreenIcon</string>
-					<string>FenixGreenIconNotificationIcon</string>
+					<string>NovaTealIcon</string>
+					<string>NovaTealIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>FenixGradientIcon</key>
+			<key>NovaPurpleIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>FenixGradientIcon</string>
-					<string>FenixGradientIconNotificationIcon</string>
+					<string>NovaPurpleIcon</string>
+					<string>NovaPurpleIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaPinkIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaPinkIcon</string>
+					<string>NovaPinkIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaOrangeIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaOrangeIcon</string>
+					<string>NovaOrangeIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaBlackIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaBlackIcon</string>
+					<string>NovaBlackIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaRedIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaRedIcon</string>
+					<string>NovaRedIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -84,35 +124,79 @@
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>FenixYellowIcon</key>
+			<key>NovaBlueIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>FenixYellowIconIpad</string>
-					<string>FenixYellowIconLargeIpad</string>
-					<string>FenixYellowIconNotificationIcon</string>
+					<string>NovaBlueIconIpad</string>
+					<string>NovaBlueIconLargeIpad</string>
+					<string>NovaBlueIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>FenixGreenIcon</key>
+			<key>NovaTealIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>FenixGreenIconIpad</string>
-					<string>FenixGreenIconLargeIpad</string>
-					<string>FenixGreenIconNotificationIcon</string>
+					<string>NovaTealIconIpad</string>
+					<string>NovaTealIconLargeIpad</string>
+					<string>NovaTealIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>FenixGradientIcon</key>
+			<key>NovaPurpleIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>FenixGradientIconIpad</string>
-					<string>FenixGradientIconLargeIpad</string>
-					<string>FenixGradientIconNotificationIcon</string>
+					<string>NovaPurpleIconIpad</string>
+					<string>NovaPurpleIconLargeIpad</string>
+					<string>NovaPurpleIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaPinkIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaPinkIconIpad</string>
+					<string>NovaPinkIconLargeIpad</string>
+					<string>NovaPinkIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaOrangeIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaOrangeIconIpad</string>
+					<string>NovaOrangeIconLargeIpad</string>
+					<string>NovaOrangeIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaBlackIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaBlackIconIpad</string>
+					<string>NovaBlackIconLargeIpad</string>
+					<string>NovaBlackIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaRedIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaRedIconIpad</string>
+					<string>NovaRedIconLargeIpad</string>
+					<string>NovaRedIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>

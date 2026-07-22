@@ -76,7 +76,11 @@ final class FenixuzAnalyticsController: ViewController {
         super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
 
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        self.title = "Analytics"
+        switch self.presentationData.strings.baseLanguageCode {
+        case "uz": self.title = "Analitika"
+        case "ru": self.title = "Аналитика"
+        default: self.title = "Analytics"
+        }
 
         // Icon-only back button: an iOS 26 "glass" chevron-in-a-circle (no "Back" text),
         // matching the native PeerInfo back button. A standard image bar button (not the

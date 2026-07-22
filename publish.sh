@@ -34,6 +34,29 @@ PROV_DIR="$SCRIPT_DIR/build-input/configuration-repository/provisioning"
 OUTPUT_DIR="${OUTPUT_DIR:-$HOME/Desktop}"
 VIPADS_TEAM_ID="ZDBP5RSRZF"
 
+# ─── Step 0: Version param (optional) ───────────────────────────────────────
+# Usage: ./publish.sh [version]     e.g.  ./publish.sh 12.8.5
+# Agar versiya berilsa, appstore-configuration.json (app_version) va versions.json
+# (app) ni avtomatik yangilaydi — qo'lda edit qilish shart emas. Berilmasa, hozirgi
+# app_version ishlatiladi (eski xatti-harakat).
+VERSION_ARG="${1:-}"
+if [ -n "$VERSION_ARG" ]; then
+    if ! echo "$VERSION_ARG" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+        err "Noto'g'ri versiya formati: '$VERSION_ARG'. Namuna: 12.8.5"
+    fi
+    python3 - "$VERSION_ARG" <<'PYEOF'
+import sys, re
+version = sys.argv[1]
+for path, key in [("build-system/appstore-configuration.json", "app_version"), ("versions.json", "app")]:
+    s = open(path).read()
+    new, n = re.subn(r'("%s"\s*:\s*")[^"]*(")' % key, r'\g<1>' + version + r'\g<2>', s, count=1)
+    if n == 0:
+        sys.exit('"%s" kaliti %s ichida topilmadi' % (key, path))
+    open(path, "w").write(new)
+PYEOF
+    ok "Versiya yangilandi: $VERSION_ARG (appstore-configuration.json + versions.json)"
+fi
+
 # ─── Step 1: API credentials ────────────────────────────────────────────────
 if [ -f "build-system/local-secrets.sh" ]; then
     source build-system/local-secrets.sh
@@ -131,16 +154,15 @@ if not os.path.exists(prov_build):
     open(prov_build, 'w').write('exports_files([])\n')
 
 tmp_path = repo + '/variables.bzl.tmp'
-# aps_environment="" — push notifications entitlement qo'shilmaydi.
-# Apple Developer Portal'da uz.fenixuz.app uchun Push Notifications capability
-# yoqilmagan. Push kerak bo'lganda: developer.apple.com → Identifiers →
-# uz.fenixuz.app → Capabilities → Push Notifications ✅ → keyin Distribution
-# profilni regenerate qilib '/Users/.../Documents/Apple/Distribution/'ga
-# nusxa olib, bu yerda aps_environment='production' qilib qo'ying.
+# aps_environment='production' — Push Notifications uz.fenixuz.app App ID'da
+# yoqilgan (Apple Push Services cert 2026-07-07) va Fenixuz_AppStore.mobileprovision
+# 2026-07-15 da aps-environment:production bilan qayta generatsiya qilingan.
+# Bo'sh ('') qilsak push entitlement IPA'dan tushib qoladi va App Store'da push
+# umuman kelmaydi. O'zgartirmang.
 config.write_to_variables_file(
     bazel_path=bazel,
     use_xcode_managed_codesigning=False,
-    aps_environment='',
+    aps_environment='production',
     path=tmp_path
 )
 new_content = open(tmp_path).read()
@@ -201,6 +223,8 @@ warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi).
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c opt \
+    --apple_generate_dsym \
+    --output_groups=+dsyms \
     --ios_multi_cpus=arm64 \
     --watchos_cpus=arm64_32 \
     --//Telegram:embedWatchApp \
@@ -221,10 +245,13 @@ cp -f "$TELEGRAM_IPA" "$OUT_IPA"
 
 ok "IPA: $OUT_IPA  ($(du -h "$OUT_IPA" | awk '{print $1}'))"
 
-# Verify embedded profile inside IPA
+# Verify embedded profile + entitlements inside IPA.
+# App bundle nomi Novagram.app (bundle_name) — oldin bu yerda Telegram.app deb qat'iy
+# yozilgani uchun tekshiruv jim o'tkazib yuborilardi; endi .app avtomatik topiladi.
 TMP_VERIFY="$(mktemp -d)"
 unzip -q "$OUT_IPA" -d "$TMP_VERIFY"
-EMBEDDED_PROV="$TMP_VERIFY/Payload/Telegram.app/embedded.mobileprovision"
+EMBEDDED_APP="$(find "$TMP_VERIFY/Payload" -maxdepth 1 -name "*.app" | head -1)"
+EMBEDDED_PROV="$EMBEDDED_APP/embedded.mobileprovision"
 if [ -f "$EMBEDDED_PROV" ]; then
     GTA=$(security cms -D -i "$EMBEDDED_PROV" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /dev/stdin 2>/dev/null)
     if [ "$GTA" = "true" ]; then
@@ -233,6 +260,14 @@ if [ -f "$EMBEDDED_PROV" ]; then
     fi
     PROV_NAME=$(security cms -D -i "$EMBEDDED_PROV" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin 2>/dev/null)
     ok "Embedded profil: $PROV_NAME (Distribution)"
+    # Communication Notifications entitlement (lock-screen sender avatar) imzolanganini tekshirish
+    if codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "usernotifications.communication"; then
+        ok "Communication Notifications entitlement: signed ✓ (lock-screen avatar)"
+    else
+        warn "Communication Notifications entitlement YO'Q — lock-screen avatar ishlamaydi (BUILD:560 + App ID capability tekshiring)"
+    fi
+else
+    warn "Embedded .app topilmadi — profil verify o'tkazib yuborildi"
 fi
 rm -rf "$TMP_VERIFY"
 

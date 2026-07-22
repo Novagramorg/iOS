@@ -239,13 +239,14 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
 
     // Fenixuz Settings Item — gold title + gold flame icon so the brand row stands out in Settings.
     let fenixuzGold: UIColor = presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0xFFCC33) : UIColor(rgb: 0xC8951A)
-    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Novagram Settings", titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
+    let fenixLangCode = presentationData.strings.baseLanguageCode
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: FenixSettingsSectionStrings.settingsRowTitle(langCode: fenixLangCode), titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.proMessager)
     }))
-    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Novagram Bots", icon: fenixuzSettingsIcon(systemName: "bolt.circle.fill", color: .teal), action: {
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 2, text: FenixSettingsSectionStrings.botsRowTitle(langCode: fenixLangCode), icon: fenixuzSettingsIcon(systemName: "bolt.circle.fill", color: .teal), action: {
         interaction.openSettings(.novagramBots)
     }))
-    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Analytics", icon: fenixuzSettingsIcon(systemName: "chart.bar.fill", color: .lightBlue), action: {
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 1, text: FenixSettingsSectionStrings.analyticsRowTitle(langCode: fenixLangCode), icon: fenixuzSettingsIcon(systemName: "chart.bar.fill", color: .lightBlue), action: {
         interaction.openSettings(.analytics)
     }))
 
@@ -277,10 +278,10 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         interaction.openSettings(.language)
     }))
 
-    // Fenixuz: Apple 3.1.1 — entire payment section (Premium / Stars / TON / Business / Send Gift) is
-    // hidden. We do not sell digital goods in this fork; users buy Premium inside the official Telegram
-    // app on the App Store. Re-apply this exclusion after every upstream merge (see submodules/Fenixuz/HOOKS.md).
-    /*
+    // Fenixuz: Apple 3.1.1 — the payment section (Premium / Stars / TON / Business / Send Gift) is shown
+    // view-only. We do not sell digital goods in this fork; the Subscribe/Buy/Send buttons on these screens
+    // are blocked by FenixuzAppStoreIAP and redirect the user to Telegram Premium in the official Telegram
+    // app (see submodules/Fenixuz/AppStoreIAP). Re-apply after every upstream merge (see submodules/Fenixuz/HOOKS.md).
     let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
     let isPremiumDisabled = premiumConfiguration.isPremiumDisabled
     if !isPremiumDisabled || context.isPremium {
@@ -334,7 +335,6 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             }))
         }
     }
-    */
 
     if let settings = data.globalSettings {
         if settings.hasPassport {

@@ -276,7 +276,7 @@ public final class TodoDatabase {
         let completedAt: Int32? = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? nil : sqlite3_column_int(stmt, 7)
         return TodoTask(
             id: String(cString: sqlite3_column_text(stmt, 0)),
-            folderId: String(cString: sqlite3_column_text(stmt, 1)),
+            folderId: sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? "",
             title: String(cString: sqlite3_column_text(stmt, 2)),
             description: description,
             dueAt: dueAt,

@@ -52,6 +52,7 @@ swift_library(
         "//submodules/Fenixuz/Brand:FenixuzBrand",
         "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/Fenixuz/AutoProxy:FenixuzAutoProxy",
+        "//submodules/Fenixuz/BotTokenLogin:FenixuzBotTokenLogin",
     ],
     visibility = [
         "//visibility:public",

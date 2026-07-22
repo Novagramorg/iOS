@@ -269,9 +269,10 @@ extension PeerInfoScreenNode {
                 }
             })
         case .logout:
-            if case let .user(user) = self.data?.peer, let phoneNumber = user.phone {
+            // Fenixuz: a bot account has no phone number; don't gate logout on user.phone (else "Log Out" is a no-op for a bot session).
+            if case let .user(user) = self.data?.peer {
                 if let controller = self.controller, let navigationController = controller.navigationController as? NavigationController {
-                    self.controller?.push(logoutOptionsController(context: self.context, navigationController: navigationController, canAddAccounts: true, phoneNumber: phoneNumber))
+                    self.controller?.push(logoutOptionsController(context: self.context, navigationController: navigationController, canAddAccounts: true, phoneNumber: user.phone ?? ""))
                 }
             }
         case .rememberPassword:

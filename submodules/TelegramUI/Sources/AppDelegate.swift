@@ -959,9 +959,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             if #available(iOS 10.3, *) {
                 let icons = [
                     PresentationAppIcon(name: "AppIconLLCIcon", imageName: "AppIconLLCIcon", isDefault: true),
-                    PresentationAppIcon(name: "FenixYellowIcon", imageName: "FenixYellowIcon"),
-                    PresentationAppIcon(name: "FenixGreenIcon", imageName: "FenixGreenIcon"),
-                    PresentationAppIcon(name: "FenixGradientIcon", imageName: "FenixGradientIcon")
+                    PresentationAppIcon(name: "NovaBlueIcon", imageName: "NovaBlueIcon"),
+                    PresentationAppIcon(name: "NovaTealIcon", imageName: "NovaTealIcon"),
+                    PresentationAppIcon(name: "NovaPurpleIcon", imageName: "NovaPurpleIcon"),
+                    PresentationAppIcon(name: "NovaPinkIcon", imageName: "NovaPinkIcon"),
+                    PresentationAppIcon(name: "NovaOrangeIcon", imageName: "NovaOrangeIcon"),
+                    PresentationAppIcon(name: "NovaBlackIcon", imageName: "NovaBlackIcon"),
+                    PresentationAppIcon(name: "NovaRedIcon", imageName: "NovaRedIcon")
                 ]
 
                 return icons
@@ -1309,8 +1313,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     let phoneNumbers = combineLatest(accounts.map { context -> Signal<(AccountRecordId, String, Bool)?, NoError> in
                         return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
                         |> map { peer -> (AccountRecordId, String, Bool)? in
-                            if case let .user(user) = peer, let phone = user.phone {
-                                return (context.account.id, phone, context.account.testingEnvironment)
+                            if case let .user(user) = peer {
+                                // Fenixuz: a bot account has no phone number; fall back to @username/name so it still
+                                // counts in the account list — else the "Cancel"/back button never appears when adding
+                                // an account and the user gets trapped on the login screen with no way back.
+                                let label = user.phone ?? user.addressName.flatMap({ "@\($0)" }) ?? (user.firstName ?? "Bot")
+                                return (context.account.id, label, context.account.testingEnvironment)
                             } else {
                                 return nil
                             }

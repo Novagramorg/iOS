@@ -23,6 +23,7 @@ import AlertUI
 import InAppPurchaseManager
 import ObjectiveC
 import AVFoundation
+import FenixuzBotTokenLogin
 
 private var ObjCKey_Delegate: Int?
 
@@ -357,9 +358,57 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     }
                 }))
             }
+            // Fenixuz: secondary entry point — push the bot-token login screen.
+            controller.loginWithBotToken = { [weak self] in
+                self?.presentBotTokenEntry()
+            }
         }
         controller.updateData(countryCode: countryCode, countryName: nil, number: number)
         return controller
+    }
+
+    // Fenixuz: builds the bot-token login screen, mirroring passwordEntryController(...). auth.importBotAuthorization
+    // is atomic, so this is pushed locally (like passkey) instead of routing through UnauthorizedAccountStateContents.
+    private func botTokenEntryController() -> AuthorizationSequenceBotTokenEntryController {
+        for c in self.viewControllers {
+            if let c = c as? AuthorizationSequenceBotTokenEntryController {
+                return c
+            }
+        }
+        let controller = AuthorizationSequenceBotTokenEntryController(sharedContext: self.sharedContext, presentationData: self.presentationData, back: { [weak self] in
+            guard let strongSelf = self else {
+                return
+            }
+            let _ = strongSelf.popViewController(animated: true)
+        })
+        controller.loginWithToken = { [weak self, weak controller] token in
+            guard let strongSelf = self else {
+                return
+            }
+            controller?.inProgress = true
+            strongSelf.actionDisposable.set((importBotAuthorization(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, botToken: token)
+            |> deliverOnMainQueue).startStrict(error: { [weak self, weak controller] error in
+                guard let strongSelf = self, let controller = controller else {
+                    return
+                }
+                controller.inProgress = false
+                let text: String
+                switch error {
+                case .invalidToken:
+                    text = "Bot token noto'g'ri yoki eskirgan."
+                case .limitExceeded:
+                    text = strongSelf.presentationData.strings.Login_CodeFloodError
+                case .generic:
+                    text = strongSelf.presentationData.strings.Login_UnknownError
+                }
+                controller.present(textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            }))
+        }
+        return controller
+    }
+
+    private func presentBotTokenEntry() {
+        self.pushViewController(self.botTokenEntryController())
     }
     
     private func codeEntryController(number: String, phoneCodeHash: String, email: String?, type: SentAuthorizationCodeType, nextType: AuthorizationCodeNextType?, timeout: Int32?, previousCodeType: SentAuthorizationCodeType?, isPrevious: Bool, termsOfService: (UnauthorizedAccountTermsOfService, Bool)?) -> AuthorizationSequenceCodeEntryController {

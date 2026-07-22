@@ -167,7 +167,10 @@ public final class SpeechToTextManager {
             }
 
             inputNode.removeTap(onBus: 0)
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
+            // nil = use the input node's live format. Passing an explicit format that no longer
+            // matches the hardware (route change / Bluetooth / stale sample rate) makes installTap
+            // throw an uncatchable Obj-C NSException — the AVFAudio InstallTapOnNode crash. nil avoids it.
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { (buffer, _) in
                 self.recognitionRequest?.append(buffer)
             }
 
@@ -182,37 +185,43 @@ public final class SpeechToTextManager {
             }
 
             self.recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest, resultHandler: { [weak self] (result, error) in
-                guard let self = self else { return }
+                // SFSpeechRecognitionTask's server-based resultHandler is delivered on an
+                // unspecified background queue. Hop to main before touching onTextUpdate/onError/
+                // onStop — they mutate the chat text input and run UIKit layout. Mirrors every
+                // other async callback in this file (auth, audio-session, Vosk).
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
 
-                if self.isStopping {
-                    return
-                }
-
-                if let result = result {
-                    let transcribed = result.bestTranscription.formattedString
-
-                    if result.isFinal {
-                        // Final result: optionally translate before emitting, then clean up.
-                        self.emitFinalText(transcribed)
-                    } else {
-                        // Partial result: emit raw text immediately for live preview.
-                        self.onTextUpdate?(transcribed)
+                    if self.isStopping {
+                        return
                     }
-                }
 
-                if let error = error {
-                    let nsError = error as NSError
-                    // Ignore errors caused by intentional stop/cancel or unavailable service
-                    // 7 = Speech recognition not available for this locale
-                    // 1110 = No speech detected (normal when stopping)
-                    // 216 = Operation cancelled
-                    // 209 = Recognition cancelled
-                    // 301 = Request was cancelled
-                    let ignoredCodes: Set<Int> = [7, 1110, 216, 209, 301]
-                    if !ignoredCodes.contains(nsError.code) {
-                        self.onError?(SpeechToTextStrings.recognitionError(code: nsError.code, description: error.localizedDescription))
+                    if let result = result {
+                        let transcribed = result.bestTranscription.formattedString
+
+                        if result.isFinal {
+                            // Final result: optionally translate before emitting, then clean up.
+                            self.emitFinalText(transcribed)
+                        } else {
+                            // Partial result: emit raw text immediately for live preview.
+                            self.onTextUpdate?(transcribed)
+                        }
                     }
-                    self.cleanupRecording()
+
+                    if let error = error {
+                        let nsError = error as NSError
+                        // Ignore errors caused by intentional stop/cancel or unavailable service
+                        // 7 = Speech recognition not available for this locale
+                        // 1110 = No speech detected (normal when stopping)
+                        // 216 = Operation cancelled
+                        // 209 = Recognition cancelled
+                        // 301 = Request was cancelled
+                        let ignoredCodes: Set<Int> = [7, 1110, 216, 209, 301]
+                        if !ignoredCodes.contains(nsError.code) {
+                            self.onError?(SpeechToTextStrings.recognitionError(code: nsError.code, description: error.localizedDescription))
+                        }
+                        self.cleanupRecording()
+                    }
                 }
             })
         }
@@ -400,7 +409,9 @@ public final class SpeechToTextManager {
             self.voskConverter = converter
 
             inputNode.removeTap(onBus: 0)
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            // nil format (see the Apple path above) — avoids the installTap NSException crash;
+            // feedVosk rebuilds its converter if the live input format changes mid-recording.
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
                 self?.feedVosk(inputBuffer: buffer)
             }
 
@@ -442,7 +453,17 @@ public final class SpeechToTextManager {
     /// Convert one mic buffer to 16 kHz mono Int16 (cheap, on the audio thread), then feed the
     /// copied samples to Vosk on the serial queue (the heavy decode stays off the audio thread).
     private func feedVosk(inputBuffer buffer: AVAudioPCMBuffer) {
-        guard let converter = self.voskConverter, let outFormat = self.voskOutputFormat else {
+        guard let outFormat = self.voskOutputFormat else {
+            return
+        }
+        // The tap delivers the input node's live format (installed with format: nil). A mid-
+        // recording route change (Bluetooth, etc.) changes that format, and AVAudioConverter.convert
+        // throws an uncatchable Obj-C NSException when the incoming buffer format differs from the
+        // converter's input format — so rebuild the converter whenever it no longer matches.
+        if self.voskConverter?.inputFormat.isEqual(buffer.format) != true {
+            self.voskConverter = AVAudioConverter(from: buffer.format, to: outFormat)
+        }
+        guard let converter = self.voskConverter else {
             return
         }
         let ratio = outFormat.sampleRate / buffer.format.sampleRate

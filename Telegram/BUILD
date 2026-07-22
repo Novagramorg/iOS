@@ -318,9 +318,13 @@ filegroup(
 
 alternate_icon_folders = [
     "AppIconLLCIcon",
-    "FenixYellowIcon",
-    "FenixGreenIcon",
-    "FenixGradientIcon",
+    "NovaBlueIcon",
+    "NovaTealIcon",
+    "NovaPurpleIcon",
+    "NovaPinkIcon",
+    "NovaOrangeIcon",
+    "NovaBlackIcon",
+    "NovaRedIcon",
 ]
 
 composer_icon_folders = []
@@ -553,7 +557,7 @@ official_communication_notifications_fragment = """
 <key>com.apple.developer.usernotifications.communication</key>
 <true/>
 """
-communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids else ""
+communication_notifications_fragment = official_communication_notifications_fragment if (telegram_bundle_id in official_bundle_ids or telegram_bundle_id == "uz.fenixuz.app") else ""
 
 official_notification_filtering_fragment = """
 <key>com.apple.developer.usernotifications.filtering</key>

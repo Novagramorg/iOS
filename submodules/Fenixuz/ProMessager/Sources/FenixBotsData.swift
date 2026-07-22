@@ -52,6 +52,32 @@ enum FenixBotsStrings {
     }
 }
 
+// MARK: - Localized Settings-section row titles
+// Titles for the three Fenixuz rows at the top of the main Settings screen.
+// Takes the app language (presentationData.strings.baseLanguageCode) as langCode — never Locale.current.
+
+public enum FenixSettingsSectionStrings {
+    public static func settingsRowTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Novagram sozlamalari"
+        case "ru": return "Настройки Novagram"
+        default:   return "Novagram Settings"
+        }
+    }
+
+    public static func botsRowTitle(langCode: String) -> String {
+        return FenixBotsStrings.rowTitle(langCode: langCode)
+    }
+
+    public static func analyticsRowTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Analitika"
+        case "ru": return "Аналитика"
+        default:   return "Analytics"
+        }
+    }
+}
+
 // MARK: - Embedded JSON
 // Verbatim copy of /Users/codingtech/Documents/Telegram/novagram_bots.json.
 // The canonical source of truth is that file; this copy is bundled for runtime decoding.

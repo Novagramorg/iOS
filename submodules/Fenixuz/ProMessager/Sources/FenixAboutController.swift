@@ -207,21 +207,21 @@ private func allFeatureSpecs() -> [FeatureSpec] {
         // 7. Secret Vault
         FeatureSpec(
             symbol: "eye.slash.fill", color: .purple,
-            title: L3(en: "Secret Vault", uz: "Maxfiy seyf", ru: "Секретное хранилище"),
+            title: L3(en: "Hidden Chats", uz: "Yashirin chatlar", ru: "Скрытые чаты"),
             enable: L3(
-                en: "Long-press any chat and choose “Hide” — the first time, you'll be asked to set a separate vault PIN. Or turn the toggle on directly in Settings → Novagram → Protection → “Secret Vault”.",
-                uz: "Istalgan chatni uzoq bosib \"Berkitish\"ni tanlang — birinchi marta alohida seyf PIN o'rnatishingiz so'raladi. Yoki to'g'ridan-to'g'ri Sozlamalar → Novagram → Himoya → \"Maxfiy seyf\" switchini yoqing.",
-                ru: "Зажмите любой чат и выберите «Скрыть» — в первый раз попросят задать отдельный PIN хранилища. Либо включите переключатель напрямую в Настройки → Novagram → Защита → «Секретное хранилище»."
+                en: "Long-press any chat and choose “Hide” — the first time, you'll be asked to set a separate passcode. Or turn the toggle on directly in Settings → Novagram → Protection → “Hidden Chats”.",
+                uz: "Istalgan chatni uzoq bosib \"Berkitish\"ni tanlang — birinchi marta alohida kod-parol o'rnatishingiz so'raladi. Yoki to'g'ridan-to'g'ri Sozlamalar → Novagram → Himoya → \"Yashirin chatlar\" switchini yoqing.",
+                ru: "Зажмите любой чат и выберите «Скрыть» — в первый раз попросят задать отдельный код-пароль. Либо включите переключатель напрямую в Настройки → Novagram → Защита → «Скрытые чаты»."
             ),
             works: L3(
-                en: "Hidden chats vanish from your main chat list and are muted automatically. To open the vault, long-press the “Chats” title (or tap it 10 times quickly) and enter your vault PIN — a separate PIN from Chat Lock.",
-                uz: "Berkitilgan chatlar asosiy chat ro'yxatidan yo'qoladi va avtomatik ovozsiz qilinadi. Seyfni ochish uchun \"Chats\" sarlavhasini uzoq bosing (yoki tez 10 marta bosing) va seyf PIN'ini kiriting — bu Chat qulfidan alohida PIN.",
-                ru: "Скрытые чаты исчезают из основного списка и автоматически отключаются от звука. Чтобы открыть хранилище, зажмите заголовок «Chats» (или быстро нажмите 10 раз) и введите PIN хранилища — он отдельный от блокировки чата."
+                en: "Hidden chats vanish from your main chat list and are muted automatically. To open them, long-press the “Chats” title and enter your passcode — a separate passcode from Chat Lock.",
+                uz: "Berkitilgan chatlar asosiy chat ro'yxatidan yo'qoladi va avtomatik ovozsiz qilinadi. Ularni ochish uchun \"Chats\" sarlavhasini uzoq bosing va kod-parolni kiriting — bu Chat qulfidan alohida kod-parol.",
+                ru: "Скрытые чаты исчезают из основного списка и автоматически отключаются от звука. Чтобы открыть их, зажмите заголовок «Chats» и введите код-пароль — он отдельный от блокировки чата."
             ),
             disable: L3(
-                en: "Turn the “Secret Vault” switch off in Settings → Novagram → Protection. This requires your Chat Lock master PIN and shows a confirmation — turning it off returns every hidden chat to the main list, unmutes them, and deletes the vault PIN.",
-                uz: "Sozlamalar → Novagram → Himoya bo'limida \"Maxfiy seyf\" switchini o'chiring. Buning uchun Chat qulfi asosiy PIN'i kerak va tasdiqlash so'raladi — o'chirilganda barcha berkitilgan chatlar asosiy ro'yxatga qaytadi, ovozi yoqiladi va seyf PIN'i o'chadi.",
-                ru: "Выключите переключатель «Секретное хранилище» в Настройки → Novagram → Защита. Потребуется главный PIN блокировки чата и подтверждение — после отключения все скрытые чаты вернутся в основной список, звук включится, а PIN хранилища удалится."
+                en: "Turn the “Hidden Chats” switch off in Settings → Novagram → Protection. This requires your Chat Lock master PIN and shows a confirmation — turning it off returns every hidden chat to the main list, unmutes them, and deletes the passcode.",
+                uz: "Sozlamalar → Novagram → Himoya bo'limida \"Yashirin chatlar\" switchini o'chiring. Buning uchun Chat qulfi asosiy PIN'i kerak va tasdiqlash so'raladi — o'chirilganda barcha berkitilgan chatlar asosiy ro'yxatga qaytadi, ovozi yoqiladi va kod-parol o'chadi.",
+                ru: "Выключите переключатель «Скрытые чаты» в Настройки → Novagram → Защита. Потребуется главный PIN блокировки чата и подтверждение — после отключения все скрытые чаты вернутся в основной список, звук включится, а код-пароль удалится."
             )
         ),
         // 8. Auto-Text Suffix

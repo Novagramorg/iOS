@@ -1,14 +1,14 @@
 import Foundation
 
-/// Localized strings for the Secret Vault feature (settings entry, chat-list bulk
-/// action, undo toast and the vault screen). Self-contained en/uz/ru so the module
-/// never has to touch the central FenixuzL10n.
+/// Localized strings for the Hidden Chats feature (SecretVault module — settings
+/// entry, chat-list bulk action, undo toast and the vault screen). Self-contained
+/// en/uz/ru so the module never has to touch the central FenixuzL10n.
 public enum SecretVaultStrings {
 
     // MARK: - Vault screen
 
     public static var screenTitle: String {
-        localized(en: "Secret Vault", uz: "Maxfiy seyf", ru: "Секретное хранилище")
+        localized(en: "Hidden Chats", uz: "Yashirin chatlar", ru: "Скрытые чаты")
     }
 
     public static var emptyTitle: String {
@@ -64,28 +64,29 @@ public enum SecretVaultStrings {
 
     // MARK: - Settings entry
 
-    public static var settingsTitle: String {
-        localized(en: "Secret Vault", uz: "Maxfiy seyf", ru: "Секретное хранилище")
+    public static func settingsTitle(langCode: String) -> String {
+        localized(lang: langCode, en: "Hidden Chats", uz: "Yashirin chatlar", ru: "Скрытые чаты")
     }
 
-    public static var settingsSubtitle: String {
-        localized(en: "Hide chats behind a PIN", uz: "Chatlarni PIN ostida yashirish", ru: "Скрыть чаты за PIN-кодом")
+    public static func settingsSubtitle(langCode: String) -> String {
+        localized(lang: langCode, en: "Hide chats behind a passcode", uz: "Chatlarni kod-parol ostida yashirish", ru: "Скрыть чаты за код-паролем")
     }
 
     public static var settingsHeader: String {
-        localized(en: "SECRET VAULT", uz: "MAXFIY SEYF", ru: "СЕКРЕТНОЕ ХРАНИЛИЩЕ")
+        localized(en: "HIDDEN CHATS", uz: "YASHIRIN CHATLAR", ru: "СКРЫТЫЕ ЧАТЫ")
     }
 
-    public static var settingsFooter: String {
+    public static func settingsFooter(langCode: String) -> String {
         localized(
-            en: "Hidden chats disappear from the main list and are muted. To open the vault, long-press the “Chats” title or tap it 10 times, then enter your vault PIN.",
-            uz: "Berkitilgan chatlar asosiy ro'yxatdan yo'qoladi va ovozsiz qilinadi. Seyfni ochish uchun “Chats” sarlavhasini bosib turing yoki 10 marta bosing, so'ng seyf PIN'ini kiriting.",
-            ru: "Скрытые чаты исчезают из основного списка и отключают уведомления. Чтобы открыть хранилище, зажмите заголовок «Chats» или нажмите на него 10 раз, затем введите PIN хранилища."
+            lang: langCode,
+            en: "Hidden chats disappear from your main list and are muted. To open them, long-press the “Chats” title, then enter your passcode.",
+            uz: "Yashirin chatlar asosiy ro'yxatdan yo'qoladi va ovozsiz bo'ladi. Ularni ochish uchun “Chats” sarlavhasini bosib turing, so'ng kod-parolni kiriting.",
+            ru: "Скрытые чаты исчезают из основного списка и отключают уведомления. Чтобы открыть их, зажмите заголовок «Chats» и введите код-пароль."
         )
     }
 
     public static var settingsChangePin: String {
-        localized(en: "Change Vault PIN", uz: "Seyf PIN'ini o'zgartirish", ru: "Изменить PIN хранилища")
+        localized(en: "Change Passcode", uz: "Kod-parolni o'zgartirish", ru: "Изменить код-пароль")
     }
 
     public static func settingsHiddenCount(_ count: Int) -> String {
@@ -108,31 +109,31 @@ public enum SecretVaultStrings {
 
     public static var biometricFooter: String {
         localized(
-            en: "Use Face ID or Touch ID to open the vault. Your PIN still works if biometrics fail.",
-            uz: "Seyfni ochish uchun Face ID yoki Touch ID'dan foydalaning. Biometrika ishlamasa, PIN baribir ishlaydi.",
-            ru: "Используйте Face ID или Touch ID для открытия хранилища. Если биометрия не сработает, PIN по-прежнему доступен."
+            en: "Use Face ID or Touch ID to open your hidden chats. Your passcode still works if biometrics fail.",
+            uz: "Yashirin chatlarni ochish uchun Face ID yoki Touch ID'dan foydalaning. Biometrika ishlamasa, kod-parol baribir ishlaydi.",
+            ru: "Используйте Face ID или Touch ID, чтобы открыть скрытые чаты. Если биометрия не сработает, код-пароль по-прежнему доступен."
         )
     }
 
     public static var biometricReason: String {
         localized(
-            en: "Confirm to unlock the Secret Vault with biometrics",
-            uz: "Maxfiy seyfni biometrika bilan ochishni tasdiqlang",
-            ru: "Подтвердите разблокировку секретного хранилища по биометрии"
+            en: "Confirm to open your hidden chats with biometrics",
+            uz: "Yashirin chatlarni biometrika bilan ochishni tasdiqlang",
+            ru: "Подтвердите открытие скрытых чатов по биометрии"
         )
     }
 
     // MARK: - Disable confirmation
 
     public static var disableConfirmTitle: String {
-        localized(en: "Turn off Secret Vault?", uz: "Maxfiy seyf o'chirilsinmi?", ru: "Отключить секретное хранилище?")
+        localized(en: "Turn off Hidden Chats?", uz: "Yashirin chatlar o'chirilsinmi?", ru: "Отключить скрытые чаты?")
     }
 
     public static var disableConfirmText: String {
         localized(
-            en: "All hidden chats will return to the main list and be unmuted, and the vault PIN will be removed.",
-            uz: "Barcha yashirin chatlar asosiy ro'yxatga qaytadi, ovozi yoqiladi va seyf PIN'i o'chiriladi.",
-            ru: "Все скрытые чаты вернутся в основной список, звук включится, а PIN хранилища будет удалён."
+            en: "All hidden chats will return to the main list and be unmuted, and the passcode will be removed.",
+            uz: "Barcha yashirin chatlar asosiy ro'yxatga qaytadi, ovozi yoqiladi va kod-parol o'chiriladi.",
+            ru: "Все скрытые чаты вернутся в основной список, звук включится, а код-пароль будет удалён."
         )
     }
 
@@ -144,34 +145,44 @@ public enum SecretVaultStrings {
         localized(en: "Cancel", uz: "Bekor qilish", ru: "Отмена")
     }
 
-    // MARK: - Verify prompt (shown when opening the vault from the title)
+    // MARK: - Verify prompt (shown when opening hidden chats from the title)
 
     public static var verifyTitle: String {
-        localized(en: "Secret Vault", uz: "Maxfiy seyf", ru: "Секретное хранилище")
+        localized(en: "Hidden Chats", uz: "Yashirin chatlar", ru: "Скрытые чаты")
     }
 
     public static var verifySubtitle: String {
-        localized(en: "Enter your vault PIN", uz: "Seyf PIN'ini kiriting", ru: "Введите PIN хранилища")
+        localized(en: "Enter your passcode", uz: "Kod-parolni kiriting", ru: "Введите код-пароль")
     }
 
-    // MARK: - Forgot-PIN recovery (Face ID / passcode) + unhide
+    // MARK: - Forgot-passcode recovery (Face ID / passcode) + unhide
 
     public static var recoveryReason: String {
         localized(
-            en: "Confirm your identity to open the Secret Vault",
-            uz: "Maxfiy seyfni ochish uchun shaxsingizni tasdiqlang",
-            ru: "Подтвердите личность, чтобы открыть секретное хранилище"
+            en: "Confirm your identity to open your hidden chats",
+            uz: "Yashirin chatlarni ochish uchun shaxsingizni tasdiqlang",
+            ru: "Подтвердите личность, чтобы открыть скрытые чаты"
         )
     }
 
     public static var unhideMenu: String {
-        localized(en: "Unhide from Vault", uz: "Seyfdan chiqarish", ru: "Убрать из хранилища")
+        localized(en: "Unhide", uz: "Ochish", ru: "Показать")
     }
 
     // MARK: - Helper
 
     private static func localized(en: String, uz: String, ru: String) -> String {
         let lang = Locale.current.languageCode ?? "en"
+        switch lang {
+        case "uz": return uz
+        case "ru": return ru
+        default:   return en
+        }
+    }
+
+    // Language-aware overload: resolves from the app's selected language (langCode) instead of
+    // the device system language, so these strings follow the in-app language like every sibling provider.
+    private static func localized(lang: String, en: String, uz: String, ru: String) -> String {
         switch lang {
         case "uz": return uz
         case "ru": return ru

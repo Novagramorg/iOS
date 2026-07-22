@@ -248,6 +248,11 @@ public struct FenixuzL10n {
         )
     }
 
+    // Word shown next to the timestamp on a deleted message's status line
+    public var status_deletedMessage: String {
+        pick(en: "Removed", uz: "O'chirilgan", ru: "Удалено")
+    }
+
     public var settings_chat_footer: String {
         pick(
             en: "Changes apply to all chats immediately.",
@@ -414,6 +419,9 @@ public struct FenixuzL10n {
     }
     public var context_forwardWithoutName: String {
         pick(en: "Forward without name", uz: "Imzosiz forward qilish", ru: "Переслать без имени")
+    }
+    public var context_editHistory: String {
+        pick(en: "Edit History", uz: "Tahrirlash tarixi", ru: "История правок")
     }
     public var settings_interface_unlimitedPins_title: String {
         pick(en: "Unlimited Pins", uz: "Cheksiz pin", ru: "Безлимитные закрепы")
@@ -599,17 +607,17 @@ public struct FenixuzL10n {
 
     public var iap_block_message: String {
         pick(
-            en: "Premium subscriptions are not sold in this app. To subscribe to Telegram Premium, please install the official Telegram app from the App Store and subscribe there.",
-            uz: "Premium obuna bu ilovada sotilmaydi. Telegram Premium'ga obuna bo'lish uchun App Store'dan rasmiy Telegram ilovasini o'rnating va obunani o'sha yerda amalga oshiring.",
-            ru: "Premium-подписка в этом приложении не продаётся. Чтобы подписаться на Telegram Premium, установите официальное приложение Telegram из App Store и оформите подписку там."
+            en: "Telegram Premium is purchased through the official Telegram app. Continue to Telegram Premium to complete your subscription.",
+            uz: "Telegram Premium rasmiy Telegram ilovasi orqali sotib olinadi. Obunani yakunlash uchun Telegram Premium'ga o'ting.",
+            ru: "Telegram Premium приобретается в официальном приложении Telegram. Перейдите в Telegram Premium, чтобы оформить подписку."
         )
     }
 
     public var iap_block_open_app_store: String {
         pick(
-            en: "Open App Store",
-            uz: "App Store'da ochish",
-            ru: "Открыть App Store"
+            en: "Open Telegram Premium",
+            uz: "Telegram Premium'ni ochish",
+            ru: "Открыть Telegram Premium"
         )
     }
 
@@ -798,6 +806,40 @@ public struct FenixuzL10n {
             uz: "Tahrirlangan xabarga uzoq bosib barcha oldingi versiyalarni ko'ring",
             ru: "Зажмите отредактированное сообщение, чтобы увидеть все предыдущие версии"
         )
+    }
+
+    // MARK: - Alternate app icon names (Settings -> App Icon picker)
+
+    public var iconName_default: String {
+        pick(en: "Default", uz: "Asosiy", ru: "Основной")
+    }
+
+    public var iconName_blue: String {
+        pick(en: "Blue", uz: "Ko‘k", ru: "Синий")
+    }
+
+    public var iconName_teal: String {
+        pick(en: "Teal", uz: "Feruza", ru: "Бирюзовый")
+    }
+
+    public var iconName_purple: String {
+        pick(en: "Purple", uz: "Binafsha", ru: "Фиолетовый")
+    }
+
+    public var iconName_pink: String {
+        pick(en: "Pink", uz: "Pushti", ru: "Розовый")
+    }
+
+    public var iconName_orange: String {
+        pick(en: "Orange", uz: "To‘q sariq", ru: "Оранжевый")
+    }
+
+    public var iconName_black: String {
+        pick(en: "Black", uz: "Qora", ru: "Чёрный")
+    }
+
+    public var iconName_red: String {
+        pick(en: "Red", uz: "Qizil", ru: "Красный")
     }
 
     // MARK: - Camera picker front/back labels

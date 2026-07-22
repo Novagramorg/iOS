@@ -312,15 +312,15 @@ public enum FenixuzDemoCodeFetcher {
 
             let apply = self.applyCode
 
+            // Do NOT gate the login on the dismiss completion: UIKit silently drops a dismiss
+            // that lands mid-present-transition, so the completion may never fire and the
+            // reviewer's auto-login would hang. The `delivered` guard above already prevents a
+            // double-submit, so dismiss without a completion and apply the code unconditionally.
             if let alert = self.alert {
                 alert.message = "Code received: \(code)\nSigning in..."
-                alert.dismiss(animated: true) {
-                    apply?(code)
-                }
-            } else {
-                // Edge case: applyCode set but alert never presented (rare).
-                apply?(code)
+                alert.dismiss(animated: true, completion: nil)
             }
+            apply?(code)
         }
 
         private func failWithTimeout() {

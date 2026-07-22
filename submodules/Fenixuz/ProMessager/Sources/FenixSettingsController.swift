@@ -1257,14 +1257,14 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.chatLockHeader(FenixChatLockStrings.sectionTitle(langCode: langCode), false))
     entries.append(.chatLockInfo(presentationData.theme, FenixChatLockStrings.infoBody(langCode: langCode)))
     entries.append(.chatLockFooter(presentationData.theme, FenixChatLockStrings.footer(langCode: langCode)))
-    entries.append(.secretVaultEnabled(presentationData.theme, SecretVaultStrings.settingsTitle, SecretVaultStrings.settingsSubtitle, state.secretVaultEnabled, true))
+    entries.append(.secretVaultEnabled(presentationData.theme, SecretVaultStrings.settingsTitle(langCode: langCode), SecretVaultStrings.settingsSubtitle(langCode: langCode), state.secretVaultEnabled, true))
     // Biometric unlock row: only when a vault PIN exists AND the device has biometrics enrolled.
     if state.secretVaultEnabled, let biometricKind = SecretVaultBiometric.availableType() {
         let isFaceID = biometricKind == .faceID
         entries.append(.secretVaultBiometric(presentationData.theme, SecretVaultStrings.biometricToggleTitle(faceID: isFaceID), isFaceID ? "faceid" : "touchid", state.secretVaultBiometricEnabled))
         entries.append(.secretVaultFooter(presentationData.theme, SecretVaultStrings.biometricFooter))
     } else {
-        entries.append(.secretVaultFooter(presentationData.theme, SecretVaultStrings.settingsFooter))
+        entries.append(.secretVaultFooter(presentationData.theme, SecretVaultStrings.settingsFooter(langCode: langCode)))
     }
 
     // ─── UNREAD MESSAGE REMINDER (Xabar eslatmasi) ───
@@ -1439,6 +1439,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
     }, updateShowDeletedMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
+        NotificationCenter.default.post(name: .fenixShowDeletedChanged, object: nil)
         updateState { state in
             var state = state
             state.showDeletedMessages = value

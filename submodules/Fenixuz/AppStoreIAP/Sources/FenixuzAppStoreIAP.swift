@@ -42,6 +42,11 @@ public enum FenixuzAppStoreIAP {
     /// Official Telegram on the App Store. iOS opens `itms-apps://` directly in the App Store app.
     private static let officialTelegramAppStoreURL = "itms-apps://apps.apple.com/app/id686449807"
 
+    /// Official Telegram Premium bot. The blocked-purchase alert redirects here so the user completes the
+    /// Premium subscription inside the official Telegram app. Change the username to point at a different
+    /// reseller bot if needed. Falls back to `officialTelegramAppStoreURL` if this URL cannot be opened.
+    private static let premiumBotURL = "https://t.me/PremiumBot"
+
     // MARK: - Bot-invoice gate
 
     /// Returns `true` if presenting `BotCheckoutController` for this invoice would steer the user
@@ -96,7 +101,10 @@ public enum FenixuzAppStoreIAP {
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: l10n.iap_block_open_app_store, style: .default) { _ in
-            guard let url = URL(string: officialTelegramAppStoreURL) else { return }
+            // Fenixuz: redirect the Premium purchase to the official Telegram Premium bot so the user
+            // completes the subscription inside the official Telegram app. Fall back to the official
+            // Telegram App Store page if the t.me link cannot be opened.
+            guard let url = URL(string: premiumBotURL) ?? URL(string: officialTelegramAppStoreURL) else { return }
             UIApplication.shared.open(url, options: [:], completionHandler: nil)
         })
         alert.addAction(UIAlertAction(title: l10n.iap_block_cancel, style: .cancel, handler: nil))
