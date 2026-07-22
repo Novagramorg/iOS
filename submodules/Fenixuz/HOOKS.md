@@ -8,7 +8,7 @@ This file is the **source of truth** for every line of Fenixuz code that lives o
 
 On every `git pull upstream master`, an AI assistant uses this file to re-apply hooks if upstream code moved. **Fenixuz hooks always win** against upstream changes; surrounding upstream code is taken as-is.
 
-> Last verified: 2026-05-19 against upstream commit `9ed152eb6b` (Fenixuz master). 2026-05-16 added DeviceAccess contacts-consent hook for Apple Review 5.1.2 rejection fix. 2026-05-19 added ApplicationContext.swift hook to defer the silent post-login contacts auto-prompt by 1 second (initial attempt that day silenced the auto-prompt entirely; that was reverted the same day after the user reported the consent + iOS alerts never appeared — the deferred version restores both alerts while still letting the Chats tab finish its layout before the alert presents). 2026-05-19 (later same day) replaced the `InAppPurchaseManager.swift` runtime gate with a complete rewrite that removes the StoreKit code path entirely (`SKPaymentQueue`, `SKProductsRequest`, `SKPayment`, `SKReceipt*` no longer reachable); also dropped the now-unused `import StoreKit` from `AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift`, and in `TelegramUI/Sources/AppDelegate.swift` both dropped the import and replaced the iOS 15+ `AppStore.showManageSubscriptions(in:)` Manage Subscriptions sheet with the web fallback URL (no StoreKit-backed subscriptions exist on this fork so the system sheet would be empty anyway).
+> Last verified: 2026-05-19 against upstream commit `9ed152eb6b` (Fenixuz master). 2026-05-16 added DeviceAccess contacts-consent hook for Apple Review 5.1.2 rejection fix. 2026-05-19 added ApplicationContext.swift hook to defer the silent post-login contacts auto-prompt by 1 second (initial attempt that day silenced the auto-prompt entirely; that was reverted the same day after the user reported the consent + iOS alerts never appeared — the deferred version restores both alerts while still letting the Chats tab finish its layout before the alert presents). 2026-05-19 (later same day) replaced the `InAppPurchaseManager.swift` runtime gate with a complete rewrite that removes the StoreKit code path entirely (`SKPaymentQueue`, `SKProductsRequest`, `SKPayment`, `SKReceipt*` no longer reachable); also dropped the now-unused `import StoreKit` from `AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift`, and in `TelegramUI/Sources/AppDelegate.swift` both dropped the import and replaced the iOS 15+ `AppStore.showManageSubscriptions(in:)` Manage Subscriptions sheet with the web fallback URL (no StoreKit-backed subscriptions exist on this fork so the system sheet would be empty anyway). 2026-07-17 added the "Deleted messages (anti-delete)" section documenting `DeletedMessageAttribute` (new TelegramCore file) plus its five Telegram-owned hook sites (AccountManager registration, AccountStateManagementUtils delete interception, ChatHistoryEntriesForView display filter, StringForMessageTimestampStatus label, ChatHistoryListNode reactivity gate) — this feature previously had zero HOOKS.md coverage despite touching 5 upstream files, a merge risk now closed. 2026-07-17 (same day, Wave 2) updated that section: `DeletedMessageAttribute` gained a `timestamp: Int32` payload (key `"t"`, backward-compatible decode), `AccountStateManagementUtils.swift`'s delete interception is now itself gated on `show_deleted_messages` (capture+retain only when ON, real delete when OFF — previously capture was unconditional and only display was gated), and `StringForMessageTimestampStatus.swift`'s label now renders the captured deletion time. Also flagged (not fixed) a pre-existing gap: `AccountManager.swift:247`'s `declareEncodable` factory still ignores its decoder argument, so the persisted timestamp does not currently survive a disk decode round-trip — see the ⚠️ note in that section. 2026-07-17 (later same day) added the "Bot token login" section documenting the new `submodules/TelegramCore/Sources/FenixuzBotAuthorization.swift` file plus three `AuthorizationUI` hook sites (`AuthorizationSequencePhoneEntryController(+Node)` secondary button, `AuthorizationSequenceController` screen wiring) and the `AuthorizationUI/BUILD` dep — login-only, additive, existing phone-login path untouched. 2026-07-17 (later same day) added the "Novagram banner ads" section documenting the OURS-FIRST `.link` `ChatListNotice` injection in `GlobalControlPanelsContext.swift` (producer branch + dismiss branch) and the click-report branch in `ChatListUI/Sources/ChatListControllerNode.swift`, plus the `GlobalControlPanelsContext/BUILD` dep addition (`ChatListUI/BUILD` and `NovagramAds/BUILD` needed no change — already satisfied by the earlier search-ads/chat-ads hooks).
 
 ---
 
@@ -280,6 +280,221 @@ The `prewarmIfDemo` call is a no-op for any non-demo number, so real users are u
 
 ---
 
+## 📌 Bot token login (login-only, LIMITED bot-session UX) — 2026-07-17
+
+Lets a user log in with a **bot token** (`123456:ABC-...`) instead of a phone number, via the MTProto RPC `auth.importBotAuthorization`. This is a **secondary, additive entry point** on the existing phone-entry screen — the phone-number send-code/verify-code path (`sendAuthorizationCode` / `authorizeWithCode` / `resendAuthorizationCode` in `Authorization.swift`) is completely untouched. The manager has accepted the resulting session's limited bot UX (a bot session does not populate a normal chat list/history the way a user session does) as an acceptable trade-off for this feature — it is login-only, not a chat client for the bot.
+
+`auth.importBotAuthorization` is **atomic** — one round trip, no code/password step — so per the design constraint it is **not** added as a case of `UnauthorizedAccountStateContents` (that enum drives the phone flow's multi-step server-authoritative state machine). Instead the bot-token screen is pushed **locally** by `AuthorizationSequenceController`, the same pattern already used for passkey login.
+
+### `submodules/TelegramCore/Sources/FenixuzBotAuthorization.swift` (NEW FILE, 55 lines)
+
+This is a **new Telegram-owned file** (lives in `TelegramCore/Sources/`, not under `submodules/Fenixuz/`) — an exception to the "Fenixuz logic lives in a Fenixuz module" rule, made necessary by `switchToAuthorizedAccount(transaction:account:isSupportUser:)` (`Authorization.swift:18`) being `internal` (no access modifier). A Fenixuz module outside the `TelegramCore` Bazel target cannot call it; making it `public` would widen a call surface that upstream deliberately keeps module-private. Placing the new function in a file inside `TelegramCore/Sources/` instead keeps `switchToAuthorizedAccount`'s visibility **unchanged** (still `internal`, confirmed at `Authorization.swift:18` — no modifier was touched) while still reusing it directly, since Bazel's `srcs = glob(["Sources/**/*.swift"])` (`TelegramCore/BUILD:6-8`) picks up any file dropped in that tree as part of the same compilation unit/module.
+
+Full contents — `ImportBotAuthorizationError` enum (`.invalidToken` / `.limitExceeded` / `.generic`) and:
+
+```swift
+public func importBotAuthorization(accountManager: AccountManager<TelegramAccountManagerTypes>, account: UnauthorizedAccount, apiId: Int32, apiHash: String, botToken: String) -> Signal<Void, ImportBotAuthorizationError>
+```
+
+It calls `Api.functions.auth.importBotAuthorization(flags: 0, apiId:apiHash:botAuthToken:)` (`TelegramApi/Sources/Api42.swift:2416`), maps `ACCESS_TOKEN_INVALID`/`ACCESS_TOKEN_EXPIRED` → `.invalidToken`, `FLOOD_WAIT*` → `.limitExceeded`, anything else → `.generic`. On success it mirrors the tail of the phone flow's own completion sequence — `storeFutureLoginToken`, builds an `AuthorizedAccountState`, calls `initializedAppSettingsAfterLogin`, `transaction.setState(state)`, then `accountManager.transaction { switchToAuthorizedAccount(transaction:account:isSupportUser: false) }` — the exact same helpers `sendAuthorizationCode` and `authorizeWithCode` already use, so account-switch behavior (sort order, `setCurrentId`, `removeAuth`) is identical to a phone login.
+
+**No BUILD change required** — `TelegramCore/BUILD` already depends on `TelegramApi`, `MtProtoKit`, `SwiftSignalKit`, and `Postbox` (the four imports this file needs), and the `glob()` above requires no explicit `srcs` entry.
+
+### `submodules/Fenixuz/BotTokenLogin/` module (target `FenixuzBotTokenLogin`)
+
+Pure-UI Fenixuz module, two files:
+- `Sources/AuthorizationSequenceBotTokenEntryController.swift` (135 lines) — `ViewController` subclass, simplified clone of `AuthorizationSequencePasswordEntryController`: single text field + "Next", `public var loginWithToken: ((String) -> Void)?` callback, `public init(sharedContext:presentationData:back:displayBack:)`.
+- `Sources/AuthorizationSequenceBotTokenEntryControllerNode.swift` (222 lines) — the node: title, a notice label ("Bot rejimi cheklangan: chat ro'yxati va tarix ko'rinmaydi" — surfaces the LIMITED bot-session caveat to the user up front), the token `TextFieldNode`, and a `SolidRoundedButtonNode` "Kirish".
+
+`BUILD` deps (`Display`, `AsyncDisplayKit`, `TelegramPresentationData`, `AccountContext`, `TelegramCore`, `SwiftSignalKit`, `PresentationDataUtils`, `ProgressNavigationButtonNode`, `AuthorizationUtils`, `AnimatedStickerNode`, `TelegramAnimatedStickerNode`, `SolidRoundedButtonNode`) all resolve against the module's actual imports — verified by grepping every symbol used in both source files (`TextFieldNode`/`AccessibilityAreaNode`/`HapticFeedback`/`UITracingLayerView` → `Display`; `AnimatedStickerNodeLocalFileSource`/`DefaultAnimatedStickerNodeImpl` → `AnimatedStickerNode`/`TelegramAnimatedStickerNode`; `AuthorizationLayoutItem`/`layoutAuthorizationItems` → `AuthorizationUtils`). `TelegramCore` and `PresentationDataUtils` are declared but currently unused by either source file — harmless (Bazel doesn't fail on an unused dep) and left as-is per minimal-diff; not worth a churn-only removal commit.
+
+### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift`
+
+**Property, next to `loginWithPasskey` (lines 65–66):**
+
+```swift
+// Fenixuz: fired when the "Bot token bilan kirish" secondary button is tapped.
+public var loginWithBotToken: (() -> Void)?
+```
+
+**Wiring, inside `loadDisplayNode()` right after the `retryPasskey` closure (lines 251–254):**
+
+```swift
+// Fenixuz: secondary "Bot token bilan kirish" button → let the sequence controller push the token screen.
+self.controllerNode.botTokenPressed = { [weak self] in
+    self?.loginWithBotToken?()
+}
+```
+
+No new import needed — this file only forwards a closure, it never references `AuthorizationSequenceBotTokenEntryController` directly.
+
+### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift`
+
+Adds one secondary text button, styled and positioned like a link, sitting just above the "Continue" button:
+
+- **Declaration** (line 324): `private let botTokenButton: HighlightableButtonNode` — `HighlightableButtonNode` is defined in `Display/Source/HighlightableButton.swift`, already imported; no new import.
+- **Callback** (line 346): `var botTokenPressed: (() -> Void)?`
+- **Init** (lines 450–453): instantiate + `setTitle("Bot token bilan kirish", ...)` + accessibility label/traits.
+- **`addSubnode`** (line 470) and **target wiring** (line 475): `self.botTokenButton.addTarget(self, action: #selector(self.botTokenButtonPressed), forControlEvents: .touchUpInside)`.
+- **Visibility** — toggled alongside `proceedNode` in both `containerLayoutUpdated` branches: `isHidden = false` on the wide layout (line 673), `isHidden = true` on the narrow/small layout (line 679).
+- **Layout** (lines 701–704): measured and positioned 14pt above the Continue button's frame, horizontally centered.
+- **Tap handler** (lines 726–727): `@objc private func botTokenButtonPressed() { self.botTokenPressed?() }`.
+
+### `submodules/AuthorizationUI/Sources/AuthorizationSequenceController.swift`
+
+**Import (line 26):**
+
+```swift
+import FenixuzBotTokenLogin
+```
+
+**Wiring, inside `phoneEntryController(...)` (the factory starting at line 162), right after the passkey `loginWithPasskey` block (lines 361–364):**
+
+```swift
+// Fenixuz: secondary entry point — push the bot-token login screen.
+controller.loginWithBotToken = { [weak self] in
+    self?.presentBotTokenEntry()
+}
+```
+
+**New private methods (lines 370–412)**, mirroring the existing `passwordEntryController(...)` / `codeEntryController(...)` singleton-reuse pattern:
+
+```swift
+// Fenixuz: builds the bot-token login screen, mirroring passwordEntryController(...). auth.importBotAuthorization
+// is atomic, so this is pushed locally (like passkey) instead of routing through UnauthorizedAccountStateContents.
+private func botTokenEntryController() -> AuthorizationSequenceBotTokenEntryController {
+    for c in self.viewControllers {
+        if let c = c as? AuthorizationSequenceBotTokenEntryController {
+            return c
+        }
+    }
+    let controller = AuthorizationSequenceBotTokenEntryController(sharedContext: self.sharedContext, presentationData: self.presentationData, back: { [weak self] in
+        guard let strongSelf = self else { return }
+        let _ = strongSelf.popViewController(animated: true)
+    })
+    controller.loginWithToken = { [weak self, weak controller] token in
+        guard let strongSelf = self else { return }
+        controller?.inProgress = true
+        strongSelf.actionDisposable.set((importBotAuthorization(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, botToken: token)
+        |> deliverOnMainQueue).startStrict(error: { [weak self, weak controller] error in
+            guard let strongSelf = self, let controller = controller else { return }
+            controller.inProgress = false
+            let text: String
+            switch error {
+            case .invalidToken: text = "Bot token noto'g'ri yoki eskirgan."
+            case .limitExceeded: text = strongSelf.presentationData.strings.Login_CodeFloodError
+            case .generic: text = strongSelf.presentationData.strings.Login_UnknownError
+            }
+            controller.present(textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        }))
+    }
+    return controller
+}
+
+private func presentBotTokenEntry() {
+    self.pushViewController(self.botTokenEntryController())
+}
+```
+
+`self.apiId` / `self.apiHash` (lines 43–44/71–72) are pre-existing controller properties, already threaded through from `sendAuthorizationCode`'s call site — no new plumbing needed. On success, `importBotAuthorization`'s Signal completes with no `.next` value and no error, so there's no explicit success handler here: `switchToAuthorizedAccount` (called inside `FenixuzBotAuthorization.swift`) already flips `AccountManager`'s current account, and the app's existing root-controller account-switch observer takes it from there — same as the phone flow's own `.loggedIn` completion.
+
+### `submodules/AuthorizationUI/BUILD`
+
+`deps = [...]` already contains (line 55):
+
+```python
+"//submodules/Fenixuz/BotTokenLogin:FenixuzBotTokenLogin",
+```
+
+Reason: `AuthorizationSequenceController.swift` imports `FenixuzBotTokenLogin` for `AuthorizationSequenceBotTokenEntryController`.
+
+### Post-login incoming messages → chat list (2026-07-17)
+
+Follow-up so that messages arriving **after** bot login (a user DMs the bot, or a group/channel the bot is in gets a message) materialize a chat-list row. Pre-login history is still unavailable (bots can't call `messages.getDialogs`/`getHistory`), but live updates flow through the normal update pipeline and are now persisted into the chat list.
+
+**Root cause:** the update pipeline (`AccountStateManager` → `replayFinalState`) is not gated off for bots and writes incoming messages to Postbox history via `transaction.addMessages(...)`. But an incoming message alone never sets **chat-list inclusion** — that only comes from the dialog-sync paths (`messages.getDialogs`/`getPeerDialogs`), which bots can't use. So a bot session's peers stay `.notIncluded` and never show a row (`ChatListIndexTable` default). The fix forces inclusion for a bot session's message peers.
+
+#### `submodules/TelegramCore/Sources/FenixuzBotSession.swift` (NEW FILE, ~45 lines)
+
+New Telegram-owned file (same rationale/exception as `FenixuzBotAuthorization.swift` — it calls the `internal` helper `updatePeerChatInclusionWithMinTimestamp` from `UpdatePeers.swift:5`, so it must live inside the `TelegramCore` glob). Contents:
+
+- `setFenixuzBotSession(transaction:isBot:)` / `fenixuzIsBotSession(transaction:) -> Bool` — persist/read a per-account-postbox preference marking the session as a bot. Stored under a **length-8** `ValueBoxKey` (`0x46656E78426F7431` = "FenxBot1") which cannot collide with the upstream length-4 preference keys.
+- `fenixuzIsBotSession(transaction:accountPeerId:) -> Bool` — robust variant used by `replayFinalState`: returns true if the login flag is set **OR** the account's own peer has `botInfo` (i.e. it is a bot). The peer check makes the fix work **retroactively** for accounts logged in before the flag existed — no re-login needed.
+- `fenixuzForceBotChatInclusion(isBotSession:transaction:messages:location:)` — for a bot session, on `.UpperHistoryBlock` messages, calls `updatePeerChatInclusionWithMinTimestamp(..., forceRootGroupIfNotExists: true)` per peer so the chat materializes from the message alone. **No-op for normal accounts** (guard on `isBotSession`). Has a `#if DEBUG` `FENIX_BOTLOGIN` log used to confirm updates flow during device testing.
+
+No BUILD change — picked up by `TelegramCore/BUILD`'s `glob()`.
+
+#### `submodules/TelegramCore/Sources/FenixuzBotAuthorization.swift` (hook, +3 lines)
+
+Right after `transaction.setState(state)`, add `setFenixuzBotSession(transaction: transaction, isBot: true)` so the account is tagged at login time.
+
+#### `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` (2 one-line hooks)
+
+- Near the top of `replayFinalState(...)` (right after `var peerIdsWithAddedSecretMessages = Set<PeerId>()`): `let fenixuzBotSession = fenixuzIsBotSession(transaction: transaction, accountPeerId: accountPeerId)` — read once per replay (retroactive peer-based detection).
+- In the `.AddMessages` operation handler, immediately after `_ = transaction.addMessages(messages, location: location)`: `fenixuzForceBotChatInclusion(isBotSession: fenixuzBotSession, transaction: transaction, messages: messages, location: location)`.
+
+### Chat-list hole removal for bot sessions (2026-07-17)
+
+Even with inclusion forced, the chat list rendered **empty** because a fresh account has a top **chat-list hole** that the client fills via `messages.getDialogs`. Bots get `BOT_METHOD_INVALID` on `getDialogs`, so `managedChatListHoles` retried the fetch forever (observed: ~140 `getDialogs` calls in a couple of minutes) and the list view stayed stuck on the unresolved hole — the locally-materialized chats never showed.
+
+- **`submodules/TelegramCore/Sources/FenixuzBotSession.swift`** — added `fenixuzManagedChatListHole(postbox:network:accountPeerId:groupId:hole:) -> Signal<Never, NoError>`: for a bot session it `replaceChatListHole(..., hole: nil)` (removes the hole so the list is treated as loaded); for a normal account it calls the original `fetchChatListHole(...)` unchanged. Requires `import SwiftSignalKit` (added to the file).
+- **`submodules/TelegramCore/Sources/State/ManagedChatListHoles.swift`** — one-line hook: the `for (entry, disposable) in added` loop calls `fenixuzManagedChatListHole(...)` instead of `fetchChatListHole(...)` directly.
+
+### DM unread count, group/channel open, and folders for bot sessions (2026-07-17)
+
+Three follow-ups, all bot-gated, all logic in `FenixuzBotSession.swift` with 1-line hooks in Telegram-owned files:
+
+**DM unread count.** Bots can't call `getPeerDialogs`/`getHistory`, which normally seed a DM's `PeerReadState`; without a read state, an incoming DM never increments the unread count (`MessageHistoryReadStateTable.addIncomingMessages` only increments when a state already exists). Groups/channels differ because their read state is seeded from the channel `pts` in the update stream (`updateReadChannelInbox`), no `getDialogs` needed.
+- `FenixuzBotSession.swift` — `fenixuzInitializeBotDMReadState(isBotSession:transaction:messages:location:)`: for an incoming `CloudUser` message with no existing `.Cloud` read state, seeds `resetIncomingReadStates([peerId: [.Cloud: .idBased(maxIncomingReadId: 0, maxOutgoingReadId: 0, maxKnownId: 0, count: 0, markedUnread: false)]])`.
+- `State/AccountStateManagementUtils.swift` — 1-line hook **immediately before** `_ = transaction.addMessages(messages, location: location)` (so the add's own `addIncomingMessages` increments through the normal path, and no failing `.Validate`/`getPeerDialogs` sync is queued). Only post-session-start messages count (historical unread lives only in `getDialogs`, unreachable for a bot).
+
+**Opening a group/channel chat.** Opening a chat fills history via `messages.getHistory`; for a bot that returns `BOT_METHOD_INVALID`, the fetch errors on the first try (`Holes.swift` `maxRetries: 0`), so `transaction.removeHole(...)` never runs and the chat view stays stuck on the hole — the received "you were added" service message never renders.
+- `FenixuzBotSession.swift` — `fenixuzManagedMessageHistoryHole(accountPeerId:network:postbox:hole:direction:space:count:)`: for a bot session `transaction.removeHole(..., range: 1 ... (Int32.max - 1))`; otherwise the original `fetchMessageHistoryHole(...)`. Both `|> ignoreValues`.
+- `State/ManagedMessageHistoryHoles.swift` — the `case let .peer(hole):` fetch site calls `fenixuzManagedMessageHistoryHole(...)` instead of `fetchMessageHistoryHole(...)`.
+
+**Folders (chat list filters).** Rendering is 100% local, but the folder tab strip needs ≥2 tabs, the first being `.allChats` — which only arrives from the server's `getDialogFilters` (`dialogFilterDefault`), blocked for bots. So a bot-created folder yields a single-tab state and no strip appears.
+- `FenixuzBotSession.swift` — `fenixuzEnsureAllChatsForBotFilters(transaction:filters:)`: for a bot session, if `filters` is non-empty and lacks `.allChats`, prepends `.allChats`. (`normalize()` only prunes `updates`, never touches `.allChats`, so this is stable.)
+- `TelegramEngine/Peers/ChatListFiltering.swift` — `_internal_updateChatListFiltersInteractively`: 1-line hook right after `f(state.filters)` (changed `let updatedFilters` → `var`).
+
+### Logout for a bot session (2026-07-17)
+
+"Log Out" did nothing for a bot account. Root cause: `PeerInfoScreenSettingsActions.swift` `case .logout` gated the whole action on `let phoneNumber = user.phone` — a bot has **no phone number** (`user.phone == nil`), so the `if let` failed and `logoutOptionsController` was never pushed. No `logoutFromAccount` call ever reached the core (confirmed: absent from app-logs).
+
+- `TelegramUI/.../PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift` — dropped the `let phoneNumber = user.phone` requirement (keep only `if case let .user(user) = self.data?.peer`) and pass `phoneNumber: user.phone ?? ""` to `logoutOptionsController(...)`. The phone is only used for the "Change Number" sub-screen, so `""` is harmless; normal accounts are unchanged (`?? ""` never triggers for them).
+
+### Multi-account back button + bot-token icon (2026-07-17)
+
+**Add-account "Cancel"/back button was missing for bot accounts (user got trapped).** The phone-entry screen shows a Cancel button only when `!otherAccountPhoneNumbers.1.isEmpty`, but that list was built (`AppDelegate.swift` ~line 1316) by mapping each existing account to `user.phone` and dropping the ones with no phone — i.e. **all bot accounts**. So with only bot accounts logged in, adding another account showed no back button.
+- `TelegramUI/Sources/AppDelegate.swift` — in the account→phone map, for a `.user` peer with no `phone` fall back to `@username`/`firstName` (`user.phone ?? user.addressName.flatMap { "@\($0)" } ?? (user.firstName ?? "Bot")`) so bot accounts are included in the list. Normal accounts unchanged (`?? ` never triggers).
+
+**Bot-token login moved from a bottom text link to a nav-bar icon** (next to QR), per request.
+- `AuthorizationSequencePhoneEntryControllerNode.swift` — the bottom `botTokenButton` is now always hidden (wide-layout `isHidden` set to `true` at ~line 673; it was `false`).
+- `AuthorizationSequencePhoneEntryController.swift` — `updateNavigationItems()` full-size branch now sets `rightBarButtonItems = [qrItem, botItem]` (index 0 = rightmost, so the bot icon sits just LEFT of the QR icon). The bot icon is Telegram's own chatbot/robot glyph `UIImage(bundleImageName: "Item List/Icons/Chatbot")`, scaled 30→24pt (template) to match the QR icon. New `@objc botTokenIconPressed()` calls `self.loginWithBotToken?()` (same flow as the old bottom button).
+
+### Bot session tab bar — only Chats + Settings (2026-07-18)
+
+A bot can't use Contacts (no `contacts.getContacts`) or Calls, so those tabs are hidden for a bot session; only Chats + Settings remain.
+
+- `TelegramCore/Sources/FenixuzBotSession.swift` — `public func fenixuzIsBotSessionSignal(account:) -> Signal<Bool, NoError>`: one-shot postbox read (bot-ness never changes in a session).
+- `TelegramUI/Sources/TelegramRootController.swift` — added `isBotAccount` / `currentShowCallsTab` / `botAccountDisposable`. `addRootControllers`/`updateRootControllers` skip the Contacts and Calls appends when `isBotAccount`; after the initial build, a `fenixuzIsBotSessionSignal` subscription sets `isBotAccount = true` and calls `updateRootControllers(...)` to collapse the tab bar (selecting Chats). Regular accounts are unaffected. (Search accessory + the other tabs are untouched.)
+
+### Muting a peer didn't stick in a bot session (2026-07-18)
+
+Muting a channel/user/group in a bot session had no effect — notifications kept coming. (Audited via a 6-agent Opus 4.8 workflow.) Root cause is LOCAL, not server: bots receive no APNs push (the notifications are locally generated from the live update stream). Muting writes only PENDING settings; `pushPeerNotificationSettings` (`ManagedPendingPeerNotificationSettings.swift`) then tries to sync to the server, but a bot's peer has no accessHash → `apiInputPeer` is nil → it hits a branch that **discards the pending settings without committing them to CURRENT**. `getEffective` falls back to current → the peer reverts to unmuted → notifications resume.
+
+- `TelegramCore/Sources/FenixuzBotSession.swift` — `fenixuzCommitPendingSettingsIfBot(transaction:peerId:settings:)`: for a bot session, `transaction.updateCurrentPeerNotificationSettings([peerId: settings])` so the mute holds. No-op for normal accounts.
+- `TelegramCore/Sources/State/ManagedPendingPeerNotificationSettings.swift` — two 1-line hooks calling the helper **before** the pending-discard, on both `apiInputPeer==nil` branches: the outer else (uses `peerId`) and the inner non-thread else (uses `notificationPeerId`).
+
+Deliberately NOT fixed in the NSE (it doesn't run for bot sessions) and NOT by fabricating access hashes (would break other peer API calls). Needs on-device confirmation that a muted bot-session peer no longer notifies.
+
+### Known limitation (by design, manager-accepted)
+
+- **Pre-login history is not available** — bots can't call `messages.getDialogs`/`getHistory`, so chats/messages that existed before login won't backfill. Only post-login activity appears (surfaced to the user via the entry screen's notice text).
+- **Group/channel messages depend on the bot's server-side privacy mode** — a bot with BotFather privacy mode ON only receives commands/mentions/replies in groups; to see all group messages the bot owner must disable privacy mode. This is a Telegram server rule, not client-side.
+- Still a **login-only** feature: no bot-specific chat UI was built.
+
+---
+
 ## 📌 TelegramUI module
 
 ### `submodules/TelegramUI/Sources/ChatHistoryListNode.swift` (2026-06-27, reactive gate 2026-07-07)
@@ -307,7 +522,141 @@ if case .bubbles = mode, let adMessagesContext {
 
 Reason: `ChatHistoryListNode.init` builds the ad source (`adMessagesContext.state`, or empty for CloudUser / non-bubbles). `FenixShowAdsGate.gate` (in `FenixuzProMessager`, file `FenixShowAdsGate.swift`) wraps that source so it emits an empty tuple while `fenix_show_ads` is off and mirrors the real source while on. The gate is driven by `FenixShowAdsGate.enabledSignal`, which re-reads the UserDefaults key on every `.fenixShowAdsChanged` notification — posted by `FenixSettingsController.updateShowAds`. Result: flipping the toggle takes effect **live** in already-open chats (no reopen needed), replacing the previous one-shot init-time read. Feature #6: NovagramPro Ads Easter-egg section. The `fakeAds` experimental path is untouched. Real Telegram sponsored messages remain server-gated to the official api_id and cannot flow to this fork — this toggle only controls the visibility wiring.
 
+**Hook D — Novagram chat-ad source swap (VipAds → NovagramAds, 2026-07-11).** The old `submodules/Fenixuz/VipAds` module (`FenixVipAds` + `VipAdsSDK`) was removed and re-done with the newer `NovagramAds` SDK. Add `import FenixNovagramAds` to Hook A's import block. In the `else` branch that builds the real ad source (the `else` of the `fakeAds` check, currently `adMessages = adMessagesContext.state`, ~line 916), change it to:
+
+```swift
+} else {
+    // Fenixuz: serve OUR chat ads (ads-api.vipads.uz) in the channel sponsored slot.
+    adMessages = FenixNovagramChatAds.chatAdMessages(context: context, peerId: peerId)
+}
+```
+
+Reason: Telegram gates sponsored messages to the official api_id, so `adMessagesContext.state` is always empty on this fork. `FenixNovagramChatAds.chatAdMessages` (module `submodules/Fenixuz/NovagramAds`, target `FenixNovagramAds`) fetches a chat ad from OUR backend via `chatAds.search(channelName:viewerId:)` (channelName = the channel's username; broadcast channels only) and renders it as a sponsored `Message` in the same slot, mirroring the `fakeAds` path / `AdMessagesHistoryContextImpl.CachedMessage.toMessage`. Still wrapped by `FenixShowAdsGate` (Hook C). `chat_ads/order/search/` currently REQUIRES auth, so the SDK client is seeded with a **temporary test token** (a `FenixNovagramStaticTokenStore` in `FenixNovagramChatAds.swift`) — remove it once the backend is made public or keyed by Telegram user id. viewer_id policy is the same as search ads (real id in App Store builds, random id otherwise). BUILD: `//submodules/Fenixuz/NovagramAds:FenixNovagramAds` added to `//submodules/TelegramUI` deps.
+
+**Hook E — chat-ad click reporting in `submodules/TelegramUI/Sources/ChatController.swift` (2026-07-11).** Add `import FenixNovagramAds`. In the `activateAdAction` closure (~line 4926), immediately after `self.chatDisplayNode.adMessagesContext?.markAction(opaqueId: adAttribute.opaqueId, media: media, fullscreen: fullscreen)`, add:
+
+```swift
+// Fenixuz: report the tap to OUR ads backend when this is one of our ads (no-op otherwise).
+FenixNovagramChatAds.reportClick(opaqueId: adAttribute.opaqueId, context: self.context)
+```
+
+Reason: our sponsored `Message` carries an `AdMessageAttribute` whose `opaqueId` is `novagram:<orderId>`. Telegram's own `markAction` reports to Telegram's server (a no-op for our ad), so we also report the tap to OUR backend via `chatAds.click`. `reportClick` no-ops on any opaqueId not prefixed `novagram:`, so real Telegram ads are unaffected; the tap still opens `adAttribute.url` exactly as before.
+
+---
+
+### `submodules/ChatListUI/Sources/ChatListSearchListPaneNode.swift` — Novagram search ads (2026-07-11)
+
+Shows a promoted channel from our own ads backend at the **very top** of global search (the "Chats" tab), above Telegram's own sponsored `.adPeer` row, with an "ads by Novagram" trailing label. No ad (backend answers HTTP 404) → the row is nil and Telegram's own results show unchanged.
+
+Module: `submodules/Fenixuz/NovagramAds` — target `FenixNovagramAds` (bridge) over vendored SDK target `NovagramAds`. Entry point `FenixNovagramSearchAds.promotedChannel(context:query:)` → `Signal<FenixNovagramPromotedChannel?, NoError>`; click reporting `FenixNovagramSearchAds.reportClick(orderId:context:)`.
+
+Hooks in this file (all additive, `.novagramAdPeer` sorts before every other case so it renders first):
+
+1. **Import** — add `import FenixNovagramAds` next to `import FetchManagerImpl`.
+2. **`ChatListSearchEntryStableId`** — add `case novagramAdPeerId(EnginePeer.Id)`.
+3. **`ChatListSearchEntry`** — add `case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, String?)` (peer, orderId, index, theme, strings, query). Handle it in `stableId`, `==`, `<` (sorts first — less than `.topic`; add it to the `return false` group of every other case's rhs switch), and `item(...)` (renders a `ContactsPeerItem` with `rightLabelText: .init(text: "ads by Novagram", …)`, tap → `interaction.peerSelected` + `FenixNovagramSearchAds.reportClick`).
+4. **`foundRemotePeers`** — widen its tuple from `([FoundPeer],[FoundPeer],[AdPeer],Bool)` to `(…,Bool, FenixNovagramPromotedChannel?)`. In the `.chats` branch, `combineLatest` the existing `searchAdPeers(query:)` with `FenixNovagramSearchAds.promotedChannel(context:query:)`; every other branch passes `nil` as the 5th element.
+5. **Entry insert** — right after `var existingPeerIds = Set<EnginePeer.Id>()`, if `foundRemotePeers.4` is non-nil and not hidden, insert `.novagramAdPeer(...)` at index 0 of `entries` and add its peer id to `existingPeerIds` (so it isn't duplicated as a local/global result).
+
+BUILD: `//submodules/Fenixuz/NovagramAds:FenixNovagramAds` added to `//submodules/ChatListUI` deps.
+
+viewer_id policy (in `FenixNovagramSearchAds`): real Telegram user id when `GlobalExperimentalSettings.isAppStoreBuild` is true (App Store publish), a throwaway random id otherwise — the backend caps each order to one view per viewer, so a real id would show the ad once and never again while testing (`./run.sh`, `-r --prod`).
+
 BUILD: `//submodules/Fenixuz/ProMessager:FenixuzProMessager` is already a dep of `//submodules/TelegramUI` (added 2026-06-27, see below).
+
+---
+
+### `submodules/TelegramUI/Components/GlobalControlPanelsContext/Sources/GlobalControlPanelsContext.swift` + `submodules/ChatListUI/Sources/ChatListControllerNode.swift` — Novagram banner ads (2026-07-17)
+
+Shows a backend-driven banner at the **very top of the chat list**, reusing Telegram's own `.link` `ChatListNotice` case (the same slot upstream uses for "click here" server-side suggestions) instead of adding a new UI element. OURS-FIRST priority: if our backend has an active, non-dismissed banner and the ads gate is ON, it wins the whole notice slot; if empty / 404 / gate OFF, the signal emits `nil` and Telegram's existing notice chain (`reviewLogin`, `setupPassword`, birthdays, Premium upsells, `.link` suggestions, …) runs completely unchanged below it.
+
+Module: `submodules/Fenixuz/NovagramAds` — target `FenixNovagramAds`, file `Sources/FenixNovagramAds/FenixNovagramBannerAds.swift`. Entry points: `FenixNovagramBannerAds.bannerNotice(context:)` → `Signal<GlobalControlPanelsContext.ChatListNotice?, NoError>`, `FenixNovagramBannerAds.reportClick(bannerId:context:)`, `FenixNovagramBannerAds.markDismissed(bannerId:viewerId:context:)`. Gated by `FenixShowAdsGate.enabledSignal` (same NovagramPro ads toggle as chat ads / search ads), and locally deduped against a per-viewer dismissed-id set in `UserDefaults` (suite `pro_messager`, key `fenix_banner_dismissed_ids`) so a dismissed banner disappears instantly even before the backend round-trip completes.
+
+**Hook 1 — producer, OURS-FIRST branch (`GlobalControlPanelsContext.swift`).**
+
+Import, top of file (line 10):
+
+```swift
+import FenixNovagramAds
+```
+
+Inside `chatListNotices`'s `suggestedChatListNoticeSignal`, `FenixNovagramBannerAds.bannerNotice(context: context)` is appended as the last input of the `combineLatest(...)` call (line 346) and the trailing closure parameter list gains a matching `bannerNotice` (line 348). As the very first statement inside the `mapToSignal { … in` body (lines 349–351), before any of Telegram's own suggestion checks:
+
+```swift
+if let bannerNotice = bannerNotice {
+    return .single(bannerNotice)   // OURS — highest priority
+}
+```
+
+Reason: `suggestedChatListNoticeSignal` is a single `combineLatest` → `mapToSignal` chain that falls through a long `if/else if` ladder of upstream suggestion types, ending in the real `.link` branch (suggestions-driven, line 479–480) and a final `return .single(nil)` (line 482). Adding our signal as one more `combineLatest` input and checking it first means: banner present → short-circuit with `.single(bannerNotice)` before touching any upstream case; banner absent (`nil`) → falls straight through to the untouched upstream ladder. No upstream branch, ordering, or precedence among upstream cases was reordered or removed.
+
+**Hook 2 — dismiss (`GlobalControlPanelsContext.swift`, `Impl.dismissChatListNotice`).**
+
+Inside the `switch notice` in `dismissChatListNotice(parentController:notice:)`, the pre-existing `case let .link(id, _, _, _):` arm (which previously always called `dismissServerProvidedSuggestion`) is branched on the id prefix (lines 666–671):
+
+```swift
+case let .link(id, _, _, _):
+    if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
+        FenixNovagramBannerAds.markDismissed(bannerId: uuid, viewerId: FenixNovagramBannerAds.viewerId(context: self.context), context: self.context)
+    } else {
+        _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: id).startStandalone()
+    }
+```
+
+Reason: our banner's `.link` id is namespaced `"novagram-banner:<uuid>"` (built in `FenixNovagramBannerAds.bannerNotice`), so it is never a real server suggestion id and calling `dismissServerProvidedSuggestion` on it would just be a harmless no-op server call — but routing it to `markDismissed` instead also (a) tells our backend so the dismissal survives a reinstall, (b) records the id locally for instant re-filtering, and (c) posts `.fenixShowAdsChanged` so the chat-list notice reactively drops the banner right away. Any real upstream `.link` suggestion (id without our prefix) still goes through the original `dismissServerProvidedSuggestion` call, unchanged.
+
+**Hook 3 — click reporting (`ChatListUI/Sources/ChatListControllerNode.swift`).**
+
+Import (line 32):
+
+```swift
+import FenixNovagramAds
+```
+
+The pre-existing `case let .link(id, url, _, _):` arm of the notice tap-action switch gains a prefix check before its existing `openUrl(url)` call (lines 1443–1447):
+
+```swift
+case let .link(id, url, _, _):
+    if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
+        FenixNovagramBannerAds.reportClick(bannerId: uuid, context: self.context)
+    }
+    self.effectiveContainerNode.currentItemNode.interaction?.openUrl(url)
+```
+
+Reason: same id-namespacing as Hook 2 — a tap on our banner also needs a fire-and-forget click report to our own backend before Telegram opens `url` (which stays `ad.link`, i.e. `openUrl` behavior for real upstream `.link` suggestions is byte-for-byte unchanged).
+
+**BUILD dependency additions:**
+
+- `//submodules/TelegramUI/Components/GlobalControlPanelsContext/BUILD` — `deps` gains `"//submodules/Fenixuz/NovagramAds:FenixNovagramAds"` (needed for the `import FenixNovagramAds` in Hook 1; this module previously had no Fenixuz dep at all).
+- `//submodules/ChatListUI/BUILD` — `deps` already had `"//submodules/Fenixuz/NovagramAds:FenixNovagramAds"` from the search-ads hook above; reused as-is for Hook 3's `import FenixNovagramAds`, no duplicate line added.
+- `//submodules/Fenixuz/NovagramAds/BUILD`, target `FenixNovagramAds` — **no change needed**. It already depended on `//submodules/SSignalKit/SwiftSignalKit`, `//submodules/Postbox`, `//submodules/TelegramCore`, `//submodules/AccountContext`, `//submodules/TelegramUI/Components/GlobalControlPanelsContext`, and `//submodules/Fenixuz/ProMessager:FenixuzProMessager` — exactly the six non-`NovagramAds` imports `FenixNovagramBannerAds.swift` uses (`SwiftSignalKit`, `Postbox`, `TelegramCore`, `AccountContext`, `GlobalControlPanelsContext`, `FenixuzProMessager` for `FenixShowAdsGate`/`.fenixShowAdsChanged`), plus its own `:NovagramAds` (vendored SDK) dep for `SDKClient`/`SDKConfiguration`/`SDKBannerAd`.
+
+---
+
+### `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` — hide the Premium "hide ads" option on OUR ads (2026-07-11)
+
+Our injected chat ad (`FenixNovagramChatAds`, opaqueId `novagram:<orderId>`) renders through Telegram's own sponsored-message UI, whose context menu offers **"Hide" → Telegram Premium** (`makePremiumDemoController(subject: .noAds)` → `makePremiumIntroController(source: .ads)`). This fork does not sell Premium (no IAP, see AppStoreIAP §), so that option must not appear on our ads — and it must NOT be replaced with any "buy from official Telegram" steering (Apple 3.1.1 / 4.1 anti-steering). The option is simply absent.
+
+In the sponsored-menu `else` branch (the `!adAttribute.canReport` path our ad takes — our `AdMessageAttribute` sets `canReport: false`), just before the premium gate, add:
+
+```swift
+// Fenixuz: OUR Novagram ad must not offer Telegram Premium "hide ads" (we have no IAP).
+let isNovagramAd = (String(data: adAttribute.opaqueId, encoding: .utf8) ?? "").hasPrefix("novagram:")
+```
+
+and change the gate around the `SponsoredMessageMenu_Hide` item from `if !chatPresentationInterfaceState.isPremium && !premiumConfiguration.isPremiumDisabled {` to append `&& !isNovagramAd`. Native Telegram ads are unaffected (their opaqueId lacks the prefix); the `SponsoredMessageMenu_Info` and Copy items remain. No BUILD change (edit is in an already-built Telegram-owned file).
+
+Mac mirror: `TelegramSwift/Telegram-Mac/ChatMessageMenuItems.swift` — same `isNovagramAd` gate on the `chatContextHideAd` item; the Mac search ad uses `contextMenu = nil` (no Premium at all). See `TelegramSwift/FORK_NOTES.md` §10.
+
+### `PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` — payment section shown view-only + redirect to Premium bot (2026-07-20)
+
+Reverses the earlier full hide of the Settings **payment section**. The block that builds the `.payment` rows — **Telegram Premium** (`Settings_Premium` → `.premium`), **Telegram Stars** (`Settings_Stars` → `.stars`), **My TON** (`Settings_MyTon` → `.ton`), **Telegram Business** (`Settings_Business` → `.businessSetup`), **Send a Gift** (`Settings_SendGift` → `.premiumGift`) — used to be wrapped in a `/* ... */` block comment (~lines 281–338, that hide was never itself in HOOKS.md). The comment is now removed, so all five rows render again (still upstream-conditional on `isPremiumDisabled` / Stars & TON balances — unchanged).
+
+The rows open the real Premium/Stars/Business/Gift screens **view-only**; their Subscribe/Buy/Send buttons stay blocked by the existing IAP gates (`InAppPurchaseManager.buyProduct` → `FenixuzAppStoreIAP.shouldBlockIAP`, plus the bot-invoice sites). Upstream ships this block live, so a clean merge already leaves the rows visible — the merge risk here is *re-applying the old hide by mistake*, so on conflict keep the rows.
+
+**Redirect target changed — `submodules/Fenixuz/AppStoreIAP/Sources/FenixuzAppStoreIAP.swift`:** the blocked-purchase alert now opens `https://t.me/PremiumBot` (new constant `premiumBotURL`, falls back to `officialTelegramAppStoreURL`) instead of the App Store page, so the purchase reads as completed inside the official Telegram app. Strings `iap_block_message` and `iap_block_open_app_store` in `FenixuzL10n.swift` updated to match ("Open Telegram Premium").
+
+⚠️ **Apple 3.1.1 anti-steering:** redirecting a Subscribe button to a purchase destination (@PremiumBot) is stronger steering than the previous "download the official app" App Store link, and than the deliberately steering-free ads case above. This is a re-rejection risk — kept per explicit product decision (2026-07-20).
 
 ---
 
@@ -814,6 +1163,7 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `PeerInfoScreen/{BUILD, PeerInfoScreen.swift, PeerInfoSettingsItems.swift, PeerInfoScreenSettingsActions.swift}` (2026-06-27) | +1 dep, +1 enum case, +2 imports, +1 row, +1 action case | "Analytics" Settings row → FenixuzAnalyticsController |
 | `PeerInfoScreen/{PeerInfoScreen.swift, PeerInfoSettingsItems.swift, PeerInfoScreenSettingsActions.swift}` (2026-07-06) | +1 enum case `.novagramBots`, +1 row under NovagramPro (id 2), +1 action case | "Novagram Bots" Settings row → fenixBotsController (surface Bots directly in Settings for faster discovery; reuses FenixuzProMessager, no new dep) |
 | `PeerInfoScreen/PeerInfoSettingsItems.swift` (2026-07-06) | 1 string literal | Settings row renamed "NovagramPro" → "Novagram Settings" (the Pro name read as a paid tier) |
+| `PeerInfoScreen/PeerInfoSettingsItems.swift` (2026-07-16) | 3 row `text:` literals → `FenixSettingsSectionStrings.{settings,bots,analytics}RowTitle(langCode:)`, +1 `fenixLangCode` line | localize the 3 Novagram section rows (Settings/Bots/Analytics) — were hardcoded English while the app UI was Uzbek. Uses app language `strings.baseLanguageCode`, NOT `Locale.current`. Strings live in `FenixuzProMessager/FenixBotsData.swift` (`FenixSettingsSectionStrings`). Analytics page title in `FenixuzAnalytics/FenixuzAnalyticsController.swift` localized the same way. |
 | `ChatListUI/Sources/ChatContextMenus.swift` (2026-07-06) | 1 line in ChatLock item | pincode context-menu icon Pin/Unpin → "Chat/Context Menu/Lock" (emoji stripped from titles in FenixuzL10n+ChatLock — icon+emoji double was wrong) |
 | `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` + `TelegramUI/Sources/ChatControllerForwardMessages.swift` + `TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift` + `TelegramUI/BUILD` (2026-07-07) | +1 import, +1 dep, +1 context item, +1 one-shot consume local, 3 expressions | "Forward Without Name" (revised): the `pro_messager/forward_hide_names` toggle (NovagramPro, default OFF) no longer force-hides names on every forward — it now EXPOSES a per-message long-press context item "Forward without name" (FenixuzL10n.context_forwardWithoutName). Tapping it sets one-shot `pro_messager/forward_hide_names_once`, which the forward-destination sites consume-and-reset (OR'd with `!hasNotOwnMessages`, own-messages-always-hide preserved). LoadDisplayNode fallback reverted to upstream `hideNames: false`. |
 | `TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift` (2026-07-06) | let→var, +4 lines | "Unlimited Pins": client pin limit → 1000 when `pro_messager/unlimited_pins` is set; upstream swallows pin-sync server errors, extra pins stay device-local (NovagramPro toggle, default OFF) |
@@ -823,7 +1173,10 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `AppDelegate.swift` (2026-07-07) | +1 import, +14-line launch hook | start FenixAutoAcceptManager global monitor on the active account (Feature #45 proactive auto-accept; FenixuzProMessager already a dep) |
 | `AuthorizationUI/BUILD` + `AuthorizationSequencePhoneEntryController.swift` (2026-07-04) | +1 dep, +1 import, +~30 lines | login-screen "NovagramProxy" nav button — enable proxy before login in blocked countries |
 | `TelegramCore/Sources/SyncCore/SyncCore_EditedMessageHistoryAttribute.swift` (fork-ADDED file; media v2 2026-07-07) | whole file (~115 lines) | `EditedMessageHistoryEntry` + `EditedMessageHistoryAttribute` — stores previous versions of edited messages; v2 adds `media: [Media]` (backward-compatible decode) |
-| `TelegramCore/Sources/State/AccountStateManagementUtils.swift` (`.EditMessage`, ~line 4599; updated 2026-07-07) | ~28-line capture block | append previous text+entities+media to `EditedMessageHistoryAttribute` when text OR media changed (webpage previews excluded) |
+| `TelegramCore/Sources/FenixuzEditHistoryCapture.swift` (fork-ADDED file; 2026-07-21) | whole file (~55 lines) | `fenixuzAppendEditHistory(previousMessage:newText:newMedia:into:)` — single shared capture helper; also carries an existing history forward when an update brings no text/media change (so it is not silently dropped) |
+| `TelegramCore/Sources/State/AccountStateManagementUtils.swift` (`.EditMessage`, ~line 4599; updated 2026-07-21) | 1-line hook (was ~28-line inline block) | call `fenixuzAppendEditHistory(...)` (capture logic moved into the shared helper) |
+| `TelegramCore/Sources/PendingMessages/RequestEditMessage.swift` (2026-07-21) | +3 lines × 4 update branches | call `fenixuzAppendEditHistory(...)` in the own-edit result handler so a user's OWN first edit is recorded — the previous code replaced the message with the server copy (dropping the attribute) before the state-manager path could see a text change, so history only began at the SECOND edit |
+| `TelegramCore/Sources/SyncCore/SyncCore_StandaloneAccountTransaction.swift` (`mergeMessageAttributes`, 2026-07-21) | +19 lines | carry `EditedMessageHistoryAttribute` forward across message re-add/replace (`.InsertExistingMessage` → `justUpdate`), like the existing `AudioTranscription`/`DerivedData`/`RichText` entries. Without it, channel & group messages re-arriving via `getChannelDifference` newMessages dropped the captured history — this is why History worked in **private chats but not groups/channels** |
 | `TelegramCore/Sources/Account/AccountManager.swift` (line ~246) | +1 line | `declareEncodable(EditedMessageHistoryAttribute.self, ...)` Postbox type registration |
 
 **Total Telegram-owned files modified: 24** (6 BUILD + 16 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
@@ -1907,7 +2260,7 @@ The standalone `tgwatch` SwiftUI watch app was deleted from the fork; restored f
 2. Before `config_setting(name = "projectIncludeReleaseSetting")`: `bool_flag(name="embedWatchApp", default=False)` + `config_setting(name="embedWatchAppSetting", ...)`. (`bool_flag` already loaded.)
 3. Before `ios_application(name = "Telegram", bundle_name = "Novagram",`: the `apple_prebuilt_watchos_application(name="TelegramWatchApp", bundle_id="{telegram_bundle_id}.watchkitapp", tags=["manual"])` target.
 4. Inside that `ios_application` (before `deps = [":Main", ":Lib"]`): `watch_application = select({":embedWatchAppSetting": ":TelegramWatchApp", "//conditions:default": None})`.
-- ⚠️ **BRANDING TRAP:** upstream's `Telegram/BUILD` diff also flips `bundle_name` Novagram→Telegram, swaps Fenix* icons, drops PrivacyManifest — these were **NOT taken**. `bundle_name = "Novagram"`, `alternate_icon_folders` (FenixYellow/Green/Gradient), `composer_icon_folders = []`, `:PrivacyManifest` all preserved.
+- ⚠️ **BRANDING TRAP:** upstream's `Telegram/BUILD` diff also flips `bundle_name` Novagram→Telegram, swaps Fenix* icons, drops PrivacyManifest — these were **NOT taken**. `bundle_name = "Novagram"`, `alternate_icon_folders` (FenixYellow/Green/Gradient **at the time — superseded 2026-07-09, see "Alternate app icon set: 3 Fenix → 7 Nova" near the end of this file for the current list**), `composer_icon_folders = []`, `:PrivacyManifest` all preserved.
 
 **Remaining to SHIP the watch (user-side, deferred — not done here):** register App ID `uz.fenixuz.app.watchkitapp` + watchkitapp provisioning profile under team `ZDBP5RSRZF`, drop `WatchApp.mobileprovision` into the codesigning material. Until then keep `publish.sh` **WITHOUT** `--embedWatchApp` (an `--embedWatchApp` distribution build HARD-RAISES without that profile by design). watchOS min target = 26.0. First standalone watch build needs network (QRCodeGenerator SPM resolve).
 
@@ -2194,7 +2547,7 @@ New `FenixSection.secretVault` section: `secretVaultEnabled` toggle + `secretVau
 
 1. `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift`
    - Added `import FenixuzRoundVideoFromGallery` (next to the existing `import FenixuzLocalization`).
-   - Inside the `presentCameraSelection` closure action sheet: the first `ActionSheetItemGroup` is built as `var fenixCameraItems: [ActionSheetItem]` (Front + Back buttons unchanged); when `FenixRoundVideoFromGallery.isEnabled`, a third `l10n.cameraPicker_gallery` ("Photos") button is appended that calls `FenixRoundVideoFromGallery.present(context:peerId:threadId:from:)` using `presentationInterfaceState.chatLocation.peerId/threadId` + `interfaceInteraction.chatController()`. This block is already a Fenixuz hook (camera-picker localization, 2026-06-08) — extend it.
+   - Inside the `presentCameraSelection` closure action sheet: the first `ActionSheetItemGroup` is built as `var fenixCameraItems: [ActionSheetItem]` (Front + Back buttons unchanged); when `FenixRoundVideoFromGallery.isEnabled`, a third `l10n.cameraPicker_gallery` ("Photos") button is appended that calls `FenixRoundVideoFromGallery.present(context:peerId:threadId:replySubject:from:)` using `presentationInterfaceState.chatLocation.peerId/threadId`, `presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel` (2026-07-16: threads the active swipe-reply through so a round video sent from the gallery preserves its reply instead of sending as a plain message), + `interfaceInteraction.chatController()`. This block is already a Fenixuz hook (camera-picker localization, 2026-06-08) — extend it.
 
 2. `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD`
    - Added dep `//submodules/Fenixuz/RoundVideoFromGallery:FenixuzRoundVideoFromGallery`.
@@ -2220,14 +2573,29 @@ Schema v2: `EditedMessageHistoryEntry` gained `public let media: [Media]` (defau
 
 ### `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` — `.EditMessage` handler (~line 4599)
 
-Fork-owned capture block (predates this doc; documented now). 2026-07-07 rework:
-- History entry is now created when **text OR media changed** (previously text-only; media-only edits captured nothing).
-- Entry carries `media: fenixPreviousMedia` = `previousMessage.media` with `TelegramMediaWebpage` filtered out — webpage-preview loading also arrives as `EditMessage` and must not create fake history entries.
-- Entry timestamp = previous version's `EditedMessageAttribute.date` if present, else `previousMessage.timestamp` (distinct timestamps make the History page sort stable).
-- Upstream translation-carryover branch (`previousMessage.text == message.text`) left untouched above the block; debug `print()` lines removed.
-- Idempotent: re-delivered identical edits compare equal (same text, same media ids) → no duplicate entries.
+Fork-owned capture (predates this doc; documented now). 2026-07-07 rework captured text+media; **2026-07-21** the inline ~28-line block was extracted into the shared helper `fenixuzAppendEditHistory(...)` (see below) and is now a single call:
+```swift
+fenixuzAppendEditHistory(previousMessage: previousMessage, newText: message.text, newMedia: message.media, into: &updatedAttributes)
+```
+- Still: history entry created when **text OR media changed** (webpage previews filtered out), entry timestamp = previous `EditedMessageAttribute.date` else `previousMessage.timestamp`, idempotent on re-delivered identical edits.
+- New in 2026-07-21: when the update brings **no** text/media change, an already-captured history is now carried forward instead of being dropped by the server copy's attribute set.
+- Upstream translation-carryover branch (`previousMessage.text == message.text`) left untouched above the call.
 
-On upstream merge conflict: keep the upstream translation/factcheck code, re-insert the `// Fenixuz: capture the previous version` block between the translation `if` and the `FactCheckMessageAttribute` block.
+On upstream merge conflict: keep the upstream translation/factcheck code, re-insert the `// Fenixuz: capture the previous version` call between the translation `if` and the `FactCheckMessageAttribute` block.
+
+### `submodules/TelegramCore/Sources/FenixuzEditHistoryCapture.swift` (fork-ADDED file, 2026-07-21) + `RequestEditMessage.swift` own-edit fix
+
+**Bug fixed:** the History viewer only appeared after a message was edited **2+ times**; a single edit showed nothing. Cause: a user's OWN edit goes through `PendingMessages/RequestEditMessage.swift`, whose result handler replaced the message with the server copy (preserving only flags/localTags/media, **dropping `EditedMessageHistoryAttribute`** and capturing no previous version). The same updates were then fed to `stateManager.addUpdates(result)`, but by then the stored text already equalled the server text, so the `.EditMessage` capture saw no change. The original version was therefore never recorded for own edits, and the history only started accumulating from the second observed change.
+
+**Fix:**
+- New file `FenixuzEditHistoryCapture.swift` — the single `fenixuzAppendEditHistory(previousMessage:newText:newMedia:into:)` helper, now called from both edit paths. Idempotent across the two: once one path has stored the pre-edit version, the other sees no change and carries the existing history forward (no duplicate, no drop).
+- `RequestEditMessage.swift` — in all **4** inline update branches (`updateEditMessage`, `updateNewMessage`, `updateEditChannelMessage`, `updateNewChannelMessage`) the return now threads `updatedAttributes` (server attributes + captured history) through `.withUpdatedAttributes(updatedAttributes)`. `previousMessage` in this closure still holds the pre-edit text, so the first edit is captured deterministically.
+- TelegramCore `BUILD` globs `Sources/**/*.swift`, so the new file needs no BUILD change.
+- Note: this fixes OWN edits and other people's edits observed live. Edits made to a message **before it was loaded** on this device still cannot be recovered — Telegram exposes no server-side edit history, so the feature is inherently capture-on-observe.
+
+**Follow-up fix (same day) — `SyncCore_StandaloneAccountTransaction.swift` `mergeMessageAttributes`:** after the above, History worked in **private chats but NOT in groups/channels**. Root cause: `EditedMessageHistoryAttribute` is local-only (server never sends it). Channel & group messages are re-added via `getChannelDifference` newMessages, which for an already-stored id runs Postbox `MessageHistoryIndexTable.addMessages` → `.InsertExistingMessage` → `MessageHistoryTable.justUpdate` → `seedConfiguration.mergeMessageAttributes(previous, &updated)`. That closure only carries forward a whitelist of local-only attributes (`AudioTranscription`, `DerivedData`, `RichText`); `EditedMessageHistoryAttribute` was missing, so every channel re-sync overwrote the message with the server copy and dropped the captured history. Private-chat messages don't take the `.InsertExistingMessage` re-add path (their edits go through `.EditMessage`/`updateMessage`, preserved by the helper), which is exactly why DMs worked and groups/channels didn't. Fix: added an `EditedMessageHistoryAttribute` carry-forward block to `mergeMessageAttributes` (append `previous`'s attribute when `updated` has none — and the server copy never has one). `telegramPostboxSeedConfiguration` (this file, ~line 30) is the single seed config used by every account (`Account.swift:260,1711`), so one edit covers all accounts. On upstream merge conflict: re-add the `EditedMessageHistoryAttribute` block after the `RichTextMessageAttribute` block inside `mergeMessageAttributes`.
+
+**Localization (same day):** the context-menu item label was a hardcoded English `"History"`. Replaced with `FenixuzL10n(chatPresentationInterfaceState.strings).context_editHistory` (new `FenixuzL10n` string — en "Edit History", uz "Tahrirlash tarixi", ru "История правок"). `import FenixuzLocalization` was already present in `ChatInterfaceStateContextMenus.swift` (line ~40, used by `context_forwardWithoutName`), so no BUILD change.
 
 ### `submodules/TelegramCore/Sources/Account/AccountManager.swift` (line ~246, pre-existing)
 
@@ -2292,3 +2660,520 @@ soundOptions expanded 5 → 12 tones (added marimba, crystal, droplet, ping, pul
 as bundled .caf; names in `FenixuzL10n.settings_reminder_soundName`). Apple's own Settings tones
 cannot be used by a 3rd-party app for notifications — only bundled files / .default — so these are
 original synthesized tones (like Telegram bundles its own).
+
+---
+
+## 📌 2026-07-09 — Alternate app icon set: 3 Fenix → 7 Nova (glass icons) + localized names
+
+The alternate-icon picker (Settings → app icon) dropped the 3 old flat Fenix icons
+(FenixYellowIcon / FenixGreenIcon / FenixGradientIcon) in favor of 7 new "Nova" glass-style
+icons: NovaBlueIcon, NovaTealIcon, NovaPurpleIcon, NovaPinkIcon, NovaOrangeIcon, NovaBlackIcon,
+NovaRedIcon. AppIconLLCIcon stays the default, unchanged. PNG assets live in
+`Telegram/Telegram-iOS/<Name>.alticon/` (8 files each, same naming convention the Fenix folders
+used: `<Name>@2x/@3x`, `<Name>Ipad[@2x]`, `<Name>LargeIpad@2x`, `<Name>NotificationIcon[@2x/@3x]`).
+
+**Supersedes the branding-trap note in the WatchApp-restoration section above (2026-06-22 entry) —
+that note said `alternate_icon_folders` (FenixYellow/Green/Gradient) must be preserved on merges;
+the CURRENT list is the 7 Nova names below. Do not restore FenixYellow/Green/Gradient.**
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift` — UPSTREAM hook (patched via python3, not Edit, per auto-lint policy)
+
+`getAvailableAlternateIcons` icon list: the 3 `PresentationAppIcon(name: "Fenix...", ...)` entries
+were replaced 1:1 with 7 Nova entries (same array shape; `AppIconLLCIcon` / `isDefault: true`
+untouched). Internal `name:`/`imageName:` string equals the icon's `.alticon` folder basename in
+every case.
+
+### `submodules/SettingsUI/Sources/Themes/ThemeSettingsAppIconItem.swift` — UPSTREAM hook (patched via python3, not Edit) + newly localized
+
+The hardcoded `var name = "Icon"` / `switch icon.name { case "FenixYellowIcon": name = "Sariq" ... }`
+display-name switch (Uzbek-only literal strings, no en/ru at all) is replaced with a
+`FenixuzL10n`-backed switch: `let fenixL10n = FenixuzL10n(item.strings)`, then each case reads
+`fenixL10n.iconName_<color>` (default/blue/teal/purple/pink/orange/black/red). Added
+`import FenixuzLocalization` after the existing `import AppBundle`. `item.strings:
+PresentationStrings` is the item's own existing stored property (line 41) — call site uses the
+positional `FenixuzL10n(_:)` initializer (matches the convention used everywhere else in the
+codebase, e.g. `AuthorizationSequencePhoneEntryControllerNode.swift:751`).
+
+### `submodules/SettingsUI/BUILD`
+
+Added dep (first Fenixuz dep in this BUILD file):
+
+```python
+"//submodules/Fenixuz/Localization:FenixuzLocalization",
+```
+
+Reason: `ThemeSettingsAppIconItem.swift` now imports `FenixuzLocalization` for `FenixuzL10n`.
+
+### `Telegram/Telegram-iOS/Info.plist` (fork-owned) — both `CFBundleAlternateIcons` dicts (iPhone `CFBundleIcons` + iPad `CFBundleIcons~ipad`)
+
+Same 3→7 swap, mirroring the exact per-icon shape the Fenix entries already used:
+- iPhone dict: `CFBundleIconFiles = [<Name>, <Name>NotificationIcon]`
+- iPad dict: `CFBundleIconFiles = [<Name>Ipad, <Name>LargeIpad, <Name>NotificationIcon]`
+
+Both blocks patched via python3 exact-string replacement — this file is tab-indented throughout,
+so a scripted replacement was used to avoid any tab/space drift a hand-typed Edit could introduce.
+
+### `Telegram/BUILD` (fork-owned)
+
+`alternate_icon_folders` list: same 3→7 swap (feeds the `filegroup` list-comprehension that globs
+each `Telegram-iOS/{name}.alticon/*.png` a few lines below it).
+
+### `submodules/Fenixuz/Localization/Sources/FenixuzL10n.swift` (fork-owned)
+
+Added 8 new `pick(en:uz:ru:)`-backed properties under a new `// MARK: - Alternate app icon names`
+section (right after `settings_chat_editedHistory_subtitle`): `iconName_default`, `iconName_blue`,
+`iconName_teal`, `iconName_purple`, `iconName_pink`, `iconName_orange`, `iconName_black`,
+`iconName_red`.
+
+**Verified identical across every layer** (AppDelegate icon list ↔ Info.plist keys ↔ `.alticon`
+folder basename ↔ `Telegram/BUILD` `alternate_icon_folders` string), for `AppIconLLCIcon` plus all
+7 Nova names.
+
+---
+
+## 📌 Communication Notifications entitlement (push avatar / comm-style) — 2026-07-20
+
+`Telegram/BUILD` line ~560. Upstream gates the `com.apple.developer.usernotifications.communication`
+entitlement to Telegram's own bundle ids only:
+
+```python
+communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids else ""
+```
+
+**Fenixuz hook — extend the condition with our App Store bundle ONLY (do NOT add to `official_bundle_ids`,
+which is also read at BUILD:495/501/523 for VOIP/CarPlay/associated-domains — that would grant collateral
+entitlements):**
+
+```python
+communication_notifications_fragment = official_communication_notifications_fragment if (telegram_bundle_id in official_bundle_ids or telegram_bundle_id == "uz.fenixuz.app") else ""
+```
+
+**Why:** without the entitlement, the NSE's `content.updating(from: INSendMessageIntent)`
+(`Telegram/NotificationService/Sources/NotificationService.swift:696`) throws and is swallowed by the
+print-only catch (:697-699), so lock-screen pushes render in plain app-icon style (no sender avatar, no
+iOS-15 communication presentation) even though decryption works and the sender name + text render fine.
+The entitlement only lands in the main-app `TelegramEntitlements` (BUILD:582-599, bound to the
+`ios_application` at :1776) — the extensions incl. the NSE do NOT carry it, so only the `uz.fenixuz.app`
+App ID needs the "Communication Notifications" capability + a regenerated App Store distribution profile
+(`Fenixuz_AppStore.mobileprovision`). The capability is Apple self-serve (not approval-gated). Main-app
+Info.plist already has `NSUserActivityTypes`→`INSendMessageIntent` (BUILD:1655-1658, upstream), so no
+other change is needed. Avatar photo is cache-only (`peerAvatar()` :468, no fetch): real photo for
+active contacts, monogram for never-opened senders.
+
+---
+
+## 📌 Deleted messages (anti-delete) — 2026-07-17 (Wave 2 same day: capture gating + real timestamp)
+
+NovagramPro feature: instead of letting a peer's message deletion actually remove the message
+from the local Postbox, the fork can retain it (marked with a `DeletedMessageAttribute` that now
+carries the actual deletion time) and show it inline with a "🗑 Deleted" label + timestamp,
+exactly where it used to sit in the conversation — but only while the user toggle is on.
+
+**Wave 2 change (same day as Wave 1 above):** capture is now itself gated by the toggle, not just
+display. When `show_deleted_messages` is ON, a server-driven delete is intercepted and the message
+is retained (marked, not removed). When OFF, the delete goes through unmodified — the message is
+actually removed from Postbox, matching vanilla Telegram behaviour. (Wave 1 always retained+marked
+every delete regardless of the toggle, and only gated *display* in
+`ChatHistoryEntriesForView.swift`; that display-side filter is unchanged and still needed as a
+second gate for messages that were retained earlier while the toggle was on and are still sitting
+in Postbox after the user turns it off.)
+
+**Setting:** `show_deleted_messages`, suite `pro_messager`, default `false`, owned by
+`FenixuzProMessager` (`FenixSettingsController.swift`). Same suite as every other NovagramPro
+toggle (`fenix_show_ads`, `block_foreign_users`, etc. — see the ProMessager sections above).
+
+### `submodules/TelegramCore/Sources/Message/DeletedMessageAttribute.swift` (Wave 2: added `timestamp`)
+
+The whole attribute, in full, after Wave 2:
+
+```swift
+import Foundation
+import Postbox
+
+public class DeletedMessageAttribute: MessageAttribute, Equatable {
+    public let timestamp: Int32
+
+    public init(timestamp: Int32) {
+        self.timestamp = timestamp
+    }
+
+    public convenience init() {
+        self.init(timestamp: 0)
+    }
+
+    required public init(decoder: PostboxDecoder) {
+        self.timestamp = decoder.decodeInt32ForKey("t", orElse: 0)
+    }
+
+    public func encode(_ encoder: PostboxEncoder) {
+        encoder.encodeInt32(self.timestamp, forKey: "t")
+    }
+
+    public static func == (lhs: DeletedMessageAttribute, rhs: DeletedMessageAttribute) -> Bool {
+        return lhs.timestamp == rhs.timestamp
+    }
+}
+```
+
+Before (Wave 1) this was a zero-payload marker: empty `init()`, empty `init(decoder:)`, empty
+`encode(_:)`, `==` always `true`. Wave 2 adds a stored `timestamp: Int32` (the deletion time,
+`Date().timeIntervalSince1970` at capture time — see the `AccountStateManagementUtils.swift` hook
+below), encoded under key `"t"`. The parameterless `convenience init()` is kept so any code still
+constructing the old way (and the `AccountManager.swift:247` registration factory, see below) keeps
+compiling, defaulting to `timestamp: 0`. `decodeInt32ForKey("t", orElse: 0)` makes decoding
+**backward-compatible**: an attribute encoded by Wave 1 (no `"t"` key present in its bytes) decodes
+to `timestamp: 0` instead of throwing/crashing.
+
+⚠️ **Known gap, flagged not fixed by this doc update:** `AccountManager.swift:247`'s registration
+factory (`declareEncodable(DeletedMessageAttribute.self, f: { _ in DeletedMessageAttribute() })`)
+still ignores the decoder it's handed and always constructs a fresh `DeletedMessageAttribute()`
+(i.e. `timestamp: 0`). Postbox's heterogeneous-attribute decode path
+(`PostboxDecoder.decodeRootObject()` → `decodeObjectForKey("_")` → `typeStore.decode(hash,
+decoder:)` in `submodules/Postbox/Sources/Coding.swift`) calls **this factory**, not
+`DeletedMessageAttribute.init(decoder:)` directly — so every time a message is re-decoded from the
+on-disk store (`MessageHistoryTable.swift`'s `decodeRootObject()` call sites), the persisted
+timestamp is discarded and replaced with `0`, even for freshly-encoded Wave 2 data. The in-memory
+instance created at capture time (in `AccountStateManagementUtils.swift`) holds the correct
+timestamp until the next disk round-trip (app relaunch, or any history-view rebuild that re-decodes
+from Postbox). One-line fix if wanted: `f: { DeletedMessageAttribute(decoder: $0) }`.
+
+Reason: a marker attribute — its presence flags a message as retained-after-delete; its (now
+non-zero) payload records when that happened. Lives in `TelegramCore` (not a Fenixuz module)
+because `MessageAttribute` conformance requires `Postbox` and every downstream consumer
+(`AccountStateManagementUtils.swift`, `ChatHistoryEntriesForView.swift`,
+`StringForMessageTimestampStatus.swift`) already depends on `TelegramCore`; a Fenixuz module would
+need to be a new dependency of all three instead. No BUILD change needed — `TelegramCore/BUILD`
+sources via `glob(["Sources/**/*.swift", ...])` (see `srcs = glob([...` at the top of the file), so
+the field addition needed no BUILD edit.
+
+---
+
+### `submodules/TelegramCore/Sources/Account/AccountManager.swift:247` (unchanged by Wave 2)
+
+Inside the `declaredEncodables` static-let block, alongside every other `declareEncodable(...)`
+call for a `MessageAttribute`/`Codable` type:
+
+```swift
+declareEncodable(DeletedMessageAttribute.self, f: { _ in DeletedMessageAttribute() })
+```
+
+Reason: every `PostboxCoding` type must be registered here or Postbox cannot decode it back out of
+the on-disk keyed archive on next launch — an unregistered attribute silently vanishes across app
+relaunches (the exact bug this line prevents). This line was **not touched** by Wave 2: it still
+reads `{ _ in DeletedMessageAttribute() }`, a leftover from when the attribute carried no payload
+(Wave 1). Now that `DeletedMessageAttribute` has a real `timestamp` field, this factory ignoring
+the decoder means the persisted timestamp does not survive a disk decode — see the ⚠️ note in the
+`DeletedMessageAttribute.swift` entry above for the full mechanism and the one-line fix.
+
+---
+
+### `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift:4449-4546` (Wave 2: gated on `show_deleted_messages`)
+
+Two `AccountStateMutationOperation` cases in the state-application switch —
+`.DeleteMessagesWithGlobalIds(ids)` (4449-4505) and `.DeleteMessages(ids)` (4507-4546) — are
+intercepted before they reach Postbox's real delete path, but (Wave 2 change) **only when the
+toggle is on**. Both cases now read the setting first and branch on it:
+
+```swift
+case let .DeleteMessages(ids):
+    let fenixShowDeleted = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+    if fenixShowDeleted {
+        var actuallyDeletedIds: [MessageId] = []
+        var retainedMessageIds: Set<MessageId> = []
+
+        for id in ids {
+            if let message = transaction.getMessage(id) {
+                if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                    retainedMessageIds.insert(id)
+                } else {
+                    var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+                    newAttributes.append(DeletedMessageAttribute(timestamp: Int32(Date().timeIntervalSince1970)))
+
+                    let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                    transaction.updateMessage(id, update: { _ in
+                        return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
+                    })
+                    retainedMessageIds.insert(id)
+                }
+            } else {
+                actuallyDeletedIds.append(id)
+            }
+        }
+
+        if !actuallyDeletedIds.isEmpty {
+            _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: actuallyDeletedIds, manualAddMessageThreadStatsDifference: { id, _, remove in
+                addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+            })
+        }
+        deletedMessageIds.append(contentsOf: actuallyDeletedIds.map { .messageId($0) })
+        deletedMessageIds.append(contentsOf: retainedMessageIds.map { .messageId($0) })
+    } else {
+        if !ids.isEmpty {
+            _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, manualAddMessageThreadStatsDifference: { id, _, remove in
+                addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+            })
+        }
+        deletedMessageIds.append(contentsOf: ids.map { .messageId($0) })
+    }
+```
+
+(`.DeleteMessagesWithGlobalIds` does the identical `fenixShowDeleted` gate keyed by global id
+instead of `MessageId`: same capture-attribute-and-`updateMessage` branch when `true` — plus it maps
+retained message ids back to their global ids before excluding them from the delete batch — and the
+same unmodified `transaction.deleteMessagesWithGlobalIds(ids, ...)` + cached-media cleanup when
+`false`, identical to Wave 1's always-on path.)
+
+The rule, same in both cases: `fenixShowDeleted` is read once at the top of the case (`let
+fenixShowDeleted = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages")
+?? false`).
+
+- **ON:** if the message still exists locally and does NOT already carry `DeletedMessageAttribute`,
+  re-write it in place with the attribute added — now constructed as
+  `DeletedMessageAttribute(timestamp: Int32(Date().timeIntervalSince1970))`, capturing the moment of
+  interception as the deletion time — via `updateMessage` (not `deleteMessages`). This message is
+  added to `retainedMessageIds`, not `actuallyDeletedIds` / the equivalent global-id list. Only
+  messages that are already gone locally (`transaction.getMessage(id) == nil`, e.g. never synced) or
+  already marked deleted (avoid double-marking / overwriting the original deletion timestamp when
+  the peer double-deletes) fall through to the real `_internal_deleteMessages` /
+  `transaction.deleteMessagesWithGlobalIds` call.
+- **OFF (Wave 2 change):** the entire capture block is skipped — the `ids`/`ids` (global) go
+  straight to `_internal_deleteMessages` / `transaction.deleteMessagesWithGlobalIds` unmodified,
+  exactly as vanilla Telegram would. No retention, no attribute, no `updateMessage` call at all.
+
+Reason: this is the actual "anti-delete" mechanism — the single chokepoint where every server-driven
+delete (peer deletes for me/everyone, `updates.deleteMessages`, `updates.deleteChannelMessages`)
+lands during state application. Intercepting here means every delete surface in the app (chat UI,
+notifications, sync) is covered without hooking each one individually. Wave 2 moves the toggle read
+from being purely a *display* gate (`ChatHistoryEntriesForView.swift`, hook below) to also being a
+*capture* gate here: with the feature off, this fork now behaves identically to vanilla Telegram
+(real deletes, no residual retained messages silently accumulating in Postbox for a feature the user
+isn't using); with it on, behaviour matches Wave 1 exactly, plus the retained attribute now carries
+a real timestamp instead of being a bare marker. `deletedMessageIds` (the function's return-side
+accumulator used to drive UI invalidation/animations) still receives both retained and
+actually-deleted ids in the ON branch (and all-deleted ids in the OFF branch), so the chat list /
+message list still gets a change notification and re-runs its filter (see the
+`ChatHistoryEntriesForView.swift` hook below) — a retained message just doesn't disappear from the
+underlying data, only (optionally) from the rendered view.
+
+---
+
+### `submodules/TelegramUI/Sources/ChatHistoryEntriesForView.swift:155,169-171`
+
+Inside the entries-loop, a hoisted read before the `loop: for entry in view.entries` (line 154 is
+`var count = 0`):
+
+```swift
+let showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+loop: for entry in view.entries {
+```
+
+then inside the loop, right after the existing `pendingRemovedMessages` skip-check (line 165-167):
+
+```swift
+if !showDeletedMessages && message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+    continue
+}
+```
+
+Reason: this is the display filter — the message is retained in Postbox (see the state-management
+hook above) but is skipped when building the rendered chat-history entries unless the user has
+`show_deleted_messages` on. The `UserDefaults` read is hoisted **outside** the per-entry loop (a
+single read reused for every entry) rather than reading it once per message — this function runs
+once per history-view transform and the view can contain hundreds of entries, so a per-entry
+UserDefaults hit would be a needless syscall in the hot path. No new import needed: `TelegramCore`
+(for `DeletedMessageAttribute`) is already imported at the top of this file (line 4); the toggle is
+read directly via `Foundation.UserDefaults` rather than through a `FenixuzProMessager` API call, matching
+the existing style of every other inline `pro_messager` read in this codebase (see
+`ChatController.swift`'s `blockForeignUsers` read for precedent).
+
+---
+
+### `submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift:223-230` (Wave 2: shows the deletion time)
+
+Right before the function's final `return dateText`:
+
+```swift
+if let del = message.attributes.first(where: { $0 is DeletedMessageAttribute }) as? DeletedMessageAttribute {
+    if del.timestamp > 0 {
+        let deletedTimeText = stringForMessageTimestamp(timestamp: del.timestamp, dateTimeFormat: dateTimeFormat)
+        dateText = "🗑 " + FenixuzL10n(strings).status_deletedMessage + " · " + deletedTimeText + " " + dateText
+    } else {
+        dateText = "🗑 " + FenixuzL10n(strings).status_deletedMessage + " " + dateText
+    }
+}
+```
+
+Wave 1 only ever appended the bare "🗑 Deleted" label. Wave 2 pulls the attribute instance itself
+out (`as? DeletedMessageAttribute`, not just the earlier `contains(where:)` existence check) to read
+its `timestamp`. When `timestamp > 0` (a real deletion time was captured — see the
+`AccountStateManagementUtils.swift` hook above), it renders that time via the same
+`stringForMessageTimestamp(...)` helper already used elsewhere in this function for the message's
+own `dateText`, separated by `" · "`. When `timestamp == 0` — either genuinely old data encoded
+before Wave 2 (see the backward-compat note in the `DeletedMessageAttribute.swift` entry above), or
+a decode that hit the `AccountManager.swift:247` gap also noted above — it falls back to the Wave 1
+label with no time, so no "🗑 Deleted · Jan 1, 1970" ever renders.
+
+Reason: the localized "Deleted" label (+ now, time) shown next to the timestamp when a
+retained-but-deleted message is visible (only reachable when `show_deleted_messages` is on — see
+the display-filter hook above; if the filter hides the message this code path is simply never
+reached for it). String key `status_deletedMessage` lives in
+`submodules/Fenixuz/Localization/Sources/FenixuzL10n.swift:252` (en/uz/ru). `import
+FenixuzLocalization` was already present in this file (line 9, added for an earlier hook) and
+`FenixuzLocalization` was already a dep of this component's BUILD file
+(`submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/BUILD`) — no new import or
+BUILD change needed for this hook. No new import needed for `stringForMessageTimestamp` either —
+it's a top-level function already defined/used elsewhere in this same file.
+
+---
+
+### `submodules/TelegramUI/Sources/ChatHistoryListNode.swift:1885-1887` — reactivity (2026-07-17)
+
+Immediately before the `historyViewTransitionDisposable` combineLatest chain, wraps the existing
+`historyViewUpdate` signal:
+
+```swift
+// Fenixuz: re-run the history transform live when the "show deleted messages" toggle flips (mirrors the ads gate).
+historyViewUpdate = combineLatest(queue: messageViewQueue, historyViewUpdate, FenixShowDeletedGate.reloadSignal)
+|> map { $0.0 }
+```
+
+`FenixShowDeletedGate` lives in `submodules/Fenixuz/ProMessager/Sources/FenixShowDeletedGate.swift`
+(pure Fenixuz code, not itself a hook — listed here only because it is the counterpart half of this
+hook). It exposes:
+
+```swift
+public extension NSNotification.Name {
+    static let fenixShowDeletedChanged = NSNotification.Name("FenixShowDeletedChanged")
+}
+
+public enum FenixShowDeletedGate {
+    public static var reloadSignal: Signal<Void, NoError> {
+        return Signal { subscriber in
+            subscriber.putNext(())
+            let observer = NotificationCenter.default.addObserver(forName: .fenixShowDeletedChanged, object: nil, queue: .main) { _ in
+                subscriber.putNext(())
+            }
+            return ActionDisposable {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+    }
+}
+```
+
+The notification is posted from `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift:1440-1442`
+(Fenixuz-owned, not a hook — reference only), inside the `updateShowDeletedMessages` argument
+closure:
+
+```swift
+}, updateShowDeletedMessages: { value in
+    UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
+    NotificationCenter.default.post(name: .fenixShowDeletedChanged, object: nil)
+```
+
+Reason: `ChatHistoryEntriesForView.swift`'s filter (hook above) reads `show_deleted_messages` fresh
+every time the history-view transform runs — but that transform only re-runs when Postbox's
+underlying `historyViewUpdate` signal emits, i.e. on actual message changes. Without this hook,
+flipping the toggle in NovagramPro settings would do nothing until the user backed out of the chat
+and reopened it (the transform wouldn't re-run to pick up the new UserDefaults value). Wrapping
+`historyViewUpdate` in `combineLatest(...)` with `FenixShowDeletedGate.reloadSignal` — which emits
+once immediately and again every time `.fenixShowDeletedChanged` posts — forces one extra transform
+pass right after the toggle flips, in every already-open chat, live. This mirrors the exact
+pattern already used for the ads toggle (`FenixShowAdsGate.gate(...)`, hook C in the
+"TelegramUI module" section above), except the ads gate wraps the ad-message *source* signal
+directly while this gate wraps the *trigger* for re-running the whole history transform (the
+filter itself lives in a different file, `ChatHistoryEntriesForView.swift`, so there is no single
+signal to gate — the reload has to be pushed from the outside).
+
+`import FenixuzProMessager` was already present in this file (added 2026-06-27 for
+`FenixShowAdsGate`, see hook A in the "TelegramUI module" section above) — `FenixShowDeletedGate` is
+in the same module, so no new import or BUILD dep was needed. `FenixShowDeletedGate.swift` itself
+is picked up automatically by `ProMessager/BUILD`'s `srcs = glob(["Sources/**/*.swift"])`.
+
+---
+
+### BUILD changes for this feature: none (still true after Wave 2)
+
+Every file this feature touches already had its required dependency wired in from an earlier hook
+batch. Wave 2 only edited method bodies inside already-covered files (`DeletedMessageAttribute.swift`
+gained a field, `AccountStateManagementUtils.swift` and `StringForMessageTimestampStatus.swift`
+gained branches) — no new files, no new imports, no new deps:
+- `TelegramCore/BUILD` and `ProMessager/BUILD` both glob their `Sources/`, so the two new files
+  (`DeletedMessageAttribute.swift`, `FenixShowDeletedGate.swift`) needed no BUILD edit.
+- `TelegramUI/BUILD` already depends on `//submodules/Fenixuz/ProMessager:FenixuzProMessager`
+  (added 2026-06-27, see the "TelegramUI module" section above) — covers both
+  `ChatHistoryListNode.swift`'s `FenixShowDeletedGate` import and (transitively, already imported)
+  `TelegramCore` for `DeletedMessageAttribute` in `ChatHistoryEntriesForView.swift` and
+  `AccountStateManagementUtils.swift`.
+- `ChatMessageDateAndStatusNode/BUILD` already depends on
+  `//submodules/Fenixuz/Localization:FenixuzLocalization`.
+
+---
+
+## 📌 2026-07-22 — Location page: ETA permission flow + timeout fallbacks (stuck-shimmer fix)
+
+**Files:** `submodules/LocationUI/Sources/LocationUtils.swift` (`getExpectedTravelTime`) and
+`submodules/LocationUI/Sources/LocationViewControllerNode.swift` (static-location `eta` signal).
+
+**Root cause (confirmed on device 2026-07-22, `[FenixETA]` logs):** with location access denied,
+MapKit's `calculateETA` (source = `MKMapItem.forCurrentLocation()`) returns `kCLErrorDomain
+Code=1` on the first request after launch and then **never invokes the completion handler at
+all** on subsequent requests. Upstream's eta pipeline has no timeout, drops any tuple containing
+`.calculating`, and SwiftSignalKit `combineLatest` never completes until all inputs complete —
+so one starved callback froze the page at the seeded `(.calculating, .calculating)`: permanent
+shimmer / never-appearing directions buttons (`LocationInfoListItem.swift:351`). Fork's
+LocationUI is byte-identical to upstream/master 12.9.2 tip — fork-only hardening, nothing to
+cherry-pick.
+
+**Hook A — `LocationUtils.swift` `getExpectedTravelTime`:**
+1. Permission pre-check at the top: if `CLLocationManager.authorizationStatus()` is not
+   `authorizedWhenInUse`/`authorizedAlways`, emit `.unknown` + complete immediately (instant
+   "Get Directions" button, no doomed MapKit request). Also protects the live-location per-row
+   ETA badges (`LocationViewControllerNode.swift` ~line 600 calls the same function).
+2. One-shot `SwiftSignalKit.Timer(timeout: 15.0)` fallback on the authorized path: emits
+   `.unknown` + completes + `directions.cancel()` if `calculateETA` stays silent; the callback
+   and the `ActionDisposable` both invalidate it. `Subscriber` ignores post-completion events —
+   the timer-vs-callback race is safe. Timer stays alive via strong captures in the
+   `calculateETA` closure (retained by MapKit) and the disposable.
+3. `#if DEBUG` `[FenixETA]` NSLog lines (start/callback/TIMEOUT/disposed) kept for future
+   regression debugging; compiled out of release builds.
+
+**Hook B — `LocationViewControllerNode.swift` static-location `eta`:**
+1. `etaAuthorization` gate before the ETA requests: `.notDetermined` →
+   `DeviceAccess.authorizeAccess(to: .location(.send), ...)` (standard system prompt via
+   `requestWhenInUseAuthorization`, presented through `interaction.present`); every other status
+   resolves instantly with no alerts (denied stays silent). Grant → real ETA flow; deny →
+   `.single((.unknown, .unknown))`.
+2. Chain-level `|> timeout(20.0, queue: .mainQueue(), alternate: .single((.unknown, .unknown)))`
+   around the `combineLatest |> mapToSignal` pair filter — second safety net (that inner signal
+   emits nothing until a terminal pair, so `timeout` acts as a hard cap from subscription).
+3. `#if DEBUG` `[FenixETA] deliver` NSLog in the big `combineLatest` subscriber.
+
+**Upstream-merge note:** if upstream rewrites `getExpectedTravelTime` or the `eta` construction,
+re-apply both hooks at the new positions (upstream code wins around them; the permission gate,
+the 15s timer, and the 20s chain timeout are the non-negotiable parts).
+
+### BUILD changes: none
+
+`LocationUI/BUILD` already had every needed dep (`import SwiftSignalKit`, `import DeviceAccess`,
+`import CoreLocation` were all already present in the touched files).
+
+---
+
+## 📌 2026-07-22 — Open In sheet: app tiles not tappable (upstream cherry-pick)
+
+**File:** `submodules/OpenInExternalAppUI/Sources/OpenInOptionsScreen.swift` — `OpenInAppView.init`
+
+**Hook:** two lines — `self.iconView.isUserInteractionEnabled = false` and
+`self.titleLabel.isUserInteractionEnabled = false`. The icon `TransformImageView` and the title
+`UILabel` are subviews of a `UIControl` and were swallowing touches, so tapping the Maps/Yandex
+tiles on the location "Open In" sheet did nothing (reproduced on device 2026-07-22).
+
+This is a verbatim early cherry-pick of the `OpenInOptionsScreen.swift` hunk of upstream commit
+`5df5e0a2c6` ("Various fixes", 2026-06-11) — the next `git pull upstream master` converges to
+identical code, so expect no conflict (or a trivial both-sides-identical one). No other hunks of
+that commit were taken.
+
+### BUILD changes: none
+
+---

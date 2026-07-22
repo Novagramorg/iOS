@@ -10,7 +10,7 @@ extension TelegramMediaMap {
     convenience init(coordinate: CLLocationCoordinate2D, liveBroadcastingTimeout: Int32? = nil, proximityNotificationRadius: Int32? = nil) {
         self.init(latitude: coordinate.latitude, longitude: coordinate.longitude, heading: nil, accuracyRadius: nil, venue: nil, liveBroadcastingTimeout: liveBroadcastingTimeout, liveProximityNotificationRadius: proximityNotificationRadius)
     }
-    
+
     var coordinate: CLLocationCoordinate2D {
         return CLLocationCoordinate2D(latitude: self.latitude, longitude: self.longitude)
     }
@@ -71,7 +71,7 @@ public func nearbyVenues(context: AccountContext, story: Bool = false, latitude:
             |> map { results -> ChatContextResultCollection? in
                 return results?.results
             }
-            |> `catch` { error -> Signal<ChatContextResultCollection?, NoError> in
+            |> `catch` { _ -> Signal<ChatContextResultCollection?, NoError> in
                 return .single(nil)
             }
         }
@@ -90,7 +90,7 @@ func stringForEstimatedDuration(strings: PresentationStrings, time: Double, form
         let minutes = Int32(time / 60.0) % 60
         let hours = Int32(time / 3600.0)
         let days = Int32(time / (3600.0 * 24.0))
-        
+
         let string: String
         if hours >= 24 {
             string = strings.Map_ETADays(days)
@@ -142,19 +142,55 @@ public enum ExpectedTravelTime: Equatable {
 
 public func getExpectedTravelTime(coordinate: CLLocationCoordinate2D, transportType: MKDirectionsTransportType) -> Signal<ExpectedTravelTime, NoError> {
     return Signal { subscriber in
+        // MapKit needs the user's current position to compute an ETA; with location access denied the
+        // request errors or just never calls back (kCLErrorDomain Code=1 seen on device), so answer
+        // instantly instead of making the user wait for the timeout
+        let authorizationStatus = CLLocationManager.authorizationStatus()
+        if authorizationStatus != .authorizedWhenInUse && authorizationStatus != .authorizedAlways {
+            #if DEBUG
+            NSLog("%@", "[FenixETA] no location permission (status=\(authorizationStatus.rawValue)) -> instant .unknown")
+            #endif
+            subscriber.putNext(.unknown)
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+
         subscriber.putNext(.calculating)
-        
+
         let destinationPlacemark = MKPlacemark(coordinate: coordinate, addressDictionary: nil)
         let destination = MKMapItem(placemark: destinationPlacemark)
-        
+
         let request = MKDirections.Request()
         request.source = MKMapItem.forCurrentLocation()
         request.destination = destination
         request.transportType = transportType
         request.requestsAlternateRoutes = false
-        
+
         let directions = MKDirections(request: request)
+
+        #if DEBUG
+        let startTime = CFAbsoluteTimeGetCurrent()
+        NSLog("%@", "[FenixETA] start transport=\(transportType.rawValue)")
+        #endif
+
+        // calculateETA can hang forever when the current location can't be resolved (e.g. location
+        // permission was never requested), which leaves the directions buttons in a permanent shimmer -
+        // give up after 15s so the plain Get Directions fallback button always appears
+        let timeoutTimer = SwiftSignalKit.Timer(timeout: 15.0, repeat: false, completion: {
+            #if DEBUG
+            NSLog("%@", "[FenixETA] TIMEOUT transport=\(transportType.rawValue) elapsed=\(CFAbsoluteTimeGetCurrent() - startTime)")
+            #endif
+            subscriber.putNext(.unknown)
+            subscriber.putCompletion()
+            directions.cancel()
+        }, queue: Queue.mainQueue())
+        timeoutTimer.start()
+
         directions.calculateETA { response, error in
+            timeoutTimer.invalidate()
+            #if DEBUG
+            NSLog("%@", "[FenixETA] callback transport=\(transportType.rawValue) elapsed=\(CFAbsoluteTimeGetCurrent() - startTime) eta=\(response.map { String($0.expectedTravelTime) } ?? "nil") error=\(error.map { String(describing: $0) } ?? "nil")")
+            #endif
             if let travelTime = response?.expectedTravelTime {
                 subscriber.putNext(.ready(travelTime))
             } else {
@@ -163,6 +199,10 @@ public func getExpectedTravelTime(coordinate: CLLocationCoordinate2D, transportT
             subscriber.putCompletion()
         }
         return ActionDisposable {
+            #if DEBUG
+            NSLog("%@", "[FenixETA] disposed transport=\(transportType.rawValue) elapsed=\(CFAbsoluteTimeGetCurrent() - startTime)")
+            #endif
+            timeoutTimer.invalidate()
             directions.cancel()
         }
     }

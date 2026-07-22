@@ -26,10 +26,10 @@ import GlassBackgroundComponent
 import Weather
 
 func getLocation(from message: EngineMessage) -> TelegramMediaMap? {
-    if let poll = message.media.first(where: { $0 is TelegramMediaPoll } ) as? TelegramMediaPoll, let map = poll.attachedMedia as? TelegramMediaMap {
+    if let poll = message.media.first(where: { $0 is TelegramMediaPoll }) as? TelegramMediaPoll, let map = poll.attachedMedia as? TelegramMediaMap {
         return map
     } else {
-        return message.media.first(where: { $0 is TelegramMediaMap } ) as? TelegramMediaMap
+        return message.media.first(where: { $0 is TelegramMediaMap }) as? TelegramMediaMap
     }
 }
 
@@ -62,7 +62,7 @@ public enum LocationViewEntry: Comparable, Identifiable {
     case info(PresentationTheme, TelegramMediaMap, String?, Double?, ExpectedTravelTime, ExpectedTravelTime, Bool)
     case toggleLiveLocation(PresentationTheme, String, String, Double?, Double?, Bool, EngineMessage.Id?)
     case liveLocation(PresentationTheme, PresentationDateTimeFormat, PresentationPersonNameOrder, EngineMessage, Double?, ExpectedTravelTime, ExpectedTravelTime, Int)
-    
+
     public var stableId: LocationViewEntryId {
         switch self {
         case .info:
@@ -73,8 +73,8 @@ public enum LocationViewEntry: Comparable, Identifiable {
             return .liveLocation(message.stableId)
         }
     }
-    
-    public static func ==(lhs: LocationViewEntry, rhs: LocationViewEntry) -> Bool {
+
+    public static func == (lhs: LocationViewEntry, rhs: LocationViewEntry) -> Bool {
         switch lhs {
         case let .info(lhsTheme, lhsLocation, lhsAddress, lhsDistance, lhsDrivingTime, lhsWalkingTime, lhsHasEta):
             if case let .info(rhsTheme, rhsLocation, rhsAddress, rhsDistance, rhsDrivingTime, rhsWalkingTime, rhsHasEta) = rhs, lhsTheme === rhsTheme, lhsLocation.venue?.id == rhsLocation.venue?.id, lhsAddress == rhsAddress, lhsDistance == rhsDistance, lhsDrivingTime == rhsDrivingTime, lhsWalkingTime == rhsWalkingTime, lhsHasEta == rhsHasEta {
@@ -96,8 +96,8 @@ public enum LocationViewEntry: Comparable, Identifiable {
             }
         }
     }
-    
-    public static func <(lhs: LocationViewEntry, rhs: LocationViewEntry) -> Bool {
+
+    public static func < (lhs: LocationViewEntry, rhs: LocationViewEntry) -> Bool {
         switch lhs {
         case .info:
             switch rhs {
@@ -124,7 +124,7 @@ public enum LocationViewEntry: Comparable, Identifiable {
             }
         }
     }
-    
+
     func item(context: AccountContext, presentationData: PresentationData, interaction: LocationViewInteraction?) -> ListViewItem {
         switch self {
         case let .info(_, location, address, distance, drivingTime, walkingTime, hasEta):
@@ -154,7 +154,7 @@ public enum LocationViewEntry: Comparable, Identifiable {
             } else {
                 beginTimeAndTimeout = nil
             }
-            
+
             let icon: LocationActionListItemIcon
             if let timeout, Int32(timeout) != liveLocationIndefinitePeriod, !additional {
                 icon = .extendLiveLocation
@@ -163,7 +163,7 @@ public enum LocationViewEntry: Comparable, Identifiable {
             } else {
                 icon = .liveLocation
             }
-            
+
             return LocationActionListItem(presentationData: ItemListPresentationData(presentationData), engine: context.engine, title: title, subtitle: subtitle, icon: icon, isOpaque: false, beginTimeAndTimeout: !additional ? beginTimeAndTimeout : nil, action: {
                 if beginTimeAndTimeout != nil {
                     if let timeout, Int32(timeout) != liveLocationIndefinitePeriod {
@@ -204,11 +204,11 @@ public enum LocationViewEntry: Comparable, Identifiable {
 
 private func preparedTransition(from fromEntries: [LocationViewEntry], to toEntries: [LocationViewEntry], context: AccountContext, presentationData: PresentationData, interaction: LocationViewInteraction?, gotTravelTimes: Bool, animated: Bool) -> LocationViewTransaction {
     let (deleteIndices, indicesAndItems, updateIndices) = mergeListsStableWithUpdates(leftList: fromEntries, rightList: toEntries)
-    
+
     let deletions = deleteIndices.map { ListViewDeleteItem(index: $0, directionHint: nil) }
     let insertions = indicesAndItems.map { ListViewInsertItem(index: $0.0, previousIndex: $0.2, item: $0.1.item(context: context, presentationData: presentationData, interaction: interaction), directionHint: nil) }
     let updates = updateIndices.map { ListViewUpdateItem(index: $0.0, previousIndex: $0.2, item: $0.1.item(context: context, presentationData: presentationData, interaction: interaction), directionHint: nil) }
-    
+
     return LocationViewTransaction(deletions: deletions, insertions: insertions, updates: updates, gotTravelTimes: gotTravelTimes, count: toEntries.count, animated: animated)
 }
 
@@ -223,8 +223,8 @@ public enum LocationViewLocation: Equatable {
     case user
     case coordinate(CLLocationCoordinate2D, Bool)
     case custom
-    
-    public static func ==(lhs: LocationViewLocation, rhs: LocationViewLocation) -> Bool {
+
+    public static func == (lhs: LocationViewLocation, rhs: LocationViewLocation) -> Bool {
         switch lhs {
         case .initial:
             if case .initial = rhs {
@@ -261,7 +261,7 @@ public struct LocationViewState {
     public var trackingMode: LocationTrackingMode
     public var updatingProximityRadius: Int32?
     public var cancellingProximityRadius: Bool
-    
+
     public init() {
         self.mapMode = .map
         self.displayingMapModeOptions = false
@@ -281,32 +281,32 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
     private let interaction: LocationViewInteraction
     private let locationManager: LocationManager
     private let isPreview: Bool
-    
+
     private var rightBarButtonAction: LocationViewRightBarButton = .none
-    
+
     private let topEdgeEffectView = EdgeEffectView()
     private let buttons = ComponentView<Empty>()
     private let title = ComponentView<Empty>()
-    
+
     private let listNode: ListView
     let backgroundView = GlassBackgroundView()
     let headerNode: LocationMapHeaderNode
-    
+
     private var enqueuedTransitions: [LocationViewTransaction] = []
-    
+
     private var disposable: Disposable?
     private let weatherDisposable = MetaDisposable()
     private var state: LocationViewState
     private let statePromise: Promise<LocationViewState>
-    
+
     private var validLayout: (layout: ContainerViewLayout, navigationHeight: CGFloat)?
     private var listOffset: CGFloat?
-    
+
     private var displayedProximityAlertTooltip = false
-    
+
     var reportedAnnotationsReady = false
     var onAnnotationsReady: (() -> Void)?
-    
+
     private let travelDisposables = DisposableSet()
     private var travelTimes: [EngineMessage.Id: (Double, ExpectedTravelTime, ExpectedTravelTime)] = [:] {
         didSet {
@@ -324,10 +324,10 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         self.interaction = interaction
         self.locationManager = locationManager
         self.isPreview = isPreview
-        
+
         self.state = LocationViewState()
         self.statePromise = Promise(self.state)
-        
+
         self.listNode = ListViewImpl()
         self.listNode.backgroundColor = .clear
         self.listNode.limitHitTestToNodes = true
@@ -336,7 +336,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         self.listNode.accessibilityPageScrolledString = { row, count in
             return presentationData.strings.VoiceOver_ScrollStatus(row, count).string
         }
-        
+
         var setupProximityNotificationImpl: ((Bool) -> Void)?
         var weatherPressedImpl: (() -> Void)?
         self.headerNode = LocationMapHeaderNode(
@@ -353,24 +353,24 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 weatherPressedImpl?()
             }
         )
-    
+
         super.init()
-        
+
         self.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
-        
+
         self.addSubnode(self.headerNode)
         if !self.isPreview {
             self.addSubnode(self.listNode)
         }
-        
+
         let userLocation: Signal<CLLocation?, NoError> = .single(nil)
         |> then(
             throttledUserLocation(self.headerNode.mapNode.userLocation)
         )
-        
+
         var eta: Signal<(ExpectedTravelTime, ExpectedTravelTime), NoError> = .single((.calculating, .calculating))
         var address: Signal<String?, NoError> = .single(nil)
-        
+
         let subjectLocation = getLocation(from: subject)
         let isStaticLocationView: Bool
         if let subjectLocation {
@@ -383,19 +383,47 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         if let location = subjectLocation, isStaticLocationView {
             self.headerNode.mapNode.setMapCenter(coordinate: location.coordinate, span: LocationMapNode.viewMapSpan, animated: false)
 
+            // ask for location access on first open (notDetermined -> system prompt), so the ETA
+            // buttons can work like the official app; denied is handled silently and instantly
+            let etaAuthorization: Signal<Bool, NoError> = Signal { subscriber in
+                let status = CLLocationManager.authorizationStatus()
+                if status == .notDetermined {
+                    DeviceAccess.authorizeAccess(to: .location(.send), locationManager: locationManager, presentationData: presentationData, present: { c, _ in
+                        interaction.present(c)
+                    }, openSettings: {
+                        context.sharedContext.applicationBindings.openSettings()
+                    }, { authorized in
+                        subscriber.putNext(authorized)
+                        subscriber.putCompletion()
+                    })
+                } else {
+                    subscriber.putNext(status == .authorizedWhenInUse || status == .authorizedAlways)
+                    subscriber.putCompletion()
+                }
+                return EmptyDisposable
+            }
+
             eta = .single((.calculating, .calculating))
-            |> then(combineLatest(queue: Queue.mainQueue(), getExpectedTravelTime(coordinate: location.coordinate, transportType: .automobile), getExpectedTravelTime(coordinate: location.coordinate, transportType: .walking))
-            |> mapToSignal { drivingTime, walkingTime -> Signal<(ExpectedTravelTime, ExpectedTravelTime), NoError> in
-                if case .calculating = drivingTime {
-                    return .complete()
+            |> then(etaAuthorization
+            |> mapToSignal { authorized -> Signal<(ExpectedTravelTime, ExpectedTravelTime), NoError> in
+                if !authorized {
+                    return .single((.unknown, .unknown))
                 }
-                if case .calculating = walkingTime {
-                    return .complete()
+                return combineLatest(queue: Queue.mainQueue(), getExpectedTravelTime(coordinate: location.coordinate, transportType: .automobile), getExpectedTravelTime(coordinate: location.coordinate, transportType: .walking))
+                |> mapToSignal { drivingTime, walkingTime -> Signal<(ExpectedTravelTime, ExpectedTravelTime), NoError> in
+                    if case .calculating = drivingTime {
+                        return .complete()
+                    }
+                    if case .calculating = walkingTime {
+                        return .complete()
+                    }
+
+                    return .single((drivingTime, walkingTime))
                 }
-                
-                return .single((drivingTime, walkingTime))
+                // second safety net: even if a per-request timer fails to fire, never leave the buttons area without a terminal value
+                |> timeout(20.0, queue: Queue.mainQueue(), alternate: .single((.unknown, .unknown)))
             })
-            
+
             if let venue = location.venue, let venueAddress = venue.address, !venueAddress.isEmpty {
                 address = .single(venueAddress)
             } else {
@@ -408,12 +436,12 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 )
             }
         }
-        
+
         let actualLiveLocations = context.engine.messages.topPeerActiveLiveLocationMessages(peerId: subject.id.peerId)
         |> map { _, messages -> [EngineMessage] in
             return messages
         }
-        
+
         let renderLiveLocations: Signal<[EngineMessage], NoError>
         if isStaticLocationView {
             renderLiveLocations = .single([])
@@ -423,7 +451,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         }
 
         setupProximityNotificationImpl = { reset in
-            let _ = (actualLiveLocations
+            _ = (actualLiveLocations
             |> take(1)
             |> deliverOnMainQueue).start(next: { messages in
                 var ownMessageId: EngineMessage.Id?
@@ -434,11 +462,11 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                     }
                 }
                 interaction.setupProximityNotification(reset, ownMessageId)
-                
-                let _ = ApplicationSpecificNotice.incrementLocationProximityAlertTip(accountManager: context.sharedContext.accountManager, count: 4).start()
+
+                _ = ApplicationSpecificNotice.incrementLocationProximityAlertTip(accountManager: context.sharedContext.accountManager, count: 4).start()
             })
         }
-        
+
         weatherPressedImpl = {
             if let location = subjectLocation {
                 context.sharedContext.openExternalUrl(
@@ -452,13 +480,13 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 )
             }
         }
-        
+
         let previousState = Atomic<LocationViewState?>(value: nil)
         let previousUserAnnotation = Atomic<LocationPinAnnotation?>(value: nil)
         let previousAnnotations = Atomic<[LocationPinAnnotation]>(value: [])
         let previousEntries = Atomic<[LocationViewEntry]?>(value: nil)
         let previousHadTravelTimes = Atomic<Bool>(value: false)
-        
+
         let actualSelfPeer = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
         let renderSelfPeer: Signal<EnginePeer?, NoError>
         if isStaticLocationView {
@@ -467,30 +495,33 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         } else {
             renderSelfPeer = actualSelfPeer
         }
-                        
+
         self.disposable = (combineLatest(self.presentationDataPromise.get(), self.statePromise.get(), renderSelfPeer, renderLiveLocations, self.headerNode.mapNode.userLocation, userLocation, address, eta, self.travelTimesPromise.get())
         |> deliverOnMainQueue).start(next: { [weak self] presentationData, state, selfPeer, liveLocations, userLocation, distance, address, eta, travelTimes in
+            #if DEBUG
+            NSLog("%@", "[FenixETA] deliver eta=(\(eta.0), \(eta.1))")
+            #endif
             if let strongSelf = self, let location = getLocation(from: subject) {
                 var entries: [LocationViewEntry] = []
                 var annotations: [LocationPinAnnotation] = []
-                var userAnnotation: LocationPinAnnotation? = nil
+                var userAnnotation: LocationPinAnnotation?
                 var effectiveLiveLocations: [EngineMessage] = liveLocations
-                
+
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
-                
-                var proximityNotification: Bool? = nil
+
+                var proximityNotification: Bool?
                 var proximityNotificationRadius: Int32?
                 var index: Int = 0
-                
+
                 var isLocationView = false
                 if location.liveBroadcastingTimeout == nil {
                     isLocationView = true
-                    
+
                     let subjectLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
                     let distance = userLocation.flatMap { subjectLocation.distance(from: $0) }
-                    
+
                     entries.append(.info(presentationData.theme, location, address, distance, eta.0, eta.1, true))
-                    
+
                     annotations.append(LocationPinAnnotation(context: context, theme: presentationData.theme, location: location, queryId: nil, resultId: nil, forcedSelection: true))
                 } else {
                     var activeOwnLiveLocation: EngineMessage?
@@ -504,19 +535,19 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                             break
                         }
                     }
-                                        
+
                     let title: String
                     let subtitle: String
                     let beginTime: Double?
                     let timeout: Double?
-                    
+
                     if let message = activeOwnLiveLocation {
                         var liveBroadcastingTimeout: Int32 = 0
                         if let location = getLocation(from: message), let timeout = location.liveBroadcastingTimeout {
                             liveBroadcastingTimeout = timeout
                         }
                         title = presentationData.strings.Map_StopLiveLocation
-                        
+
                         var updateTimestamp = message.timestamp
                         for attribute in message.attributes {
                             if let attribute = attribute as? EditedMessageAttribute {
@@ -524,7 +555,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                                 break
                             }
                         }
-                        
+
                         subtitle = stringForRelativeLiveLocationTimestamp(strings: presentationData.strings, relativeTimestamp: updateTimestamp, relativeTo: currentTime, dateTimeFormat: presentationData.dateTimeFormat)
                         beginTime = Double(message.timestamp)
                         timeout = Double(liveBroadcastingTimeout)
@@ -534,7 +565,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                         beginTime = nil
                         timeout = nil
                     }
-                    
+
                     if case let .channel(channel) = subject.author, case .broadcast = channel.info, activeOwnLiveLocation == nil {
                     } else {
                         if let timeout, Int32(timeout) != liveLocationIndefinitePeriod {
@@ -544,9 +575,9 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                             entries.append(.toggleLiveLocation(presentationData.theme, title, subtitle, beginTime, timeout, false, nil))
                         }
                     }
-                    
+
                     var sortedLiveLocations: [EngineMessage] = []
-                    
+
                     var effectiveSubject: EngineMessage?
                     for message in effectiveLiveLocations {
                         if message.id == subject.id {
@@ -562,13 +593,13 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                     }
                     effectiveLiveLocations = sortedLiveLocations
                 }
-                        
+
                 for message in effectiveLiveLocations {
                     if let location = getLocation(from: message) {
                         if let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info, let threadId = message.threadId, threadId != 1 {
                             continue
                         }
-                        
+
                         var liveBroadcastingTimeout: Int32 = 0
                         if let timeout = location.liveBroadcastingTimeout {
                             liveBroadcastingTimeout = timeout
@@ -582,17 +613,17 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                         if message.flags.contains(.Incoming) && remainingTime != 0 && proximityNotification == nil {
                             proximityNotification = false
                         }
-                        
+
                         let subjectLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
                         let distance = userLocation.flatMap { subjectLocation.distance(from: $0) }
-                        
+
                         let timestamp = CACurrentMediaTime()
                         if message.localTags.contains(.OutgoingLiveLocation), let selfPeer = selfPeer {
                             userAnnotation = LocationPinAnnotation(context: context, theme: presentationData.theme, message: message, selfPeer: selfPeer, isSelf: true, heading: location.heading)
                         } else {
                             var drivingTime: ExpectedTravelTime = .unknown
                             var walkingTime: ExpectedTravelTime = .unknown
-                            
+
                             if !isLocationView && message.author?.id != context.account.peerId {
                                 let signal = combineLatest(
                                     queue: Queue.mainQueue(),
@@ -608,11 +639,11 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                                     }
                                     return .single((drivingTime, walkingTime))
                                 }
-                                
+
                                 if let (previousTimestamp, maybeDrivingTime, maybeWalkingTime) = travelTimes[message.id] {
                                     drivingTime = maybeDrivingTime
                                     walkingTime = maybeWalkingTime
-                                    
+
                                     if timestamp > previousTimestamp + 60.0 {
                                         strongSelf.travelDisposables.add(signal.start(next: { [weak self] drivingTime, walkingTime in
                                             guard let strongSelf = self else {
@@ -627,7 +658,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                                 } else {
                                     drivingTime = .calculating
                                     walkingTime = .calculating
-                                    
+
                                     strongSelf.travelDisposables.add(signal.start(next: { [weak self] drivingTime, walkingTime in
                                         guard let strongSelf = self else {
                                             return
@@ -639,14 +670,14 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                                     }))
                                 }
                             }
-                            
+
                             annotations.append(LocationPinAnnotation(context: context, theme: presentationData.theme, message: message, selfPeer: selfPeer, isSelf: message.author?.id == context.account.peerId, heading: location.heading))
                             entries.append(.liveLocation(presentationData.theme, presentationData.dateTimeFormat, presentationData.nameDisplayOrder, message, distance, drivingTime, walkingTime, index))
                         }
                         index += 1
                     }
                 }
-                
+
                 if let currentProximityNotification = proximityNotification, currentProximityNotification && state.cancellingProximityRadius {
                     proximityNotification = false
                     proximityNotificationRadius = nil
@@ -654,18 +685,18 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                     proximityNotification = true
                     proximityNotificationRadius = radius
                 }
-                
+
                 if subject.id.peerId.namespace != Namespaces.Peer.CloudUser, proximityNotification == nil {
                     proximityNotification = false
                 }
                 if case let .channel(channel) = subject.author, case .broadcast = channel.info {
                     proximityNotification = nil
                 }
-                
+
                 let previousEntries = previousEntries.swap(entries)
                 let previousState = previousState.swap(state)
                 let previousHadTravelTimes = previousHadTravelTimes.swap(!travelTimes.isEmpty)
-                
+
                 var animated = false
                 var previousActionsCount = 0
                 var actionsCount = 0
@@ -681,28 +712,28 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                         actionsCount += 1
                     }
                 }
-                
+
                 if actionsCount < previousActionsCount {
                     animated = true
                 }
-                
+
                 let transition = preparedTransition(from: previousEntries ?? [], to: entries, context: context, presentationData: presentationData, interaction: strongSelf.interaction, gotTravelTimes: !travelTimes.isEmpty && !previousHadTravelTimes, animated: animated)
                 strongSelf.enqueueTransition(transition)
-                
+
                 strongSelf.headerNode.updateState(mapMode: state.mapMode, trackingMode: state.trackingMode, displayingMapModeOptions: state.displayingMapModeOptions, displayingPlacesButton: false, proximityNotification: proximityNotification, animated: true)
-                
+
                 if let proximityNotification = proximityNotification, !proximityNotification && !strongSelf.displayedProximityAlertTooltip {
                     strongSelf.displayedProximityAlertTooltip = true
-                    
-                    let _ = (ApplicationSpecificNotice.getLocationProximityAlertTip(accountManager: context.sharedContext.accountManager)
+
+                    _ = (ApplicationSpecificNotice.getLocationProximityAlertTip(accountManager: context.sharedContext.accountManager)
                     |> deliverOnMainQueue).start(next: { [weak self] counter in
                         if let strongSelf = self, counter < 3 {
-                            let _ = ApplicationSpecificNotice.incrementLocationProximityAlertTip(accountManager: context.sharedContext.accountManager).start()
+                            _ = ApplicationSpecificNotice.incrementLocationProximityAlertTip(accountManager: context.sharedContext.accountManager).start()
                             strongSelf.displayProximityAlertTooltip()
                         }
                     })
                 }
-                
+
                 switch state.selectedLocation {
                     case .initial:
                         if previousState?.selectedLocation != .initial {
@@ -721,7 +752,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                         break
                 }
                 strongSelf.headerNode.mapNode.trackingMode = state.trackingMode
-                
+
                 let previousAnnotations = previousAnnotations.swap(annotations)
                 let previousUserAnnotation = previousUserAnnotation.swap(userAnnotation)
                 if (userAnnotation == nil) != (previousUserAnnotation == nil) {
@@ -729,7 +760,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 }
                 if annotations != previousAnnotations {
                     strongSelf.headerNode.mapNode.annotations = annotations
-                    
+
                     if !strongSelf.reportedAnnotationsReady {
                         strongSelf.reportedAnnotationsReady = true
                         if annotations.count > 0 {
@@ -737,7 +768,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                         }
                     }
                 }
-                
+
                 if let _ = proximityNotification {
                     strongSelf.headerNode.mapNode.activeProximityRadius = proximityNotificationRadius.flatMap { Double($0)  }
                 } else {
@@ -754,21 +785,21 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                     rightBarButtonAction = .share
                 }
                 strongSelf.rightBarButtonAction = rightBarButtonAction
-                
+
                 if let (layout, navigationBarHeight) = strongSelf.validLayout {
                     var updateLayout = false
                     let transition: ContainedViewLayoutTransition = .animated(duration: 0.45, curve: .spring)
                     if previousState?.displayingMapModeOptions != state.displayingMapModeOptions {
                         updateLayout = true
                     }
-                    
+
                     if updateLayout {
                         strongSelf.containerLayoutUpdated(layout, navigationHeight: navigationBarHeight, transition: transition)
                     }
                 }
             }
         })
-        
+
         if !isPreview {
             self.listNode.updateFloatingHeaderOffset = { [weak self] offset, listTransition in
                 guard let self, self.listNode.scrollEnabled else {
@@ -778,7 +809,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 self.updateHeader(transition: listTransition)
             }
         }
-        
+
         self.listNode.beganInteractiveDragging = { [weak self] _ in
             guard let strongSelf = self else {
                 return
@@ -789,7 +820,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 return state
             }
         }
-        
+
         self.headerNode.mapNode.beganInteractiveDragging = { [weak self] in
             guard let strongSelf = self else {
                 return
@@ -802,7 +833,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 return state
             }
         }
-        
+
         self.headerNode.mapNode.annotationSelected = { [weak self] annotation in
             guard let strongSelf = self else {
                 return
@@ -811,13 +842,13 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 strongSelf.interaction.goToCoordinate(annotation.coordinate)
             }
         }
-        
+
         self.headerNode.mapNode.userLocationAnnotationSelected = { [weak self] in
             if let strongSelf = self, let location = strongSelf.headerNode.mapNode.currentUserLocation {
                 strongSelf.interaction.goToCoordinate(location.coordinate)
             }
         }
-        
+
         self.locationManager.manager.startUpdatingHeading()
         self.locationManager.manager.delegate = self
 
@@ -825,20 +856,20 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             self.requestWeatherData(coordinate: location.coordinate)
         }
     }
-    
+
     deinit {
         self.disposable?.dispose()
         self.weatherDisposable.dispose()
         self.travelDisposables.dispose()
         self.locationManager.manager.stopUpdatingHeading()
     }
-    
+
     override func didLoad() {
         super.didLoad()
-        
+
         self.view.insertSubview(self.backgroundView, aboveSubview: self.headerNode.view)
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         if newHeading.headingAccuracy < 0.0 {
             self.headerNode.mapNode.userHeading = nil
@@ -849,11 +880,11 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             self.headerNode.mapNode.userHeading = CGFloat(newHeading.magneticHeading)
         }
     }
-    
+
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
         self.presentationDataPromise.set(.single(presentationData))
-        
+
         self.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
         self.listNode.backgroundColor = .clear
         self.headerNode.updatePresentationData(self.presentationData)
@@ -861,7 +892,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             self.containerLayoutUpdated(layout, navigationHeight: navigationBarHeight, transition: .immediate)
         }
     }
-    
+
     func updateState(_ f: (LocationViewState) -> LocationViewState) {
         self.state = f(self.state)
         self.statePromise.set(.single(self.state))
@@ -887,7 +918,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         }
         let headerFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: layout.size.height))
         transition.updateFrame(node: self.headerNode, frame: headerFrame)
-        
+
         let headerHeight: CGFloat
         if self.isPreview {
             headerHeight = layout.size.height
@@ -920,24 +951,24 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         )
         transition.updateFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: glassInset, y: layout.size.height - backgroundSize.height - glassInset), size: backgroundSize))
     }
-    
+
     private func enqueueTransition(_ transition: LocationViewTransaction) {
         self.enqueuedTransitions.append(transition)
-        
+
         if let _ = self.validLayout {
             while !self.enqueuedTransitions.isEmpty {
                 self.dequeueTransition()
             }
         }
     }
-    
+
     var initialized = false
     private func dequeueTransition() {
         guard let _ = self.validLayout, let transition = self.enqueuedTransitions.first else {
             return
         }
         self.enqueuedTransitions.remove(at: 0)
-        
+
         let scrollToItem: ListViewScrollToItem?
         if (!self.initialized && transition.insertions.count > 0) || transition.gotTravelTimes {
             var index: Int = 0
@@ -955,13 +986,13 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             } else if transition.insertions.count == 2 {
                 index = 1
             }
-            
+
             scrollToItem = ListViewScrollToItem(index: index, position: .bottom(offset), animated: transition.gotTravelTimes, curve: .Default(duration: 0.3), directionHint: .Up)
             self.initialized = true
         } else {
             scrollToItem = nil
         }
-        
+
         var options = ListViewDeleteAndInsertOptions()
         if transition.animated {
             options.insert(.AnimateInsertion)
@@ -969,18 +1000,18 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         self.listNode.transaction(deleteIndices: transition.deletions, insertIndicesAndItems: transition.insertions, updateIndicesAndItems: transition.updates, options: options, scrollToItem: scrollToItem, updateSizeAndInsets: nil, updateOpaqueState: nil, completion: { _ in
         })
     }
-    
+
     func scrollToTop() {
         self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: ListViewScrollToItem(index: 0, position: .top(0.0), animated: true, curve: .Default(duration: nil), directionHint: .Up), updateSizeAndInsets: nil, stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
     }
-    
+
     func setProximityIndicator(radius: Int32?) {
         guard let (layout, navigationBarHeight) = self.validLayout else {
             return
         }
         if let radius = radius {
             self.headerNode.forceIsHidden = true
-            
+
             if let coordinate = self.headerNode.mapNode.currentUserLocation?.coordinate {
                 self.updateState { state in
                     var state = state
@@ -988,22 +1019,22 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                     state.trackingMode = .none
                     return state
                 }
-                
+
                 var contentOffset: CGFloat = 0.0
                 if case let .known(offset) = self.listNode.visibleContentOffset() {
                     contentOffset = offset
                 }
-                
+
                 let panelHeight: CGFloat = 349.0 + layout.intrinsicInsets.bottom
                 let inset = (layout.size.width - 260.0) / 2.0
                 let offset = panelHeight / 2.0 + 60.0 + inset + navigationBarHeight / 2.0
-                
+
                 let point = CGPoint(x: layout.size.width / 2.0, y: navigationBarHeight + (layout.size.height - navigationBarHeight - panelHeight) / 2.0)
                 let convertedPoint = self.view.convert(point, to: self.headerNode.mapNode.view)
-                
+
                 self.headerNode.mapNode.setMapCenter(coordinate: coordinate, radius: Double(radius), insets: UIEdgeInsets(top: navigationBarHeight, left: inset, bottom: offset - contentOffset, right: inset), offset: convertedPoint.y - self.headerNode.mapNode.frame.height / 2.0, animated: true)
             }
-            
+
             self.headerNode.mapNode.proximityIndicatorRadius = Double(radius)
         } else {
             self.headerNode.forceIsHidden = false
@@ -1016,11 +1047,11 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             }
         }
     }
-    
+
     func showAll() {
         self.headerNode.mapNode.showAll()
     }
-    
+
     func liveLocationActionSourceView(extend: Bool) -> UIView? {
         var result: UIView?
         self.listNode.forEachItemNode { itemNode in
@@ -1037,8 +1068,8 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
         }) else {
             return
         }
-        
-        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.subject.id.peerId))
+
+        _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.subject.id.peerId))
         |> mapToSignal { peer -> Signal<EnginePeer, NoError> in
             if let peer {
                 return .single(peer)
@@ -1055,17 +1086,17 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             if peer.id.namespace == Namespaces.Peer.CloudUser {
                 text = strongSelf.presentationData.strings.Location_ProximityTip(peer.compactDisplayTitle).string
             }
-            
+
             strongSelf.interaction.present(TooltipScreen(account: strongSelf.context.account, sharedContext: strongSelf.context.sharedContext, text: .plain(text: text), icon: nil, location: .point(location.offsetBy(dx: -9.0, dy: 0.0), .right), displayDuration: .custom(3.0), shouldDismissOnTouch: { _, _ in
                 return .dismiss(consume: false)
             }))
         })
     }
-    
+
     func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationHeight: CGFloat, transition: ContainedViewLayoutTransition) {
         let isFirstLayout = self.validLayout == nil
         self.validLayout = (layout, navigationHeight)
-        
+
         var actionHeight: CGFloat?
         self.listNode.forEachItemNode { itemNode in
             if let itemNode = itemNode as? LocationActionListItemNode {
@@ -1074,28 +1105,28 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 }
             }
         }
-        
+
         let overlap: CGFloat = 0.0
         var topInset: CGFloat = layout.size.height - layout.intrinsicInsets.bottom - overlap
         topInset -= 100.0
-        
+
         if let location = getLocation(from: self.subject), location.liveBroadcastingTimeout != nil {
             topInset += 66.0
         }
-        
+
         if self.listOffset == nil {
             self.listOffset = topInset
         }
         self.updateHeader(transition: transition)
-        
+
         let (duration, curve) = listViewAnimationDurationAndCurve(transition: transition)
-        
+
         let insets = UIEdgeInsets(top: topInset, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right)
         self.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: nil, updateSizeAndInsets: ListViewUpdateSizeAndInsets(size: layout.size, insets: insets, headerInsets: UIEdgeInsets(top: navigationHeight, left: 0.0, bottom: layout.intrinsicInsets.bottom, right: 0.0), scrollIndicatorInsets: UIEdgeInsets(top: topInset + 3.0, left: 0.0, bottom: layout.intrinsicInsets.bottom, right: 0.0), duration: duration, curve: curve), stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in })
-        
+
         let listFrame: CGRect = CGRect(origin: CGPoint(), size: layout.size)
         transition.updateFrame(node: self.listNode, frame: listFrame)
-                
+
         if !self.isPreview {
             let topEdgeEffectFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: 80.0))
             transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
@@ -1103,7 +1134,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
             if self.topEdgeEffectView.superview == nil {
                 self.view.addSubview(self.topEdgeEffectView)
             }
-        
+
             let leftControlItems: [GlassControlGroupComponent.Item] = [
                 GlassControlGroupComponent.Item(
                     id: AnyHashable("close"),
@@ -1147,7 +1178,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                     )
                 )
             }
-                
+
             let barButtonSideInset: CGFloat = 16.0
             let buttonsSize = self.buttons.update(
                 transition: ComponentTransition(transition),
@@ -1176,7 +1207,7 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 view.bounds = CGRect(origin: .zero, size: buttonsFrame.size)
                 view.center = buttonsFrame.center
             }
-            
+
             let titleSize = self.title.update(
                 transition: ComponentTransition(transition),
                 component: AnyComponent(
@@ -1201,14 +1232,14 @@ final class LocationViewControllerNode: ViewControllerTracingNode, CLLocationMan
                 transition.updateFrame(view: titleView, frame: titleFrame)
             }
         }
-        
+
         if isFirstLayout {
             while !self.enqueuedTransitions.isEmpty {
                 self.dequeueTransition()
             }
         }
     }
-    
+
     var coordinate: Signal<CLLocationCoordinate2D, NoError> {
         return self.headerNode.mapNode.userLocation
         |> filter { location in
