@@ -3177,3 +3177,29 @@ that commit were taken.
 ### BUILD changes: none
 
 ---
+
+## 📌 2026-07-22 — Upstream release-12.9.2 merge (12.8 → 12.9.2)
+
+Merged upstream `release-12.9.2` (254 commits, 994 files, MTProto layer 227→228) into the fork on branch `merge/upstream-12.9.2`, commit `8a8857e0be`. 24 content conflicts resolved (per-file agents, "hooks win, upstream around them"). Post-merge audit of **238 hook-sites: 0 lost, 225 present as documented, 4 adapted, 9 stale-doc entries corrected below.** Build green first pass (`./run.sh`, 4900 actions, 0 errors).
+
+### Adapted during this merge (behavior preserved, anchors changed)
+
+1. **EnqueueMessage.swift — Ghost read-on-send**: upstream split the transaction into a `(resultIds, ephemeralMessageIds)` tuple + a new `|> map` ephemeral-send stage. The in-transaction `.Cloud` read is now at ~614-616, `afterCompleted { fenixuzForceReadHistory }` re-attached after the new map stage (~626-631).
+2. **ChatControllerNode.swift — #37 Send-Translate / #31 auto-translate**: hooks gained a `!sendAsRichMessage` guard (~4955) so upstream's new rich-message send path (tables/headings/lists) bypasses plain-text auto-translate — otherwise formatting would be destroyed. Auto Text Adder likewise remains text-path-only.
+3. **ChatTextInputPanelNode.swift — STT**: `onTextUpdate`/`onError` closures rewired to the new `richTextInputNode` API (`loadTextInputNodeIfNeeded()` + `self.text` setter). Same replace-whole-input behavior. Line refs in older sections shifted (e.g. `sttButtonPressed` ~5904 → ~6160).
+4. **ChatListSearchListPaneNode.swift — Novagram search ads**: re-applied into upstream's new communities-search structure; `foundRemotePeers` is now a 5-tuple ending in `FenixNovagramPromotedChannel?`; new `communityId != nil` scoped-search branch deliberately returns `nil` ad (no global promo inside a community).
+
+### Stale-doc corrections (absent BEFORE this merge too — not merge losses; verified against pre-merge `dfb547b0ce`)
+
+- **FenixuzAppStoreIAP per-site hooks** (`ChatController.swift` bot-invoice gate, `OpenResolvedUrl.swift` slug gate, `WebAppController.swift` + `WebUI/BUILD`, `AppDelegate.swift` import/isAppStoreBuild mirror, `TelegramUI/BUILD` dep): all superseded by the 2026-05-19 full StoreKit-removal rewrite — the IAP gate lives ONLY in `InAppPurchaseManager.swift` now. Those older § blocks are historical.
+- **ApplicationContext.swift 1s contacts-prompt defer**: removed before this merge; the file carries only upstream's own `didAppear`/`after(0.15)` logic. (A comment at ~834 still references the defer — harmless.)
+- **Send-Confirm #38 voice @ `micButton.stopRecording`**: superseded — the hook moved to `sendMediaRecording()` (already documented in the later entry); the 2108-2116 paragraph is historical.
+- **WatchApp team scrub**: `C67CF9S4VU` had crept back via a tgwatch re-sync; re-scrubbed to `ZDBP5RSRZF` on 2026-07-22 (`project.yml` + `tgwatch.xcodeproj/project.pbxproj`, 4 spots). Re-apply on every future watch re-sync.
+
+### Undocumented hooks discovered by the audit (documented here now)
+
+- `AccountContext.swift` (AccountContext module): `isRealPremium` member on the `AccountContext` protocol.
+- `AccountContext/Sources/ChatController.swift`: `navigateToFirstMessage()` + `isEmbeddedBotMode` on the `ChatController` protocol (bot-token-login embedded mode).
+- `TelegramUI/Sources/Chat/UpdateChatPresentationInterfaceState.swift`: `isEmbeddedBotMode` rightBarButtons suppression — after this merge it lives in the shared `updateRightNavigationButtons(...)` extension, so it now applies at both upstream call sites (intended).
+
+> ⚠️ Line numbers in sections written before 2026-07-22 may have shifted ±20-60 lines after this merge. The `// Fenixuz:` comment anchors remain authoritative — locate hooks by grep, not by line number.
