@@ -473,7 +473,7 @@ private var nextClientId: Int32 = 1
 public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, ChatHistoryListNode {
     static let fixedAdMessageStableId: UInt32 = UInt32.max - 5000
 
-    private let listView: ListViewImpl
+    private let listView: ChatHistoryListViewBackend
     public let rotated: Bool
 
     public let context: AccountContext
@@ -775,7 +775,15 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private let initTimestamp: Double
     
     var pinToTopStableId: EngineMessage.StableId?
-    
+
+    // Configures the rotation on the concrete backend before it is upcast to the protocol, so the
+    // construction-only `rotated` flag need not appear on the ChatHistoryListViewBackend contract.
+    private static func makeListView(rotated: Bool) -> ChatHistoryListViewBackend {
+        let listView = ListViewImpl()
+        listView.rotated = rotated
+        return listView
+    }
+
     public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
@@ -928,7 +936,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         nextClientId += 1
 
         self.rotated = rotated
-        self.listView = ListViewImpl()
+        self.listView = ChatHistoryListNodeImpl.makeListView(rotated: rotated)
 
         super.init()
         
@@ -943,7 +951,6 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
 
         self.addSubnode(self.listView)
 
-        self.listView.rotated = rotated
         if rotated {
             self.transform = CATransform3DMakeRotation(CGFloat(Double.pi), 0.0, 0.0, 1.0)
         }
@@ -1229,7 +1236,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     strongSelf.openNextChannelToRead?(nextChannelToRead.peer, nextChannelToRead.threadData, nextChannelToRead.location)
                 } else {
                     strongSelf.freezeOverscrollControlProgress = true
-                    strongSelf.listView.scroller.contentInset = UIEdgeInsets(top: 94.0 + 12.0, left: 0.0, bottom: 0.0, right: 0.0)
+                    strongSelf.listView.setTopContentInset(94.0 + 12.0)
                     Queue.mainQueue().after(0.3, {
                         let animator = DisplayLinkAnimator(duration: 0.2, from: 1.0, to: 0.0, update: { rawT in
                             guard let strongSelf = self else {
@@ -1237,13 +1244,13 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                             }
                             let t = listViewAnimationCurveEaseInOut(rawT)
                             let value = (94.0 + 12.0) * t
-                            strongSelf.listView.scroller.contentInset = UIEdgeInsets(top: value, left: 0.0, bottom: 0.0, right: 0.0)
+                            strongSelf.listView.setTopContentInset(value)
                         }, completion: {
                             guard let strongSelf = self else {
                                 return
                             }
                             strongSelf.contentInsetAnimator = nil
-                            strongSelf.listView.scroller.contentInset = UIEdgeInsets()
+                            strongSelf.listView.setTopContentInset(0.0)
                             strongSelf.freezeOverscrollControlProgress = false
                         })
                         strongSelf.contentInsetAnimator = animator
@@ -5261,13 +5268,13 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     // Narrow accessors replacing the previously-exposed `scroller: ListViewScroller`, so consumers
     // can't reach the whole scroll view. `bounces` is the only scroller knob a consumer needs
     // (PeerInfo disables it); `contentHeight` is the scroller content-size height used by the host's
-    // preferredContentSizeForLayout. Internal contentInset writes go straight to `self.listView.scroller`.
+    // preferredContentSizeForLayout. Internal top-inset writes go through `setTopContentInset(_:)`.
     public var bounces: Bool {
-        get { self.listView.scroller.bounces }
-        set { self.listView.scroller.bounces = newValue }
+        get { self.listView.bounces }
+        set { self.listView.bounces = newValue }
     }
     public var contentHeight: CGFloat {
-        return self.listView.scroller.contentSize.height
+        return self.listView.contentHeight
     }
     // The inner view that owns the scroll pan gesture recognizer (see ListView's `self.view.addGestureRecognizer(self.scroller.panGestureRecognizer)`).
     // Since the composition refactor, `self.view` is the rotated wrapper and the pan lives on this
