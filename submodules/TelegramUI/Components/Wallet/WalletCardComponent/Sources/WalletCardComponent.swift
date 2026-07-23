@@ -8,10 +8,12 @@ import BundleIconComponent
 import MultilineTextComponent
 import TelegramPresentationData
 import TelegramStringFormatting
+import WalletContext
 
 public final class WalletCardComponent: Component {
     public let balance: Int64?
-    public let usdRate: Double?
+    public let fiatCurrency: WalletContext.FiatCurrency
+    public let fiatRate: WalletContext.FiatRate?
     public let dateTimeFormat: PresentationDateTimeFormat
     public let name: String
     public let address: String
@@ -19,14 +21,16 @@ public final class WalletCardComponent: Component {
 
     public init(
         balance: Int64?,
-        usdRate: Double?,
+        fiatCurrency: WalletContext.FiatCurrency,
+        fiatRate: WalletContext.FiatRate?,
         dateTimeFormat: PresentationDateTimeFormat,
         name: String,
         address: String,
         qrPressed: @escaping () -> Void
     ) {
         self.balance = balance
-        self.usdRate = usdRate
+        self.fiatCurrency = fiatCurrency
+        self.fiatRate = fiatRate
         self.dateTimeFormat = dateTimeFormat
         self.name = name
         self.address = address
@@ -37,7 +41,7 @@ public final class WalletCardComponent: Component {
         if lhs.balance != rhs.balance {
             return false
         }
-        if lhs.usdRate != rhs.usdRate {
+        if lhs.fiatCurrency != rhs.fiatCurrency || lhs.fiatRate != rhs.fiatRate {
             return false
         }
         if lhs.dateTimeFormat != rhs.dateTimeFormat {
@@ -53,13 +57,14 @@ public final class WalletCardComponent: Component {
     }
 
     public final class View: UIView {
-        private let backgroundView = UIImageView()
-        
+        private let backgroundView = WalletCardBackgroundView()
+
         private let integralBalance = ComponentView<Empty>()
         private let fractionalBalance = ComponentView<Empty>()
         private let currency = ComponentView<Empty>()
         private let secondaryBalance = ComponentView<Empty>()
         private let name = ComponentView<Empty>()
+        private let addressOutline = ComponentView<Empty>()
         private let address = ComponentView<Empty>()
         private let qrButton = ComponentView<Empty>()
 
@@ -67,11 +72,14 @@ public final class WalletCardComponent: Component {
 
         override public init(frame: CGRect) {
             super.init(frame: frame)
-            
+
             self.addSubview(self.backgroundView)
 
             self.clipsToBounds = true
             self.layer.cornerRadius = 20.0
+            if #available(iOS 13.0, *) {
+                self.layer.cornerCurve = .continuous
+            }
         }
 
         required public init?(coder: NSCoder) {
@@ -86,14 +94,14 @@ public final class WalletCardComponent: Component {
             transition: ComponentTransition
         ) -> CGSize {
             self.component = component
-            
+
             let referenceSize = CGSize(width: 361.0, height: 220.0)
             let width = max(0.0, availableSize.width)
             let scale = width / referenceSize.width
             let size = CGSize(width: width, height: referenceSize.height * scale)
 
-            self.backgroundColor = UIColor(rgb: 0x0088ff)
-            self.layer.cornerRadius = 20.0
+            self.backgroundColor = .clear
+            self.layer.cornerRadius = 20.0 * width / 336.0
 
             let formattedBalance: String
             if let balance = component.balance {
@@ -103,12 +111,12 @@ public final class WalletCardComponent: Component {
                     maxDecimalPositions: 2
                 )
             } else {
-                formattedBalance = "—"
+                formattedBalance = "0"
             }
 
             let integralText: String
             let fractionalText: String
-            if component.balance == nil {
+            if component.balance == nil || component.balance == 0 {
                 integralText = formattedBalance
                 fractionalText = ""
             } else if let decimalRange = formattedBalance.range(of: component.dateTimeFormat.decimalSeparator) {
@@ -124,11 +132,13 @@ public final class WalletCardComponent: Component {
             }
 
             let secondaryText: String
-            if let balance = component.balance, let usdRate = component.usdRate {
-                secondaryText = formatTonUsdValue(
+            if let balance = component.balance, let fiatRate = component.fiatRate {
+                secondaryText = formatTonFiatValue(
                     balance,
                     divide: true,
-                    rate: usdRate,
+                    rate: fiatRate.unitsPerGram,
+                    currencySymbol: component.fiatCurrency.symbol,
+                    maxDecimalPositions: balance == 0 ? 0 : 2,
                     dateTimeFormat: component.dateTimeFormat
                 )
             } else {
@@ -141,7 +151,7 @@ public final class WalletCardComponent: Component {
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(
-                        size: 22.0 * scale,
+                        size: 22.0,
                         design: .round,
                         weight: .semibold,
                         traits: .monospacedNumbers
@@ -150,7 +160,7 @@ public final class WalletCardComponent: Component {
                     items: [
                         AnimatedTextComponent.Item(
                             id: "gramIcon",
-                            content: .icon("Wallet/CardGram", tint: false, offset: CGPoint())
+                            content: .icon("Wallet/CardGram", tint: false, offset: CGPoint(x: 0.0, y: -1.0))
                         ),
                         AnimatedTextComponent.Item(id: "gramIntegral", content: .text(integralText))
                     ],
@@ -163,7 +173,7 @@ public final class WalletCardComponent: Component {
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(
-                        size: 18.0 * scale,
+                        size: 18.0,
                         design: .round,
                         weight: .semibold,
                         traits: .monospacedNumbers
@@ -181,7 +191,7 @@ public final class WalletCardComponent: Component {
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(
-                        size: 22.0 * scale,
+                        size: 22.0,
                         design: .round,
                         weight: .semibold
                     ),
@@ -195,10 +205,10 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: width, height: 100.0)
             )
 
-            let mainCenterY = 94.0 * scale
+            let mainCenterY = 94.0
             let integralOriginY = floor(mainCenterY - integralSize.height * 0.5)
             let integralBottomY = integralOriginY + integralSize.height
-            var mainOriginX = 20.0 * scale
+            var mainOriginX = 20.0
             if let integralView = self.integralBalance.view {
                 if integralView.superview == nil {
                     self.addSubview(integralView)
@@ -213,7 +223,7 @@ public final class WalletCardComponent: Component {
             }
             mainOriginX += integralSize.width
             if !fractionalText.isEmpty {
-                mainOriginX += 1.0 * scale
+                mainOriginX += 1.0
             }
             if let fractionalView = self.fractionalBalance.view {
                 if fractionalView.superview == nil {
@@ -222,13 +232,13 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: fractionalView,
                     frame: CGRect(
-                        origin: CGPoint(x: mainOriginX, y: floor(integralBottomY - fractionalSize.height - 2.0)),
+                        origin: CGPoint(x: mainOriginX, y: floor(integralBottomY - fractionalSize.height - 2.0) - 1.0 - UIScreenPixel),
                         size: fractionalSize
                     )
                 )
             }
             mainOriginX += fractionalSize.width
-            mainOriginX += 5.0 * scale
+            mainOriginX += 5.0
             if let currencyView = self.currency.view {
                 if currencyView.superview == nil {
                     self.addSubview(currencyView)
@@ -246,7 +256,7 @@ public final class WalletCardComponent: Component {
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(
-                        size: 14.0 * scale,
+                        size: 14.0,
                         design: .round,
                         weight: .semibold,
                         traits: .monospacedNumbers
@@ -267,7 +277,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: secondaryView,
                     frame: CGRect(
-                        origin: CGPoint(x: 24.0 * scale, y: 114.0 * scale),
+                        origin: CGPoint(x: 24.0, y: 114.0),
                         size: secondarySize
                     )
                 )
@@ -278,7 +288,7 @@ public final class WalletCardComponent: Component {
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: component.name,
-                        font: Font.with(size: 14.0 * scale, design: .monospace, weight: .semibold),
+                        font: Font.with(size: 14.0, design: .monospace, weight: .semibold),
                         textColor: mainColor
                     )),
                     maximumNumberOfLines: 1
@@ -293,7 +303,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: nameView,
                     frame: CGRect(
-                        origin: CGPoint(x: 24.0 * scale, y: size.height - 32.0 * scale),
+                        origin: CGPoint(x: 24.0, y: size.height - 32.0),
                         size: nameSize
                     )
                 )
@@ -307,14 +317,14 @@ public final class WalletCardComponent: Component {
                         tintColor: nil,
                         scaleFactor: scale
                     )),
-                    minSize: CGSize(width: 50.0 * scale, height: 38.0 * scale),
+                    minSize: CGSize(width: 50.0, height: 38.0),
                     action: { [weak self] in
                         self?.component?.qrPressed()
                     },
                     animateAlpha: false
                 )),
                 environment: {},
-                containerSize: CGSize(width: 80.0 * scale, height: 80.0 * scale)
+                containerSize: CGSize(width: 80.0 * scale, height: 80.0)
             )
             if let qrView = self.qrButton.view {
                 if qrView.superview == nil {
@@ -330,36 +340,87 @@ public final class WalletCardComponent: Component {
             }
 
             let addressText = formattedWalletAddress(component.address)
+
+            let _ = self.addressOutline.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: addressText.uppercased(),
+                        font: Font.monospace(11.0),
+                        textColor: UIColor(rgb: 0xffffff, alpha: 0.1)
+                    )),
+                    maximumNumberOfLines: 2,
+                    lineSpacing: 0.1
+                )),
+                environment: {},
+                containerSize: CGSize(width: size.height, height: 50.0)
+            )
             let addressSize = self.address.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: addressText.uppercased(),
-                        font: Font.monospace(11.0 * scale),
-                        textColor: UIColor.black.withAlphaComponent(0.14)
+                        font: Font.monospace(11.0),
+                        textColor: UIColor(rgb: 0x005dda)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: 0.1,
-                    textShadowColor: UIColor(rgb: 0xfff, alpha: 0.06),
-                    textShadowBlur: 0.0
+                    lineSpacing: 0.1
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
             )
+            if let addressView = self.addressOutline.view {
+                if addressView.superview == nil {
+                    self.addSubview(addressView)
+                }
+                addressView.transform = .identity
+                addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
+                addressView.center = CGPoint(x: width - 24.0, y: size.height * 0.5 + 1.0)
+                addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
+            }
             if let addressView = self.address.view {
                 if addressView.superview == nil {
                     self.addSubview(addressView)
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 24.0 * scale, y: size.height * 0.5)
+                addressView.center = CGPoint(x: width - 24.0, y: size.height * 0.5)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
-            
-            self.backgroundView.frame = CGRect(origin: .zero, size: size)
-            if self.backgroundView.image == nil {
-                self.backgroundView.image = UIImage(bundleImageName: "Wallet/CardMock")
+
+            var safeZones: [CGRect] = []
+            let moneyViews: [UIView] = [
+                self.integralBalance.view,
+                self.fractionalBalance.view,
+                self.currency.view,
+                self.secondaryBalance.view
+            ].compactMap { $0 }
+            var moneyFrame = CGRect.null
+            for view in moneyViews where !view.frame.isEmpty {
+                moneyFrame = moneyFrame.union(view.frame)
             }
+            if !moneyFrame.isNull {
+                safeZones.append(moneyFrame)
+            }
+            if let nameView = self.name.view, !nameView.frame.isEmpty {
+                safeZones.append(nameView.frame)
+            }
+            if let qrView = self.qrButton.view, !qrView.frame.isEmpty {
+                safeZones.append(qrView.frame)
+            }
+            var addressFrame = CGRect.null
+            if let addressOutlineView = self.addressOutline.view, !addressOutlineView.frame.isEmpty {
+                addressFrame = addressFrame.union(addressOutlineView.frame)
+            }
+            if let addressView = self.address.view, !addressView.frame.isEmpty {
+                addressFrame = addressFrame.union(addressView.frame)
+            }
+            if !addressFrame.isNull {
+                safeZones.append(addressFrame)
+            }
+
+            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: size))
+            self.backgroundView.update(size: size, safeZones: safeZones)
 
             return size
         }

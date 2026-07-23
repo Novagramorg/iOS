@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit",
+        "//third-party/TONWalletKit",
     ],
     visibility = [
         "//visibility:public",

@@ -1,0 +1,12 @@
+{{!--
+  Custom inline enum declaration template.
+  Uses lambda.titlecase on property name instead of enumName to avoid the TON prefix
+  on nested enum types (e.g. Message instead of TONMessage).
+--}}
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} enum {{#lambda.titlecase}}{{{name}}}{{/lambda.titlecase}}: {{^isContainer}}{{dataType}}{{/isContainer}}{{#isContainer}}String{{/isContainer}}, {{#useVapor}}Content, Hashable{{/useVapor}}{{^useVapor}}Codable{{^isContainer}}{{^isString}}{{^isInteger}}{{^isFloat}}{{^isDouble}}, JSONEncodable{{/isDouble}}{{/isFloat}}{{/isInteger}}{{/isString}}{{/isContainer}}{{/useVapor}}, CaseIterable{{#enumUnknownDefaultCase}}{{#isInteger}}, CaseIterableDefaultsLast{{/isInteger}}{{#isFloat}}, CaseIterableDefaultsLast{{/isFloat}}{{#isDouble}}, CaseIterableDefaultsLast{{/isDouble}}{{#isString}}, CaseIterableDefaultsLast{{/isString}}{{#isContainer}}, CaseIterableDefaultsLast{{/isContainer}}{{/enumUnknownDefaultCase}} {
+        {{#allowableValues}}
+        {{#enumVars}}
+        case {{{name}}} = {{{value}}}
+        {{/enumVars}}
+        {{/allowableValues}}
+    }

@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import AccountContext
+import Markdown
 import TelegramPresentationData
 import ComponentFlow
 import ViewControllerComponent
@@ -33,7 +34,11 @@ private struct WalletInfoContent: Equatable {
     let buttonTitle: String
 }
 
-private func walletInfoContent(mode: WalletInfoScreenMode) -> WalletInfoContent {
+private func walletInfoContent(
+    mode: WalletInfoScreenMode,
+    tonUsdRate: Double?,
+    dateTimeFormat: PresentationDateTimeFormat
+) -> WalletInfoContent {
     switch mode {
     case .wallet:
         //TODO:localize
@@ -84,8 +89,18 @@ private func walletInfoContent(mode: WalletInfoScreenMode) -> WalletInfoContent 
     case .gram:
         //TODO:localize
         let title = "Gram"
-        //TODO:localize
-        let text = "The native currency\nof the TON blockchain."
+        let text: String
+        if let tonUsdRate, tonUsdRate.isFinite, tonUsdRate > 0.0 {
+            let usdRateText = String(format: "%0.2f", tonUsdRate).replacingOccurrences(
+                of: ".",
+                with: dateTimeFormat.decimalSeparator
+            )
+            //TODO:localize
+            text = "The native currency of the TON blockchain. **1 Gram** currently equals **\(usdRateText)\u{00a0}USD**."
+        } else {
+            //TODO:localize
+            text = "The native currency of the TON blockchain."
+        }
         //TODO:localize
         let fastTitle = "Fast"
         //TODO:localize
@@ -102,7 +117,7 @@ private func walletInfoContent(mode: WalletInfoScreenMode) -> WalletInfoContent 
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: .icon(name: "Wallet/InfoLogo"),
+            logo: .icon(name: "Wallet/Logo"),
             title: title,
             text: text,
             items: [
@@ -261,13 +276,21 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let component = context.component
             let state = context.state
             let theme = environment.theme
-            let content = walletInfoContent(mode: component.mode)
+            let tonUsdRate = component.context.currentAppConfiguration.with { configuration -> Double? in
+                return configuration.data?["ton_usd_rate"] as? Double
+            }
+            let content = walletInfoContent(
+                mode: component.mode,
+                tonUsdRate: tonUsdRate,
+                dateTimeFormat: environment.dateTimeFormat
+            )
 
             let sideInset: CGFloat = 30.0 + environment.safeInsets.left
             let textSideInset: CGFloat = 30.0 + environment.safeInsets.left
 
             let titleFont = Font.bold(24.0)
             let textFont = Font.regular(15.0)
+            let boldTextFont = Font.semibold(15.0)
 
             let textColor = theme.actionSheet.primaryTextColor
             let secondaryTextColor = theme.actionSheet.secondaryTextColor
@@ -330,11 +353,15 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             let text = text.update(
                 component: BalancedTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: content.text,
-                        font: textFont,
-                        textColor: component.mode == .recovery ? textColor : secondaryTextColor
-                    )),
+                    text: .markdown(
+                        text: content.text,
+                        attributes: MarkdownAttributes(
+                            body: MarkdownAttributeSet(font: textFont, textColor: textColor),
+                            bold: MarkdownAttributeSet(font: boldTextFont, textColor: textColor),
+                            link: MarkdownAttributeSet(font: textFont, textColor: textColor),
+                            linkAttribute: { _ in nil }
+                        )
+                    ),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2

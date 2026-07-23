@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import AccountContext
+import WalletContext
 import SwiftSignalKit
 import TelegramPresentationData
 import ComponentFlow
@@ -15,13 +16,15 @@ private final class WalletSettingsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
+    let walletContext: WalletContext
 
-    init(context: AccountContext) {
+    init(context: AccountContext, walletContext: WalletContext) {
         self.context = context
+        self.walletContext = walletContext
     }
 
     static func ==(lhs: WalletSettingsScreenComponent, rhs: WalletSettingsScreenComponent) -> Bool {
-        return lhs.context === rhs.context
+        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
     }
 
     final class View: UIView {
@@ -33,6 +36,7 @@ private final class WalletSettingsScreenComponent: Component {
         private var component: WalletSettingsScreenComponent?
         private var environment: EnvironmentType?
         private weak var state: EmptyComponentState?
+        private let operationDisposable = MetaDisposable()
 
         override init(frame: CGRect) {
             self.scrollView = UIScrollView()
@@ -56,6 +60,10 @@ private final class WalletSettingsScreenComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
 
+        deinit {
+            self.operationDisposable.dispose()
+        }
+
         func scrollToTop() {
             self.scrollView.setContentOffset(CGPoint(), animated: true)
         }
@@ -71,13 +79,37 @@ private final class WalletSettingsScreenComponent: Component {
                     guard let self, let component = self.component, let controller = self.environment?.controller() else {
                         return
                     }
-                    let words = generateWalletRecoveryWords()
-                    controller.push(component.context.sharedContext.makeWalletRecoveryPhraseScreen(
-                        context: component.context,
-                        words: words
-                    ))
+                    component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self, weak controller] authorized in
+                        guard authorized, let self, let controller else {
+                            return
+                        }
+                        self.operationDisposable.set((component.walletContext.recoveryPhrase()
+                        |> deliverOnMainQueue).start(next: { words in
+                            controller.push(component.context.sharedContext.makeWalletWordsScreen(
+                                context: component.context,
+                                words: words,
+                                verify: false,
+                                completion: nil
+                            ))
+                        }, error: { [weak self] _ in
+                            self?.presentRecoveryPhraseError()
+                        }))
+                    })
                 }
             ))
+        }
+
+        private func presentRecoveryPhraseError() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Couldn’t Show Recovery Phrase",
+                text: "Telegram couldn’t unlock the local wallet secret. Unlock the device and try again.",
+                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
+                })]
+            ), in: .window(.root))
         }
 
         private func presentDisableBackupAlert() {
@@ -115,34 +147,38 @@ private final class WalletSettingsScreenComponent: Component {
             //TODO:localize
             let title = "Delete Wallet?"
             //TODO:localize
-            let text = "You'll lose access to your funds unless you've saved your 24-word recovery phrase."
+            let text = "You'll lose access to your funds unless you've saved your 12- or 24-word recovery phrase."
             //TODO:localize
             let cancelTitle = "Cancel"
             //TODO:localize
             let deleteTitle = "Delete Anyway"
 
-            controller.present(textAlertController(
+            let alertController = textAlertController(
                 context: component.context,
                 title: title,
                 text: text,
                 actions: [
                     TextAlertAction(type: .genericAction, title: cancelTitle, action: {
                     }),
-                    TextAlertAction(type: .destructiveAction, title: deleteTitle, action: {
+                    TextAlertAction(type: .destructiveAction, title: deleteTitle, action: { [weak self] in
+                        guard let self, let component = self.component, let controller = self.environment?.controller() else {
+                            return
+                        }
+                        component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self, weak controller] authorized in
+                            guard authorized, let self, let controller else {
+                                return
+                            }
+                            self.operationDisposable.set((component.walletContext.deleteWallet()
+                            |> deliverOnMainQueue).start(next: {
+                                controller.dismiss()
+                            }, error: { _ in
+                                
+                            }))
+                        })
                     })
                 ]
-            ), in: .window(.root))
-        }
-
-        private func textComponent(text: String, font: UIFont, color: UIColor) -> AnyComponent<Empty> {
-            return AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: text,
-                    font: font,
-                    textColor: color
-                )),
-                maximumNumberOfLines: 0
-            ))
+            )
+            controller.present(alertController, in: .window(.root))
         }
 
         func update(
@@ -165,7 +201,7 @@ private final class WalletSettingsScreenComponent: Component {
             //TODO:localize
             let recoveryAction = "Show Recovery Phrase"
             //TODO:localize
-            let recoveryFooter = "You can transfer your wallet to another device by copying your 24-word recovery phrase."
+            let recoveryFooter = "You can transfer your wallet to another device by copying your 12- or 24-word recovery phrase."
             //TODO:localize
             let backupHeader = "Encrypted Backup"
             //TODO:localize
@@ -190,25 +226,34 @@ private final class WalletSettingsScreenComponent: Component {
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
                     style: .glass,
-                    header: self.textComponent(
-                        text: recoveryHeader.uppercased(),
-                        font: headerFont,
-                        color: theme.list.freeTextColor
-                    ),
-                    footer: self.textComponent(
-                        text: recoveryFooter,
-                        font: footerFont,
-                        color: theme.list.freeTextColor
-                    ),
+                    header: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: recoveryHeader.uppercased(),
+                            font: headerFont,
+                            textColor: theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    footer: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: recoveryFooter,
+                            font: footerFont,
+                            textColor: theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
                     items: [
                         AnyComponentWithIdentity(id: "showRecoveryPhrase", component: AnyComponent(ListActionItemComponent(
                             theme: theme,
                             style: .glass,
-                            title: self.textComponent(
-                                text: recoveryAction,
-                                font: actionFont,
-                                color: theme.list.itemAccentColor
-                            ),
+                            title: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: recoveryAction,
+                                    font: actionFont,
+                                    textColor: theme.list.itemAccentColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
                             accessory: nil,
                             action: { [weak self] _ in
                                 self?.openRecoveryPhrase()
@@ -240,25 +285,34 @@ private final class WalletSettingsScreenComponent: Component {
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
                     style: .glass,
-                    header: self.textComponent(
-                        text: backupHeader.uppercased(),
-                        font: headerFont,
-                        color: theme.list.freeTextColor
-                    ),
-                    footer: self.textComponent(
-                        text: backupFooter,
-                        font: footerFont,
-                        color: theme.list.freeTextColor
-                    ),
+                    header: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: backupHeader.uppercased(),
+                            font: headerFont,
+                            textColor: theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    footer: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: backupFooter,
+                            font: footerFont,
+                            textColor: theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
                     items: [
                         AnyComponentWithIdentity(id: "disableBackup", component: AnyComponent(ListActionItemComponent(
                             theme: theme,
                             style: .glass,
-                            title: self.textComponent(
-                                text: disableBackupAction,
-                                font: actionFont,
-                                color: theme.list.itemDestructiveColor
-                            ),
+                            title: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: disableBackupAction,
+                                    font: actionFont,
+                                    textColor: theme.list.itemDestructiveColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
                             accessory: nil,
                             action: { [weak self] _ in
                                 self?.presentDisableBackupAlert()
@@ -296,11 +350,14 @@ private final class WalletSettingsScreenComponent: Component {
                         AnyComponentWithIdentity(id: "deleteWallet", component: AnyComponent(ListActionItemComponent(
                             theme: theme,
                             style: .glass,
-                            title: self.textComponent(
-                                text: deleteWalletAction,
-                                font: actionFont,
-                                color: theme.list.itemDestructiveColor
-                            ),
+                            title: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: deleteWalletAction,
+                                    font: actionFont,
+                                    textColor: theme.list.itemDestructiveColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
                             accessory: nil,
                             action: { [weak self] _ in
                                 self?.presentDeleteWalletAlert()
@@ -373,13 +430,13 @@ private final class WalletSettingsScreenComponent: Component {
 }
 
 public final class WalletSettingsScreen: ViewControllerComponentContainer {
-    public init(context: AccountContext) {
+    public init(context: AccountContext, walletContext: WalletContext) {
         //TODO:localize
         let title = "Keys & Backup"
 
         super.init(
             context: context,
-            component: WalletSettingsScreenComponent(context: context),
+            component: WalletSettingsScreenComponent(context: context, walletContext: walletContext),
             navigationBarAppearance: .default,
             theme: .default
         )

@@ -1,0 +1,72 @@
+{{!--
+  Template for model generation.
+  
+  Handles two patterns:
+  1. Discriminated union enums: when x-swift-discriminated-enum is set (via preprocessing)
+  2. Regular objects: fallback to standard struct generation
+  
+  Vendor extensions used:
+  - x-swift-discriminated-enum: boolean indicating this is a discriminated union
+  - x-swift-enum-cases: array of {name, hasAssociatedValue, valuePropertyName} for each case
+  
+  The Swift type for associated values comes from synthetic properties (x_<case>_value)
+  which OpenAPI Generator resolves to proper Swift types in vars.
+--}}
+{{#vendorExtensions.x-swift-discriminated-enum}}{{!-- Discriminated union detected via preprocessing --}}
+{{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} enum {{{classname}}}: Codable {
+{{#vars}}
+{{#vendorExtensions.x-swift-enum-case}}    case {{{vendorExtensions.x-swift-enum-case}}}({{{dataType}}}){{/vendorExtensions.x-swift-enum-case}}
+{{/vars}}
+{{#vendorExtensions.x-swift-enum-cases}}
+{{^hasAssociatedValue}}    case {{{name}}}{{/hasAssociatedValue}}
+{{/vendorExtensions.x-swift-enum-cases}}
+
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+
+        switch type {
+{{#vars}}
+{{#vendorExtensions.x-swift-enum-case}}        case "{{{vendorExtensions.x-swift-enum-case}}}":
+            let value = try container.decode({{{dataType}}}.self, forKey: .value)
+            self = .{{{vendorExtensions.x-swift-enum-case}}}(value)
+{{/vendorExtensions.x-swift-enum-case}}
+{{/vars}}
+{{#vendorExtensions.x-swift-enum-cases}}
+{{^hasAssociatedValue}}        case "{{{name}}}":
+            self = .{{{name}}}
+{{/hasAssociatedValue}}
+{{/vendorExtensions.x-swift-enum-cases}}
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown type: \(type)"
+            )
+        }
+    }
+
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+{{#vars}}
+{{#vendorExtensions.x-swift-enum-case}}        case .{{{vendorExtensions.x-swift-enum-case}}}(let value):
+            try container.encode("{{{vendorExtensions.x-swift-enum-case}}}", forKey: .type)
+            try container.encode(value, forKey: .value)
+{{/vendorExtensions.x-swift-enum-case}}
+{{/vars}}
+{{#vendorExtensions.x-swift-enum-cases}}
+{{^hasAssociatedValue}}        case .{{{name}}}:
+            try container.encode("{{{name}}}", forKey: .type)
+{{/hasAssociatedValue}}
+{{/vendorExtensions.x-swift-enum-cases}}
+        }
+    }
+
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} enum CodingKeys: String, CodingKey, CaseIterable {
+        case type
+        case value
+    }
+}
+{{/vendorExtensions.x-swift-discriminated-enum}}{{^vendorExtensions.x-swift-discriminated-enum}}{{!-- Not a discriminated union - use standard object generation --}}
+{{> modelObject}}{{/vendorExtensions.x-swift-discriminated-enum}}

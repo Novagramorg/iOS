@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CoreText
 import Display
 import AccountContext
 import SwiftSignalKit
@@ -104,10 +105,22 @@ private final class WalletReceiveQrComponent: Component {
 private final class WalletReceiveAddressRingComponent: Component {
     let address: String
     let color: UIColor
+    let cardSize: CGSize
+    let cardCornerRadius: CGFloat
+    let pathOffset: CGFloat
 
-    init(address: String, color: UIColor) {
+    init(
+        address: String,
+        color: UIColor,
+        cardSize: CGSize,
+        cardCornerRadius: CGFloat,
+        pathOffset: CGFloat
+    ) {
         self.address = address
         self.color = color
+        self.cardSize = cardSize
+        self.cardCornerRadius = cardCornerRadius
+        self.pathOffset = pathOffset
     }
 
     static func ==(lhs: WalletReceiveAddressRingComponent, rhs: WalletReceiveAddressRingComponent) -> Bool {
@@ -117,27 +130,197 @@ private final class WalletReceiveAddressRingComponent: Component {
         if lhs.color != rhs.color {
             return false
         }
+        if lhs.cardSize != rhs.cardSize {
+            return false
+        }
+        if lhs.cardCornerRadius != rhs.cardCornerRadius {
+            return false
+        }
+        if lhs.pathOffset != rhs.pathOffset {
+            return false
+        }
         return true
     }
 
     final class View: UIView {
-        private let topLabel = UILabel()
-        private let rightLabel = UILabel()
-        private let bottomLabel = UILabel()
-        private let leftLabel = UILabel()
+        private struct RoundedRectPerimeter {
+            struct Sample {
+                let point: CGPoint
+                let tangent: CGVector
+            }
+
+            let rect: CGRect
+            let radius: CGFloat
+            let horizontalLength: CGFloat
+            let verticalLength: CGFloat
+            let cornerLength: CGFloat
+            let length: CGFloat
+
+            init?(rect inputRect: CGRect, radius proposedRadius: CGFloat) {
+                guard inputRect.origin.x.isFinite, inputRect.origin.y.isFinite,
+                      inputRect.width.isFinite, inputRect.height.isFinite,
+                      proposedRadius.isFinite else {
+                    return nil
+                }
+
+                let rect = inputRect.standardized
+                guard rect.width > 0.0, rect.height > 0.0 else {
+                    return nil
+                }
+
+                let radius = min(max(0.0, proposedRadius), min(rect.width, rect.height) * 0.5)
+                let horizontalLength = max(0.0, rect.width - radius * 2.0)
+                let verticalLength = max(0.0, rect.height - radius * 2.0)
+                let cornerLength = CGFloat.pi * radius * 0.5
+                let length = horizontalLength * 2.0 + verticalLength * 2.0 + cornerLength * 4.0
+                guard length.isFinite, length > 0.0 else {
+                    return nil
+                }
+
+                self.rect = rect
+                self.radius = radius
+                self.horizontalLength = horizontalLength
+                self.verticalLength = verticalLength
+                self.cornerLength = cornerLength
+                self.length = length
+            }
+
+            private func arcSample(center: CGPoint, angle: CGFloat) -> Sample {
+                let sine = sin(angle)
+                let cosine = cos(angle)
+                return Sample(
+                    point: CGPoint(
+                        x: center.x + self.radius * cosine,
+                        y: center.y + self.radius * sine
+                    ),
+                    tangent: CGVector(dx: -sine, dy: cosine)
+                )
+            }
+
+            func sample(at distance: CGFloat) -> Sample {
+                var normalizedDistance: CGFloat
+                if distance.isFinite {
+                    normalizedDistance = distance.truncatingRemainder(dividingBy: self.length)
+                } else {
+                    normalizedDistance = 0.0
+                }
+                if normalizedDistance < 0.0 {
+                    normalizedDistance += self.length
+                }
+
+                // The primitive path starts at the top-left tangency. Apply a phase so that
+                // distance zero is the center of the top edge.
+                var segmentDistance = normalizedDistance + self.horizontalLength * 0.5
+                if segmentDistance >= self.length {
+                    segmentDistance -= self.length
+                }
+
+                if self.horizontalLength > 0.0 && segmentDistance < self.horizontalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.minX + self.radius + segmentDistance,
+                            y: self.rect.minY
+                        ),
+                        tangent: CGVector(dx: 1.0, dy: 0.0)
+                    )
+                }
+                segmentDistance -= self.horizontalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.maxX - self.radius, y: self.rect.minY + self.radius),
+                        angle: -.pi * 0.5 + segmentDistance / self.radius
+                    )
+                }
+                segmentDistance -= self.cornerLength
+
+                if self.verticalLength > 0.0 && segmentDistance < self.verticalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.maxX,
+                            y: self.rect.minY + self.radius + segmentDistance
+                        ),
+                        tangent: CGVector(dx: 0.0, dy: 1.0)
+                    )
+                }
+                segmentDistance -= self.verticalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.maxX - self.radius, y: self.rect.maxY - self.radius),
+                        angle: segmentDistance / self.radius
+                    )
+                }
+                segmentDistance -= self.cornerLength
+
+                if self.horizontalLength > 0.0 && segmentDistance < self.horizontalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.maxX - self.radius - segmentDistance,
+                            y: self.rect.maxY
+                        ),
+                        tangent: CGVector(dx: -1.0, dy: 0.0)
+                    )
+                }
+                segmentDistance -= self.horizontalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.minX + self.radius, y: self.rect.maxY - self.radius),
+                        angle: .pi * 0.5 + segmentDistance / self.radius
+                    )
+                }
+                segmentDistance -= self.cornerLength
+
+                if self.verticalLength > 0.0 && segmentDistance < self.verticalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.minX,
+                            y: self.rect.maxY - self.radius - segmentDistance
+                        ),
+                        tangent: CGVector(dx: 0.0, dy: -1.0)
+                    )
+                }
+                segmentDistance -= self.verticalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.minX + self.radius, y: self.rect.minY + self.radius),
+                        angle: .pi + segmentDistance / self.radius
+                    )
+                }
+
+                return Sample(
+                    point: CGPoint(x: self.rect.minX + self.radius, y: self.rect.minY),
+                    tangent: CGVector(dx: 1.0, dy: 0.0)
+                )
+            }
+        }
+
+        private struct GlyphItem {
+            let glyph: CGGlyph
+            let position: CGPoint
+            let advance: CGFloat
+            let font: CTFont
+        }
+
+        private struct GlyphLayout {
+            let items: [GlyphItem]
+            let width: CGFloat
+        }
+
+        private var component: WalletReceiveAddressRingComponent?
+        private var availableSize: CGSize = .zero
 
         override init(frame: CGRect) {
             super.init(frame: frame)
 
+            self.isOpaque = false
+            self.backgroundColor = .clear
+            self.contentMode = .redraw
             self.isUserInteractionEnabled = false
-            for label in [self.topLabel, self.rightLabel, self.bottomLabel, self.leftLabel] {
-                label.backgroundColor = .clear
-                label.textAlignment = .center
-                label.adjustsFontSizeToFitWidth = true
-                label.minimumScaleFactor = 0.75
-                label.lineBreakMode = .byClipping
-                self.addSubview(label)
-            }
+            self.isAccessibilityElement = false
+            self.accessibilityElementsHidden = true
         }
 
         required init?(coder: NSCoder) {
@@ -155,58 +338,196 @@ private final class WalletReceiveAddressRingComponent: Component {
             return result
         }
 
+        private static func glyphLayout(text: String, font: UIFont) -> GlyphLayout? {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(
+                string: text,
+                attributes: [.font: font]
+            ))
+
+            var items: [GlyphItem] = []
+            let glyphRuns = CTLineGetGlyphRuns(line) as NSArray
+            for runValue in glyphRuns {
+                let run = runValue as! CTRun
+                let glyphCount = CTRunGetGlyphCount(run)
+                if glyphCount == 0 {
+                    continue
+                }
+
+                var glyphs = [CGGlyph](repeating: 0, count: glyphCount)
+                var positions = [CGPoint](repeating: .zero, count: glyphCount)
+                var advances = [CGSize](repeating: .zero, count: glyphCount)
+                let range = CFRangeMake(0, glyphCount)
+                CTRunGetGlyphs(run, range, &glyphs)
+                CTRunGetPositions(run, range, &positions)
+                CTRunGetAdvances(run, range, &advances)
+
+                let attributes = CTRunGetAttributes(run) as NSDictionary
+                guard let runFont = attributes[kCTFontAttributeName] as! CTFont? else {
+                    continue
+                }
+
+                for index in 0 ..< glyphCount {
+                    items.append(GlyphItem(
+                        glyph: glyphs[index],
+                        position: positions[index],
+                        advance: max(0.0, advances[index].width),
+                        font: runFont
+                    ))
+                }
+            }
+
+            items.sort { lhs, rhs in
+                return lhs.position.x < rhs.position.x
+            }
+            guard !items.isEmpty else {
+                return nil
+            }
+
+            var width: CGFloat = 0.0
+            for item in items {
+                width = max(width, item.position.x + item.advance)
+            }
+            guard width.isFinite, width > 0.0 else {
+                return nil
+            }
+
+            return GlyphLayout(items: items, width: width)
+        }
+
+        override func draw(_ rect: CGRect) {
+            guard let component = self.component, !component.address.isEmpty,
+                  let graphicsContext = UIGraphicsGetCurrentContext() else {
+                return
+            }
+
+            let bounds = self.bounds
+            guard bounds.origin.x.isFinite, bounds.origin.y.isFinite,
+                  bounds.width.isFinite, bounds.height.isFinite,
+                  bounds.width > 0.0, bounds.height > 0.0,
+                  component.cardSize.width.isFinite, component.cardSize.height.isFinite,
+                  component.cardCornerRadius.isFinite, component.pathOffset.isFinite else {
+                return
+            }
+
+            let groupedAddress = Self.groupedAddress(component.address)
+                .joined(separator: " ")
+                .uppercased()
+            guard !groupedAddress.isEmpty else {
+                return
+            }
+
+            let baseFontSize = max(8.0, min(11.0, bounds.width / 31.0)) * 1.2
+            let baseFont = Font.with(size: baseFontSize, design: .monospace, weight: .semibold)
+
+            let cardSize = CGSize(
+                width: max(0.0, component.cardSize.width),
+                height: max(0.0, component.cardSize.height)
+            )
+            let cardRect = CGRect(
+                x: bounds.midX - cardSize.width * 0.5,
+                y: bounds.midY - cardSize.height * 0.5,
+                width: cardSize.width,
+                height: cardSize.height
+            )
+            let pathOffset = max(0.0, component.pathOffset)
+            let desiredPathRect = cardRect.insetBy(dx: -pathOffset, dy: -pathOffset)
+
+            let glyphInset = ceil(baseFont.lineHeight * 0.5)
+            let safeInsetX = min(glyphInset, max(0.0, (bounds.width - 1.0) * 0.5))
+            let safeInsetY = min(glyphInset, max(0.0, (bounds.height - 1.0) * 0.5))
+            let safeBounds = bounds.insetBy(dx: safeInsetX, dy: safeInsetY)
+            let pathRect = desiredPathRect.intersection(safeBounds)
+            guard !pathRect.isNull, !pathRect.isEmpty else {
+                return
+            }
+
+            let cardCornerRadius = min(
+                max(0.0, component.cardCornerRadius),
+                min(cardRect.width, cardRect.height) * 0.5
+            )
+            guard let perimeter = RoundedRectPerimeter(
+                rect: pathRect,
+                radius: cardCornerRadius + pathOffset
+            ) else {
+                return
+            }
+
+            let halfLength = perimeter.length * 0.5
+            guard halfLength.isFinite, halfLength > 0.0 else {
+                return
+            }
+
+            let unitText = "· \(groupedAddress) "
+            guard let glyphLayout = Self.glyphLayout(text: unitText, font: baseFont) else {
+                return
+            }
+            let glyphScale: CGFloat
+            if glyphLayout.width > halfLength {
+                glyphScale = halfLength / glyphLayout.width * 0.99
+            } else {
+                glyphScale = 1.0
+            }
+            guard glyphScale.isFinite, glyphScale > 0.0 else {
+                return
+            }
+
+            let tracking = max(
+                0.0,
+                (halfLength - glyphLayout.width * glyphScale) / CGFloat(glyphLayout.items.count)
+            )
+            guard let firstItem = glyphLayout.items.first else {
+                return
+            }
+            let firstCenter = (firstItem.position.x + firstItem.advance * 0.5) * glyphScale
+
+            graphicsContext.saveGState()
+            graphicsContext.setFillColor(component.color.cgColor)
+            graphicsContext.setTextDrawingMode(.fill)
+
+            for copyIndex in 0 ..< 2 {
+                let copyOffset = CGFloat(copyIndex) * halfLength
+                for index in 0 ..< glyphLayout.items.count {
+                    let item = glyphLayout.items[index]
+                    let centerOffset = (item.position.x + item.advance * 0.5) * glyphScale - firstCenter
+                    let distance = copyOffset + centerOffset + CGFloat(index) * tracking
+                    let sample = perimeter.sample(at: distance)
+                    let angle = atan2(sample.tangent.dy, sample.tangent.dx)
+
+                    graphicsContext.saveGState()
+                    graphicsContext.translateBy(x: sample.point.x, y: sample.point.y)
+                    graphicsContext.rotate(by: angle)
+                    graphicsContext.scaleBy(x: glyphScale, y: -glyphScale)
+                    graphicsContext.textMatrix = .identity
+
+                    var glyph = item.glyph
+                    var glyphPosition = CGPoint(
+                        x: -item.advance * 0.5,
+                        y: (CTFontGetDescent(item.font) - CTFontGetAscent(item.font)) * 0.5
+                    )
+                    CTFontDrawGlyphs(item.font, &glyph, &glyphPosition, 1, graphicsContext)
+                    graphicsContext.restoreGState()
+                }
+            }
+
+            graphicsContext.restoreGState()
+        }
+
         func update(
             component: WalletReceiveAddressRingComponent,
-            availableSize: CGSize,
-            transition: ComponentTransition
+            availableSize: CGSize
         ) -> CGSize {
-            let groups = Self.groupedAddress(component.address)
-            let horizontalGroups: [String]
-            let verticalGroups: [String]
-            if groups.count >= 12 {
-                horizontalGroups = Array(groups.suffix(4)) + ["·"] + Array(groups.prefix(4))
-                verticalGroups = Array(groups.dropFirst(4).prefix(6))
+            let needsDisplay: Bool
+            if let currentComponent = self.component {
+                needsDisplay = currentComponent != component || self.availableSize != availableSize
             } else {
-                let splitIndex = max(1, groups.count / 2)
-                horizontalGroups = Array(groups.suffix(from: min(splitIndex, groups.count))) + ["·"] + Array(groups.prefix(splitIndex))
-                verticalGroups = groups
+                needsDisplay = true
             }
 
-            let horizontalText = horizontalGroups.joined(separator: " ")
-            let verticalText = verticalGroups.joined(separator: " ")
-            let font = Font.with(size: max(8.0, min(11.0, availableSize.width / 31.0)) * 1.2, design: .monospace, weight: .semibold)
-            //Font.monospace(max(8.0, min(11.0, availableSize.width / 31.0)) * 1.2)
-
-            for label in [self.topLabel, self.rightLabel, self.bottomLabel, self.leftLabel] {
-                label.font = font
-                label.textColor = component.color
+            self.component = component
+            self.availableSize = availableSize
+            if needsDisplay {
+                self.setNeedsDisplay()
             }
-            self.topLabel.text = horizontalText.uppercased()
-            self.bottomLabel.text = horizontalText.uppercased()
-            self.rightLabel.text = verticalText.uppercased()
-            self.leftLabel.text = verticalText.uppercased()
-
-            let horizontalSize = CGSize(width: max(1.0, availableSize.width - 64.0), height: 18.0)
-            let verticalSize = CGSize(width: max(1.0, availableSize.height - 64.0), height: 18.0)
-
-            self.topLabel.transform = .identity
-            self.topLabel.bounds = CGRect(origin: .zero, size: horizontalSize)
-            self.topLabel.center = CGPoint(x: availableSize.width / 2.0, y: 10.0)
-
-            self.bottomLabel.transform = .identity
-            self.bottomLabel.bounds = CGRect(origin: .zero, size: horizontalSize)
-            self.bottomLabel.center = CGPoint(x: availableSize.width / 2.0, y: availableSize.height - 10.0)
-            self.bottomLabel.transform = CGAffineTransform(rotationAngle: .pi)
-
-            self.rightLabel.transform = .identity
-            self.rightLabel.bounds = CGRect(origin: .zero, size: verticalSize)
-            self.rightLabel.center = CGPoint(x: availableSize.width - 10.0, y: availableSize.height / 2.0)
-            self.rightLabel.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
-
-            self.leftLabel.transform = .identity
-            self.leftLabel.bounds = CGRect(origin: .zero, size: verticalSize)
-            self.leftLabel.center = CGPoint(x: 10.0, y: availableSize.height / 2.0)
-            self.leftLabel.transform = CGAffineTransform(rotationAngle: -.pi / 2.0)
 
             return availableSize
         }
@@ -223,7 +544,7 @@ private final class WalletReceiveAddressRingComponent: Component {
         environment: Environment<Empty>,
         transition: ComponentTransition
     ) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, transition: transition)
+        return view.update(component: self, availableSize: availableSize)
     }
 }
 
@@ -442,6 +763,8 @@ private final class WalletReceiveSheetContent: CombinedComponent {
             let qrSize = max(1.0, cardWidth - 20.0)
             let copyButtonHeight: CGFloat = 28.0
             let cardHeight = qrSize + copyButtonHeight + 24.0
+            let cardCornerRadius: CGFloat = 28.0
+            let ringPathOffset: CGFloat = 14.0
             let ringSize = CGSize(
                 width: max(1.0, min(max(1.0, availableWidth - 32.0), cardWidth + 76.0)),
                 height: cardHeight + 56.0
@@ -464,7 +787,10 @@ private final class WalletReceiveSheetContent: CombinedComponent {
             let addressRing = addressRing.update(
                 component: WalletReceiveAddressRingComponent(
                     address: component.address,
-                    color: UIColor(rgb: 0x0052b3).withAlphaComponent(0.48)
+                    color: UIColor(rgb: 0x0052b3).withAlphaComponent(0.48),
+                    cardSize: cardFrame.size,
+                    cardCornerRadius: cardCornerRadius,
+                    pathOffset: ringPathOffset
                 ),
                 availableSize: ringSize,
                 transition: context.transition
@@ -473,7 +799,7 @@ private final class WalletReceiveSheetContent: CombinedComponent {
             let qrCardBackground = qrCardBackground.update(
                 component: RoundedRectangle(
                     color: .white,
-                    cornerRadius: 28.0,
+                    cornerRadius: cardCornerRadius,
                     size: cardFrame.size
                 ),
                 availableSize: cardFrame.size,
@@ -624,9 +950,10 @@ private final class WalletReceiveSheetContent: CombinedComponent {
             let background = background.update(
                 component: RoundedRectangle(
                     colors: [
-                        UIColor(rgb: 0x087cff),
-                        UIColor(rgb: 0x4eb9f4),
-                        UIColor(rgb: 0x087cff)
+                        UIColor(rgb: 0x0079ff),
+                        UIColor(rgb: 0x46b2ff),
+                        UIColor(rgb: 0x46b2ff),
+                        UIColor(rgb: 0x067eff)
                     ],
                     cornerRadius: 0.0,
                     gradientDirection: .vertical,
@@ -636,7 +963,7 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                 transition: context.transition
             )
             context.add(background.position(CGPoint(x: availableWidth / 2.0, y: contentHeight / 2.0)))
-            context.add(addressRing.position(ringFrame.center).opacity(0.0))
+            context.add(addressRing.position(ringFrame.center))
             context.add(qrCardBackground.position(cardFrame.center))
             if state.displaysAddress {
                 let addressGrid = addressGrid.update(
@@ -764,7 +1091,7 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                         getController: controller
                     )),
                     style: .glass,
-                    backgroundColor: .color(UIColor(rgb: 0x087cff)),
+                    backgroundColor: .color(UIColor(rgb: 0x0079ff)),
                     followContentSizeChanges: true,
                     clipsContent: true,
                     autoAnimateOut: false,

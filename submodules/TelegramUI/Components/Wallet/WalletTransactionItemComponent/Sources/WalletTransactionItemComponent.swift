@@ -91,7 +91,11 @@ public final class WalletTransactionItemComponent: Component {
                 subtitleText = "Deposit"
                 formattedAmountValue = component.transaction.amount
                 showAmountPlus = true
-                amountColor = component.theme.list.itemDisclosureActions.constructive.fillColor
+                if component.transaction.currency == .usdt {
+                    amountColor = UIColor(rgb: 0x0B9696)
+                } else {
+                    amountColor = component.theme.list.itemDisclosureActions.constructive.fillColor
+                }
                 avatarPeer = .transaction(.incoming)
             case .outgoing:
                 //TODO:localize
@@ -140,12 +144,27 @@ public final class WalletTransactionItemComponent: Component {
             let textOriginX: CGFloat = 46.0
             let textAvailableWidth = max(0.0, availableSize.width - textOriginX)
 
-            let amountText = formatTonAmountText(
-                formattedAmountValue,
-                dateTimeFormat: component.dateTimeFormat,
-                showPlus: showAmountPlus,
-                maxDecimalPositions: 2
-            )
+            let amountText: String
+            let amountIconName: String
+            switch component.transaction.currency {
+            case .ton:
+                amountText = formatTonAmountText(
+                    formattedAmountValue,
+                    dateTimeFormat: component.dateTimeFormat,
+                    showPlus: showAmountPlus,
+                    maxDecimalPositions: 2
+                )
+                amountIconName = "Wallet/TransactionGram"
+            case .usdt:
+                amountText = formatWalletTokenAmountText(
+                    formattedAmountValue,
+                    decimalDigits: 6,
+                    dateTimeFormat: component.dateTimeFormat,
+                    showPlus: showAmountPlus,
+                    maxDecimalPositions: 2
+                )
+                amountIconName = "Wallet/TransactionUsdt"
+            }
             let amountAttributedText = tonAmountAttributedString(
                 amountText,
                 integralFont: Font.semibold(15.0),
@@ -156,12 +175,12 @@ public final class WalletTransactionItemComponent: Component {
             let amountIconSize = self.amountIcon.update(
                 transition: transition,
                 component: AnyComponent(BundleIconComponent(
-                    name: "Ads/TonMedium",
-                    tintColor: UIColor(rgb: 0x30a1f5),
-                    maxSize: CGSize(width: 13.0, height: 13.0)
+                    name: amountIconName,
+                    tintColor: nil,
+                    maxSize: CGSize(width: 18.0, height: 18.0)
                 )),
                 environment: {},
-                containerSize: CGSize(width: 13.0, height: 13.0)
+                containerSize: CGSize(width: 18.0, height: 18.0)
             )
             let amountSize = self.amount.update(
                 transition: transition,
@@ -173,7 +192,7 @@ public final class WalletTransactionItemComponent: Component {
                 containerSize: CGSize(width: max(0.0, textAvailableWidth - amountIconSize.width - 3.0), height: 100.0)
             )
 
-            let amountSpacing: CGFloat = 3.0
+            let amountSpacing: CGFloat = 1.0
             let amountContentWidth = amountSize.width + amountSpacing + amountIconSize.width
             let titleToAmountSpacing: CGFloat = 12.0
             let titleAvailableWidth = max(0.0, textAvailableWidth - amountContentWidth - titleToAmountSpacing)
@@ -183,7 +202,7 @@ public final class WalletTransactionItemComponent: Component {
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: walletTransactionCounterparty(component.transaction.counterparty),
-                        font: Font.medium(17.0),
+                        font: Font.semibold(17.0),
                         textColor: component.theme.list.itemPrimaryTextColor
                     )),
                     maximumNumberOfLines: 1
@@ -289,7 +308,7 @@ public final class WalletTransactionItemComponent: Component {
                     frame: CGRect(
                         origin: CGPoint(
                             x: amountOriginX + amountSize.width + amountSpacing,
-                            y: floor(amountOriginY + (amountSize.height - amountIconSize.height) * 0.5)
+                            y: floorToScreenPixels(amountOriginY + (amountSize.height - amountIconSize.height) * 0.5) + UIScreenPixel
                         ),
                         size: amountIconSize
                     )
@@ -328,10 +347,49 @@ private func walletTransactionCounterparty(_ address: String?) -> String {
         return unknownAddress
     }
 
-    let edgeLength = 8
+    let edgeLength = 4
     guard address.count > edgeLength * 2 else {
         return address
     }
 
     return "\(address.prefix(edgeLength))...\(address.suffix(edgeLength))"
+}
+
+private func formatWalletTokenAmountText(
+    _ value: Int64,
+    decimalDigits: Int,
+    dateTimeFormat: PresentationDateTimeFormat,
+    showPlus: Bool,
+    maxDecimalPositions: Int
+) -> String {
+    var digits = String(value.magnitude)
+    while digits.count <= decimalDigits {
+        digits.insert("0", at: digits.startIndex)
+    }
+
+    let fractionStart = digits.index(digits.endIndex, offsetBy: -decimalDigits)
+    var integralPart = String(digits[..<fractionStart])
+    var fractionalPart = String(digits[fractionStart...])
+    while fractionalPart.last == "0" {
+        fractionalPart.removeLast()
+    }
+    if fractionalPart.count > maxDecimalPositions {
+        fractionalPart = String(fractionalPart.prefix(maxDecimalPositions))
+    }
+
+    if let integralValue = Int32(integralPart) {
+        integralPart = presentationStringsFormattedNumber(integralValue, dateTimeFormat.groupingSeparator)
+    }
+
+    var result = integralPart
+    if !fractionalPart.isEmpty {
+        result.append(dateTimeFormat.decimalSeparator)
+        result.append(fractionalPart)
+    }
+    if value < 0 {
+        result.insert("-", at: result.startIndex)
+    } else if showPlus {
+        result.insert("+", at: result.startIndex)
+    }
+    return result
 }

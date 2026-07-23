@@ -5225,6 +5225,40 @@ public extension Api.functions.ephemeral {
     }
 }
 public extension Api.functions.ephemeral {
+    static func editMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, id: Int32, message: String?, media: Api.InputMedia?, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+        let buffer = Buffer()
+        buffer.appendInt32(334647534)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        peer.serialize(buffer, true)
+        receiverId.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(message!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 3) != 0 {
+            media!.serialize(buffer, true)
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            buffer.appendInt32(481674261)
+            buffer.appendInt32(Int32(entities!.count))
+            for item in entities! {
+                item.serialize(buffer, true)
+            }
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            replyMarkup!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "ephemeral.editMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("id", ConstructorParameterDescription(id)), ("message", ConstructorParameterDescription(message)), ("media", ConstructorParameterDescription(media)), ("entities", ConstructorParameterDescription(entities)), ("replyMarkup", ConstructorParameterDescription(replyMarkup))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+            let reader = BufferReader(buffer)
+            var result: Api.Updates?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Updates
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
     static func getCallbackAnswer(flags: Int32, peer: Api.InputPeer, id: Int32, data: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.BotCallbackAnswer>) {
         let buffer = Buffer()
         buffer.appendInt32(1067738312)
@@ -14164,6 +14198,28 @@ public extension Api.functions.stories {
             var result: Api.StoryAlbum?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.StoryAlbum
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.toncenter {
+    static func performApiRequest(flags: Int32, endpoint: String, query: String?, payload: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.toncenter.ApiResponse>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1921262239)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(endpoint, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeString(query!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            serializeString(payload!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "toncenter.performApiRequest", parameters: [("flags", ConstructorParameterDescription(flags)), ("endpoint", ConstructorParameterDescription(endpoint)), ("query", ConstructorParameterDescription(query)), ("payload", ConstructorParameterDescription(payload))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.toncenter.ApiResponse? in
+            let reader = BufferReader(buffer)
+            var result: Api.toncenter.ApiResponse?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.toncenter.ApiResponse
             }
             return result
         })

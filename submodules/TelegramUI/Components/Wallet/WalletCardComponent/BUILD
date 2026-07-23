@@ -18,6 +18,7 @@ swift_library(
         "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramStringFormatting",
+        "//submodules/TelegramUI/Components/Wallet/WalletContext",
     ],
     visibility = [
         "//visibility:public",

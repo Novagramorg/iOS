@@ -1,0 +1,54 @@
+local
+settings.local.*
+mcp.json
+
+# Mac OS X
+.DS_Store
+
+# Xcode
+
+## Build generated
+build/
+DerivedData
+generated
+
+## Various settings
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+
+## Other
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.xcscmblueprint
+Demo/TONWalletApp.xcodeproj/project.xcworkspace/xcuserdata/
+Demo/TONWalletApp.xcodeproj/xcuserdata/
+Demo/TONWalletApp.xcodeproj/xcuserdata/
+
+## Obj-C/Swift specific
+*.hmap
+*.ipa
+
+## Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Demo app secrets
+Demo/TONWalletApp/Env.swift
+
+# WalletKit from git
+walletkit-git
+
+# Codegen fixtures actual output (regenerated each test run, diffed vs fixtures/)
+Scripts/generate-api/.test-fixtures

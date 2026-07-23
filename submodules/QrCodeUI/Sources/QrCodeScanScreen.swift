@@ -45,6 +45,33 @@ private func parseAuthTransferUrl(_ url: URL) -> Data? {
     return nil
 }
 
+private func normalizedTonQrValue(_ value: String) -> String? {
+    let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else {
+        return nil
+    }
+    if let components = URLComponents(string: value),
+       components.scheme?.lowercased() == "ton",
+       components.host?.lowercased() == "transfer" {
+        return value
+    }
+
+    let friendlyCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+    if value.count == 48, value.unicodeScalars.allSatisfy({ friendlyCharacters.contains($0) }) {
+        return value
+    }
+
+    let rawParts = value.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+    let hexadecimalCharacters = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+    if rawParts.count == 2,
+       (rawParts[0] == "0" || rawParts[0] == "-1"),
+       rawParts[1].count == 64,
+       rawParts[1].unicodeScalars.allSatisfy({ hexadecimalCharacters.contains($0) }) {
+        return value
+    }
+    return nil
+}
+
 public final class QrCodeScanScreen: ViewController {
     public enum Subject {
         case authTransfer(activeSessionsContext: ActiveSessionsContext)
@@ -161,11 +188,23 @@ public final class QrCodeScanScreen: ViewController {
         })
     }
     
-    private func completeWithCode(_ code: String) {
-        guard case .custom = self.subject else {
-            return
+    @discardableResult
+    fileprivate func completeWithCode(_ code: String) -> Bool {
+        switch self.subject {
+        case .cryptoAddress:
+            guard let value = normalizedTonQrValue(code) else {
+                return false
+            }
+            self.codeResolved = true
+            self.completion(value)
+            self.dismissAnimated()
+            return true
+        case .custom:
+            self.completion(code)
+            return true
+        default:
+            return false
         }
-        self.completion(code)
     }
     
     override public func loadDisplayNode() {
@@ -212,7 +251,7 @@ public final class QrCodeScanScreen: ViewController {
                         }))
                     }
                 case .cryptoAddress:
-                    break
+                    strongSelf.completeWithCode(code)
                 case .peer:
                     if let _ = URL(string: code) {
                         strongSelf.controllerNode.resolveCode(code: code, completion: { [weak self] result in
@@ -555,7 +594,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
                 case .peer:
                     filteredCodes = codes.filter { $0.message.hasPrefix("https://t.me/") || $0.message.hasPrefix("t.me/") }
                 case .cryptoAddress:
-                    filteredCodes = codes.filter { $0.message.hasPrefix("ton://") }
+                    filteredCodes = codes.filter { normalizedTonQrValue($0.message) != nil }
                 case .custom:
                     filteredCodes = codes
             }
@@ -882,6 +921,10 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
     }
     
     fileprivate func resolveCode(code: String, completion: @escaping (Bool) -> Void) {
+        if case .cryptoAddress = self.subject {
+            completion(self.controller?.completeWithCode(code) == true)
+            return
+        }
         self.resolveDisposable.set((self.context.sharedContext.resolveUrl(context: self.context, peerId: nil, url: code, skipUrlAuth: false)
         |> deliverOnMainQueue).start(next: { [weak self] result in
             if let strongSelf = self {

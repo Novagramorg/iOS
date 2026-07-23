@@ -1,0 +1,3 @@
+{{!-- Emits a Swift type token for a discriminated-union case's value, based on
+  language-neutral `x-value-*` flags placed by aggregateNestedTypes on each
+  case record. Scope: a single entry of `x-cases[]`. --}}{{#x-value-type-string}}String{{/x-value-type-string}}{{#x-value-type-integer}}{{> _swiftIntegerType}}{{/x-value-type-integer}}{{#x-value-type-number}}Double{{/x-value-type-number}}{{#x-value-type-boolean}}Bool{{/x-value-type-boolean}}{{#x-value-type-ref}}{{modelNamePrefix}}{{x-value-ref-name}}{{/x-value-type-ref}}{{#x-value-type-array}}[AnyCodable]{{/x-value-type-array}}

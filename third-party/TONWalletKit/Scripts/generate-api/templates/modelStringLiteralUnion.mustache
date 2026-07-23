@@ -1,0 +1,40 @@
+{{!--
+  Template for unions of string literals + a single ref to a primitive string
+  type, e.g. TypeScript `'ton' | UserFriendlyAddress`.
+
+  Vendor extensions used:
+  - x-string-literal-union: boolean flag
+  - x-literal-cases: array of {name, rawValue}
+  - x-ref-case: {name, typeRef}
+--}}
+{{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} enum {{{classname}}}: Codable {
+{{#vendorExtensions.x-literal-cases}}
+    case {{{name}}}
+{{/vendorExtensions.x-literal-cases}}
+    case {{{vendorExtensions.x-ref-case.name}}}({{modelNamePrefix}}{{{vendorExtensions.x-ref-case.typeRef}}})
+
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        switch rawValue {
+{{#vendorExtensions.x-literal-cases}}
+        case "{{{rawValue}}}":
+            self = .{{{name}}}
+{{/vendorExtensions.x-literal-cases}}
+        default:
+            self = .{{{vendorExtensions.x-ref-case.name}}}(try {{modelNamePrefix}}{{{vendorExtensions.x-ref-case.typeRef}}}(from: decoder))
+        }
+    }
+
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} func encode(to encoder: any Encoder) throws {
+        switch self {
+{{#vendorExtensions.x-literal-cases}}
+        case .{{{name}}}:
+            var container = encoder.singleValueContainer()
+            try container.encode("{{{rawValue}}}")
+{{/vendorExtensions.x-literal-cases}}
+        case .{{{vendorExtensions.x-ref-case.name}}}(let value):
+            try value.encode(to: encoder)
+        }
+    }
+}

@@ -20,6 +20,7 @@ public enum Api {
     public enum stickers {}
     public enum storage {}
     public enum stories {}
+    public enum toncenter {}
     public enum updates {}
     public enum upload {}
     public enum users {}
@@ -46,6 +47,7 @@ public enum Api {
         public enum stats {}
         public enum stickers {}
         public enum stories {}
+        public enum toncenter {}
         public enum updates {}
         public enum upload {}
         public enum users {}
@@ -934,7 +936,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1189204285] = { return Api.RecentMeUrl.parse_recentMeUrlUnknown($0) }
     dict[-1188296222] = { return Api.RecentMeUrl.parse_recentMeUrlUser($0) }
     dict[1897752877] = { return Api.RecentStory.parse_recentStory($0) }
-    dict[1218642516] = { return Api.ReplyMarkup.parse_replyInlineMarkup($0) }
+    dict[1492647094] = { return Api.ReplyMarkup.parse_replyInlineMarkup($0) }
     dict[-2035021048] = { return Api.ReplyMarkup.parse_replyKeyboardForceReply($0) }
     dict[-1606526075] = { return Api.ReplyMarkup.parse_replyKeyboardHide($0) }
     dict[-2049074735] = { return Api.ReplyMarkup.parse_replyKeyboardMarkup($0) }
@@ -1180,6 +1182,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1934976362] = { return Api.Update.parse_updateBotPrecheckoutQuery($0) }
     dict[675009298] = { return Api.Update.parse_updateBotPurchasedPaidMedia($0) }
     dict[-1246823043] = { return Api.Update.parse_updateBotShippingQuery($0) }
+    dict[1812827683] = { return Api.Update.parse_updateBotStarsSubscription($0) }
     dict[-997782967] = { return Api.Update.parse_updateBotStopped($0) }
     dict[-2095595325] = { return Api.Update.parse_updateBotWebhookJSON($0) }
     dict[-1684914010] = { return Api.Update.parse_updateBotWebhookJSONQuery($0) }
@@ -1226,6 +1229,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[386986326] = { return Api.Update.parse_updateEncryptedChatTyping($0) }
     dict[956179895] = { return Api.Update.parse_updateEncryptedMessagesRead($0) }
     dict[-1264392051] = { return Api.Update.parse_updateEncryption($0) }
+    dict[-1690826910] = { return Api.Update.parse_updateEphemeralBotCallbackQuery($0) }
     dict[-451831443] = { return Api.Update.parse_updateFavedStickers($0) }
     dict[422972864] = { return Api.Update.parse_updateFolderPeers($0) }
     dict[-2027964103] = { return Api.Update.parse_updateGeoLiveViewed($0) }
@@ -1683,6 +1687,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1436583780] = { return Api.stories.StoryReactionsList.parse_storyReactionsList($0) }
     dict[-560009955] = { return Api.stories.StoryViews.parse_storyViews($0) }
     dict[1507299269] = { return Api.stories.StoryViewsList.parse_storyViewsList($0) }
+    dict[-1399980519] = { return Api.toncenter.ApiResponse.parse_apiResponse($0) }
     dict[543450958] = { return Api.updates.ChannelDifference.parse_channelDifference($0) }
     dict[1041346555] = { return Api.updates.ChannelDifference.parse_channelDifferenceEmpty($0) }
     dict[-1531132162] = { return Api.updates.ChannelDifference.parse_channelDifferenceTooLong($0) }
@@ -2956,6 +2961,8 @@ public extension Api {
         case let _1 as Api.stories.StoryViews:
             _1.serialize(buffer, boxed)
         case let _1 as Api.stories.StoryViewsList:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.toncenter.ApiResponse:
             _1.serialize(buffer, boxed)
         case let _1 as Api.updates.ChannelDifference:
             _1.serialize(buffer, boxed)

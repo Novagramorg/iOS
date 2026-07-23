@@ -379,15 +379,27 @@ public final class StarsAvatarComponent: Component {
                 }
             case let .transaction(direction):
                 iconInset = 6.0
-                let backgroundColor: UIColor
                 switch direction {
                 case .incoming:
-                    backgroundColor = component.theme.list.itemDisclosureActions.constructive.fillColor
+                    self.backgroundView.image = generateGradientFilledCircleImage(
+                        diameter: size.width,
+                        colors: [
+                            UIColor(rgb: 0x32b83b).cgColor,
+                            UIColor(rgb: 0x87d93b).cgColor
+                        ],
+                        direction: .vertical
+                    )
                     iconRotation = .pi
                 case .outgoing:
-                    backgroundColor = component.theme.list.itemAccentColor
+                    self.backgroundView.image = generateGradientFilledCircleImage(
+                        diameter: size.width,
+                        colors: [
+                            UIColor(rgb: 0x2a9ef1).cgColor,
+                            UIColor(rgb: 0x72d5fd).cgColor
+                        ],
+                        direction: .vertical
+                    )
                 }
-                self.backgroundView.image = generateFilledCircleImage(diameter: size.width, color: backgroundColor)
                 self.backgroundView.isHidden = false
                 self.iconView.isHidden = false
                 self.avatarNode.isHidden = true

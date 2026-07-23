@@ -24,6 +24,7 @@ import DCTAnimationCacheImpl
 import DCTMultiAnimationRendererImpl
 import AppBundle
 import DirectMediaImageCache
+import WalletContext
 
 private final class DeviceSpecificContactImportContext {
     let disposable = MetaDisposable()
@@ -130,6 +131,7 @@ public final class AccountContextImpl: AccountContext {
     public let inAppPurchaseManager: InAppPurchaseManager?
     public let starsContext: StarsContext?
     public let tonContext: StarsContext?
+    public let walletContext: WalletContext?
     public let giftAuctionsManager: GiftAuctionsManager?
     
     public let peerChannelMemberCategoriesContextsManager = PeerChannelMemberCategoriesContextsManager()
@@ -302,6 +304,30 @@ public final class AccountContextImpl: AccountContext {
             self.inAppPurchaseManager = InAppPurchaseManager(engine: .authorized(self.engine))
             self.starsContext = self.engine.payments.peerStarsContext()
             self.tonContext = self.engine.payments.peerTonContext()
+            let accountIsCurrent = sharedContext.activeAccountContexts
+            |> map { primary, _, _ in
+                return primary?.account.id == account.id
+            }
+            |> distinctUntilChanged
+            let networkAvailable = account.networkState
+            |> map { state -> Bool in
+                if case .waitingForNetwork = state {
+                    return false
+                } else {
+                    return true
+                }
+            }
+            |> distinctUntilChanged
+            let environment = account.testingEnvironment ? "test" : "production"
+            self.walletContext = WalletContext(
+                storageNamespace: "telegram.\(environment).\(UInt64(bitPattern: account.peerId.toInt64()))",
+                applicationInForeground: sharedContext.applicationBindings.applicationInForeground,
+                accountIsCurrent: accountIsCurrent,
+                networkAvailable: networkAvailable,
+                log: { message in
+                    Logger.shared.log("WalletContext", message)
+                }
+            )
             self.giftAuctionsManager = GiftAuctionsManager(account: account)
         } else {
             self.prefetchManager = nil
@@ -310,6 +336,7 @@ public final class AccountContextImpl: AccountContext {
             self.inAppPurchaseManager = nil
             self.starsContext = nil
             self.tonContext = nil
+            self.walletContext = nil
             self.giftAuctionsManager = nil
         }
         

@@ -1,0 +1,85 @@
+{{!--
+  Nested-enum body for inline discriminated unions. Used by modelObject.mustache
+  to render the enum declaration AS A NESTED TYPE inside a parent struct.
+
+  Current scope: one element of `vendorExtensions.x-nested-types`. Each carries:
+    - `nested-name`               (PascalCase nested enum name, e.g. "Inner")
+    - `discriminator-field`       (the JSON discriminator field name)
+    - `x-cases[]`                 (cases: { name, rawValue, x-empty-variant,
+                                            x-single-field-variant,
+                                            x-single-field-name,
+                                            x-single-field-optional,
+                                            x-indirect,
+                                            x-value-type-{string,integer,number,boolean,array,ref},
+                                            x-value-ref-name,
+                                            x-int-format-flags })
+    - `x-single-field-coding-keys[]` ({name})
+--}}
+    {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} enum {{{nested-name}}}: Codable {
+{{#x-cases}}
+{{#x-empty-variant}}
+        case {{{name}}}
+{{/x-empty-variant}}
+{{#x-single-field-variant}}
+        {{#x-indirect}}indirect {{/x-indirect}}case {{{name}}}({{{x-single-field-name}}}: {{> _swiftValueType}}{{#x-single-field-optional}}?{{/x-single-field-optional}})
+{{/x-single-field-variant}}
+{{^x-empty-variant}}{{^x-single-field-variant}}
+        {{#x-indirect}}indirect {{/x-indirect}}case {{{name}}}({{> _swiftValueType}})
+{{/x-single-field-variant}}{{/x-empty-variant}}
+{{/x-cases}}
+
+        {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let discriminator = try container.decode(String.self, forKey: .discriminator)
+            switch discriminator {
+{{#x-cases}}
+            case "{{{rawValue}}}":
+{{#x-empty-variant}}
+                self = .{{{name}}}
+{{/x-empty-variant}}
+{{#x-single-field-variant}}
+                let {{{x-single-field-name}}} = try container.decode{{#x-single-field-optional}}IfPresent{{/x-single-field-optional}}({{> _swiftValueType}}.self, forKey: .{{{x-single-field-name}}})
+                self = .{{{name}}}({{{x-single-field-name}}}: {{{x-single-field-name}}})
+{{/x-single-field-variant}}
+{{^x-empty-variant}}{{^x-single-field-variant}}
+                self = .{{{name}}}(try {{> _swiftValueType}}(from: decoder))
+{{/x-single-field-variant}}{{/x-empty-variant}}
+{{/x-cases}}
+            default:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .discriminator,
+                    in: container,
+                    debugDescription: "Unknown discriminator value: \(discriminator)"
+                )
+            }
+        }
+
+        {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} func encode(to encoder: any Encoder) throws {
+            switch self {
+{{#x-cases}}
+{{#x-empty-variant}}
+            case .{{{name}}}:
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode("{{{rawValue}}}", forKey: .discriminator)
+{{/x-empty-variant}}
+{{#x-single-field-variant}}
+            case .{{{name}}}(let {{{x-single-field-name}}}):
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode("{{{rawValue}}}", forKey: .discriminator)
+                try container.encode{{#x-single-field-optional}}IfPresent{{/x-single-field-optional}}({{{x-single-field-name}}}, forKey: .{{{x-single-field-name}}})
+{{/x-single-field-variant}}
+{{^x-empty-variant}}{{^x-single-field-variant}}
+            case .{{{name}}}(let value):
+                try value.encode(to: encoder)
+{{/x-single-field-variant}}{{/x-empty-variant}}
+{{/x-cases}}
+            }
+        }
+
+        {{#nonPublicApi}}internal{{/nonPublicApi}}{{^nonPublicApi}}public{{/nonPublicApi}} enum CodingKeys: String, CodingKey, CaseIterable {
+            case discriminator = "{{{discriminator-field}}}"
+{{#x-single-field-coding-keys}}
+            case {{{name}}}
+{{/x-single-field-coding-keys}}
+        }
+    }

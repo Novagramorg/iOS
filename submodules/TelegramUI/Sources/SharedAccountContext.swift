@@ -77,10 +77,13 @@ import GiftOptionsScreen
 import GiftViewScreen
 import StarsIntroScreen
 import WalletScreen
+import WalletSetupScreen
 import WalletReceiveScreen
+import WalletImportScreen
 import WalletSettingsScreen
-import WalletRecoveryPhraseScreen
+import WalletWordsScreen
 import WalletInfoScreen
+import WalletConnectScreen
 import WalletContext
 import WalletTransactionScreen
 import ContentReportScreen
@@ -4147,27 +4150,98 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
 
     public func makeWalletScreen(context: AccountContext) -> ViewController {
-        return WalletScreen(context: context)
+        guard let walletContext = context.walletContext else {
+            fatalError()
+        }
+        switch walletContext.stateValue.phase {
+        case .empty:
+            return self.makeWalletSetupEntryScreen(context: context, walletContext: walletContext)
+        case .restoring, .wallet, .failed:
+            return self.makeWalletContentScreen(context: context, walletContext: walletContext)
+        }
+    }
+
+    private func makeWalletSetupEntryScreen(context: AccountContext, walletContext: WalletContext) -> ViewController {
+        return WalletSetupScreen(
+            context: context,
+            walletContext: walletContext,
+            routeToWallet: { [weak self, weak context] sourceController in
+                guard let self, let context,
+                      let navigationController = sourceController.navigationController as? NavigationController else {
+                    return false
+                }
+                guard navigationController.viewControllers.contains(where: { $0 === sourceController }) else {
+                    return false
+                }
+                navigationController.replaceController(
+                    sourceController,
+                    with: self.makeWalletContentScreen(context: context, walletContext: walletContext),
+                    animated: false
+                )
+                return true
+            }
+        )
+    }
+
+    private func makeWalletContentScreen(context: AccountContext, walletContext: WalletContext) -> ViewController {
+        return WalletScreen(
+            context: context,
+            walletContext: walletContext,
+            routeToSetup: { [weak self, weak context] sourceController in
+                guard let self, let context,
+                      let navigationController = sourceController.navigationController as? NavigationController else {
+                    return
+                }
+                navigationController.replaceController(
+                    sourceController,
+                    with: self.makeWalletSetupEntryScreen(context: context, walletContext: walletContext),
+                    animated: false
+                )
+            }
+        )
     }
 
     public func makeWalletReceiveScreen(context: AccountContext, address: String) -> ViewController {
         return WalletReceiveScreen(context: context, address: address)
     }
 
-    public func makeWalletSettingsScreen(context: AccountContext) -> ViewController {
-        return WalletSettingsScreen(context: context)
+    public func makeWalletImportScreen(context: AccountContext, mode: WalletImportScreenMode, completion: (() -> Void)?) -> ViewController {
+        guard let walletContext = context.walletContext else {
+            preconditionFailure("Wallet is only available in the main account context")
+        }
+        return WalletImportScreen(context: context, walletContext: walletContext, mode: mode, completion: completion)
     }
 
-    public func makeWalletRecoveryPhraseScreen(context: AccountContext, words: [String]) -> ViewController {
-        return WalletRecoveryPhraseScreen(context: context, words: words)
+    public func makeWalletSettingsScreen(context: AccountContext) -> ViewController {
+        guard let walletContext = context.walletContext else {
+            preconditionFailure("Wallet is only available in the main account context")
+        }
+        return WalletSettingsScreen(context: context, walletContext: walletContext)
+    }
+
+    public func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController {
+        return WalletWordsScreen(context: context, words: words, verify: verify, completion: completion)
     }
     
     public func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
         return WalletInfoScreen(context: context, mode: mode, completion: completion)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction) -> ViewController {
-        return WalletTransactionScreen(context: context, transaction: transaction)
+    public func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, application: WalletConnectApplication, cancelled: @escaping () -> Void, connected: @escaping () -> Void) -> ViewController {
+        return WalletConnectScreen(context: context, walletContext: walletContext, application: application, cancelled: cancelled, connected: connected)
+    }
+
+    public func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController {
+        return WalletTransactionScreen(context: context, mode: mode)
+    }
+
+    public func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void) {
+        let _ = passcodeEntryController(context: context, completion: completion).start(next: { [weak self] controller in
+            guard let self, let controller else {
+                return
+            }
+            self.mainWindow?.present(controller, on: .root)
+        })
     }
 
     public func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController {
