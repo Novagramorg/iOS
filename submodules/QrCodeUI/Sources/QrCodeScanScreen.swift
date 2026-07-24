@@ -6,6 +6,7 @@ import Display
 import ComponentFlow
 import SwiftSignalKit
 import Camera
+import CameraLegacy
 import CoreImage
 import AlertUI
 import TelegramPresentationData
@@ -354,7 +355,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
     private let errorTextNode: ImmediateTextNode
     private let topNavigationButton = ComponentView<Empty>()
     
-    private let camera: Camera
+    private let camera: CameraProtocol
     private let codeDisposable = MetaDisposable()
     private var torchDisposable: Disposable?
     private let resolveDisposable = MetaDisposable()
@@ -386,7 +387,8 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.controller = controller
         self.subject = subject
         
-        self.previewView = CameraSimplePreviewView(frame: .zero, main: true)
+        let cameraImpl = LegacyCameraImpl.shared
+        self.previewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: false)
         self.previewView.backgroundColor = .black
         
         self.fadeNode = ASDisplayNode()
@@ -466,7 +468,11 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.errorTextNode.textAlignment = .center
         self.errorTextNode.isHidden = true
         
-        self.camera = Camera(configuration: .init(preset: .hd1920x1080, position: .back, audio: false, photo: true, metadata: true), previewView: self.previewView)
+        self.camera = cameraImpl.makeCamera(
+            configuration: .init(preset: .hd1920x1080, position: .back, audio: false, photo: true, metadata: true),
+            previewView: self.previewView,
+            secondaryPreviewView: nil
+        )
         
         super.init()
         

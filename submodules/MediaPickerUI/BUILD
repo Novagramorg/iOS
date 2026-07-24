@@ -44,6 +44,7 @@ swift_library(
         "//submodules/TelegramUI/Components/MediaEditor",
         "//submodules/RadialStatusNode",
         "//submodules/Camera",
+        "//submodules/Camera/CameraLegacy",
         "//submodules/TelegramUI/Components/MediaEditor/ImageObjectSeparation",
         "//submodules/ChatSendMessageActionUI",
         "//submodules/ComponentFlow",

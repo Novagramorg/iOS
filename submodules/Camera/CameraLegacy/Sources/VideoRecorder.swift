@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import UIKit
+import Camera
 import CoreImage
 import SwiftSignalKit
 import TelegramCore
@@ -14,11 +15,11 @@ private extension CMSampleBuffer {
 }
 
 private final class VideoRecorderImpl {
-    public enum RecorderError: LocalizedError {
+    enum RecorderError: LocalizedError {
         case generic
         case avError(Error)
        
-        public var errorDescription: String? {
+        var errorDescription: String? {
             switch self {
             case .generic:
                 return "Error"
@@ -41,7 +42,7 @@ private final class VideoRecorderImpl {
     private var pendingAudioSampleBuffers: [CMSampleBuffer] = []
     
     private var _duration = Atomic<CMTime>(value: .zero)
-    public var duration: CMTime {
+    var duration: CMTime {
         return self._duration.with { $0 }
     }
         
@@ -68,7 +69,7 @@ private final class VideoRecorderImpl {
     private var hasAllVideoBuffers = false
     private var hasAllAudioBuffers = false
     
-    public init?(configuration: VideoRecorder.Configuration, ciContext: CIContext, orientation: AVCaptureVideoOrientation, fileUrl: URL) {
+    init?(configuration: VideoRecorder.Configuration, ciContext: CIContext, orientation: AVCaptureVideoOrientation, fileUrl: URL) {
         self.configuration = configuration
         self.ciContext = ciContext
         
@@ -97,13 +98,13 @@ private final class VideoRecorderImpl {
         return self.error.with { $0 }
     }
     
-    public func start() {
+    func start() {
         self.queue.async {
             self.recordingStartSampleTime = CMTime(seconds: CACurrentMediaTime(), preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         }
     }
-    
-    public func markPositionChange(position: Camera.Position, time: CMTime? = nil) {
+
+    func markPositionChange(position: Camera.Position, time: CMTime? = nil) {
         self.queue.async {
             guard self.recordingStartSampleTime.isValid || time != nil else {
                 return
@@ -122,13 +123,16 @@ private final class VideoRecorderImpl {
     private var previousPresentationTime: Double?
     private var previousAppendTime: Double?
     
-    public func appendVideoSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+    func appendVideoSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
         #if compiler(>=6.0) // Xcode 16
         nonisolated(unsafe) let sampleBuffer = sampleBuffer
         #endif
         
         self.queue.async {
-            guard self.hasError() == nil && !self.stopped else {
+            guard self.hasError() == nil else {
+                return
+            }
+            guard !self.stopped else {
                 return
             }
             
@@ -169,16 +173,18 @@ private final class VideoRecorderImpl {
                     return
                 }
                 if self.videoInput != nil && (self.audioInput != nil || !self.configuration.hasAudio) {
-                    print("startWriting")
                     let start = CACurrentMediaTime()
                     if !self.assetWriter.startWriting() {
                         if let error = self.assetWriter.error {
                             self.transitionToFailedStatus(error: .avError(error))
                         }
+
+                    } else {
                     }
                     print("started In \(CACurrentMediaTime() - start)")
                     return
                 }
+                return
             } else if self.assetWriter.status == .writing && !self.startedSession {
                 print("Started session at \(presentationTime)")
                 self.assetWriter.startSession(atSourceTime: presentationTime)
@@ -249,7 +255,7 @@ private final class VideoRecorderImpl {
         }
     }
     
-    public func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+    func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
         #if compiler(>=6.0) // Xcode 16
         nonisolated(unsafe) let sampleBuffer = sampleBuffer
         #endif
@@ -326,7 +332,7 @@ private final class VideoRecorderImpl {
         }
     }
     
-    public func cancelRecording(completion: @escaping () -> Void) {
+    func cancelRecording(completion: @escaping () -> Void) {
         self.queue.async {
             if self.stopped {
                 DispatchQueue.main.async {
@@ -347,11 +353,11 @@ private final class VideoRecorderImpl {
         }
     }
     
-    public var isRecording: Bool {
+    var isRecording: Bool {
         return !self.stopped
     }
     
-    public func stopRecording() {
+    func stopRecording() {
         self.queue.async {
             var stopTime = CMTime(seconds: CACurrentMediaTime(), preferredTimescale: CMTimeScale(NSEC_PER_SEC))
             if self.recordingStartSampleTime.isValid {
@@ -468,7 +474,7 @@ private final class VideoRecorderImpl {
         }
         return true
     }
-    
+
     private func transitionToFailedStatus(error: RecorderError) {
         let _ = self.error.modify({ _ in return error })
     }
@@ -489,7 +495,7 @@ private extension Sequence {
     }
 }
 
-public final class VideoRecorder {
+final class VideoRecorder {
     var duration: Double? {
         return self.impl.duration.seconds
     }
@@ -524,7 +530,7 @@ public final class VideoRecorder {
     fileprivate let fileUrl: URL
     private let completion: (Result) -> Void
     
-    public var isRecording: Bool {
+    var isRecording: Bool {
         return self.impl.isRecording
     }
     
@@ -559,7 +565,7 @@ public final class VideoRecorder {
     func start() {
         self.impl.start()
     }
-    
+
     func stop() {
         self.impl.stopRecording()
     }

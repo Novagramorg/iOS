@@ -20,6 +20,7 @@ import UndoUI
 import PresentationDataUtils
 import MoreButtonNode
 import Camera
+import CameraLegacy
 import MediaEditor
 import ImageObjectSeparation
 import ChatSendMessageActionUI
@@ -327,7 +328,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         fileprivate let cameraWrapperView: UIView
         fileprivate var cameraView: TGAttachmentCameraView?
         
-        fileprivate var modernCamera: Camera?
+        fileprivate var modernCamera: CameraProtocol?
         fileprivate var modernCameraView: CameraSimplePreviewView?
         fileprivate var modernCameraTapGestureRecognizer: UITapGestureRecognizer?
         
@@ -737,14 +738,15 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 
                 self.gridNode.scrollView.addSubview(cameraView)
                 self.gridNode.addSubnode(self.cameraActivateAreaNode)
-            } else if useModernCamera, !Camera.isIpad {
+            } else if useModernCamera, !LegacyCameraImpl.shared.isIpad {
                 #if !targetEnvironment(simulator)
+                let cameraImpl = LegacyCameraImpl.shared
                 var cameraPosition: Camera.Position = .back
                 if case .assets(nil, .createAvatar) = controller.subject {
                     cameraPosition = .front
                 }
                 
-                let cameraPreviewView = CameraSimplePreviewView(frame: .zero, main: true)
+                let cameraPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: false)
                 cameraPreviewView.resetPlaceholder(front: cameraPosition == .front)
                 self.modernCameraView = cameraPreviewView
                 
@@ -768,7 +770,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 self.cameraWrapperView.addSubview(cameraPreviewView)
                 
                 let setupCamera = {
-                    let camera = Camera(
+                    let camera = cameraImpl.makeCamera(
                         configuration: Camera.Configuration(
                             preset: .hd1920x1080,
                             position: cameraPosition,

@@ -11,6 +11,7 @@ import AccountContext
 import TelegramCore
 import PresentationDataUtils
 import Camera
+import CameraLegacy
 import MultilineTextComponent
 import BlurredBackgroundComponent
 import Photos
@@ -1874,7 +1875,7 @@ private final class CameraScreenComponent: CombinedComponent {
                     
                     if !isSticker && !isAvatar && !isTablet {
                         var nextButtonX = availableSize.width - topControlSideInset - rightMostButtonWidth / 2.0 - 100.0
-                        if Camera.isDualCameraSupported(forRoundVideo: false) && !component.cameraState.isCollageEnabled && component.cameraState.isStreaming == .none {
+                        if LegacyCameraImpl.shared.isDualCameraSupported(forRoundVideo: false) && !component.cameraState.isCollageEnabled && component.cameraState.isStreaming == .none {
                             let dualButton = dualButton.update(
                                 component: CameraButton(
                                     content: AnyComponentWithIdentity(
@@ -2339,7 +2340,8 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     fileprivate final class Node: ViewControllerTracingNode, ASGestureRecognizerDelegate {
         private weak var controller: CameraScreenImpl?
         private let context: AccountContext
-        fileprivate var camera: Camera?
+        private let cameraImpl: CameraImpl
+        fileprivate var camera: CameraProtocol?
         private let updateState: ActionSlot<CameraState>
         private let toggleCameraPositionAction: ActionSlot<Void>
         fileprivate let dismissCollageSelection: ActionSlot<Void>
@@ -2475,6 +2477,8 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         init(controller: CameraScreenImpl) {
             self.controller = controller
             self.context = controller.context
+            let cameraImpl = LegacyCameraImpl.shared
+            self.cameraImpl = cameraImpl
             self.updateState = ActionSlot<CameraState>()
             self.toggleCameraPositionAction = ActionSlot<Void>()
             self.dismissCollageSelection = ActionSlot<Void>()
@@ -2502,7 +2506,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             self.mainPreviewBlurView = BlurView()
             self.mainPreviewBlurView.isUserInteractionEnabled = false
             
-            var isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: false)
+            var isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: false)
             if isDualCameraEnabled {
                 if let isDualCameraEnabledValue = UserDefaults.standard.object(forKey: "TelegramStoryCameraIsDualEnabled") as? NSNumber {
                     isDualCameraEnabled = isDualCameraEnabledValue.boolValue
@@ -2530,7 +2534,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             
             self.mainPreviewContainerView = PortalSourceView()
             self.mainPreviewContainerView.clipsToBounds = true
-            self.mainPreviewView = CameraSimplePreviewView(frame: .zero, main: true)
+            self.mainPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: false)
             
             self.mainPreviewAnimationWrapperView = UIView()
             self.mainPreviewAnimationWrapperView.clipsToBounds = true
@@ -2538,7 +2542,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             
             self.additionalPreviewContainerView = UIView()
             self.additionalPreviewContainerView.clipsToBounds = true
-            self.additionalPreviewView = CameraSimplePreviewView(frame: .zero, main: false)
+            self.additionalPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: false, roundVideo: false)
             
             if isDualCameraEnabled {
                 self.mainPreviewView.resetPlaceholder(front: false)
@@ -2785,13 +2789,13 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             }
             
             var isNew = false
-            let camera: Camera
+            let camera: CameraProtocol
             if let cameraHolder = controller.holder {
                 camera = cameraHolder.camera
                 self.mainPreviewView = cameraHolder.previewView
                 self.mainPreviewAnimationWrapperView.addSubview(self.mainPreviewView)
             } else {
-                camera = Camera(
+                camera = self.cameraImpl.makeCamera(
                     configuration: Camera.Configuration(
                         preset: .hd1920x1080,
                         position: self.cameraState.position,
@@ -4082,7 +4086,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     
     private var validLayout: ContainerViewLayout?
     
-    fileprivate var camera: Camera? {
+    fileprivate var camera: CameraProtocol? {
         return self.node.camera
     }
     
