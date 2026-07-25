@@ -1,0 +1,139 @@
+import UIKit
+@testable import CoreListDemo
+
+/// Deterministic `ScrollEngine` driving the REAL `ScrollPhysics` core through a `SyntheticClock` —
+/// no pan recognizer, no `CADisplayLink`. Higher fidelity than `TestableScrollView` (which hand-rolls
+/// spring/decel): new tests validate the list against the actual reverse-engineered physics. Wraps
+/// the same `PhysicsScrollCore` the production `PhysicsScrollEngine` does, so the shipping glue is
+/// under test.
+final class TestScrollEngine: ScrollEngine {
+    let host = UIView()
+    let clock: SyntheticClock
+    private let core: PhysicsScrollCore
+
+    init(clock: SyntheticClock, viewport: CGSize) {
+        self.clock = clock
+        host.frame = CGRect(origin: .zero, size: viewport)
+        core = PhysicsScrollCore(contentHost: host)
+    }
+
+    // MARK: - Deceleration mode
+
+    enum DecelerationMode { case stepped, keyframe }
+    var decelerationMode: DecelerationMode = .stepped
+
+    private var flight: KeyframeFlight?
+    private(set) var keyframeRebakeCount = 0
+    var keyframeFlightDuration: TimeInterval? { flight?.duration }
+    private(set) var declaredEdges: (min: CGFloat?, max: CGFloat?) = (0, 0)
+
+    // MARK: - ScrollEngine
+
+    var onScroll: ((CGFloat) -> Void)? {
+        get { core.onScroll }
+        set { core.onScroll = newValue }
+    }
+    var onWillBeginDragging: (() -> Void)?
+    var offset: CGFloat { flight.map { $0.liveOffset(now: clock.now) } ?? core.offset }
+    var contentHost: UIView { host }
+
+    func setOffset(_ y: CGFloat) {
+        // Mirror PhysicsScrollEngine.setOffset (file PhysicsScrollEngine.swift): catch any live
+        // keyframe flight to its live offset (production: catchFlight + removeAnimation; test: same
+        // shape), then idle the core's phase UNCONDITIONALLY (production: cancelDeceleration runs
+        // regardless of flight; matches both keyframe-catch and stepped-decel halt paths). The 4c
+        // halt idiom (§4(b)) is `engine.setOffset(engine.offset)` — a no-op offset write that
+        // catches + idles as a side effect; Tasks 4-6 §4(b) halt sites rely on this to fully halt
+        // motion in both modes.
+        if let f = flight {
+            core.setOffset(f.liveOffset(now: clock.now))   // snap physics to live BEFORE clobbering
+            flight = nil
+        }
+        core.cancelDeceleration()                          // phase → .idle (production parity, both modes)
+        core.setOffset(y)
+    }
+    func applyShift(_ dy: CGFloat) {
+        if flight != nil {
+            let changesShape = core.hasFiniteEdge
+            core.applyShiftPhysicsOnly(dy)
+            flight?.noteShift(dy)
+            if changesShape {
+                flight?.noteEdgesChanged()
+            }
+        } else {
+            core.applyShift(dy)
+        }
+    }
+    func setEdges(min: CGFloat?, max: CGFloat?) {
+        declaredEdges = (min, max)
+        if core.setEdges(min: min, max: max) { flight?.noteEdgesChanged() }   // rebake only on a REAL edge change
+    }
+    func containerOrigin(windowHeight: CGFloat, topLoaded: Bool, bottomLoaded: Bool) -> CGFloat {
+        core.containerOrigin(windowHeight: windowHeight, topLoaded: topLoaded, bottomLoaded: bottomLoaded)
+    }
+
+    // MARK: - Deterministic gesture simulation (real physics)
+
+    var isDecelerating: Bool { flight != nil || core.isDecelerating }
+
+    func beginDrag() {
+        onWillBeginDragging?()                                  // parity with PhysicsScrollEngine.handlePan(.began)
+        if let f = flight {                                    // catch a moving flight at its live offset
+            core.setOffset(f.liveOffset(now: clock.now))
+            flight = nil
+        }
+        core.beginDrag()
+    }
+
+    /// `translation`/`velocity` are recognizer-space (points, points/sec) — finger up is negative,
+    /// matching `UIPanGestureRecognizer.translation/velocity(in:)`.
+    func drag(translation: CGFloat, velocity: CGFloat) { core.drag(translation: translation, velocity: velocity) }
+
+    @discardableResult func endDrag() -> Bool {
+        let decelerate = core.endDrag()
+        if decelerate && decelerationMode == .keyframe {
+            flight = KeyframeFlight(core: core, startTime: clock.now)
+        }
+        return decelerate
+    }
+
+    /// Begin a flick that sends the content offset moving at `offsetVelocity` pts/s (+down/increasing),
+    /// anchored at the current offset, leaving the engine decelerating. Drive it with `tick(dt:)`.
+    /// Two zero-translation drag frames load `endDrag`'s `0.75·prev + 0.25·latest` low-pass to the
+    /// target without moving the offset; the recognizer velocity is the opposite sign of the offset
+    /// velocity (the finger moves opposite the content).
+    func simulateFlick(offsetVelocity v: CGFloat) {
+        core.beginDrag()
+        core.drag(translation: 0, velocity: -v)
+        core.drag(translation: 0, velocity: -v)
+        _ = endDrag()
+    }
+
+    /// Advance the deceleration by `dt` seconds (no-op if not decelerating). Caller advances the
+    /// clock separately (mirrors `VirtualListDriver.tick`).
+    func tick(dt: TimeInterval) {
+        if let f = flight {
+            if f.isComplete(now: clock.now), !f.hasPendingEdgeRebake {
+                core.setOffset(f.settledOffset)            // settle at the LIST-coord rest (finalOffset + accrued shift)
+                core.cancelDeceleration()                  // phase → .idle so isDecelerating is false
+                flight = nil
+                onScroll?(core.offset)
+                return
+            }
+            f.beginTick(now: clock.now)
+            onScroll?(f.liveOffset(now: clock.now))         // → list rebalances → applyShift/setEdges → noteShift/noteEdges
+            if f.rebakeIfNeeded(now: clock.now) {
+                keyframeRebakeCount += 1
+                if f.isComplete(now: clock.now) {
+                    core.setOffset(f.settledOffset)
+                    core.cancelDeceleration()
+                    flight = nil
+                    onScroll?(core.offset)
+                }
+            }
+            return
+        }
+        guard core.isDecelerating else { return }
+        _ = core.step(dtMs: CGFloat(dt * 1000))
+    }
+}

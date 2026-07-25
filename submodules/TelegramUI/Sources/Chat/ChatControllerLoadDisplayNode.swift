@@ -929,7 +929,7 @@ extension ChatControllerImpl {
                         let _ = options.insert(.PreferSynchronousResourceLoading)
 
                         var deleteItems = transition.deleteItems
-                        var insertItems: [ListViewInsertItem] = []
+                        var insertItems: [ChatHistoryListViewInsertItem] = []
                         var stationaryItemRange: (Int, Int)?
                         var scrollToItem: ListViewScrollToItem?
 
@@ -949,7 +949,7 @@ extension ChatControllerImpl {
                                     maxInsertedItem = item.index
                                 }
                                 insertedIndex = item.index
-                                insertItems.append(ListViewInsertItem(index: item.index, previousIndex: item.previousIndex, item: item.item, directionHint: item.directionHint == .Down ? .Up : nil))
+                                insertItems.append(ChatHistoryListViewInsertItem(index: item.index, previousIndex: item.previousIndex, stableId: item.stableId, item: item.item, directionHint: item.directionHint == .Down ? .Up : nil))
                             }
 
                             if isScheduledMessages, let insertedIndex {

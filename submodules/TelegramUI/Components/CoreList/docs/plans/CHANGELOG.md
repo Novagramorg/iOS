@@ -1,0 +1,147 @@
+# Plans changelog
+
+This is the concise landed-work digest for the current granular stable-identity/property animation
+architecture. `CLAUDE.md` contains the current contract; retained designs contain rationale; Git
+history contains removed experiments, execution plans, and superseded architectures.
+
+## Current direction
+
+Settled window layout and animated presentation are separate authorities. Core list operations write
+final frames; `ListAnimationModel` owns analytic state per stable identity/property;
+`ListAnimationController` owns model/layer binding and generation-safe lifecycle; and
+`CoreAnimationCompiler` renders those tracks as explicitly timed keyframes.
+
+Unchanged targets are exact no-ops. Changed properties retarget from their analytic current value
+for C0 continuity. Position is additive relative to settled geometry; width, height, and opacity are
+absolute; one controller-local transaction clock and one already-scaled duration feed each pass.
+Departures use rigid ghost blocks with boundary witnesses. Virtualization crossings retain only
+endpoint-window survivors and never measure extra rows. Programmatic distant scrolling uses one
+additive viewport track and adjacent outgoing/incoming carousel windows.
+
+The foundational authorities are
+[`2026-07-20-list-animation-model-design.md`](2026-07-20-list-animation-model-design.md) and
+[`2026-07-20-additive-viewport-scroll-design.md`](2026-07-20-additive-viewport-scroll-design.md).
+Current extensions are retained under `docs/superpowers/specs/`.
+
+## Landed work
+
+- **2026-07-24 — documentation authority cleanup**: reduced the checked-in documentation to current
+  subsystem authorities, moved historical recovery to Git, normalized retained design status, and
+  made `CLAUDE.md` the concise map of current contracts.
+
+- **2026-07-24 — finite-edge shifts trigger terminal-safe keyframe re-bakes** (`bc7471f`,
+  `57dae12`; [design](../superpowers/specs/2026-07-24-terminal-keyframe-edge-rebake-design.md)):
+  keyframe shifts remain translation-only while both edges are open. With either edge finite, a
+  shift becomes a durable trajectory-shape invalidation; pending invalidation outranks obsolete
+  sampler/CA completion and rebakes once against the latest offset and bounds while preserving
+  analytic current position and velocity. Focused serial K2 verification passed 54/54 tests and the
+  complete suite passed 480/480.
+
+- **2026-07-24 — delayed, deduplicated Demo auto-load responses** (`b851ffa`, `b0a634c`;
+  [design](../superpowers/specs/2026-07-24-delayed-auto-load-response-design.md)): the Demo
+  controller owns queued and in-flight edge requests, coalesces simultaneous edges, returns each
+  accepted request after 0.2 seconds, and suppresses duplicates or stale disabled-mode responses.
+  Each response uses one zero-duration `.preserveVisibleContent` transaction; the list remains
+  policy-free. Focused verification passed 62/62 tests and the complete suite passed 477/477.
+
+- **2026-07-24 — durable keyframe edge invalidation** (`0b9cf7a`;
+  [design](../superpowers/specs/2026-07-24-durable-keyframe-edge-invalidation-design.md)): real edge
+  changes now survive display-link tick boundaries, coalesce against the latest bounds, and are
+  consumed only by a continuous trajectory splice. Pure coordinate shifts remain translation-only.
+  Focused verification passed 43/43 tests and the complete suite passed 475/475.
+
+- **2026-07-24 — Demo automatic edge loading** (`cc1487e`, `7226e06`, `86d5a42`, `79d3318`;
+  [design](../superpowers/specs/2026-07-24-demo-auto-edge-loading-design.md)):
+  `CoreVirtualListView` exposes deduplicated settled loaded-edge state at list-local load lines.
+  The default-off Demo policy prepends or appends five rows and continues in bounded batches until
+  neither edge is reached. Positive margins load later, negative margins earlier, and display-only
+  overscroll does not affect observation. Complete verification passed 472/472 tests.
+
+- **2026-07-23 — infinite-loading anchor preservation** (`7d81837`, `36865b3`, `6416b50`,
+  `3d0c9a6`;
+  [design](../superpowers/specs/2026-07-23-infinite-loading-anchor-preservation-design.md)):
+  `.preserveVisibleContent` preserves the loaded identity crossing the settled top-inset edge at
+  its own inset-relative position. A departing witness falls back below, then above; explicit
+  `scrollTo` wins; finite edges still clip. No old off-screen row is measured and no post-layout
+  correction is applied. Complete verification passed 455/455 tests.
+
+- **2026-07-23 — seeded mixed-pass stress harness** (`cb39336`, `4eaf6a3`, `dfb3bda`,
+  `3efaf15`;
+  [design](../superpowers/specs/2026-07-23-seeded-mixed-pass-stress-harness-design.md)): a bounded
+  fixed-seed grammar composes structural, row-geometry, viewport-geometry, and programmatic-scroll
+  changes. It checks transaction-boundary C0 continuity, unchanged-track preservation, CA/model
+  metadata parity, settled-window integrity, and carry/ghost teardown. The first run exposed and
+  fixed viewport-release ownership that failed to migrate across a replacement generation.
+  Complete verification passed 437/437 tests.
+
+- **2026-07-22 — crossing-run boundary projection** (`de25629`, `5426f63`, `03a9fd2`,
+  `c80416e`;
+  [fallback design](../superpowers/specs/2026-07-22-crossing-run-boundary-fallback-design.md),
+  [occupied-boundary design](../superpowers/specs/2026-07-22-crossing-run-occupied-boundary-design.md)):
+  an unwitnessed contiguous crossing run receives one rigid best-effort translation. Its anchorward
+  edge clears both the viewport-plus-preload threshold and the settled extent already occupied by
+  the built window, preserving internal spacing without loading or measuring additional items.
+  Complete verification passed 429/429 tests.
+
+- **2026-07-22 — projected-anchor inset transitions** (`2333c2c`;
+  [design](../superpowers/specs/2026-07-22-projected-anchor-inset-transition-design.md)): inset
+  changes project the resolved anchor before the one-pass window build. Construction traverses to
+  and clips the loaded top first, then the loaded bottom; the completed projected window alone
+  determines the new settled offset. Complete verification passed 404/404 tests.
+
+- **2026-07-22 — rigid carousel adjacency and detached-boundary remapping** (`9c31058`,
+  `10716db`;
+  [adjacency design](../superpowers/specs/2026-07-22-normalized-carousel-adjacency-design.md),
+  [replacement design](../superpowers/specs/2026-07-22-viewport-replacement-detached-boundary-design.md),
+  [exclusive-motion design](../superpowers/specs/2026-07-22-carousel-exclusive-row-motion-design.md)):
+  disjoint programmatic-scroll windows use normalized loaded-strip geometry, remap detached overlay
+  content once at viewport replacement, and leave destination-only rows under the shared viewport
+  track as their exclusive vertical-motion owner.
+
+- **2026-07-21 — composable viewport geometry** (`3c9c3aa` through `45d1365`;
+  [design](../superpowers/specs/2026-07-21-viewport-geometry-animation-design.md)): the list receives
+  size plus full insets without parent-position knowledge. Final geometry writes immediately, then
+  independent x/y/width/height tracks and one shared viewport correction compose with structural,
+  ghost, crossing, and carousel motion. Complete verification passed 389/389 tests.
+
+- **2026-07-21 — per-identity virtualization crossing carries** (`2be66f1` through `2202614`;
+  [design](../superpowers/specs/2026-07-21-crossing-survivor-carry-design.md)): survivors crossing
+  the viewport-plus-preload membership boundary animate instead of instantly unloading or
+  materializing. The settled active window remains pure; only the union of old rendered survivors
+  and the new settled window participates, and no additional row is measured. Complete verification
+  passed 376/376 tests.
+
+- **2026-07-21 — settled-edge anchors and ghost attachments** (`c4f48b4`, `92884e3`,
+  `3d5121d`;
+  [design](../superpowers/specs/2026-07-21-settled-edge-anchor-ghost-attachment-design.md)):
+  mutation anchors use clamped settled geometry, not presentation overscroll. At the loaded top,
+  index zero pins below the top inset; departed blocks attach the correct local min/max edge to a
+  live or ghost boundary. Complete verification passed 356/356 tests.
+
+- **2026-07-21 — ghost-block boundary witnesses** (`2af9629` through `bc9dbcd`;
+  [design](../superpowers/specs/2026-07-21-ghost-block-boundary-witness-design.md)): contiguous
+  departures retain rigid sampled member geometry under one wrapper. Stable live/ghost boundary
+  links migrate toward each pass anchor; deletion-only blocks remain open until an insertion
+  occupies their root; referenced empty blocks remain spatial nodes until dependents finish.
+  Complete verification passed 350/350 tests.
+
+- **2026-07-21 — projected viewport window construction**
+  ([design](../superpowers/specs/2026-07-21-projected-viewport-window-design.md)): transaction
+  windows are built directly against the final projected viewport-plus-preload band, so later
+  container parking cannot change virtualization membership.
+
+- **2026-07-21 — additive viewport animation for programmatic scrolling** (`25d63f8` through
+  `e783719`;
+  [design](2026-07-20-additive-viewport-scroll-design.md)): settled engine state remains logical
+  scroll authority while one analytic additive viewport correction animates `contentHost`.
+  Overlapping windows use shared identities; disjoint windows use one adjacent carousel without
+  intermediate rows. Gestures update settled state beneath the unchanged correction. Complete
+  verification passed 314/314 tests.
+
+- **2026-07-20 — granular animation model landed** (`4220850` through `08309c6`, followed by
+  `b65942f`, `9b6e85f`, `d0b6021`, `3995c25`;
+  [design](2026-07-20-list-animation-model-design.md)): introduced UIKit-free analytic tracks,
+  strict unchanged-target preservation, changed-target C0 replacement, CA keyframe compilation,
+  stable binding lifecycle, insertion fades, fresh exit owners, and independent survivor
+  position/extent transitions. Later passes added off-screen height reconciliation and
+  generation-safe autonomous cleanup. The former production animation architecture was removed.

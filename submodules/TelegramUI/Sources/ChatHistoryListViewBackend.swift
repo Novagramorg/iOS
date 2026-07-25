@@ -48,10 +48,10 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     var tapped: (() -> Void)? { get set }
     var reorderItem: (Int, Int, Any?) -> Signal<Bool, NoError> { get set }
 
-    func transaction(
+    func chatHistoryTransaction(
         deleteIndices: [ListViewDeleteItem],
-        insertIndicesAndItems: [ListViewInsertItem],
-        updateIndicesAndItems: [ListViewUpdateItem],
+        insertIndicesAndItems: [ChatHistoryListViewInsertItem],
+        updateIndicesAndItems: [ChatHistoryListViewUpdateItem],
         options: ListViewDeleteAndInsertOptions,
         scrollToItem: ListViewScrollToItem?,
         additionalScrollDistance: CGFloat,
@@ -91,10 +91,10 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
 // `public extension ListView { ... }` block in ListViewProtocol.swift — provide the default-argument
 // convenience overloads that ChatHistoryListNodeImpl relies on. They forward to the full requirement.
 public extension ChatHistoryListViewBackend {
-    func transaction(
+    func chatHistoryTransaction(
         deleteIndices: [ListViewDeleteItem],
-        insertIndicesAndItems: [ListViewInsertItem],
-        updateIndicesAndItems: [ListViewUpdateItem],
+        insertIndicesAndItems: [ChatHistoryListViewInsertItem],
+        updateIndicesAndItems: [ChatHistoryListViewUpdateItem],
         options: ListViewDeleteAndInsertOptions,
         scrollToItem: ListViewScrollToItem? = nil,
         additionalScrollDistance: CGFloat = 0.0,
@@ -104,7 +104,7 @@ public extension ChatHistoryListViewBackend {
         updateOpaqueState: Any?,
         completion: @escaping (ListViewDisplayedItemRange) -> Void = { _ in }
     ) {
-        self.transaction(
+        self.chatHistoryTransaction(
             deleteIndices: deleteIndices,
             insertIndicesAndItems: insertIndicesAndItems,
             updateIndicesAndItems: updateIndicesAndItems,
@@ -137,5 +137,48 @@ extension ListViewImpl: ChatHistoryListViewBackend {
     }
     public func setTopContentInset(_ inset: CGFloat) {
         self.scroller.contentInset = UIEdgeInsets(top: inset, left: 0.0, bottom: 0.0, right: 0.0)
+    }
+    
+    public func chatHistoryTransaction(
+        deleteIndices: [ListViewDeleteItem],
+        insertIndicesAndItems: [ChatHistoryListViewInsertItem],
+        updateIndicesAndItems: [ChatHistoryListViewUpdateItem],
+        options: ListViewDeleteAndInsertOptions,
+        scrollToItem: ListViewScrollToItem?,
+        additionalScrollDistance: CGFloat,
+        updateSizeAndInsets: ListViewUpdateSizeAndInsets?,
+        stationaryItemRange: (Int, Int)?,
+        customAnimationTransition: ControlledTransition?,
+        updateOpaqueState: Any?,
+        completion: @escaping (ListViewDisplayedItemRange) -> Void
+    ) {
+        self.transaction(
+            deleteIndices: deleteIndices,
+            insertIndicesAndItems: insertIndicesAndItems.map { item in
+                return ListViewInsertItem(
+                    index: item.index,
+                    previousIndex: item.previousIndex,
+                    item: item.item,
+                    directionHint: item.directionHint,
+                    forceAnimateInsertion: item.forceAnimateInsertion
+                )
+            },
+            updateIndicesAndItems: updateIndicesAndItems.map { item in
+                return ListViewUpdateItem(
+                    index: item.index,
+                    previousIndex: item.previousIndex,
+                    item: item.item,
+                    directionHint: item.directionHint
+                )
+            },
+            options: options,
+            scrollToItem: scrollToItem,
+            additionalScrollDistance: additionalScrollDistance,
+            updateSizeAndInsets: updateSizeAndInsets,
+            stationaryItemRange: stationaryItemRange,
+            customAnimationTransition: customAnimationTransition,
+            updateOpaqueState: updateOpaqueState,
+            completion: completion
+        )
     }
 }
