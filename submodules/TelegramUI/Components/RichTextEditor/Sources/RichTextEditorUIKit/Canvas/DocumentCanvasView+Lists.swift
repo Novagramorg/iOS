@@ -11,10 +11,22 @@ extension DocumentCanvasView {
         // as a non-list paragraph (resets numbering). That is the intended behavior. The paragraph
         // `style` is forwarded so ListNumbering can treat a quote as its own numbering scope (a quoted
         // list and the surrounding list number independently); non-BlockBox blocks default to `.body`.
-        ListNumbering.labels(for: boxes.map { box in
-            let p = box as? BlockBox
-            return ParagraphBlock(id: box.id, style: p?.style ?? .body, list: p?.listMembership)
-        })
+        // Each container body (details / expanded block quote) is its own numbering SCOPE — numbered
+        // independently of the surrounding stack — so `ListNumbering.labels` runs per-stack and merges.
+        var result: [BlockID: String] = [:]
+        func labelStack(_ stack: [CanvasBlock]) {
+            let scoped = ListNumbering.labels(for: stack.map { box in
+                let p = box as? BlockBox
+                return ParagraphBlock(id: box.id, style: p?.style ?? .body, list: p?.listMembership)
+            })
+            result.merge(scoped) { _, new in new }
+            for b in stack {
+                if let d = b as? DetailsBox { labelStack(d.children.boxes) }
+                else if let bq = b as? BlockQuoteBox, !bq.collapsed { labelStack(bq.children.boxes) }
+            }
+        }
+        labelStack(boxes)
+        return result
     }
 
     struct ListMarkerDraw { let label: String; let origin: CGPoint; let font: UIFont; let id: BlockID }
@@ -27,17 +39,31 @@ extension DocumentCanvasView {
     func stampListMarkers() {
         let labels = listMarkerLabels()
         let isSoleBlock = (boxes.count == 1)
-        for case let p as BlockBox in boxes {
-            p.isTopLevelBlock = true
-            p.isOnlyBlock = isSoleBlock
-            p.resolvedListMarker = labels[p.id]
-            p.placeholders = self.placeholders
-            p.hostsChecklistCheckbox = (self.checklistMarkerViewProvider != nil) && (p.listMembership?.marker == .checklist)
+        // Recurse into details + expanded block-quote bodies so NESTED list paragraphs get their marker label
+        // (`resolvedListMarker`) and checkbox-hosting flag too. `isTopLevelBlock`/`isOnlyBlock` (which gate the
+        // document placeholder) are true ONLY for the root stack; nested boxes are not top-level.
+        func stamp(_ stack: [CanvasBlock], topLevel: Bool) {
+            for b in stack {
+                if let p = b as? BlockBox {
+                    p.isTopLevelBlock = topLevel
+                    p.isOnlyBlock = topLevel && isSoleBlock
+                    p.resolvedListMarker = labels[p.id]
+                    p.placeholders = self.placeholders
+                    p.hostsChecklistCheckbox = (self.checklistMarkerViewProvider != nil) && (p.listMembership?.marker == .checklist)
+                } else if let pq = b as? PullQuoteBox {
+                    pq.placeholders = self.placeholders
+                } else if let cb = b as? CodeBlockBox {
+                    cb.placeholders = self.placeholders
+                } else if let bq = b as? BlockQuoteBox {
+                    bq.placeholders = self.placeholders
+                    if !bq.collapsed { stamp(bq.children.boxes, topLevel: false) }
+                } else if let d = b as? DetailsBox {
+                    d.placeholders = self.placeholders; d.chevronImage = self.detailsChevronImage
+                    stamp(d.children.boxes, topLevel: false)
+                }
+            }
         }
-        for case let pq as PullQuoteBox in boxes { pq.placeholders = self.placeholders }
-        for case let cb as CodeBlockBox in boxes { cb.placeholders = self.placeholders }
-        for case let bq as BlockQuoteBox in boxes { bq.placeholders = self.placeholders }
-        for case let d as DetailsBox in boxes { d.placeholders = self.placeholders; d.chevronImage = self.detailsChevronImage }
+        stamp(boxes, topLevel: true)
     }
 
     /// Test/geometry seam: the per-box marker draws keyed by `BlockID`. Production draws each marker in

@@ -509,10 +509,10 @@ extension DocumentCanvasView: UIKeyInput {
         // KEEP the media. The setter stashes the just-cleared image into `imageObjectDeletePending`; honor it
         // here by replacing that media with an empty body paragraph in place.
         if let pendingId = imageObjectDeletePending,
-           let i = boxes.firstIndex(where: { $0.id == pendingId && $0 is MediaBlockBox }),
-           head == boxes[i].nodeStart || selFrom == boxes[i].nodeStart || selTo == boxes[i].nodeStart {
+           let (stack, i) = owningStack(ofBlockID: pendingId), let mb = stack.boxes[i] as? MediaBlockBox,
+           head == mb.nodeStart || selFrom == mb.nodeStart || selTo == mb.nodeStart {
             imageObjectDeletePending = nil
-            editing { replaceMediaWithEmptyParagraph(at: i) }
+            editing { replaceMediaWithEmptyParagraph(id: pendingId) }   // stack-aware: in place, even nested
             clearImageSelection()
             return
         }
@@ -641,17 +641,18 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
+        // (A) A TAP-SELECTED image (the tint highlight; `imageSelection` is still set because `selectImage`
+        // doesn't go through the `selectedTextRange` setter) → replace the media with an empty body paragraph
+        // in place, caret there. (The range-driven tap-select path returns earlier via `imageObjectDeletePending`.)
+        // Stack-aware (by id, not a top-level index) so a NESTED tap-selected media is replaced in place too,
+        // not removed — so this runs BEFORE the `boxIndex(of:)` gap branch, which resolves only at top level.
+        if let img = mediaBox(atGap: head), imageSelection == img.id {
+            editing { replaceMediaWithEmptyParagraph(id: img.id) }
+            clearImageSelection()
+            return
+        }
         // Caret at a media block's leading gap (the slot to the LEFT of the image).
         if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
-            // (A) A TAP-SELECTED image (the tint highlight; `imageSelection` is still set because
-            // `selectImage` doesn't go through the `selectedTextRange` setter) → replace the media with an
-            // empty body paragraph in place, caret there. (The range-driven tap-select path returns earlier
-            // via `imageObjectDeletePending`.) Unchanged.
-            if imageSelection == img.id {
-                editing { replaceMediaWithEmptyParagraph(at: i) }
-                clearImageSelection()
-                return
-            }
             // (B) A plain, non-selected caret at the gap → Backspace acts on the PREVIOUS block (delete
             // leftward, like a text caret sitting just before the image), NOT on the media.
             if i == 0 {
@@ -761,6 +762,45 @@ extension DocumentCanvasView: UIKeyInput {
                 // activeStack so a mis-resolved following block can't pre-empt it. (The later count==1
                 // un-quote branch is now redundant but harmless.)
                 unwrapBlockQuoteLevel()
+                return
+            }
+        }
+        // Backspace inside a DETAILS body. `resolveBox` below mis-resolves a nested position (the details is a
+        // degenerate container — `textLength == 0` — so a position inside it falls through to the following /
+        // last top-level block), so resolve via `activeStack` here — mirrors the `isInsideTable` /
+        // `isInsideBlockQuote` collapsed branches above. Without this, a caret at the start of a nested empty
+        // paragraph whose previous sibling is an image cross-deletes into the image's caption instead of
+        // removing the paragraph. (A nested block quote / table inside the details is handled by their own
+        // branches above; this covers the details' own direct body paragraphs.)
+        if selFrom == selTo, isInsideDetails(head), let active = activeStack(at: head), let child = active.box as? BlockBox {
+            if active.local > 0 {
+                let n = graphemeClusterLengthBeforeCaret(global: head)
+                editing(coalescing: .deleting) { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
+                return
+            }
+            // local == 0 → start of a nested paragraph. (A details body paragraph is always index >= 1;
+            // `children[0]` is the title.)
+            if let list = child.listMembership {
+                if list.level > 0 { outdent() }
+                else { editing { child.listMembership = nil; child.style = .body; restyle(child); recomputeSpans() } }
+                return
+            }
+            if active.index > 0 {
+                let prev = active.stack.boxes[active.index - 1]
+                // The title (`index 0`) and a non-paragraph atom (image / table / code / quote) can't absorb a
+                // text merge: an EMPTY paragraph is removed (caret steps to the previous block's nearest text
+                // slot); a non-empty one is kept (caret steps back).
+                if active.index == 1 || isNonParagraphAtom(prev) {
+                    let dest = prevTextPosition(before: head)
+                    if child.textLength == 0 {
+                        editing { active.stack.boxes.remove(at: active.index); recomputeSpans(); anchor = dest; head = dest }
+                    } else if dest != head, isRenderablePosition(dest) {
+                        setCaret(global: dest)
+                    }
+                } else {
+                    // Previous sibling is a text body paragraph → merge into it within the details stack.
+                    editing { mergeParagraphs(in: active.stack, upperIndex: active.index - 1) }
+                }
                 return
             }
         }

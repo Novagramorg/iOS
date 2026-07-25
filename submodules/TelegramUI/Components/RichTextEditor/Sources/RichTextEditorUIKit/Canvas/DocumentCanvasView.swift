@@ -903,11 +903,11 @@ final class DocumentCanvasView: UIView {
     @discardableResult
     func reconcileBlockViews(visibleRect: CGRect) -> Bool {
         var createdFreshTable = false
-        let window = blockWindow(forBand: overscanRect(for: visibleRect))
+        let band = overscanRect(for: visibleRect)
         var wantedIDs = Set<BlockID>()
-        for i in window {
-            let box = boxes[i]
-            guard box.rendersAsBlockView else { continue }
+
+        // Realize (create or rebind) one box's backing view.
+        func realize(_ box: CanvasBlock) {
             wantedIDs.insert(box.id)
             if let view = blockViews[box.id] {
                 bindRealizedView(view, to: box, fresh: false)          // stayed realized
@@ -926,6 +926,25 @@ final class DocumentCanvasView: UIView {
                 bindRealizedView(view, to: box, fresh: true)
             }
         }
+
+        // DFS in tree order. Realize a box when it renders-as-view AND its extent meets the band, then descend
+        // into a details / (expanded) block-quote body (NOT table cells — a `TableBackingView` self-hosts those,
+        // so a nested table gets its own view here and hosts its own cell views). Visiting a container BEFORE
+        // its children means a FRESH container chrome view is inserted below its fresh child views (children
+        // draw above the chrome). A container off-band ⇒ its children (within its frame) are off-band too.
+        func realizeTree(_ box: CanvasBlock) {
+            let inBand = box.blockViewFrame.intersects(band)
+            if box.rendersAsBlockView, inBand { realize(box) }
+            guard inBand else { return }
+            if let d = box as? DetailsBox {
+                for c in d.children.boxes { realizeTree(c) }
+            } else if let bq = box as? BlockQuoteBox, !bq.collapsed {
+                for c in bq.children.boxes { realizeTree(c) }
+            }
+        }
+
+        for i in blockWindow(forBand: band) { realizeTree(boxes[i]) }   // top-level binary-search; recurse visible containers
+
         for (id, view) in blockViews where !wantedIDs.contains(id) {
             view.removeFromSuperview()
             blockViews[id] = nil
@@ -989,6 +1008,8 @@ final class DocumentCanvasView: UIView {
 
     var realizedBlockViewCountForTesting: Int { blockViews.count }
     func isBlockViewRealizedForTesting(_ id: BlockID) -> Bool { blockViews[id] != nil }
+    func blockViewForTesting(_ id: BlockID) -> UIView? { blockViews[id] }
+    func checklistMarkerViewForTesting(_ id: BlockID) -> UIView? { checklistMarkerViews[id]?.view }
     var recycleQueueDepthForTesting: Int { recycleQueue.count }
 
     /// Called by a `TableBackingView` whenever its inner scroll view moves: keep the box's `contentOffsetX`
@@ -1263,7 +1284,18 @@ final class DocumentCanvasView: UIView {
     /// The `TableBlockBox` whose node span (incl. structural token slots) contains `pos`, if any — used to
     /// fold in horizontal scroll. Wider than `tableBox(containing:)` in Navigation (which matches cell text only).
     func tableBox(containingGlobal pos: Int) -> TableBlockBox? {
-        boxes.first { ($0 as? TableBlockBox).map { pos >= $0.nodeStart && pos < $0.nodeStart + $0.nodeSize } ?? false } as? TableBlockBox
+        // Recurses into details / (expanded) block-quote bodies so a nested table is found; does NOT descend
+        // into table cells (a nested table's own cells are found by that table).
+        func find(_ stack: [CanvasBlock]) -> TableBlockBox? {
+            for b in stack {
+                guard pos > b.nodeStart, pos < b.nodeStart + b.nodeSize else { continue }
+                if let t = b as? TableBlockBox { return t }
+                if let d = b as? DetailsBox, let hit = find(d.children.boxes) { return hit }
+                if let bq = b as? BlockQuoteBox, !bq.collapsed, let hit = find(bq.children.boxes) { return hit }
+            }
+            return nil
+        }
+        return find(boxes)
     }
 
     /// The horizontal scroll offset of the table containing `pos` (0 if none) — subtract it to turn an
@@ -1271,20 +1303,25 @@ final class DocumentCanvasView: UIView {
     func tableContentOffsetX(forGlobal pos: Int) -> CGFloat { tableBox(containingGlobal: pos)?.contentOffsetX ?? 0 }
 
     /// True if `pos` is the gap before a media atom box's `nodeStart` — a renderable caret slot.
+    /// Recurses into details / expanded block-quote bodies (via `allBoxesRecursive`) so a NESTED media
+    /// atom's gap is a gap position too.
     func isGapPosition(_ pos: Int) -> Bool {
-        boxes.contains { $0 is MediaBlockBox && $0.nodeStart == pos }
+        allBoxesRecursive().contains { $0 is MediaBlockBox && $0.nodeStart == pos }
     }
 
-    /// The media box whose gap-before-atom is at `pos`, if any.
+    /// The media box whose gap-before-atom is at `pos`, if any. Recurses into details / expanded block-quote
+    /// bodies — every image action (tap-select, edit-menu geometry, delete, spoiler) routes through this, so a
+    /// media block nested in a container must resolve here just like a top-level one.
     func mediaBox(atGap pos: Int) -> MediaBlockBox? {
-        boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
+        allBoxesRecursive().first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
     }
 
-    /// The COLLAPSED block-quote box whose leading gap is at `pos` (top-level), if any. The folded quote is a
+    /// The COLLAPSED block-quote box whose leading gap is at `pos`, if any. The folded quote is a
     /// caption-less atom holding no editable text, so a caret can focus its gap but typing there must open a
-    /// body paragraph before it — mirroring `mediaBox(atGap:)`.
+    /// body paragraph before it — mirroring `mediaBox(atGap:)`. Recurses (a collapsed quote can nest in a
+    /// details body); `allBoxesRecursive` lists a collapsed quote as a leaf atom (it walks no children).
     func collapsedBlockQuoteBox(atGap pos: Int) -> BlockQuoteBox? {
-        boxes.first { ($0 as? BlockQuoteBox).map { $0.collapsed && $0.nodeStart == pos } ?? false } as? BlockQuoteBox
+        allBoxesRecursive().first { ($0 as? BlockQuoteBox).map { $0.collapsed && $0.nodeStart == pos } ?? false } as? BlockQuoteBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.

@@ -74,12 +74,14 @@ final class DetailsBox: CanvasBlock {
         self.topInset = 6.0
         self.bottomInset = d.expanded ? (BlockBox.defaultVerticalInset + 8.0) : 17.0
 
-        // The title is the first child paragraph (its BlockID is the details block's own id, matching
-        // `DocumentTree`'s title paragraph). The title is ALWAYS the Body style; its paragraph style is
-        // implicit, so the model stores only the inline runs. Only the TITLE's TEXT is indented past the
-        // leading chevron — via a display-only paragraph indent, so its frame stays full width and the BODY
-        // sits at the normal body inset (flush, not aligned with the title).
-        let titleBox = BlockBox(paragraph: ParagraphBlock(id: d.id, style: .body,
+        // The title is the first child paragraph. Its BlockID is a DERIVED, distinct id (NOT `d.id`): the
+        // `DetailsBox` chrome and the title box are BOTH realized as separate backing views keyed by BlockID,
+        // so sharing `d.id` would collide in the canvas's `blockViews` map (one would overwrite the other,
+        // dropping the chrome). The derived id is stable across rebuilds (so the title view reuses). The title
+        // is ALWAYS the Body style; its paragraph style is implicit, so the model stores only the inline runs.
+        // Only the TITLE's TEXT is indented past the leading chevron — via a display-only paragraph indent, so
+        // its frame stays full width and the BODY sits at the normal body inset (flush, not aligned with it).
+        let titleBox = BlockBox(paragraph: ParagraphBlock(id: DetailsBox.titleBlockID(d.id), style: .body,
                                                           paragraph: ParagraphAttributes(firstLineIndent: DetailsBox.contentLeadingInset,
                                                                                          headIndent: DetailsBox.contentLeadingInset),
                                                           runs: d.title),
@@ -98,6 +100,11 @@ final class DetailsBox: CanvasBlock {
         stack.verticalInsetBase = 0
         self.children = stack
     }
+
+    /// A stable, distinct BlockID for the title child box, derived from the details block's id so it never
+    /// collides with the `DetailsBox`'s own id in the canvas `blockViews` map (both are realized as views).
+    /// The `\u{1}` suffix can't occur in a real UUID id, so it can't collide with another block's id either.
+    static func titleBlockID(_ base: BlockID) -> BlockID { BlockID(base.description + "\u{1}detailsTitle") }
 
     private var titleBox: BlockBox? { children.boxes.first as? BlockBox }
 
@@ -168,7 +175,9 @@ final class DetailsBox: CanvasBlock {
     func closestPosition(toCanvasPoint point: CGPoint) -> Int { children.closestPosition(toCanvasPoint: point) }
 
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
-        children.draw(in: ctx, imageProvider: imageProvider)
+        // Chrome only — the title + body children each render via their OWN backing views (hosted by the
+        // canvas's recursive `reconcileBlockViews`), so this must NOT flatten them (that would double-draw
+        // and, for view-hosted children like tables/media, draw only their non-view part).
         // Empty-title placeholder (the title is children[0], Body style; it is not top-level so it draws no
         // placeholder of its own). Aligned to where centered Body text will appear (half the extra leading).
         if let titleBox = children.boxes.first as? BlockBox, titleBox.textLength == 0, !placeholders.detailsTitle.isEmpty {

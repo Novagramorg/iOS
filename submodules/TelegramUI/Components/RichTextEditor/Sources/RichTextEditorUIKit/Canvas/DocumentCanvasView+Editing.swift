@@ -183,12 +183,25 @@ extension DocumentCanvasView {
     }
 
     /// Removes the media block identified by its occurrence `BlockID` — NOT by `mediaID`, which may be shared
-    /// by several blocks. Routes through the same path as the image edit-menu "Delete" (`deleteImageBox`):
-    /// remove the block, merge the caret up, never leave a zero-block document. No-op when no block has `id`.
-    /// Owns its own `editing { }` (one undo step).
+    /// by several blocks. Removes the block from its OWN stack (top-level OR a details / block-quote body, via
+    /// `owningStack`), parks the caret at the previous block's text end (else the new first block's start), and
+    /// never leaves a stack with zero blocks. No-op when no block has `id`. Owns its own `editing { }` (one undo
+    /// step). Stack-aware equivalent of the top-level index-based `deleteImageBox`.
     func deleteMediaBlock(id: BlockID) {
-        guard let index = boxes.firstIndex(where: { $0.id == id }) else { return }
-        editing { self.deleteImageBox(at: index) }
+        guard let (stack, index) = owningStack(ofBlockID: id) else { return }
+        editing {
+            stack.boxes.remove(at: index)
+            // A stack must never be empty — the root document AND a container body each need an editable slot.
+            // (A details body always retains its title box at index 0, so this only fires for the root or a
+            // block-quote body that held the media as its sole child.)
+            if stack.boxes.isEmpty {
+                stack.boxes.append(BlockBox(paragraph: ParagraphBlock(id: BlockID.generate()), mapper: self.mapper, width: self.effectiveWidth))
+            }
+            self.recomputeSpans()
+            let target = index > 0 ? stack.boxes[index - 1] : stack.boxes.first
+            let caret = target.map { $0.textStart + $0.textLength } ?? 0
+            self.anchor = caret; self.head = caret
+        }
     }
 
     /// Replaces the media block at `index` with a fresh EMPTY body paragraph, placing the caret in it.
@@ -203,6 +216,19 @@ extension DocumentCanvasView {
         var newBoxes = boxes
         newBoxes.replaceSubrange(index...index, with: [empty])
         boxes = newBoxes
+        recomputeSpans()
+        anchor = empty.textStart; head = empty.textStart
+    }
+
+    /// Stack-aware equivalent of `replaceMediaWithEmptyParagraph(at:)`: replaces the media block with `id` in
+    /// its OWN stack (top-level OR a details / block-quote body, via `owningStack`) with a fresh empty body
+    /// paragraph, caret there. Lets a Backspace-deletes-media path replace a NESTED media in place instead of
+    /// falling through to a generic remove-and-merge. No-op if `id` isn't a media block. Caller wraps in `editing`.
+    func replaceMediaWithEmptyParagraph(id: BlockID) {
+        guard let (stack, index) = owningStack(ofBlockID: id), stack.boxes[index] is MediaBlockBox else { return }
+        let empty = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                             mapper: mapper, width: effectiveWidth)
+        stack.boxes[index] = empty
         recomputeSpans()
         anchor = empty.textStart; head = empty.textStart
     }
@@ -635,18 +661,16 @@ extension DocumentCanvasView {
         guard let table = activeTable() else { return }
         editing {
             // Drop the empty leading block from the cell (active.index == 1 ⇒ index 0 is that empty block;
-            // the cell keeps its remaining ≥1 block). The table box itself is unchanged, so its top-level
-            // index in `boxes` — and the `active.stack` cell reference — stay valid.
+            // the cell keeps its remaining ≥1 block). The table box itself is unchanged, so its index in its
+            // OWN stack (`table.stack`) — and the `active.stack` cell reference — stay valid.
             var cellBoxes = active.stack.boxes
             cellBoxes.remove(at: 0)
             active.stack.boxes = cellBoxes
-            // Insert an empty body paragraph immediately before the table (17pt canvas mapper, not the
-            // cell's 15pt variant).
+            // Insert an empty body paragraph immediately before the table, in the TABLE's own stack (top-level
+            // OR a container body), 17pt canvas mapper (not the cell's 15pt variant).
             let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
                                 mapper: mapper, width: effectiveWidth)
-            var nb = boxes
-            nb.insert(body, at: table.index)
-            boxes = nb
+            table.stack.boxes.insert(body, at: table.index)
             recomputeSpans()
             anchor = body.textStart; head = body.textStart
         }
@@ -977,11 +1001,19 @@ extension DocumentCanvasView {
 
     /// The `TableBlockBox` whose leaf regions contain `pos`, or nil if `pos` is not inside any table.
     func owningTable(_ pos: Int) -> TableBlockBox? {
-        for box in boxes {
-            guard let table = box as? TableBlockBox else { continue }
-            for r in table.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return table }
+        func find(_ stack: [CanvasBlock]) -> TableBlockBox? {
+            for box in stack {
+                if let table = box as? TableBlockBox {
+                    for r in table.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return table }
+                } else if let d = box as? DetailsBox {
+                    if let hit = find(d.children.boxes) { return hit }   // a table nested in a details body
+                } else if let bq = box as? BlockQuoteBox, !bq.collapsed {
+                    if let hit = find(bq.children.boxes) { return hit }   // a table nested in a quote body
+                }
+            }
+            return nil
         }
-        return nil
+        return find(boxes)
     }
 
     /// True when `[a, b]` is a PARTIAL selection within a SINGLE table — both endpoints in the same table AND the
@@ -1031,6 +1063,38 @@ extension DocumentCanvasView {
         }
         walk(boxes)
         return result
+    }
+
+    /// Every box in document order, recursing into details + expanded block-quote bodies (NOT table cells —
+    /// a `TableBackingView` owns its cell content). Matches `reconcileBlockViews`' descent, so the per-block
+    /// sync passes (list markers, media, checkbox views) cover the same nested boxes that get backing views.
+    func allBoxesRecursive() -> [CanvasBlock] {
+        var result: [CanvasBlock] = []
+        func walk(_ stack: [CanvasBlock]) {
+            for b in stack {
+                result.append(b)
+                if let d = b as? DetailsBox { walk(d.children.boxes) }
+                else if let bq = b as? BlockQuoteBox, !bq.collapsed { walk(bq.children.boxes) }
+            }
+        }
+        walk(boxes)
+        return result
+    }
+
+    /// The `BlockStack` (and the index within it) that DIRECTLY contains the box with `id`, recursing into
+    /// details / expanded block-quote bodies (NOT table cells — a cell rebuild is a separate path). Lets the
+    /// by-blockID media mutators splice a rebuilt box into its OWN stack, so an image/album action works on a
+    /// media block nested in a container, not only at top level. `stack.boxes[index]` is the found box.
+    func owningStack(ofBlockID id: BlockID) -> (stack: BlockStack, index: Int)? {
+        func search(_ stack: BlockStack) -> (stack: BlockStack, index: Int)? {
+            for (i, b) in stack.boxes.enumerated() {
+                if b.id == id { return (stack, i) }
+                if let d = b as? DetailsBox, let r = search(d.children) { return r }
+                else if let bq = b as? BlockQuoteBox, !bq.collapsed, let r = search(bq.children) { return r }
+            }
+            return nil
+        }
+        return search(root)
     }
 
     /// True if `pos` is inside a detail (folding) block (its owning top-level box is a `DetailsBox`).

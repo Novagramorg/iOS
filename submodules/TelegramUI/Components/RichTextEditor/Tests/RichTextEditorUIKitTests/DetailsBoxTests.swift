@@ -24,15 +24,16 @@ final class DetailsBoxTests: XCTestCase {
         box.nodeStart = 0
         box.recompute()
         let regions = box.leafRegions()
-        // The title is the first child BlockBox, so its region reads back as a `.paragraph` ref (id == the
-        // details block's own id); the position (globalStart 2) is what the token model requires.
-        XCTAssertEqual(regions.first?.ref, .paragraph(BlockID("d")))
+        // The title is the first child BlockBox with a DERIVED id (distinct from the details' own id, so the
+        // two backing views don't collide in `blockViews`); its region reads back as that `.paragraph` ref.
+        let titleID = DetailsBox.titleBlockID(BlockID("d"))
+        XCTAssertEqual(regions.first?.ref, .paragraph(titleID))
         XCTAssertEqual(regions.first?.globalStart, 1)                 // first child of a container at nodeStart 0 → leaf at 1 (like BlockQuoteBox)
         XCTAssertEqual(regions.count, 2)                              // title + one body paragraph
         // Folded → only the title region
         var folded = d; folded.expanded = false
         let f = DetailsBox(details: folded, mapper: mapper(), width: 320); f.nodeStart = 0; f.recompute()
-        XCTAssertEqual(f.leafRegions().map { $0.ref }, [.paragraph(BlockID("d"))])
+        XCTAssertEqual(f.leafRegions().map { $0.ref }, [.paragraph(titleID)])
     }
 
     func test_detailsBox_currentBlock_roundTrips() {

@@ -10,7 +10,7 @@ extension DocumentCanvasView {
     /// box's own canvas rect — no attachment-glyph scan). Called from `layoutSubviews` after blocks lay out.
     func syncMediaItemViews() {
         var present = Set<BlockID>()
-        for box in boxes {
+        for box in allBoxesRecursive() {   // top level AND nested in a details / quote body
             guard let media = box as? MediaBlockBox else { continue }
             present.insert(media.id)
             let canvasRect = media.mediaRect()
@@ -133,7 +133,7 @@ extension DocumentCanvasView {
     /// construction — no explicit anchor/head bookkeeping needed. Top-level media blocks only (mirrors
     /// `deleteMediaBlock`'s scope); no-op if `blockID` isn't found or `itemIndex` is out of range.
     func deleteMediaItem(blockID: BlockID, itemIndex: Int) {
-        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+        guard let (stack, index) = owningStack(ofBlockID: blockID), let mediaBox = stack.boxes[index] as? MediaBlockBox,
               case .media(let currentMedia) = mediaBox.currentBlock(), currentMedia.items.indices.contains(itemIndex) else { return }
         if currentMedia.items.count <= 1 {
             deleteMediaBlock(id: blockID)   // existing media-delete → empty paragraph; owns its own undo step
@@ -142,11 +142,11 @@ extension DocumentCanvasView {
         editing {
             var newMedia = currentMedia
             newMedia.items.remove(at: itemIndex)
+            // `effectiveWidth` is a placeholder — BlockStack.layout re-sets each box's width on the next pass,
+            // so a nested box gets its (narrower) container width regardless.
             let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
                                        horizontalBleed: mediaBox.horizontalBleed)
-            var newBoxes = boxes
-            newBoxes.replaceSubrange(index...index, with: [newBox])
-            boxes = newBoxes
+            stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
         }
     }
@@ -158,7 +158,7 @@ extension DocumentCanvasView {
     /// `editing { }` for one undo step. `nodeSize` is caption-length-derived only, so appending an item
     /// never moves the caret. Top-level media blocks only; no-op if `blockID` isn't found.
     func addMediaItem(blockID: BlockID, mediaID: String, naturalSize: CGSize, kind: MediaKind) {
-        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+        guard let (stack, index) = owningStack(ofBlockID: blockID), let mediaBox = stack.boxes[index] as? MediaBlockBox,
               case .media(let currentMedia) = mediaBox.currentBlock() else { return }
         editing {
             var newMedia = currentMedia
@@ -166,9 +166,7 @@ extension DocumentCanvasView {
                                             naturalSize: Size2D(width: Double(naturalSize.width), height: Double(naturalSize.height))))
             let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
                                        horizontalBleed: mediaBox.horizontalBleed)
-            var newBoxes = boxes
-            newBoxes.replaceSubrange(index...index, with: [newBox])
-            boxes = newBoxes
+            stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
         }
     }
@@ -183,7 +181,7 @@ extension DocumentCanvasView {
     /// are caption-derived only), so the caret is undisturbed. Top-level media blocks only; no-op if `blockID`
     /// isn't found.
     func toggleMediaSpoiler(blockID: BlockID, itemIndex: Int?) {
-        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+        guard let (stack, index) = owningStack(ofBlockID: blockID), let mediaBox = stack.boxes[index] as? MediaBlockBox,
               case .media(let currentMedia) = mediaBox.currentBlock() else { return }
         editing {
             var newMedia = currentMedia
@@ -195,9 +193,7 @@ extension DocumentCanvasView {
             }
             let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
                                        horizontalBleed: mediaBox.horizontalBleed)
-            var newBoxes = boxes
-            newBoxes.replaceSubrange(index...index, with: [newBox])
-            boxes = newBoxes
+            stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
         }
     }
@@ -209,16 +205,14 @@ extension DocumentCanvasView {
     /// (`nodeSize`/`textStart` are caption-derived only), so the caret is undisturbed. No-op if `blockID`
     /// isn't found or the block has fewer than 2 items (a single item has no album layout).
     func toggleMediaDisplayMode(blockID: BlockID) {
-        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+        guard let (stack, index) = owningStack(ofBlockID: blockID), let mediaBox = stack.boxes[index] as? MediaBlockBox,
               case .media(let currentMedia) = mediaBox.currentBlock(), currentMedia.items.count >= 2 else { return }
         editing {
             var newMedia = currentMedia
             newMedia.displayMode = (currentMedia.displayMode == .mosaic) ? .slideshow : .mosaic
             let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
                                        horizontalBleed: mediaBox.horizontalBleed)
-            var newBoxes = boxes
-            newBoxes.replaceSubrange(index...index, with: [newBox])
-            boxes = newBoxes
+            stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
         }
     }

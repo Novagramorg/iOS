@@ -385,7 +385,9 @@ final class BlockQuoteBox: CanvasBlock {
             }
             return
         }
-        children.draw(in: ctx, imageProvider: imageProvider)
+        // Chrome only — child blocks each render via their OWN backing views (hosted by the canvas's
+        // recursive `reconcileBlockViews`); flattening them here would double-draw and lose view-hosted
+        // content (tables/media). The accent bar + fill are the back-most `blockquoteUnderlay`.
         if let ph = placeholderText, let first = children.boxes.first {
             // Empty quote: draw the host hint left-aligned at the child paragraph's text position (the quote is
             // left-aligned, unlike the centered pull quote). Baseline shift mirrors BlockBox.placeholderDraw.
