@@ -86,6 +86,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Host-injected fold chevron for detail blocks — the V2 `ExpandingItemVerticalRegularArrow` (template).
+    /// `nil` (default) ⇒ a drawn-arrow fallback. Assigning it reloads so `DetailsBox`es pick up the image.
+    public var detailsChevronImage: UIImage? = nil {
+        didSet {
+            canvas.detailsChevronImage = detailsChevronImage
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host tunable text-layout metrics (body/caption line height + paragraph spacing; a growable set).
     /// Defaults reproduce the editor's built-in document look (`.default` — 1.10 line height, 8pt paragraph
     /// gap); the compact chat composer assigns `.compact` (natural 1.0 line height, no spacing) so multi-line
@@ -428,6 +440,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
     /// a top-level paragraph.
     public func insertTable(rows: Int, cols: Int) { canvas.insertTable(rows: rows, columns: cols) }
+
+    /// Inserts a fresh, expanded detail (folding) block at the caret (empty title + one empty body paragraph),
+    /// with the caret placed in the title. No-op unless the caret is in a top-level paragraph.
+    public func insertDetailsBlock() { canvas.insertDetailsBlock() }
 
     /// Sets `url` as a link over the current selection (no-op if the selection is empty).
     public func setLink(_ url: String) { canvas.setLink(url) }

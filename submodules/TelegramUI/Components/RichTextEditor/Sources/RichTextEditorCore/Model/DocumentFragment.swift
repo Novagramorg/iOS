@@ -28,6 +28,9 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             return .pullQuote(PullQuote(id: .generate(), runs: pq.runs, author: pq.author))
         case .blockQuote(let bq):
             return .blockQuote(BlockQuote(id: .generate(), children: regeneratingIDs(bq.children), collapsed: bq.collapsed, author: bq.author))
+        case .details(let d):
+            return .details(DetailsBlock(id: .generate(), title: d.title,
+                                         children: regeneratingIDs(d.children), expanded: d.expanded))
         case .table(let t):
             // Regenerate the table AND its nested row/cell/inner-block IDs — a pasted "Copy Table" carries the
             // source table's IDs verbatim, and block views are keyed by BlockID, so a duplicate-ID paste would
@@ -155,6 +158,10 @@ public func blockPlainText(_ block: Block) -> String {
     case .code(let c): return c.text
     case .pullQuote(let pq): return pq.text
     case .blockQuote(let bq): return bq.children.map(blockPlainText).joined(separator: "\n")
+    case .details(let d):
+        let titleText = d.title.map(\.text).joined()
+        let body = d.children.map(blockPlainText).joined(separator: "\n")
+        return body.isEmpty ? titleText : titleText + "\n" + body
     default: return ""
     }
 }
@@ -429,6 +436,13 @@ extension Document {
                                                       children: regeneratingIDs(bq.children),
                                                       collapsed: bq.collapsed,
                                                       author: bq.author)))
+                }
+            case .details(let d):
+                // Capture the whole detail block only on full coverage (mirrors `.blockQuote`). Interactive
+                // copy/paste of details is deferred (v1); this arm keeps the AI-edit full-range path lossless.
+                if lo <= cursor && hi >= cursor + size {
+                    out.append(.details(DetailsBlock(id: .generate(), title: d.title,
+                                                     children: regeneratingIDs(d.children), expanded: d.expanded)))
                 }
             case .media, .table:
                 // Carried only for the AI-edit path, and only when the selection FULLY covers the block's

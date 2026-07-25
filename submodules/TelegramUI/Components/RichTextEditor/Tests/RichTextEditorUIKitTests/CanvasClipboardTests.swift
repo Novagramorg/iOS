@@ -209,6 +209,7 @@ final class CanvasClipboardTests: XCTestCase {
             case .table(let t): for row in t.rows { for cell in row.cells { out += allRunTexts(cell.blocks) } }
             case .pullQuote(let pq): out += pq.runs.map(\.text)
             case .blockQuote(let bq): out += allRunTexts(bq.children)
+            case .details(let d): out += d.title.map(\.text); out += allRunTexts(d.children)
             }
         }
         return out

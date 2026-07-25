@@ -139,6 +139,14 @@ extension DocumentCanvasView {
     /// window starts a fresh count. One handler means there is no UIKit firing-order race between separate
     /// single/double/triple recognizers — and no ~0.35s `require(toFail:)` caret-placement lag.
     func handleTap(at point: CGPoint, time now: TimeInterval) {
+        // A detail-block chevron is a CONTROL, not text — route every tap on it to the single-tap handler
+        // (which toggles fold) and bypass multi-tap escalation, so no tap count ever moves/selects the cursor
+        // (mirrors checkboxes / table controls / the image-atom bypass below).
+        if firstDetailsGlyphHit(at: point) != nil {
+            lastTapTime = now; lastTapLocation = point; tapCount = 1
+            performSingleTap(at: point)
+            return
+        }
         // An image atom has no word/paragraph to escalate to — route EVERY tap on an image to the
         // single-tap (two-step select/menu) handler, bypassing multi-tap escalation.
         if let img = mediaBox(atGap: closestGlobalPosition(to: point)), img.mediaRect().contains(point) {
@@ -242,6 +250,12 @@ extension DocumentCanvasView {
         if let bq = firstBlockQuoteGlyphHit(at: point) {
             clearStructuralSelections()
             toggleCollapsed(box: bq)
+            return
+        }
+        // A tap on a DetailsBox's chevron folds/unfolds it (title stays visible either way).
+        if let details = firstDetailsGlyphHit(at: point) {
+            clearStructuralSelections()
+            toggleDetailsExpanded(box: details)
             return
         }
         if let checklist = checklistBox(atCanvasPoint: point) {

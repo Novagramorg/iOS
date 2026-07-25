@@ -83,6 +83,14 @@ public func chatInputContent(
             blocks.append(.blockQuote(ChatInputBlockQuote(
                 content: inner, collapsed: bq.collapsed,
                 author: chatInputRuns(fromRuns: bq.author, resolveEmoji: resolveEmoji))))
+        case let .details(d):
+            // Editor detail (folding) container → currency .details, recursing its children as a sub-document.
+            let inner = chatInputContent(fromDocument: Document(blocks: d.children),
+                                         resolveEmoji: resolveEmoji, resolveMedia: resolveMedia)
+            blocks.append(.details(ChatInputDetails(
+                content: inner,
+                title: chatInputRuns(fromRuns: d.title, resolveEmoji: resolveEmoji),
+                expanded: d.expanded)))
         }
     }
     return ChatInputContent(blocks: blocks)
@@ -233,6 +241,13 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
                 runs.append(contentsOf: cellRuns(fromBlocks: [child]))
             }
             runs.append(contentsOf: bq.author)
+        case let .details(d):
+            // A table cell is inline-only; detail-block structure is not representable inside a cell.
+            // Flatten the title then the children's runs inline.
+            runs.append(contentsOf: d.title)
+            for child in d.children {
+                runs.append(contentsOf: cellRuns(fromBlocks: [child]))
+            }
         }
     }
     return runs
@@ -357,6 +372,15 @@ private func documentBlocks(
         }
         return [.blockQuote(BlockQuote(id: BlockID.generate(), children: children, collapsed: bq.collapsed,
                                        author: runs(fromChatInputRuns: bq.author, registerEmoji: registerEmoji)))]
+    case let .details(d):
+        // Currency .details → a real editor Block.details, recursing the inner ChatInputContent back to
+        // editor blocks. `expanded` maps 1:1.
+        let children = d.content.blocks.flatMap {
+            documentBlocks(fromChatInputBlock: $0, registerEmoji: registerEmoji, registerMedia: registerMedia)
+        }
+        return [.details(DetailsBlock(id: BlockID.generate(),
+                                      title: runs(fromChatInputRuns: d.title, registerEmoji: registerEmoji),
+                                      children: children, expanded: d.expanded))]
     }
 }
 
@@ -528,7 +552,7 @@ public func rtfRequiresNativeRichInput(_ data: Data) -> Bool {
     guard let document = RTFImport.document(fromRTF: data) else { return false }
     return document.blocks.contains { block in
         switch block {
-        case .table, .media:
+        case .table, .media, .details:
             return true
         case .paragraph, .code, .pullQuote, .blockQuote:
             return false

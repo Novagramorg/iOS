@@ -45,6 +45,10 @@ func makeBox(for block: Block, mapper: AttributedStringMapper,
                                                       pullQuoteStyle: pullQuoteStyle,
                                                       expandImage: expandImage,
                                                       collapseImage: collapseImage, width: width)
+    case .details(let d):        return DetailsBox(details: d, mapper: mapper,
+                                                   quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                                                   expandImage: expandImage,
+                                                   collapseImage: collapseImage, width: width)
     }
 }
 
@@ -244,6 +248,10 @@ final class DocumentCanvasView: UIView {
     /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to
     /// `BlockQuoteBox`; the `expand` image likewise.
     var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons?
+
+    /// Host-injected fold chevron for detail blocks (the V2 `ExpandingItemVerticalRegularArrow`). Stamped onto
+    /// each top-level `DetailsBox` during layout; `nil` ⇒ a drawn-arrow fallback.
+    var detailsChevronImage: UIImage?
 
     /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
     /// Defaults to the editor's built-in hints; a compact host (chat composer) sets them to "" to suppress
@@ -999,6 +1007,7 @@ final class DocumentCanvasView: UIView {
         documentSize = root.recompute(baseOffset: 0)
         for case let t as TableBlockBox in boxes { t.recompute() }
         for case let bq as BlockQuoteBox in boxes { bq.recompute() }
+        for case let d as DetailsBox in boxes { d.recompute() }
     }
 
     /// The box whose text contains `pos` (inclusive of the trailing caret slot), or nil at a
@@ -1067,6 +1076,7 @@ final class DocumentCanvasView: UIView {
                         width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
         for case let bq as BlockQuoteBox in boxes { bq.recompute() }   // child frames depend on the quote frame
+        for case let d as DetailsBox in boxes { d.recompute() }   // body child frames depend on the details frame
         stampListMarkers()
         syncBlockViews()
         blockquoteUnderlay.frame = bounds

@@ -127,9 +127,9 @@ public func attributedString(from content: ChatInputContent, renderListMarkers: 
                         range: NSRange(location: start, length: len))
                 }
             }
-        case .media, .table:
+        case .media, .table, .details:
             // INTENTIONAL render-only filter (not deferred): the legacy `UITextView` composer cannot represent a
-            // structural media/table block, so this `NSAttributedString` projection drops them. Heading/list
+            // structural media/table/detail block, so this `NSAttributedString` projection drops them. Heading/list
             // paragraphs above similarly render as plain text (`appendRuns` ignores heading style + list membership).
             // `ChatInputContent` stays the sole authoritative storage; this flat view is lossy by design. The native
             // engine carries these blocks via the direct `Document ↔ ChatInputContent` bridge, never this path.
@@ -241,6 +241,11 @@ public func entityPreservingFallbackAttributedString(
                 let quoteAttribute = inheritedBlockAttribute ?? ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: blockQuote.collapsed)
                 appendContent(blockQuote.content, inheritedBlockAttribute: quoteAttribute)
                 appendRuns(blockQuote.author, blockAttribute: inheritedBlockAttribute)
+            case let .details(details):
+                // Defensive entity-path fallback (details normally forces the rich path): flatten the title
+                // then the nested content as plain text, so nothing is lost if it ever reaches this path.
+                appendRuns(details.title, blockAttribute: inheritedBlockAttribute)
+                appendContent(details.content, inheritedBlockAttribute: inheritedBlockAttribute)
             case let .media(media):
                 appendRuns(media.caption, blockAttribute: inheritedBlockAttribute)
             case let .table(table):

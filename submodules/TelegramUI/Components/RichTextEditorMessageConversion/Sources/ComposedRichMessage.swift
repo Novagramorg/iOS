@@ -41,6 +41,9 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
         case .blockQuote:
             // Pass through; children are resolved in downstream builders.
             out.append(block)
+        case .details:
+            // Pass through; children are resolved in downstream builders (buildInstantPage recurses).
+            out.append(block)
         }
     }
     return out
@@ -98,6 +101,9 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
             return true
         case .blockQuote:
             // A block quote has no entity form → always forces the rich path.
+            return true
+        case .details:
+            // A detail (folding) block has no entity form → always forces the rich path.
             return true
         }
     }

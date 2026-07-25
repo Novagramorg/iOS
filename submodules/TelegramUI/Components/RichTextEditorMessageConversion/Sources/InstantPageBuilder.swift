@@ -103,6 +103,14 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             for (id, m) in innerPage.media { pageMedia[id] = m }
             pageBlocks.append(.blockQuote(blocks: innerPage.blocks, caption: authorCaption(bq.author), collapsed: bq.collapsed))
             index += 1
+        case let .details(d):
+            // A detail (folding) block → an InstantPage `.details`. Recurse children through the same builder;
+            // merge child media into the page dict. The title becomes the details title RichText; `expanded`
+            // maps straight across (it is the inverse of a block-quote's `collapsed`).
+            let innerPage = buildInstantPage(from: d.children, media: media)
+            for (id, m) in innerPage.media { pageMedia[id] = m }
+            pageBlocks.append(.details(title: richText(from: d.title), blocks: innerPage.blocks, expanded: d.expanded))
+            index += 1
         }
     }
     return InstantPage(blocks: pageBlocks, media: pageMedia, isComplete: true, rtl: false, url: "", views: nil)

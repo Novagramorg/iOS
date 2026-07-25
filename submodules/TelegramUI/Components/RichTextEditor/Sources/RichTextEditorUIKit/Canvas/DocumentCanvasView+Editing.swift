@@ -208,7 +208,7 @@ extension DocumentCanvasView {
     /// merge text into it, so it removes an empty paragraph instead of the block (and never deletes
     /// the block). A `BlockBox` (body / heading / quote / list paragraph) is text and merges normally.
     func isNonParagraphAtom(_ box: CanvasBlock) -> Bool {
-        box is MediaBlockBox || box is TableBlockBox || box is BlockQuoteBox || box is CodeBlockBox || box is PullQuoteBox
+        box is MediaBlockBox || box is TableBlockBox || box is BlockQuoteBox || box is CodeBlockBox || box is PullQuoteBox || box is DetailsBox
     }
 
     /// The position just past a media/code block's coverable content, for the Select-All / covered-range
@@ -270,6 +270,11 @@ extension DocumentCanvasView {
                 if let bq = b as? BlockQuoteBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
                     return descend(bq.children)
                 }
+                // A detail (folding) block child stack: descend by TOKEN SPAN, exactly like a block quote.
+                // Its title is children[0] and its body is children[1...], so both resolve to real leaf boxes.
+                if let d = b as? DetailsBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    return descend(d.children)
+                }
                 // A table: keep the existing per-cell resolver (cells hold no nested containers in v1).
                 if let t = b as? TableBlockBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
                     return t.cellStack(containing: pos)
@@ -287,8 +292,8 @@ extension DocumentCanvasView {
         // (table cell or block quote) that `descend` couldn't reach — notably a quote/pull-quote AUTHOR
         // region, which is a second leaf region off the child stack — must return nil, NOT the following
         // top-level block that `resolveBox` mis-resolves it to. Genuine top-level boundaries pass through.
-        guard !isInsideBlockQuote(pos), !isInsideTable(pos),
-              let r = resolveBox(at: pos), !(r.box is TableBlockBox), !(r.box is BlockQuoteBox) else { return nil }
+        guard !isInsideBlockQuote(pos), !isInsideTable(pos), !isInsideDetails(pos),
+              let r = resolveBox(at: pos), !(r.box is TableBlockBox), !(r.box is BlockQuoteBox), !(r.box is DetailsBox) else { return nil }
         return (root, r.box, r.local, r.index)
     }
 
@@ -296,11 +301,13 @@ extension DocumentCanvasView {
     /// is inside a cell or block-quote child, and neither endpoint resolves to a table or block-quote box.
     /// (Spanning a table or block quote as a covered middle box is fine — the merge drops it.)
     func selectionEndpointsEditableTopLevel(_ a: Int, _ b: Int) -> Bool {
-        if isInsideTable(a) || isInsideBlockQuote(a) || isInsideTable(b) || isInsideBlockQuote(b) { return false }
+        if isInsideTable(a) || isInsideBlockQuote(a) || isInsideDetails(a) || isInsideTable(b) || isInsideBlockQuote(b) || isInsideDetails(b) { return false }
         if let ra = resolveBox(at: a), ra.box is TableBlockBox { return false }
         if let ra = resolveBox(at: a), ra.box is BlockQuoteBox { return false }
+        if let ra = resolveBox(at: a), ra.box is DetailsBox { return false }
         if let rb = resolveBox(at: b), rb.box is TableBlockBox { return false }
         if let rb = resolveBox(at: b), rb.box is BlockQuoteBox { return false }
+        if let rb = resolveBox(at: b), rb.box is DetailsBox { return false }
         return true
     }
 
@@ -811,6 +818,8 @@ extension DocumentCanvasView {
         // resolveBox, so `resolveBox(at: head)` below mis-resolves to the FOLLOWING top-level block and the media
         // would be inserted there. Media isn't supported inside quotes (v1) → no-op.
         guard !boxes.isEmpty, !isInsideBlockQuote(head) else { return }
+        // Inserts into the caret's OWN stack (top level OR a detail block's body) via container-aware
+        // `activeStack` (NOT `resolveBox`, which mis-resolves a container-interior caret to the following block).
         // Deliberately do NOT becomeFirstResponder here: inserting media (typically picked while the editor
         // is unfocused) must not steal focus / pop the keyboard. The caret is still placed at/after the new
         // media below (model caret), so a later tap/focus lands there. When already focused, that caret is
@@ -819,14 +828,14 @@ extension DocumentCanvasView {
         // removed 2026-07-21 so an unfocused insert no longer forces focus.)
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
-            guard let pos = resolveBox(at: head) else { return }
+            guard let pos = activeStack(at: head) else { return }
             let mediaBlock = MediaBlock(id: BlockID.generate(), mediaID: mediaID, kind: kind,
                                         naturalSize: Size2D(width: Double(naturalSize.width),
                                                             height: Double(naturalSize.height)),
                                         caption: caption)
             let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth,
                                          horizontalBleed: mediaBlockStyle.horizontalBleed)
-            var newBoxes = boxes
+            var newBoxes = pos.stack.boxes
             if let p = pos.box as? BlockBox, p.textLength == 0 {
                 newBoxes.replaceSubrange(pos.index...pos.index, with: [mediaBox])   // empty paragraph → replace it
             } else if let p = pos.box as? BlockBox, pos.local > 0, pos.local < p.textLength {
@@ -841,22 +850,23 @@ extension DocumentCanvasView {
             } else {
                 newBoxes.insert(mediaBox, at: pos.index + 1)    // after the caret's block
             }
-            boxes = newBoxes
+            pos.stack.boxes = newBoxes
             recomputeSpans()
             if kind == .audio {
                 // Audio is caption-less: land the caret in the body paragraph AFTER the audio, appending an
                 // empty one when the audio is the last block or is followed by a non-paragraph atom, so typing
-                // continues. (Captioned media lands the caret in its caption.)
-                let mediaIndex = boxes.firstIndex(where: { $0.id == mediaBox.id }) ?? boxes.count - 1
-                let following = mediaIndex + 1 < boxes.count ? boxes[mediaIndex + 1] : nil
+                // continues. (Captioned media lands the caret in its caption.) All within the SAME stack.
+                let stackBoxes = pos.stack.boxes
+                let mediaIndex = stackBoxes.firstIndex(where: { $0.id == mediaBox.id }) ?? stackBoxes.count - 1
+                let following = mediaIndex + 1 < stackBoxes.count ? stackBoxes[mediaIndex + 1] : nil
                 if let nextParagraph = following as? BlockBox {
                     anchor = nextParagraph.textStart; head = nextParagraph.textStart
                 } else {
                     let trailing = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
                                             mapper: mapper, width: effectiveWidth)
-                    var withTrailing = boxes
+                    var withTrailing = pos.stack.boxes
                     withTrailing.insert(trailing, at: mediaIndex + 1)
-                    boxes = withTrailing
+                    pos.stack.boxes = withTrailing
                     recomputeSpans()
                     anchor = trailing.textStart; head = trailing.textStart
                 }
@@ -993,6 +1003,37 @@ extension DocumentCanvasView {
     /// recurses into nested quotes, checking the top-level `BlockQuoteBox`es is sufficient.
     func isInsideBlockQuote(_ pos: Int) -> Bool {
         for box in boxes where box is BlockQuoteBox {
+            for r in box.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return true }
+        }
+        return false
+    }
+
+    /// Every `BlockBox` whose text span overlaps the current selection, INCLUDING boxes nested in a detail
+    /// block's body — so paragraph-style / list operations apply inside a details body, not only at top level.
+    /// (Block quotes and table cells are intentionally NOT descended here; those stay top-level-only for these
+    /// operations in v1.)
+    func selectedBlockBoxes() -> [BlockBox] {
+        let lo = min(selFrom, selTo), hi = max(selFrom, selTo)
+        var result: [BlockBox] = []
+        func walk(_ stack: [CanvasBlock]) {
+            for b in stack {
+                if let p = b as? BlockBox {
+                    let bLo = p.textStart, bHi = p.textStart + p.textLength
+                    if lo <= bHi && hi >= bLo { result.append(p) }
+                } else if let d = b as? DetailsBox {
+                    walk(d.children.boxes)
+                }
+            }
+        }
+        walk(boxes)
+        return result
+    }
+
+    /// True if `pos` is inside a detail (folding) block (its owning top-level box is a `DetailsBox`).
+    /// Mirrors `isInsideBlockQuote`; `DetailsBox.leafRegions()` recurses into nested detail blocks, so
+    /// checking the top-level `DetailsBox`es is sufficient.
+    func isInsideDetails(_ pos: Int) -> Bool {
+        for box in boxes where box is DetailsBox {
             for r in box.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return true }
         }
         return false

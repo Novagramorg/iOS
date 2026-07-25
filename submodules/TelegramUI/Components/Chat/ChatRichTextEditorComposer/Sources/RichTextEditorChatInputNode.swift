@@ -148,7 +148,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode)
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, detailsTitle: self.strings.RichText_PlaceholderDetailTitle)
         // The composer sits over the input panel's own background — clear the editor's document "page"
         // background (`.systemBackground`, opaque white in light mode) so the panel shows through. `nil`
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
@@ -179,6 +179,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
            let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
             self.editorView.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
         }
+        // Detail-block fold chevron — the same vertical arrow the InstantPage V2 renderer uses.
+        self.editorView.detailsChevronImage = UIImage(bundleImageName: "Item List/ExpandingItemVerticalRegularArrow")?.withRenderingMode(.alwaysTemplate)
         // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-dismiss
         // gestures. Those Display flags can only be set host-side (the editor package can't import Display) and
         // are applied to the hit-testable handle views, so the effect is scoped to knob interaction — not the
@@ -371,7 +373,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case let .paragraph(p): return p.text.isEmpty
         case let .code(c): return c.text.isEmpty
         case let .pullQuote(pq): return pq.text.isEmpty
-        case .media, .table, .blockQuote: return false
+        case .media, .table, .blockQuote, .details: return false
         }
     }
     public var inputContentIsEmptyWhitespaceTrimmed: Bool {
@@ -380,7 +382,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             case let .paragraph(p): return p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .code(c): return c.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq): return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote: return false
+            case .media, .table, .blockQuote, .details: return false
             }
         }
     }

@@ -177,9 +177,10 @@ public struct ChatInputContent: Equatable {
                 } else {
                     result.append(bq.content.plainText)
                 }
-            case .media, .table:
+            case .media, .table, .details:
                 // Off the flat axis: no character AND no separator (see `blockFlatLength`). Matches
                 // `attributedString(from:)` (drops them) and the editor's `composerParagraphs()` (skips them).
+                // A detail block round-trips via the structured Codable + InstantPage path, not flat text.
                 break
             }
         }
@@ -217,6 +218,8 @@ public struct ChatInputContent: Equatable {
             return pq.text.isEmpty
         case .blockQuote:
             return false
+        case .details:
+            return false
         }
     }
 
@@ -234,7 +237,7 @@ public struct ChatInputContent: Equatable {
                 return code.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq):
                 return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote:
+            case .media, .table, .blockQuote, .details:
                 return false
             }
         }
@@ -296,6 +299,9 @@ public struct ChatInputContent: Equatable {
                     if case let .paragraph(p) = $0, case .body = p.style, p.list == nil { return true }
                     return false
                 }
+            case .details:
+                // A detail (folding) block carries structure the message-entity set can't express → rich path.
+                return false
             }
         }
     }
@@ -361,6 +367,37 @@ extension ChatInputBlockQuote: Codable {
     }
 }
 
+/// A structured detail (folding) block carrying an editable title (summary) + arbitrary nested content.
+/// Mirrors `InstantPage.details`; `expanded` maps 1:1 to the wire field (the inverse of a blockQuote's
+/// `collapsed`). Off the flat caret axis (like `.media`/`.table`) — it round-trips via this structured
+/// Codable + the InstantPage path, not via flat text.
+public struct ChatInputDetails: Equatable {
+    public var content: ChatInputContent
+    public var title: [ChatInputRun]
+    public var expanded: Bool
+    public init(content: ChatInputContent, title: [ChatInputRun] = [], expanded: Bool = true) {
+        self.content = content
+        self.title = title
+        self.expanded = expanded
+    }
+}
+
+extension ChatInputDetails: Codable {
+    private enum CodingKeys: String, CodingKey { case content, title, expanded }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.content = try c.decode(ChatInputContent.self, forKey: .content)
+        self.title = try c.decodeIfPresent([ChatInputRun].self, forKey: .title) ?? []
+        self.expanded = try c.decodeIfPresent(Bool.self, forKey: .expanded) ?? true
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(content, forKey: .content)
+        try c.encode(title, forKey: .title)
+        try c.encode(expanded, forKey: .expanded)
+    }
+}
+
 public enum ChatInputBlock: Equatable, Codable {
     case paragraph(ChatInputParagraph)
     case code(ChatInputCode)
@@ -376,6 +413,7 @@ public enum ChatInputBlock: Equatable, Codable {
     /// A structured blockquote block carrying arbitrary nested content. Mirrors `InstantPage.blockQuote`.
     /// Collapsed → 1 " " placeholder on the flat axis; expanded → inner content on the flat axis.
     case blockQuote(ChatInputBlockQuote)
+    case details(ChatInputDetails)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -385,6 +423,7 @@ public enum ChatInputBlock: Equatable, Codable {
         case table
         case pullQuote
         case blockQuote
+        case details
     }
 
     private enum Kind: Int32, Codable {
@@ -395,6 +434,7 @@ public enum ChatInputBlock: Equatable, Codable {
         case table      = 4
         case pullQuote  = 5
         case blockQuote = 6
+        case details    = 7
     }
 
     public init(from decoder: Decoder) throws {
@@ -420,6 +460,8 @@ public enum ChatInputBlock: Equatable, Codable {
             self = .pullQuote(try container.decode(ChatInputPullQuote.self, forKey: .pullQuote))
         case .blockQuote:
             self = .blockQuote(try container.decode(ChatInputBlockQuote.self, forKey: .blockQuote))
+        case .details:
+            self = .details(try container.decode(ChatInputDetails.self, forKey: .details))
         }
     }
 
@@ -444,6 +486,9 @@ public enum ChatInputBlock: Equatable, Codable {
         case let .blockQuote(bq):
             try container.encode(Kind.blockQuote.rawValue, forKey: .kind)
             try container.encode(bq, forKey: .blockQuote)
+        case let .details(d):
+            try container.encode(Kind.details.rawValue, forKey: .kind)
+            try container.encode(d, forKey: .details)
         }
     }
 }
@@ -1044,7 +1089,7 @@ public extension ChatInputContent {
         switch block {
         case .paragraph, .code, .pullQuote, .blockQuote:
             return true
-        case .media, .table:
+        case .media, .table, .details:
             return false
         }
     }
@@ -1065,7 +1110,7 @@ public extension ChatInputContent {
             // Collapsed → 1 (the " " placeholder); expanded → the recursed interior flat length
             // (the inner ChatInputContent's plainText already applies the same inter-block accounting).
             return bq.collapsed ? 1 : (bq.content.plainText as NSString).length
-        case .media, .table:
+        case .media, .table, .details:
             return 0
         }
     }

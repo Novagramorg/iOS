@@ -41,7 +41,7 @@ final class BlockStack {
     /// it: a code block, a table, a pull quote, or a block-quote box. Its own top/bottom insets are INTERNAL
     /// padding (fill→text), not external margin — so two of these adjacent would sit with their fills flush.
     private static func isFramedAtom(_ box: CanvasBlock) -> Bool {
-        box is CodeBlockBox || box is TableBlockBox || box is PullQuoteBox || box is BlockQuoteBox
+        box is CodeBlockBox || box is TableBlockBox || box is PullQuoteBox || box is BlockQuoteBox || box is DetailsBox
     }
 
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
@@ -57,7 +57,7 @@ final class BlockStack {
         let base = self.verticalInsetBase
         // A table, a code block, a pull quote, and a block-quote box all draw their own bounded fill,
         // so a neighbor reserves extra framed margin for visible separation.
-        if neighbor is TableBlockBox || neighbor is CodeBlockBox || neighbor is PullQuoteBox || neighbor is BlockQuoteBox { return base + BlockStack.framedNeighborMargin }
+        if neighbor is TableBlockBox || neighbor is CodeBlockBox || neighbor is PullQuoteBox || neighbor is BlockQuoteBox || neighbor is DetailsBox { return base + BlockStack.framedNeighborMargin }
         // Any block facing a media (image/video/audio/location) block uses the dedicated body↔image inset,
         // independent of `base`. (Media is not a `BlockBox`, so it would otherwise fall through to `base`.)
         if neighbor is MediaBlockBox { return BlockStack.mediaNeighborInset }

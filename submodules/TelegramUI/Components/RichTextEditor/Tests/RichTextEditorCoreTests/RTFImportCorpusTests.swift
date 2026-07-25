@@ -35,6 +35,8 @@ final class RTFImportCorpusTests: XCTestCase {
                 result.append(pq.text)
             case .blockQuote:
                 break
+            case .details:
+                break
             }
         }
         return result

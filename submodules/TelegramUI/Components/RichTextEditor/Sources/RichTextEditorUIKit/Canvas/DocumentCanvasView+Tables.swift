@@ -308,37 +308,39 @@ extension DocumentCanvasView {
     /// image/gap) — guarded BEFORE `editing { }` so a no-op registers no undo entry. Caret lands in the
     /// first header cell.
     func insertTable(rows: Int, columns: Int) {
-        // `!isInsideBlockQuote(head)` is load-bearing: a caret inside a quote has no degenerate-container-safe
-        // resolveBox, so `resolveBox(at: head)` below mis-resolves to the FOLLOWING top-level block and the table
-        // would be inserted there. Tables aren't supported inside quotes (v1) → no-op, like the in-table guard.
+        // Insert into the caret's OWN stack — top level OR a detail block's body — via the container-aware
+        // `activeStack` (NOT `resolveBox`, which mis-resolves a container-interior position to the following
+        // top-level block). `!isInsideTable` prevents nested tables; `!isInsideBlockQuote` keeps tables out of
+        // quotes (unsupported in v1); a detail body is allowed (its `activeStack` resolves to the body stack,
+        // and nested tables there are laid out by `DetailsBox.recompute`).
         guard !boxes.isEmpty, !isInsideTable(head), !isInsideBlockQuote(head),
-              let resolved = resolveBox(at: head), resolved.box is BlockBox else { return }
+              let a = activeStack(at: head), a.box is BlockBox else { return }
         // Deliberately do NOT becomeFirstResponder here (matches `insertMedia`): inserting a table must not
         // steal focus / pop the keyboard when the editor is unfocused. The caret is still placed live in the
         // new table's first cell below (model caret). When already focused, that caret is scrolled into view
         // synchronously (FR-gated `scrollCaretIntoView` → `performLayout`); when unfocused, the new table is
         // laid out by the host's async `update()` on `onChange` (a later tap focuses + operates on the cells).
-        // (Was: unconditional becomeFirstResponder — removed 2026-07-21.)
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
-            guard let pos = resolveBox(at: head), let p = pos.box as? BlockBox else { return }
+            guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return }
             let tableBox = TableBlockBox(table: TableBlock.empty(rows: rows, columns: columns),
                                          mapper: mapper, width: effectiveWidth)
-            var newBoxes = boxes
+            var newBoxes = active.stack.boxes
+            let idx = active.index
             if p.textLength == 0 {
-                newBoxes.replaceSubrange(pos.index...pos.index, with: [tableBox])   // empty paragraph → replace it
-            } else if pos.local > 0, pos.local < p.textLength {
-                let (upper, lower) = p.currentParagraph().split(at: pos.local, newID: BlockID.generate())
-                let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)
-                let lowerBox = BlockBox(paragraph: lower, mapper: mapper, width: effectiveWidth)
+                newBoxes.replaceSubrange(idx...idx, with: [tableBox])   // empty paragraph → replace it
+            } else if active.local > 0, active.local < p.textLength {
+                let (upper, lower) = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
+                let upperBox = BlockBox(paragraph: upper, mapper: p.mapper, width: effectiveWidth)
+                let lowerBox = BlockBox(paragraph: lower, mapper: p.mapper, width: effectiveWidth)
                 let replacement: [any CanvasBlock] = [upperBox, tableBox, lowerBox]
-                newBoxes.replaceSubrange(pos.index...pos.index, with: replacement)
-            } else if pos.local == 0 {
-                newBoxes.insert(tableBox, at: pos.index)            // before the caret's block
+                newBoxes.replaceSubrange(idx...idx, with: replacement)
+            } else if active.local == 0 {
+                newBoxes.insert(tableBox, at: idx)            // before the caret's block
             } else {
-                newBoxes.insert(tableBox, at: pos.index + 1)        // after the caret's block
+                newBoxes.insert(tableBox, at: idx + 1)        // after the caret's block
             }
-            boxes = newBoxes
+            active.stack.boxes = newBoxes
             recomputeSpans()
             if let caret = tableBox.cellTextStart(row: 0, column: 0) { anchor = caret; head = caret }
         }

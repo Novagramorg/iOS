@@ -66,6 +66,17 @@ public enum DocumentTree {
                 children.append(.paragraph(id: bq.id, children: [.text(length: bq.authorUTF16Count, ref: .quoteAuthor(bq.id))]))
             }
             return .blockQuote(id: bq.id, children: children)
+        case .details(let d):
+            // Title is ALWAYS a leading, editable paragraph child (unlike the content-gated block-quote author).
+            // Body children are on the editable axis only when expanded; when folded they are preserved in the
+            // Block model but OFF the position axis (the title stays a caret target either way).
+            var children: [DocNode] = [
+                .paragraph(id: d.id, children: [.text(length: d.titleUTF16Count, ref: .detailsTitle(d.id))]),
+            ]
+            if d.expanded {
+                children.append(contentsOf: d.children.map(node(for:)))
+            }
+            return .details(id: d.id, children: children)
         }
     }
 

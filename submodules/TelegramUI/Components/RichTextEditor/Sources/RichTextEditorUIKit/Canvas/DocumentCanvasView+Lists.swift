@@ -37,6 +37,7 @@ extension DocumentCanvasView {
         for case let pq as PullQuoteBox in boxes { pq.placeholders = self.placeholders }
         for case let cb as CodeBlockBox in boxes { cb.placeholders = self.placeholders }
         for case let bq as BlockQuoteBox in boxes { bq.placeholders = self.placeholders }
+        for case let d as DetailsBox in boxes { d.placeholders = self.placeholders; d.chevronImage = self.detailsChevronImage }
     }
 
     /// Test/geometry seam: the per-box marker draws keyed by `BlockID`. Production draws each marker in
@@ -53,10 +54,7 @@ extension DocumentCanvasView {
     func setList(_ marker: ListMarker?) {
         guard !boxes.isEmpty else { return }
         editing {
-            for box in boxes {
-                guard let p = box as? BlockBox else { continue }
-                let boxLo = p.textStart, boxHi = p.textStart + p.textLength
-                guard selFrom <= boxHi && selTo >= boxLo else { continue }
+            for p in selectedBlockBoxes() {   // top level AND inside a detail block's body
                 if let marker = marker {
                     // Seed `checked` only when the box becomes a checklist FRESH; when it is already a
                     // `.checklist`, preserve its current checked state so re-applying the checklist marker

@@ -168,6 +168,12 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 return InstantPageTableRow(cells: cells)
             }
             result.append(.table(title: .empty, rows: rows, bordered: true, striped: false))
+        case let .details(d):
+            // Recursive detail (folding) block → InstantPage `.details`. Forward the title as RichText and the
+            // inner content unchanged; `expanded` maps 1:1 (the inverse of a block-quote's `collapsed`).
+            result.append(.details(title: richText(from: d.title),
+                                   blocks: instantPageBlocks(from: d.content, collectingMediaInto: &media),
+                                   expanded: d.expanded))
         }
         i += 1
     }
@@ -312,6 +318,13 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
                 content: ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media)),
                 collapsed: collapsed == true,
                 author: authorRuns(fromCaption: caption))))
+        case let .details(title, innerBlocks, expanded):
+            // Recursive detail (folding) block → `ChatInputBlock.details`. Symmetric inverse of the forward
+            // `.details` arm; `expanded` maps 1:1 (the inverse of a block-quote's `collapsed`).
+            result.append(.details(ChatInputDetails(
+                content: ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media)),
+                title: chatInputRuns(fromRichText: title),
+                expanded: expanded)))
         case let .formula(latex):
             var attributes = ChatInputInlineAttributes()
             attributes.formula = latex

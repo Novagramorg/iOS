@@ -397,6 +397,11 @@ extension DocumentCanvasView: UIKeyInput {
                 // Double-return at the BEGINNING → body paragraph BEFORE the quote (the leading blank line is
                 // dropped). Checked after the trailing exit so a wholly-empty quote takes the un-quote path.
                 _ = ()
+            } else if selFrom == selTo, isInsideDetails(head), detailsEmptyTrailingBodyExit() {
+                // Double-return on an empty trailing line of a detail block's BODY EXITS to a body paragraph
+                // AFTER the details block (the title, children[0], is never the escape target). A single empty
+                // body line adds a line on the first Return and escapes on the second (handled in the helper).
+                _ = ()
             } else if selFrom == selTo, let active = activeStack(at: head),
                       headerCellDoubleReturnExitsAbove(active) {
                 // Double-return on the START of a header cell's second block (empty first block) EXITS the

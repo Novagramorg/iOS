@@ -1961,7 +1961,7 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         )
         self.titleTextView.update(item: titleV2Item, theme: theme)
 
-        self.chevronView.tintColor = theme.secondaryControlColor
+        self.chevronView.tintColor = theme.textCategories.paragraph.color
         let chevronSize = CGSize(width: 18.0, height: 18.0)
         self.chevronView.bounds = CGRect(origin: .zero, size: chevronSize)
         self.chevronView.center = CGPoint(

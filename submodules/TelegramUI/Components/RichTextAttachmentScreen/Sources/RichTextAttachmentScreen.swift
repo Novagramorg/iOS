@@ -825,6 +825,18 @@ final class RichTextAttachmentScreenComponent: Component {
                 self.editor.setList(.checklist)
             })))
 
+            // "Detail Block" — an INSERT action (no checkmark, unlike the marker toggles above): inserts a
+            // fresh, expanded folding block at the caret. Not premium-gated (matches its list-menu siblings).
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Detail, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Expand"), color: theme.contextMenu.primaryColor)
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.insertDetailsBlock()
+            })))
+
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let contextController = makeContextController(
                 presentationData: presentationData,
@@ -1163,7 +1175,7 @@ final class RichTextAttachmentScreenComponent: Component {
             defer { self.isUpdating = false }
 
             if self.component == nil {
-                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode)
+                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode, detailsTitle: environment.strings.RichText_PlaceholderDetailTitle)
                 
                 // The screen paints `list.plainBackgroundColor` (below); clear the editor's opaque default
                 // `.systemBackground` so that themed surface shows through.
@@ -1186,6 +1198,8 @@ final class RichTextAttachmentScreenComponent: Component {
                    let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
                     editor.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
                 }
+                // Detail-block fold chevron — the same vertical arrow the InstantPage V2 renderer uses.
+                editor.detailsChevronImage = UIImage(bundleImageName: "Item List/ExpandingItemVerticalRegularArrow")?.withRenderingMode(.alwaysTemplate)
                 // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-
                 // dismiss gestures. These Display flags can only be set host-side (the editor package can't
                 // import Display) and are applied to the hit-testable handle views, so the effect is scoped to

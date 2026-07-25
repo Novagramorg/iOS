@@ -8,7 +8,7 @@ extension DocumentCanvasView {
     /// code and quote-author regions are skipped (author is metadata, not prose).
     func spellCheckableRef(_ ref: TextNodeRef) -> BlockID? {
         switch ref {
-        case .paragraph(let id), .caption(let id), .pullQuote(let id): return id
+        case .paragraph(let id), .caption(let id), .pullQuote(let id), .detailsTitle(let id): return id
         case .code, .quoteAuthor: return nil
         }
     }
