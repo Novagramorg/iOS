@@ -270,14 +270,18 @@ public struct InstantPageV2MediaImageItem {
     public let webPage: TelegramMediaWebpage
     public let attributes: [InstantPageImageAttribute]   // always empty for image; kept for symmetry
     public let spoiler: Bool
+    /// Aspect-FIT + blurred backdrop (single media, whose frame is height-capped) vs the default
+    /// aspect-FILL crop (collage cells). See `InstantPageImageNode.fit`. Default false = crop.
+    public let fit: Bool
 
-    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute], spoiler: Bool = false) {
+    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute], spoiler: Bool = false, fit: Bool = false) {
         self.frame = frame
         self.cornerRadius = cornerRadius
         self.media = media
         self.webPage = webPage
         self.attributes = attributes
         self.spoiler = spoiler
+        self.fit = fit
     }
 }
 
@@ -300,14 +304,18 @@ public struct InstantPageV2MediaVideoItem {
     public let webPage: TelegramMediaWebpage
     public let attributes: [InstantPageImageAttribute]   // always empty
     public let spoiler: Bool
+    /// Aspect-FIT + blurred backdrop (single media, whose frame is height-capped) vs the default
+    /// aspect-FILL crop (collage cells). See `InstantPageImageNode.fit`. Default false = crop.
+    public let fit: Bool
 
-    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute], spoiler: Bool = false) {
+    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute], spoiler: Bool = false, fit: Bool = false) {
         self.frame = frame
         self.cornerRadius = cornerRadius
         self.media = media
         self.webPage = webPage
         self.attributes = attributes
         self.spoiler = spoiler
+        self.fit = fit
     }
 }
 
@@ -814,7 +822,8 @@ private func layoutBlock(
                         media: instantPageMedia,
                         webPage: webpage,
                         attributes: [],
-                        spoiler: spoiler
+                        spoiler: spoiler,
+                        fit: true
                     ))
                 },
                 naturalSize: naturalSize,
@@ -824,6 +833,7 @@ private func layoutBlock(
                 flush: true,
                 boundingWidth: boundingWidth,
                 horizontalInset: horizontalInset,
+                capHeight: true,
                 context: &context
             )
         } else {
@@ -855,7 +865,8 @@ private func layoutBlock(
                         media: instantPageMedia,
                         webPage: webpage,
                         attributes: [],
-                        spoiler: spoiler
+                        spoiler: spoiler,
+                        fit: true
                     ))
                 },
                 naturalSize: naturalSize,
@@ -865,6 +876,7 @@ private func layoutBlock(
                 flush: true,
                 boundingWidth: boundingWidth,
                 horizontalInset: horizontalInset,
+                capHeight: true,
                 context: &context
             )
         } else {
@@ -1977,15 +1989,29 @@ private func instantPageV2MediaFrame(
     flush: Bool,
     cornerRadius: CGFloat,
     boundingWidth: CGFloat,
-    horizontalInset: CGFloat
+    horizontalInset: CGFloat,
+    capHeight: Bool = false
 ) -> (frame: CGRect, scaledSize: CGSize, cornerRadius: CGFloat) {
     let availableWidth = flush ? boundingWidth : (boundingWidth - horizontalInset * 2.0)
-    let scaledSize: CGSize
+    var scaledSize: CGSize
     if naturalSize.width > 0.0 && naturalSize.height > 0.0 {
         let scale = min(availableWidth / naturalSize.width, 1.0)
         scaledSize = CGSize(width: floor(naturalSize.width * scale), height: floor(naturalSize.height * scale))
     } else {
         scaledSize = CGSize(width: availableWidth, height: naturalSize.height)
+    }
+
+    // Cap the displayed height at `min(1000, availableWidth)` — "media is never taller than its display
+    // width, up to 1000pt" — matching the RichText editor (`MediaBlockBox.imageDisplaySize`). A capped
+    // (portrait) box no longer matches the image aspect; the media view renders it aspect-fit + blurred
+    // backdrop (the single `.image`/`.video` items pass `fit: true`). The returned `scaledSize.height`
+    // is the capped value, so the caption offsets below the capped box. `capHeight` is opt-in so cover
+    // images / embed placeholders keep their prior (uncapped) sizing.
+    if capHeight {
+        let heightCap = min(1000.0, availableWidth)
+        if scaledSize.height > heightCap {
+            scaledSize.height = heightCap
+        }
     }
 
     if flush {
@@ -2014,6 +2040,7 @@ private func layoutTypedMediaWithCaption(
     flush: Bool,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
+    capHeight: Bool = false,
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     let (mediaFrame, scaledSize, effectiveCornerRadius) = instantPageV2MediaFrame(
@@ -2021,7 +2048,8 @@ private func layoutTypedMediaWithCaption(
         flush: flush,
         cornerRadius: cornerRadius,
         boundingWidth: boundingWidth,
-        horizontalInset: horizontalInset
+        horizontalInset: horizontalInset,
+        capHeight: capHeight
     )
     var result: [InstantPageV2LaidOutItem] = [produceItem(mediaFrame, effectiveCornerRadius)]
 
@@ -2138,8 +2166,9 @@ private func layoutCollage(
 
 /// Lays out an `InstantPageBlock.slideshow(items:caption:)`. Mirrors V1
 /// (InstantPageLayout.swift:809-843): collect the inner image medias, size the block to the tallest
-/// image fitted into the bounding width (cap 1200), emit a single full-width slideshow carousel item,
-/// caption below. Only `.image` inner blocks contribute (matches V1).
+/// image fitted into the bounding width (capped), emit a single full-width slideshow carousel item,
+/// caption below. `.image` AND `.video` inner blocks contribute (the editor's slideshow display mode
+/// can hold videos; V1 was image-only, but the editor's mosaic↔slideshow toggle now produces videos).
 private func layoutSlideshow(
     items innerBlocks: [InstantPageBlock],
     caption: InstantPageCaption,
@@ -2149,16 +2178,32 @@ private func layoutSlideshow(
 ) -> [InstantPageV2LaidOutItem] {
     var medias: [InstantPageMedia] = []
     var height: CGFloat = 0.0
+    // Cap the block height at `min(1000, boundingWidth)` — matching the RichText editor's
+    // `MediaBlockBox.slideshowSize` (was 1200). Each page renders aspect-fit + blurred backdrop within
+    // this box (the slideshow's `makeMediaWrapper` passes `fit: true`), so a shorter page shows whole.
+    let heightCap = min(1000.0, boundingWidth)
     for block in innerBlocks {
         switch block {
         case let .image(id, blockCaption, url, webpageId, _):
             if case let .image(image) = context.media[id], let imageSize = largestImageRepresentation(image.representations)?.dimensions {
                 let mediaIndex = context.mediaIndexCounter
                 context.mediaIndexCounter += 1
-                let filledSize = imageSize.cgSize.fitted(CGSize(width: boundingWidth, height: 1200.0))
+                let filledSize = imageSize.cgSize.fitted(CGSize(width: boundingWidth, height: heightCap))
                 height = max(height, filledSize.height)
                 let mediaUrl: InstantPageUrlItem? = url.flatMap { InstantPageUrlItem(url: $0, webpageId: webpageId) }
                 medias.append(InstantPageMedia(index: mediaIndex, media: .image(image), url: mediaUrl, caption: blockCaption.text, credit: blockCaption.credit))
+            }
+        case let .video(id, blockCaption, _, _, _):
+            // Videos in a slideshow (the editor's mosaic↔slideshow toggle produces these) render as a
+            // poster + play badge (tap opens the gallery), exactly like a collage video cell. Without this
+            // arm the video was dropped entirely — no page, short paging-dot count. Sized like an image
+            // from the file's dimensions (fitted to width, capped).
+            if case let .file(file) = context.media[id], let dimensions = file.dimensions {
+                let mediaIndex = context.mediaIndexCounter
+                context.mediaIndexCounter += 1
+                let filledSize = dimensions.cgSize.fitted(CGSize(width: boundingWidth, height: heightCap))
+                height = max(height, filledSize.height)
+                medias.append(InstantPageMedia(index: mediaIndex, media: .file(file), url: nil, caption: blockCaption.text, credit: blockCaption.credit))
             }
         default:
             break

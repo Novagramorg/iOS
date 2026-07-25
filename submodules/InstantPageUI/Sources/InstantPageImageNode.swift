@@ -58,6 +58,14 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     let attributes: [InstantPageImageAttribute]
     private let interactive: Bool
     private let roundCorners: Bool
+    /// When true, the media is aspect-FITTED (letterboxed) within the node's bounds — with a blurred,
+    /// scaled-up copy of the media filling the letterbox/pillarbox gap (`resizeMode: .blurBackground`) —
+    /// instead of the default aspect-FILL (cover + crop). Mirrors the RichText editor's
+    /// `RichTextMediaContentComponent` (`usesAspectFit`), so a sent rich message matches its authoring
+    /// preview. Used by single media (whose frame height is capped at `min(1000, boundingWidth)`, so a
+    /// tall portrait shows whole + blurred rather than cropped) and by every slideshow page (whose shared
+    /// block frame is the tallest page). A landscape image that fills its slot shows no blur
+    /// (`aspectFitted == boundingSize`). Honored in `layout()` for image/file media.
     private let fit: Bool
     /// When set, overrides the per-media-type placeholder/letterbox `emptyColor` (e.g. the slideshow uses
     /// black instead of the panel/placeholder color). nil = keep the per-type default.
@@ -460,21 +468,23 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
             self.statusNode.frame = CGRect(x: floorToScreenPixels((size.width - radialStatusSize) / 2.0), y: floorToScreenPixels((size.height - radialStatusSize) / 2.0), width: radialStatusSize, height: radialStatusSize)
             
             if case .image = self.media.media, let dimensions = self.effectiveMediaDimensions() {
-                let imageSize = dimensions.cgSize.aspectFilled(size)
+                let imageSize = self.fit ? dimensions.cgSize.aspectFitted(size) : dimensions.cgSize.aspectFilled(size)
                 let boundingSize = size
+                let resizeMode: TransformImageResizeMode = self.fit ? .blurBackground : .fill(.black)
                 let radius: CGFloat = self.roundCorners ? floor(min(imageSize.width, imageSize.height) / 2.0) : 0.0
                 let makeLayout = self.imageNode.asyncLayout()
-                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: self.emptyColorOverride ?? self.theme.panelBackgroundColor))
+                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), resizeMode: resizeMode, emptyColor: self.emptyColorOverride ?? self.theme.panelBackgroundColor))
                 apply()
 
                 self.linkIconNode.frame = CGRect(x: size.width - 38.0, y: 14.0, width: 24.0, height: 24.0)
             } else if case let .file(file) = self.media.media, let dimensions = self.effectiveMediaDimensions() {
                 let emptyColor = file.mimeType.hasPrefix("image/") ? self.theme.imageTintColor : nil
 
-                let imageSize = dimensions.cgSize.aspectFilled(size)
+                let imageSize = self.fit ? dimensions.cgSize.aspectFitted(size) : dimensions.cgSize.aspectFilled(size)
                 let boundingSize = size
+                let resizeMode: TransformImageResizeMode = self.fit ? .blurBackground : .fill(.black)
                 let makeLayout = self.imageNode.asyncLayout()
-                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: self.emptyColorOverride ?? emptyColor))
+                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), resizeMode: resizeMode, emptyColor: self.emptyColorOverride ?? emptyColor))
                 apply()
             } else if case .geo = self.media.media {
                 let presentationTheme = self.context.sharedContext.currentPresentationData.with { $0 }.theme

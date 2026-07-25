@@ -92,7 +92,8 @@ func makeMediaWrapper(
     theme: InstantPageTheme,
     openMedia: @escaping (InstantPageMedia) -> Void,
     longPressMedia: @escaping (InstantPageMedia) -> Void,
-    emptyColor: UIColor? = nil
+    emptyColor: UIColor? = nil,
+    fit: Bool = false
 ) -> InstantPageImageNode {
     let imageNode = InstantPageImageNode(
         context: renderContext.context,
@@ -103,7 +104,7 @@ func makeMediaWrapper(
         attributes: attributes,
         interactive: true,
         roundCorners: false,
-        fit: false,
+        fit: fit,
         openMedia: openMedia,
         longPressMedia: longPressMedia,
         activatePinchPreview: nil,
@@ -209,7 +210,8 @@ final class InstantPageV2MediaImageView: UIView, InstantPageItemView {
             renderContext: renderContext,
             theme: theme,
             openMedia: openMedia,
-            longPressMedia: { _ in }
+            longPressMedia: { _ in },
+            fit: item.fit
         )
 
         super.init(frame: item.frame)
@@ -333,7 +335,8 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
             renderContext: renderContext,
             theme: theme,
             openMedia: openMedia,
-            longPressMedia: { _ in }
+            longPressMedia: { _ in },
+            fit: item.fit
         )
 
         super.init(frame: item.frame)
