@@ -1,6 +1,20 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
-load("@build_bazel_rules_apple//apple:resources.bzl", "apple_resource_bundle")
-load("//build-system/bazel-utils:plist_fragment.bzl", "plist_fragment")
+load(
+    "@build_bazel_rules_apple//apple:resources.bzl",
+    "apple_resource_bundle",
+    "apple_resource_group",
+)
+load("//build-system/bazel-utils:plist_fragment.bzl",
+    "plist_fragment",
+)
+
+filegroup(
+    name = "CameraNeoMetalResources",
+    srcs = glob([
+        "MetalResources/**/*.*",
+    ]),
+    visibility = ["//visibility:public"],
+)
 
 plist_fragment(
     name = "CameraNeoBundleInfoPlist",
@@ -21,10 +35,9 @@ apple_resource_bundle(
     infoplists = [
         ":CameraNeoBundleInfoPlist",
     ],
-    resources = glob([
-        "MetalResources/**/*.*",
-    ]),
-    visibility = ["//visibility:public"],
+    resources = [
+        ":CameraNeoMetalResources",
+    ],
 )
 
 swift_library(
