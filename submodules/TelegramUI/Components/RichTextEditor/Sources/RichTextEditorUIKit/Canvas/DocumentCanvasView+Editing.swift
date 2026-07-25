@@ -51,8 +51,12 @@ extension DocumentCanvasView {
         // RIGHT — otherwise it would keep the default (left) until the next reload/refocus. Empty-box-only work
         // (restyle no-ops on empty storage); the guard inside makes it a cheap no-op when nothing changed.
         refreshEmptyBoxWritingDirections()
-        notifyContentSizeChanged(); setNeedsDisplay(); refreshSelectionUI()
-        onSelectionChange?()   // an edit moves the caret too — ask the host to scroll it into view (like the arrow-key setter)
+        setNeedsDisplay()
+        if !suppressHostChangeNotification {
+            refreshSelectionUI()   // step 1 of a two-step paste keeps the caret at its prior spot (no caret blink to the raw-text end); step 2 moves it to the final position
+            notifyContentSizeChanged()
+            onSelectionChange?()   // an edit moves the caret too — ask the host to scroll it into view (like the arrow-key setter)
+        }
     }
 
     /// Restores a whole-document snapshot, then re-registers the inverse for redo (Phase 1 trick).

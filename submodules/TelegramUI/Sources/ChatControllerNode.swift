@@ -999,6 +999,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.textInputPanelNode?.paste = { [weak self] data in
             self?.paste(data)
         }
+        self.textInputPanelNode?.pastedMarkdownParser = { context, text in
+            return chatInputContentFromPastedMarkdown(context: context, plainText: text)
+        }
         self.textInputPanelNode?.displayAttachmentMenu = { [weak self] in
             self?.displayAttachmentMenu()
         }
@@ -4705,6 +4708,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         return
                     }
                     self.controller?.presentFormulaEditor(initialValue: initialValue, completion: completion)
+                },
+                pastedMarkdownParser: { context, text in
+                    return chatInputContentFromPastedMarkdown(context: context, plainText: text)
                 }
             )
             editorScreen.navigationPresentation = .modal

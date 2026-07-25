@@ -1105,6 +1105,9 @@ extension ChatControllerImpl {
                                     return
                                 }
                                 self.presentFormulaEditor(initialValue: initialValue, completion: completion)
+                            },
+                            pastedMarkdownParser: { context, text in
+                                return chatInputContentFromPastedMarkdown(context: context, plainText: text)
                             }
                         )
                         completion(controller, controller.mediaPickerContext)

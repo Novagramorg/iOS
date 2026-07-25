@@ -148,6 +148,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
 
+    /// Host transform for pasted PLAIN text. When set and it returns a `Document`, that document is
+    /// spliced at the caret (one undo step) instead of the built-in newline-split paste. Returning nil
+    /// falls back to the built-in behavior. The package attaches no meaning to the string — a host uses
+    /// this to convert e.g. markdown to rich content without the package depending on any markdown code.
+    public var plainTextFragmentTransformer: ((String) -> Document?)? { didSet { canvas.plainTextFragmentTransformer = plainTextFragmentTransformer } }
+
     /// A HARDWARE-keyboard Return (plain or ⌘) is offered to the host before the editor inserts a newline, so
     /// a chat composer can implement send-on-Enter / send-on-⌘-Enter. Return `true` to have the editor insert
     /// a newline (the default when unset); `false` when the host consumed the Return (e.g. sent the message).

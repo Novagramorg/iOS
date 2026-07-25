@@ -276,6 +276,40 @@ private func chatInputMediaItems(fromInnerBlocks innerBlocks: [InstantPageBlock]
     return items
 }
 
+/// Flattens InstantPage list items into `ChatInputContent` list paragraphs, recursing into `.blocks` items (a
+/// list item carrying continuation paragraphs and/or a nested sub-list) and preserving indent depth via the
+/// paragraph's `ChatInputListMembership.level`. Without the recursion a nested sub-list (carried as an item's
+/// `.blocks` payload — what the markdown parser emits) would be dropped entirely.
+private func appendChatInputListParagraphs(_ items: [InstantPageListItem], ordered: Bool, level: Int32, media: [MediaId: Media], into result: inout [ChatInputBlock]) {
+    func marker(_ checked: Bool?) -> ChatInputListMarker {
+        return checked != nil ? .checklist : (ordered ? .ordered : .bullet)
+    }
+    for item in items {
+        switch item {
+        case let .text(rt, _, checked):
+            result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker(checked), level: level, checked: checked), runs: chatInputRuns(fromRichText: rt))))
+        case let .blocks(blocks, _, checked):
+            var isFirstParagraph = true
+            for inner in blocks {
+                switch inner {
+                case let .paragraph(rt):
+                    let paragraphChecked = isFirstParagraph ? checked : nil
+                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker(paragraphChecked), level: level, checked: paragraphChecked), runs: chatInputRuns(fromRichText: rt))))
+                    isFirstParagraph = false
+                case let .list(subItems, subOrdered):
+                    appendChatInputListParagraphs(subItems, ordered: subOrdered, level: level + 1, media: media, into: &result)
+                default:
+                    // A non-paragraph, non-list block inside a list item (e.g. a nested quote/code — rare from
+                    // markdown). Flatten via the general mapper so its content is not lost.
+                    result.append(contentsOf: chatInputBlocks(fromInstantPageBlocks: [inner], media: media))
+                }
+            }
+        case .unknown:
+            break
+        }
+    }
+}
+
 func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [MediaId: Media] = [:]) -> [ChatInputBlock] {
     var result: [ChatInputBlock] = []
     for block in blocks {
@@ -293,17 +327,14 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             }
             result.append(.paragraph(ChatInputParagraph(style: style, runs: chatInputRuns(fromRichText: rt))))
         case let .list(items, ordered):
-            // One body paragraph per `.text` item. If the item carries a non-nil `checked` value the marker is
-            // `.checklist` (the forward threads `checked` from `ChatInputListMembership`); otherwise use
-            // `.ordered` / `.bullet` per the `ordered` flag. Level 0 throughout (the forward canonicalizes
-            // any indent level to 0 — see the forward's level canonicalization note). A `.blocks`/`.unknown`
-            // item (never produced by the forward; only from cloud) is skipped defensively.
-            for item in items {
-                if case let .text(rt, _, checked) = item {
-                    let marker: ChatInputListMarker = checked != nil ? .checklist : (ordered ? .ordered : .bullet)
-                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0, checked: checked), runs: chatInputRuns(fromRichText: rt))))
-                }
-            }
+            // One body list paragraph per item. `.text` items are a single paragraph; a `.blocks` item — which
+            // the markdown parser produces for a list item that carries continuation paragraphs and/or a NESTED
+            // sub-list — is flattened recursively (its own paragraph(s) at this level, a nested `.list` one level
+            // deeper), preserving indent via `ChatInputListMembership.level`. A non-nil `checked` selects the
+            // `.checklist` marker (the forward threads `checked` from `ChatInputListMembership`); otherwise
+            // `.ordered` / `.bullet` per the `ordered` flag. (Skipping `.blocks` used to silently drop a whole
+            // nested sub-list on paste.)
+            appendChatInputListParagraphs(items, ordered: ordered, level: 0, media: media, into: &result)
         case let .preformatted(rt, language):
             result.append(.code(ChatInputCode(language: language, runs: chatInputRuns(fromRichText: rt))))
         case let .pullQuote(rt, caption):

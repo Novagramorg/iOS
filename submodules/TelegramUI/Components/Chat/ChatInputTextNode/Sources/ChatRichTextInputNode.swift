@@ -340,6 +340,11 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// a no-op (the host routes its paste through the `NSAttributedString` path instead).
     func performRichPaste()
 
+    /// Host transform for pasted PLAIN text, forwarded to the native editor's
+    /// `plainTextFragmentTransformer`. Returning a `Document` splices rich content at the caret;
+    /// returning nil keeps the built-in plain paste. Native backend only — legacy backend ignores it.
+    var pastedMarkdownFragmentParser: ((String) -> Document?)? { get set }
+
     /// Fired on a genuine user TEXT edit (typing/delete/paste/IME) so the host can report the "typing…" chat
     /// activity. Set by the PANEL, wired to its `updateActivity`. It must NOT fire on a caret/selection move or
     /// on a programmatic content set (draft restore / send-clear / state echo) — otherwise the chat partner
@@ -1013,6 +1018,8 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     // The legacy path routes media via `chatInputTextNodeShouldPaste`; these hooks are never read.
     public var canPasteMedia: (() -> Bool)?
     public var onPasteMedia: (() -> Bool)?
+    // The legacy backend has no native editor; the parser is stored but never consulted.
+    public var pastedMarkdownFragmentParser: ((String) -> Document?)?
 
     func performFormatAction(_ action: ChatRichTextFormatAction) {}
     func performRichPaste() {}

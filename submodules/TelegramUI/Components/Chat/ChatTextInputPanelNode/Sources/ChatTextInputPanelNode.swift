@@ -59,6 +59,7 @@ import ChatRecordingPreviewInputPanelNode
 import ChatInputContextPanelNode
 import RasterizedCompositionComponent
 import RichTextEditorUIKit
+import RichTextEditorCore
 
 /// The chat composer's inline custom-emoji view already exposes `dynamicColor` (forwarding to its backing
 /// `InlineStickerItemLayer`), so it satisfies the editor's emoji-view contract as-is. Declared here (the one
@@ -329,6 +330,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var updateHeight: (Bool) -> Void = { _ in }
     public var toggleExpandMediaInput: (() -> Void)?
     public var switchToTextInputIfNeeded: (() -> Void)?
+    /// Parses pasted plain text as markdown into a `ChatInputContent`, or nil when the text should paste
+    /// as-is. Injected by the panel's owner (only the monolith can reach the BrowserUI-backed parser).
+    /// Takes the context explicitly so the panel does not have to capture it.
+    public var pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?
     public var textInputAccessoryPanel: ((_ context: AccountContext, _ chatPresentationInterfaceState: ChatPresentationInterfaceState, _ chatControllerInteraction: ChatControllerInteraction?, _ interfaceInteraction: ChatPanelInterfaceInteraction?) -> AnyComponentWithIdentity<ChatInputAccessoryPanelEnvironment>?)?
     public var textInputContextPanel: ((_ context: AccountContext, _ chatPresentationInterfaceState: ChatPresentationInterfaceState, _ chatControllerInteraction: ChatControllerInteraction?, _ interfaceInteraction: ChatPanelInterfaceInteraction?, _ current: ChatInputContextPanelNode?) -> ChatInputContextPanelNode?)?
     
@@ -1226,6 +1231,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         richTextInputNode.canPasteMedia = { [weak self] in self?.handlePastedMedia(perform: false) ?? false }
         richTextInputNode.onPasteMedia = { [weak self] in self?.handlePastedMedia(perform: true) ?? false }
+        richTextInputNode.pastedMarkdownFragmentParser = { [weak self] text in
+            guard let self, let context = self.context, let content = self.pastedMarkdownParser?(context, text) else {
+                return nil
+            }
+            return pasteFragmentDocument(fromChatInputContent: content)
+        }
         richTextInputNode.onRequestTableStructuralMenu = { [weak self] request in
             guard let self, let context = self.context else { return }
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -5527,6 +5538,19 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if reattached.string != plainText {
                 attributedString = reattached
             }
+        }
+
+        // Markdown-on-paste: plain clipboard text that parses as markdown with formatting/structure is
+        // inserted as rich content. ANY markdown (inline or structural) latches the field to the native
+        // editor, which re-reads the same pasteboard text through its own plainTextFragmentTransformer and
+        // performs a two-step paste (insert plain → replace with rich) so undo reverts rich→plain. Only
+        // taken when the parser actually classifies the text as rich; plain text falls through.
+        if attributedString == nil,
+           let plainText = pasteboard.string,
+           let context = self.context,
+           self.pastedMarkdownParser?(context, plainText) != nil {
+            self.pasteRichFragmentFromPasteboard()
+            return false
         }
 
         if let attributedString = attributedString {

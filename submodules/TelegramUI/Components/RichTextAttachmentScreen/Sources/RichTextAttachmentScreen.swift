@@ -344,7 +344,8 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
         presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
-        presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
+        presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?,
+        pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)? = nil
     ) {
         self.context = context
         self.sendMessage = sendMessage
@@ -359,7 +360,8 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
             sendContextActions: sendContextActions,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu,
-            presentFormulaEditor: presentFormulaEditor
+            presentFormulaEditor: presentFormulaEditor,
+            pastedMarkdownParser: pastedMarkdownParser
         ), navigationBarAppearance: .transparent, theme: .default)
 
         self._hasGlassStyle = true
@@ -557,14 +559,16 @@ final class RichTextAttachmentScreenComponent: Component {
     let overNavigationContainer: UIView
     let presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
+    let pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?
 
-    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?, pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?) {
         self.context = context
         self.mode = mode
         self.sendContextActions = sendContextActions
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
         self.presentFormulaEditor = presentFormulaEditor
+        self.pastedMarkdownParser = pastedMarkdownParser
     }
 
     static func ==(lhs: RichTextAttachmentScreenComponent, rhs: RichTextAttachmentScreenComponent) -> Bool {
@@ -1200,6 +1204,16 @@ final class RichTextAttachmentScreenComponent: Component {
                 }
                 // Detail-block fold chevron — the same vertical arrow the InstantPage V2 renderer uses.
                 editor.detailsChevronImage = UIImage(bundleImageName: "Item List/ExpandingItemVerticalRegularArrow")?.withRenderingMode(.alwaysTemplate)
+                // Markdown-on-paste: plain pasted text that parses as markdown with formatting/structure is
+                // spliced as rich content instead of literal text. The parser is injected by the host (only
+                // the monolith can reach the BrowserUI-backed markdown pipeline); nil falls back to the
+                // editor's built-in plain-text paste.
+                editor.plainTextFragmentTransformer = { [weak self] text in
+                    guard let self, let component = self.component, let parser = component.pastedMarkdownParser, let content = parser(component.context, text) else {
+                        return nil
+                    }
+                    return pasteFragmentDocument(fromChatInputContent: content)
+                }
                 // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-
                 // dismiss gestures. These Display flags can only be set host-side (the editor package can't
                 // import Display) and are applied to the hit-testable handle views, so the effect is scoped to

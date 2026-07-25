@@ -470,7 +470,55 @@ also called by the incremental `updateDraftMessage` path) + `_internal_applyFetc
 
 ---
 
-## 7. Accepted limitations & deferred work
+## 7. Markdown on paste (plain text → rich)
+
+Pasting **plain text that parses as CommonMark markdown** inserts it as rich content instead of a literal
+string — `**bold**` becomes bold, `# Heading` / `- list` / a `|`-table become real blocks. Clipboard paste
+only (no drag-&-drop, programmatic insert, or share-extension prefill). Always-on; undo is the escape hatch.
+
+**Pipeline (reuses the send-path parser).** `chatInputContentFromPastedMarkdown(context:plainText:)`
+(`TelegramUI/Sources/PastedMarkdownConversion.swift`) runs the same CommonMark parser the rich-message *send*
+path uses — `inputRichTextAttributeFromText` (`BrowserUI/BrowserMarkdown.swift`, Apple `NSAttributedString(markdown:)`
+with default options) → `InstantPage` → `chatInputContent(fromInstantPage:)` → `ChatInputContent`. A pure gate
+`pastedMarkdownContentIsRicherThanPlain(_:)` (`TextFormat/PastedMarkdownGate.swift`) returns nil when the parse
+is nothing but unformatted `.body` paragraphs, so ordinary text (incl. multi-line) falls through to the default
+plain paste; CommonMark's paired-delimiter rules mean a stray `*`/`-` never triggers.
+
+**Why the monolith owns the parse.** `BrowserUI` already depends on `ChatRichTextEditorComposer`, so neither the
+panel, the attachment screen, nor the `RichTextEditor` package may import it (cycle). The parse therefore lives in
+the `TelegramUI` monolith (the one layer that can import `BrowserUI` + `AccountContext`) and is **injected downward
+as a closure**. The `RichTextEditor` package stays markdown-free: it exposes a neutral
+`plainTextFragmentTransformer: ((String) -> Document?)?` it calls without knowing what markdown is.
+
+**Wiring.**
+- Chat composer: `ChatTextInputPanelNode.pastedMarkdownParser` (set at panel construction — `ChatControllerNode`
+  / `ChatInterfaceStateInputPanels`). It sets `ChatRichTextInputNode.pastedMarkdownFragmentParser` on the native
+  node (→ `RichTextEditorView.plainTextFragmentTransformer`), and in `chatInputTextNodeShouldPaste()` (legacy
+  field), **any** markdown latches to the native editor via `pasteRichFragmentFromPasteboard()`. So all markdown
+  paste — inline or structural, legacy-surface or native — flows through the native editor uniformly.
+- Article editor: `RichTextAttachmentScreen(pastedMarkdownParser:)` threads the closure to its `RichTextEditorView`.
+
+**Two-step undo (load-bearing).** The native paste (`DocumentCanvasView.pasteMarkdownTwoStep`) inserts the **raw
+markdown text** as step 1, then **replaces that range with the rich content** as step 2 — so one Cmd+Z / shake
+reverts rich → plain and a second removes it. Step 2 is deferred to the **next run-loop cycle** on purpose: the
+editor's private `UndoManager` uses the default `groupsByEvent`, which coalesces every registration made in one
+run-loop event into a single undo group, so a synchronous step 2 would collapse both into one undo. To avoid a
+visible flash of the raw markdown, step 1 sets `DocumentCanvasView.suppressHostChangeNotification`, which makes
+`notifyContentSizeChanged()` (gated at its definition — `setBlocks` calls it too, not just `editing {}`) and the
+`editing {}` trailing `refreshSelectionUI()`/`onSelectionChange()` no-op; the canvas has no `draw(_:)` and is
+parent-driven, so with the host un-notified the intermediate state neither lays out nor moves the caret. Step 2
+runs the normal, host-notifying edit, so only the rich result is drawn and the caret moves once (to its end).
+
+**Nested lists.** `chatInputBlocks(fromInstantPageBlocks:)` recurses into `InstantPageListItem.blocks` items — a
+list item that carries continuation paragraphs and/or a nested sub-list, which the markdown parser emits for an
+indented sub-list — preserving indent via `ChatInputListMembership.level` (mapped on to the editor's
+`ListMembership.level` by the bridge). Skipping `.blocks` used to silently drop a whole nested sub-list on paste.
+
+**Accepted limitation.** The ChatInputContent → InstantPage *forward* (send) still coalesces list items to a flat
+level (canonicalizes indent), so a pasted nested list **displays** nested in the composer/editor but may flatten
+when the message is sent — a separate send-path change.
+
+## 8. Accepted limitations & deferred work
 
 - **Cross-device collapsed-quote fidelity:** the MTProto `Api.RichMessage`/`InputRichMessage` has no `collapsed`
   flag, so the three model quote states collapse to one on the wire (`.quote(isCollapsed:false)` /
@@ -500,6 +548,10 @@ also called by the incremental `updateDraftMessage` path) + `_internal_applyFetc
 | markers (mention/date, code) | `TextFormat/.../MentionDateMarkers.swift`, `CodeBlockMarkers.swift` |
 | native node | `Chat/ChatRichTextEditorComposer/Sources/RichTextEditorChatInputNode.swift` |
 | panel (GET/SET, node select) | `Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` |
+| markdown-on-paste parse (monolith) | `TelegramUI/Sources/PastedMarkdownConversion.swift` |
+| markdown-on-paste gate | `TextFormat/Sources/PastedMarkdownGate.swift` (`+ Tests/PastedMarkdownGateTests.swift`) |
+| CommonMark → InstantPage (send + paste) | `BrowserUI/Sources/BrowserMarkdown.swift` (`inputRichTextAttributeFromText`) |
+| two-step paste + neutral transformer hook | `RichTextEditor/.../Canvas/DocumentCanvasView+Clipboard.swift` (`pasteMarkdownTwoStep`), `DocumentCanvasView.swift` (`plainTextFragmentTransformer`, `suppressHostChangeNotification`) |
 | state value-equality | `AccountContext/Sources/ChatController.swift` |
 | send / edit | `TelegramUI/Sources/ChatControllerNode.swift`, `Chat/ChatControllerLoadDisplayNode.swift` |
 | expanded-editor send-options | `RichTextAttachmentScreen/Sources/RichTextAttachmentScreen.swift`; callers `ChatControllerNode.swift` (`openExpandedInput`), `ChatControllerOpenAttachmentMenu.swift` (`.richText`) |

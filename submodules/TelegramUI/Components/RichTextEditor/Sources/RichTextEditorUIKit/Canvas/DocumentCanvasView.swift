@@ -202,6 +202,7 @@ final class DocumentCanvasView: UIView {
     /// editor pastes text (fragment/RTF/plain) itself.
     var canPasteMedia: (() -> Bool)?
     var onPasteMedia: (() -> Bool)?
+    var plainTextFragmentTransformer: ((String) -> Document?)?
 
     /// A HARDWARE-keyboard Return (plain or ⌘) routes here before the editor inserts a newline, so a host
     /// (the chat composer) can send-on-Enter / send-on-⌘-Enter. Mirrors the legacy `ChatInputTextViewImpl`'s
@@ -547,6 +548,13 @@ final class DocumentCanvasView: UIView {
     /// run-breaking boundary that isn't already caught by the contiguity check (undo/redo restore,
     /// IME commit, document swap, resign-first-responder).
     func breakUndoCoalescing() { openUndoRun = nil }
+
+    /// When set, an `editing { }` block skips its trailing HOST notifications (`notifyContentSizeChanged`
+    /// and `onSelectionChange`) so the host does not re-lay-out / redraw for that edit. Used by the
+    /// markdown two-step paste to keep the intermediate raw-text state (step 1) off-screen — only step 2's
+    /// rich result triggers a host layout, so the paste shows no flash of the raw markdown. The canvas has
+    /// no `draw(_:)` and is parent-driven, so suppressing the host layout keeps the block views unchanged.
+    var suppressHostChangeNotification = false
 
     /// Token for the input-language-change observer (see init); removed in deinit.
     private var inputModeObserver: NSObjectProtocol?
@@ -1150,7 +1158,10 @@ final class DocumentCanvasView: UIView {
     /// layout. The editor convention: a view never `setNeedsLayout()`s itself for a content change — it
     /// notifies its parent, which drives layout explicitly. `intrinsicContentSize` is a pure computed
     /// property, so there is nothing to invalidate; this only fires the callback.
-    func notifyContentSizeChanged() { onContentSizeChange?() }
+    func notifyContentSizeChanged() {
+        if suppressHostChangeNotification { return }   // step 1 of a two-step paste stays off-screen (no flash)
+        onContentSizeChange?()
+    }
 
     /// Selection/caret changes call `setNeedsDisplay()` without a layout pass; propagate the repaint to
     /// the selection overlays and the chrome overlay — and to TABLE views only (their cell wash is

@@ -626,6 +626,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     public var canPasteMedia: (() -> Bool)? { didSet { self.editorView.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { self.editorView.onPasteMedia = onPasteMedia } }
+    public var pastedMarkdownFragmentParser: ((String) -> Document?)? { didSet { self.editorView.plainTextFragmentTransformer = self.pastedMarkdownFragmentParser } }
 
     public func performFormatAction(_ action: ChatRichTextFormatAction) {
         switch action {
