@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import SwiftSignalKit
+import Camera
 import TelegramCore
 
 private let defaultFPS: Double = 30.0
@@ -14,7 +15,7 @@ final class CameraDevice {
         }
     }
     
-    public private(set) var videoDevice: AVCaptureDevice? = nil {
+    private(set) var videoDevice: AVCaptureDevice? = nil {
         didSet {
             if let previousVideoDevice = oldValue {
                 self.unsubscribeFromChanges(previousVideoDevice)
@@ -27,7 +28,7 @@ final class CameraDevice {
     }
     private var videoDevicePromise = Promise<AVCaptureDevice?>()
     
-    public private(set) var audioDevice: AVCaptureDevice? = nil
+    private(set) var audioDevice: AVCaptureDevice? = nil
         
     func configure(for session: CameraSession, position: Camera.Position, dual: Bool, switchAudio: Bool) {
         self.position = position

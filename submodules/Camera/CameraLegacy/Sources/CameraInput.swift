@@ -1,4 +1,5 @@
 import AVFoundation
+import Camera
 import TelegramCore
 
 class CameraInput {
