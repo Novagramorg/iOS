@@ -108,6 +108,20 @@ genrule(
     visibility = ["//visibility:public"],
 )
 
+# Converts the reference module into a C++ byte array so it ships inside the
+# binary. Production builds have no filesystem loader (see
+# TGCALLS_ALLOW_EXTERNAL_WASM_CORE), so this is the only module they can run.
+genrule(
+    name = "reference_core_embedded_src",
+    srcs = [
+        ":reference_core_wasm",
+        "tools/wasm_to_source.py",
+    ],
+    outs = ["ReferenceCoreEmbedded.cpp"],
+    cmd = "python3 $(location tools/wasm_to_source.py) $(location :reference_core_wasm) $@",
+    visibility = ["//visibility:public"],
+)
+
 sources = glob([
     "Sources/**/*.m",
     "Sources/**/*.mm",
@@ -222,6 +236,7 @@ sources = glob([
     "tgcalls/tgcalls/v2wasm/InstanceV2PumpImpl.cpp",
     "tgcalls/tgcalls/v2wasm/NativeCoreBackend.cpp",
     "tgcalls/tgcalls/v2wasm/WamrCoreBackend.cpp",
+    ":reference_core_embedded_src",
     "tgcalls/tgcalls/v2/NativeNetworkingImpl.cpp",
     "tgcalls/tgcalls/v2/RawTcpSocket.cpp",
     "tgcalls/tgcalls/v2/ReflectorPort.cpp",
@@ -364,6 +379,7 @@ cc_library(
         "tgcalls/tgcalls/v2wasm/InstanceV2PumpImpl.cpp",
         "tgcalls/tgcalls/v2wasm/NativeCoreBackend.cpp",
         "tgcalls/tgcalls/v2wasm/WamrCoreBackend.cpp",
+        ":reference_core_embedded_src",
         "tgcalls/tgcalls/v2/NativeNetworkingImpl.cpp",
         "tgcalls/tgcalls/v2/RawTcpSocket.cpp",
         "tgcalls/tgcalls/v2/ReflectorPort.cpp",
@@ -383,6 +399,11 @@ cc_library(
         "-Ithird-party/libyuv",
         "-DRTC_ENABLE_VP9",
         "-DTGVOIP_NAMESPACE=tgvoip_webrtc",
+        # CLI/dev only: enables --wasm-core PATH. NEVER add this to the
+        # objc_library — the key it unlocks comes from the server, so in a
+        # shipped build it would be a remote-code-execution surface. See the
+        # security note in v2wasm/CallCoreHost.cpp.
+        "-DTGCALLS_ALLOW_EXTERNAL_WASM_CORE=1",
         "-std=c++17",
         "-w",
     ] + select({

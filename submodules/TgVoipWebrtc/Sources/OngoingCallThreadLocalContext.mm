@@ -8,6 +8,7 @@
 #import "v2/InstanceV2Impl.h"
 #import "v2/InstanceV2ReferenceImpl.h"
 #import "v2/InstanceV2CompatImpl.h"
+#import "v2wasm/InstanceV2PumpImpl.h"
 #include "StaticThreads.h"
 
 #import "VideoCaptureInterface.h"
@@ -1636,6 +1637,10 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
         tgcalls::Register<tgcalls::InstanceV2Impl>();
         tgcalls::Register<tgcalls::InstanceV2ReferenceImpl>();
         tgcalls::Register<tgcalls::InstanceV2CompatImpl>();
+        // 18.0.0 (native core) / 19.0.0 (embedded wasm core). Advertised
+        // unconditionally: the server reconciles both endpoints' lists and
+        // returns one version, so no client-side gating is needed.
+        tgcalls::Register<tgcalls::InstanceV2PumpImpl>();
     });
 }
 
