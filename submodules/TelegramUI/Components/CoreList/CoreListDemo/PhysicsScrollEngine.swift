@@ -69,10 +69,17 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         set { core.onScroll = newValue }
     }
     var onWillBeginDragging: (() -> Void)?
-    /// During a `.keyframe` flight the host's `bounds.origin.y` model is parked at the trajectory's
-    /// `finalOffset` (the additive animation carries the path), so the live position must come from the
-    /// flight sample, not `core.offset`.
-    var offset: CGFloat { flight.map { $0.liveOffset(now: localNow()) } ?? core.offset }
+    /// The physics scroll position, advanced once per frame by whichever driver is running — NEVER a sample of
+    /// the flight. Consumers may read this as many times as they like within a frame and get one coherent
+    /// value; a consumer that reads it twice around its own work (the list does, three times per mutation
+    /// pass) must not observe the scroll position moving underneath it. Sampling the flight here instead made
+    /// every mid-flight `applyChanges` re-place the content where it was when the pass started — a backward
+    /// lurch of `velocity × pass duration`, up to 185pt measured. See
+    /// docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
+    ///
+    /// The instantaneous position is deliberately NOT exposed: `catchFlight` samples
+    /// `flight.liveOffset(now: localNow())` directly, which is the one operation that genuinely needs it.
+    var offset: CGFloat { core.offset }
     var contentHost: UIView { host }
 
     func setOffset(_ y: CGFloat) {
@@ -89,11 +96,24 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         core.cancelDeceleration()
         core.setOffset(y)
     }
+    func haltMotionInPlace() {
+        // Same teardown as `setOffset` minus the offset write: `catchFlight` already snaps the physics and
+        // the layer model to the live position and removes the animation, so the content does not move.
+        if flight != nil { catchFlight() }
+        stopDisplayLink()
+        core.cancelDeceleration()
+    }
+    func syncToPresentedPosition() {
+        // Exactly what a sampling tick does first: reseed the physics at the flight's live sample. The CA
+        // animation is untouched, so the flight keeps playing — only the value the list reads becomes current.
+        flight?.beginTick(now: localNow())
+    }
     func applyShift(_ dy: CGFloat) {
         if flight != nil {
             // With two open edges this is a rigid coordinate translation and needs no re-emit. A finite
             // edge stays fixed while the offset moves, however, so its relative geometry changes and the
-            // translated old bounce is no longer authoritative.
+            // translated old bounce is no longer authoritative — unless the translated path still cannot
+            // reach that edge, which `noteEdgesChanged` filters out.
             let changesShape = core.hasFiniteEdge
             host.bounds.origin.y += dy
             core.applyShiftPhysicsOnly(dy)
@@ -116,10 +136,14 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
 
     // MARK: - Driver
 
+    /// Route a declared-edge change (or a coordinate re-base against a fixed edge) into the live flight.
+    /// `noteEdgesChanged` ignores a change that cannot reach its baked path — that flight keeps playing the
+    /// animation it already has, so the generation bump is gated on an invalidation ACTUALLY being pending:
+    /// bumping it unconditionally would kill the completion block of an animation we then never replace.
     private func noteFlightEdgesChanged() {
         guard let flight else { return }
         flight.noteEdgesChanged()
-        flightGeneration &+= 1
+        if flight.hasPendingEdgeRebake { flightGeneration &+= 1 }
     }
 
     @objc private func handlePan(_ gr: UIPanGestureRecognizer) {

@@ -113,10 +113,13 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // ListView index and is always nil. Absence from the loaded window is the equivalent test —
     // genuine departures move to the non-interactive exitOverlay and never appear here.
     //
-    // Frames come from UIKit `convert` rather than a CoreList accessor: it walks whatever ancestor
+    // Frames come from `presentedFrame(of:)` rather than a bare `convert`: it walks whatever ancestor
     // path the row currently has (`container` normally, `crossingOverlay` while a structural
-    // transition carries it), so it cannot drift from what is rendered. These are settled endpoints,
-    // which is what ListViewImpl reads too.
+    // transition carries it), so it cannot drift from what is rendered, AND it corrects for the
+    // additive viewport animations. A bare `convert` composes ancestor MODEL bounds, and CoreList's
+    // host layer is parked at a keyframe flight's DESTINATION for the whole fling — so it would report
+    // every row hundreds of points from where the user sees it, for the entire momentum phase.
+    // (ListViewImpl reads settled endpoints, but there model == presented; here it does not.)
     private func loadedFrame(of node: ListViewItemNode) -> CGRect? {
         for hostView in self.itemNodeHostViews {
             if hostView.itemNode === node {
@@ -126,9 +129,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return nil
     }
 
-    // A loaded row's rect in the hosted CoreVirtualListView's coordinate space.
+    // A loaded row's rect in the hosted CoreVirtualListView's coordinate space, as presented.
     private func listFrame(of view: UIView) -> CGRect {
-        return self.coreList.convert(view.bounds, from: view)
+        return self.coreList.presentedFrame(of: view)
     }
 
     // The settled rect of the row at a collection index, or nil when that index is not loaded.
@@ -402,12 +405,10 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // "loaded" is not "visible" — over-reporting here would play sound for off-screen video and fire
     // read tracking / unseen-reaction animations for messages the user cannot see.
     //
-    // Geometry comes from UIKit rather than a CoreList accessor: `convert` walks whatever ancestor
-    // path the row currently has (`container` normally, `crossingOverlay` while a structural
-    // transition carries it), so it cannot drift from what is actually rendered. The frames are
-    // settled endpoints — CoreList animates via additive CA position tracks and absolute extent
-    // tracks while the model layer holds final geometry — which is exactly what ListViewImpl filters
-    // on too.
+    // Geometry comes from `listFrame(of:)`, i.e. CoreList's `presentedFrame(of:)`: the frames must be
+    // where the rows ARE, not their settled endpoints. Reporting settled geometry mid-fling would fire
+    // read tracking and unseen-reaction animations for whatever is visible at the flight's DESTINATION,
+    // since the host layer is parked there for the flight's whole duration.
     //
     // See `visibleBand` for why the band reads currentSize/currentInsets.
     func forEachVisibleItemNode(_ f: (ASDisplayNode) -> Void) {
@@ -416,7 +417,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             guard let itemNode = hostView.itemNode else {
                 continue
             }
-            let frame = self.coreList.convert(hostView.bounds, from: hostView)
+            let frame = self.listFrame(of: hostView)
             if frame.maxY > band.top && frame.minY < band.bottom {
                 f(itemNode)
             }

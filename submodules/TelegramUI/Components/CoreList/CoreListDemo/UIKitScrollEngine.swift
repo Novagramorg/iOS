@@ -48,6 +48,20 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
         isProgrammatic = false
     }
 
+    func haltMotionInPlace() {
+        // A `UIScrollView`'s `bounds.origin` IS its presented position, so writing it back is an exact
+        // halt-in-place here — this is the historical `setOffset(offset)` idiom, now stated once instead of
+        // at four call sites, and behaviour-preserving for this backend. (If UIKit momentum ever needs a
+        // harder stop than a programmatic offset write, the canonical form is
+        // `setContentOffset(contentOffset, animated: false)` — deliberately not changed here, since this
+        // backend's behaviour is not what the change is about.)
+        setOffset(offset)
+    }
+
+    func syncToPresentedPosition() {
+        // A `UIScrollView`'s `bounds.origin` is always the presented value; there is nothing to re-anchor.
+    }
+
     func applyShift(_ dy: CGFloat) {
         isProgrammatic = true
         scrollView.bounds.origin.y += dy

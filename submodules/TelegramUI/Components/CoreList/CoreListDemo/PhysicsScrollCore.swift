@@ -37,13 +37,32 @@ final class PhysicsScrollCore {
         physics = ScrollPhysics(
             x: ScrollAxis(offset: 0, min: 0, max: 0,
                           range: Swift.max(1, contentHost.bounds.width), rate: 0.998, scale: self.scale),
-            y: ScrollAxis(offset: 0, min: -PhysicsScrollCore.sentinelDistance, max: PhysicsScrollCore.sentinelDistance,
+            // Seeded FROM the host, not from 0: `offset` below is the physics axis, and the identity
+            // "physics offset == the host's bounds origin while nothing is in flight" must hold by
+            // construction, not by every caller happening to pass a zero-origin host.
+            y: ScrollAxis(offset: contentHost.bounds.origin.y,
+                          min: -PhysicsScrollCore.sentinelDistance, max: PhysicsScrollCore.sentinelDistance,
                           range: Swift.max(1, contentHost.bounds.height), rate: 0.998, scale: self.scale))
     }
 
-    var offset: CGFloat { contentHost.bounds.origin.y }
+    /// THE scroll position, in the list's coordinate — the physics axis, which the active driver advances
+    /// exactly once per frame (`.stepped` through `step`, `.keyframe` through `KeyframeFlight.beginTick`'s
+    /// `reseedDeceleration`). Per-frame stable, and independent of whether a deceleration animation exists or
+    /// what shape it has.
+    ///
+    /// NOT `contentHost.bounds.origin.y`: that is the additive BASE of the emitted keyframe animation, parked
+    /// at the trajectory's `finalOffset` for the whole flight (`Trajectory+Keyframe.swift`
+    /// `boundsOriginKeyframeAnimation` emits `offset(tᵢ) − finalOffset`, so the base must be the settled
+    /// endpoint). Mid-flight it therefore holds the flight's DESTINATION — hundreds to thousands of points
+    /// from what is on screen. Reading it as a position is what produced the mid-flight mutation lurch; see
+    /// docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
+    var offset: CGFloat { physics.y.offset }
     var isDecelerating: Bool { physics.y.phase == .decelerating }
     var hasFiniteEdge: Bool { minEdge != nil || maxEdge != nil }
+    /// The DECLARED edges — `nil` is an open side (the axis gets the far sentinel instead of a bound).
+    /// Read by `KeyframeFlight`, which bakes against them and needs to know when a declared change can
+    /// actually reach the path it has in flight.
+    var edges: (min: CGFloat?, max: CGFloat?) { (minEdge, maxEdge) }
 
     /// Set the pixel-rounding scale used by the NEXT `makePhysics` (i.e. the next `beginDrag`/resume/
     /// reseed). The owning engine refreshes this from the host's real display scale before a gesture so

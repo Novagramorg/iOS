@@ -10,6 +10,29 @@ final class PhysicsScrollCoreTests: XCTestCase {
         return (core, host)
     }
 
+    func test_offset_isThePhysicsPosition_notTheHostBounds() {
+        // `applyShiftPhysicsOnly` is the one method that deliberately decouples the two (a keyframe flight owns
+        // the layer model, which is the additive animation's base). `offset` must follow the PHYSICS, or the
+        // list reads the flight's destination as its scroll position — the mid-flight mutation lurch.
+        let (core, host) = makeCore()
+        core.setOffset(100)
+        XCTAssertEqual(core.offset, 100, accuracy: 0.001)
+        XCTAssertEqual(host.bounds.origin.y, 100, accuracy: 0.001)
+
+        core.applyShiftPhysicsOnly(250)
+        XCTAssertEqual(core.offset, 350, accuracy: 0.001, "offset follows the physics axis")
+        XCTAssertEqual(host.bounds.origin.y, 100, accuracy: 0.001, "the layer model is deliberately untouched")
+    }
+
+    func test_offset_seedsFromTheHostAtConstruction() {
+        // The identity "offset == host bounds origin while nothing is in flight" must hold by construction,
+        // not because every caller happens to pass a zero-origin host.
+        let host = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 800))
+        host.bounds.origin.y = 420
+        let core = PhysicsScrollCore(contentHost: host)
+        XCTAssertEqual(core.offset, 420, accuracy: 0.001)
+    }
+
     func test_setOffset_writesHostBounds_doesNotFireOnScroll() {
         let (core, host) = makeCore()
         var fired: [CGFloat] = []

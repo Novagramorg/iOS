@@ -85,12 +85,19 @@ provides `offset`, programmatic `setOffset`/`applyShift`, edge declaration, user
   engine offset while that edge stays fixed changes relative trajectory geometry, so the shift and
   latest edges are folded into one continuous re-bake. Pending invalidation outranks completion of
   the obsolete sampler or CA trajectory, preserving analytic current position and velocity whenever
-  motion remains.
+  motion remains. Only an edge that can REACH the flight's remaining path counts as a real change:
+  the deceleration integrator is edge-independent until the path crosses an edge, so the declared
+  edges plus the baked offset band identify the motion, and a change outside that band leaves the
+  flight — and the animation the render server is already playing, with its completion — untouched.
 
 The UIKit-backed suite remains the core-list additivity oracle. The physics-backed list path is
 covered by `PhysicsListIntegrationTests` plus the physics and keyframe unit suites. The Virtual List
 demo defaults to `PhysicsScrollEngine` with keyframe deceleration; UIKit and stepped physics remain
 selectable from the engine control.
+
+`ScrollEngine.offset` is **the physics scroll position, advanced once per frame** by whichever driver is
+running — never a sample of a running animation. See the gotcha below and
+`docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md`.
 
 📖 **Read before changing:** `ScrollEngine.swift`, `UIKitScrollEngine.swift`,
 `PhysicsScrollEngine.swift`, `PhysicsScrollCore.swift`, `KeyframeFlight.swift`, and designs
@@ -498,6 +505,26 @@ Animation an authority.
   writing non-zero offsets.
 - Trackpad indirect scroll ignores `pan.setTranslation(.zero)`; keep the explicit translation
   baseline in the physics engine.
+- **`ScrollEngine.offset` is per-frame stable; never sample a running animation through it, and never read
+  `contentHost.bounds.origin.y` as a position.** That layer value is the additive BASE of the emitted keyframe
+  animation, parked at the trajectory's `finalOffset` for the whole flight — mid-flight it holds the flight's
+  *destination*, hundreds to thousands of points from what is on screen. `PhysicsScrollCore.offset` returns
+  `physics.y.offset` instead, which the active driver advances exactly once per frame (`.stepped` via `step`,
+  `.keyframe` via `KeyframeFlight.beginTick`'s reseed). This is load-bearing because `CoreVirtualListView`
+  reads the offset **three times** in one mutation pass (`:539`, `:849`, and `:1347` via `setBoundsOriginY`)
+  and treats the difference as the shift the pass itself applied: any per-read drift becomes geometry error.
+  When it sampled the flight, every mid-flight `applyChanges` re-placed the content where it was when the pass
+  *started* — a backward lurch of `velocity × pass duration`, measured up to 185pt. Continuity needs
+  *consistency*, not currency: one value used throughout cancels algebraically no matter how stale it is.
+  A mutation pass calls `syncToPresentedPosition()` at entry, so it resolves against a current viewport;
+  between ticks a plain `offset` read still trails the presented position by `velocity × (main-thread time
+  since the last tick)`, which is what makes it stable. Halting momentum uses `haltMotionInPlace()` — never
+  `setOffset(offset)`, which reads a stable value and then has it overwritten by the catch's instantaneous
+  one (that cost 65pt of discontinuity on a `scrollTo` arriving mid-fling). Corollaries: the
+  before/after differencing in `render()` / `applyEngineShift` must **stay** differences (`UIKitScrollEngine`
+  genuinely clamps on a `contentSize` shrink, and the realized shift is the only correct amount); and any
+  lurch test must measure against `TestScrollEngine.liveViewportOffset`, never `engine.offset`, or it passes
+  by its own measuring stick freezing.
 - **`PhysicsScrollEngine`'s `shouldBeRequiredToFailBy` must stay gated on content motion**
   (`flight != nil || core.isDecelerating`). Declaring it unconditionally breaks every
   press-and-hold recognizer hosted in the list, because such a recognizer must recognize *while the

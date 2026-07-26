@@ -29,6 +29,24 @@ final class KeyframeFlight {
     private var edgeRebakePending = false
     var hasPendingEdgeRebake: Bool { edgeRebakePending }
 
+    /// The declared edges the live `trajectory` was baked against, in the trajectory's own coordinate.
+    /// Together with the trajectory these ARE the parameters of the animation the engine has in flight: the
+    /// path is a deterministic function of the seeded `(offset, velocity)` — which by construction stays ON
+    /// this path, `beginTick` reseeds from it — plus the declared edges. So the ONLY thing a mid-flight
+    /// change can alter is how the edges sit relative to the path. Refreshed at every bake.
+    private var bakedEdges: (min: CGFloat?, max: CGFloat?) = (nil, nil)
+    /// Layer-local time of the last `beginTick`, i.e. how far the played path has been consumed. A rebake
+    /// only ever replaces the FUTURE, so this is where the "can an edge still reach this path" test starts.
+    /// `nil` until the first tick (then the whole path is future) and never ahead of the caller's real
+    /// clock, so it can only ever over-report the remaining band — a rebake too many, never one missed.
+    private var lastTickTime: TimeInterval?
+
+    /// Clearance required before an edge counts as untouched by a path: the physics' own settle tolerance
+    /// (`Deceleration.settleTolerance`, 0.5px — private there). A path that merely reaches an edge already
+    /// engaged the spring and settles within that band of it, so the band keeps a bounce from reading as a
+    /// free coast.
+    private static let edgeClearance: CGFloat = 0.5
+
     init(core: PhysicsScrollCore, startTime: TimeInterval) {
         self.core = core
         self.startTime = startTime
@@ -36,6 +54,7 @@ final class KeyframeFlight {
         // (engine) must construct a flight only after endDrag returned .decelerate.
         assert(core.isDecelerating, "KeyframeFlight must be built from a core in .decelerating state")
         self.trajectory = core.bakeTrajectory()
+        self.bakedEdges = core.edges
     }
 
     var duration: TimeInterval { trajectory.duration }
@@ -54,6 +73,7 @@ final class KeyframeFlight {
     /// a subsequent `applyShift`/`setEdges` composes on it). Does NOT reset `coordinateShift` or a
     /// pending edge invalidation — both persist until an edge-change rebake folds them in.
     func beginTick(now: TimeInterval) {
+        lastTickTime = now
         core.reseedDeceleration(offset: liveOffset(now: now), velocity: liveVelocity(now: now))
     }
 
@@ -62,9 +82,40 @@ final class KeyframeFlight {
     /// model by the same `dy`; the in-flight additive animation keeps playing, just translated.
     func noteShift(_ dy: CGFloat) { coordinateShift += dy }
 
-    /// The list changed a bounce edge this tick. The decel SHAPE changes (a bounce appears/disappears),
-    /// so this DOES request a rebake/re-emit. The engine calls it alongside `core.setEdges(...)`.
-    func noteEdgesChanged() { edgeRebakePending = true }
+    /// The list changed a bounce edge this tick (or re-based the coordinate while a finite edge stayed
+    /// put). Requests a rebake/re-emit only when that can actually change the SHAPE of this flight: an edge
+    /// the path has yet to reach takes no part in the motion that is left, so re-baking against it would
+    /// hand the render server the animation it is already playing. `setEdges` reports EVERY declared change, and
+    /// during virtualization most of them move a content edge far from a coasting flick — re-emitting for
+    /// those is the same CA churn `noteShift` exists to avoid. The engine calls this with `core` already
+    /// holding the new edges.
+    func noteEdgesChanged() {
+        if canChangeRemainingMotion(newEdges: core.edges) {
+            edgeRebakePending = true
+        }
+    }
+
+    /// Whether the declared edges can still alter what is LEFT of the baked path. Two ways in: the band the
+    /// path has yet to cover reaches the edges it was baked against (a bounce that is still to come, and any
+    /// edge move reshapes it), or it reaches the newly declared ones. The baked band is in the trajectory
+    /// coordinate, so the freshly declared edges — which the list states in the CURRENT coordinate — are
+    /// compared against the band re-based by `coordinateShift`. Only ever RAISES the pending flag; a real
+    /// invalidation stays durable until a rebake consumes it.
+    private func canChangeRemainingMotion(newEdges: (min: CGFloat?, max: CGFloat?)) -> Bool {
+        let remaining = trajectory.offsetExtent(from: (lastTickTime ?? startTime) - startTime)
+        if Self.edgesReach(bakedEdges, extent: remaining) { return true }
+        return Self.edgesReach(newEdges, extent: (remaining.min + coordinateShift,
+                                                 remaining.max + coordinateShift))
+    }
+
+    /// Whether either declared edge takes part in a path occupying `extent`. `nil` is an open side —
+    /// `PhysicsScrollCore` gives it a far sentinel, i.e. unreachable by construction.
+    private static func edgesReach(_ edges: (min: CGFloat?, max: CGFloat?),
+                                   extent: (min: CGFloat, max: CGFloat)) -> Bool {
+        if let lo = edges.min, extent.min <= lo + edgeClearance { return true }
+        if let hi = edges.max, extent.max >= hi - edgeClearance { return true }
+        return false
+    }
 
     /// After `onScroll`/rebalance: if an edge changed, rebake+splice (a pure shift does not get here —
     /// it rode the model translation). Returns true if rebaked (the engine then re-emits the CA animation
@@ -82,6 +133,7 @@ final class KeyframeFlight {
         trajectory = spliced.trajectory
         startTime = spliced.beginTime
         coordinateShift = 0                                   // folded into the new trajectory's coordinate
+        bakedEdges = core.edges                               // what the new path was shaped by (see noteEdgesChanged)
         edgeRebakePending = false
         generation &+= 1
         return true

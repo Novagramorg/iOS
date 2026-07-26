@@ -25,6 +25,9 @@ final class TestScrollEngine: ScrollEngine {
     private var flight: KeyframeFlight?
     private(set) var keyframeRebakeCount = 0
     var keyframeFlightDuration: TimeInterval? { flight?.duration }
+    /// Where the live flight will come to rest, in list coordinates (nil when not flying). A rebake that
+    /// changes the motion moves this; one skipped as unreachable must leave it exactly as it was.
+    var keyframeSettledOffset: CGFloat? { flight?.settledOffset }
     private(set) var declaredEdges: (min: CGFloat?, max: CGFloat?) = (0, 0)
 
     // MARK: - ScrollEngine
@@ -34,7 +37,15 @@ final class TestScrollEngine: ScrollEngine {
         set { core.onScroll = newValue }
     }
     var onWillBeginDragging: (() -> Void)?
-    var offset: CGFloat { flight.map { $0.liveOffset(now: clock.now) } ?? core.offset }
+    /// Mirrors `PhysicsScrollEngine.offset`: the physics position, advanced once per frame, never a sample of
+    /// the flight. See that property and the clock-free-mutation-pass spec.
+    var offset: CGFloat { core.offset }
+    /// TEST INSTRUMENT ONLY — the PRESENTED viewport, i.e. what the render server shows. The model is parked at
+    /// the trajectory's `finalOffset` and the additive keyframe adds `offset(tᵢ) − finalOffset`
+    /// (Trajectory+Keyframe.swift), so the presented bounds origin is exactly `flight.liveOffset(now:)`. This
+    /// is the measuring stick for lurch tests: it must NOT go through `offset`, or a test that asserts the
+    /// content did not move would pass by the measuring stick freezing with the value it measures.
+    var liveViewportOffset: CGFloat { flight.map { $0.liveOffset(now: clock.now) } ?? core.offset }
     var contentHost: UIView { host }
 
     func setOffset(_ y: CGFloat) {
@@ -52,9 +63,22 @@ final class TestScrollEngine: ScrollEngine {
         core.cancelDeceleration()                          // phase → .idle (production parity, both modes)
         core.setOffset(y)
     }
+    func haltMotionInPlace() {
+        // Mirrors PhysicsScrollEngine.haltMotionInPlace: catch the flight at its live position (production
+        // additionally removes the CA animation), then idle the core.
+        if let f = flight {
+            core.setOffset(f.liveOffset(now: clock.now))
+            flight = nil
+        }
+        core.cancelDeceleration()
+    }
+    func syncToPresentedPosition() {
+        flight?.beginTick(now: clock.now)
+    }
     func applyShift(_ dy: CGFloat) {
         if flight != nil {
             let changesShape = core.hasFiniteEdge
+            host.bounds.origin.y += dy          // mirror PhysicsScrollEngine — the model rides the re-base
             core.applyShiftPhysicsOnly(dy)
             flight?.noteShift(dy)
             if changesShape {
@@ -92,7 +116,13 @@ final class TestScrollEngine: ScrollEngine {
     @discardableResult func endDrag() -> Bool {
         let decelerate = core.endDrag()
         if decelerate && decelerationMode == .keyframe {
-            flight = KeyframeFlight(core: core, startTime: clock.now)
+            let f = KeyframeFlight(core: core, startTime: clock.now)
+            flight = f
+            // Mirror PhysicsScrollEngine.launchFlight: the layer model is parked at the trajectory's settled
+            // endpoint because the emitted keyframe animation is ADDITIVE around it. The harness emits no CA,
+            // but it must reproduce the model value or a host reading geometry through `UIView.convert`
+            // cannot be tested against it — the destination-space defect is invisible otherwise.
+            host.bounds.origin.y = f.trajectory.finalOffset
         }
         return decelerate
     }
@@ -124,6 +154,7 @@ final class TestScrollEngine: ScrollEngine {
             onScroll?(f.liveOffset(now: clock.now))         // → list rebalances → applyShift/setEdges → noteShift/noteEdges
             if f.rebakeIfNeeded(now: clock.now) {
                 keyframeRebakeCount += 1
+                host.bounds.origin.y = f.trajectory.finalOffset   // mirror reemitFlightAnimation's re-park
                 if f.isComplete(now: clock.now) {
                     core.setOffset(f.settledOffset)
                     core.cancelDeceleration()

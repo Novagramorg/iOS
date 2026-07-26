@@ -81,6 +81,100 @@ final class KeyframeFlightTests: XCTestCase {
         XCTAssertEqual(flight.liveVelocity(now: 0.2), velBefore, accuracy: 0.05)
     }
 
+    // MARK: - An edge change that cannot reach the path is not an invalidation
+
+    func test_edgeChangeBeyondThePath_doesNotRebake() {
+        // The list re-declares edges on every rebalance; during virtualization most of those move a content
+        // edge nowhere near a coasting flick. `Deceleration.step` is edge-independent until the path crosses
+        // an edge, so such a change cannot alter the motion — no invalidation, no re-emit.
+        let (core, flight) = makeCoreFlung()
+        flight.beginTick(now: 0.05)
+        let settledBefore = flight.settledOffset
+
+        XCTAssertTrue(core.setEdges(min: nil, max: settledBefore + 500))   // a real change, far past the rest point
+        flight.noteEdgesChanged()
+
+        XCTAssertFalse(flight.hasPendingEdgeRebake, "an unreachable edge is not a trajectory invalidation")
+        XCTAssertFalse(flight.rebakeIfNeeded(now: 0.05))
+        XCTAssertEqual(flight.generation, 0)
+        XCTAssertEqual(flight.settledOffset, settledBefore, "the flight keeps the path it is already playing")
+    }
+
+    func test_edgeChangeBehindThePath_doesNotRebake() {
+        // Same on the other side: the flick coasts AWAY from a top edge, so declaring one behind it cannot
+        // reach the remaining path.
+        let (core, flight) = makeCoreFlung()
+        flight.beginTick(now: 0.05)
+
+        XCTAssertTrue(core.setEdges(min: flight.liveOffset(now: 0.05) - 200, max: nil))
+        flight.noteEdgesChanged()
+
+        XCTAssertFalse(flight.hasPendingEdgeRebake)
+        XCTAssertFalse(flight.rebakeIfNeeded(now: 0.05))
+    }
+
+    func test_edgeChangeOnlyBehindTheCONSUMEDPath_doesNotRebake() {
+        // The path STARTS at the top edge (a top-loaded list flicked down) and coasts away from it. Only
+        // what is left to play can still be reshaped, so once the flight has moved off that edge a change
+        // to it is inert — the whole-path band would have kept re-emitting for the entire flight.
+        let host = UIView(frame: CGRect(origin: .zero, size: CGSize(width: 390, height: 800)))
+        let core = PhysicsScrollCore(contentHost: host)
+        core.setEdges(min: 0, max: nil)                    // top loaded; release sits exactly on the edge
+        core.beginDrag(); core.drag(translation: 0, velocity: -3000); core.drag(translation: 0, velocity: -3000)
+        _ = core.endDrag()
+        let flight = KeyframeFlight(core: core, startTime: 0)
+        XCTAssertEqual(flight.trajectory.offsetExtent().min, 0, accuracy: 0.001, "baked band starts at the edge")
+
+        flight.beginTick(now: 0.1)                          // consumed the part that sat on the edge
+        XCTAssertGreaterThan(flight.liveOffset(now: 0.1), 10)
+        XCTAssertTrue(core.setEdges(min: -300, max: nil))    // the top edge moves, behind the played path
+        flight.noteEdgesChanged()
+
+        XCTAssertFalse(flight.hasPendingEdgeRebake)
+        XCTAssertFalse(flight.rebakeIfNeeded(now: 0.1))
+    }
+
+    func test_edgeChangeWhileThePathStillBounces_rebakes() {
+        // A path whose REMAINING part engages an edge is still shaped by it, so any change to the declared
+        // edges must invalidate it (here the bounce is removed entirely).
+        let host = UIView(frame: CGRect(origin: .zero, size: CGSize(width: 390, height: 800)))
+        let core = PhysicsScrollCore(contentHost: host)
+        core.setEdges(min: nil, max: 300)
+        core.beginDrag(); core.drag(translation: 0, velocity: -6000); core.drag(translation: 0, velocity: -6000)
+        _ = core.endDrag()
+        let flight = KeyframeFlight(core: core, startTime: 0)
+        XCTAssertGreaterThan(flight.trajectory.offsetExtent().max, 300, "the baked path overshoots the edge")
+
+        flight.beginTick(now: 0.01)
+        XCTAssertTrue(core.setEdges(min: nil, max: nil))
+        flight.noteEdgesChanged()
+
+        XCTAssertTrue(flight.hasPendingEdgeRebake, "a bounce still to come is reshaped by any edge change")
+        XCTAssertTrue(flight.rebakeIfNeeded(now: 0.01))
+        XCTAssertGreaterThan(flight.trajectory.finalOffset, 400, "must now coast past the removed edge")
+    }
+
+    func test_shiftPastAFiniteEdge_rebakesEvenThoughTheEdgeDidNotMove() {
+        // The `applyShift` route: the declared edge stays put while the coordinate re-bases under it, so the
+        // shifted path reaches an edge it previously could not — a real invalidation with no `setEdges` call.
+        let host = UIView(frame: CGRect(origin: .zero, size: CGSize(width: 390, height: 800)))
+        let core = PhysicsScrollCore(contentHost: host)
+        core.setEdges(min: nil, max: 4_000)
+        core.beginDrag(); core.drag(translation: 0, velocity: -3000); core.drag(translation: 0, velocity: -3000)
+        _ = core.endDrag()
+        let flight = KeyframeFlight(core: core, startTime: 0)
+        flight.beginTick(now: 0.05)
+        core.setEdges(min: nil, max: 4_000)                  // unchanged: the shift alone moves the geometry
+        flight.noteEdgesChanged()
+        XCTAssertFalse(flight.hasPendingEdgeRebake, "still clear of the edge before the re-base")
+
+        core.applyShiftPhysicsOnly(3_000); flight.noteShift(3_000)
+        flight.noteEdgesChanged()                            // the engine's `changesShape` route
+
+        XCTAssertTrue(flight.hasPendingEdgeRebake, "the re-based path now reaches the fixed edge")
+        XCTAssertTrue(flight.rebakeIfNeeded(now: 0.05))
+    }
+
     func test_rebakeOnEdgeChange_springsBackToNewBottomEdge() {
         // Flick down with a far-away bottom, then mid-flight load a real bottom edge → rebake must
         // bake a spring-back to that edge.

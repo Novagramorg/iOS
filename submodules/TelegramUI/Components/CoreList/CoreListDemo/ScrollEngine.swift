@@ -21,6 +21,24 @@ protocol ScrollEngine: AnyObject {
     /// Programmatic absolute write (the old `setBoundsOriginY` + the fast-flick delta clamp).
     func setOffset(_ y: CGFloat)
 
+    /// Stop any deceleration/momentum, leaving the content exactly where it is PRESENTED. Idempotent, and
+    /// never fires `onScroll`.
+    ///
+    /// This exists so a caller never has to write `setOffset(offset)` to halt. Under a `.keyframe` flight
+    /// that idiom is a trap: `offset` is per-frame stable, the call internally catches the flight at its
+    /// true instantaneous position, and then the stale argument overwrites it — so the halt lands on the
+    /// last sampling tick's position instead of the current one. See
+    /// docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
+    func haltMotionInPlace()
+
+    /// Re-anchor the reported `offset` on what the render server is currently presenting, without disturbing
+    /// any animation. Call once at the top of a mutation pass so the pass reads a CURRENT position: `offset`
+    /// is per-frame stable by contract, which makes it stale by however long the main thread has been busy
+    /// since the last sampling tick. Continuity does not require currency (a single consistent value cancels
+    /// algebraically), but membership, the anchor witness and the overscroll gate all do. No-op for an engine
+    /// whose offset is already the presented value.
+    func syncToPresentedPosition()
+
     /// Programmatic relative shift — the rebalance reposition (the old `bounds.origin.y += shift`).
     func applyShift(_ dy: CGFloat)
 

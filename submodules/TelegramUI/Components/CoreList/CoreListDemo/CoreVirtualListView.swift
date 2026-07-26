@@ -370,6 +370,39 @@ public final class CoreVirtualListView: UIView {
     public var loadedItemEntries: LoadedItemEntries { LoadedItemEntries(activeWindow.items) }
     // The current settled scroll offset reported by the scroll engine.
     public var currentScrollOffset: CGFloat { engine.offset }
+
+    /// A view's rect in this list's coordinate space, as PRESENTED — where it is on screen right now, not
+    /// where its settled model geometry says it will end up.
+    ///
+    /// Hosts MUST use this instead of `convert(_:from:)`. `UIView.convert` composes ancestor MODEL
+    /// `bounds.origin`, and `contentHost`'s model origin is the additive base of whatever animates the
+    /// viewport: a `.keyframe` deceleration parks it at the flight's destination for the flight's whole
+    /// duration, and a programmatic `scrollTo` leaves the settled endpoint there while the additive
+    /// `viewportOffset` track carries the motion. Converting through `contentHost` therefore yields
+    /// destination-space geometry — which silently made a host's visible-range, content-offset and
+    /// read-tracking reporting describe the end of a fling rather than the middle of it.
+    ///
+    /// Only this view can apply the correction, because only it holds both the model base and the engine's
+    /// scroll position. Ancestor-path-agnostic like `convert` itself: a row carried by `crossingOverlay`
+    /// during a structural transition converts correctly too.
+    ///
+    /// "Presented" here means **as of the last sampling tick**, not instantaneous: it is built on
+    /// `engine.offset`, which is per-frame stable by contract, so this is stable within a frame and at most
+    /// one frame behind the screen. That is the right semantic for a host — hosts read geometry from the
+    /// per-frame scroll callbacks, where the two coincide exactly — and it keeps the clock out of the seam.
+    /// Two reads in the same frame therefore agree, which is what makes this safe to call in a loop over the
+    /// loaded window.
+    public func presentedFrame(of view: UIView) -> CGRect {
+        convert(view.bounds, from: view)
+            .offsetBy(dx: 0, dy: -modelToPresentedViewportDelta)
+    }
+
+    /// How far the model viewport leads the presented one: `(engine.offset − contentHost model origin)` plus
+    /// the additive viewport correction. Zero whenever nothing is animating the viewport.
+    private var modelToPresentedViewportDelta: CGFloat {
+        (engine.offset - engine.contentHost.bounds.origin.y)
+            + animationController.viewportOffset(at: animationController.now())
+    }
     // The height of the currently loaded (settled) window.
     public var settledContentHeight: CGFloat { activeWindow.height }
 
@@ -510,6 +543,20 @@ public final class CoreVirtualListView: UIView {
             return
         }
 
+        // A `scrollTo` pass halts any live momentum (the §4(b) halt idiom). Do it HERE, before the first
+        // `engine.offset` read below: the halt catches a keyframe flight at its true instantaneous
+        // position, so halting mid-pass would leave every geometry decision — and the viewport animation's
+        // `from` — anchored on a position the content has already left. `resolveAnchor`'s `scrollTo` branch
+        // is its first branch, so this fires for exactly the passes that used to halt there. See
+        // docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
+        if hasScrollTo { engine.haltMotionInPlace() }
+
+        // Re-anchor on the presented viewport once, before the first `engine.offset` read below. Everything
+        // downstream — the anchor witness (:1481), buildWindow's projected load band, the overscroll gate
+        // (:588, :819-828), refreshReachedLoadedEdges and the final coordinate re-base — then resolves
+        // against the current viewport instead of the last sampling tick's. No-op after a halt above.
+        engine.syncToPresentedPosition()
+
         let oldItems = _items
         let oldViewportInsets = viewportInsets
         let effectiveItems = newItems ?? oldItems
@@ -578,7 +625,7 @@ public final class CoreVirtualListView: UIView {
         if let newSize { logicalSize = newSize }
         if let newInsets { viewportInsets = newInsets }
         if !oldItems.isEmpty, effectiveItems.isEmpty {
-            engine.setOffset(engine.offset)
+            engine.haltMotionInPlace()
         }
 
         let consumedDirty = dirtyIndices
@@ -1350,7 +1397,7 @@ public final class CoreVirtualListView: UIView {
 
     private func rebuildFromScratch() {
         defer { refreshReachedLoadedEdges() }
-        engine.setOffset(engine.offset)
+        engine.haltMotionInPlace()
         resetViewportCarries()
         animationController.reset()
         ghostLedger.reset()
@@ -1398,7 +1445,8 @@ public final class CoreVirtualListView: UIView {
                                oldTopInset: CGFloat,
                                oldItemCount: Int) -> ResolvedAnchor? {
         if let scrollTo {
-            engine.setOffset(engine.offset)
+            // Momentum was already halted at pass entry (see applyChanges) — deliberately, so this pass's
+            // geometry is built against the caught position rather than a stale sample.
             return ResolvedAnchor(index: scrollTo.index,
                                   pointOffset: scrollTo.pointOffset,
                                   preservesVisibleContent: false)
@@ -1414,7 +1462,7 @@ public final class CoreVirtualListView: UIView {
             return preserved
         }
         if isNoOverlapSwap {
-            engine.setOffset(engine.offset)
+            engine.haltMotionInPlace()
             return ResolvedAnchor(index: 0,
                                   pointOffset: 0,
                                   preservesVisibleContent: false)

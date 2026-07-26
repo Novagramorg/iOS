@@ -120,8 +120,8 @@ needs no analogue, because genuine departures move to the non-interactive `exitO
 blocks and never appear in `loadedItemViews`.
 
 `forEachVisibleItemNode` applies `ListViewImpl`'s own filter — `frame.maxY > insets.top &&
-frame.minY < height - insets.bottom` — to each row's rect obtained via
-`coreList.convert(hostView.bounds, from: hostView)`. Two load-bearing details:
+frame.minY < height - insets.bottom` — to each row's rect obtained via `listFrame(of:)`, i.e.
+`coreList.presentedFrame(of: hostView)`. Two load-bearing details:
 
 - **The filter is not optional.** CoreList's loaded window is viewport **plus preload margin**, so
   forwarding to `forEachItemNode` would report off-screen rows as visible and misdrive
@@ -134,10 +134,22 @@ frame.minY < height - insets.bottom` — to each row's rect obtained via
   same transaction. Before the first `updateSizeAndInsets`, `currentSize` is `.zero` and nothing
   reports visible, matching `ListViewImpl` with a zero `visibleSize`.
 
-`convert` is used rather than a CoreList frame accessor deliberately: it walks whatever ancestor path
-the row currently has (`container` normally, `crossingOverlay` while a structural transition carries
-it), so it cannot drift from what is rendered. The frames are settled endpoints, which is what
-`ListViewImpl` filters on too.
+**All row geometry goes through `CoreVirtualListView.presentedFrame(of:)`, never a bare
+`UIView.convert`.** The `convert`-based reasoning still holds — it walks whatever ancestor path the row
+currently has (`container` normally, `crossingOverlay` while a structural transition carries it), so it
+cannot drift from what is rendered — but `convert` alone composes ancestor **model** `bounds.origin`, and
+CoreList's `contentHost` model origin is the additive base of whatever animates the viewport. Under a
+`.keyframe` flight it is parked at the flight's *destination* for the entire fling, and a programmatic
+`scrollTo` leaves the settled endpoint there while an additive `viewportOffset` track carries the motion.
+So a bare `convert` reported every row hundreds of points from where the user saw it for the whole
+momentum phase — visible range, content offsets, read tracking and unseen-reaction animations all
+described the end of the fling rather than the middle of it. `presentedFrame(of:)` applies the correction
+(only CoreList holds both the model base and the engine position). It is presented **as of the last
+sampling tick**, which is what a host wants: these callbacks all run per frame, where the two coincide.
+`ListViewImpl` reads settled endpoints too, but there the model *is* the presented value — that is why
+the original reasoning did not transfer. Verified in the app: with this fix (plus the two engine-side ones it
+shipped with) the occasional stutter while flinging through unloaded history is gone. See
+`submodules/TelegramUI/Components/CoreList/docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md`.
 
 ### Index lookup, relative offset, inset visibility
 

@@ -16,6 +16,21 @@ struct Trajectory {
     var duration: TimeInterval { samples.last?.t ?? 0 }
     var finalOffset: CGFloat { samples.last?.offset ?? samples.first?.offset ?? 0 }
 
+    /// The offset band the path occupies from `t` (seconds, clamped) onward, including any rubber-band
+    /// excursion beyond an edge. Since `Deceleration.step` is edge-INDEPENDENT until the offset crosses an
+    /// edge, this band is what decides whether a given edge takes part in the motion at all (see
+    /// `KeyframeFlight.noteEdgesChanged`). The interpolated position AT `t` is included, so the band is
+    /// continuous with what has already played.
+    func offsetExtent(from t: TimeInterval = 0) -> (min: CGFloat, max: CGFloat) {
+        var lo = offset(at: t)
+        var hi = lo
+        for s in samples where s.t > t {
+            lo = Swift.min(lo, s.offset)
+            hi = Swift.max(hi, s.offset)
+        }
+        return (lo, hi)
+    }
+
     /// Content offset at `t` (seconds), clamped to `[0, duration]` and linearly interpolated between
     /// bracketing samples — matching the `.linear` keyframe animation's own interpolation, so the
     /// sampler tracks what the render server shows at any display refresh rate.

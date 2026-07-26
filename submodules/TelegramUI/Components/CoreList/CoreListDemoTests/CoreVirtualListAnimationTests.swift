@@ -662,6 +662,16 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             contentHost.bounds.origin.y = offset
         }
 
+        func haltMotionInPlace() {
+            // Nothing to halt: this engine has no momentum. `setOffset` re-clamps, which is the correct
+            // no-motion behaviour and mirrors UIKitScrollEngine.
+            setOffset(offset)
+        }
+
+        func syncToPresentedPosition() {
+            // Its offset is already the presented value — nothing animates behind it.
+        }
+
         func applyShift(_ dy: CGFloat) {
             setOffset(offset + dy)
         }
