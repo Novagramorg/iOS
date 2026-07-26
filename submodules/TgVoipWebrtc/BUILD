@@ -18,6 +18,96 @@ optimization_flags = select({
     "//conditions:default": ["-DNDEBUG"],
 })
 
+_WASM_CORE_COMMON_SRCS = [
+    "tgcalls/tgcalls/v2wasm/ReferenceCallCore.cpp",
+    "tgcalls/tgcalls/v2wasm/ReferenceCallCore.h",
+    "tgcalls/tgcalls/v2wasm/CallCoreABI.h",
+    "tgcalls/tgcalls/v2wasm/CoreFactory.h",
+    "tgcalls/tgcalls/v2wasm/SignalingFraming.cpp",
+    "tgcalls/tgcalls/v2wasm/SignalingFraming.h",
+    "tgcalls/tgcalls/v2wasm/CoreGzip.cpp",
+    "tgcalls/tgcalls/v2wasm/CoreGzip.h",
+    "tgcalls/tgcalls/v2wasm/CoreBase64.h",
+    "tgcalls/tgcalls/v2wasm/wasm_module_entry.cpp",
+    "tgcalls/tgcalls/third-party/json11.cpp",
+    "tgcalls/tgcalls/third-party/json11.hpp",
+]
+
+# {extra_srcs} = per-module factory (+ variant) TUs, one absolute-ish path
+# per line ending in " \\".
+# NOTE: --strip-all removes the wasm name section (~86% of the module: 996 KB
+# -> 172 KB, measured 2026-07-03). Cost: WAMR trap backtraces show function
+# indices instead of names. Drop the flag locally when debugging a module
+# trap.
+# NOTE: -Oz -flto (default wasm-ld LTO level; --lto-O3 measured 8 KB BIGGER)
+# takes the reference module to 129 KB. The size-over-speed trade is free
+# here: the module is interpreter-run control-plane code (~10 Hz, KB-scale
+# payloads).
+_WASM_CORE_CMD = """
+set -e
+SDK_CLANG="$(execpath {sdk}//:bin/clang++)"
+SDK_DIR="$$(cd "$$(dirname "$$SDK_CLANG")/.." && pwd)"
+"$$SDK_CLANG" --target=wasm32-wasip1 --sysroot="$$SDK_DIR/share/wasi-sysroot" \\
+    -std=c++17 -Oz -flto -fno-exceptions -fno-rtti \\
+    -mexec-model=reactor -Wl,--no-entry,--strip-all \\
+    -Isubmodules/TgVoipWebrtc/tgcalls/tgcalls \\
+    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/ReferenceCallCore.cpp \\
+    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/SignalingFraming.cpp \\
+    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/CoreGzip.cpp \\
+    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/wasm_module_entry.cpp \\
+    submodules/TgVoipWebrtc/tgcalls/tgcalls/third-party/json11.cpp \\
+{extra_srcs}    -o $@
+"""
+
+_WASM_REFERENCE_EXTRA_SRCS = """    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/reference_core_factory.cpp \\
+"""
+
+genrule(
+    name = "reference_core_wasm",
+    srcs = _WASM_CORE_COMMON_SRCS + [
+        "tgcalls/tgcalls/v2wasm/reference_core_factory.cpp",
+    ] + select({
+        "@platforms//os:linux": ["@wasi_sdk_linux//:all_files"],
+        "//conditions:default": ["@wasi_sdk_macos//:all_files"],
+    }),
+    outs = ["reference-core-abi1.wasm"],
+    cmd_bash = select({
+        "@platforms//os:linux": _WASM_CORE_CMD.format(sdk = "@wasi_sdk_linux", extra_srcs = _WASM_REFERENCE_EXTRA_SRCS),
+        "//conditions:default": _WASM_CORE_CMD.format(sdk = "@wasi_sdk_macos", extra_srcs = _WASM_REFERENCE_EXTRA_SRCS),
+    }),
+    tools = select({
+        "@platforms//os:linux": ["@wasi_sdk_linux//:bin/clang++"],
+        "//conditions:default": ["@wasi_sdk_macos//:bin/clang++"],
+    }),
+    visibility = ["//visibility:public"],
+)
+
+_WASM_VARIANT_EXTRA_SRCS = """    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/VariantCallCore.cpp \\
+    submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/variant_core_factory.cpp \\
+"""
+
+genrule(
+    name = "variant_core_wasm",
+    srcs = _WASM_CORE_COMMON_SRCS + [
+        "tgcalls/tgcalls/v2wasm/VariantCallCore.cpp",
+        "tgcalls/tgcalls/v2wasm/VariantCallCore.h",
+        "tgcalls/tgcalls/v2wasm/variant_core_factory.cpp",
+    ] + select({
+        "@platforms//os:linux": ["@wasi_sdk_linux//:all_files"],
+        "//conditions:default": ["@wasi_sdk_macos//:all_files"],
+    }),
+    outs = ["variant-core-abi1.wasm"],
+    cmd_bash = select({
+        "@platforms//os:linux": _WASM_CORE_CMD.format(sdk = "@wasi_sdk_linux", extra_srcs = _WASM_VARIANT_EXTRA_SRCS),
+        "//conditions:default": _WASM_CORE_CMD.format(sdk = "@wasi_sdk_macos", extra_srcs = _WASM_VARIANT_EXTRA_SRCS),
+    }),
+    tools = select({
+        "@platforms//os:linux": ["@wasi_sdk_linux//:bin/clang++"],
+        "//conditions:default": ["@wasi_sdk_macos//:bin/clang++"],
+    }),
+    visibility = ["//visibility:public"],
+)
+
 sources = glob([
     "Sources/**/*.m",
     "Sources/**/*.mm",
@@ -124,6 +214,14 @@ sources = glob([
     "tgcalls/tgcalls/v2/InstanceV2Impl.cpp",
     "tgcalls/tgcalls/v2/InstanceV2CompatImpl.cpp",
     "tgcalls/tgcalls/v2/InstanceV2ReferenceImpl.cpp",
+    "tgcalls/tgcalls/v2wasm/ReferenceCallCore.cpp",
+    "tgcalls/tgcalls/v2wasm/SignalingFraming.cpp",
+    "tgcalls/tgcalls/v2wasm/CoreGzip.cpp",
+    "tgcalls/tgcalls/v2wasm/CallCoreHost.cpp",
+    "tgcalls/tgcalls/v2wasm/HostCompressionService.cpp",
+    "tgcalls/tgcalls/v2wasm/InstanceV2PumpImpl.cpp",
+    "tgcalls/tgcalls/v2wasm/NativeCoreBackend.cpp",
+    "tgcalls/tgcalls/v2wasm/WamrCoreBackend.cpp",
     "tgcalls/tgcalls/v2/NativeNetworkingImpl.cpp",
     "tgcalls/tgcalls/v2/RawTcpSocket.cpp",
     "tgcalls/tgcalls/v2/ReflectorPort.cpp",
@@ -180,6 +278,7 @@ objc_library(
         "//third-party/rnnoise:rnnoise",
         "//third-party/libyuv",
         "//third-party/td:TdBinding",
+        "//third-party/wamr:wamr",
     ],
     sdk_frameworks = [
         "Foundation",
@@ -257,6 +356,14 @@ cc_library(
         "tgcalls/tgcalls/v2/InstanceV2Impl.cpp",
         "tgcalls/tgcalls/v2/InstanceV2CompatImpl.cpp",
         "tgcalls/tgcalls/v2/InstanceV2ReferenceImpl.cpp",
+        "tgcalls/tgcalls/v2wasm/ReferenceCallCore.cpp",
+        "tgcalls/tgcalls/v2wasm/SignalingFraming.cpp",
+        "tgcalls/tgcalls/v2wasm/CoreGzip.cpp",
+        "tgcalls/tgcalls/v2wasm/CallCoreHost.cpp",
+        "tgcalls/tgcalls/v2wasm/HostCompressionService.cpp",
+        "tgcalls/tgcalls/v2wasm/InstanceV2PumpImpl.cpp",
+        "tgcalls/tgcalls/v2wasm/NativeCoreBackend.cpp",
+        "tgcalls/tgcalls/v2wasm/WamrCoreBackend.cpp",
         "tgcalls/tgcalls/v2/NativeNetworkingImpl.cpp",
         "tgcalls/tgcalls/v2/RawTcpSocket.cpp",
         "tgcalls/tgcalls/v2/ReflectorPort.cpp",
@@ -291,6 +398,7 @@ cc_library(
         "//submodules/ffmpeg:ffmpeg",
         "//third-party/rnnoise:rnnoise",
         "//third-party/libyuv",
+        "//third-party/wamr:wamr",
     ] + select({
         ":is_macos": ["//third-party/webrtc:webrtc_platform_helpers"],
         "//conditions:default": [],
