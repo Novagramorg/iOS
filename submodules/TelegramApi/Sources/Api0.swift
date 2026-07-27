@@ -8,6 +8,7 @@ public enum Api {
     public enum chatlists {}
     public enum communities {}
     public enum contacts {}
+    public enum ephemeral {}
     public enum fragment {}
     public enum help {}
     public enum messages {}
@@ -304,7 +305,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1038136962] = { return Api.EncryptedFile.parse_encryptedFileEmpty($0) }
     dict[-317144808] = { return Api.EncryptedMessage.parse_encryptedMessage($0) }
     dict[594758406] = { return Api.EncryptedMessage.parse_encryptedMessageService($0) }
-    dict[-641278950] = { return Api.EphemeralMessage.parse_ephemeralMessage($0) }
+    dict[-1896618863] = { return Api.EphemeralMessage.parse_ephemeralMessage($0) }
     dict[-1574126186] = { return Api.ExportedChatInvite.parse_chatInviteExported($0) }
     dict[-317687113] = { return Api.ExportedChatInvite.parse_chatInvitePublicJoinRequests($0) }
     dict[206668204] = { return Api.ExportedChatlistInvite.parse_exportedChatlistInvite($0) }
@@ -1478,6 +1479,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1891070632] = { return Api.contacts.TopPeers.parse_topPeers($0) }
     dict[-1255369827] = { return Api.contacts.TopPeers.parse_topPeersDisabled($0) }
     dict[-567906571] = { return Api.contacts.TopPeers.parse_topPeersNotModified($0) }
+    dict[273664114] = { return Api.ephemeral.WelcomeMessages.parse_welcomeMessages($0) }
+    dict[1509940017] = { return Api.ephemeral.WelcomeMessages.parse_welcomeMessagesNotModified($0) }
     dict[1857945489] = { return Api.fragment.CollectibleInfo.parse_collectibleInfo($0) }
     dict[-585598930] = { return Api.help.AppConfig.parse_appConfig($0) }
     dict[2094949405] = { return Api.help.AppConfig.parse_appConfigNotModified($0) }
@@ -2667,6 +2670,8 @@ public extension Api {
         case let _1 as Api.contacts.SponsoredPeers:
             _1.serialize(buffer, boxed)
         case let _1 as Api.contacts.TopPeers:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.ephemeral.WelcomeMessages:
             _1.serialize(buffer, boxed)
         case let _1 as Api.fragment.CollectibleInfo:
             _1.serialize(buffer, boxed)

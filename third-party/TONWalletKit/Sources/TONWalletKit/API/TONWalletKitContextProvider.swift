@@ -71,13 +71,25 @@ actor TONWalletKitContextProvider: TONWalletKitContextProviderProtocol {
                         return nil
                     }
                 }
+                let toncenterRequestHandlers = configuration.networkConfigurations.compactMap { config -> TONToncenterRequestHandlerJSAdapter? in
+                    guard case let .toncenter(apiClientConfiguration)? = config.apiClient,
+                          let requestHandler = apiClientConfiguration.requestHandler else {
+                        return nil
+                    }
+                    return TONToncenterRequestHandlerJSAdapter(
+                        context: context.jsContext,
+                        network: config.network,
+                        requestHandler: requestHandler
+                    )
+                }
                 
                 try await context.initializeWalletKit(
                     configuration: configuration,
                     storage: AnyJSValueEncodable(storage),
                     sessionManager: sessionManager,
                     apiClients: apiClients,
-                    fetchManifest: configuration.fetchManifest
+                    fetchManifest: configuration.fetchManifest,
+                    toncenterRequestHandlers: toncenterRequestHandlers
                 )
                 
                 self.result = .success(context)

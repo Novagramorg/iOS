@@ -320,6 +320,7 @@ public final class AccountContextImpl: AccountContext {
             |> distinctUntilChanged
             let environment = account.testingEnvironment ? "test" : "production"
             self.walletContext = WalletContext(
+                engine: self.engine,
                 storageNamespace: "telegram.\(environment).\(UInt64(bitPattern: account.peerId.toInt64()))",
                 applicationInForeground: sharedContext.applicationBindings.applicationInForeground,
                 accountIsCurrent: accountIsCurrent,

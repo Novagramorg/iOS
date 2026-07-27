@@ -30,6 +30,30 @@ import Foundation
 import UIKit
 #endif
 
+public struct TONToncenterRequest: Sendable {
+    public enum Method: String, Sendable {
+        case get
+        case post
+    }
+
+    public let method: Method
+    public let endpoint: String
+    public let query: String?
+    public let payload: String?
+
+    public init(
+        method: Method,
+        endpoint: String,
+        query: String? = nil,
+        payload: String? = nil
+    ) {
+        self.method = method
+        self.endpoint = endpoint
+        self.query = query
+        self.payload = payload
+    }
+}
+
 public struct TONWalletKitConfiguration: Encodable, Hashable {
     public typealias FetchManifest = (_ manifestUrl: String) async throws -> TONManifestFetchResult
 
@@ -313,24 +337,29 @@ extension TONWalletKitConfiguration {
     }
     
     public struct APIClientConfiguration: Encodable, Hashable {
+        public typealias RequestHandler = @Sendable (TONToncenterRequest) async throws -> String
+
         let url: URL?
         let key: String
         let timeout: TimeInterval?
         let disableNetworkSend: Bool?
         let dnsResolver: String?
+        let requestHandler: RequestHandler?
         
         public init(
             url: URL? = nil,
             key: String,
             timeout: TimeInterval? = nil,
             disableNetworkSend: Bool? = nil,
-            dnsResolver: String? = nil
+            dnsResolver: String? = nil,
+            requestHandler: RequestHandler? = nil
         ) {
             self.url = url
             self.key = key
             self.timeout = timeout
             self.disableNetworkSend = disableNetworkSend
             self.dnsResolver = dnsResolver
+            self.requestHandler = requestHandler
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -344,6 +373,22 @@ extension TONWalletKitConfiguration {
             }
             try container.encodeIfPresent(disableNetworkSend, forKey: .disableNetworkSend)
             try container.encodeIfPresent(dnsResolver, forKey: .dnsResolver)
+        }
+
+        public func hash(into hasher: inout Hasher) {
+            hasher.combine(url)
+            hasher.combine(key)
+            hasher.combine(timeout)
+            hasher.combine(disableNetworkSend)
+            hasher.combine(dnsResolver)
+        }
+
+        public static func == (lhs: APIClientConfiguration, rhs: APIClientConfiguration) -> Bool {
+            return lhs.url == rhs.url
+                && lhs.key == rhs.key
+                && lhs.timeout == rhs.timeout
+                && lhs.disableNetworkSend == rhs.disableNetworkSend
+                && lhs.dnsResolver == rhs.dnsResolver
         }
 
         private enum CodingKeys: String, CodingKey {

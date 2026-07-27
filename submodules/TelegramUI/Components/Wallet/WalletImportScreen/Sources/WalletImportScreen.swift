@@ -930,7 +930,7 @@ private final class WalletImportScreenComponent: Component {
                 frame: CGRect(origin: CGPoint(), size: availableSize)
             )
 
-            let contentSideInset = 16.0 + max(
+            let contentSideInset = 48.0 + max(
                 environment.safeInsets.left,
                 environment.safeInsets.right
             )
@@ -1070,7 +1070,7 @@ private final class WalletImportScreenComponent: Component {
                     )
                 )
             }
-            contentHeight += bodySize.height + 38.0
+            contentHeight += bodySize.height + 14.0
 
             let fieldWidth = max(
                 0.0,
@@ -1081,10 +1081,6 @@ private final class WalletImportScreenComponent: Component {
             if isVerificationMode {
                 self.wordCountControl.view?.removeFromSuperview()
             } else {
-                //TODO:localize
-                let twelveWordsTitle = "12 Words"
-                //TODO:localize
-                let twentyFourWordsTitle = "24 Words"
                 self.wordCountControl.parentState = state
 
                 let segmentedTheme = SegmentControlComponent.Theme(
@@ -1095,16 +1091,17 @@ private final class WalletImportScreenComponent: Component {
                     dividerColor: theme.rootController.navigationBar.segmentedDividerColor
                 )
 
+                //TODO:localize
                 let wordCountControlSize = self.wordCountControl.update(
                     transition: transition,
                     component: AnyComponent(SegmentControlComponent(
                         theme: segmentedTheme,
                         items: [
-                            SegmentControlComponent.Item(id: AnyHashable(12), title: twelveWordsTitle),
-                            SegmentControlComponent.Item(id: AnyHashable(24), title: twentyFourWordsTitle)
+                            SegmentControlComponent.Item(id: AnyHashable(12), title: "12 words"),
+                            SegmentControlComponent.Item(id: AnyHashable(24), title: "24 words")
                         ],
                         selectedId: AnyHashable(self.words.count),
-                        fillWidth: true,
+                        fillWidth: false,
                         action: { [weak self] id in
                             guard let count = id.base as? Int else {
                                 return
@@ -1122,15 +1119,15 @@ private final class WalletImportScreenComponent: Component {
                     transition.setFrame(
                         view: wordCountControlView,
                         frame: CGRect(
-                            x: fieldX,
+                            x: floor((availableSize.width - wordCountControlSize.width) / 2.0),
                             y: contentHeight,
                             width: wordCountControlSize.width,
                             height: wordCountControlSize.height
                         )
                     )
                 }
-                contentHeight += wordCountControlSize.height + 24.0
-                }
+                contentHeight += wordCountControlSize.height + 32.0
+            }
 
             let fieldHeight: CGFloat = 52.0
             let fieldSpacing: CGFloat = 14.0

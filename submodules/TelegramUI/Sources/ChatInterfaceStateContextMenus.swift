@@ -72,6 +72,9 @@ private func canEditMessage(accountPeerId: EnginePeer.Id, limitsConfiguration: E
         }
     } else if message.id.namespace == Namespaces.Message.QuickReplyCloud {
         hasEditRights = true
+    } else if message.id.namespace == Namespaces.Message.WelcomeMessageCloud {
+        hasEditRights = true
+        unlimitedInterval = true
     } else if message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.id.namespace != Namespaces.Message.Cloud {
         hasEditRights = false
     } else if let author = message.author, author.id == accountPeerId, let peer = message.peers[message.id.peerId] {
@@ -2316,12 +2319,29 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             switch customChatContents.kind {
             case .hashTagSearch:
                 break
-            case .quickReplyMessageInput:
+            case .quickReplyMessageInput, .welcomeMessages:
                 actions.removeAll()
-                if !messageText.isEmpty || (resourceAvailable && isImage) || diceEmoji != nil {
+                if message.id.namespace == Namespaces.Message.WelcomeMessageLocal, message.attributes.contains(where: { ($0 as? EphemeralOutgoingMessageAttribute)?.state == .failed }) {
+                    actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_MessageDialogRetry, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        let _ = context.engine.messages.retryEphemeralOutgoingMessage(messageId: message.id).startStandalone()
+                        f(.dismissWithoutContent)
+                    })))
+                }
+                if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
                     actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
                     }, action: { _, f in
+                        if let richMessageInstantPage {
+                            UIPasteboard.general.items = [richMessagePasteboardItem(fromInstantPage: richMessageInstantPage)]
+                            Queue.mainQueue().after(0.2, {
+                                let content: UndoOverlayContent = .copy(text: chatPresentationInterfaceState.strings.Conversation_MessageCopied)
+                                controllerInteraction.displayUndo(content)
+                            })
+                            f(.default)
+                            return
+                        }
                         var messageEntities: [MessageTextEntity]?
                         var restrictedText: String?
                         for attribute in message.attributes {
@@ -2358,7 +2378,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     })))
                 }
                 
-                if message.id.namespace == Namespaces.Message.QuickReplyCloud {
+                if message.id.namespace == Namespaces.Message.QuickReplyCloud || message.id.namespace == Namespaces.Message.WelcomeMessageCloud {
                     if data.canEdit {
                         actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_MessageDialogEdit, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)

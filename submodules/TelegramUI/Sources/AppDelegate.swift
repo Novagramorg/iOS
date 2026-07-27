@@ -248,6 +248,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private var contextValue: AuthorizedApplicationContext?
     private let context = Promise<AuthorizedApplicationContext?>()
     private let contextDisposable = MetaDisposable()
+
+    #if DEBUG
+    private weak var debugWalletTestController: ViewController?
+    private weak var debugWalletTestAlertController: AlertScreen?
+    private var debugWalletTestBaselineControllerIds: Set<ObjectIdentifier>?
+    private var debugWalletTestWasPushed: Bool = false
+    private var debugWalletTestGeneration: Int = 0
+    private let debugWalletSendPeerDisposable = MetaDisposable()
+    #endif
     
     private var authContextValue: UnauthorizedApplicationContext?
     private let authContext = Promise<UnauthorizedApplicationContext?>()
@@ -1325,6 +1334,23 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.contextDisposable.set((self.context.get()
         |> deliverOnMainQueue).start(next: { context in
             print("Application: context took \(CFAbsoluteTimeGetCurrent() - startTime) to become available")
+
+            #if DEBUG
+            self.mainWindow.motionShake = nil
+            self.debugWalletTestGeneration &+= 1
+            self.debugWalletSendPeerDisposable.set(nil)
+
+            self.debugWalletTestAlertController?.dismiss(animated: false, completion: nil)
+            self.debugWalletTestAlertController = nil
+            if let currentRootController = self.contextValue?.rootController {
+                self.dismissDebugWalletTestController(rootController: currentRootController)
+            } else {
+                self.debugWalletTestController?.dismiss(animated: false, completion: nil)
+                self.debugWalletTestController = nil
+                self.debugWalletTestBaselineControllerIds = nil
+                self.debugWalletTestWasPushed = false
+            }
+            #endif
             
             var network: Network?
             if let context = context {
@@ -1355,6 +1381,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
                     self.mainWindow.debugAction = nil
                     self.mainWindow.viewController = context.rootController
+
+                    #if DEBUG
+                    self.setupDebugWalletScreensShake(
+                        context: context.context,
+                        rootController: context.rootController
+                    )
+                    #endif
                     
                     if firstTime {
                         let layer = context.rootController.view.layer
@@ -2474,6 +2507,467 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
     }
     
+    #if DEBUG
+    private func setupDebugWalletScreensShake(
+        context: AccountContext,
+        rootController: TelegramRootController
+    ) {
+        self.mainWindow.motionShake = { [weak self, weak context, weak rootController] in
+            guard let self, let context, let rootController else {
+                return
+            }
+            guard self.debugWalletTestAlertController == nil else {
+                return
+            }
+
+            self.debugWalletTestGeneration &+= 1
+            let generation = self.debugWalletTestGeneration
+            self.debugWalletSendPeerDisposable.set(nil)
+            self.dismissDebugWalletTestController(rootController: rootController)
+
+            self.presentDebugWalletScreensMenu(
+                context: context,
+                rootController: rootController,
+                generation: generation
+            )
+        }
+    }
+
+    private func presentDebugWalletScreensMenu(
+        context: AccountContext,
+        rootController: TelegramRootController,
+        generation: Int
+    ) {
+        guard self.debugWalletTestGeneration == generation else {
+            return
+        }
+        guard self.debugWalletTestController == nil, self.debugWalletTestAlertController == nil else {
+            return
+        }
+
+        let address = "UQDYzZmfsrGzhObKJUw4gzdeIxEai3jAFbiGKGwxvxHinf4K"
+        guard let walletContext = context.walletContext else {
+            return
+        }
+
+        let actions: [AlertScreen.Action] = [
+            self.debugWalletScreenAction(
+                title: "WalletScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: true,
+                makeController: { context in
+                    return context.sharedContext.makeWalletScreen(context: context)
+                }
+            ),
+            self.debugWalletScreenAction(
+                title: "WalletReceiveScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: false,
+                makeController: { context in
+                    return context.sharedContext.makeWalletReceiveScreen(
+                        context: context,
+                        address: address
+                    )
+                }
+            ),
+            AlertScreen.Action(
+                title: "WalletSendScreen",
+                action: { [weak self, weak context, weak rootController] in
+                    guard let self, let context, let rootController else {
+                        return
+                    }
+                    guard self.debugWalletTestGeneration == generation, self.debugWalletTestAlertController != nil else {
+                        return
+                    }
+
+                    self.debugWalletSendPeerDisposable.set((context.engine.data.get(
+                        TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)
+                    )
+                    |> deliverOnMainQueue).start(next: { [weak self, weak context, weak rootController] peer in
+                        guard let self, let context, let rootController, let peer else {
+                            return
+                        }
+                        guard self.debugWalletTestGeneration == generation, self.debugWalletTestAlertController != nil else {
+                            return
+                        }
+
+                        self.dismissDebugWalletScreensMenu(generation: generation, completion: { [weak self, weak context, weak rootController] in
+                            guard let self, let context, let rootController else {
+                                return
+                            }
+                            let controller = WalletSendScreen(
+                                context: context,
+                                peer: peer,
+                                walletContext: walletContext,
+                                completion: { _, _ in
+                                }
+                            )
+                            controller.navigationPresentation = .modal
+                            self.presentDebugWalletScreen(
+                                controller,
+                                rootController: rootController,
+                                generation: generation,
+                                push: true
+                            )
+                        })
+                    }))
+                },
+                autoDismiss: false
+            ),
+            self.debugWalletScreenAction(
+                title: "WalletTransactionScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: false,
+                makeController: { context in
+                    return context.sharedContext.makeWalletTransactionScreen(
+                        context: context,
+                        mode: .transaction(WalletContext.Transaction(
+                            id: "debug-transaction",
+                            logicalTime: "0",
+                            timestamp: Int32(Date().timeIntervalSince1970) - 3600,
+                            direction: .incoming,
+                            amount: 1_344_020_000_000,
+                            fee: 5_000_000,
+                            counterparty: address,
+                            comment: "Test transfer"
+                        ))
+                    )
+                }
+            ),
+            self.debugWalletScreenAction(
+                title: "WalletImportScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: true,
+                makeController: { context in
+                    return context.sharedContext.makeWalletImportScreen(context: context, mode: .importWallet, completion: nil)
+                }
+            ),
+            self.debugWalletScreenAction(
+                title: "WalletSettingsScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: true,
+                makeController: { context in
+                    return context.sharedContext.makeWalletSettingsScreen(context: context)
+                }
+            ),
+            self.debugWalletWordsScreenAction(
+                context: context,
+                walletContext: walletContext,
+                rootController: rootController,
+                generation: generation
+            ),
+            self.debugWalletScreenAction(
+                title: "WalletInfoScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: false,
+                makeController: { context in
+                    return context.sharedContext.makeWalletInfoScreen(
+                        context: context,
+                        mode: .wallet,
+                        completion: nil
+                    )
+                }
+            ),
+            self.debugWalletScreenAction(
+                title: "WalletConnectScreen",
+                context: context,
+                rootController: rootController,
+                generation: generation,
+                push: false,
+                makeController: { context in
+                    return context.sharedContext.makeWalletConnectScreen(
+                        context: context,
+                        walletContext: walletContext,
+                        application: WalletConnectApplication(
+                            name: "Fragment",
+                            domain: "fragment.com",
+                            iconName: "Wallet/FragmentMock",
+                            iconBackgroundColor: UIColor(rgb: 0x1a2026),
+                            isVerified: true
+                        ),
+                        cancelled: {
+                        },
+                        connected: {
+                        }
+                    )
+                }
+            )
+        ]
+
+        let alertController = AlertScreen(
+            context: context,
+            configuration: AlertScreen.Configuration(actionAlignment: .vertical),
+            content: [],
+            actions: actions
+        )
+        alertController.dismissed = { [weak self, weak alertController] _ in
+            guard let self else {
+                return
+            }
+            if self.debugWalletTestAlertController === alertController {
+                self.debugWalletTestAlertController = nil
+                self.debugWalletSendPeerDisposable.set(nil)
+            }
+        }
+        self.debugWalletTestAlertController = alertController
+        self.mainWindow.present(alertController, on: .root)
+    }
+
+    private func dismissDebugWalletScreensMenu(
+        generation: Int,
+        completion: @escaping () -> Void
+    ) {
+        guard self.debugWalletTestGeneration == generation else {
+            return
+        }
+        guard let alertController = self.debugWalletTestAlertController else {
+            return
+        }
+
+        alertController.dismiss(completion: { [weak self] in
+            guard let self, self.debugWalletTestGeneration == generation else {
+                return
+            }
+            completion()
+        })
+    }
+
+    private func debugWalletScreenAction(
+        title: String,
+        context: AccountContext,
+        rootController: TelegramRootController,
+        generation: Int,
+        push: Bool,
+        makeController: @escaping (AccountContext) -> ViewController
+    ) -> AlertScreen.Action {
+        return AlertScreen.Action(
+            title: title,
+            action: { [weak self, weak context, weak rootController] in
+                guard let self, let context, let rootController else {
+                    return
+                }
+                guard self.debugWalletTestGeneration == generation else {
+                    return
+                }
+
+                self.debugWalletSendPeerDisposable.set(nil)
+                self.dismissDebugWalletScreensMenu(generation: generation, completion: { [weak self, weak context, weak rootController] in
+                    guard let self, let context, let rootController else {
+                        return
+                    }
+                    self.presentDebugWalletScreen(
+                        makeController(context),
+                        rootController: rootController,
+                        generation: generation,
+                        push: push
+                    )
+                })
+            },
+            autoDismiss: false
+        )
+    }
+
+    private func debugWalletWordsScreenAction(
+        context: AccountContext,
+        walletContext: WalletContext,
+        rootController: TelegramRootController,
+        generation: Int
+    ) -> AlertScreen.Action {
+        return AlertScreen.Action(
+            title: "WalletWordsScreen",
+            action: { [weak self, weak context, weak walletContext, weak rootController] in
+                guard let self, let context, let walletContext, let rootController else {
+                    return
+                }
+                guard self.debugWalletTestGeneration == generation else {
+                    return
+                }
+
+                self.debugWalletSendPeerDisposable.set((walletContext.generateMnemonic()
+                |> deliverOnMainQueue).start(next: { [weak self, weak context, weak rootController] words in
+                    guard let self, let context, let rootController else {
+                        return
+                    }
+                    guard self.debugWalletTestGeneration == generation else {
+                        return
+                    }
+                    self.dismissDebugWalletScreensMenu(generation: generation, completion: { [weak self, weak context, weak rootController] in
+                        guard let self, let context, let rootController else {
+                            return
+                        }
+                        let controller = context.sharedContext.makeWalletWordsScreen(
+                            context: context,
+                            words: words,
+                            verify: false,
+                            completion: nil
+                        )
+                        self.presentDebugWalletScreen(
+                            controller,
+                            rootController: rootController,
+                            generation: generation,
+                            push: true
+                        )
+                    })
+                }, error: { [weak self] _ in
+                    guard let self, self.debugWalletTestGeneration == generation else {
+                        return
+                    }
+                    self.debugWalletSendPeerDisposable.set(nil)
+                }))
+            },
+            autoDismiss: false
+        )
+    }
+
+    private func presentDebugWalletScreen(
+        _ controller: ViewController,
+        rootController: TelegramRootController,
+        generation: Int,
+        push: Bool
+    ) {
+        guard self.debugWalletTestGeneration == generation else {
+            return
+        }
+        guard self.debugWalletTestController == nil, self.debugWalletTestAlertController == nil else {
+            return
+        }
+        self.captureDebugWalletTestBaseline(rootController: rootController)
+        self.debugWalletTestController = controller
+        self.debugWalletTestWasPushed = push
+
+        if push {
+            rootController.pushViewController(controller)
+        } else {
+            self.mainWindow.present(controller, on: .root)
+        }
+    }
+
+    private func captureDebugWalletTestBaseline(rootController: TelegramRootController) {
+        var controllerIds = Set<ObjectIdentifier>()
+        self.mainWindow.forEachViewController({ controller in
+            controllerIds.insert(ObjectIdentifier(controller))
+            return true
+        })
+        for controller in rootController.overlayControllers {
+            controllerIds.insert(ObjectIdentifier(controller))
+        }
+        for controller in rootController.globalOverlayControllers {
+            controllerIds.insert(ObjectIdentifier(controller))
+        }
+        for controller in self.mainWindow.debugGlobalOverlayControllers {
+            controllerIds.insert(ObjectIdentifier(controller))
+        }
+        self.debugWalletTestBaselineControllerIds = controllerIds
+    }
+
+    private func isDebugWalletScreenController(_ controller: UIViewController) -> Bool {
+        guard let controllerName = NSStringFromClass(type(of: controller)).split(separator: ".").last else {
+            return false
+        }
+        return controllerName.hasPrefix("Wallet") && controllerName.hasSuffix("Screen")
+    }
+
+    private func isDebugWalletAuxiliaryController(_ controller: UIViewController) -> Bool {
+        if self.isDebugWalletScreenController(controller) {
+            return true
+        }
+        guard let controllerName = NSStringFromClass(type(of: controller)).split(separator: ".").last else {
+            return false
+        }
+        return controllerName.hasPrefix("ContextController") || controllerName == "AlertScreen"
+    }
+
+    private func dismissDebugWalletTestController(rootController: TelegramRootController) {
+        let controller = self.debugWalletTestController
+        let baselineControllerIds = self.debugWalletTestBaselineControllerIds
+        let wasPushed = self.debugWalletTestWasPushed
+
+        self.debugWalletTestController = nil
+        defer {
+            self.debugWalletTestBaselineControllerIds = nil
+            self.debugWalletTestWasPushed = false
+        }
+
+        if wasPushed {
+            let viewControllers = rootController.viewControllers
+            let debugControllerIndex: Int?
+            if let controller, let controllerIndex = viewControllers.firstIndex(where: { $0 === controller }) {
+                debugControllerIndex = controllerIndex
+            } else if let baselineControllerIds {
+                debugControllerIndex = viewControllers.firstIndex(where: { controller in
+                    return !baselineControllerIds.contains(ObjectIdentifier(controller)) && self.isDebugWalletScreenController(controller)
+                })
+            } else {
+                debugControllerIndex = nil
+            }
+
+            if let debugControllerIndex {
+                rootController.setViewControllers(
+                    Array(viewControllers.prefix(debugControllerIndex)),
+                    animated: false
+                )
+            } else {
+                controller?.dismiss(animated: false, completion: nil)
+            }
+        } else {
+            controller?.dismiss(animated: false, completion: nil)
+        }
+
+        if let baselineControllerIds {
+            let rootControllerIds = Set(rootController.viewControllers.map { ObjectIdentifier($0) })
+            var addedOverlayControllers: [ViewController] = []
+            var addedOverlayControllerIds = Set<ObjectIdentifier>()
+
+            let appendOverlayController: (ViewController, Bool) -> Void = { controller, includeAuxiliaryControllers in
+                let id = ObjectIdentifier(controller)
+                guard !baselineControllerIds.contains(id), !rootControllerIds.contains(id), !addedOverlayControllerIds.contains(id) else {
+                    return
+                }
+                if includeAuxiliaryControllers {
+                    guard self.isDebugWalletAuxiliaryController(controller) else {
+                        return
+                    }
+                } else if !self.isDebugWalletScreenController(controller) {
+                    return
+                }
+                addedOverlayControllerIds.insert(id)
+                addedOverlayControllers.append(controller)
+            }
+
+            self.mainWindow.forEachViewController({ controller in
+                if let controller = controller as? ViewController {
+                    appendOverlayController(controller, false)
+                }
+                return true
+            })
+            for controller in rootController.overlayControllers {
+                appendOverlayController(controller, true)
+            }
+            for controller in rootController.globalOverlayControllers {
+                appendOverlayController(controller, true)
+            }
+            for controller in self.mainWindow.debugGlobalOverlayControllers {
+                appendOverlayController(controller, true)
+            }
+            for controller in addedOverlayControllers.reversed() {
+                controller.dismiss(animated: false, completion: nil)
+            }
+        }
+    }
+    #endif
+
     private func authorizedContext() -> Signal<AuthorizedApplicationContext, NoError> {
         return self.context.get()
         |> mapToSignal { context -> Signal<AuthorizedApplicationContext, NoError> in

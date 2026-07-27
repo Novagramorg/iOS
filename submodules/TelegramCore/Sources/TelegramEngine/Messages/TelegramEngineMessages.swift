@@ -227,6 +227,14 @@ public extension TelegramEngine {
             return _internal_retryEphemeralOutgoingMessage(account: self.account, messageId: messageId)
         }
 
+        public func refreshWelcomeMessages(peerId: PeerId) -> Signal<Void, NoError> {
+            return _internal_refreshWelcomeMessages(account: self.account, peerId: peerId)
+        }
+
+        public func deleteAllWelcomeMessages(peerId: PeerId) -> Signal<Void, NoError> {
+            return _internal_deleteAllWelcomeMessages(account: self.account, peerId: peerId)
+        }
+
         public func requestUpdatePinnedMessage(peerId: PeerId, update: PinnedMessageUpdate) -> Signal<Void, UpdatePinnedMessageError> {
             return _internal_requestUpdatePinnedMessage(account: self.account, peerId: peerId, update: update)
         }

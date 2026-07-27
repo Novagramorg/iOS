@@ -1,9 +1,10 @@
 import Foundation
 import Combine
 import SwiftSignalKit
+import TelegramCore
 import TONWalletKit
 
-private let walletApiKey = ""
+private let walletApiKey = "84f56a3a13a49c973bba18b3b69e5589c0a87c5227631629941155ef6ab0b555"
 private let walletFiatRatesUrl = "https://api.mywallet.io/currency-rates"
 private let walletFiatRatesRefreshInterval: TimeInterval = 15.0 * 60.0
 
@@ -441,6 +442,7 @@ public final class WalletContext {
     }
 
     private let log: (String) -> Void
+    private let toncenterProxy: WalletToncenterProxy
     private let vault: WalletKeychainVault
     private let statePromise: ValuePromise<State>
     private var currentState: State
@@ -482,6 +484,7 @@ public final class WalletContext {
     private var fiatRatesLastSuccessfulAt: Int32?
 
     public init(
+        engine: TelegramEngine,
         storageNamespace: String,
         applicationInForeground: Signal<Bool, NoError>,
         accountIsCurrent: Signal<Bool, NoError>,
@@ -489,6 +492,7 @@ public final class WalletContext {
         log: @escaping (String) -> Void = { _ in }
     ) {
         self.log = log
+        self.toncenterProxy = WalletToncenterProxy(engine: engine)
         self.vault = WalletKeychainVault(namespace: storageNamespace)
         let initialState = State(
             phase: .restoring,
@@ -564,6 +568,7 @@ public final class WalletContext {
 
     deinit {
         self.environmentDisposable.dispose()
+        self.toncenterProxy.cancelAll()
         self.walletInitializationTask?.cancel()
         self.runtimeTask?.cancel()
         self.synchronizationTask?.cancel()
@@ -1239,6 +1244,7 @@ public final class WalletContext {
             let previousWalletId = context.wallet?.id
             let previousKit = context.kit
             context.lifecycleGeneration &+= 1
+            context.toncenterProxy.setEnabled(false)
             context.isStartingStreaming = false
             context.balanceLastSuccessfulAt = nil
             context.walletInitializationTask?.cancel()
@@ -1410,6 +1416,7 @@ public final class WalletContext {
     private func environmentDidChange() {
         if !self.canUseNetworkRuntime {
             self.cancelFiatRatesRequest()
+            self.toncenterProxy.setEnabled(false)
             self.activeOperationCancellation?.cancel()
             self.synchronizationTask?.cancel()
             self.synchronizationTask = nil
@@ -1476,6 +1483,7 @@ public final class WalletContext {
             self.releaseRuntimeIfPossible()
             return
         }
+        self.toncenterProxy.setEnabled(true)
         self.requestFiatRatesIfNeeded()
         guard self.secretRecord != nil else {
             return
@@ -1552,6 +1560,7 @@ public final class WalletContext {
         }
         if !self.canUseNetworkRuntime || !self.hasRuntimeDemand {
             self.cancelFiatRatesRequest()
+            self.toncenterProxy.setEnabled(false)
             self.lifecycleGeneration &+= 1
             self.isStartingStreaming = false
             self.synchronizationTask?.cancel()
@@ -1719,17 +1728,22 @@ public final class WalletContext {
         guard self.canUseNetworkRuntime else {
             throw WalletError.unavailable
         }
+        self.toncenterProxy.setEnabled(true)
         if let kit = self.kit {
             return kit
         }
         let generation = self.lifecycleGeneration
+        let toncenterProxy = self.toncenterProxy
         let configuration = TONWalletKitConfiguration(
             networkConfigurations: Set([
                 TONWalletKitConfiguration.NetworkConfiguration(
                     network: .mainnet,
                     apiClient: .toncenter(TONWalletKitConfiguration.APIClientConfiguration(
-                        key: walletApiKey,
-                        timeout: 30.0
+                        key: "",
+                        timeout: 30.0,
+                        requestHandler: { request in
+                            return try await toncenterProxy.perform(request)
+                        }
                     ))
                 )
             ]),
@@ -2955,4 +2969,30 @@ private func walletError(_ error: Error) -> WalletContext.WalletError {
 
 private func currentTimestamp() -> Int32 {
     return Int32(clamping: Int64(Date().timeIntervalSince1970))
+}
+
+private final class WalletOperationCancellation {
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var isCancelled = false
+
+    func setTask(_ task: Task<Void, Never>) {
+        self.lock.lock()
+        if self.isCancelled {
+            self.lock.unlock()
+            task.cancel()
+        } else {
+            self.task = task
+            self.lock.unlock()
+        }
+    }
+
+    func cancel() {
+        self.lock.lock()
+        self.isCancelled = true
+        let task = self.task
+        self.task = nil
+        self.lock.unlock()
+        task?.cancel()
+    }
 }

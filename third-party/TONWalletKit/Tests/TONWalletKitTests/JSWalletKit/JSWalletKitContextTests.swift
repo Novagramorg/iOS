@@ -184,13 +184,14 @@ struct JSWalletKitContextTests {
         #expect(initCalls.count == 1)
 
         let args = try #require(initCalls.first?.args)
-        #expect(args.count == 6)
+        #expect(args.count == 7)
         #expect(args[0] as? String == "config")
         #expect(args[1] as? String == "storage")
         #expect(args[2] is JSValue)
         #expect(args[3] as? String == "session")
         #expect(args[4] as? String == "api")
         #expect((args[5] as? JSValue) == nil)
+        #expect((args[6] as? [TONToncenterRequestHandlerJSAdapter])?.isEmpty == true)
     }
 
     @Test("InitializeWalletKit throws when JS call fails")
@@ -207,6 +208,30 @@ struct JSWalletKitContextTests {
                 apiClients: "api"
             )
         }
+    }
+
+    @Test("InitializeWalletKit forwards Toncenter request handlers as the 7th argument")
+    func initializeWalletKitForwardsToncenterRequestHandlers() async throws {
+        let (sut, mock) = makeSUT()
+        let requestHandler = TONToncenterRequestHandlerJSAdapter(
+            context: mock.jsContext,
+            network: .mainnet,
+            requestHandler: { _ in "{}" }
+        )
+
+        try await sut.initializeWalletKit(
+            configuration: "config",
+            storage: "storage",
+            sessionManager: "session",
+            apiClients: "api",
+            toncenterRequestHandlers: [requestHandler]
+        )
+
+        let initCalls = mock.callRecords.filter { $0.path == "initWalletKit" }
+        let args = try #require(initCalls.first?.args)
+        let handlers = try #require(args[6] as? [TONToncenterRequestHandlerJSAdapter])
+        #expect(handlers.count == 1)
+        #expect(handlers[0] === requestHandler)
     }
 
     @Test("bridgeTransport argument is callable from JS during initializeWalletKit")
@@ -299,7 +324,7 @@ struct JSWalletKitContextTests {
         #expect(initCalls.count == 1)
 
         let args = try #require(initCalls.first?.args)
-        #expect(args.count == 6)
+        #expect(args.count == 7)
         let fetchManifestArg = try #require(args[5] as? JSValue)
         #expect(fetchManifestArg.isObject)
     }
@@ -317,7 +342,7 @@ struct JSWalletKitContextTests {
 
         let initCalls = mock.callRecords.filter { $0.path == "initWalletKit" }
         let args = try #require(initCalls.first?.args)
-        #expect(args.count == 6)
+        #expect(args.count == 7)
         #expect((args[5] as? JSValue) == nil)
     }
 

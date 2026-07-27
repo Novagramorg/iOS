@@ -580,6 +580,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             editingOpenReactionsSetup: { [weak self] in
                 self?.editingOpenReactionsSetup()
             },
+            editingOpenWelcomeMessages: { [weak self] in
+                self?.editingOpenWelcomeMessages()
+            },
             dismissInput: { [weak self] in
                 self?.view.endEditing(true)
             },
@@ -4187,6 +4190,20 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         } else {
             self.controller?.push(peerAllowedReactionListController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id))
         }
+    }
+
+    private func editingOpenWelcomeMessages() {
+        let contents = WelcomeMessageSetupChatContents(context: self.context, peerId: self.peerId)
+        let chatController = self.context.sharedContext.makeChatController(
+            context: self.context,
+            chatLocation: .customChatContents,
+            subject: .customChatContents(contents: contents),
+            botStart: nil,
+            mode: .standard(.default),
+            params: nil
+        )
+        chatController.navigationPresentation = .modal
+        self.controller?.push(chatController)
     }
     
     private func toggleAutoTranslate(isEnabled: Bool) {

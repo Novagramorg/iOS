@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/TelegramCore",
         "//third-party/TONWalletKit",
     ],
     visibility = [

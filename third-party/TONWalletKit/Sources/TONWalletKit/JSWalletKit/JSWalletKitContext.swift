@@ -36,7 +36,8 @@ protocol JSWalletKitContextProtocol: JSDynamicObject, AnyObject {
         storage: any JSValueEncodable,
         sessionManager: any JSValueEncodable,
         apiClients: any JSValueEncodable,
-        fetchManifest: TONWalletKitConfiguration.FetchManifest?
+        fetchManifest: TONWalletKitConfiguration.FetchManifest?,
+        toncenterRequestHandlers: [TONToncenterRequestHandlerJSAdapter]
     ) async throws
 
     func add(eventsHandler: any JSBridgeEventsHandler) throws
@@ -73,7 +74,8 @@ class JSWalletKitContext: JSWalletKitContextProtocol {
         storage: any JSValueEncodable,
         sessionManager: any JSValueEncodable,
         apiClients: any JSValueEncodable,
-        fetchManifest: TONWalletKitConfiguration.FetchManifest? = nil
+        fetchManifest: TONWalletKitConfiguration.FetchManifest? = nil,
+        toncenterRequestHandlers: [TONToncenterRequestHandlerJSAdapter] = []
     ) async throws {
         let bridgeTransport: @convention(block) (JSValue) -> Void = { [weak self] response in
             do {
@@ -116,7 +118,8 @@ class JSWalletKitContext: JSWalletKitContextProtocol {
             JSValue(object: bridgeTransport, in: context.jsContext),
             sessionManager,
             apiClients,
-            jsFetchManifest
+            jsFetchManifest,
+            toncenterRequestHandlers
         )
     }
     

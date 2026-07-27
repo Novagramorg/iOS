@@ -1416,6 +1416,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 let ItemAddToCommunityInfo = 121
                 let ItemCommunity = 122
                 let ItemRemoveFromCommunity = 123
+                let ItemWelcomeMessages = 124
                 
                 let isCreator = channel.flags.contains(.isCreator)
                 let isPublic = channel.addressName != nil
@@ -1543,6 +1544,12 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                         }
                         items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemAppearance, label: .image(colorImage, colorImage.size), additionalBadgeIcon: boostIcon, text: presentationData.strings.Channel_Info_AppearanceItem, icon: PresentationResourcesSettings.chatAppearance, action: {
                             interaction.editingOpenNameColorSetup()
+                        }))
+                    }
+                    
+                    if channel.hasPermission(.changeInfo) {
+                        items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: .none, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
+                            interaction.editingOpenWelcomeMessages()
                         }))
                     }
                     
@@ -1684,10 +1691,13 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
             let ItemTopicsText = 109
             let ItemAddToCommunity = 110
             let ItemAddToCommunityInfo = 111
+            let ItemWelcomeMessages = 112
             
             var canViewAdminsAndBanned = false
+            var canChangeInfo = false
             
             if case .creator = group.role {
+                canChangeInfo = true
                 if let cachedData = data.cachedData as? CachedGroupData {
                     if cachedData.flags.contains(.canChangeUsername) {
                         items[.peerPublicSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemUsername, label: .text(presentationData.strings.Group_Setup_TypePrivate), text: presentationData.strings.GroupInfo_GroupType, icon: PresentationResourcesSettings.groupType, action: {
@@ -1759,6 +1769,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 
                 canViewAdminsAndBanned = true
             } else if case let .admin(rights, _) = group.role {
+                canChangeInfo = rights.rights.contains(.canChangeInfo)
                 let label: String
                 if let cachedData = data.cachedData as? CachedGroupData, case let .known(reactionSettings) = cachedData.reactionSettings {
                     switch reactionSettings.allowedReactions {
@@ -1790,6 +1801,12 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 }
                 
                 canViewAdminsAndBanned = true
+            }
+
+            if canChangeInfo {
+                items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: .none, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
+                    interaction.editingOpenWelcomeMessages()
+                }))
             }
             
             if canViewAdminsAndBanned {

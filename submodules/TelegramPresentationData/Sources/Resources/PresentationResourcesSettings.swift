@@ -351,4 +351,6 @@ public struct PresentationResourcesSettings {
     public static let voices = renderSettingsIcon(name: "Item List/Icons/Microphone", backgroundColors: [colorPurple])
     public static let upload = renderSettingsIcon(name: "Item List/Icons/Upload", backgroundColors: [colorBlue])
     public static let download = renderSettingsIcon(name: "Item List/Icons/Download", backgroundColors: [colorGreen])
+    
+    public static let welcome = renderSettingsIcon(name: "Item List/Icons/Hand", backgroundColors: [colorViolet])
 }

@@ -601,7 +601,7 @@ private final class ChatEmptyNodeCloudChatContent: ASDisplayNode, ChatEmptyNodeC
             maxWidth = min(240.0, maxWidth)
             
             switch customChatContents.kind {
-            case .quickReplyMessageInput:
+            case .quickReplyMessageInput, .welcomeMessages:
                 insets.top = 10.0
                 imageSpacing = 5.0
                 titleSpacing = 5.0
@@ -673,6 +673,13 @@ private final class ChatEmptyNodeCloudChatContent: ASDisplayNode, ChatEmptyNodeC
                 case .hashTagSearch:
                     titleString = ""
                     strings = []
+                case .welcomeMessages:
+                    iconName = "Chat/Empty Chat/GreetingShortcut"
+                    centerText = true
+                    titleString = interfaceState.strings.WelcomeMessages_EmptyTitle
+                    strings = [
+                        interfaceState.strings.WelcomeMessages_EmptyText
+                    ]
                 }
             } else {
                 titleString = interfaceState.strings.Conversation_CloudStorageInfo_Title

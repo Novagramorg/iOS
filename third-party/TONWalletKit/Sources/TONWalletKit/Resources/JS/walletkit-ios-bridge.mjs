@@ -50908,7 +50908,52 @@ var init_main = __esmMin((() => {
 	init_SwiftWalletAdapter();
 	init_SwiftAPIClientAdapter();
 	init_SwiftTONConnectSessionsManager();
-	window.initWalletKit = async (configuration, storage, bridgeTransport, sessionManager, apiClients, fetchManifest) => {
+	const swiftToncenterFetch = (requestHandler) => (input, init = {}) => {
+		const url = new URL(typeof input === "string" ? input : input?.url ?? String(input));
+		const method = String(init.method ?? "GET").toUpperCase();
+		if (method !== "GET" && method !== "POST") return Promise.reject(new Error(`Unsupported Toncenter request method: ${method}`));
+		const payload = init.body == null ? "" : init.body;
+		if (typeof payload !== "string") return Promise.reject(new Error("Unsupported Toncenter request body"));
+		const requestId = crypto.randomUUID();
+		const signal = init.signal;
+		return new Promise((resolve, reject) => {
+			let settled = false;
+			const cleanup = () => signal?.removeEventListener("abort", abort);
+			const abort = () => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				requestHandler.cancelRequest(requestId);
+				reject(signal?.reason ?? new DOMException("The operation was aborted", "AbortError"));
+			};
+			if (signal?.aborted) {
+				abort();
+				return;
+			}
+			signal?.addEventListener("abort", abort);
+			Promise.resolve(requestHandler.performRequest(
+				method,
+				url.pathname,
+				url.search.length > 1 ? url.search.slice(1) : "",
+				payload,
+				requestId
+			)).then((json) => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				resolve(new Response(json, {
+					status: 200,
+					headers: { "content-type": "application/json" }
+				}));
+			}, (error) => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				reject(error);
+			});
+		});
+	};
+	window.initWalletKit = async (configuration, storage, bridgeTransport, sessionManager, apiClients, fetchManifest, toncenterRequestHandlers) => {
 		console.log("🚀 WalletKit iOS Bridge starting...");
 		if (configuration.bridge && bridgeTransport) configuration.bridge.jsBridgeTransport = (sessionID, message) => {
 			bridgeTransport({
@@ -50918,6 +50963,11 @@ var init_main = __esmMin((() => {
 			});
 		};
 		const networks = {};
+		const toncenterRequestHandlersByNetwork = {};
+		if (toncenterRequestHandlers) for (const requestHandler of toncenterRequestHandlers) {
+			const network = requestHandler.getNetwork();
+			toncenterRequestHandlersByNetwork[network.chainId] = requestHandler;
+		}
 		if (configuration.networkConfigurations) for (const netConfig of configuration.networkConfigurations) {
 			if (netConfig.apiClientType === "custom") continue;
 			let apiClient;
@@ -50928,7 +50978,8 @@ var init_main = __esmMin((() => {
 				apiKey: netConfig.apiClientConfiguration?.key,
 				timeout: netConfig.apiClientConfiguration?.timeout,
 				network: netConfig.network,
-				disableNetworkSend: netConfig.apiClientConfiguration?.disableNetworkSend
+				disableNetworkSend: netConfig.apiClientConfiguration?.disableNetworkSend,
+				fetchApi: toncenterRequestHandlersByNetwork[netConfig.network.chainId] ? swiftToncenterFetch(toncenterRequestHandlersByNetwork[netConfig.network.chainId]) : void 0
 			});
 			else if (netConfig.apiClientType === "tonapi") apiClient = new ApiClientTonApi({
 				endpoint: netConfig.apiClientConfiguration?.url,

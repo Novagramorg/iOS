@@ -832,8 +832,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         guard let item = self.item else {
             return false
         }
-        if case let .customChatContents(contents) = item.associatedData.subject, case .quickReplyMessageInput = contents.kind {
-            return true
+        if case let .customChatContents(contents) = item.associatedData.subject {
+            switch contents.kind {
+            case .quickReplyMessageInput, .welcomeMessages:
+                return true
+            case .businessLinkSetup, .hashTagSearch:
+                break
+            }
         }
         return false
     }
@@ -1650,7 +1655,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
         
         let messageTheme = incoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
-        let isEphemeralMessage = Namespaces.Message.allEphemeral.contains(firstMessage.id.namespace)
+        let isEphemeralMessage = Namespaces.Message.allEphemeral.contains(firstMessage.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(firstMessage.id.namespace)
         let ephemeralBadgeHeight: CGFloat = 17.0
         let ephemeralBadgeHorizontalInset: CGFloat = 5.0
         let ephemeralBadgeIconSize = CGSize(width: 14.0, height: 17.0)
@@ -1659,7 +1664,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let ephemeralBadgeText: String?
         if isEphemeralMessage {
             if incoming {
-                ephemeralBadgeText = "Only visible to you"
+                ephemeralBadgeText = item.presentationData.strings.Chat_EphemeralMessage_BadgeYou
             } else {
                 var botPeerId: PeerId?
                 for attribute in firstMessage.attributes {
@@ -1680,7 +1685,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 } else {
                     botName = "bot"
                 }
-                ephemeralBadgeText = "Only visible to \(botName)"
+                ephemeralBadgeText = item.presentationData.strings.Chat_EphemeralMessage_Badge(botName).string
             }
         } else {
             ephemeralBadgeText = nil

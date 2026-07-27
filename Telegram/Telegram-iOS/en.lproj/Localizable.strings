@@ -16593,3 +16593,14 @@ Error: %8$@";
 "TextProcessing.ActionGenerate" = "Generate";
 "TextProcessing.StyleList.Prompt" = "Prompt";
 "TextProcessing.PromptPlaceholder" = "Generate text, formulas, or tables...";
+
+"GroupInfo.WelcomeMessages" = "Welcome Message";
+"WelcomeMessages.Title" = "Welcome Message";
+"WelcomeMessages.EmptyTitle" = "Create a Welcome Messages";
+"WelcomeMessages.EmptyText" = "Automatically greet new members when they join.";
+"WelcomeMessages.MessageLimitReachedText_1" = "Limit of %@ message reached";
+"WelcomeMessages.MessageLimitReachedText_aby" = "Limit of %@ messages reached";
+"Chat.Placeholder.WelcomeMessage" = "Add a message...";
+
+"Chat.EphemeralMessage.BadgeYou" = "Only visible to you";
+"Chat.EphemeralMessage.Badge" = "Only visible to %@";

@@ -1,4 +1,164 @@
 public extension Api.help {
+    enum Country: TypeConstructorDescription {
+        public class Cons_country: TypeConstructorDescription {
+            public var flags: Int32
+            public var iso2: String
+            public var defaultName: String
+            public var name: String?
+            public var countryCodes: [Api.help.CountryCode]
+            public init(flags: Int32, iso2: String, defaultName: String, name: String?, countryCodes: [Api.help.CountryCode]) {
+                self.flags = flags
+                self.iso2 = iso2
+                self.defaultName = defaultName
+                self.name = name
+                self.countryCodes = countryCodes
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("country", [("flags", ConstructorParameterDescription(self.flags)), ("iso2", ConstructorParameterDescription(self.iso2)), ("defaultName", ConstructorParameterDescription(self.defaultName)), ("name", ConstructorParameterDescription(self.name)), ("countryCodes", ConstructorParameterDescription(self.countryCodes))])
+            }
+        }
+        case country(Cons_country)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .country(let _data):
+                if boxed {
+                    buffer.appendInt32(-1014526429)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.iso2, buffer: buffer, boxed: false)
+                serializeString(_data.defaultName, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeString(_data.name!, buffer: buffer, boxed: false)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.countryCodes.count))
+                for item in _data.countryCodes {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .country(let _data):
+                return ("country", [("flags", ConstructorParameterDescription(_data.flags)), ("iso2", ConstructorParameterDescription(_data.iso2)), ("defaultName", ConstructorParameterDescription(_data.defaultName)), ("name", ConstructorParameterDescription(_data.name)), ("countryCodes", ConstructorParameterDescription(_data.countryCodes))])
+            }
+        }
+
+        public static func parse_country(_ reader: BufferReader) -> Country? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: [Api.help.CountryCode]?
+            if let _ = reader.readInt32() {
+                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.help.CountryCode.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.help.Country.country(Cons_country(flags: _1!, iso2: _2!, defaultName: _3!, name: _4, countryCodes: _5!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.help {
+    enum CountryCode: TypeConstructorDescription {
+        public class Cons_countryCode: TypeConstructorDescription {
+            public var flags: Int32
+            public var countryCode: String
+            public var prefixes: [String]?
+            public var patterns: [String]?
+            public init(flags: Int32, countryCode: String, prefixes: [String]?, patterns: [String]?) {
+                self.flags = flags
+                self.countryCode = countryCode
+                self.prefixes = prefixes
+                self.patterns = patterns
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("countryCode", [("flags", ConstructorParameterDescription(self.flags)), ("countryCode", ConstructorParameterDescription(self.countryCode)), ("prefixes", ConstructorParameterDescription(self.prefixes)), ("patterns", ConstructorParameterDescription(self.patterns))])
+            }
+        }
+        case countryCode(Cons_countryCode)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .countryCode(let _data):
+                if boxed {
+                    buffer.appendInt32(1107543535)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.countryCode, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.prefixes!.count))
+                    for item in _data.prefixes! {
+                        serializeString(item, buffer: buffer, boxed: false)
+                    }
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.patterns!.count))
+                    for item in _data.patterns! {
+                        serializeString(item, buffer: buffer, boxed: false)
+                    }
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .countryCode(let _data):
+                return ("countryCode", [("flags", ConstructorParameterDescription(_data.flags)), ("countryCode", ConstructorParameterDescription(_data.countryCode)), ("prefixes", ConstructorParameterDescription(_data.prefixes)), ("patterns", ConstructorParameterDescription(_data.patterns))])
+            }
+        }
+
+        public static func parse_countryCode(_ reader: BufferReader) -> CountryCode? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: [String]?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                if let _ = reader.readInt32() {
+                    _3 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+                }
+            }
+            var _4: [String]?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                if let _ = reader.readInt32() {
+                    _4 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.help.CountryCode.countryCode(Cons_countryCode(flags: _1!, countryCode: _2!, prefixes: _3, patterns: _4))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.help {
     enum DeepLinkInfo: TypeConstructorDescription {
         public class Cons_deepLinkInfo: TypeConstructorDescription {
             public var flags: Int32
@@ -1577,73 +1737,6 @@ public extension Api.messages {
         }
         public static func parse_availableEffectsNotModified(_ reader: BufferReader) -> AvailableEffects? {
             return Api.messages.AvailableEffects.availableEffectsNotModified
-        }
-    }
-}
-public extension Api.messages {
-    enum AvailableReactions: TypeConstructorDescription {
-        public class Cons_availableReactions: TypeConstructorDescription {
-            public var hash: Int32
-            public var reactions: [Api.AvailableReaction]
-            public init(hash: Int32, reactions: [Api.AvailableReaction]) {
-                self.hash = hash
-                self.reactions = reactions
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("availableReactions", [("hash", ConstructorParameterDescription(self.hash)), ("reactions", ConstructorParameterDescription(self.reactions))])
-            }
-        }
-        case availableReactions(Cons_availableReactions)
-        case availableReactionsNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .availableReactions(let _data):
-                if boxed {
-                    buffer.appendInt32(1989032621)
-                }
-                serializeInt32(_data.hash, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.reactions.count))
-                for item in _data.reactions {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .availableReactionsNotModified:
-                if boxed {
-                    buffer.appendInt32(-1626924713)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .availableReactions(let _data):
-                return ("availableReactions", [("hash", ConstructorParameterDescription(_data.hash)), ("reactions", ConstructorParameterDescription(_data.reactions))])
-            case .availableReactionsNotModified:
-                return ("availableReactionsNotModified", [])
-            }
-        }
-
-        public static func parse_availableReactions(_ reader: BufferReader) -> AvailableReactions? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: [Api.AvailableReaction]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.AvailableReaction.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.messages.AvailableReactions.availableReactions(Cons_availableReactions(hash: _1!, reactions: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_availableReactionsNotModified(_ reader: BufferReader) -> AvailableReactions? {
-            return Api.messages.AvailableReactions.availableReactionsNotModified
         }
     }
 }

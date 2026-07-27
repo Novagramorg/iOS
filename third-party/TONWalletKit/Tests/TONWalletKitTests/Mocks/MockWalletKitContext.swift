@@ -34,7 +34,8 @@ class MockWalletKitContext: MockJSDynamicObject, JSWalletKitContextProtocol {
         storage: any JSValueEncodable,
         sessionManager: any JSValueEncodable,
         apiClients: any JSValueEncodable,
-        fetchManifest: TONWalletKitConfiguration.FetchManifest?
+        fetchManifest: TONWalletKitConfiguration.FetchManifest?,
+        toncenterRequestHandlers: [TONToncenterRequestHandlerJSAdapter]
     ) async throws {}
 
     func add(eventsHandler: any JSBridgeEventsHandler) throws {}

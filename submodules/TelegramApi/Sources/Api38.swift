@@ -1,4 +1,71 @@
 public extension Api.messages {
+    enum SavedGifs: TypeConstructorDescription {
+        public class Cons_savedGifs: TypeConstructorDescription {
+            public var hash: Int64
+            public var gifs: [Api.Document]
+            public init(hash: Int64, gifs: [Api.Document]) {
+                self.hash = hash
+                self.gifs = gifs
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("savedGifs", [("hash", ConstructorParameterDescription(self.hash)), ("gifs", ConstructorParameterDescription(self.gifs))])
+            }
+        }
+        case savedGifs(Cons_savedGifs)
+        case savedGifsNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .savedGifs(let _data):
+                if boxed {
+                    buffer.appendInt32(-2069878259)
+                }
+                serializeInt64(_data.hash, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.gifs.count))
+                for item in _data.gifs {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .savedGifsNotModified:
+                if boxed {
+                    buffer.appendInt32(-402498398)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .savedGifs(let _data):
+                return ("savedGifs", [("hash", ConstructorParameterDescription(_data.hash)), ("gifs", ConstructorParameterDescription(_data.gifs))])
+            case .savedGifsNotModified:
+                return ("savedGifsNotModified", [])
+            }
+        }
+
+        public static func parse_savedGifs(_ reader: BufferReader) -> SavedGifs? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.messages.SavedGifs.savedGifs(Cons_savedGifs(hash: _1!, gifs: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_savedGifsNotModified(_ reader: BufferReader) -> SavedGifs? {
+            return Api.messages.SavedGifs.savedGifsNotModified
+        }
+    }
+}
+public extension Api.messages {
     enum SavedReactionTags: TypeConstructorDescription {
         public class Cons_savedReactionTags: TypeConstructorDescription {
             public var tags: [Api.SavedReactionTag]
