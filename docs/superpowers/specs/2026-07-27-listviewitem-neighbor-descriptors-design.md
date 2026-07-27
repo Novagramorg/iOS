@@ -107,7 +107,8 @@ public protocol ItemListNeighborFacet {
     var sectionId: ItemListSectionId { get }
     var isAlwaysPlain: Bool { get }
     var requestsNoInset: Bool { get }
-    var isTextItem: Bool { get }        // itemListNeighbors' `topItem is ItemListTextItem` branch
+    var isTextItem: Bool { get }               // itemListNeighbors' `topItem is ItemListTextItem` branch
+    var hasActiveRevealOptions: Bool { get }   // from ItemListRevealOptionsStatefulItem
 }
 
 // Display
