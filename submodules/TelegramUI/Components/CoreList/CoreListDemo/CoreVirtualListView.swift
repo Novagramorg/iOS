@@ -289,6 +289,11 @@ public final class CoreVirtualListView: UIView {
     var ghostMemberViews: [UIView] {
         ghostRenders.values.flatMap { render in render.members.values.map(\.view) }
     }
+    /// The per-block wrappers parented directly to `exitOverlay`. Members live inside these, so an
+    /// overlay-ownership check has to account for both.
+    var ghostBlockWrapperViews: [UIView] {
+        ghostRenders.values.map(\.wrapper)
+    }
     struct DetachedHorizontalSnapshot {
         let owner: ListAnimationOwner
         let view: UIView
@@ -508,6 +513,7 @@ public final class CoreVirtualListView: UIView {
         defer {
             isApplyingChanges = false
             refreshReachedLoadedEdges()
+            assertOverlayInvariants()
         }
 
         let hasItems = newItems != nil
@@ -2635,6 +2641,7 @@ public final class CoreVirtualListView: UIView {
                                 generation: generation,
                                 view: carry.view)
         }
+        assertOverlayInvariants()
     }
 
     private func resetViewportCarries() {
@@ -2763,6 +2770,43 @@ public final class CoreVirtualListView: UIView {
         }
         ghostLedger.shiftRoots(by: delta)
         assertGhostInvariants()
+    }
+
+    /// Every view parked in an overlay must be owned by something that will eventually remove it:
+    /// a `viewportCarry` (reaped by `finishViewportGeneration`), a `crossingCarry`, or a ghost
+    /// block's wrapper. A view that outlives its owner is stranded forever — the overlays sit above
+    /// `container` and have `isUserInteractionEnabled = false`, so it renders on top of live rows
+    /// and silently swallows nothing, which is exactly how the "stale rows overlay live rows"
+    /// symptom presents.
+    ///
+    /// A generation's completion is dropped without being invoked whenever a new track replaces an
+    /// in-flight one (`discardPendingCompletions` filters rather than fires), so the migration in
+    /// `migrateCrossingViewportReleases` / the carry re-stamp is the only thing keeping these
+    /// reachable. This asserts that contract instead of trusting it.
+    private func assertOverlayInvariants() {
+#if DEBUG
+        let carriedViews = Set(viewportCarries.map { ObjectIdentifier($0.view) })
+        let crossingViews = Set(crossingCarries.values.map { ObjectIdentifier($0.view) })
+        let ghostWrappers = Set(ghostRenders.values.map { ObjectIdentifier($0.wrapper) })
+
+        for view in exitOverlay.subviews {
+            let key = ObjectIdentifier(view)
+            if carriedViews.contains(key) || ghostWrappers.contains(key) { continue }
+            assertionFailure("exitOverlay holds a view owned by no viewport carry or ghost block — "
+                + "it will never be removed and will render above live rows")
+        }
+        for view in crossingOverlay.subviews {
+            if crossingViews.contains(ObjectIdentifier(view)) { continue }
+            assertionFailure("crossingOverlay holds a view owned by no crossing carry — "
+                + "it will never be removed and will render above live rows")
+        }
+
+        // The reverse direction: a carry whose view has drifted out of its overlay is equally broken.
+        for carry in viewportCarries {
+            assert(carry.view.superview === exitOverlay,
+                   "viewport carry view is not in exitOverlay")
+        }
+#endif
     }
 
     private func assertGhostInvariants() {
