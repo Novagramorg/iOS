@@ -234,8 +234,7 @@ public final class ListItemComponentAdaptor: Component {
                     async: { f in f() },
                     node: { return itemNode },
                     params: component.params,
-                    previousItem: nil,
-                    nextItem: nil,
+                    neighbors: .none,
                     animation: mappedAnimation,
                     completion: { [weak itemNode] layout, apply in
                         resultSize = layout.size
@@ -271,8 +270,7 @@ public final class ListItemComponentAdaptor: Component {
                     async: { f in f() },
                     params: component.params,
                     synchronousLoads: true,
-                    previousItem: nil,
-                    nextItem: nil,
+                    neighbors: .none,
                     completion: { result, apply in
                         itemNode = result
                         apply().1(ListViewItemApply(isOnScreen: true))

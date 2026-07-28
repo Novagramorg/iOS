@@ -225,6 +225,26 @@ chat reads `abs(offset) <= 0.9` as "pinned to the newest message"
 so the backend reports the settled endpoint plus a matching transition and lets the consumer animate
 alongside.
 
+## Neighbor awareness
+
+Rows are laid out with the descriptors published by their adjacent entries, so bubbles merge and
+date headers collapse the way they do on `ListViewImpl`. Before this existed the backend passed
+`previousItem: nil, nextItem: nil`, which rendered every message unmerged with its own date header.
+
+`CoreListEntryItem` carries a `ListViewItemNeighbors`, computed in one pass **after** the
+insert/update/delete operations have settled — neighbors are a function of final adjacency, so
+computing them per-operation would use indices that later shift. The index bases match
+`ListView.neighbors(at:)`; that is valid because the backend feeds items in `ListView` index order,
+and it means the `isRotated` flip inside `ChatMessageItem.merged(with:isRotated:)` needs no
+special-casing here.
+
+The value participates in `isEqual(to:)` alongside `stableId`/`stableVersion`, so a row whose
+neighbors changed is unequal and re-applies. That is the backend's equivalent of `ListViewImpl`'s
+descriptor-diff invalidation.
+
+See the "Neighbor descriptors" section of the root `CLAUDE.md` for the load-bearing invariant: a
+descriptor must encode everything a neighbor reads, or the omitted fact goes stale on screen.
+
 ## Deferred items / known limitations
 
 These are accepted for the PoC and are the follow-ups before the CoreList backend could be a real

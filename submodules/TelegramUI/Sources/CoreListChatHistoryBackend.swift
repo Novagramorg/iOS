@@ -257,6 +257,15 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
                     updated[update.index] = CoreListEntryItem(stableId: update.stableId, stableVersion: stableVersion, listItem: update.item)
                 }
             }
+            // Neighbors are a function of final adjacency, so they are computed once the array has
+            // settled rather than per-operation. Same index bases as ListView.neighbors(at:) — the
+            // backend feeds items in ListView index order.
+            for index in 0 ..< updated.count {
+                updated[index].neighbors = ListViewItemNeighbors(
+                    previous: index == 0 ? nil : updated[index - 1].listItem.neighborDescriptor,
+                    next: index == updated.count - 1 ? nil : updated[index + 1].listItem.neighborDescriptor
+                )
+            }
             self.entries = updated
         }
         
@@ -492,17 +501,21 @@ private final class CoreListEntryItem: CoreListItem {
     let stableId: UInt64
     let stableVersion: Int
     let listItem: ListViewItem
+    // Descriptors published by the adjacent entries. Compared in isEqual(to:) so a row re-applies
+    // when a neighbor changed, and passed into layout so merge/date decisions are correct.
+    var neighbors: ListViewItemNeighbors
 
     var identity: AnyHashable { AnyHashable(self.stableId) }
     
-    init(stableId: UInt64, stableVersion: Int, listItem: ListViewItem) {
+    init(stableId: UInt64, stableVersion: Int, listItem: ListViewItem, neighbors: ListViewItemNeighbors = .none) {
         self.stableId = stableId
         self.stableVersion = stableVersion
         self.listItem = listItem
+        self.neighbors = neighbors
     }
 
     func view() -> UIView & CoreListItemView {
-        return CoreListNodeHostView(listItem: self.listItem)
+        return CoreListNodeHostView(listItem: self.listItem, neighbors: self.neighbors)
     }
 
     // Content equality: the engine matches rows by `identity` (= stableId); this additionally compares
@@ -518,17 +531,21 @@ private final class CoreListEntryItem: CoreListItem {
         if other.stableVersion != self.stableVersion {
             return false
         }
+        if other.neighbors != self.neighbors {
+            return false
+        }
         return true
     }
 
     func apply(to view: UIView & CoreListItemView) {
-        (view as? CoreListNodeHostView)?.setListItem(self.listItem)
+        (view as? CoreListNodeHostView)?.setListItem(self.listItem, neighbors: self.neighbors)
     }
 }
 
 // Hosts a ListViewItemNode's view inside CoreVirtualListView
 private final class CoreListNodeHostView: UIView, CoreListItemView {
     private var listItem: ListViewItem
+    private var neighbors: ListViewItemNeighbors
     fileprivate private(set) var itemNode: ListViewItemNode?
     private var lastWidth: CGFloat = -1.0
     private var lastHeight: CGFloat = 0.0
@@ -536,15 +553,17 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
 
     var onContentDidChange: ((_ animated: Bool) -> Void)? = nil
 
-    init(listItem: ListViewItem) {
+    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors) {
         self.listItem = listItem
+        self.neighbors = neighbors
         super.init(frame: .zero)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func setListItem(_ item: ListViewItem) {
+    func setListItem(_ item: ListViewItem, neighbors: ListViewItemNeighbors) {
         self.listItem = item
+        self.neighbors = neighbors
         self.contentDirty = true
     }
 
@@ -563,7 +582,7 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         
         if let itemNode = self.itemNode {
             var layoutAndApply: (ListViewItemNodeLayout, (ListViewItemApply) -> Void)?
-            self.listItem.updateNode(async: { f in f() }, node: { itemNode }, params: params, previousItem: nil, nextItem: nil, animation: ListViewItemUpdateAnimation.None, completion: { nodeLayout, nodeApply in
+            self.listItem.updateNode(async: { f in f() }, node: { itemNode }, params: params, neighbors: self.neighbors, animation: ListViewItemUpdateAnimation.None, completion: { nodeLayout, nodeApply in
                 layoutAndApply = (nodeLayout, nodeApply)
             })
             if let (nodeLayout, nodeApply) = layoutAndApply {
@@ -578,7 +597,7 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         } else {
             var resolvedNode: ListViewItemNode?
             var applyClosure: (() -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void))?
-            self.listItem.nodeConfiguredForParams(async: { f in f() }, params: params, synchronousLoads: true, previousItem: nil, nextItem: nil, completion: { node, apply in
+            self.listItem.nodeConfiguredForParams(async: { f in f() }, params: params, synchronousLoads: true, neighbors: self.neighbors, completion: { node, apply in
                 resolvedNode = node
                 applyClosure = apply
             })

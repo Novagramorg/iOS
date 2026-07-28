@@ -1066,7 +1066,7 @@ final class MediaPickerSelectedListNode: ASDisplayNode, ASScrollViewDelegate, AS
                     let itemNode = messageNodes[i]
                     headerItems[i].updateNode(async: { $0() }, node: {
                         return itemNode
-                    }, params: params, previousItem: nil, nextItem: nil, animation: .None, completion: { (layout, apply) in
+                    }, params: params, neighbors: .none, animation: .None, completion: { (layout, apply) in
                         let nodeFrame = CGRect(origin: itemNode.frame.origin, size: CGSize(width: size.width, height: layout.size.height))
                         
                         itemNode.contentSize = layout.contentSize
@@ -1081,7 +1081,7 @@ final class MediaPickerSelectedListNode: ASDisplayNode, ASScrollViewDelegate, AS
                 var messageNodes: [ListViewItemNode] = []
                 for i in 0 ..< headerItems.count {
                     var itemNode: ListViewItemNode?
-                    headerItems[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, previousItem: nil, nextItem: nil, completion: { node, apply in
+                    headerItems[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: .none, completion: { node, apply in
                         itemNode = node
                         apply().1(ListViewItemApply(isOnScreen: true))
                     })

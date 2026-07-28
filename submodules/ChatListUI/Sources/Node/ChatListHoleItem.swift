@@ -8,6 +8,10 @@ import ComponentFlow
 import LottieComponent
 
 class ChatListHoleItem: ListViewItem {
+    var neighborDescriptor: AnyEquatable {
+        return AnyEquatable.noNeighborInfluence
+    }
+
     let theme: PresentationTheme
     
     let selectable: Bool = false
@@ -16,12 +20,12 @@ class ChatListHoleItem: ListViewItem {
         self.theme = theme
     }
     
-    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
             let node = ChatListHoleItemNode()
-            node.relativePosition = (first: previousItem == nil, last: nextItem == nil)
+            node.relativePosition = (first: neighbors.previous == nil, last: neighbors.next == nil)
             node.insets = ChatListItemNode.insets(first: false, last: false, firstWithHeader: false)
-            node.layoutForParams(params, item: self, previousItem: previousItem, nextItem: nextItem)
+            node.layoutForParams(params, item: self, neighbors: neighbors)
             Queue.mainQueue().async {
                 completion(node, {
                     return (nil, { _ in })
@@ -30,15 +34,15 @@ class ChatListHoleItem: ListViewItem {
         }
     }
     
-    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             assert(node() is ChatListHoleItemNode)
             if let nodeValue = node() as? ChatListHoleItemNode {
             
                 let layout = nodeValue.asyncLayout()
                 async {
-                    let first = previousItem == nil
-                    let last = nextItem == nil
+                    let first = neighbors.previous == nil
+                    let last = neighbors.next == nil
                     
                     let (nodeLayout, apply) = layout(self, params, first, last)
                     Queue.mainQueue().async {
@@ -59,7 +63,7 @@ class ChatListHoleItemNode: ListViewItemNode {
         super.init(layerBacked: false)
     }
     
-    override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         let layout = self.asyncLayout()
         let (_, apply) = layout(item as! ChatListHoleItem, params, self.relativePosition.first, self.relativePosition.last)
         apply()
@@ -82,6 +86,10 @@ class ChatListHoleItemNode: ListViewItemNode {
 }
 
 class ChatListSearchEmptyFooterItem: ListViewItem {
+    var neighborDescriptor: AnyEquatable {
+        return AnyEquatable.noNeighborInfluence
+    }
+
     let theme: PresentationTheme
     let strings: PresentationStrings
     let searchQuery: String?
@@ -98,7 +106,7 @@ class ChatListSearchEmptyFooterItem: ListViewItem {
         self.searchAllMessages = searchAllMessages
     }
     
-    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
             let node = ChatListSearchEmptyFooterItemNode()
             let (layout, apply) = node.asyncLayout()(self, params)
@@ -114,7 +122,7 @@ class ChatListSearchEmptyFooterItem: ListViewItem {
         }
     }
     
-    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             assert(node() is ChatListSearchEmptyFooterItemNode)
             if let nodeValue = node() as? ChatListSearchEmptyFooterItemNode {
@@ -171,7 +179,7 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
         self.item?.searchAllMessages?()
     }
     
-    override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         let layout = self.asyncLayout()
         let (_, apply) = layout(item as! ChatListSearchEmptyFooterItem, params)
         apply()
