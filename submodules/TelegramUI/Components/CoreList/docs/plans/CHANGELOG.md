@@ -25,6 +25,21 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-07-27 — `CoreListTransition`** (`2e50799` through `d31a0c8`;
+  [design](../superpowers/specs/2026-07-27-corelist-transition-design.md)): replaced
+  `ListAnimationSpec`/`ListAnimationCurve` with a vendored, ComponentTransition-shaped
+  `CoreListTransition`. 146 `animationDuration:` and 68 `logicalDuration:` call sites collapsed onto
+  one `transition:` parameter, which also fixed a latent wart where those paths hard-coded
+  `smoothstep` regardless of the pass's curve. `smoothstep`/`easeOut` became `.easeInOut` — a real if
+  small motion change — with `.linear` retained as the tests' contrast curve. `apply(to:transition:)`
+  and `update(width:transition:)` now carry the pass transition, non-immediate only for rows whose
+  content changed. All 20 `CATransaction` blocks route through `CoreListTransition.commit`, so
+  `CATransaction` is named in one directory. Converted to `ComponentTransition` in
+  `CoreListChatHistoryBackend`, which also derives its pass transition from the ListView
+  transaction's own `scrollToItem`/`updateSizeAndInsets`/`options` rather than a hardcoded duration.
+  `ListAnimationModel` remains the sole presentation authority, unchanged. 557/557 tests plus a full
+  Bazel app build.
+
 - **2026-07-24 — documentation authority cleanup**: reduced the checked-in documentation to current
   subsystem authorities, moved historical recovery to Git, normalized retained design status, and
   made `CLAUDE.md` the concise map of current contracts.

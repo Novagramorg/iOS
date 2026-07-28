@@ -44,7 +44,7 @@ final class MidFlightPassLurchTests: XCTestCase {
             return other.id == id && other.revision == revision
         }
         func view() -> UIView & CoreListItemView { SlowRowView(height: height, clock: clock, cost: cost) }
-        func apply(to view: UIView & CoreListItemView) { clock.advance(by: cost) }
+        func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) { clock.advance(by: cost) }
     }
 
     private final class SlowRowView: UIView, CoreListItemView {
@@ -61,7 +61,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         }
         required init?(coder: NSCoder) { fatalError() }
 
-        func update(width: CGFloat) -> CGFloat {
+        func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
             clock.advance(by: cost)      // "measuring this row took `cost` seconds"
             return height
         }
@@ -83,7 +83,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         let clock = SyntheticClock()
         let items: [CoreListItem] = (0..<200).map { SlowRow(id: $0, clock: clock, cost: cost) }
         let fixture = PhysicsListFixture(items: items, decelerationMode: mode, clock: clock)
-        fixture.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), animationDuration: 0)
+        fixture.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
         fixture.simulateFlick(offsetVelocity: velocity)
         for _ in 0..<6 { fixture.tick(dt: 1.0 / 120) }
         return (fixture, clock)
@@ -105,7 +105,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         let probe = (b.listView.items[b.activeWindow.items[3].index] as! SlowRow).identity
         let t0 = clockB.now
         let changed: [CoreListItem] = (0..<200).map { SlowRow(id: $0, revision: 1, clock: clockB, cost: cost) }
-        b.listView.applyChanges(items: changed, animationDuration: 0)
+        b.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0))
         let dt = clockB.now - t0
         let withPass = screenY(b, identity: probe)!
 
@@ -162,7 +162,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         clock.advance(by: 0.008)          // the pass arrives between sampling ticks
         let before = screenY(f, identity: probe)!
 
-        f.listView.applyChanges(scrollTo: (index: 70, pointOffset: 0), animationDuration: 0.3)
+        f.listView.applyChanges(scrollTo: (index: 70, pointOffset: 0), transition: .easeInOut(duration: 0.3))
 
         let after = screenY(f, identity: probe)!
         XCTAssertEqual(after, before, accuracy: 0.5, """
@@ -224,7 +224,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         let changed: [CoreListItem] = (0..<200).map {
             SlowRow(id: $0, revision: 1, clock: clock, cost: 0)
         }
-        f.listView.applyChanges(items: changed, animationDuration: 0)
+        f.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(f.engine.offset, f.engine.liveViewportOffset, accuracy: 1e-6,
                        "the pass must have re-anchored the engine on the presented position")
@@ -239,7 +239,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         let changed: [CoreListItem] = (0..<200).map {
             SlowRow(id: $0, revision: 1, clock: clockB, cost: 0.0001)
         }
-        b.listView.applyChanges(items: changed, animationDuration: 0)
+        b.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0))
         let withPass = screenY(b, identity: probe)!
 
         let (a, clockA) = flying(cost: 0.0001, velocity: 9000)
@@ -274,7 +274,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         let changed: [CoreListItem] = (0..<30).map {
             SlowRow(id: $0, revision: 1, clock: clockB, cost: 0.0001)
         }
-        b.listView.applyChanges(items: changed, animationDuration: 0)
+        b.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0))
         let withPass = screenY(b, identity: probe)!
 
         let (a, clockA) = bouncing(cost: 0.0001)

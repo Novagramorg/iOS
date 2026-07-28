@@ -216,7 +216,8 @@ properties are additive horizontal/vertical position offsets, absolute visual wi
 and one shared additive viewport offset.
 
 Each `ListAnimationTrack` has a monotonically increasing generation, `from`, `to`, immutable start
-time, duration, and a track-owned curve (`smoothstep` or `easeOut`). The transaction rules are strict:
+time, duration, and a track-owned `CoreListTransition.Animation.Curve`. The transaction rules are
+strict:
 
 - unchanged settled position (within `1e-6pt`) is a true no-op: the exact track, generation, phase,
   curve, deadline, and installed CA animation survive untouched;
@@ -283,6 +284,22 @@ owner's predecessor identity set, its position correction safely settles to zero
 because unloaded geometry cannot supply an exact retarget endpoint. This includes an owner that enters
 the new loaded window in the same pass. Its height and opacity tracks are untouched. An off-screen owner whose
 predecessors are unchanged keeps the exact original position track, phase, and deadline.
+
+`CoreListTransition` (`CoreListDemo/Transition/`) is the module's animation descriptor: a
+self-contained copy of ComponentFlow's `ComponentTransition` value model, vendored because CoreList
+has no Bazel `deps` and the demo builds standalone. The case shape is identical, so
+`ComponentTransition.init(_ CoreListTransition)` — in
+`TelegramUI/Sources/CoreListChatHistoryBackend.swift`, the only consumer — is a case-for-case map.
+It deliberately does NOT round-trip a zero duration: CoreList means "immediate" by it, so the
+conversion yields `.immediate` rather than a zero-length animation.
+`applyChanges(…, transition:)` is the only mutation entry point; the parallel duration-only overloads
+are gone. Production uses `.easeInOut` throughout, and the tests keep `.linear` (via a test-only
+`CoreListTransition.linear(duration:)`) as the contrast curve their curve-identity assertions need.
+`.spring` and `.bounce` are documented approximations — ComponentFlow resolves both through private
+`UIKitRuntimeUtils` API — and are supported on input only. `CoreListTransition` is also the module's
+only `CATransaction` scope, via `commit(disablingImplicitActions:completion:_:)`; `CATransaction` must
+not be named anywhere else. See
+`docs/superpowers/specs/2026-07-27-corelist-transition-design.md`.
 
 `CoreAnimationCompiler` is an output renderer, never an authority. It samples the model curve into
 one explicitly timed `CAKeyframeAnimation`: position is additive on `position.x`/`position.y`, width/height
@@ -377,11 +394,11 @@ protocol CoreListItem: AnyObject {
     var identity: AnyHashable { get }
     func view() -> UIView & CoreListItemView
     func isEqual(to other: CoreListItem) -> Bool
-    func apply(to view: UIView & CoreListItemView)
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition)
 }
 
 protocol CoreListItemView: AnyObject {
-    func update(width: CGFloat) -> CGFloat
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat
     var onContentDidChange: ((_ animated: Bool) -> Void)? { get set }
 }
 ```
@@ -391,8 +408,18 @@ and the uniqueness invariant. `isEqual(to:)` is **value/content equality** for a
 survivor — the engine reconfigures a survivor (`apply(to:)` + remeasure) iff `!isEqual`. It has **no
 default** (equality-by-identity is almost never correct in production, so every item states its content
 equality explicitly); an identity-only item still opts in by writing `isEqual` to compare just its
-identity field(s). `apply(to:)` updates a reused view in place (default: no-op). `update(width:)` lays
-out the row and returns its measured height.
+identity field(s). `apply(to:transition:)` updates a reused view in place (default: no-op).
+`update(width:transition:)` lays out the row and returns its measured height.
+
+Both receive the enclosing pass's `CoreListTransition`, so a row can animate its own internals on the
+same curve and duration as its outer geometry. It is non-immediate **only** when that row's content
+changed in the pass — a reconciled survivor, or an animated self-update flush. Fresh views, scroll-in
+loads, unchanged survivors, and off-screen remeasures receive `.immediate`: there is nothing to
+animate from, or the change is purely outer geometry, which `ListAnimationModel` owns. `update` must
+return the settled height either way, and may be called twice in one pass (dirty remeasure, then
+window construction) — the transition's setters early-out on an equal target, so the second call is a
+no-op. The mechanism is a per-pass `reconciledIdentities` set paired with `currentPassTransition`;
+scroll-driven rebalancing leaves the set empty, which is what makes its rows `.immediate` for free.
 
 📖 **Read before changing:** `DemoRow.swift` and
 `docs/plans/2026-05-31-item-content-reconcile-design.md`.
@@ -525,6 +552,24 @@ Animation an authority.
   genuinely clamps on a `contentSize` shrink, and the realized shift is the only correct amount); and any
   lurch test must measure against `TestScrollEngine.liveViewportOffset`, never `engine.offset`, or it passes
   by its own measuring stick freezing.
+- **A zero duration is immediate, which is the opposite of ComponentFlow.** `ComponentTransition`
+  treats only `.none` as immediate and animates `.curve(duration: 0, …)`. CoreList settles a
+  zero-duration property immediately, and roughly half the test suite says "no animation" as
+  `duration: 0`. Every branch must therefore test `CoreListTransition.isImmediate`; `if case .none`
+  silently animates a pass that must not.
+- **Duration scaling happens once per path, and the paths must not meet.** The model path scales in
+  `ListAnimationController` and `CoreAnimationCompiler` must not scale again; the executor path scales
+  inside `CALayer.animate` (as Display's does). Consequently the transition handed to items is always
+  the LOGICAL, unscaled one — handing them a pre-scaled transition double-scales under Slow
+  Animations. For the same reason `ListAnimationController`'s settled-write helpers use
+  `CoreListTransition.commit` directly rather than `.immediate` setters: the setters clear the
+  matching standard animation key (`position`, `opacity`, `bounds.size.height`) as ComponentTransition
+  does, and the executor installs ITEM-VIEW animations under exactly those keys, so a settled write
+  would cancel a row's own fade.
+- **`Curve.custom` carries `Float`, so it is not a route to exact curves.** `.custom(1/3, 0, 2/3, 1)`
+  is `x²(3−2x)` in real arithmetic, but 1/3 and 2/3 round to float32 and every sample drifts by up to
+  1.7e-8 — including at phase 0.5, where the ideal bezier is exactly 0.5. Payload-free cases
+  (`.easeInOut`, `.linear`) use `Double` literals and are exact.
 - **`PhysicsScrollEngine`'s `shouldBeRequiredToFailBy` must stay gated on content motion**
   (`flight != nil || core.isDecelerating`). Declaring it unconditionally breaks every
   press-and-hold recognizer hosted in the list, because such a recognizer must recognize *while the

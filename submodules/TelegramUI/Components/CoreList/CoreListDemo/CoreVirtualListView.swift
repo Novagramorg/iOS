@@ -1,7 +1,17 @@
 import UIKit
 
 public protocol CoreListItemView: AnyObject {
-    func update(width: CGFloat) -> CGFloat
+    /// Lays the row out at `width` and returns its measured height.
+    ///
+    /// `transition` describes the enclosing pass, and is non-immediate ONLY when this row's content
+    /// changed in that pass — a reconciled survivor, or an animated self-update flush. A fresh view,
+    /// a row loaded by scrolling, an unchanged survivor, and an off-screen remeasure all receive
+    /// `.immediate`: there is nothing to animate from, or the change is purely outer geometry, which
+    /// `ListAnimationModel` owns. The returned height must be the settled height either way.
+    ///
+    /// This may be called twice in one pass (dirty remeasure, then window construction). The
+    /// transition's setters early-out on an equal target, so the second call is a no-op.
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat
     var onContentDidChange: ((_ animated: Bool) -> Void)? { get set }
 }
 
@@ -16,11 +26,13 @@ public protocol CoreListItem: AnyObject {
     /// (`apply(to:)` + remeasure) iff `!isEqual`. Deliberately has NO default: equality-by-identity is
     /// almost never correct in production, so every item must state its content equality explicitly.
     func isEqual(to other: CoreListItem) -> Bool
-    func apply(to view: UIView & CoreListItemView)
+    /// Reconfigures a reused survivor's content. `transition` is the enclosing pass's transition; a
+    /// view that animates its own internals should use it, or hold it for its next layout.
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition)
 }
 
 public extension CoreListItem {
-    func apply(to view: UIView & CoreListItemView) {}
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {}
 }
 
 public enum CoreListAnchorMode: Equatable {
@@ -413,6 +425,15 @@ public final class CoreVirtualListView: UIView {
 
     private var dirtyIndices: Set<Int> = []
     private var dirtyAnimated = false
+    /// Identities whose content was reconciled in the pass currently being applied. Window
+    /// construction measures exactly these with the pass transition; everything else measures
+    /// `.immediate`. Cleared at the end of each pass.
+    private var reconciledIdentities: Set<AnyHashable> = []
+    /// The transition of the pass currently being applied, paired with `reconciledIdentities`.
+    /// Window construction is reached from the mutation pass AND from scroll-driven rebalancing;
+    /// the latter leaves the set empty, so its rows correctly measure `.immediate` without any
+    /// caller having to say so.
+    private var currentPassTransition: CoreListTransition = .immediate
     private var dirtyFlushScheduled = false
     private var isApplyingChanges = false
     var defaultDirtyDuration: TimeInterval = 0.3
@@ -480,24 +501,11 @@ public final class CoreVirtualListView: UIView {
 
     public func applyChanges(items newItems: [CoreListItem]? = nil,
                       newSize: CGSize? = nil,
-                      scrollTo: (index: Int, pointOffset: CGFloat)? = nil,
-                      anchorMode: CoreListAnchorMode = .automatic,
-                      animationDuration: TimeInterval) {
-        applyChanges(items: newItems,
-                     newSize: newSize,
-                     newInsets: nil,
-                     scrollTo: scrollTo,
-                     anchorMode: anchorMode,
-                     animation: .smoothstep(duration: animationDuration))
-    }
-
-    public func applyChanges(items newItems: [CoreListItem]? = nil,
-                      newSize: CGSize? = nil,
                       newInsets: UIEdgeInsets? = nil,
                       scrollTo: (index: Int, pointOffset: CGFloat)? = nil,
                       anchorMode: CoreListAnchorMode = .automatic,
-                      animation: ListAnimationSpec) {
-        let animationDuration = animation.duration
+                      transition: CoreListTransition) {
+        let animationDuration = transition.duration
         if isApplyingChanges {
             scheduler.schedule { [weak self] in
                 self?.applyChanges(items: newItems,
@@ -505,13 +513,15 @@ public final class CoreVirtualListView: UIView {
                                    newInsets: newInsets,
                                    scrollTo: scrollTo,
                                    anchorMode: anchorMode,
-                                   animation: animation)
+                                   transition: transition)
             }
             return
         }
         isApplyingChanges = true
         defer {
             isApplyingChanges = false
+            reconciledIdentities.removeAll()
+            currentPassTransition = .immediate
             refreshReachedLoadedEdges()
             assertOverlayInvariants()
         }
@@ -645,6 +655,8 @@ public final class CoreVirtualListView: UIView {
             moveReuseNewToOld[move.new] = move.old
         }
 
+        reconciledIdentities.removeAll()
+        currentPassTransition = transition
         if hasItems {
             func reconcileContent(newIndex: Int, oldIndex: Int) {
                 guard oldItems.indices.contains(oldIndex),
@@ -652,7 +664,8 @@ public final class CoreVirtualListView: UIView {
                       !oldItems[oldIndex].isEqual(to: effectiveItems[newIndex]),
                       let view = oldRenderedState[oldItems[oldIndex].identity]?.view
                 else { return }
-                effectiveItems[newIndex].apply(to: view)
+                effectiveItems[newIndex].apply(to: view, transition: transition)
+                reconciledIdentities.insert(effectiveItems[newIndex].identity)
             }
             for (newIndex, oldIndex) in survivorMapNewToOld {
                 reconcileContent(newIndex: newIndex, oldIndex: oldIndex)
@@ -662,9 +675,13 @@ public final class CoreVirtualListView: UIView {
             }
         }
 
+        // Dirty rows changed their own content, so they are reconciled too.
         for index in consumedDirty {
             if let item = oldWindow.items.first(where: { $0.index == index }) {
-                _ = item.view.update(width: contentWidth)
+                if effectiveItems.indices.contains(index) {
+                    reconciledIdentities.insert(effectiveItems[index].identity)
+                }
+                _ = item.view.update(width: contentWidth, transition: transition)
             }
         }
 
@@ -794,7 +811,7 @@ public final class CoreVirtualListView: UIView {
         }
         let newGhostBlockIDs = departingRuns.map {
             makeGhostBlock(from: $0,
-                           logicalDuration: animationDuration,
+                           transition: transition,
                            transactionTime: transactionTime)
         }
         var newGhostBlockByDepartedIdentity: [AnyHashable: GhostBlockID] = [:]
@@ -806,14 +823,13 @@ public final class CoreVirtualListView: UIView {
         for identity in outgoingCrossingIdentities {
             guard crossingCarries[identity] == nil,
                   let old = oldRenderedState[identity] else { continue }
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            old.view.onContentDidChange = nil
-            old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-            old.view.frame = CGRect(origin: CGPoint(x: old.contentX, y: old.contentY),
-                                    size: old.size)
-            crossingOverlay.addSubview(old.view)
-            CATransaction.commit()
+            CoreListTransition.commit {
+                old.view.onContentDidChange = nil
+                old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+                old.view.frame = CGRect(origin: CGPoint(x: old.contentX, y: old.contentY),
+                                        size: old.size)
+                crossingOverlay.addSubview(old.view)
+            }
             crossingCarries[identity] = CrossingCarry(
                 identity: identity,
                 view: old.view,
@@ -1050,7 +1066,7 @@ public final class CoreVirtualListView: UIView {
                     currentViewportCorrection: currentViewportCorrection,
                     oldSettledOffset: oldBoundsOriginY + coordinateShift,
                     newSettledOffset: transactionOffset,
-                    animation: animation,
+                    transition: transition,
                     transactionTime: transactionTime) { [weak self] generation in
                     self?.finishViewportGeneration(generation)
                 }
@@ -1079,7 +1095,7 @@ public final class CoreVirtualListView: UIView {
                     currentViewportCorrection: currentViewportCorrection,
                     oldSettledOffset: syntheticOldSettledOffset,
                     newSettledOffset: transactionOffset,
-                    animation: animation,
+                    transition: transition,
                     transactionTime: transactionTime) { [weak self] generation in
                     self?.finishViewportGeneration(generation)
                 }
@@ -1122,7 +1138,7 @@ public final class CoreVirtualListView: UIView {
                 currentViewportCorrection: currentViewportCorrection,
                 oldSettledOffset: syntheticOldOffset,
                 newSettledOffset: transactionOffset,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime) { [weak self] generation in
                 self?.finishViewportGeneration(generation)
             }
@@ -1149,14 +1165,13 @@ public final class CoreVirtualListView: UIView {
                     newEngineOffset: transactionOffset,
                     viewportFrom: viewportFrom
                 )
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                old.view.onContentDidChange = nil
-                old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-                old.view.layer.position.x = old.contentX + old.positionOffsetX
-                old.view.layer.bounds.size.width = old.visualWidth
-                exitOverlay.addSubview(old.view)
-                CATransaction.commit()
+                CoreListTransition.commit {
+                    old.view.onContentDidChange = nil
+                    old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+                    old.view.layer.position.x = old.contentX + old.positionOffsetX
+                    old.view.layer.bounds.size.width = old.visualWidth
+                    exitOverlay.addSubview(old.view)
+                }
                 let owner = animationController.makeTransient(
                     identity: identity,
                     layer: old.view.layer,
@@ -1182,13 +1197,13 @@ public final class CoreVirtualListView: UIView {
         }
 
         if logicalSizeChanged || insetsChanged {
-            transitionDetachedHorizontalGeometry(animation: animation,
+            transitionDetachedHorizontalGeometry(transition: transition,
                                                  transactionTime: transactionTime)
         }
 
         if hasGhostGeometryPass {
             transitionGhostBlocks(liveEdges: liveEdges,
-                                  logicalDuration: animationDuration,
+                                  transition: transition,
                                   transactionTime: transactionTime)
         }
 
@@ -1286,7 +1301,7 @@ public final class CoreVirtualListView: UIView {
                 from: old,
                 plan: plan,
                 newSettledContentY: newSettledContentY,
-                logicalDuration: animationDuration,
+                transition: transition,
                 transactionTime: transactionTime,
                 fallbackReleaseGeneration: viewportTrack?.generation
             )
@@ -1323,7 +1338,7 @@ public final class CoreVirtualListView: UIView {
             transitionIncomingCrossingSurvivor(
                 new,
                 plan: plan,
-                logicalDuration: animationDuration,
+                transition: transition,
                 transactionTime: transactionTime
             )
         }
@@ -1342,7 +1357,7 @@ public final class CoreVirtualListView: UIView {
                 layer: new.view.layer,
                 oldSettledY: coordinates.oldY,
                 newSettledY: coordinates.newY,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             animationController.transitionPositionX(
@@ -1350,7 +1365,7 @@ public final class CoreVirtualListView: UIView {
                 layer: new.view.layer,
                 oldSettledX: old.contentX,
                 newSettledX: new.contentX,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             animationController.transitionWidth(
@@ -1358,7 +1373,7 @@ public final class CoreVirtualListView: UIView {
                 layer: new.view.layer,
                 oldSettledWidth: old.size.width,
                 newSettledWidth: new.size.width,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             animationController.transitionHeight(
@@ -1366,7 +1381,7 @@ public final class CoreVirtualListView: UIView {
                 layer: new.view.layer,
                 oldSettledHeight: old.size.height,
                 newSettledHeight: new.size.height,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
         }
@@ -1380,7 +1395,7 @@ public final class CoreVirtualListView: UIView {
             guard let new = newState[identity] else { continue }
             animationController.insert(identity: identity,
                                        layer: new.view.layer,
-                                       logicalDuration: animationDuration,
+                                       transition: transition,
                                        transactionTime: transactionTime)
         }
     }
@@ -1575,7 +1590,7 @@ public final class CoreVirtualListView: UIView {
         dirtyFlushScheduled = false
         guard !dirtyIndices.isEmpty else { return }
         let animated = dirtyAnimated
-        applyChanges(animationDuration: animated ? defaultDirtyDuration : 0)
+        applyChanges(transition: animated ? .easeInOut(duration: defaultDirtyDuration) : .immediate)
     }
 
     private func handleUserScroll(_ currentY: CGFloat) {
@@ -1682,6 +1697,17 @@ public final class CoreVirtualListView: UIView {
         }
     }
 
+    /// A row measures with the pass transition only if its content was reconciled in this pass.
+    /// Everything else — fresh views, scroll-in loads, unchanged survivors, off-screen remeasures —
+    /// measures `.immediate`: there is nothing to animate from, or the change is purely outer
+    /// geometry, which `ListAnimationModel` owns.
+    private func measureTransition(forItemAt index: Int) -> CoreListTransition {
+        guard _items.indices.contains(index),
+              reconciledIdentities.contains(_items[index].identity)
+        else { return .immediate }
+        return currentPassTransition
+    }
+
     private func buildWindow(anchoredAt index: Int,
                              pointOffset: CGFloat,
                              pinsLoadedTop: Bool = false,
@@ -1694,7 +1720,8 @@ public final class CoreVirtualListView: UIView {
                                sourceWindow: sourceWindow,
                                survivorMapNewToOld: survivorMapNewToOld,
                                moveReuseNewToOld: moveReuseNewToOld)
-        let height = view.update(width: width)
+        let height = view.update(width: width,
+                                 transition: measureTransition(forItemAt: index))
         var window = Window(items: [
             Window.Item(index: index,
                         view: view,
@@ -1780,7 +1807,8 @@ public final class CoreVirtualListView: UIView {
                                sourceWindow: sourceWindow,
                                survivorMapNewToOld: survivorMapNewToOld,
                                moveReuseNewToOld: moveReuseNewToOld)
-        let height = view.update(width: width)
+        let height = view.update(width: width,
+                                 transition: measureTransition(forItemAt: index))
         window.items.insert(
             Window.Item(index: index,
                         view: view,
@@ -1803,7 +1831,8 @@ public final class CoreVirtualListView: UIView {
                                sourceWindow: sourceWindow,
                                survivorMapNewToOld: survivorMapNewToOld,
                                moveReuseNewToOld: moveReuseNewToOld)
-        let height = view.update(width: width)
+        let height = view.update(width: width,
+                                 transition: measureTransition(forItemAt: index))
         window.items.append(
             Window.Item(index: index,
                         view: view,
@@ -1901,27 +1930,26 @@ public final class CoreVirtualListView: UIView {
         let window = activeWindow
         let newOriginY = computeContainerOriginY(for: window)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        container.frame = CGRect(x: 0,
-                                 y: newOriginY,
-                                 width: logicalSize.width,
-                                 height: max(1, window.height))
-        for subview in container.subviews
-            where !window.items.contains(where: { $0.view === subview }) {
-            subview.removeFromSuperview()
-        }
-        for item in window.items {
-            item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-            item.view.frame = item.frame.offsetBy(dx: 0, dy: -window.minY)
-            item.view.layer.opacity = 1
-            item.view.onContentDidChange = { [weak self, weak view = item.view] animated in
-                guard let self, let view else { return }
-                self.markDirty(view, animated: animated)
+        CoreListTransition.commit {
+            container.frame = CGRect(x: 0,
+                                     y: newOriginY,
+                                     width: logicalSize.width,
+                                     height: max(1, window.height))
+            for subview in container.subviews
+                where !window.items.contains(where: { $0.view === subview }) {
+                subview.removeFromSuperview()
             }
-            if item.view.superview !== container { container.addSubview(item.view) }
+            for item in window.items {
+                item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+                item.view.frame = item.frame.offsetBy(dx: 0, dy: -window.minY)
+                item.view.layer.opacity = 1
+                item.view.onContentDidChange = { [weak self, weak view = item.view] animated in
+                    guard let self, let view else { return }
+                    self.markDirty(view, animated: animated)
+                }
+                if item.view.superview !== container { container.addSubview(item.view) }
+            }
         }
-        CATransaction.commit()
 
         let edges = loadedEdgeRange(for: window, originY: newOriginY)
         let offsetBeforeEdges = engine.offset
@@ -2041,7 +2069,7 @@ public final class CoreVirtualListView: UIView {
         from old: SettledLiveItem,
         plan: CrossingEndpointPlan,
         newSettledContentY: CGFloat,
-        logicalDuration: TimeInterval,
+        transition: CoreListTransition,
         transactionTime: TimeInterval,
         fallbackReleaseGeneration: UInt64?
     ) {
@@ -2052,10 +2080,9 @@ public final class CoreVirtualListView: UIView {
            abs(carry.settledContentY - newSettledContentY) <= 1e-6 {
             return
         }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        old.view.layer.position.y = newSettledContentY
-        CATransaction.commit()
+        CoreListTransition.commit {
+            old.view.layer.position.y = newSettledContentY
+        }
         carry.settledContentY = newSettledContentY
         crossingCarries[old.identity] = carry
 
@@ -2064,7 +2091,7 @@ public final class CoreVirtualListView: UIView {
             layer: old.view.layer,
             oldSettledY: plan.oldY,
             newSettledY: plan.newY,
-            logicalDuration: logicalDuration,
+            transition: transition,
             transactionTime: transactionTime
         ) { [weak self, weak view = old.view] generation in
             guard let view else { return }
@@ -2095,7 +2122,7 @@ public final class CoreVirtualListView: UIView {
     private func transitionIncomingCrossingSurvivor(
         _ new: SettledLiveItem,
         plan: CrossingEndpointPlan,
-        logicalDuration: TimeInterval,
+        transition: CoreListTransition,
         transactionTime: TimeInterval
     ) {
         animationController.transitionPosition(
@@ -2103,13 +2130,13 @@ public final class CoreVirtualListView: UIView {
             layer: new.view.layer,
             oldSettledY: plan.oldY,
             newSettledY: plan.newY,
-            logicalDuration: logicalDuration,
+            transition: transition,
             transactionTime: transactionTime
         )
     }
 
     private func transitionDetachedHorizontalGeometry(
-        animation: ListAnimationSpec,
+        transition: CoreListTransition,
         transactionTime: TimeInterval
     ) {
         let targetX = viewportInsets.left
@@ -2117,10 +2144,9 @@ public final class CoreVirtualListView: UIView {
 
         for blockID in Array(ghostRenders.keys) {
             guard var render = ghostRenders[blockID] else { continue }
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            render.wrapper.layer.bounds.size.width = logicalSize.width
-            CATransaction.commit()
+            CoreListTransition.commit {
+                render.wrapper.layer.bounds.size.width = logicalSize.width
+            }
             for key in Array(render.members.keys) {
                 guard var member = render.members[key] else { continue }
                 animationController.transitionPositionX(
@@ -2128,7 +2154,7 @@ public final class CoreVirtualListView: UIView {
                     layer: member.view.layer,
                     oldSettledX: member.settledX,
                     newSettledX: targetX,
-                    animation: animation,
+                    transition: transition,
                     transactionTime: transactionTime
                 )
                 animationController.transitionWidth(
@@ -2136,7 +2162,7 @@ public final class CoreVirtualListView: UIView {
                     layer: member.view.layer,
                     oldSettledWidth: member.settledWidth,
                     newSettledWidth: targetWidth,
-                    animation: animation,
+                    transition: transition,
                     transactionTime: transactionTime
                 )
                 member.settledX = targetX
@@ -2153,7 +2179,7 @@ public final class CoreVirtualListView: UIView {
                 layer: carry.view.layer,
                 oldSettledX: carry.settledX,
                 newSettledX: targetX,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             animationController.transitionWidth(
@@ -2161,7 +2187,7 @@ public final class CoreVirtualListView: UIView {
                 layer: carry.view.layer,
                 oldSettledWidth: carry.settledWidth,
                 newSettledWidth: targetWidth,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             carry.settledX = targetX
@@ -2176,7 +2202,7 @@ public final class CoreVirtualListView: UIView {
                 layer: carry.view.layer,
                 oldSettledX: carry.settledX,
                 newSettledX: targetX,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             animationController.transitionWidth(
@@ -2184,7 +2210,7 @@ public final class CoreVirtualListView: UIView {
                 layer: carry.view.layer,
                 oldSettledWidth: carry.settledWidth,
                 newSettledWidth: targetWidth,
-                animation: animation,
+                transition: transition,
                 transactionTime: transactionTime
             )
             carry.settledX = targetX
@@ -2219,7 +2245,7 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func makeGhostBlock(from items: [SettledLiveItem],
-                                logicalDuration: TimeInterval,
+                                transition: CoreListTransition,
                                 transactionTime: TimeInterval) -> GhostBlockID {
         precondition(!items.isEmpty)
         let rootY = items[0].contentY + items[0].positionOffset
@@ -2239,26 +2265,25 @@ public final class CoreVirtualListView: UIView {
         wrapper.clipsToBounds = false
         wrapper.isUserInteractionEnabled = false
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        wrapper.layer.anchorPoint = CGPoint(x: 0, y: 0)
-        wrapper.layer.bounds = CGRect(x: 0,
-                                      y: 0,
-                                      width: logicalSize.width,
-                                      height: max(1, localMaxY - localMinY))
-        wrapper.layer.position = CGPoint(x: 0, y: rootY)
-        exitOverlay.addSubview(wrapper)
-        for (item, localY) in zip(items, localYs) {
-            item.view.onContentDidChange = nil
-            item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-            wrapper.addSubview(item.view)
-            item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
-                                     y: localY,
-                                     width: item.visualWidth,
-                                     height: item.visualHeight)
-            item.view.layer.opacity = Float(item.opacity)
+        CoreListTransition.commit {
+            wrapper.layer.anchorPoint = CGPoint(x: 0, y: 0)
+            wrapper.layer.bounds = CGRect(x: 0,
+                                          y: 0,
+                                          width: logicalSize.width,
+                                          height: max(1, localMaxY - localMinY))
+            wrapper.layer.position = CGPoint(x: 0, y: rootY)
+            exitOverlay.addSubview(wrapper)
+            for (item, localY) in zip(items, localYs) {
+                item.view.onContentDidChange = nil
+                item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+                wrapper.addSubview(item.view)
+                item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
+                                         y: localY,
+                                         width: item.visualWidth,
+                                         height: item.visualHeight)
+                item.view.layer.opacity = Float(item.opacity)
+            }
         }
-        CATransaction.commit()
 
         animationController.seedGhostBlock(owner: owner,
                                            layer: wrapper.layer,
@@ -2281,7 +2306,7 @@ public final class CoreVirtualListView: UIView {
             let memberOwner = makeExit(from: item,
                                        localY: localY,
                                        blockID: id,
-                                       logicalDuration: logicalDuration,
+                                       transition: transition,
                                        transactionTime: transactionTime)
             let key = ObjectIdentifier(item.view)
             if var render = ghostRenders[id], render.members[key] != nil {
@@ -2302,22 +2327,21 @@ public final class CoreVirtualListView: UIView {
     private func makeExit(from item: SettledLiveItem,
                           localY: CGFloat,
                           blockID: GhostBlockID,
-                          logicalDuration: TimeInterval,
+                          transition: CoreListTransition,
                           transactionTime: TimeInterval) -> ListAnimationOwner {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
-                                 y: localY,
-                                 width: item.visualWidth,
-                                 height: item.visualHeight)
-        item.view.layer.opacity = Float(item.opacity)
-        CATransaction.commit()
+        CoreListTransition.commit {
+            item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
+                                     y: localY,
+                                     width: item.visualWidth,
+                                     height: item.visualHeight)
+            item.view.layer.opacity = Float(item.opacity)
+        }
 
         return animationController.makeExit(
             identity: item.identity,
             layer: item.view.layer,
             contentY: localY,
-            logicalDuration: logicalDuration,
+            transition: transition,
             transactionTime: transactionTime
         ) { [weak self, weak view = item.view] in
             guard let view else { return }
@@ -2550,7 +2574,7 @@ public final class CoreVirtualListView: UIView {
 
     private func transitionGhostBlocks(
         liveEdges: [AnyHashable: GhostLiveEdges],
-        logicalDuration: TimeInterval,
+        transition: CoreListTransition,
         transactionTime: TimeInterval
     ) {
         let targets = ghostLedger.resolvedTargets(liveEdges: liveEdges)
@@ -2562,7 +2586,7 @@ public final class CoreVirtualListView: UIView {
                 layer: render.wrapper.layer,
                 oldSettledY: snapshot.settledRootY,
                 newSettledY: target,
-                logicalDuration: logicalDuration,
+                transition: transition,
                 transactionTime: transactionTime
             )
             ghostLedger.setSettledRootY(target, for: snapshot.id)
@@ -2660,10 +2684,10 @@ public final class CoreVirtualListView: UIView {
         appliedEngineShift: CGFloat,
         oldSettledOffset: CGFloat,
         newSettledOffset: CGFloat,
-        logicalDuration: TimeInterval
+        transition: CoreListTransition
     ) {
         let epsilon: CGFloat = 1e-6
-        guard logicalDuration > 0,
+        guard !transition.isImmediate,
               abs(newSettledOffset - oldSettledOffset) > epsilon
         else { return }
 
@@ -2679,7 +2703,7 @@ public final class CoreVirtualListView: UIView {
         currentViewportCorrection: CGFloat,
         oldSettledOffset: CGFloat,
         newSettledOffset: CGFloat,
-        animation: ListAnimationSpec,
+        transition: CoreListTransition,
         transactionTime: TimeInterval,
         completion: @escaping (UInt64) -> Void
     ) -> ListAnimationMutation {
@@ -2691,7 +2715,7 @@ public final class CoreVirtualListView: UIView {
             appliedEngineShift: newSettledOffset - oldEngineOffset,
             oldSettledOffset: oldSettledOffset,
             newSettledOffset: newSettledOffset,
-            logicalDuration: animation.duration
+            transition: transition
         )
         let previousGeneration = animationController.model.track(
             for: .viewport,
@@ -2701,7 +2725,7 @@ public final class CoreVirtualListView: UIView {
             layer: engine.contentHost.layer,
             oldSettledOffset: oldSettledOffset,
             newSettledOffset: newSettledOffset,
-            animation: animation,
+            transition: transition,
             transactionTime: transactionTime,
             completion: completion
         )
@@ -2736,13 +2760,12 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func layoutExitOverlay() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        crossingOverlay.frame = CGRect(origin: .zero,
+        CoreListTransition.commit {
+            crossingOverlay.frame = CGRect(origin: .zero,
+                                           size: engine.contentHost.bounds.size)
+            exitOverlay.frame = CGRect(origin: .zero,
                                        size: engine.contentHost.bounds.size)
-        exitOverlay.frame = CGRect(origin: .zero,
-                                   size: engine.contentHost.bounds.size)
-        CATransaction.commit()
+        }
     }
 
     private func applyEngineShift(_ delta: CGFloat) {
@@ -2754,15 +2777,14 @@ public final class CoreVirtualListView: UIView {
 
     private func shiftExitOverlayChildren(by delta: CGFloat) {
         guard delta != 0 else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for view in crossingOverlay.subviews {
-            view.layer.position.y += delta
+        CoreListTransition.commit {
+            for view in crossingOverlay.subviews {
+                view.layer.position.y += delta
+            }
+            for view in exitOverlay.subviews {
+                view.layer.position.y += delta
+            }
         }
-        for view in exitOverlay.subviews {
-            view.layer.position.y += delta
-        }
-        CATransaction.commit()
         for identity in Array(crossingCarries.keys) {
             guard var carry = crossingCarries[identity] else { continue }
             carry.settledContentY += delta

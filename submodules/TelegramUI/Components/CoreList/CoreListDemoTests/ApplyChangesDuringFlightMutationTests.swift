@@ -48,7 +48,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
             let fixture = fixture(mode: mode)
             startFlight(fixture)
 
-            fixture.listView.applyChanges(items: [], animationDuration: 1)
+            fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 1))
 
             XCTAssertFalse(fixture.engine.isDecelerating, "\(mode) motion must halt on empty content")
             XCTAssertEqual(fixture.engine.declaredEdges.min, 0)
@@ -71,7 +71,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 startFlight(fixture)
                 fixture.listView.applyChanges(
                     newSize: CGSize(width: 390, height: 700),
-                    animationDuration: 0.3
+                    transition: .easeInOut(duration: 0.3)
                 )
                 XCTAssertTrue(fixture.engine.isDecelerating, "\(mode) resize should preserve motion")
             }
@@ -81,7 +81,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 startFlight(fixture)
                 var changed = source
                 changed.insert(Item(id: 500, height: 50), at: 30)
-                fixture.listView.applyChanges(items: changed, animationDuration: 0.3)
+                fixture.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0.3))
                 XCTAssertTrue(fixture.engine.isDecelerating, "\(mode) insert should preserve motion")
             }
             do {
@@ -90,7 +90,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 startFlight(fixture)
                 var changed = source
                 changed.remove(at: 30)
-                fixture.listView.applyChanges(items: changed, animationDuration: 0.3)
+                fixture.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0.3))
                 XCTAssertTrue(fixture.engine.isDecelerating, "\(mode) delete should preserve motion")
             }
             do {
@@ -100,7 +100,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 var changed = source
                 changed.insert(Item(id: 500, height: 50), at: 30)
                 changed.remove(at: 61)
-                fixture.listView.applyChanges(items: changed, animationDuration: 0.3)
+                fixture.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0.3))
                 XCTAssertTrue(fixture.engine.isDecelerating, "\(mode) mixed pass should preserve motion")
             }
         }
@@ -113,7 +113,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 startFlight(fixture)
                 fixture.listView.applyChanges(
                     scrollTo: (index: 5, pointOffset: 0),
-                    animationDuration: 0.3
+                    transition: .easeInOut(duration: 0.3)
                 )
                 XCTAssertFalse(fixture.engine.isDecelerating, "\(mode) scrollTo must halt motion")
                 XCTAssertNotNil(fixture.animationController.model.track(
@@ -125,7 +125,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 startFlight(fixture)
                 fixture.listView.applyChanges(
                     items: items(Array(500..<700)),
-                    animationDuration: 0.3
+                    transition: .easeInOut(duration: 0.3)
                 )
                 XCTAssertFalse(fixture.engine.isDecelerating, "\(mode) no-overlap replacement must halt motion")
             }
@@ -139,7 +139,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 viewport: CGSize(width: 390, height: 300),
                 preloadMargin: 100, decelerationMode: mode)
             fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
-                                          animationDuration: 4)
+                                          transition: .easeInOut(duration: 4))
             fixture.tick(dt: 1)
             let before = try XCTUnwrap(fixture.viewportTrack)
             fixture.beginDrag()

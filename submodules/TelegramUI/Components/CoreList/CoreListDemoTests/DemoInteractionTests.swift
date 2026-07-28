@@ -161,7 +161,7 @@ final class DemoInteractionTests: XCTestCase {
         XCTAssertEqual(firstTrack.duration,
                        0.5 * UIView.animationDurationFactor,
                        accuracy: 1e-9)
-        XCTAssertEqual(firstTrack.curve, .easeOut)
+        XCTAssertEqual(firstTrack.curve, .easeInOut)
 
         mixedButton.sendActions(for: .touchUpInside)
 
@@ -403,7 +403,7 @@ final class DemoInteractionTests: XCTestCase {
         let fixture = try makeLoadedController()
         fixture.list.applyChanges(
             scrollTo: (index: 40, pointOffset: -20),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         let witness = fixture.list.items[40].identity
         let oldY = try settledY(for: 40, in: fixture.list)
@@ -483,7 +483,7 @@ final class DemoInteractionTests: XCTestCase {
 
         fixture.list.applyChanges(
             scrollTo: (index: fixture.list.items.count - 1, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         deliverAutoLoadResponse(fixture.responseScheduler)
 
@@ -505,7 +505,7 @@ final class DemoInteractionTests: XCTestCase {
 
         fixture.list.applyChanges(
             scrollTo: (index: fixture.list.items.count - 1, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         drainMainQueue()
 
@@ -602,11 +602,11 @@ final class DemoInteractionTests: XCTestCase {
 
         fixture.list.applyChanges(
             scrollTo: (index: 20, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         fixture.list.applyChanges(
             scrollTo: (index: 0, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         drainMainQueue()
 
@@ -625,7 +625,7 @@ final class DemoInteractionTests: XCTestCase {
         formAutoLoadRequest(fixture.responseScheduler)
         fixture.list.applyChanges(
             scrollTo: (index: 20, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         fixture.responseScheduler.advance(by: 0.2)
@@ -641,7 +641,7 @@ final class DemoInteractionTests: XCTestCase {
         let unload = try button(titled: "Load -5", in: fixture.views)
         fixture.list.applyChanges(
             items: Array(fixture.list.items.prefix(4)),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         unload.sendActions(for: .touchUpInside)

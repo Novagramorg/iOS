@@ -24,10 +24,10 @@ final class OverlayOrphanProbeTests: XCTestCase {
     func testOverlappingScrollToActuallyParksViews() {
         let peak = peakOverlayOccupancy { fixture in
             fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                          animation: .easeOut(duration: 0.3))
+                                          transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.1)
             fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
-                                          animation: .easeOut(duration: 0.3))
+                                          transition: .easeInOut(duration: 0.3))
         }
         XCTAssertGreaterThan(peak, 0,
             "overlapping scrollTo never parked a view — OverlayOrphanTests' equivalent case is "
@@ -37,9 +37,9 @@ final class OverlayOrphanProbeTests: XCTestCase {
     func testEmptyingListActuallyParksViews() {
         let peak = peakOverlayOccupancy { fixture in
             fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                          animation: .easeOut(duration: 0.3))
+                                          transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.1)
-            fixture.listView.applyChanges(items: [], animation: .easeOut(duration: 0.3))
+            fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
         }
         XCTAssertGreaterThan(peak, 0,
             "emptying mid-transition never parked a view — that case is vacuous")
@@ -48,10 +48,10 @@ final class OverlayOrphanProbeTests: XCTestCase {
     func testSizeChangeDuringScrollToActuallyParksViews() {
         let peak = peakOverlayOccupancy { fixture in
             fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                          animation: .easeOut(duration: 0.3))
+                                          transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.1)
             fixture.listView.applyChanges(newSize: CGSize(width: 390, height: 300),
-                                          animation: .easeOut(duration: 0.3))
+                                          transition: .easeInOut(duration: 0.3))
         }
         XCTAssertGreaterThan(peak, 0,
             "size change during scrollTo never parked a view — that case is vacuous")

@@ -102,7 +102,7 @@ final class MixedPassStressOracle {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard step.animation.duration > 0 else { return }
+        guard step.transition.duration > 0 else { return }
         let shared = Set(before.live.keys).intersection(after.live.keys)
 
         for identity in shared {
@@ -543,7 +543,7 @@ final class MixedPassStressOracle {
         )
         XCTAssertEqual(
             track.duration,
-            step.animation.duration,
+            step.transition.duration,
             accuracy: 1e-9,
             "\(context)\nidentity=\(identity) property=\(property) "
                 + "used the wrong pass duration",
@@ -552,7 +552,7 @@ final class MixedPassStressOracle {
         )
         XCTAssertEqual(
             track.curve,
-            step.animation.curve,
+            step.transition.curve,
             "\(context)\nidentity=\(identity) property=\(property) "
                 + "used the wrong pass curve",
             file: file,

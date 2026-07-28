@@ -377,10 +377,10 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let layer = CALayer()
         layer.bounds = CGRect(x: 0, y: 0, width: 40, height: 75)
 
-        controller.insert(identity: "row", layer: layer, logicalDuration: 8)
+        controller.insert(identity: "row", layer: layer, transition: .easeInOut(duration: 8))
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 8)
+                                      transition: .easeInOut(duration: 8))
         let positionBefore = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .positionY)
         ))
@@ -390,11 +390,11 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
 
         controller.transitionHeight(identity: "row", layer: layer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4)
+                                    transition: .easeInOut(duration: 4))
         time = 1
         controller.transitionHeight(identity: "row", layer: layer,
                                     oldSettledHeight: 100, newSettledHeight: 125,
-                                    logicalDuration: 3)
+                                    transition: .easeInOut(duration: 3))
 
         let positionAfter = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .positionY)
@@ -428,7 +428,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 0, newSettledY: 100,
-                                      logicalDuration: 4, transactionTime: time)
+                                      transition: .easeInOut(duration: 4), transactionTime: time)
 
         time = 11
         layer.timeOffset = time
@@ -438,7 +438,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         CATransaction.commit()
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 100, newSettledY: 150,
-                                      logicalDuration: 3, transactionTime: time)
+                                      transition: .easeInOut(duration: 3), transactionTime: time)
         let replacement = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
         ))
@@ -586,7 +586,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: first)
         controller.transitionPosition(identity: "row", layer: first,
                                       oldSettledY: 0, newSettledY: 100,
-                                      logicalDuration: 4, transactionTime: time)
+                                      transition: .easeInOut(duration: 4), transactionTime: time)
         let original = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
         ))
@@ -627,7 +627,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 0.3)
+                                      transition: .easeInOut(duration: 0.3))
 
         let track = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
@@ -653,7 +653,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedViewport(layer: layer)
         controller.transitionViewport(
             layer: layer, oldSettledOffset: 100, newSettledOffset: 300,
-            logicalDuration: 0.3, transactionTime: time,
+            transition: .easeInOut(duration: 0.3), transactionTime: time,
             completion: { _ in }
         )
         let beforeTrack = try XCTUnwrap(controller.model.track(
@@ -667,7 +667,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         time = 41
         let mutation = controller.transitionViewport(
             layer: layer, oldSettledOffset: 300, newSettledOffset: 300,
-            logicalDuration: 20, transactionTime: time,
+            transition: .easeInOut(duration: 20), transactionTime: time,
             completion: { _ in }
         )
         let afterTrack = try XCTUnwrap(controller.model.track(
@@ -698,7 +698,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 4)
+                                      transition: .easeInOut(duration: 4))
         let beforeTrack = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
         ))
@@ -710,7 +710,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 180,
                                       newSettledY: 180 + 5e-7,
-                                      logicalDuration: 20)
+                                      transition: .easeInOut(duration: 20))
 
         let afterTrack = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
@@ -742,7 +742,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionHeight(identity: "row", layer: layer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4)
+                                    transition: .easeInOut(duration: 4))
         let beforeTrack = try XCTUnwrap(
             controller.model.track(for: owner, property: .height)
         )
@@ -755,7 +755,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let mutation = controller.transitionHeight(
             identity: "row", layer: layer,
             oldSettledHeight: 100, newSettledHeight: 100 + 5e-7,
-            logicalDuration: 20
+            transition: .easeInOut(duration: 20)
         )
 
         XCTAssertEqual(mutation, .unchanged)
@@ -778,7 +778,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionHeight(identity: "row", layer: layer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4)
+                                    transition: .easeInOut(duration: 4))
         XCTAssertNotNil(controller.model.track(for: owner, property: .height))
         XCTAssertNotNil(layer.animation(forKey: compiler.animationKey(for: .height)))
 
@@ -799,18 +799,18 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         )
         let layer = CALayer()
 
-        controller.insert(identity: "row", layer: layer, logicalDuration: 8)
+        controller.insert(identity: "row", layer: layer, transition: .easeInOut(duration: 8))
         let opacityBefore = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .opacity)
         ))
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 4)
+                                      transition: .easeInOut(duration: 4))
 
         time = 1
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 180, newSettledY: 220,
-                                      logicalDuration: 3)
+                                      transition: .easeInOut(duration: 3))
 
         let opacityAfter = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .opacity)
@@ -839,14 +839,14 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         )
         let layer = CALayer()
 
-        controller.insert(identity: "A", layer: layer, logicalDuration: 8)
+        controller.insert(identity: "A", layer: layer, transition: .easeInOut(duration: 8))
         controller.transitionPosition(identity: "A", layer: layer,
                                       oldSettledY: 0, newSettledY: 80,
-                                      logicalDuration: 8)
-        controller.insert(identity: "B", layer: layer, logicalDuration: 8)
+                                      transition: .easeInOut(duration: 8))
+        controller.insert(identity: "B", layer: layer, transition: .easeInOut(duration: 8))
         controller.transitionPosition(identity: "B", layer: layer,
                                       oldSettledY: 0, newSettledY: 120,
-                                      logicalDuration: 8)
+                                      transition: .easeInOut(duration: 8))
 
         let positionBefore = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .positionY)
@@ -875,7 +875,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let unchanged = controller.transitionPosition(
             identity: "B", layer: layer,
             oldSettledY: 120, newSettledY: 120,
-            logicalDuration: 20
+            transition: .easeInOut(duration: 20)
         )
         XCTAssertEqual(unchanged, .unchanged)
         XCTAssertNotNil(layer.animation(forKey: compiler.animationKey(for: .positionY)))
@@ -896,7 +896,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: firstLayer)
         controller.transitionPosition(identity: "row", layer: firstLayer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 4)
+                                      transition: .easeInOut(duration: 4))
         let original = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
         ))
@@ -937,7 +937,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 0, newSettledY: 100,
-                                      logicalDuration: 4,
+                                      transition: .easeInOut(duration: 4),
                                       transactionTime: time)
         controller.unbind(identity: "row", layer: layer, at: time)
 
@@ -974,7 +974,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionHeight(identity: "row", layer: layer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4,
+                                    transition: .easeInOut(duration: 4),
                                     transactionTime: time)
         XCTAssertNil(controller.model.track(for: owner, property: .positionY))
         XCTAssertNil(controller.model.track(for: owner, property: .opacity))
@@ -1005,7 +1005,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: firstLayer)
         controller.transitionHeight(identity: "row", layer: firstLayer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4,
+                                    transition: .easeInOut(duration: 4),
                                     transactionTime: time)
         controller.unbind(identity: "row", layer: firstLayer, at: time)
 
@@ -1015,7 +1015,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.rebind(identity: "row", layer: reboundLayer)
         controller.transitionHeight(identity: "row", layer: reboundLayer,
                                     oldSettledHeight: 100, newSettledHeight: 200,
-                                    logicalDuration: 8,
+                                    transition: .easeInOut(duration: 8),
                                     transactionTime: time)
         let replacement = try XCTUnwrap(
             controller.model.track(for: owner, property: .height)
@@ -1051,7 +1051,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: firstLayer)
         controller.transitionHeight(identity: "row", layer: firstLayer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4,
+                                    transition: .easeInOut(duration: 4),
                                     transactionTime: time)
         XCTAssertEqual(installedCompletions.count, 1)
         controller.unbind(identity: "row", layer: firstLayer, at: time)
@@ -1063,7 +1063,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         XCTAssertEqual(installedCompletions.count, 2)
         controller.transitionHeight(identity: "row", layer: reboundLayer,
                                     oldSettledHeight: 100, newSettledHeight: 200,
-                                    logicalDuration: 8,
+                                    transition: .easeInOut(duration: 8),
                                     transactionTime: time)
         XCTAssertEqual(installedCompletions.count, 3)
         let replacement = try XCTUnwrap(
@@ -1104,7 +1104,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.seedLive(identity: "row", layer: firstLayer)
         controller.transitionPosition(identity: "row", layer: firstLayer,
                                       oldSettledY: 0, newSettledY: 100,
-                                      logicalDuration: 4,
+                                      transition: .easeInOut(duration: 4),
                                       transactionTime: time)
         controller.unbind(identity: "row", layer: firstLayer, at: time)
 
@@ -1112,7 +1112,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         controller.rebind(identity: "row", layer: secondLayer)
         controller.transitionPosition(identity: "row", layer: secondLayer,
                                       oldSettledY: 100, newSettledY: 200,
-                                      logicalDuration: 8,
+                                      transition: .easeInOut(duration: 8),
                                       transactionTime: time)
         let replacement = try XCTUnwrap(controller.model.track(
             for: owner, property: .positionY
@@ -1151,7 +1151,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
                                         layer: wrapper.layer,
                                         oldSettledY: 100,
                                         newSettledY: 180,
-                                        logicalDuration: 4,
+                                        transition: .easeInOut(duration: 4),
                                         transactionTime: time)
 
         for phase in [0.0, 0.5, 1.0] {

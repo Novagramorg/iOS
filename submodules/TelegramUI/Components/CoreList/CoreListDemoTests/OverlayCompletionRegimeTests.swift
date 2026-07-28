@@ -20,7 +20,7 @@ final class OverlayCompletionRegimeTests: XCTestCase {
                                          viewport: CGSize(width: 390, height: 400),
                                          emitsCA: false)
         fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         XCTAssertGreaterThan(fixture.viewportCarryViews.count, 0,
                              "expected carries to be parked mid-transition")

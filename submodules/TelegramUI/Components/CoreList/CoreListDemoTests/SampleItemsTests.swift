@@ -22,7 +22,7 @@ final class SampleItemsTests: XCTestCase {
         view.onContentDidChange = { animated in captured = animated }
         view.simulateContentChange(newHeight: 80, animated: true)
         XCTAssertEqual(captured, true)
-        XCTAssertEqual(view.update(width: 100), 80, accuracy: 0.001)
+        XCTAssertEqual(view.update(width: 100, transition: .immediate), 80, accuracy: 0.001)
     }
 
     func testSelfUpdatingItem_nonAnimatedFlagPropagates() {

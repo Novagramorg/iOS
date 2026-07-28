@@ -28,58 +28,20 @@ enum ListAnimatedProperty: Hashable {
     case opacity
 }
 
-public enum ListAnimationCurve: Equatable {
-    case smoothstep
-    case easeOut
-
-    func value(at phase: Double) -> Double {
-        let x = min(max(phase, 0), 1)
-        switch self {
-        case .smoothstep:
-            return x * x * (3 - 2 * x)
-        case .easeOut:
-            let inverse = 1 - x
-            return 1 - inverse * inverse * inverse
-        }
-    }
-}
-
-public struct ListAnimationSpec: Equatable {
-    public let duration: TimeInterval
-    public let curve: ListAnimationCurve
-    
-    public init(duration: TimeInterval, curve: ListAnimationCurve) {
-        self.duration = duration
-        self.curve = curve
-    }
-
-    public static func smoothstep(duration: TimeInterval) -> Self {
-        Self(duration: duration, curve: .smoothstep)
-    }
-
-    public static func easeOut(duration: TimeInterval) -> Self {
-        Self(duration: duration, curve: .easeOut)
-    }
-
-    public func scaled(by factor: Double) -> Self {
-        Self(duration: max(0, duration * factor), curve: curve)
-    }
-}
-
 struct ListAnimationTrack: Equatable {
     let generation: UInt64
     let from: CGFloat
     let to: CGFloat
     let startTime: TimeInterval
     let duration: TimeInterval
-    let curve: ListAnimationCurve
+    let curve: CoreListTransition.Animation.Curve
 
     init(generation: UInt64,
          from: CGFloat,
          to: CGFloat,
          startTime: TimeInterval,
          duration: TimeInterval,
-         curve: ListAnimationCurve = .smoothstep) {
+         curve: CoreListTransition.Animation.Curve = .easeInOut) {
         self.generation = generation
         self.from = from
         self.to = to
@@ -91,8 +53,8 @@ struct ListAnimationTrack: Equatable {
     func value(at time: TimeInterval) -> CGFloat {
         guard duration > 0 else { return to }
         let x = min(max((time - startTime) / duration, 0), 1)
-        let eased = curve.value(at: x)
-        return from + (to - from) * CGFloat(eased)
+        let eased = curve.solve(at: CGFloat(x))
+        return from + (to - from) * eased
     }
 
     func isComplete(at time: TimeInterval) -> Bool {
@@ -190,17 +152,7 @@ final class ListAnimationModel {
     func transitionViewport(oldSettledOffset: CGFloat,
                             newSettledOffset: CGFloat,
                             at time: TimeInterval,
-                            duration: TimeInterval) -> ListAnimationMutation {
-        transitionViewport(oldSettledOffset: oldSettledOffset,
-                           newSettledOffset: newSettledOffset,
-                           at: time,
-                           animation: .smoothstep(duration: duration))
-    }
-
-    func transitionViewport(oldSettledOffset: CGFloat,
-                            newSettledOffset: CGFloat,
-                            at time: TimeInterval,
-                            animation: ListAnimationSpec) -> ListAnimationMutation {
+                            transition: CoreListTransition) -> ListAnimationMutation {
         if states[.viewport] == nil { seedViewport() }
         guard abs(newSettledOffset - oldSettledOffset) > positionEpsilon else {
             return .unchanged
@@ -213,40 +165,28 @@ final class ListAnimationModel {
                        from: oldSettledOffset + correction - newSettledOffset,
                        to: 0,
                        at: time,
-                       animation: animation)
+                       transition: transition)
     }
 
     func transitionPosition(owner: ListAnimationOwner,
                             oldSettledY: CGFloat,
                             newSettledY: CGFloat,
                             at time: TimeInterval,
-                            duration: TimeInterval) -> ListAnimationMutation {
-        transitionPosition(owner: owner,
-                           oldSettledY: oldSettledY,
-                           newSettledY: newSettledY,
-                           at: time,
-                           animation: .smoothstep(duration: duration))
-    }
-
-    func transitionPosition(owner: ListAnimationOwner,
-                            oldSettledY: CGFloat,
-                            newSettledY: CGFloat,
-                            at time: TimeInterval,
-                            animation: ListAnimationSpec) -> ListAnimationMutation {
+                            transition: CoreListTransition) -> ListAnimationMutation {
         precondition(owner.isLive)
         ensureLive(owner)
         return transitionPositionOffset(owner: owner,
                                         oldSettledY: oldSettledY,
                                         newSettledY: newSettledY,
                                         at: time,
-                                        animation: animation)
+                                        transition: transition)
     }
 
     func transitionPositionX(owner: ListAnimationOwner,
                              oldSettledX: CGFloat,
                              newSettledX: CGFloat,
                              at time: TimeInterval,
-                             animation: ListAnimationSpec) -> ListAnimationMutation {
+                             transition: CoreListTransition) -> ListAnimationMutation {
         if owner.isLive { ensureLive(owner) }
         guard states[owner] != nil else { return .unchanged }
         guard abs(newSettledX - oldSettledX) > positionEpsilon else { return .unchanged }
@@ -256,40 +196,28 @@ final class ListAnimationModel {
                        from: oldSettledX + currentOffset - newSettledX,
                        to: 0,
                        at: time,
-                       animation: animation)
+                       transition: transition)
     }
 
     func transitionGhostBlock(owner: ListAnimationOwner,
                               oldSettledY: CGFloat,
                               newSettledY: CGFloat,
                               at time: TimeInterval,
-                              duration: TimeInterval) -> ListAnimationMutation {
+                              transition: CoreListTransition) -> ListAnimationMutation {
         precondition(owner.isGhostBlock)
         if states[owner] == nil { seedGhostBlock(owner: owner) }
         return transitionPositionOffset(owner: owner,
                                         oldSettledY: oldSettledY,
                                         newSettledY: newSettledY,
                                         at: time,
-                                        duration: duration)
+                                        transition: transition)
     }
 
     private func transitionPositionOffset(owner: ListAnimationOwner,
                                           oldSettledY: CGFloat,
                                           newSettledY: CGFloat,
                                           at time: TimeInterval,
-                                          duration: TimeInterval) -> ListAnimationMutation {
-        transitionPositionOffset(owner: owner,
-                                 oldSettledY: oldSettledY,
-                                 newSettledY: newSettledY,
-                                 at: time,
-                                 animation: .smoothstep(duration: duration))
-    }
-
-    private func transitionPositionOffset(owner: ListAnimationOwner,
-                                          oldSettledY: CGFloat,
-                                          newSettledY: CGFloat,
-                                          at time: TimeInterval,
-                                          animation: ListAnimationSpec) -> ListAnimationMutation {
+                                          transition: CoreListTransition) -> ListAnimationMutation {
         guard abs(newSettledY - oldSettledY) > positionEpsilon else { return .unchanged }
         let currentOffset = value(for: owner, property: .positionY, at: time) ?? 0
         let currentVisibleY = oldSettledY + currentOffset
@@ -298,26 +226,14 @@ final class ListAnimationModel {
                        from: currentVisibleY - newSettledY,
                        to: 0,
                        at: time,
-                       animation: animation)
+                       transition: transition)
     }
 
     func transitionHeight(owner: ListAnimationOwner,
                           oldSettledHeight: CGFloat,
                           newSettledHeight: CGFloat,
                           at time: TimeInterval,
-                          duration: TimeInterval) -> ListAnimationMutation {
-        transitionHeight(owner: owner,
-                         oldSettledHeight: oldSettledHeight,
-                         newSettledHeight: newSettledHeight,
-                         at: time,
-                         animation: .smoothstep(duration: duration))
-    }
-
-    func transitionHeight(owner: ListAnimationOwner,
-                          oldSettledHeight: CGFloat,
-                          newSettledHeight: CGFloat,
-                          at time: TimeInterval,
-                          animation: ListAnimationSpec) -> ListAnimationMutation {
+                          transition: CoreListTransition) -> ListAnimationMutation {
         precondition(owner.isLive)
         ensureLive(owner, height: oldSettledHeight)
         guard abs(newSettledHeight - oldSettledHeight) > positionEpsilon else {
@@ -327,14 +243,14 @@ final class ListAnimationModel {
             ?? oldSettledHeight
         return replace(owner: owner, property: .height,
                        from: currentHeight, to: newSettledHeight,
-                       at: time, animation: animation)
+                       at: time, transition: transition)
     }
 
     func transitionWidth(owner: ListAnimationOwner,
                          oldSettledWidth: CGFloat,
                          newSettledWidth: CGFloat,
                          at time: TimeInterval,
-                         animation: ListAnimationSpec) -> ListAnimationMutation {
+                         transition: CoreListTransition) -> ListAnimationMutation {
         if owner.isLive { ensureLive(owner, width: oldSettledWidth) }
         guard states[owner] != nil else { return .unchanged }
         guard abs(newSettledWidth - oldSettledWidth) > positionEpsilon else {
@@ -347,25 +263,25 @@ final class ListAnimationModel {
                        from: currentWidth,
                        to: newSettledWidth,
                        at: time,
-                       animation: animation)
+                       transition: transition)
     }
 
     func transitionOpacity(owner: ListAnimationOwner,
                            to target: CGFloat,
                            at time: TimeInterval,
-                           duration: TimeInterval) -> ListAnimationMutation {
+                           transition: CoreListTransition) -> ListAnimationMutation {
         guard let state = states[owner] else { return .unchanged }
         guard state.opacity != target else { return .unchanged }
         let from = value(for: owner, property: .opacity, at: time) ?? state.opacity
         return replace(owner: owner, property: .opacity, from: from, to: target,
-                       at: time, duration: duration)
+                       at: time, transition: transition)
     }
 
     func beginInsertion(owner: ListAnimationOwner,
                         width: CGFloat,
                         height: CGFloat,
                         at time: TimeInterval,
-                        duration: TimeInterval) -> ListAnimationMutation {
+                        transition: CoreListTransition) -> ListAnimationMutation {
         precondition(owner.isLive)
         seedLive(owner: owner,
                  positionOffsetX: 0,
@@ -374,12 +290,12 @@ final class ListAnimationModel {
                  width: width,
                  height: height)
         return replace(owner: owner, property: .opacity, from: 0, to: 1,
-                       at: time, duration: duration)
+                       at: time, transition: transition)
     }
 
     func beginExit(from owner: ListAnimationOwner,
                    at time: TimeInterval,
-                   duration: TimeInterval) -> ListAnimationExit {
+                   transition: CoreListTransition) -> ListAnimationExit {
         precondition(owner.isLive)
         ensureLive(owner)
 
@@ -401,7 +317,7 @@ final class ListAnimationModel {
                                        tracks: [:])
         let mutation = replace(owner: exitOwner, property: .opacity,
                                from: opacity, to: 0,
-                               at: time, duration: duration)
+                               at: time, transition: transition)
         return ListAnimationExit(owner: exitOwner,
                                  positionX: positionX,
                                  positionY: positionY,
@@ -557,25 +473,13 @@ final class ListAnimationModel {
                          from: CGFloat,
                          to: CGFloat,
                          at time: TimeInterval,
-                         duration: TimeInterval) -> ListAnimationMutation {
-        replace(owner: owner,
-                property: property,
-                from: from,
-                to: to,
-                at: time,
-                animation: .smoothstep(duration: duration))
-    }
-
-    private func replace(owner: ListAnimationOwner,
-                         property: ListAnimatedProperty,
-                         from: CGFloat,
-                         to: CGFloat,
-                         at time: TimeInterval,
-                         animation: ListAnimationSpec) -> ListAnimationMutation {
+                         transition: CoreListTransition) -> ListAnimationMutation {
         nextGeneration += 1
         setStoredValue(to, for: owner, property: property)
 
-        guard animation.duration > 0 else {
+        // Destructuring rather than reading `.duration`/`.curve` separately: the same check that
+        // rules out an immediate settle is what proves the curve is present.
+        guard case let .curve(duration, curve) = transition.animation, duration > 0 else {
             states[owner]?.tracks.removeValue(forKey: property)
             return .immediate(value: to)
         }
@@ -584,8 +488,8 @@ final class ListAnimationModel {
                                        from: from,
                                        to: to,
                                        startTime: time,
-                                       duration: animation.duration,
-                                       curve: animation.curve)
+                                       duration: duration,
+                                       curve: curve)
         states[owner]?.tracks[property] = track
         return .started(track)
     }

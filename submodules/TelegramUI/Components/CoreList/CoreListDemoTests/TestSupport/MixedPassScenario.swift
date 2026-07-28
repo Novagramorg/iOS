@@ -18,7 +18,7 @@ final class MixedPassItemView: UIView, CoreListItemView {
         contentHeight = height
     }
 
-    nonisolated func update(width: CGFloat) -> CGFloat {
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         contentHeight
     }
 }
@@ -49,7 +49,7 @@ final class MixedPassItem: CoreListItem, Equatable {
         return other == self   // value equality over id + height
     }
 
-    func apply(to view: UIView & CoreListItemView) {
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
         (view as? MixedPassItemView)?.apply(height: height)
     }
 }
@@ -97,7 +97,7 @@ struct MixedPassStep: CustomStringConvertible {
     let size: CGSize
     let insets: UIEdgeInsets
     let scrollTo: (index: Int, pointOffset: CGFloat)?
-    let animation: ListAnimationSpec
+    let transition: CoreListTransition
     let advanceAfter: TimeInterval
     let actions: [MixedPassAction]
 
@@ -108,7 +108,7 @@ struct MixedPassStep: CustomStringConvertible {
     var description: String {
         "\(actionDescription) | count=\(items.count) size=\(size.width)x\(size.height) "
             + "insets=\(insets) scroll=\(String(describing: scrollTo)) "
-            + "duration=\(animation.duration) curve=\(animation.curve) "
+            + "duration=\(transition.duration) curve=\(String(describing: transition.curve)) "
             + "advance=\(advanceAfter)"
     }
 }
@@ -187,14 +187,16 @@ struct MixedPassScenario {
         }
 
         let duration = Self.durations[rng.int(in: 0..<Self.durations.count)]
-        let animation: ListAnimationSpec
+        let transition: CoreListTransition
         if duration == 0 {
-            animation = .smoothstep(duration: 0)
+            transition = .immediate
         } else {
             positivePassSerial += 1
-            animation = positivePassSerial.isMultiple(of: 2)
-                ? .easeOut(duration: duration)
-                : .smoothstep(duration: duration)
+            // Two curves, alternating: the oracle compares installed CA metadata against the model
+            // track, so a single curve everywhere would stop exercising curve propagation.
+            transition = positivePassSerial.isMultiple(of: 2)
+                ? .easeInOut(duration: duration)
+                : .linear(duration: duration)
         }
         let phase = Self.phases[rng.int(in: 0..<Self.phases.count)]
         let step = MixedPassStep(
@@ -202,7 +204,7 @@ struct MixedPassScenario {
             size: size,
             insets: insets,
             scrollTo: scrollTo,
-            animation: animation,
+            transition: transition,
             advanceAfter: duration * phase,
             actions: actions
         )

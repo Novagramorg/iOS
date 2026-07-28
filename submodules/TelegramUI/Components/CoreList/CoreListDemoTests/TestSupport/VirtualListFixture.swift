@@ -192,6 +192,6 @@ final class VirtualListFixture {
         let size = CGSize(width: width ?? listView.logicalSize.width,
                           height: height ?? listView.logicalSize.height)
         listView.frame = CGRect(origin: listView.frame.origin, size: size)
-        listView.applyChanges(newSize: size, animationDuration: 0)
+        listView.applyChanges(newSize: size, transition: .easeInOut(duration: 0))
     }
 }

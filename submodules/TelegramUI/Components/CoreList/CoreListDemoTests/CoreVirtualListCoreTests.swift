@@ -66,7 +66,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let beforeOffset = fixture.listView.engine.offset
 
         let diff = CoreVirtualListView.computeDiff(old: source, new: source)
-        fixture.listView.applyChanges(items: source, animationDuration: 0)
+        fixture.listView.applyChanges(items: source, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(diff.survivorMap.count, source.count)
         XCTAssertTrue(diff.deletes.isEmpty)
@@ -91,7 +91,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
 
         var inserted = source
         inserted.insert(items([999])[0], at: 3)
-        fixture.listView.applyChanges(items: inserted, animationDuration: 0)
+        fixture.listView.applyChanges(items: inserted, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(fixture.listView.engine.offset, oldOffset, accuracy: 0.001)
         XCTAssertEqual(settledScreenY(fixture.listView, index: 3)!, 150, accuracy: 0.001)
@@ -99,7 +99,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
         XCTAssertTrue(viewByIdentity(fixture.listView)[source[3].identity] === oldViews[source[3].identity])
 
         inserted.remove(at: 3)
-        fixture.listView.applyChanges(items: inserted, animationDuration: 0)
+        fixture.listView.applyChanges(items: inserted, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(fixture.listView.engine.offset, oldOffset, accuracy: 0.001)
         XCTAssertEqual(settledScreenY(fixture.listView, index: 3)!, 150, accuracy: 0.001)
@@ -120,7 +120,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let moved = reordered.remove(at: 2)
         reordered.insert(moved, at: 5)
         let diff = CoreVirtualListView.computeDiff(old: source, new: reordered)
-        fixture.listView.applyChanges(items: reordered, animationDuration: 0)
+        fixture.listView.applyChanges(items: reordered, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(diff.moves.count, 1)
         XCTAssertEqual(diff.moves.first?.old, 2)
@@ -136,7 +136,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
 
         fixture.listView.applyChanges(
             scrollTo: (index: 100, pointOffset: 200),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertTrue(fixture.activeWindow.contains(index: 100))
@@ -152,7 +152,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let top = VirtualListFixture(items: source)
         var withoutFirst = source
         withoutFirst.removeFirst()
-        top.listView.applyChanges(items: withoutFirst, animationDuration: 0)
+        top.listView.applyChanges(items: withoutFirst, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(top.activeWindow.startIndex, 0)
         XCTAssertEqual(top.listView.engine.offset, 0, accuracy: 0.001)
@@ -161,13 +161,13 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let bottom = VirtualListFixture(items: source)
         bottom.listView.applyChanges(
             scrollTo: (index: 49, pointOffset: 750),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         let lastIdentity = source[48].identity
         let lastView = viewByIdentity(bottom.listView)[lastIdentity]
         var withoutLast = source
         withoutLast.removeLast()
-        bottom.listView.applyChanges(items: withoutLast, animationDuration: 0)
+        bottom.listView.applyChanges(items: withoutLast, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(bottom.activeWindow.endIndex, 48)
         XCTAssertEqual(settledScreenY(bottom.listView, index: 48)! + 50, 800, accuracy: 0.001)
@@ -187,7 +187,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
 
         fixture.listView.applyChanges(
             newSize: CGSize(width: 195, height: 800),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(fixture.activeWindow.localFrame(for: 0)!.height, 100, accuracy: 0.001)
@@ -206,7 +206,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let oldOffset = fixture.listView.engine.offset
 
         source[2] = ContentResizableItem(id: ids[2], contentHeight: 90)
-        fixture.listView.applyChanges(items: source, animationDuration: 0)
+        fixture.listView.applyChanges(items: source, transition: .easeInOut(duration: 0))
 
         XCTAssertTrue(viewByIdentity(fixture.listView)[identity] === view)
         XCTAssertEqual(view.applyCount, 2)
@@ -273,17 +273,17 @@ final class CoreVirtualListCoreTests: XCTestCase {
             layer: oldView.layer,
             oldSettledY: 0,
             newSettledY: 100,
-            logicalDuration: 1
+            transition: .easeInOut(duration: 1)
         )
 
         fixture.listView.applyChanges(
             scrollTo: (index: 50, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         fixture.advance(by: 0.25)
         fixture.listView.applyChanges(
             scrollTo: (index: 0, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         let reboundView = fixture.activeWindow.items.first(where: { $0.index == 0 })!.view
@@ -303,14 +303,14 @@ final class CoreVirtualListCoreTests: XCTestCase {
             layer: view.layer,
             oldSettledY: 0,
             newSettledY: 100,
-            logicalDuration: 1
+            transition: .easeInOut(duration: 1)
         )
         let key = "CoreListAnimation.positionY"
         let installed = try XCTUnwrap(view.layer.animation(forKey: key))
         installed.setValue("preserve-existing-install", forKey: "Task4.installSentinel")
         view.layer.add(installed, forKey: key)
 
-        fixture.listView.applyChanges(items: source, animationDuration: 0)
+        fixture.listView.applyChanges(items: source, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(view.layer.animation(forKey: key)?.value(forKey: "Task4.installSentinel") as? String,
                        "preserve-existing-install")
@@ -323,13 +323,13 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let uikitViews = viewByIdentity(uikit.listView)
         let physicsViews = viewByIdentity(physics.listView)
 
-        uikit.listView.applyChanges(scrollTo: (index: 40, pointOffset: 125), animationDuration: 0)
-        physics.listView.applyChanges(scrollTo: (index: 40, pointOffset: 125), animationDuration: 0)
+        uikit.listView.applyChanges(scrollTo: (index: 40, pointOffset: 125), transition: .easeInOut(duration: 0))
+        physics.listView.applyChanges(scrollTo: (index: 40, pointOffset: 125), transition: .easeInOut(duration: 0))
         var changed = source
         changed.insert(items([999])[0], at: 43)
         changed.remove(at: 38)
-        uikit.listView.applyChanges(items: changed, animationDuration: 0)
-        physics.listView.applyChanges(items: changed, animationDuration: 0)
+        uikit.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0))
+        physics.listView.applyChanges(items: changed, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(uikit.activeWindow.startIndex, physics.activeWindow.startIndex)
         XCTAssertEqual(uikit.activeWindow.endIndex, physics.activeWindow.endIndex)

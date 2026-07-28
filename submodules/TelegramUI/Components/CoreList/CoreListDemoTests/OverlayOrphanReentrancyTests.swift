@@ -8,7 +8,7 @@ import UIKit
 /// involve the scroll engine. Both gaps matter:
 ///
 ///   - **Re-entrancy.** A row signalling `onContentDidChange` calls `markDirty`, which schedules
-///     `flushDirtyItems` → `applyChanges(animationDuration:)` with no items, no size and no
+///     `flushDirtyItems` → `applyChanges(transition:)` with no items, no size and no
 ///     scrollTo. If that lands while a pass is already running, the re-entrancy guard defers it and
 ///     it executes against state that has since moved. The engine nils `onContentDidChange` on
 ///     views it parks, which says the authors knew this fires during transitions.
@@ -72,7 +72,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     func testContentChangeDuringScrollToDrainsOverlays() throws {
         let fixture = selfUpdatingFixture()
         fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         let view = try XCTUnwrap(visibleSelfUpdatingView(fixture),
                                  "no self-updating row rendered — probe cannot fire the hook")
@@ -88,7 +88,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     func testUnanimatedContentChangeDuringScrollToDrainsOverlays() throws {
         let fixture = selfUpdatingFixture()
         fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         let view = try XCTUnwrap(visibleSelfUpdatingView(fixture))
         view.simulateContentChange(newHeight: 140, animated: false)
@@ -102,12 +102,12 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     func testContentChangeStraddlingOverlappingScrollToDrainsOverlays() throws {
         let fixture = selfUpdatingFixture(count: 300)
         fixture.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.08)
         let first = try XCTUnwrap(visibleSelfUpdatingView(fixture))
         first.simulateContentChange(newHeight: 120, animated: true)
         fixture.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.flushScheduler()
         fixture.advance(by: 0.05)
         if let second = visibleSelfUpdatingView(fixture) {
@@ -124,7 +124,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         let fixture = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
         fixture.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.scroll(to: fixture.boundsOriginY + 600)
         fixture.advance(by: 0.05)
@@ -137,10 +137,10 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         let fixture = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
         fixture.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
-                                      animation: .easeOut(duration: 0.3))
+                                      transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.scroll(to: fixture.boundsOriginY + 600)
-        fixture.listView.applyChanges(items: [], animation: .easeOut(duration: 0.3))
+        fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
         fixture.flushScheduler()
         assertNoOrphans(fixture, "user scroll then empty during scrollTo")
         assertOverlaysDrain(fixture, "user scroll then empty during scrollTo")
@@ -153,7 +153,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         var peak = 0
         let reentrancy = selfUpdatingFixture()
         reentrancy.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
-                                         animation: .easeOut(duration: 0.3))
+                                         transition: .easeInOut(duration: 0.3))
         reentrancy.advance(by: 0.1)
         peak = max(peak, reentrancy.listView.exitOverlay.subviews.count
                    + reentrancy.listView.crossingOverlay.subviews.count)
@@ -171,7 +171,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         let drag = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                       viewport: CGSize(width: 390, height: 400))
         drag.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
-                                   animation: .easeOut(duration: 0.3))
+                                   transition: .easeInOut(duration: 0.3))
         drag.advance(by: 0.1)
         drag.scroll(to: drag.boundsOriginY + 600)
         for _ in 0..<20 {

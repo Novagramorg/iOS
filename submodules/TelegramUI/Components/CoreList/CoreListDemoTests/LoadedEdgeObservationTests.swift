@@ -57,7 +57,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
         )
         top.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 100, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         placeTopBoundary(at: 0, in: top)
 
@@ -71,11 +71,11 @@ final class LoadedEdgeObservationTests: XCTestCase {
         )
         bottom.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         bottom.listView.applyChanges(
             scrollTo: (index: 99, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         placeBottomBoundary(at: 300, in: bottom)
 
@@ -95,7 +95,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
         )
         top.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 100, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         top.listView.loadedEdgeMargin = 50
         placeTopBoundary(at: 0, in: top)
@@ -110,11 +110,11 @@ final class LoadedEdgeObservationTests: XCTestCase {
         )
         bottom.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         bottom.listView.applyChanges(
             scrollTo: (index: 99, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         bottom.listView.loadedEdgeMargin = 50
         placeBottomBoundary(at: 300, in: bottom)
@@ -140,7 +140,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
         )
         bottom.listView.applyChanges(
             scrollTo: (index: 99, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         bottom.listView.loadedEdgeMargin = -50
         placeBottomBoundary(at: 350, in: bottom)
@@ -220,7 +220,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             scrollTo: (index: 99, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         fixture.fireScroll()
 

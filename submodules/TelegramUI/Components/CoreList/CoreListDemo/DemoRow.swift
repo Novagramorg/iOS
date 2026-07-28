@@ -123,19 +123,22 @@ final class DemoListItemView: UIView, CoreListItemView {
         minHeight = h
     }
 
-    func update(width: CGFloat) -> CGFloat {
+    /// Lays out through the transition, which is what exercises the executor end-to-end in the demo.
+    /// `setFrame` writes the settled value synchronously before animating, so `titleLabel.frame.maxY`
+    /// below still reads the NEW layout, exactly as the old direct assignment did.
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         let contentInsets = UIEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
         let pillSize = CGSize(width: 12, height: 12)
         let labelWidth = max(0, width - contentInsets.left - contentInsets.right)
         let titleHeight = titleLabel.sizeThatFits(CGSize(width: labelWidth, height: .greatestFiniteMagnitude)).height
 
-        pillView.frame = CGRect(x: contentInsets.left, y: contentInsets.top + 2, width: pillSize.width, height: pillSize.height)
-        titleLabel.frame = CGRect(x: contentInsets.left, y: contentInsets.top + pillSize.height + 10, width: labelWidth, height: titleHeight)
+        transition.setFrame(view: pillView, frame: CGRect(x: contentInsets.left, y: contentInsets.top + 2, width: pillSize.width, height: pillSize.height))
+        transition.setFrame(view: titleLabel, frame: CGRect(x: contentInsets.left, y: contentInsets.top + pillSize.height + 10, width: labelWidth, height: titleHeight))
 
         var totalHeight = contentInsets.top + pillSize.height + 10 + titleHeight + contentInsets.bottom
         if isExpanded {
             let detailHeight = detailLabel.sizeThatFits(CGSize(width: labelWidth, height: .greatestFiniteMagnitude)).height
-            detailLabel.frame = CGRect(x: contentInsets.left, y: titleLabel.frame.maxY + 8, width: labelWidth, height: detailHeight)
+            transition.setFrame(view: detailLabel, frame: CGRect(x: contentInsets.left, y: titleLabel.frame.maxY + 8, width: labelWidth, height: detailHeight))
             totalHeight += 8 + detailHeight
         }
 

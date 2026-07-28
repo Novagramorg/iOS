@@ -3,6 +3,45 @@ import AsyncDisplayKit
 import SwiftSignalKit
 import Display
 import CoreList
+import ComponentFlow
+import ComponentDisplayAdapters
+
+// CoreList cannot depend on ComponentFlow — its Bazel target has no `deps` and its demo builds
+// standalone in Xcode — so it carries a case-for-case copy of the transition value model. This is
+// where the two meet.
+//
+// The one asymmetry is interpretation, not data: CoreList treats a zero duration as immediate, while
+// ComponentFlow animates it. That difference is preserved here rather than smoothed over — a
+// zero-duration CoreList transition maps to `.immediate`, so a caller converting one and handing it
+// to UIKit gets the behavior CoreList meant.
+extension ComponentTransition {
+    init(_ transition: CoreListTransition) {
+        switch transition.animation {
+        case .none:
+            self.init(animation: .none)
+        case let .curve(duration, curve):
+            guard !transition.isImmediate else {
+                self.init(animation: .none)
+                return
+            }
+            self.init(animation: .curve(duration: duration,
+                                        curve: ComponentTransition.Animation.Curve(curve)))
+        }
+    }
+}
+
+private extension ComponentTransition.Animation.Curve {
+    init(_ curve: CoreListTransition.Animation.Curve) {
+        switch curve {
+        case .easeInOut: self = .easeInOut
+        case .easeIn: self = .easeIn
+        case .spring: self = .spring
+        case .linear: self = .linear
+        case let .custom(a, b, c, d): self = .custom(a, b, c, d)
+        case let .bounce(stiffness, damping): self = .bounce(stiffness: stiffness, damping: damping)
+        }
+    }
+}
 
 // PoC alternative ChatHistoryListViewBackend backed by CoreVirtualListView (from the vendored
 // CoreList module). Selected via the `coreListChatBackend` experimental flag; the default
@@ -278,9 +317,28 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             scrollTo = (scrollToItem.index, 0.0)
         }
 
-        // Every pass currently animates (deferred item #2); bound to a local so the reported transition
-        // and the applied animation cannot drift when #2 lands.
-        let animated = structurallyChanged || sizeChanged || scrollTo != nil
+        // The applied animation and the reported transition are one value, so they cannot drift.
+        // Mirrors ListViewImpl's own precedence: an animated scrollToItem wins, then a
+        // size/inset update's curve, then an insertion animation.
+        var transition: CoreListTransition = .immediate
+        if let scrollToItem, scrollToItem.animated {
+            transition = .spring(duration: 0.4)
+        } else if let updateSizeAndInsets, updateSizeAndInsets.duration != 0.0 {
+            switch updateSizeAndInsets.curve {
+            case let .Spring(duration):
+                transition = .spring(duration: duration)
+            case let .Default(duration):
+                // `.Default` carries an optional duration; ListViewImpl resolves it as
+                // max(updateSizeAndInsets.duration, duration ?? 0.3), so mirror that rather than
+                // inventing a different default.
+                transition = .easeInOut(duration: max(updateSizeAndInsets.duration,
+                                                      duration ?? 0.3))
+            case let .Custom(duration, x1, y1, x2, y2):
+                transition = .init(animation: .curve(duration: duration, curve: .custom(x1, y1, x2, y2)))
+            }
+        } else if options.contains(.AnimateInsertion) {
+            transition = .spring(duration: 0.4)
+        }
 
         if structurallyChanged || sizeChanged || scrollTo != nil {
             self.coreList.applyChanges(
@@ -289,7 +347,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
                 newInsets: self.currentInsets,
                 scrollTo: scrollTo,
                 anchorMode: stationaryItemRange == nil ? .automatic : .preserveVisibleContent,
-                animation: animated ? .easeOut(duration: 0.3) : .easeOut(duration: 0.0)
+                transition: transition
             )
         }
 
@@ -304,9 +362,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // .easeOut, so the standard ease-out bezier approximates CoreList's .easeOut(0.3); this is
         // cosmetic, since consumers use the transition only to co-animate their own chrome. The
         // hardcoded duration goes away with deferred item #2 (derive the animation spec from `options`).
-        let offsetTransition: ContainedViewLayoutTransition = animated
-            ? .animated(duration: 0.3, curve: .custom(0.0, 0.0, 0.58, 1.0))
-            : .immediate
+        let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
         self.updateVisibleContentOffset(transition: offsetTransition)
         completion(self.displayedItemRange)
@@ -537,8 +593,10 @@ private final class CoreListEntryItem: CoreListItem {
         return true
     }
 
-    func apply(to view: UIView & CoreListItemView) {
-        (view as? CoreListNodeHostView)?.setListItem(self.listItem, neighbors: self.neighbors)
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
+        (view as? CoreListNodeHostView)?.setListItem(self.listItem,
+                                                     neighbors: self.neighbors,
+                                                     transition: transition)
     }
 }
 
@@ -550,6 +608,8 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
     private var lastWidth: CGFloat = -1.0
     private var lastHeight: CGFloat = 0.0
     private var contentDirty: Bool = true
+    /// The transition from the most recent `setListItem`, held for the layout that follows.
+    private var pendingTransition: CoreListTransition = .immediate
 
     var onContentDidChange: ((_ animated: Bool) -> Void)? = nil
 
@@ -561,13 +621,21 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func setListItem(_ item: ListViewItem, neighbors: ListViewItemNeighbors) {
+    func setListItem(_ item: ListViewItem,
+                     neighbors: ListViewItemNeighbors,
+                     transition: CoreListTransition) {
         self.listItem = item
         self.neighbors = neighbors
+        self.pendingTransition = transition
         self.contentDirty = true
     }
 
-    func update(width: CGFloat) -> CGFloat {
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
+        // Deferred: map `transition` onto ListViewItemUpdateAnimation so a reconciled chat row
+        // animates its internal layout. Today the node relayouts with .None and the row's outer
+        // geometry animates via ListAnimationModel, which is the pre-existing behavior.
+        _ = transition
+        _ = self.pendingTransition
         if self.itemNode == nil || self.contentDirty || abs(width - self.lastWidth) > 0.5 {
             self.rebuild(width: width)
         }

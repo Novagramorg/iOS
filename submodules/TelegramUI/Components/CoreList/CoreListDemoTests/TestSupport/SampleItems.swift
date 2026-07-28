@@ -14,7 +14,7 @@ final class FixedHeightItemView: UIView, CoreListItemView {
         fatalError()
     }
 
-    nonisolated func update(width: CGFloat) -> CGFloat {
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         fixedHeight
     }
 }
@@ -50,7 +50,7 @@ final class WidthDependentItemView: UIView, CoreListItemView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    nonisolated func update(width: CGFloat) -> CGFloat {
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         ceil(baseHeight * baseWidth / width)
     }
 }
@@ -90,7 +90,7 @@ final class WidthDependentItemViewWithSubview: UIView, CoreListItemView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    nonisolated func update(width: CGFloat) -> CGFloat {
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         let h = ceil(baseHeight * baseWidth / width)
         label.frame = CGRect(x: 0, y: 0, width: width, height: h)
         return h
@@ -174,7 +174,7 @@ final class SelfUpdatingItemView: UIView, CoreListItemView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    nonisolated func update(width: CGFloat) -> CGFloat { currentHeight }
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat { currentHeight }
 
     /// Test seam: change the height the view will report next, then signal the list.
     func simulateContentChange(newHeight: CGFloat, animated: Bool) {
@@ -219,7 +219,7 @@ final class ContentResizableItem: CoreListItem {
     }
 
     func view() -> UIView & CoreListItemView {
-        let v = ContentResizableItemView(); apply(to: v); return v
+        let v = ContentResizableItemView(); apply(to: v, transition: .immediate); return v
     }
 
     func isEqual(to other: CoreListItem) -> Bool {
@@ -227,7 +227,7 @@ final class ContentResizableItem: CoreListItem {
         return o.id == id && o.contentHeight == contentHeight
     }
 
-    func apply(to view: UIView & CoreListItemView) {
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
         (view as? ContentResizableItemView)?.applyContent(contentHeight)
     }
 }
@@ -252,5 +252,5 @@ final class ContentResizableItemView: UIView, CoreListItemView {
     /// Simulate a view-only height change (the analogue of tap-expand). NOT applied via the item.
     func addBonus(_ extra: CGFloat) { bonusHeight += extra }
 
-    nonisolated func update(width: CGFloat) -> CGFloat { contentHeight + bonusHeight }
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat { contentHeight + bonusHeight }
 }

@@ -30,7 +30,7 @@ final class PhysicsListDriver {
         controller.seedViewport(layer: engine.contentHost.layer)
         listView.preloadMargin = preloadMargin
         listView.items = items
-        listView.applyChanges(newSize: viewport, animationDuration: 0)
+        listView.applyChanges(newSize: viewport, transition: .easeInOut(duration: 0))
         listView.layoutIfNeeded()
 
         self.clock = clock

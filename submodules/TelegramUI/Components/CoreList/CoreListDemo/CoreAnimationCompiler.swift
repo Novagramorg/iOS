@@ -66,18 +66,15 @@ final class CoreAnimationCompiler {
                  completion: (() -> Void)? = nil) {
         guard emitsAnimations else { return }
         let animation = animation(for: track, property: property)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        CATransaction.setCompletionBlock(completion)
-        layer.add(animation, forKey: animationKey(for: property))
-        CATransaction.commit()
+        CoreListTransition.commit(completion: completion) {
+            layer.add(animation, forKey: animationKey(for: property))
+        }
     }
 
     func remove(property: ListAnimatedProperty, from layer: CALayer) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.removeAnimation(forKey: animationKey(for: property))
-        CATransaction.commit()
+        CoreListTransition.commit {
+            layer.removeAnimation(forKey: animationKey(for: property))
+        }
     }
 
     func animationKey(for property: ListAnimatedProperty) -> String {

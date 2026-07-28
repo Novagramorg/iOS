@@ -63,7 +63,7 @@ final class InitialLayoutTests: XCTestCase {
 
     func testReloadResetsToTop() {
         let fixture = VirtualListFixture(itemCount: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 50, pointOffset: 0), animationDuration: 0)
+        fixture.listView.applyChanges(scrollTo: (index: 50, pointOffset: 0), transition: .easeInOut(duration: 0))
         // Re-assigning items triggers a full rebuild to the top.
         fixture.listView.items = fixture.listView.items
         XCTAssertEqual(fixture.activeWindow.startIndex, 0)

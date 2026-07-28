@@ -31,7 +31,7 @@ final class MixedPassStressTests: XCTestCase {
                 newSize: step.size,
                 newInsets: step.insets,
                 scrollTo: step.scrollTo,
-                animation: step.animation
+                transition: step.transition
             )
             fixture.flushScheduler()
             let after = oracle.capture(fixture: fixture)
@@ -75,7 +75,7 @@ final class MixedPassStressTests: XCTestCase {
             items: scenario.items.map { $0 as CoreListItem },
             newSize: scenario.size,
             newInsets: scenario.insets,
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         let afterNoOp = oracle.capture(fixture: fixture)
         XCTAssertEqual(beforeNoOp, afterNoOp, context)

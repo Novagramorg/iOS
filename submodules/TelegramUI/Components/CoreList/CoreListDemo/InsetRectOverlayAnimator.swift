@@ -18,48 +18,48 @@ final class InsetRectOverlayAnimator {
 
     func transition(view: UIView,
                     to finalFrame: CGRect,
-                    animation: ListAnimationSpec) {
+                    transition: CoreListTransition) {
         let layer = view.layer
         let currentFrame = layer.presentation()?.frame ?? layer.frame
-        transition(layer: layer,
+        self.transition(layer: layer,
                    from: currentFrame,
                    to: finalFrame,
-                   animation: animation.scaled(by: durationFactor()),
+                   transition: transition.scaled(by: durationFactor()),
                    at: layer.convertTime(mediaTime(), from: nil))
     }
 
     func transition(layer: CALayer,
                     from currentFrame: CGRect,
                     to finalFrame: CGRect,
-                    animation: ListAnimationSpec,
+                    transition: CoreListTransition,
                     at startTime: CFTimeInterval) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.frame = finalFrame
-        CATransaction.commit()
+        // Settled write only; the granular tracks below are what animate. Same reasoning as
+        // ListAnimationController's write helpers — `commit` rather than an `.immediate` setter, so
+        // the standard animation keys are left alone.
+        CoreListTransition.commit { layer.frame = finalFrame }
 
         install(from: currentFrame.midX - finalFrame.midX,
                 to: 0,
                 property: .positionX,
-                animation: animation,
+                transition: transition,
                 at: startTime,
                 on: layer)
         install(from: currentFrame.midY - finalFrame.midY,
                 to: 0,
                 property: .positionY,
-                animation: animation,
+                transition: transition,
                 at: startTime,
                 on: layer)
         install(from: currentFrame.width,
                 to: finalFrame.width,
                 property: .width,
-                animation: animation,
+                transition: transition,
                 at: startTime,
                 on: layer)
         install(from: currentFrame.height,
                 to: finalFrame.height,
                 property: .height,
-                animation: animation,
+                transition: transition,
                 at: startTime,
                 on: layer)
     }
@@ -67,10 +67,13 @@ final class InsetRectOverlayAnimator {
     private func install(from: CGFloat,
                          to: CGFloat,
                          property: ListAnimatedProperty,
-                         animation: ListAnimationSpec,
+                         transition: CoreListTransition,
                          at startTime: CFTimeInterval,
                          on layer: CALayer) {
-        guard animation.duration > 0, abs(from - to) > 1e-6 else {
+        guard case let .curve(duration, curve) = transition.animation,
+              duration > 0,
+              abs(from - to) > 1e-6
+        else {
             compiler.remove(property: property, from: layer)
             return
         }
@@ -80,8 +83,8 @@ final class InsetRectOverlayAnimator {
                                        from: from,
                                        to: to,
                                        startTime: startTime,
-                                       duration: animation.duration,
-                                       curve: animation.curve)
+                                       duration: duration,
+                                       curve: curve)
         compiler.install(track, property: property, on: layer) { [weak self, weak layer] in
             guard let self, let layer else { return }
             self.complete(property: property,

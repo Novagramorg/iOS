@@ -29,7 +29,7 @@ final class MixedPassStressOracleTests: XCTestCase {
             size: CGSize(width: 430, height: 874),
             insets: UIEdgeInsets(top: 120, left: 40, bottom: 40, right: 50),
             scrollTo: (index: 40, pointOffset: 20),
-            animation: .easeOut(duration: 0.5),
+            transition: .easeInOut(duration: 0.5),
             advanceAfter: 0.05,
             actions: [
                 .resize(index: 0, id: 0, from: 44, to: 128),
@@ -44,7 +44,7 @@ final class MixedPassStressOracleTests: XCTestCase {
             newSize: step.size,
             newInsets: step.insets,
             scrollTo: step.scrollTo,
-            animation: step.animation
+            transition: step.transition
         )
         let after = oracle.capture(fixture: fixture)
 
@@ -68,7 +68,7 @@ final class MixedPassStressOracleTests: XCTestCase {
             to: 0,
             startTime: 1,
             duration: 0.5,
-            curve: .easeOut
+            curve: .linear
         )
 
         XCTAssertThrowsError(
@@ -91,7 +91,7 @@ final class MixedPassStressOracleTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             items: Array(initial.dropFirst()).map { $0 as CoreListItem },
-            animation: .smoothstep(duration: 0.1)
+            transition: .easeInOut(duration: 0.1)
         )
         fixture.clock.advance(by: 0.2)
 

@@ -285,7 +285,7 @@ final class ViewController: UIViewController {
                 || listView.viewportGeometry.insets != insets else { return }
         listView.applyChanges(newSize: newSize,
                               newInsets: insets,
-                              animation: .smoothstep(duration: 0))
+                              transition: .easeInOut(duration: 0))
     }
 
     @objc private func engineChanged() {
@@ -311,7 +311,7 @@ final class ViewController: UIViewController {
         bindAutoLoading(to: newList)
         newList.applyChanges(newSize: view.bounds.size,
                              newInsets: effectiveInsets,
-                             animation: .smoothstep(duration: 0))
+                             transition: .easeInOut(duration: 0))
         newList.items = DemoListItem.makeItems()
         if autoLoadEnabled {
             enqueueAutoLoad(edges: newList.reachedLoadedEdges)
@@ -327,21 +327,21 @@ final class ViewController: UIViewController {
         testInsets.top = testInsets.top == 0 ? 300 : 0
         let insets = effectiveInsets
         listView.applyChanges(newInsets: insets,
-                              animation: .easeOut(duration: 0.5))
+                              transition: .easeInOut(duration: 0.5))
         insetRectAnimator.transition(
             view: insetRectOverlay,
             to: view.bounds.inset(by: insets),
-            animation: .easeOut(duration: 0.5)
+            transition: .easeInOut(duration: 0.5)
         )
         refreshMixedControlTitles()
     }
 
     @objc private func jumpToForty() {
-        listView.applyChanges(scrollTo: (index: 40, pointOffset: 0), animationDuration: 0.3)
+        listView.applyChanges(scrollTo: (index: 40, pointOffset: 0), transition: .easeInOut(duration: 0.3))
     }
 
     @objc private func scrollToTop() {
-        listView.applyChanges(scrollTo: (index: 0, pointOffset: 0), animationDuration: 0.3)
+        listView.applyChanges(scrollTo: (index: 0, pointOffset: 0), transition: .easeInOut(duration: 0.3))
     }
 
     @objc private func insertOne() { insert(count: 1) }
@@ -355,7 +355,7 @@ final class ViewController: UIViewController {
         var items = listView.items
         guard !items.isEmpty else { return }
         items[min(5, items.count - 1)] = makeInsertedItem()
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     /// Delete, then insert 0.1s into the 0.3s transaction. Repeated taps exercise overlapping exit,
@@ -371,7 +371,7 @@ final class ViewController: UIViewController {
     @objc private func insertTop() {
         var items = listView.items
         items.insert(makeInsertedItem(), at: 0)
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
         refreshMixedControlTitles()
     }
 
@@ -381,7 +381,7 @@ final class ViewController: UIViewController {
         var items = listView.items
         guard !items.isEmpty else { return }
         items.removeFirst()
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
         refreshMixedControlTitles()
     }
 
@@ -391,7 +391,7 @@ final class ViewController: UIViewController {
         var items = listView.items
         guard !items.isEmpty else { return }
         items.removeLast()
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     @objc private func loadFiveAtTop() {
@@ -401,7 +401,7 @@ final class ViewController: UIViewController {
         listView.applyChanges(
             items: items,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0.3
+            transition: .easeInOut(duration: 0.3)
         )
     }
 
@@ -413,7 +413,7 @@ final class ViewController: UIViewController {
         listView.applyChanges(
             items: items,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0.3
+            transition: .easeInOut(duration: 0.3)
         )
     }
 
@@ -486,7 +486,7 @@ final class ViewController: UIViewController {
         listView.applyChanges(
             items: items,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         enqueueAutoLoad(edges: listView.reachedLoadedEdges)
     }
@@ -497,7 +497,7 @@ final class ViewController: UIViewController {
         for i in 0..<count {
             items.insert(makeInsertedItem(), at: position + i)
         }
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     /// Fresh identity + visibly distinct content for both ordinary inserts and same-slot replacements.
@@ -513,7 +513,7 @@ final class ViewController: UIViewController {
         let removeCount = min(count, items.count - start)
         guard removeCount > 0 else { return }
         items.removeSubrange(start..<(start + removeCount))
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     /// Swap the second and fifth items while preserving both identities and views. Each changed
@@ -522,7 +522,7 @@ final class ViewController: UIViewController {
         var items = listView.items
         guard items.count >= 5 else { return }
         items.swapAt(1, 4)
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     /// Like `moveSwap`, but also changes the two rows' minimum heights in the same pass. The reused
@@ -541,17 +541,17 @@ final class ViewController: UIViewController {
         if let updatedTestInsets {
             testInsets = updatedTestInsets
         }
-        let animation = ListAnimationSpec.easeOut(duration: 0.5)
+        let transition = CoreListTransition.easeInOut(duration: 0.5)
         let insets = updatedTestInsets == nil ? nil : effectiveInsets
         listView.applyChanges(items: items,
                               newInsets: insets,
                               scrollTo: scrollTo,
-                              animation: animation)
+                              transition: transition)
         if let insets {
             insetRectAnimator.transition(
                 view: insetRectOverlay,
                 to: view.bounds.inset(by: insets),
-                animation: animation
+                transition: transition
             )
         }
         refreshMixedControlTitles()
@@ -655,7 +655,7 @@ final class ViewController: UIViewController {
         // affected position properties follow the granular transition rule.
         items[1] = demoItem(items[1], minHeight: 100)
         items[4] = demoItem(items[4], minHeight: 0)
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     /// Start a move, then apply a size-only update 0.1s later. Changed affected position tracks are
@@ -664,14 +664,14 @@ final class ViewController: UIViewController {
         var items = listView.items
         guard items.count > 5 else { return }
         items.swapAt(1, 4)                                            // pass 1: the move only (no size change)
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self else { return }
             var items = self.listView.items                          // pass 2 (mid-flight): the size only
             guard items.count > 5 else { return }
             items[1] = self.demoItem(items[1], minHeight: 100)
             items[4] = self.demoItem(items[4], minHeight: 0)
-            self.listView.applyChanges(items: items, animationDuration: 0.3)
+            self.listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
         }
     }
 
@@ -739,7 +739,7 @@ final class ViewController: UIViewController {
             let position = Int.random(in: windowStart...windowEnd)
             items.remove(at: position)
         }
-        listView.applyChanges(items: items, animationDuration: 0.3)
+        listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     override func viewWillDisappear(_ animated: Bool) {

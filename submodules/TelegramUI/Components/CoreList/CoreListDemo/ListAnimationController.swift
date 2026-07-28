@@ -105,25 +105,7 @@ final class ListAnimationController {
                             layer: CALayer,
                             oldSettledY: CGFloat,
                             newSettledY: CGFloat,
-                            logicalDuration: TimeInterval,
-                            transactionTime: TimeInterval? = nil,
-                            completion: @escaping (UInt64) -> Void = { _ in })
-        -> ListAnimationMutation {
-        transitionPosition(identity: identity,
-                           layer: layer,
-                           oldSettledY: oldSettledY,
-                           newSettledY: newSettledY,
-                           animation: .smoothstep(duration: logicalDuration),
-                           transactionTime: transactionTime,
-                           completion: completion)
-    }
-
-    @discardableResult
-    func transitionPosition(identity: AnyHashable,
-                            layer: CALayer,
-                            oldSettledY: CGFloat,
-                            newSettledY: CGFloat,
-                            animation: ListAnimationSpec,
+                            transition: CoreListTransition,
                             transactionTime: TimeInterval? = nil,
                             completion: @escaping (UInt64) -> Void = { _ in })
         -> ListAnimationMutation {
@@ -136,7 +118,7 @@ final class ListAnimationController {
             oldSettledY: oldSettledY,
             newSettledY: newSettledY,
             at: time,
-            animation: animation.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor())
         )
         let cleanup: (() -> Void)?
         if case let .started(track) = mutation {
@@ -155,13 +137,13 @@ final class ListAnimationController {
                              layer: CALayer,
                              oldSettledX: CGFloat,
                              newSettledX: CGFloat,
-                             animation: ListAnimationSpec,
+                             transition: CoreListTransition,
                              transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         transitionPositionX(owner: .live(identity),
                             layer: layer,
                             oldSettledX: oldSettledX,
                             newSettledX: newSettledX,
-                            animation: animation,
+                            transition: transition,
                             transactionTime: transactionTime)
     }
 
@@ -170,7 +152,7 @@ final class ListAnimationController {
                              layer: CALayer,
                              oldSettledX: CGFloat,
                              newSettledX: CGFloat,
-                             animation: ListAnimationSpec,
+                             transition: CoreListTransition,
                              transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
@@ -179,7 +161,7 @@ final class ListAnimationController {
             oldSettledX: oldSettledX,
             newSettledX: newSettledX,
             at: transactionTime ?? now(),
-            animation: animation.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor())
         )
         if mutation != .unchanged {
             writePositionX(newSettledX, on: layer)
@@ -190,12 +172,13 @@ final class ListAnimationController {
         return mutation
     }
 
+
     @discardableResult
     func transitionGhostBlock(owner: ListAnimationOwner,
                               layer: CALayer,
                               oldSettledY: CGFloat,
                               newSettledY: CGFloat,
-                              logicalDuration: TimeInterval,
+                              transition: CoreListTransition,
                               transactionTime: TimeInterval) -> ListAnimationMutation {
         precondition(owner.isGhostBlock)
         let binding = bind(owner: owner, to: layer)
@@ -205,7 +188,7 @@ final class ListAnimationController {
             oldSettledY: oldSettledY,
             newSettledY: newSettledY,
             at: transactionTime,
-            duration: duration(logicalDuration)
+            transition: transition.scaled(by: durationFactor())
         )
         if mutation != .unchanged {
             writePositionY(newSettledY, on: layer)
@@ -224,23 +207,7 @@ final class ListAnimationController {
     func transitionViewport(layer: CALayer,
                             oldSettledOffset: CGFloat,
                             newSettledOffset: CGFloat,
-                            logicalDuration: TimeInterval,
-                            transactionTime: TimeInterval? = nil,
-                            completion: @escaping (UInt64) -> Void = { _ in })
-        -> ListAnimationMutation {
-        transitionViewport(layer: layer,
-                           oldSettledOffset: oldSettledOffset,
-                           newSettledOffset: newSettledOffset,
-                           animation: .smoothstep(duration: logicalDuration),
-                           transactionTime: transactionTime,
-                           completion: completion)
-    }
-
-    @discardableResult
-    func transitionViewport(layer: CALayer,
-                            oldSettledOffset: CGFloat,
-                            newSettledOffset: CGFloat,
-                            animation: ListAnimationSpec,
+                            transition: CoreListTransition,
                             transactionTime: TimeInterval? = nil,
                             completion: @escaping (UInt64) -> Void = { _ in })
         -> ListAnimationMutation {
@@ -251,7 +218,7 @@ final class ListAnimationController {
             oldSettledOffset: oldSettledOffset,
             newSettledOffset: newSettledOffset,
             at: transactionTime ?? now(),
-            animation: animation.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor())
         )
         let cleanup: (() -> Void)?
         if case let .started(track) = mutation {
@@ -265,27 +232,13 @@ final class ListAnimationController {
         return mutation
     }
 
-    @discardableResult
-    func transitionHeight(identity: AnyHashable,
-                          layer: CALayer,
-                          oldSettledHeight: CGFloat,
-                          newSettledHeight: CGFloat,
-                          logicalDuration: TimeInterval,
-                          transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
-        transitionHeight(identity: identity,
-                         layer: layer,
-                         oldSettledHeight: oldSettledHeight,
-                         newSettledHeight: newSettledHeight,
-                         animation: .smoothstep(duration: logicalDuration),
-                         transactionTime: transactionTime)
-    }
 
     @discardableResult
     func transitionHeight(identity: AnyHashable,
                           layer: CALayer,
                           oldSettledHeight: CGFloat,
                           newSettledHeight: CGFloat,
-                          animation: ListAnimationSpec,
+                          transition: CoreListTransition,
                           transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let owner = ListAnimationOwner.live(identity)
         let binding = bind(owner: owner, to: layer)
@@ -296,7 +249,7 @@ final class ListAnimationController {
             oldSettledHeight: oldSettledHeight,
             newSettledHeight: newSettledHeight,
             at: time,
-            animation: animation.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor())
         )
         apply(mutation, owner: owner, property: .height,
               layer: layer, binding: binding, removesOwner: false,
@@ -309,13 +262,13 @@ final class ListAnimationController {
                          layer: CALayer,
                          oldSettledWidth: CGFloat,
                          newSettledWidth: CGFloat,
-                         animation: ListAnimationSpec,
+                         transition: CoreListTransition,
                          transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         transitionWidth(owner: .live(identity),
                         layer: layer,
                         oldSettledWidth: oldSettledWidth,
                         newSettledWidth: newSettledWidth,
-                        animation: animation,
+                        transition: transition,
                         transactionTime: transactionTime)
     }
 
@@ -324,7 +277,7 @@ final class ListAnimationController {
                          layer: CALayer,
                          oldSettledWidth: CGFloat,
                          newSettledWidth: CGFloat,
-                         animation: ListAnimationSpec,
+                         transition: CoreListTransition,
                          transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
@@ -333,7 +286,7 @@ final class ListAnimationController {
             oldSettledWidth: oldSettledWidth,
             newSettledWidth: newSettledWidth,
             at: transactionTime ?? now(),
-            animation: animation.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor())
         )
         apply(mutation, owner: owner, property: .width,
               layer: layer, binding: binding, removesOwner: false,
@@ -344,7 +297,7 @@ final class ListAnimationController {
     @discardableResult
     func insert(identity: AnyHashable,
                 layer: CALayer,
-                logicalDuration: TimeInterval,
+                transition: CoreListTransition,
                 transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let owner = ListAnimationOwner.live(identity)
         let binding = bind(owner: owner, to: layer)
@@ -354,7 +307,7 @@ final class ListAnimationController {
             width: layer.bounds.width,
             height: layer.bounds.height,
             at: transactionTime ?? now(),
-            duration: duration(logicalDuration)
+            transition: transition.scaled(by: durationFactor())
         )
         apply(mutation, owner: owner, property: .opacity,
               layer: layer, binding: binding, removesOwner: false,
@@ -366,7 +319,7 @@ final class ListAnimationController {
     func makeExit(identity: AnyHashable,
                   layer: CALayer,
                   contentY: CGFloat,
-                  logicalDuration: TimeInterval,
+                  transition: CoreListTransition,
                   transactionTime: TimeInterval? = nil,
                   completion: @escaping () -> Void) -> ListAnimationOwner {
         let liveOwner = ListAnimationOwner.live(identity)
@@ -376,7 +329,7 @@ final class ListAnimationController {
         let exit = model.beginExit(
             from: liveOwner,
             at: transactionTime ?? now(),
-            duration: duration(logicalDuration)
+            transition: transition.scaled(by: durationFactor())
         )
         // Detached layers store their sampled horizontal position absolutely.
         // Their new owner therefore starts with no additive x correction.
@@ -842,38 +795,34 @@ final class ListAnimationController {
         }
     }
 
+    // These five write model-layer settled endpoints. They use `commit` directly rather than
+    // `CoreListTransition.immediate.setPositionY(…)` and friends deliberately: those setters clear
+    // the matching standard animation key (`position`, `opacity`, `bounds.size.height`) on their
+    // immediate path, mirroring ComponentTransition — and the executor installs ITEM-VIEW animations
+    // under exactly those keys. A settled write must not cancel a row's own fade or slide.
+    //
+    // They must also stay immediate for a second reason: this is the model path, whose duration was
+    // already scaled by `durationFactor()`, and whose animation the compiler emits. Routing an
+    // animated transition through here would scale again inside `CALayer.animate` and put a second
+    // animation on the same property.
+
     private func writePositionY(_ value: CGFloat, on layer: CALayer) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.position.y = value
-        CATransaction.commit()
+        CoreListTransition.commit { layer.position.y = value }
     }
 
     private func writePositionX(_ value: CGFloat, on layer: CALayer) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.position.x = value
-        CATransaction.commit()
+        CoreListTransition.commit { layer.position.x = value }
     }
 
     private func writeOpacity(_ value: CGFloat, on layer: CALayer) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.opacity = Float(value)
-        CATransaction.commit()
+        CoreListTransition.commit { layer.opacity = Float(value) }
     }
 
     private func writeHeight(_ value: CGFloat, on layer: CALayer) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.bounds.size.height = value
-        CATransaction.commit()
+        CoreListTransition.commit { layer.bounds.size.height = value }
     }
 
     private func writeWidth(_ value: CGFloat, on layer: CALayer) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.bounds.size.width = value
-        CATransaction.commit()
+        CoreListTransition.commit { layer.bounds.size.width = value }
     }
 }

@@ -7,28 +7,28 @@ final class ListAnimationModelTests: XCTestCase {
 
     func testTrackUsesItsOwnCurve() {
         let smooth = ListAnimationTrack(generation: 1, from: 0, to: 100,
-                                        startTime: 0, duration: 4, curve: .smoothstep)
+                                        startTime: 0, duration: 4, curve: .easeInOut)
         let easeOut = ListAnimationTrack(generation: 2, from: 0, to: 100,
-                                         startTime: 0, duration: 4, curve: .easeOut)
+                                         startTime: 0, duration: 4, curve: .linear)
 
-        XCTAssertEqual(smooth.value(at: 1), 15.625, accuracy: 1e-9)
-        XCTAssertEqual(easeOut.value(at: 1), 57.8125, accuracy: 1e-9)
+        XCTAssertEqual(smooth.value(at: 1), 12.916193104731983, accuracy: 1e-9)
+        XCTAssertEqual(easeOut.value(at: 1), 25.0, accuracy: 1e-9)
     }
 
     func testReplacementSamplesOldCurveAndAdoptsNewCurve() throws {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
         _ = model.transitionPosition(owner: owner, oldSettledY: 0, newSettledY: 100,
-                                     at: 0, animation: .smoothstep(duration: 4))
+                                     at: 0, transition: .linear(duration: 4))
         let current = try XCTUnwrap(model.value(for: owner, property: .positionY, at: 1))
 
         guard case let .started(track) = model.transitionPosition(
             owner: owner, oldSettledY: 100, newSettledY: 200,
-            at: 1, animation: .easeOut(duration: 2)
+            at: 1, transition: .linear(duration: 2)
         ) else { return XCTFail("expected replacement") }
 
         XCTAssertEqual(200 + track.from, 100 + current, accuracy: 1e-9)
-        XCTAssertEqual(track.curve, .easeOut)
+        XCTAssertEqual(track.curve, .linear)
     }
 
     func testControllerScalesSpecDurationOnceAndPreservesCurve() throws {
@@ -44,11 +44,11 @@ final class ListAnimationModelTests: XCTestCase {
         guard case let .started(track) = controller.transitionPosition(
             identity: "row", layer: layer,
             oldSettledY: 0, newSettledY: 100,
-            animation: .easeOut(duration: 2), transactionTime: 0
+            transition: .linear(duration: 2), transactionTime: 0
         ) else { return XCTFail("expected track") }
 
         XCTAssertEqual(track.duration, 6)
-        XCTAssertEqual(track.curve, .easeOut)
+        XCTAssertEqual(track.curve, .linear)
     }
 
     func testPositionXAndWidthRetargetIndependently() throws {
@@ -56,17 +56,17 @@ final class ListAnimationModelTests: XCTestCase {
         model.seedLive(owner: owner, positionOffsetX: 0, positionOffsetY: 0,
                        opacity: 1, width: 390, height: 75)
         _ = model.transitionPositionX(owner: owner, oldSettledX: 0, newSettledX: 40,
-                                      at: 0, animation: .smoothstep(duration: 4))
+                                      at: 0, transition: .easeInOut(duration: 4))
         _ = model.transitionWidth(owner: owner, oldSettledWidth: 390, newSettledWidth: 310,
-                                  at: 0, animation: .smoothstep(duration: 4))
+                                  at: 0, transition: .easeInOut(duration: 4))
         let xTrack = try XCTUnwrap(model.track(for: owner, property: .positionX))
 
         _ = model.transitionWidth(owner: owner, oldSettledWidth: 310, newSettledWidth: 280,
-                                  at: 1, animation: .easeOut(duration: 2))
+                                  at: 1, transition: .easeInOut(duration: 2))
 
         XCTAssertEqual(model.track(for: owner, property: .positionX), xTrack)
         XCTAssertEqual(try XCTUnwrap(model.value(for: owner, property: .width, at: 1)),
-                       377.5, accuracy: 1e-9)
+                       379.66704551621444, accuracy: 1e-9)
     }
 
     func testSmoothstepTrackSamplesBirthMiddleAndDeadline() {
@@ -82,11 +82,11 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel(positionEpsilon: 1e-6)
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
         _ = model.transitionPosition(owner: owner, oldSettledY: 100,
-                                     newSettledY: 180, at: 1, duration: 3)
+                                     newSettledY: 180, at: 1, transition: .easeInOut(duration: 3))
         let before = model.track(for: owner, property: .positionY)
         let result = model.transitionPosition(owner: owner, oldSettledY: 180,
                                               newSettledY: 180 + 5e-7,
-                                              at: 2, duration: 9)
+                                              at: 2, transition: .easeInOut(duration: 9))
         XCTAssertEqual(result, .unchanged)
         XCTAssertEqual(model.track(for: owner, property: .positionY), before)
     }
@@ -95,10 +95,10 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
         _ = model.transitionPosition(owner: owner, oldSettledY: 100,
-                                     newSettledY: 180, at: 0, duration: 4)
+                                     newSettledY: 180, at: 0, transition: .easeInOut(duration: 4))
         XCTAssertEqual(model.value(for: owner, property: .positionY, at: 2)!, -40, accuracy: 1e-9)
         let mutation = model.transitionPosition(owner: owner, oldSettledY: 180,
-                                                newSettledY: 220, at: 2, duration: 2)
+                                                newSettledY: 220, at: 2, transition: .easeInOut(duration: 2))
         guard case let .started(track) = mutation else { return XCTFail("expected replacement") }
         XCTAssertEqual(track.from, -80, accuracy: 1e-9)
         XCTAssertEqual(track.to, 0)
@@ -109,12 +109,12 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel(positionEpsilon: 1e-6)
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1, height: 75)
         _ = model.transitionHeight(owner: owner, oldSettledHeight: 75,
-                                   newSettledHeight: 100, at: 1, duration: 3)
+                                   newSettledHeight: 100, at: 1, transition: .easeInOut(duration: 3))
         let before = model.track(for: owner, property: .height)
 
         let result = model.transitionHeight(owner: owner, oldSettledHeight: 100,
                                             newSettledHeight: 100 + 5e-7,
-                                            at: 2, duration: 9)
+                                            at: 2, transition: .easeInOut(duration: 9))
 
         XCTAssertEqual(result, .unchanged)
         XCTAssertEqual(model.track(for: owner, property: .height), before)
@@ -124,18 +124,18 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1, height: 75)
         _ = model.transitionHeight(owner: owner, oldSettledHeight: 75,
-                                   newSettledHeight: 100, at: 0, duration: 4)
+                                   newSettledHeight: 100, at: 0, transition: .easeInOut(duration: 4))
         XCTAssertEqual(model.value(for: owner, property: .height, at: 1)!,
-                       78.90625, accuracy: 1e-9)
+                       78.229048276183, accuracy: 1e-9)
 
         let mutation = model.transitionHeight(owner: owner, oldSettledHeight: 100,
                                               newSettledHeight: 125,
-                                              at: 1, duration: 2)
+                                              at: 1, transition: .easeInOut(duration: 2))
 
         guard case let .started(track) = mutation else { return XCTFail("expected replacement") }
-        XCTAssertEqual(track.from, 78.90625, accuracy: 1e-9)
+        XCTAssertEqual(track.from, 78.229048276183, accuracy: 1e-9)
         XCTAssertEqual(track.to, 125, accuracy: 1e-9)
-        XCTAssertEqual(track.value(at: 1), 78.90625, accuracy: 1e-9)
+        XCTAssertEqual(track.value(at: 1), 78.229048276183, accuracy: 1e-9)
     }
 
     func testHeightReplacementAdoptsIncomingCurve() {
@@ -147,20 +147,20 @@ final class ListAnimationModelTests: XCTestCase {
             oldSettledHeight: 75,
             newSettledHeight: 125,
             at: 0,
-            animation: .easeOut(duration: 2)
+            transition: .linear(duration: 2)
         )
 
         guard case let .started(track) = mutation else {
             return XCTFail("expected height track")
         }
-        XCTAssertEqual(track.curve, .easeOut)
+        XCTAssertEqual(track.curve, .linear)
     }
 
     func testStaleCompletionCannotClearReplacement() {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
-        guard case let .started(first) = model.transitionOpacity(owner: owner, to: 0.5, at: 0, duration: 1),
-              case let .started(second) = model.transitionOpacity(owner: owner, to: 1, at: 0.5, duration: 1)
+        guard case let .started(first) = model.transitionOpacity(owner: owner, to: 0.5, at: 0, transition: .easeInOut(duration: 1)),
+              case let .started(second) = model.transitionOpacity(owner: owner, to: 1, at: 0.5, transition: .easeInOut(duration: 1))
         else { return XCTFail("expected tracks") }
         XCTAssertFalse(model.complete(owner: owner, property: .opacity,
                                       generation: first.generation, at: 1))
@@ -170,21 +170,21 @@ final class ListAnimationModelTests: XCTestCase {
     func testZeroDurationChangedPropertySettlesButSameTargetDoesNotClearOtherTrack() {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
-        _ = model.transitionOpacity(owner: owner, to: 0, at: 0, duration: 3)
+        _ = model.transitionOpacity(owner: owner, to: 0, at: 0, transition: .easeInOut(duration: 3))
         let opacity = model.track(for: owner, property: .opacity)
         XCTAssertEqual(model.transitionPosition(owner: owner, oldSettledY: 10,
-                                                newSettledY: 10, at: 1, duration: 0), .unchanged)
+                                                newSettledY: 10, at: 1, transition: .easeInOut(duration: 0)), .unchanged)
         XCTAssertEqual(model.track(for: owner, property: .opacity), opacity)
     }
 
     func testZeroDurationChangedPositionSettlesOnlyPosition() {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
-        _ = model.transitionOpacity(owner: owner, to: 0, at: 0, duration: 3)
+        _ = model.transitionOpacity(owner: owner, to: 0, at: 0, transition: .easeInOut(duration: 3))
         let opacity = model.track(for: owner, property: .opacity)
 
         let mutation = model.transitionPosition(owner: owner, oldSettledY: 10,
-                                                newSettledY: 20, at: 1, duration: 0)
+                                                newSettledY: 20, at: 1, transition: .easeInOut(duration: 0))
 
         XCTAssertEqual(mutation, .immediate(value: 0))
         XCTAssertNil(model.track(for: owner, property: .positionY))
@@ -196,16 +196,16 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedViewport()
         guard case let .started(first) = model.transitionViewport(
-            oldSettledOffset: 100, newSettledOffset: 300, at: 0, duration: 4
+            oldSettledOffset: 100, newSettledOffset: 300, at: 0, transition: .easeInOut(duration: 4)
         ) else { return XCTFail("expected viewport track") }
 
         XCTAssertEqual(model.transitionViewport(
-            oldSettledOffset: 300, newSettledOffset: 300, at: 1, duration: 20
+            oldSettledOffset: 300, newSettledOffset: 300, at: 1, transition: .easeInOut(duration: 20)
         ), .unchanged)
         XCTAssertEqual(model.track(for: .viewport, property: .viewportOffset), first)
 
         guard case let .started(second) = model.transitionViewport(
-            oldSettledOffset: 300, newSettledOffset: 500, at: 2, duration: 2
+            oldSettledOffset: 300, newSettledOffset: 500, at: 2, transition: .easeInOut(duration: 2)
         ) else { return XCTFail("expected replacement") }
         XCTAssertEqual(second.from, -300, accuracy: 1e-9)
         XCTAssertEqual(500 + second.from, 200, accuracy: 1e-9)
@@ -215,17 +215,17 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedViewport()
         guard case let .started(first) = model.transitionViewport(
-            oldSettledOffset: 100, newSettledOffset: 300, at: 0, duration: 4
+            oldSettledOffset: 100, newSettledOffset: 300, at: 0, transition: .easeInOut(duration: 4)
         ) else { return XCTFail("expected viewport track") }
 
         XCTAssertEqual(model.transitionViewport(
-            oldSettledOffset: 300, newSettledOffset: 500, at: 1, duration: 0
+            oldSettledOffset: 300, newSettledOffset: 500, at: 1, transition: .easeInOut(duration: 0)
         ), .immediate(value: 0))
         XCTAssertNil(model.track(for: .viewport, property: .viewportOffset))
         XCTAssertEqual(model.value(for: .viewport, property: .viewportOffset, at: 1), 0)
 
         guard case let .started(next) = model.transitionViewport(
-            oldSettledOffset: 500, newSettledOffset: 600, at: 2, duration: 1
+            oldSettledOffset: 500, newSettledOffset: 600, at: 2, transition: .easeInOut(duration: 1)
         ) else { return XCTFail("expected viewport track after settlement") }
         XCTAssertGreaterThan(next.generation, first.generation)
     }
@@ -234,10 +234,10 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1, height: 75)
         _ = model.transitionPosition(owner: owner, oldSettledY: 100,
-                                     newSettledY: 180, at: 0, duration: 4)
+                                     newSettledY: 180, at: 0, transition: .easeInOut(duration: 4))
         _ = model.transitionHeight(owner: owner, oldSettledHeight: 75,
-                                   newSettledHeight: 100, at: 0, duration: 4)
-        _ = model.transitionOpacity(owner: owner, to: 0.5, at: 0, duration: 4)
+                                   newSettledHeight: 100, at: 0, transition: .easeInOut(duration: 4))
+        _ = model.transitionOpacity(owner: owner, to: 0.5, at: 0, transition: .easeInOut(duration: 4))
         let livePositionTrack = model.track(for: owner, property: .positionY)
         let liveHeightTrack = model.track(for: owner, property: .height)
         let liveOpacityTrack = model.track(for: owner, property: .opacity)
@@ -251,13 +251,13 @@ final class ListAnimationModelTests: XCTestCase {
         XCTAssertEqual(model.track(for: owner, property: .opacity), liveOpacityTrack)
         XCTAssertEqual(try XCTUnwrap(model.value(
             for: transient, property: .positionY, at: 3
-        )), -67.5, accuracy: 1e-9)
+        )), -69.66704551621442, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(model.value(
             for: transient, property: .height, at: 3
-        )), 78.90625, accuracy: 1e-9)
+        )), 78.229048276183, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(model.value(
             for: transient, property: .opacity, at: 3
-        )), 0.921875, accuracy: 1e-9)
+        )), 0.9354190344763401, accuracy: 1e-9)
         for property in [ListAnimatedProperty.viewportOffset, .positionY, .height, .opacity] {
             XCTAssertNil(model.track(for: transient, property: property))
         }
@@ -271,7 +271,7 @@ final class ListAnimationModelTests: XCTestCase {
             width: 320,
             height: 75,
             at: 3,
-            duration: 2
+            transition: .easeInOut(duration: 2)
         )
 
         guard case let .started(track) = mutation else {
@@ -294,32 +294,32 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1, height: 75)
         _ = model.transitionPosition(owner: owner, oldSettledY: 100,
-                                     newSettledY: 180, at: 0, duration: 4)
-        _ = model.transitionOpacity(owner: owner, to: 0.5, at: 0, duration: 4)
+                                     newSettledY: 180, at: 0, transition: .easeInOut(duration: 4))
+        _ = model.transitionOpacity(owner: owner, to: 0.5, at: 0, transition: .easeInOut(duration: 4))
         _ = model.transitionHeight(owner: owner, oldSettledHeight: 75,
-                                   newSettledHeight: 100, at: 0, duration: 4)
+                                   newSettledHeight: 100, at: 0, transition: .easeInOut(duration: 4))
 
-        let first = model.beginExit(from: owner, at: 1, duration: 2)
+        let first = model.beginExit(from: owner, at: 1, transition: .easeInOut(duration: 2))
 
-        XCTAssertEqual(first.positionY, -67.5, accuracy: 1e-9)
-        XCTAssertEqual(first.height, 78.90625, accuracy: 1e-9)
+        XCTAssertEqual(first.positionY, -69.66704551621442, accuracy: 1e-9)
+        XCTAssertEqual(first.height, 78.229048276183, accuracy: 1e-9)
         XCTAssertNil(model.value(for: owner, property: .opacity, at: 1))
-        XCTAssertEqual(model.value(for: first.owner, property: .positionY, at: 1), -67.5)
-        XCTAssertEqual(model.value(for: first.owner, property: .height, at: 1), 78.90625)
+        XCTAssertEqual(model.value(for: first.owner, property: .positionY, at: 1), -69.66704551621442)
+        XCTAssertEqual(model.value(for: first.owner, property: .height, at: 1), 78.229048276183)
         XCTAssertNil(model.track(for: first.owner, property: .height),
                      "an exit freezes analytic height and remains fade-only")
         guard case let .started(firstFade) = first.opacityMutation else {
             return XCTFail("expected exit opacity track")
         }
-        XCTAssertEqual(firstFade.from, 0.921875, accuracy: 1e-9)
+        XCTAssertEqual(firstFade.from, 0.9354190344763401, accuracy: 1e-9)
         XCTAssertEqual(firstFade.to, 0)
 
         _ = model.beginInsertion(owner: owner,
                                  width: 240,
                                  height: 100,
                                  at: 1,
-                                 duration: 2)
-        let second = model.beginExit(from: owner, at: 1, duration: 2)
+                                 transition: .easeInOut(duration: 2))
+        let second = model.beginExit(from: owner, at: 1, transition: .easeInOut(duration: 2))
         XCTAssertNotEqual(first.owner, second.owner)
         XCTAssertNotNil(model.track(for: first.owner, property: .opacity))
     }
@@ -327,7 +327,7 @@ final class ListAnimationModelTests: XCTestCase {
     func testActiveTrackIsRetainedWithoutAnyLayerBinding() {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
-        _ = model.transitionOpacity(owner: owner, to: 0, at: 0, duration: 4)
+        _ = model.transitionOpacity(owner: owner, to: 0, at: 0, transition: .easeInOut(duration: 4))
         let track = model.track(for: owner, property: .opacity)
 
         XCTAssertEqual(model.value(for: owner, property: .opacity, at: 2), 0.5)
@@ -338,9 +338,9 @@ final class ListAnimationModelTests: XCTestCase {
         let model = ListAnimationModel()
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
         guard case let .started(position) = model.transitionPosition(
-            owner: owner, oldSettledY: 0, newSettledY: 40, at: 0, duration: 1
+            owner: owner, oldSettledY: 0, newSettledY: 40, at: 0, transition: .easeInOut(duration: 1)
         ), case let .started(opacity) = model.transitionOpacity(
-            owner: owner, to: 0, at: 0, duration: 2
+            owner: owner, to: 0, at: 0, transition: .easeInOut(duration: 2)
         ) else { return XCTFail("expected tracks") }
 
         XCTAssertFalse(model.complete(owner: owner, property: .positionY,
@@ -358,7 +358,7 @@ final class ListAnimationModelTests: XCTestCase {
         let other = ListAnimationOwner.live(AnyHashable("other"))
         model.seedLive(owner: owner, positionOffset: 0, opacity: 1)
         model.seedLive(owner: other, positionOffset: 12, opacity: 0.5)
-        let exit = model.beginExit(from: owner, at: 0, duration: 1)
+        let exit = model.beginExit(from: owner, at: 0, transition: .easeInOut(duration: 1))
 
         model.remove(other)
         XCTAssertNil(model.value(for: other, property: .positionY, at: 0))
@@ -382,7 +382,7 @@ final class ListAnimationModelTests: XCTestCase {
         controller.seedLive(identity: "row", layer: firstLayer)
         controller.transitionPosition(identity: "row", layer: firstLayer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 4)
+                                      transition: .easeInOut(duration: 4))
         let original = try XCTUnwrap(
             controller.model.track(for: owner, property: .positionY)
         )
@@ -417,7 +417,7 @@ final class ListAnimationModelTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         let staleOwner = controller.makeExit(
             identity: "row", layer: layer, contentY: 240,
-            logicalDuration: 4,
+            transition: .easeInOut(duration: 4),
             completion: { staleCleanupCount += 1 }
         )
         XCTAssertEqual(layer.position.y, 240)
@@ -425,7 +425,7 @@ final class ListAnimationModelTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         let currentOwner = controller.makeExit(
             identity: "row", layer: layer, contentY: 260,
-            logicalDuration: 8,
+            transition: .easeInOut(duration: 8),
             completion: { currentCleanupCount += 1 }
         )
         XCTAssertNotEqual(staleOwner, currentOwner)
@@ -453,10 +453,10 @@ final class ListAnimationModelTests: XCTestCase {
         controller.seedLive(identity: "row", layer: layer)
         controller.transitionPosition(identity: "row", layer: layer,
                                       oldSettledY: 100, newSettledY: 180,
-                                      logicalDuration: 4)
+                                      transition: .easeInOut(duration: 4))
         controller.transitionHeight(identity: "row", layer: layer,
                                     oldSettledHeight: 75, newSettledHeight: 100,
-                                    logicalDuration: 4)
+                                    transition: .easeInOut(duration: 4))
         time = 1
 
         let transient = controller.makeTransient(
@@ -465,7 +465,7 @@ final class ListAnimationModelTests: XCTestCase {
         )
 
         XCTAssertEqual(layer.position.y, 240)
-        XCTAssertEqual(layer.bounds.height, 78.90625, accuracy: 1e-9)
+        XCTAssertEqual(layer.bounds.height, 78.229048276183, accuracy: 1e-9)
         XCTAssertEqual(CGFloat(layer.opacity), 1, accuracy: 1e-9)
         XCTAssertTrue(controller.model.contains(.live(AnyHashable("row"))))
         XCTAssertTrue(controller.model.contains(transient))
@@ -484,22 +484,22 @@ final class ListAnimationModelTests: XCTestCase {
                                        oldSettledY: 100,
                                        newSettledY: 180,
                                        at: 0,
-                                       duration: 4)
+                                       transition: .easeInOut(duration: 4))
 
         XCTAssertEqual(try XCTUnwrap(model.value(
             for: owner, property: .positionY, at: 1
-        )), -67.5, accuracy: 1e-9)
+        )), -69.66704551621442, accuracy: 1e-9)
 
         let mutation = model.transitionGhostBlock(owner: owner,
                                                   oldSettledY: 180,
                                                   newSettledY: 240,
                                                   at: 1,
-                                                  duration: 2)
+                                                  transition: .easeInOut(duration: 2))
         guard case let .started(track) = mutation else {
             return XCTFail("expected ghost replacement")
         }
-        XCTAssertEqual(track.from, -127.5, accuracy: 1e-9)
-        XCTAssertEqual(240 + track.from, 112.5, accuracy: 1e-9)
+        XCTAssertEqual(track.from, -129.66704551621442, accuracy: 1e-9)
+        XCTAssertEqual(240 + track.from, 110.33295448378558, accuracy: 1e-9)
     }
 
     func testGhostBlockSameTargetIsExactNoOpAndZeroDurationSettles() throws {
@@ -507,18 +507,18 @@ final class ListAnimationModelTests: XCTestCase {
         let owner = ListAnimationOwner.ghostBlock(8)
         model.seedGhostBlock(owner: owner)
         guard case let .started(original) = model.transitionGhostBlock(
-            owner: owner, oldSettledY: 40, newSettledY: 90, at: 0, duration: 5
+            owner: owner, oldSettledY: 40, newSettledY: 90, at: 0, transition: .easeInOut(duration: 5)
         ) else { return XCTFail("expected ghost track") }
 
         XCTAssertEqual(model.transitionGhostBlock(
             owner: owner, oldSettledY: 90, newSettledY: 90,
-            at: 1, duration: 20
+            at: 1, transition: .easeInOut(duration: 20)
         ), .unchanged)
         XCTAssertEqual(model.track(for: owner, property: .positionY), original)
 
         XCTAssertEqual(model.transitionGhostBlock(
             owner: owner, oldSettledY: 90, newSettledY: 120,
-            at: 1, duration: 0
+            at: 1, transition: .easeInOut(duration: 0)
         ), .immediate(value: 0))
         XCTAssertNil(model.track(for: owner, property: .positionY))
     }
@@ -537,7 +537,7 @@ final class ListAnimationModelTests: XCTestCase {
         let mutation = controller.transitionGhostBlock(
             owner: owner, layer: layer,
             oldSettledY: 100, newSettledY: 180,
-            logicalDuration: 4, transactionTime: time
+            transition: .easeInOut(duration: 4), transactionTime: time
         )
         guard case let .started(track) = mutation else {
             return XCTFail("expected installed ghost track")
@@ -551,7 +551,7 @@ final class ListAnimationModelTests: XCTestCase {
         time = 11
         XCTAssertEqual(try XCTUnwrap(controller.ghostBlockOffset(
             owner: owner, at: time
-        )), -67.5, accuracy: 1e-9)
+        )), -69.66704551621442, accuracy: 1e-9)
     }
 
     func testControllerPositionCompletionReportsOnlyCurrentGeneration() throws {
@@ -573,7 +573,7 @@ final class ListAnimationModelTests: XCTestCase {
         controller.transitionPosition(
             identity: "row", layer: layer,
             oldSettledY: 0, newSettledY: 100,
-            logicalDuration: 4,
+            transition: .easeInOut(duration: 4),
             completion: { completed.append($0) }
         )
         let stale = try XCTUnwrap(installed.first)
@@ -582,7 +582,7 @@ final class ListAnimationModelTests: XCTestCase {
         controller.transitionPosition(
             identity: "row", layer: layer,
             oldSettledY: 100, newSettledY: 200,
-            logicalDuration: 4,
+            transition: .easeInOut(duration: 4),
             completion: { completed.append($0) }
         )
         let current = try XCTUnwrap(installed.last)
@@ -613,13 +613,13 @@ final class ListAnimationModelTests: XCTestCase {
         let first = controller.transitionPosition(
             identity: "row", layer: layer,
             oldSettledY: 0, newSettledY: 100,
-            logicalDuration: 4,
+            transition: .easeInOut(duration: 4),
             completion: { completed.append($0) }
         )
         let unchanged = controller.transitionPosition(
             identity: "row", layer: layer,
             oldSettledY: 100, newSettledY: 100,
-            logicalDuration: 1,
+            transition: .easeInOut(duration: 1),
             completion: { _ in XCTFail("unchanged call installed a replacement completion") }
         )
 

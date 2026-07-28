@@ -66,11 +66,11 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         fixture.listView.applyChanges(
             scrollTo: (index: 20, pointOffset: -20),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         XCTAssertEqual(
             try XCTUnwrap(fixture.settledScreenY(identity: 20)),
@@ -87,7 +87,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         context.fixture.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -107,7 +107,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         XCTAssertEqual(
             try XCTUnwrap(fixture.settledScreenY(identity: 0)),
@@ -118,7 +118,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         fixture.listView.applyChanges(
             items: items(-5..<0) + source,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -138,12 +138,12 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
 
         fixture.listView.applyChanges(
             items: items([-1]) + source,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -166,7 +166,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         context.fixture.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -183,7 +183,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         context.fixture.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         let lastY = try XCTUnwrap(context.fixture.settledScreenY(identity: 19))
@@ -200,13 +200,13 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
 
         fixture.listView.applyChanges(
             items: Array(source.dropFirst()),
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -225,7 +225,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         context.fixture.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -243,7 +243,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             items: changed,
             newInsets: UIEdgeInsets(top: 100, left: 0, bottom: 0, right: 0),
             anchorMode: .preserveVisibleContent,
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -261,7 +261,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             items: changed,
             scrollTo: (index: 40, pointOffset: 0),
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         let targetIdentity = changed[40].identity
@@ -280,11 +280,11 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         preserved.listView.applyChanges(
             items: replacement,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         automatic.listView.applyChanges(
             items: replacement,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -311,11 +311,11 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         fixture.listView.applyChanges(
             scrollTo: (index: 20, pointOffset: -20),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         let witness = ids[20]
         var changed: [CoreListItem] = (0..<5).map { _ in
@@ -329,7 +329,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             items: changed,
             newSize: CGSize(width: 390, height: 320),
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         XCTAssertEqual(
@@ -351,7 +351,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             scrollTo: (index: 40, pointOffset: 0),
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         let oldLoadedIDs = Set(fixture.activeWindow.items.map {
             fixture.listView.items[$0.index].identity
@@ -365,7 +365,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         fixture.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
 
         let newlyLoaded = fixture.activeWindow.items.filter {
@@ -388,7 +388,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-            animation: .smoothstep(duration: 0)
+            transition: .easeInOut(duration: 0)
         )
         let beforeRendered = try XCTUnwrap(fixture.renderedY(identity: 0))
         let changed = items(-5..<0) + source
@@ -396,7 +396,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         fixture.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animation: .easeOut(duration: 4)
+            transition: .easeInOut(duration: 4)
         )
 
         XCTAssertEqual(
@@ -411,7 +411,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         )
         let insertedTrack = try XCTUnwrap(fixture.opacityTrack(identity: -1))
         XCTAssertEqual(insertedTrack.duration, 4, accuracy: 1e-9)
-        XCTAssertEqual(insertedTrack.curve, .smoothstep)
+        XCTAssertEqual(insertedTrack.curve, .easeInOut)
         let insertedView = try XCTUnwrap(fixture.view(identity: -1))
         XCTAssertNotNil(insertedView.layer.animation(
             forKey: fixture.animationController.compiler.animationKey(for: .opacity)
@@ -431,7 +431,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         context.fixture.listView.applyChanges(
             items: first,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 4
+            transition: .easeInOut(duration: 4)
         )
         context.fixture.advance(by: 1)
         let beforeTrack = try XCTUnwrap(context.fixture.positionTrack(identity: 22))
@@ -441,7 +441,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         context.fixture.listView.applyChanges(
             items: second,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 3
+            transition: .easeInOut(duration: 3)
         )
 
         XCTAssertEqual(
@@ -466,7 +466,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
         uikit.listView.applyChanges(
             items: changed,
             anchorMode: .preserveVisibleContent,
-            animationDuration: 0
+            transition: .easeInOut(duration: 0)
         )
         let expected = try XCTUnwrap(uikit.settledScreenY(identity: 20))
 
@@ -479,16 +479,16 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             )
             fixture.listView.applyChanges(
                 newInsets: UIEdgeInsets(top: 60, left: 0, bottom: 0, right: 0),
-                animation: .smoothstep(duration: 0)
+                transition: .easeInOut(duration: 0)
             )
             fixture.listView.applyChanges(
                 scrollTo: (index: 20, pointOffset: -20),
-                animationDuration: 0
+                transition: .easeInOut(duration: 0)
             )
             fixture.listView.applyChanges(
                 items: changed,
                 anchorMode: .preserveVisibleContent,
-                animationDuration: 0
+                transition: .easeInOut(duration: 0)
             )
             let item = try XCTUnwrap(fixture.activeWindow.items.first {
                 fixture.listView.items[$0.index].identity == AnyHashable(20)
@@ -513,7 +513,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             fixture.listView.applyChanges(
                 items: items(-5..<0) + source,
                 anchorMode: .preserveVisibleContent,
-                animationDuration: 0.3
+                transition: .easeInOut(duration: 0.3)
             )
 
             XCTAssertTrue(fixture.engine.isDecelerating, "\(mode)")
