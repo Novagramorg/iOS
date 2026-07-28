@@ -254,15 +254,14 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         let g = flightGeneration
         // disablingImplicitActions: false — this site never disabled them, and doing so now would
         // change what the flight install does.
-        CoreListTransition.commit(disablingImplicitActions: false, completion: { [weak self] in
+        let flightAnim = f.trajectory.boundsOriginKeyframeAnimation(beginTime: now)
+        flightAnim.preferHighRefreshRate()
+        if #available(iOS 15.0, *), let r = maxRefreshRange() { flightAnim.preferredFrameRateRange = r }   // pin the floor: hold the rate
+        flightAnim.setCoreListCompletion { [weak self] _ in
             guard let self, self.flightGeneration == g else { return }   // ignore stale completions
             self.finalizeFlight()
-        }) {
-            let flightAnim = f.trajectory.boundsOriginKeyframeAnimation(beginTime: now)
-            flightAnim.preferHighRefreshRate()
-            if #available(iOS 15.0, *), let r = maxRefreshRange() { flightAnim.preferredFrameRateRange = r }   // pin the floor: hold the rate
-            host.layer.add(flightAnim, forKey: Self.flightKey)
         }
+        host.layer.add(flightAnim, forKey: Self.flightKey)
         startSamplingLink()
     }
 
@@ -297,15 +296,14 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         host.bounds.origin.y = f.trajectory.finalOffset
         flightGeneration &+= 1
         let g = flightGeneration
-        CoreListTransition.commit(disablingImplicitActions: false, completion: { [weak self] in
+        let flightAnim = f.trajectory.boundsOriginKeyframeAnimation(beginTime: f.startTime)
+        flightAnim.preferHighRefreshRate()
+        if #available(iOS 15.0, *), let r = maxRefreshRange() { flightAnim.preferredFrameRateRange = r }   // pin the floor: hold the rate
+        flightAnim.setCoreListCompletion { [weak self] _ in
             guard let self, self.flightGeneration == g else { return }
             self.finalizeFlight()
-        }) {
-            let flightAnim = f.trajectory.boundsOriginKeyframeAnimation(beginTime: f.startTime)
-            flightAnim.preferHighRefreshRate()
-            if #available(iOS 15.0, *), let r = maxRefreshRange() { flightAnim.preferredFrameRateRange = r }   // pin the floor: hold the rate
-            host.layer.add(flightAnim, forKey: Self.flightKey)
         }
+        host.layer.add(flightAnim, forKey: Self.flightKey)
     }
 
     /// Catch an in-flight `.keyframe` deceleration: read the live offset, snap the model (physics + host

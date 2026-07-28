@@ -51,11 +51,11 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testPositionKeyframeIsAdditiveAndUsesTrackClock() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 1, from: -80, to: 0,
                                        startTime: 12, duration: 3)
         let animation = try XCTUnwrap(compiler.animation(for: track, property: .positionY)
-                                      as? CAKeyframeAnimation)
+                                      as? CABasicAnimation)
         XCTAssertEqual(animation.keyPath, "position.y")
         XCTAssertTrue(animation.isAdditive)
         XCTAssertEqual(animation.beginTime, 12)
@@ -65,22 +65,22 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testOpacityKeyframeIsAbsolute() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 2, from: 0.25, to: 1,
                                        startTime: 4, duration: 2)
         let animation = try XCTUnwrap(compiler.animation(for: track, property: .opacity)
-                                      as? CAKeyframeAnimation)
+                                      as? CABasicAnimation)
         XCTAssertFalse(animation.isAdditive)
         XCTAssertEqual(animation.keyPath, "opacity")
     }
 
     func testHeightKeyframeIsAbsoluteAndIndependentlyKeyed() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 3, from: 75, to: 100,
                                        startTime: 4, duration: 2)
 
         let animation = try XCTUnwrap(compiler.animation(for: track, property: .height)
-                                      as? CAKeyframeAnimation)
+                                      as? CABasicAnimation)
 
         XCTAssertFalse(animation.isAdditive)
         XCTAssertEqual(animation.keyPath, "bounds.size.height")
@@ -92,17 +92,17 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testHorizontalGeometryKeyframesHaveIndependentMappings() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let position = ListAnimationTrack(generation: 31, from: -40, to: 0,
                                           startTime: 4, duration: 2)
         let width = ListAnimationTrack(generation: 32, from: 390, to: 310,
                                        startTime: 4, duration: 2)
 
         let positionAnimation = try XCTUnwrap(
-            compiler.animation(for: position, property: .positionX) as? CAKeyframeAnimation
+            compiler.animation(for: position, property: .positionX) as? CABasicAnimation
         )
         let widthAnimation = try XCTUnwrap(
-            compiler.animation(for: width, property: .width) as? CAKeyframeAnimation
+            compiler.animation(for: width, property: .width) as? CABasicAnimation
         )
 
         XCTAssertEqual(positionAnimation.keyPath, "position.x")
@@ -114,12 +114,12 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testViewportKeyframeIsAdditiveBoundsOrigin() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 90, from: -500, to: 0,
                                        startTime: 10, duration: 4)
         let animation = try XCTUnwrap(compiler.animation(
             for: track, property: .viewportOffset
-        ) as? CAKeyframeAnimation)
+        ) as? CABasicAnimation)
 
         XCTAssertEqual(animation.keyPath, "bounds.origin.y")
         XCTAssertTrue(animation.isAdditive)
@@ -127,56 +127,24 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
                        "CoreListAnimation.viewportOffset")
     }
 
-    func testCompiledSamplesLinearlyInterpolateTheAnalyticTrack() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
-        let spans: [(CGFloat, CGFloat)] = [(-400, 0), (0, 1), (75, -125)]
-
-        let cases: [(ListAnimatedProperty, [(CGFloat, CGFloat)], Double)] = [
-            (.positionY, spans, 0.02),
-            (.height, [(75, 100), (100, 40)], 0.02),
-            (.opacity, [(0, 1)], 0.0001),
-        ]
-        for (property, propertySpans, accuracy) in cases {
-            for (from, to) in propertySpans {
-                let track = ListAnimationTrack(generation: 7, from: from, to: to,
-                                               startTime: 19, duration: 3)
-                let animation = try XCTUnwrap(compiler.animation(for: track, property: property)
-                                              as? CAKeyframeAnimation)
-                for step in 0..<101 {
-                    let phase = (Double(step) + 0.37) / 101
-                    let compiled = try interpolatedValue(of: animation, phase: phase)
-                    let analytic = Double(track.value(at: track.startTime + phase * track.duration))
-                    XCTAssertEqual(compiled, analytic, accuracy: accuracy,
-                                   "\(property) \(from)->\(to) diverged at phase \(phase)")
-                }
-            }
-        }
-    }
-
-    func testCompilationUsesInclusiveSamplingAndPreservesGenerationAndSlowClock() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 10)
+    func testCompilationPreservesGenerationAndDoesNotRescaleDuration() throws {
+        let compiler = CoreAnimationCompiler()
         // The duration is already Slow-Animation-scaled before it reaches the compiler.
         let track = ListAnimationTrack(generation: 91, from: 20, to: 0,
                                        startTime: 40, duration: 3)
         let animation = try XCTUnwrap(compiler.animation(for: track, property: .positionY)
-                                      as? CAKeyframeAnimation)
-        let values = try XCTUnwrap(animation.values as? [NSNumber])
-        let keyTimes = try XCTUnwrap(animation.keyTimes)
-
-        XCTAssertEqual(values.count, 31)
-        XCTAssertEqual(keyTimes.count, 31)
-        XCTAssertEqual(values.first?.doubleValue, Double(track.value(at: 40)))
-        XCTAssertEqual(values.last?.doubleValue, Double(track.value(at: 43)))
-        XCTAssertEqual(keyTimes.first?.doubleValue, 0)
-        XCTAssertEqual(keyTimes.last?.doubleValue, 1)
-        XCTAssertEqual(animation.calculationMode, .linear)
+                                      as? CABasicAnimation)
+        XCTAssertEqual(animation.beginTime, 40)
         XCTAssertEqual(animation.duration, 3, "the compiler must not apply Slow Animation scaling twice")
+        XCTAssertEqual(animation.speed, 1.0)
         XCTAssertEqual((animation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
                        track.generation)
+        XCTAssertEqual(animation.fromValue as? CGFloat, 20)
+        XCTAssertEqual(animation.toValue as? CGFloat, 0)
     }
 
     func testInstallUsesStableKeysAndReplacementKeepsOtherProperty() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let layer = CALayer()
         layer.speed = 0
         layer.timeOffset = 10
@@ -218,7 +186,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testDisabledCompilerDoesNotInstallAnimation() {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240, emitsAnimations: false)
+        let compiler = CoreAnimationCompiler(emitsAnimations: false)
         let layer = CALayer()
         let track = ListAnimationTrack(generation: 1, from: 1, to: 0,
                                        startTime: 0, duration: 1)
@@ -238,46 +206,56 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         XCTAssertFalse(layer.removedKeys.contains("CoreListAnimation.opacity"))
     }
 
-    func testPausedWindowBackedLayerPresentationMatchesAnalyticPositionTrack() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
-        let track = ListAnimationTrack(generation: 44, from: -80, to: 0,
-                                       startTime: 12, duration: 3)
-        let windowScene = try XCTUnwrap(
-            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        )
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
-        let root = UIViewController()
-        window.rootViewController = root
-        root.view.backgroundColor = .white
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true }
+    /// The 100%-match proof: install per curve on a REAL layer, pause it, step `timeOffset`, and
+    /// compare what Core Animation actually renders against `track.value(at:)`. This measures the
+    /// success criterion — rendered motion — rather than the sample array that used to approximate it.
+    ///
+    /// 0.5pt tolerance is well inside a pixel on a 3x display, so a pass means visually identical,
+    /// while the class of error this work fixed (23% of travel on a mis-specified spring) would fail
+    /// it by orders of magnitude.
+    func testPausedLayerPresentationMatchesAnalyticTrackForEveryCurve() throws {
+        let compiler = CoreAnimationCompiler()
+        let cases: [(String, CoreListTransition.Animation.Curve, CoreListSpringKind, Double)] = [
+            ("easeInOut", .easeInOut, .adjustedBezier, 3.0),
+            ("easeIn", .easeIn, .adjustedBezier, 3.0),
+            ("linear", .linear, .adjustedBezier, 3.0),
+            ("custom", .custom(0.33, 0.52, 0.25, 0.99), .adjustedBezier, 3.0),
+            ("spring@0.4", .spring, .adjustedBezier, 0.4),
+            ("spring@0.5", .spring, .system05, 0.5)
+        ]
 
-        let layer = CALayer()
-        layer.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
-        layer.position = CGPoint(x: 100, y: 200)
-        layer.backgroundColor = UIColor.red.cgColor
-        layer.speed = 0
-        layer.timeOffset = track.startTime
-        root.view.layer.addSublayer(layer)
-        compiler.install(track, property: .positionY, on: layer)
+        for (name, curve, springKind, duration) in cases {
+            let track = ListAnimationTrack(generation: 44, from: -80, to: 0,
+                                           startTime: 12, duration: duration,
+                                           curve: curve, springKind: springKind)
+            let (window, root) = try visibleWindow()
+            defer { window.isHidden = true }
 
-        for phase in [0.0, 0.5, 1.0] {
-            layer.timeOffset = track.startTime + phase * track.duration
-            root.view.layoutIfNeeded()
-            CATransaction.flush()
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+            let layer = CALayer()
+            layer.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
+            layer.position = CGPoint(x: 100, y: 200)
+            layer.backgroundColor = UIColor.red.cgColor
+            layer.speed = 0
+            layer.timeOffset = track.startTime
+            root.view.layer.addSublayer(layer)
+            compiler.install(track, property: .positionY, on: layer)
 
-            let presentation = try XCTUnwrap(layer.presentation())
-            let renderedOffset = presentation.position.y - layer.position.y
-            let analyticOffset = track.value(at: layer.timeOffset)
-            XCTAssertEqual(renderedOffset, analyticOffset, accuracy: 0.1,
-                           "real Core Animation diverged at phase \(phase)")
+            for phase in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                layer.timeOffset = track.startTime + phase * track.duration
+                root.view.layoutIfNeeded()
+                flushCoreAnimation()
+
+                let presentation = try XCTUnwrap(layer.presentation())
+                let rendered = presentation.position.y - layer.position.y
+                let analytic = track.value(at: layer.timeOffset)
+                XCTAssertEqual(rendered, analytic, accuracy: 0.5,
+                               "\(name) diverged at phase \(phase)")
+            }
         }
     }
 
     func testPausedWindowBackedLayerPresentationMatchesAnalyticOpacityTrack() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 45, from: 0.2, to: 1,
                                        startTime: 12, duration: 3)
         let (window, root) = try visibleWindow()
@@ -301,7 +279,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testPausedWindowBackedLayerPresentationMatchesAnalyticHeightTrack() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 46, from: 75, to: 100,
                                        startTime: 12, duration: 3)
         let (window, root) = try visibleWindow()
@@ -324,7 +302,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testPausedViewportAddsToChangingBoundsAndPhysicsFlight() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 240)
+        let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 47, from: -200, to: 0,
                                        startTime: 12, duration: 4)
         let (window, root) = try visibleWindow()
@@ -368,7 +346,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
 
     func testControllerHeightRetargetPreservesPositionAndOpacityKeys() throws {
         var time: CFTimeInterval = 0
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -412,7 +390,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     func testPausedWindowBackedReplacementMatchesControllerModel() throws {
         var time: CFTimeInterval = 10
         let controller = ListAnimationController(
-            compiler: CoreAnimationCompiler(samplesPerSecond: 240),
+            compiler: CoreAnimationCompiler(),
             mediaTime: { time },
             durationFactor: { 1 }
         )
@@ -474,7 +452,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         )
         let outgoingAnimation = try XCTUnwrap(outgoingView.layer.animation(
             forKey: "CoreListAnimation.positionY"
-        ) as? CAKeyframeAnimation)
+        ) as? CABasicAnimation)
         XCTAssertTrue(outgoingAnimation.isAdditive)
         outgoingView.layer.speed = 0
 
@@ -506,7 +484,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let incomingView = try XCTUnwrap(incomingFixture.view(identity: incomingIdentity))
         let incomingAnimation = try XCTUnwrap(incomingView.layer.animation(
             forKey: "CoreListAnimation.positionY"
-        ) as? CAKeyframeAnimation)
+        ) as? CABasicAnimation)
         XCTAssertTrue(incomingAnimation.isAdditive)
         incomingView.layer.speed = 0
 
@@ -577,7 +555,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     func testPausedWindowBackedReboundMatchesOriginalTrackPhaseAndDeadline() throws {
         var time: CFTimeInterval = 10
         let controller = ListAnimationController(
-            compiler: CoreAnimationCompiler(samplesPerSecond: 240),
+            compiler: CoreAnimationCompiler(),
             mediaTime: { time },
             durationFactor: { 1 }
         )
@@ -614,8 +592,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         }
     }
 
-    func testControllerScalesLogicalDurationExactlyOnceForModelAndCA() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+    func testControllerAppliesSlowModeOnceAsScaledTrackAndAnimationSpeed() throws {
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { 40 },
@@ -635,14 +613,20 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let animation = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .positionY)
         ))
+        // The MODEL is on the scaled clock (its deadlines and reaping depend on it); the emitted
+        // animation keeps a logical duration and carries the factor as `speed`, matching
+        // CAAnimationUtils. Both describe the same 3s of wall time.
         XCTAssertEqual(track.duration, 3)
-        XCTAssertEqual(animation.duration, 3,
-                       "the controller, model, and compiler must share one scaled duration")
+        XCTAssertEqual(animation.duration, 0.3, accuracy: 1e-9,
+                       "the emitted duration must stay logical")
+        XCTAssertEqual(animation.speed, 0.1, accuracy: 1e-6,
+                       "Slow Animations must appear as speed, not a longer duration")
+        XCTAssertEqual(animation.duration / Double(animation.speed), 3, accuracy: 1e-6)
     }
 
     func testControllerViewportSlowDurationAndSameTargetPreserveExactTrackAndCA() throws {
         var time: CFTimeInterval = 40
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -662,7 +646,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let key = compiler.animationKey(for: .viewportOffset)
         let beforeAnimation = try XCTUnwrap(layer.animation(forKey: key))
         XCTAssertEqual(beforeTrack.duration, 3)
-        XCTAssertEqual(beforeAnimation.duration, 3)
+        XCTAssertEqual(beforeAnimation.duration, 0.3, accuracy: 1e-9)
+        XCTAssertEqual(beforeAnimation.speed, 0.1, accuracy: 1e-6)
 
         time = 41
         let mutation = controller.transitionViewport(
@@ -686,7 +671,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
 
     func testControllerSamePositionTargetLeavesInstalledGenerationAndClockUntouched() throws {
         var time: CFTimeInterval = 10
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -729,7 +714,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
 
     func testControllerSameHeightTargetLeavesModelAndInstalledCAKeyExactlyUntouched() throws {
         var time: CFTimeInterval = 10
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -766,7 +751,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testControllerResetRemovesHeightModelStateAndInstalledCAKey() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { 0 },
@@ -791,7 +776,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
 
     func testControllerPositionRetargetPreservesInFlightOpacityKey() throws {
         var time: CFTimeInterval = 0
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -831,7 +816,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     }
 
     func testControllerStaleUnbindDoesNotClearRecycledLayersCurrentOwnerKeys() throws {
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { 0 },
@@ -884,7 +869,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
 
     func testControllerRebindEmitsOriginalTrackClockAndCurrentBindingFinalizesIt() throws {
         var time: CFTimeInterval = 10
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -1035,7 +1020,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     func testStaleHeightCACompletionCannotClearReboundReplacementOrInstalledKey() throws {
         var time: CFTimeInterval = 0
         var installedCompletions: [() -> Void] = []
-        let compiler = CoreAnimationCompiler(samplesPerSecond: 20)
+        let compiler = CoreAnimationCompiler()
         let controller = ListAnimationController(
             compiler: compiler,
             mediaTime: { time },
@@ -1132,7 +1117,7 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
     func testGhostBlockControllerTrackMatchesPausedWrapperLayer() throws {
         var time: CFTimeInterval = 12
         let controller = ListAnimationController(
-            compiler: CoreAnimationCompiler(samplesPerSecond: 240),
+            compiler: CoreAnimationCompiler(),
             mediaTime: { time },
             durationFactor: { 1 }
         )
@@ -1165,23 +1150,4 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         }
     }
 
-    private func interpolatedValue(of animation: CAKeyframeAnimation,
-                                   phase: Double) throws -> Double {
-        let values = try XCTUnwrap(animation.values as? [NSNumber])
-        let keyTimes = try XCTUnwrap(animation.keyTimes)
-        let clamped = min(max(phase, 0), 1)
-        guard clamped > 0 else { return values[0].doubleValue }
-        guard clamped < 1 else { return values[values.count - 1].doubleValue }
-
-        for index in 1..<keyTimes.count {
-            let upperTime = keyTimes[index].doubleValue
-            guard clamped <= upperTime else { continue }
-            let lowerTime = keyTimes[index - 1].doubleValue
-            let localPhase = (clamped - lowerTime) / (upperTime - lowerTime)
-            let lowerValue = values[index - 1].doubleValue
-            let upperValue = values[index].doubleValue
-            return lowerValue + (upperValue - lowerValue) * localPhase
-        }
-        return values[values.count - 1].doubleValue
-    }
 }

@@ -2,13 +2,17 @@ import UIKit
 import QuartzCore
 
 extension CALayer {
-    /// Executor-path animation. Samples the curve into a keyframe animation, which is how CoreList
-    /// renders every curve (`CoreAnimationCompiler` does the same for model tracks) — so `.custom`
-    /// and `.spring` need no `CAMediaTimingFunction` equivalent.
+    /// Executor-path animation: built through the shared factory, so it emits exactly what the model
+    /// path and the rest of the app emit — a `CABasicAnimation` with a `CAMediaTimingFunction` for
+    /// bezier curves, a real `CASpringAnimation` for the two system-spring durations. Nothing here
+    /// samples a curve into keyframes any more.
     ///
-    /// Duration is scaled by `UIView.animationDurationFactor` HERE, exactly once, mirroring
-    /// Display's `CAAnimationUtils`. The model path scales in `ListAnimationController` and never
-    /// reaches this function; see the design doc's "two authorities, one scaling rule".
+    /// Slow Animations is applied HERE, exactly once, as `speed` — mirroring Display's
+    /// `CAAnimationUtils`. The model path applies it in `ListAnimationController` and never reaches
+    /// this function.
+    ///
+    /// The spring kind is resolved from the LOGICAL `duration`, before scaling — resolving it after
+    /// would miss the system-spring branches under Slow Animations.
     func animate(from: CGFloat,
                  to: CGFloat,
                  keyPath: String,
@@ -20,42 +24,25 @@ extension CALayer {
                  completion: ((Bool) -> Void)? = nil,
                  key: String? = nil) {
         let factor = UIView.animationDurationFactor
-        let scaledDuration = max(0.0, duration * factor)
-        guard scaledDuration > 0 else {
+        guard duration > 0 else {
             completion?(true)
             return
         }
 
-        let sampleCount = max(2, Int(ceil(scaledDuration * 240.0)) + 1)
-        let lastIndex = sampleCount - 1
-        var values: [NSNumber] = []
-        var keyTimes: [NSNumber] = []
-        values.reserveCapacity(sampleCount)
-        keyTimes.reserveCapacity(sampleCount)
-        for index in 0...lastIndex {
-            let phase = CGFloat(index) / CGFloat(lastIndex)
-            values.append(NSNumber(value: Double(from + (to - from) * curve.solve(at: phase))))
-            keyTimes.append(NSNumber(value: Double(phase)))
-        }
-
-        let animation = CAKeyframeAnimation(keyPath: keyPath)
-        animation.values = values
-        animation.keyTimes = keyTimes
-        animation.calculationMode = .linear
-        animation.duration = scaledDuration
-        animation.isAdditive = additive
+        let springKind = coreListSpringKind(logicalDuration: duration)
+        let animation = makeCoreListAnimation(from: from, to: to, keyPath: keyPath, curve: curve,
+                                              springKind: springKind,
+                                              logicalDuration: duration, durationFactor: factor,
+                                              additive: additive)
         animation.isRemovedOnCompletion = removeOnCompletion
-        animation.fillMode = removeOnCompletion ? .forwards : .both
-        if delay > 0 {
+        if !delay.isZero {
             animation.beginTime = convertTime(CACurrentMediaTime(), from: nil) + delay * factor
+            animation.fillMode = .both
         }
+        animation.preferHighRefreshRate()
         if let completion {
-            CoreListTransition.commit(disablingImplicitActions: true,
-                                      completion: { completion(true) }) {
-                self.add(animation, forKey: key ?? keyPath)
-            }
-        } else {
-            CoreListTransition.commit { self.add(animation, forKey: key ?? keyPath) }
+            animation.setCoreListCompletion(completion)
         }
+        self.add(animation, forKey: key ?? keyPath)
     }
 }

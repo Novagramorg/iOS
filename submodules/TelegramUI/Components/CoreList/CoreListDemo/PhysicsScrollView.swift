@@ -165,14 +165,13 @@ final class PhysicsScrollView: UIView {
         let generation = flightGeneration
 
         // disablingImplicitActions: false — this site never disabled them.
-        CoreListTransition.commit(disablingImplicitActions: false, completion: { [weak self] in
+        let flightAnim = traj.positionKeyframeAnimation(beginTime: now)
+        flightAnim.preferHighRefreshRate()
+        flightAnim.setCoreListCompletion { [weak self] _ in
             guard let self, self.flightGeneration == generation else { return } // ignore stale completions
             self.finalizeFlight()
-        }) {
-            let flightAnim = traj.positionKeyframeAnimation(beginTime: now)
-            flightAnim.preferHighRefreshRate()
-            contentView.layer.add(flightAnim, forKey: Self.flightAnimationKey)
         }
+        contentView.layer.add(flightAnim, forKey: Self.flightAnimationKey)
 
         startSamplingLink()
     }

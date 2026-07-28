@@ -807,22 +807,22 @@ final class ListAnimationController {
     // animation on the same property.
 
     private func writePositionY(_ value: CGFloat, on layer: CALayer) {
-        CoreListTransition.commit { layer.position.y = value }
+        layer.position.y = value
     }
 
     private func writePositionX(_ value: CGFloat, on layer: CALayer) {
-        CoreListTransition.commit { layer.position.x = value }
+        layer.position.x = value
     }
 
     private func writeOpacity(_ value: CGFloat, on layer: CALayer) {
-        CoreListTransition.commit { layer.opacity = Float(value) }
+        layer.opacity = Float(value)
     }
 
     private func writeHeight(_ value: CGFloat, on layer: CALayer) {
-        CoreListTransition.commit { layer.bounds.size.height = value }
+        layer.bounds.size.height = value
     }
 
     private func writeWidth(_ value: CGFloat, on layer: CALayer) {
-        CoreListTransition.commit { layer.bounds.size.width = value }
+        layer.bounds.size.width = value
     }
 }

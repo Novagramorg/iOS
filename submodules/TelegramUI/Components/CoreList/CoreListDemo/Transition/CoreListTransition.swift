@@ -15,9 +15,11 @@ import QuartzCore
 ///   `.curve(duration: 0, …)` still animates there. CoreList's model settles a zero-duration
 ///   property immediately and half its test suite says "no animation" as `duration: 0`, so every
 ///   branch here tests `isImmediate` and none writes `if case .none`.
-/// - **`.spring` is an approximation** (Display's bezier fallback, not the private
-///   `springAnimationValueAt`), and **`.bounce` is not a unit curve** — ComponentFlow's own `solve`
-///   asserts on it too. CoreList adopts neither as a default; both are supported on input.
+/// - **`.spring` samples the app's adjusted spring bezier** `(0.380, 0.700, 0.125, 1.000)` — what
+///   `CAAnimationUtils` emits for `kCAMediaTimingFunctionSpring` at any duration other than the two
+///   it special-cases with real `CASpringAnimation`s (0.5, and 0.3832 on iOS 26). See
+///   `CoreListTransition+Curve.swift`. **`.bounce` is not a unit curve** — ComponentFlow's own
+///   `solve` asserts on it too, and CoreList degrades it to `.spring`.
 /// - **Additions over ComponentTransition:** `Animation`/`Curve` are `Equatable` (because
 ///   `ListAnimationTrack` is), the struct has a hand-written `==` over `animation` alone
 ///   (`_userData: [Any]` blocks synthesis), and `duration`/`curve`/`scaled(by:)` carry over from the
@@ -42,10 +44,31 @@ public struct CoreListTransition: Equatable {
     }
 
     public var animation: Animation
+    /// Which `kCAMediaTimingFunctionSpring` branch this transition's `.spring` selects, resolved
+    /// once from the duration this transition was CONSTRUCTED with — which is the logical one.
+    /// `scaled(by:)` carries it through untouched; re-resolving from a scaled duration would miss
+    /// the system-spring branches under Slow Animations.
+    /// Internal, not public: only the compiler and the model consume it, and CoreList's public
+    /// surface stays at ComponentTransition's shape.
+    private(set) var springKind: CoreListSpringKind
+    /// The Slow-Animations factor `scaled(by:)` has applied to this transition, so the emitter can
+    /// divide it back out and express it as `speed` the way `CAAnimationUtils` does. 1 means the
+    /// duration is still logical.
+    private(set) var appliedDurationFactor: Double = 1
     private var _userData: [Any] = []
 
     public init(animation: Animation) {
         self.animation = animation
+        switch animation {
+        case .none:
+            self.springKind = .adjustedBezier
+        case let .curve(duration, curve):
+            if case .spring = curve {
+                self.springKind = coreListSpringKind(logicalDuration: duration)
+            } else {
+                self.springKind = .adjustedBezier
+            }
+        }
     }
 
     public static var immediate: CoreListTransition { CoreListTransition(animation: .none) }
@@ -96,13 +119,18 @@ public struct CoreListTransition: Equatable {
         case let .curve(duration, curve):
             var result = self
             result.animation = .curve(duration: max(0, duration * factor), curve: curve)
+            // Composes, so scaling twice is still recoverable. springKind is deliberately NOT
+            // re-resolved — see its own doc comment.
+            result.appliedDurationFactor = self.appliedDurationFactor * factor
             return result
         }
     }
 
     public func withAnimation(_ animation: Animation) -> CoreListTransition {
-        var result = self
-        result.animation = animation
+        // Re-resolves springKind: the incoming animation carries a logical duration, unlike
+        // `scaled(by:)`, which must preserve the already-resolved kind.
+        var result = CoreListTransition(animation: animation)
+        result._userData = self._userData
         return result
     }
 
@@ -131,58 +159,36 @@ public struct CoreListTransition: Equatable {
 }
 
 public extension CoreListTransition {
-    /// The module's ONLY `CATransaction` scope. Every settled write, every animation install, and
-    /// the physics deceleration flights go through this; `CATransaction` must not be named anywhere
-    /// else in CoreList.
-    ///
-    /// - Parameter disablingImplicitActions: mirrors `CATransaction.setDisableActions`. The
-    ///   deceleration-flight sites pass `false` deliberately — they never disabled actions.
-    /// - Parameter completion: mirrors `CATransaction.setCompletionBlock`.
-    static func commit(disablingImplicitActions: Bool = true,
-                       completion: (() -> Void)? = nil,
-                       _ body: () -> Void) {
-        CATransaction.begin()
-        if disablingImplicitActions {
-            CATransaction.setDisableActions(true)
-        }
-        if let completion {
-            CATransaction.setCompletionBlock(completion)
-        }
-        body()
-        CATransaction.commit()
-    }
-
     // MARK: - Setters
     //
     // Each early-outs on an equal target, exactly as ComponentTransition's do, and each writes the
-    // final value before installing an animation. `.immediate` writes inside `commit` so an
-    // enclosing UIView animation block cannot capture the write implicitly.
+    // final value before installing an animation.
+    //
+    // No CATransaction anywhere: every layer CoreList writes is UIView-backed, and a UIView's layer
+    // returns a null action by default outside an animation block, so there is no implicit animation
+    // to suppress. CoreList creates no standalone CALayer.
 
     func setPositionY(layer: CALayer, _ value: CGFloat) {
         if layer.position.y == value { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.position.y = value
-                layer.removeAnimation(forKey: "position")
-            }
+            layer.position.y = value
+            layer.removeAnimation(forKey: "position")
             return
         }
         let previous = layer.presentation()?.position.y ?? layer.position.y
-        CoreListTransition.commit { layer.position.y = value }
+        layer.position.y = value
         self.animateScalar(layer: layer, keyPath: "position.y", from: previous, to: value)
     }
 
     func setPositionX(layer: CALayer, _ value: CGFloat) {
         if layer.position.x == value { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.position.x = value
-                layer.removeAnimation(forKey: "position")
-            }
+            layer.position.x = value
+            layer.removeAnimation(forKey: "position")
             return
         }
         let previous = layer.presentation()?.position.x ?? layer.position.x
-        CoreListTransition.commit { layer.position.x = value }
+        layer.position.x = value
         self.animateScalar(layer: layer, keyPath: "position.x", from: previous, to: value)
     }
 
@@ -194,56 +200,48 @@ public extension CoreListTransition {
     func setBoundsHeight(layer: CALayer, _ value: CGFloat) {
         if layer.bounds.size.height == value { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.bounds.size.height = value
-                layer.removeAnimation(forKey: "bounds.size.height")
-            }
+            layer.bounds.size.height = value
+            layer.removeAnimation(forKey: "bounds.size.height")
             return
         }
         let previous = layer.presentation()?.bounds.size.height ?? layer.bounds.size.height
-        CoreListTransition.commit { layer.bounds.size.height = value }
+        layer.bounds.size.height = value
         self.animateScalar(layer: layer, keyPath: "bounds.size.height", from: previous, to: value)
     }
 
     func setBoundsWidth(layer: CALayer, _ value: CGFloat) {
         if layer.bounds.size.width == value { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.bounds.size.width = value
-                layer.removeAnimation(forKey: "bounds.size.width")
-            }
+            layer.bounds.size.width = value
+            layer.removeAnimation(forKey: "bounds.size.width")
             return
         }
         let previous = layer.presentation()?.bounds.size.width ?? layer.bounds.size.width
-        CoreListTransition.commit { layer.bounds.size.width = value }
+        layer.bounds.size.width = value
         self.animateScalar(layer: layer, keyPath: "bounds.size.width", from: previous, to: value)
     }
 
     func setBoundsOriginY(layer: CALayer, _ value: CGFloat) {
         if layer.bounds.origin.y == value { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.bounds.origin.y = value
-                layer.removeAnimation(forKey: "bounds.origin.y")
-            }
+            layer.bounds.origin.y = value
+            layer.removeAnimation(forKey: "bounds.origin.y")
             return
         }
         let previous = layer.presentation()?.bounds.origin.y ?? layer.bounds.origin.y
-        CoreListTransition.commit { layer.bounds.origin.y = value }
+        layer.bounds.origin.y = value
         self.animateScalar(layer: layer, keyPath: "bounds.origin.y", from: previous, to: value)
     }
 
     func setOpacity(layer: CALayer, _ value: CGFloat) {
         if layer.opacity == Float(value) { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.opacity = Float(value)
-                layer.removeAnimation(forKey: "opacity")
-            }
+            layer.opacity = Float(value)
+            layer.removeAnimation(forKey: "opacity")
             return
         }
         let previous = CGFloat(layer.presentation()?.opacity ?? layer.opacity)
-        CoreListTransition.commit { layer.opacity = Float(value) }
+        layer.opacity = Float(value)
         self.animateScalar(layer: layer, keyPath: "opacity", from: previous, to: value)
     }
 
@@ -258,7 +256,7 @@ public extension CoreListTransition {
     func setFrame(layer: CALayer, frame: CGRect) {
         if layer.frame == frame { return }
         if self.isImmediate {
-            CoreListTransition.commit { layer.frame = frame }
+            layer.frame = frame
             return
         }
         let anchor = layer.anchorPoint
@@ -276,13 +274,11 @@ public extension CoreListTransition {
                            + (transform.m13 * transform.m13))
         if current == scale { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.transform = CATransform3DMakeScale(scale, scale, 1.0)
-                layer.removeAnimation(forKey: "transform.scale")
-            }
+            layer.transform = CATransform3DMakeScale(scale, scale, 1.0)
+            layer.removeAnimation(forKey: "transform.scale")
             return
         }
-        CoreListTransition.commit { layer.transform = CATransform3DMakeScale(scale, scale, 1.0) }
+        layer.transform = CATransform3DMakeScale(scale, scale, 1.0)
         self.animateScalar(layer: layer, keyPath: "transform.scale", from: current, to: scale)
     }
 
@@ -293,50 +289,28 @@ public extension CoreListTransition {
     func setTransform(layer: CALayer, transform: CATransform3D) {
         if CATransform3DEqualToTransform(layer.transform, transform) { return }
         if self.isImmediate {
-            CoreListTransition.commit {
-                layer.transform = transform
-                layer.removeAnimation(forKey: "transform")
-            }
+            layer.transform = transform
+            layer.removeAnimation(forKey: "transform")
             return
         }
-        // A CATransform3D is not a scalar, so this samples the keyframes itself rather than going
-        // through animateScalar.
+        // CA interpolates transforms from the endpoints, exactly as ComponentTransition's
+        // setTransform does through CAAnimationUtils. An earlier version sampled an ELEMENT-WISE
+        // matrix interpolation into keyframes, which is neither what CA does nor what the rest of
+        // the app emits — it happened to look right only for the affine transforms in use.
         guard case let .curve(duration, curve) = self.animation, duration > 0 else { return }
         let previous = layer.presentation()?.transform ?? layer.transform
-        CoreListTransition.commit { layer.transform = transform }
-        let scaledDuration = max(0.0, duration * UIView.animationDurationFactor)
-        let sampleCount = max(2, Int(ceil(scaledDuration * 240.0)) + 1)
-        var values: [NSValue] = []
-        var keyTimes: [NSNumber] = []
-        for index in 0..<sampleCount {
-            let phase = CGFloat(index) / CGFloat(sampleCount - 1)
-            let t = curve.solve(at: phase)
-            var interpolated = CATransform3DIdentity
-            // Element-wise interpolation. Correct for the affine transforms CoreList item views
-            // use (translate / scale / rotate about z); it is not a general matrix interpolation.
-            withUnsafeBytes(of: previous) { fromBytes in
-                withUnsafeBytes(of: transform) { toBytes in
-                    withUnsafeMutableBytes(of: &interpolated) { outBytes in
-                        let from = fromBytes.bindMemory(to: CGFloat.self)
-                        let to = toBytes.bindMemory(to: CGFloat.self)
-                        let out = outBytes.bindMemory(to: CGFloat.self)
-                        for i in 0..<16 {
-                            out[i] = from[i] + (to[i] - from[i]) * t
-                        }
-                    }
-                }
-            }
-            values.append(NSValue(caTransform3D: interpolated))
-            keyTimes.append(NSNumber(value: Double(phase)))
-        }
-        let animation = CAKeyframeAnimation(keyPath: "transform")
-        animation.values = values
-        animation.keyTimes = keyTimes
-        animation.calculationMode = .linear
-        animation.duration = scaledDuration
-        animation.isRemovedOnCompletion = true
-        animation.fillMode = .forwards
-        CoreListTransition.commit { layer.add(animation, forKey: "transform") }
+        layer.transform = transform
+        let animation = makeCoreListAnimation(
+            fromValue: NSValue(caTransform3D: previous),
+            toValue: NSValue(caTransform3D: transform),
+            keyPath: "transform",
+            curve: curve,
+            springKind: coreListSpringKind(logicalDuration: duration),
+            logicalDuration: duration,
+            durationFactor: UIView.animationDurationFactor,
+            additive: false
+        )
+        layer.add(animation, forKey: "transform")
     }
 
     func setTransform(view: UIView, transform: CATransform3D) {

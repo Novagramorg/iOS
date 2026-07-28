@@ -35,20 +35,27 @@ xcodebuild -project CoreListDemo.xcodeproj -scheme CoreListDemo \
 # Run all tests
 xcodebuild -project CoreListDemo.xcodeproj -scheme CoreListDemo \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro K2' \
-  -parallel-testing-enabled NO test
+  -parallel-testing-enabled NO -collect-test-diagnostics never test
 
 # Run one test class
 xcodebuild -project CoreListDemo.xcodeproj -scheme CoreListDemo \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro K2' \
-  -parallel-testing-enabled NO test \
+  -parallel-testing-enabled NO -collect-test-diagnostics never test \
   -only-testing:CoreListDemoTests/CoreVirtualListAnimationTests
 ```
 
-Every test command must use both mandatory options:
+Every test command must use all three mandatory options:
 
 - `-destination 'platform=iOS Simulator,name=iPhone 17 Pro K2'` — use only the dedicated K2
   simulator. A generic similarly named simulator is a different device and may be in use.
 - `-parallel-testing-enabled NO` — keep one boot target and deterministic execution.
+- `-collect-test-diagnostics never` — **without this, any run with a failing test hangs forever.**
+  xcodebuild defaults to `on-failure`, and on failure it blocks in
+  `XCTHRunDestinationAllocator.collectSimulatorDiagnostics` gathering a sysdiagnose; with several
+  simulators booted it effectively never returns. Measured on the same deliberately-failing test:
+  5.26s with the flag, still blocked after 240s without it (and only ~1.7s of CPU, so it is waiting,
+  not working). A PASSING run exits in ~5s either way, which is what makes this so confusing — the
+  hang appears only when you have something to fix.
 
 The project uses `PBXFileSystemSynchronizedRootGroup`; files added under `CoreListDemo/` or
 `CoreListDemoTests/` are discovered automatically without editing `project.pbxproj`.
@@ -208,8 +215,10 @@ had no prior track. An unchanged endpoint remains an exact no-op.
 
 ### Granular animation contract
 
-`ListAnimationModel` is the sole presentation authority. It is UIKit-free and stores at most one
-analytic track per stable `ListAnimationOwner` and `ListAnimatedProperty`. Live owners use
+`ListAnimationModel` is the sole presentation authority. It depends only on Foundation, CoreGraphics
+and QuartzCore — the last solely to evaluate the two system springs through the same
+`CASpringAnimation` CA renders — and stores at most one analytic track per stable
+`ListAnimationOwner` and `ListAnimatedProperty`. Live owners use
 `CoreListItem.identity`; every departure receives a fresh exit-owner serial so a fading old
 incarnation and a newly inserted live incarnation with the same identity can coexist. The current
 properties are additive horizontal/vertical position offsets, absolute visual width/height, opacity,
@@ -295,16 +304,34 @@ conversion yields `.immediate` rather than a zero-length animation.
 `applyChanges(…, transition:)` is the only mutation entry point; the parallel duration-only overloads
 are gone. Production uses `.easeInOut` throughout, and the tests keep `.linear` (via a test-only
 `CoreListTransition.linear(duration:)`) as the contrast curve their curve-identity assertions need.
-`.spring` and `.bounce` are documented approximations — ComponentFlow resolves both through private
-`UIKitRuntimeUtils` API — and are supported on input only. `CoreListTransition` is also the module's
-only `CATransaction` scope, via `commit(disablingImplicitActions:completion:_:)`; `CATransaction` must
-not be named anywhere else. See
+`.spring` samples the app's **adjusted** spring bezier `(0.380, 0.700, 0.125, 1.000)` — what
+`CAAnimationUtils.swift:119` emits for `kCAMediaTimingFunctionSpring` at any duration other than the
+two it special-cases with real `CASpringAnimation`s (0.5, and 0.3832 on iOS 26); at exactly those
+durations CoreList approximates. Note this is deliberately NOT what ComponentFlow's own `solve(at:)`
+returns (`listViewAnimationCurveSystem`, which samples the 0.5s spring), so ComponentFlow's analytic
+and emitted springs agree only at duration 0.5 — CoreList is analytic-first, so it follows the
+emitted curve. `.bounce` is not a unit curve (ComponentFlow's own `solve` asserts on it) and degrades
+to `.spring`.
+
+CoreList uses **no `CATransaction` at all**. Every layer it writes is UIView-backed — it creates no
+standalone `CALayer` — and a UIView's layer returns a null action by default outside an animation
+block, so there is no implicit animation to suppress. (`SimpleLayer`/`nullAction` exists for
+standalone layers, which CoreList has none of.) Animation completions attach to the animation itself
+through `CAAnimation.setCoreListCompletion`, a copy of Display's `CALayerAnimationDelegate`, rather
+than to a transaction. See
 `docs/superpowers/specs/2026-07-27-corelist-transition-design.md`.
 
-`CoreAnimationCompiler` is an output renderer, never an authority. It samples the model curve into
-one explicitly timed `CAKeyframeAnimation`: position is additive on `position.x`/`position.y`, width/height
-are absolute on `bounds.size.width`/`bounds.size.height`, opacity is absolute, and all use the track's own
-curve, start time, and already-scaled duration.
+`CoreAnimationCompiler` is an output renderer, never an authority. It builds through the shared
+`makeCoreListAnimation` factory — a copy of `CAAnimationUtils.makeAnimation`'s branch tree — so what
+CoreList emits is what every other Telegram surface emits: a `CABasicAnimation` with a
+`CAMediaTimingFunction` for bezier curves, and a real `CASpringAnimation` for the two system-spring
+durations (0.5, and 0.3832 on iOS 26). It then adds the model-path properties the factory does not
+set: `beginTime = track.startTime`, `fillMode = .both`, `isRemovedOnCompletion = false`, and the
+generation metadata. Position is additive on `position.x`/`position.y`, width/height absolute on
+`bounds.size.width`/`bounds.size.height`, opacity absolute, all on the track's own curve, start time,
+and already-scaled duration. **No `CAKeyframeAnimation` is emitted outside the physics deceleration
+flights** (`KeyframeFlight`, `Trajectory+Keyframe`, the two physics engines), which play baked
+trajectories rather than curves.
 Interruption never reads layer presentation state back into the model. Production uses no display-link list
 renderer and no `UIViewPropertyAnimator`.
 
@@ -557,11 +584,14 @@ Animation an authority.
   zero-duration property immediately, and roughly half the test suite says "no animation" as
   `duration: 0`. Every branch must therefore test `CoreListTransition.isImmediate`; `if case .none`
   silently animates a pass that must not.
-- **Duration scaling happens once per path, and the paths must not meet.** The model path scales in
-  `ListAnimationController` and `CoreAnimationCompiler` must not scale again; the executor path scales
-  inside `CALayer.animate` (as Display's does). Consequently the transition handed to items is always
-  the LOGICAL, unscaled one — handing them a pre-scaled transition double-scales under Slow
-  Animations. For the same reason `ListAnimationController`'s settled-write helpers use
+- **Slow Animations reaches the emitted animation as `speed`, not as a longer duration** — exactly
+  as `CAAnimationUtils` does it. The model still reasons on the SCALED clock, because its deadlines,
+  `isComplete(at:)`, and the controller's reap scheduling all live there; `CoreListTransition.scaled(by:)`
+  records the factor it applied in `appliedDurationFactor`, `ListAnimationTrack` carries it, and the
+  compiler divides it back out so the animation gets a logical duration plus `speed = 1/factor`. The
+  two describe the same wall time. Applying it once per path is still the rule: the model path in
+  `ListAnimationController`, the executor path in `CALayer.animate`, and the transition handed to
+  items is always the LOGICAL one. For the same reason `ListAnimationController`'s settled-write helpers use
   `CoreListTransition.commit` directly rather than `.immediate` setters: the setters clear the
   matching standard animation key (`position`, `opacity`, `bounds.size.height`) as ComponentTransition
   does, and the executor installs ITEM-VIEW animations under exactly those keys, so a settled write
@@ -570,6 +600,33 @@ Animation an authority.
   is `x²(3−2x)` in real arithmetic, but 1/3 and 2/3 round to float32 and every sample drifts by up to
   1.7e-8 — including at phase 0.5, where the ideal bezier is exactly 0.5. Payload-free cases
   (`.easeInOut`, `.linear`) use `Double` literals and are exact.
+- **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
+  animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
+  real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no
+  effect there — and the `.stepped` mode is likewise driven by real display-link deltas. This is
+  accepted rather than verified: `UIScrollView`'s own deceleration is a physics simulation rather than
+  a UIKit animation, so it plausibly ignores the coefficient too, in which case matching it is
+  correct. Nobody has confirmed that against a real `UIScrollView`. If you make the flights honour the
+  coefficient, scale the baked trajectory's playback (`speed`), not its sample times, and check the
+  `KeyframeFlight` rebake/splice paths — they compare layer-local time against trajectory time and
+  would drift if only one side were scaled.
+- **The spring-kind predicate reads the LOGICAL duration.** `0.5` and `0.3832` select real
+  `CASpringAnimation`s; every other duration gets the adjusted bezier
+  `controlPoints(0.380, 0.700, 0.125, 1.000)`. CoreList pre-scales duration for Slow Animations, so
+  resolving the kind from a scaled value would see `5.0` under a ×10 drag coefficient and silently
+  emit a bezier — a divergence visible only under Slow Animations. `CoreListTransition` resolves it
+  once at construction, `scaled(by:)` carries it through, and `ListAnimationTrack` stores what the
+  transition resolved.
+- **`Curve.solve(at:)` deliberately differs from Display's `bezierPoint`:** no 0.997 clamp, and a
+  bisection fallback after Newton. CA keeps interpolating through a curve's tail, and the model must
+  agree with what CA renders now that CA evaluates the bezier itself. (Measured: 4-iteration Newton
+  was already exact to 4.4e-16; the clamp was the entire 2.9e-3 error.)
+- **The model evaluates system springs through the private `_solveForInput:`**, resolved by an
+  ObjC-runtime lookup in `CoreListSpringAnimation.swift`. Note `valueAt:` — which Display calls — is
+  Display's OWN category in `UIKitUtils.m:24`, not an Apple selector, so `CASpringAnimation` does not
+  respond to it here. The argument is `float` on some builds and `double` on others, which is why the
+  lookup inspects the encoding. If the selector disappears, both the model and the emitter fall back
+  to the adjusted bezier, degrading together rather than disagreeing.
 - **`PhysicsScrollEngine`'s `shouldBeRequiredToFailBy` must stay gated on content motion**
   (`flight != nil || core.isDecelerating`). Declaring it unconditionally breaks every
   press-and-hold recognizer hosted in the list, because such a recognizer must recognize *while the

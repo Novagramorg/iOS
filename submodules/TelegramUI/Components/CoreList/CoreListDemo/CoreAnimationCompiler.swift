@@ -1,56 +1,25 @@
 import QuartzCore
 
 final class CoreAnimationCompiler {
-    let samplesPerSecond: Double
     var emitsAnimations: Bool
 
-    init(samplesPerSecond: Double = 240, emitsAnimations: Bool = true) {
-        self.samplesPerSecond = samplesPerSecond
+    init(emitsAnimations: Bool = true) {
         self.emitsAnimations = emitsAnimations
     }
 
     func animation(for track: ListAnimationTrack,
                    property: ListAnimatedProperty) -> CAAnimation {
-        let sampleCount = max(2, Int(ceil(track.duration * samplesPerSecond)) + 1)
-        let lastIndex = sampleCount - 1
-        var values: [NSNumber] = []
-        var keyTimes: [NSNumber] = []
-        values.reserveCapacity(sampleCount)
-        keyTimes.reserveCapacity(sampleCount)
-
-        for index in 0...lastIndex {
-            let phase = Double(index) / Double(lastIndex)
-            let time = track.startTime + phase * track.duration
-            values.append(NSNumber(value: Double(track.value(at: time))))
-            keyTimes.append(NSNumber(value: phase))
-        }
-
-        let animation: CAKeyframeAnimation
-        switch property {
-        case .viewportOffset:
-            animation = CAKeyframeAnimation(keyPath: "bounds.origin.y")
-            animation.isAdditive = true
-        case .positionX:
-            animation = CAKeyframeAnimation(keyPath: "position.x")
-            animation.isAdditive = true
-        case .positionY:
-            animation = CAKeyframeAnimation(keyPath: "position.y")
-            animation.isAdditive = true
-        case .width:
-            animation = CAKeyframeAnimation(keyPath: "bounds.size.width")
-            animation.isAdditive = false
-        case .height:
-            animation = CAKeyframeAnimation(keyPath: "bounds.size.height")
-            animation.isAdditive = false
-        case .opacity:
-            animation = CAKeyframeAnimation(keyPath: "opacity")
-            animation.isAdditive = false
-        }
-        animation.values = values
-        animation.keyTimes = keyTimes
-        animation.calculationMode = .linear
+        let animation = makeCoreListAnimation(from: track.from,
+                                              to: track.to,
+                                              keyPath: keyPath(for: property),
+                                              curve: track.curve,
+                                              springKind: track.springKind,
+                                              logicalDuration: track.duration / max(track.durationFactor, .leastNonzeroMagnitude),
+                                              durationFactor: track.durationFactor,
+                                              additive: isAdditive(property))
+        // Model-path properties the shared factory deliberately does not set. `beginTime` is the
+        // track's own start, which is in the past on rebind — that is how phase survives.
         animation.beginTime = track.startTime
-        animation.duration = track.duration
         animation.fillMode = .both
         animation.isRemovedOnCompletion = false
         animation.setValue(track.generation, forKey: "CoreListAnimation.generation")
@@ -60,21 +29,38 @@ final class CoreAnimationCompiler {
         return animation
     }
 
+    private func keyPath(for property: ListAnimatedProperty) -> String {
+        switch property {
+        case .viewportOffset: return "bounds.origin.y"
+        case .positionX: return "position.x"
+        case .positionY: return "position.y"
+        case .width: return "bounds.size.width"
+        case .height: return "bounds.size.height"
+        case .opacity: return "opacity"
+        }
+    }
+
+    private func isAdditive(_ property: ListAnimatedProperty) -> Bool {
+        switch property {
+        case .viewportOffset, .positionX, .positionY: return true
+        case .width, .height, .opacity: return false
+        }
+    }
+
     func install(_ track: ListAnimationTrack,
                  property: ListAnimatedProperty,
                  on layer: CALayer,
                  completion: (() -> Void)? = nil) {
         guard emitsAnimations else { return }
         let animation = animation(for: track, property: property)
-        CoreListTransition.commit(completion: completion) {
-            layer.add(animation, forKey: animationKey(for: property))
+        if let completion {
+            animation.setCoreListCompletion { _ in completion() }
         }
+        layer.add(animation, forKey: animationKey(for: property))
     }
 
     func remove(property: ListAnimatedProperty, from layer: CALayer) {
-        CoreListTransition.commit {
-            layer.removeAnimation(forKey: animationKey(for: property))
-        }
+        layer.removeAnimation(forKey: animationKey(for: property))
     }
 
     func animationKey(for property: ListAnimatedProperty) -> String {

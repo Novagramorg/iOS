@@ -25,6 +25,23 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-07-28 — CAAnimationUtils parity**
+  ([design](../superpowers/specs/2026-07-28-corelist-caanimationutils-parity-design.md)): CoreList
+  stopped sampling curves into 240Hz keyframes. Both emitters now build through one shared factory
+  holding a copy of `CAAnimationUtils.makeAnimation`'s branch tree, so a chat row under the CoreList
+  backend moves exactly like one under `ListViewImpl` — including the real `CASpringAnimation` at
+  duration 0.5, which CoreList previously rendered as a sampled bezier. The model's solver dropped
+  Display's 0.997 clamp (the clamp was the entire 2.9e-3 error; 4-iteration Newton was already exact
+  to 4.4e-16) and evaluates system springs through the private `_solveForInput:`. `setTransform`
+  stopped hand-rolling element-wise matrix interpolation and now hands CA the endpoints. Keyframes
+  remain only in the physics deceleration flights. Slow Animations now reaches the emitted animation
+  as `speed` rather than a longer duration, again matching `CAAnimationUtils`; the model still reasons
+  on the scaled clock, and the track carries the applied factor so the compiler can divide it back
+  out. Verified by a paused-layer sweep per curve comparing rendered presentation against
+  `track.value(at:)`, plus 575 tests and a full Bazel build. The physics deceleration flights still
+  ignore the drag coefficient; that is an accepted limitation, documented in `CLAUDE.md`'s gotchas
+  with what to check if it is ever changed.
+
 - **2026-07-27 — `CoreListTransition`** (`2e50799` through `d31a0c8`;
   [design](../superpowers/specs/2026-07-27-corelist-transition-design.md)): replaced
   `ListAnimationSpec`/`ListAnimationCurve` with a vendored, ComponentTransition-shaped
@@ -33,8 +50,10 @@ Current extensions are retained under `docs/superpowers/specs/`.
   `smoothstep` regardless of the pass's curve. `smoothstep`/`easeOut` became `.easeInOut` — a real if
   small motion change — with `.linear` retained as the tests' contrast curve. `apply(to:transition:)`
   and `update(width:transition:)` now carry the pass transition, non-immediate only for rows whose
-  content changed. All 20 `CATransaction` blocks route through `CoreListTransition.commit`, so
-  `CATransaction` is named in one directory. Converted to `ComponentTransition` in
+  content changed. All 20 `CATransaction` blocks were removed outright: completions moved onto the
+  animation (a copy of Display's `CALayerAnimationDelegate`), and `setDisableActions` proved
+  unnecessary because every layer CoreList writes is UIView-backed and returns a null action by
+  default outside an animation block. Converted to `ComponentTransition` in
   `CoreListChatHistoryBackend`, which also derives its pass transition from the ListView
   transaction's own `scrollToItem`/`updateSizeAndInsets`/`options` rather than a hardcoded duration.
   `ListAnimationModel` remains the sole presentation authority, unchanged. 557/557 tests plus a full

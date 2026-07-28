@@ -108,10 +108,21 @@ widening fails loudly.
 Two curves cannot be reproduced faithfully, because ComponentFlow resolves both through private
 API in `UIKitRuntimeUtils`:
 
-- **`.spring`** — ComponentFlow uses `springAnimationValueAt` (private CASpringAnimation sampling).
-  The vendored `solve` uses `bezierPoint(0.23, 1, 0.32, 1)`, which is Display's *own* documented
-  fallback for that curve. Close, not bit-identical. Nothing in CoreList adopts it as a default; it
-  is supported on input because hosts may pass it.
+- **`.spring`** — **revised during implementation.** The design said to use
+  `bezierPoint(0.23, 1, 0.32, 1)`, Display's pre-iOS-9 fallback. That was wrong: it matches nothing
+  the app renders today. Both `ComponentTransition.Curve.spring` and
+  `ContainedViewLayoutTransitionCurve.spring` emit via `kCAMediaTimingFunctionSpring`, and
+  `CAAnimationUtils.swift:119` resolves that to `controlPoints(0.380, 0.700, 0.125, 1.000)` for every
+  duration except two it special-cases with real `CASpringAnimation`s (0.5, and 0.3832 on iOS 26).
+  The vendored `solve` therefore samples the adjusted bezier; the two curves differ by up to **0.228
+  in progress**, 23% of the travel, so this was a visible error, not a rounding one. At the two
+  special-cased durations CoreList still approximates — those are real springs behind private
+  `UIKitRuntimeUtils` API. No current site uses them (the chat backend springs at 0.4).
+
+  Note the adjusted curve is deliberately not what ComponentFlow's own `solve(at:)` returns: that
+  routes to `listViewAnimationCurveSystem`, which samples the 0.5s `CASpringAnimation`, so
+  ComponentFlow's analytic spring and its emitted spring agree only at duration 0.5. CoreList is
+  analytic-first — what it samples is exactly what it emits — so it follows the emitted curve.
 - **`.bounce(stiffness:damping:)`** — not a unit curve at all. `ComponentTransition.Curve.solve`
   itself `assertionFailure()`s on it and routes to `animateSpring`/`CALayerSpringParametersOverride`.
   The vendored `solve` matches that: asserts in debug, falls back to `.spring` in release.
@@ -217,7 +228,7 @@ explicit:
 - **Therefore the transition handed to items is always the logical, unscaled one.** The two paths
   never meet: the compiler never calls the executor, and the executor never touches a model track.
 
-### 7. The CATransaction sweep
+### 7. The CATransaction sweep — superseded, see below
 
 All 20 blocks route through one scope primitive, so `CATransaction` is named in exactly one file:
 
@@ -240,6 +251,20 @@ extension CoreListTransition {
 The flag exists for that last row: the deceleration-flight sites deliberately do not disable implicit
 actions, and their generation-guarded completion drives deceleration handoff. They keep their exact
 semantics and merely stop naming `CATransaction`.
+
+**Superseded during implementation.** The sweep first routed all 20 blocks through one
+`CoreListTransition.commit` scope, then removed them outright:
+
+- **Completions** moved onto the animation, via a copy of Display's `CALayerAnimationDelegate`
+  (`CAAnimationUtils.swift:4`). Every completion site adds exactly one animation and wants exactly
+  that animation's completion, so none needed transaction-wide semantics.
+- **`setDisableActions` turned out to be unnecessary everywhere.** Every layer CoreList writes is
+  UIView-backed — it creates no standalone `CALayer` — and a UIView's layer returns a null action by
+  default outside an animation block, so there is no implicit animation to suppress. (The
+  `SimpleLayer`/`nullAction` pattern exists for standalone layers, which CoreList has none of.)
+
+`CATransaction` therefore appears nowhere in CoreList, and the grep guard changed from "named in one
+directory" to "not named at all".
 
 ### 8. Executor surface
 

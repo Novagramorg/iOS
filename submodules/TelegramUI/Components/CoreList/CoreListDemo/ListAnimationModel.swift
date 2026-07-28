@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import QuartzCore
 
 enum ListAnimationOwner: Hashable {
     case viewport
@@ -35,25 +36,41 @@ struct ListAnimationTrack: Equatable {
     let startTime: TimeInterval
     let duration: TimeInterval
     let curve: CoreListTransition.Animation.Curve
+    /// Resolved from the LOGICAL duration by the transition that produced this track. This track's
+    /// own `duration` is already Slow-Animation-scaled and must never be used to re-resolve it.
+    let springKind: CoreListSpringKind
+    /// The Slow-Animations factor already folded into `duration`. The emitter divides it back out so
+    /// the animation carries a logical duration and `speed = 1/factor`, matching `CAAnimationUtils`;
+    /// the model itself keeps reasoning on the scaled clock.
+    let durationFactor: Double
 
     init(generation: UInt64,
          from: CGFloat,
          to: CGFloat,
          startTime: TimeInterval,
          duration: TimeInterval,
-         curve: CoreListTransition.Animation.Curve = .easeInOut) {
+         curve: CoreListTransition.Animation.Curve = .easeInOut,
+         springKind: CoreListSpringKind = .adjustedBezier,
+         durationFactor: Double = 1) {
         self.generation = generation
         self.from = from
         self.to = to
         self.startTime = startTime
         self.duration = duration
         self.curve = curve
+        self.springKind = springKind
+        self.durationFactor = durationFactor
     }
 
     func value(at time: TimeInterval) -> CGFloat {
         guard duration > 0 else { return to }
         let x = min(max((time - startTime) / duration, 0), 1)
-        let eased = curve.solve(at: CGFloat(x))
+        // A system spring is not a unit bezier; it is evaluated by the same CASpringAnimation Core
+        // Animation will render, so the model and the screen cannot disagree. `nil` means the
+        // private evaluator is unavailable, in which case both the model and the emitter fall back
+        // to the adjusted bezier — degraded together rather than disagreeing.
+        let eased = coreListSpringValue(kind: springKind, phase: CGFloat(x))
+            ?? curve.solve(at: CGFloat(x))
         return from + (to - from) * eased
     }
 
@@ -489,7 +506,9 @@ final class ListAnimationModel {
                                        to: to,
                                        startTime: time,
                                        duration: duration,
-                                       curve: curve)
+                                       curve: curve,
+                                       springKind: transition.springKind,
+                                       durationFactor: transition.appliedDurationFactor)
         states[owner]?.tracks[property] = track
         return .started(track)
     }

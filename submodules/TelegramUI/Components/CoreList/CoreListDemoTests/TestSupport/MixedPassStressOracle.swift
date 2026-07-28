@@ -457,7 +457,7 @@ final class MixedPassStressOracle {
         animation: CAAnimation?,
         property: ListAnimatedProperty
     ) throws {
-        guard let animation = animation as? CAKeyframeAnimation else {
+        guard let animation = animation as? CABasicAnimation else {
             throw MixedPassOracleError.missingAnimation(property)
         }
         guard (animation.value(
@@ -465,13 +465,23 @@ final class MixedPassStressOracle {
         ) as? NSNumber)?.uint64Value == expected.generation else {
             throw MixedPassOracleError.wrongGeneration
         }
-        guard abs(animation.beginTime - expected.startTime) < 1e-9,
-              abs(animation.duration - expected.duration) < 1e-9 else {
+        guard abs(animation.beginTime - expected.startTime) < 1e-9 else {
             throw MixedPassOracleError.wrongClock
         }
-        guard let values = animation.values as? [NSNumber],
-              let first = values.first,
-              let last = values.last,
+        // A system spring's `animation.duration` is the spring's own settling duration, not the
+        // track's — `speed` maps it onto the pass duration — so the track duration is not expected to
+        // appear on the animation. No current scenario emits one (MixedPassScenario alternates
+        // .easeInOut and .linear); the guard is here so one that does fails clearly rather than as a
+        // baffling duration mismatch.
+        if expected.springKind == .adjustedBezier {
+            guard abs(animation.duration - expected.duration) < 1e-9 else {
+                throw MixedPassOracleError.wrongClock
+            }
+        }
+        // Endpoints are now fromValue/toValue on a CABasicAnimation rather than the first and last
+        // entries of a sampled keyframe array.
+        guard let first = animation.fromValue as? NSNumber,
+              let last = animation.toValue as? NSNumber,
               abs(first.doubleValue - Double(expected.from)) < 1e-6,
               abs(last.doubleValue - Double(expected.to)) < 1e-6 else {
             throw MixedPassOracleError.wrongEndpoints

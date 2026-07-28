@@ -114,12 +114,12 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let key = fixture.animationController.compiler.animationKey(for: .viewportOffset)
         let animation = try XCTUnwrap(
             fixture.listView.engine.contentHost.layer.animation(forKey: key)
-                as? CAKeyframeAnimation
+                as? CABasicAnimation
         )
         XCTAssertEqual(animation.keyPath, "bounds.origin.y")
         XCTAssertTrue(animation.isAdditive)
         XCTAssertEqual(animation.duration, track.duration, accuracy: 1e-9)
-        let values = try XCTUnwrap(animation.values as? [NSNumber])
+        let values = try keyframeValues(animation).map { NSNumber(value: Double($0)) }
         XCTAssertEqual(try XCTUnwrap(values.first).doubleValue,
                        Double(track.from), accuracy: 1e-6)
         XCTAssertEqual(try XCTUnwrap(values.last).doubleValue,
@@ -442,7 +442,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         )?.curve, .easeInOut)
     }
 
-    func testUnclampedInsetViewportTrackMatchesEmittedCAKeyframe() throws {
+    func testUnclampedInsetViewportTrackMatchesEmittedAnimation() throws {
         let fixture = VirtualListFixture(itemCount: 100, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400),
                                          emitsCA: true)
@@ -462,12 +462,12 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let key = fixture.animationController.compiler.animationKey(for: .viewportOffset)
         let animation = try XCTUnwrap(
             fixture.listView.engine.contentHost.layer.animation(forKey: key)
-                as? CAKeyframeAnimation
+                as? CABasicAnimation
         )
         XCTAssertEqual(animation.keyPath, "bounds.origin.y")
         XCTAssertTrue(animation.isAdditive)
         XCTAssertEqual(animation.duration, track.duration, accuracy: 1e-9)
-        let values = try XCTUnwrap(animation.values as? [NSNumber])
+        let values = try keyframeValues(animation).map { NSNumber(value: Double($0)) }
         XCTAssertEqual(try XCTUnwrap(values.first).doubleValue,
                        Double(track.from), accuracy: 1e-6)
         XCTAssertEqual(try XCTUnwrap(values.last).doubleValue,
@@ -1080,9 +1080,16 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         }
     }
 
+    /// The animation's endpoints, as `[from, to]`.
+    ///
+    /// Named for the sampled keyframe array it used to read. CoreList now emits CAAnimationUtils-
+    /// shaped `CABasicAnimation`s, so the endpoints are `fromValue`/`toValue`; every caller only ever
+    /// looked at `.first` and `.last`, which is exactly what this still returns.
     private func keyframeValues(_ animation: CAAnimation) throws -> [CGFloat] {
-        let keyframe = try XCTUnwrap(animation as? CAKeyframeAnimation)
-        return try XCTUnwrap(keyframe.values as? [NSNumber]).map { CGFloat($0.doubleValue) }
+        let basic = try XCTUnwrap(animation as? CABasicAnimation)
+        let from = try XCTUnwrap(basic.fromValue as? NSNumber)
+        let to = try XCTUnwrap(basic.toValue as? NSNumber)
+        return [CGFloat(from.doubleValue), CGFloat(to.doubleValue)]
     }
 
     func testInsertIsFullHeightAtFinalPositionAndOnlyFades() throws {

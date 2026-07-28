@@ -823,13 +823,11 @@ public final class CoreVirtualListView: UIView {
         for identity in outgoingCrossingIdentities {
             guard crossingCarries[identity] == nil,
                   let old = oldRenderedState[identity] else { continue }
-            CoreListTransition.commit {
-                old.view.onContentDidChange = nil
-                old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-                old.view.frame = CGRect(origin: CGPoint(x: old.contentX, y: old.contentY),
-                                        size: old.size)
-                crossingOverlay.addSubview(old.view)
-            }
+            old.view.onContentDidChange = nil
+            old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+            old.view.frame = CGRect(origin: CGPoint(x: old.contentX, y: old.contentY),
+                                    size: old.size)
+            crossingOverlay.addSubview(old.view)
             crossingCarries[identity] = CrossingCarry(
                 identity: identity,
                 view: old.view,
@@ -1165,13 +1163,11 @@ public final class CoreVirtualListView: UIView {
                     newEngineOffset: transactionOffset,
                     viewportFrom: viewportFrom
                 )
-                CoreListTransition.commit {
-                    old.view.onContentDidChange = nil
-                    old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-                    old.view.layer.position.x = old.contentX + old.positionOffsetX
-                    old.view.layer.bounds.size.width = old.visualWidth
-                    exitOverlay.addSubview(old.view)
-                }
+                old.view.onContentDidChange = nil
+                old.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+                old.view.layer.position.x = old.contentX + old.positionOffsetX
+                old.view.layer.bounds.size.width = old.visualWidth
+                exitOverlay.addSubview(old.view)
                 let owner = animationController.makeTransient(
                     identity: identity,
                     layer: old.view.layer,
@@ -1930,25 +1926,23 @@ public final class CoreVirtualListView: UIView {
         let window = activeWindow
         let newOriginY = computeContainerOriginY(for: window)
 
-        CoreListTransition.commit {
-            container.frame = CGRect(x: 0,
-                                     y: newOriginY,
-                                     width: logicalSize.width,
-                                     height: max(1, window.height))
-            for subview in container.subviews
-                where !window.items.contains(where: { $0.view === subview }) {
-                subview.removeFromSuperview()
+        container.frame = CGRect(x: 0,
+                                 y: newOriginY,
+                                 width: logicalSize.width,
+                                 height: max(1, window.height))
+        for subview in container.subviews
+            where !window.items.contains(where: { $0.view === subview }) {
+            subview.removeFromSuperview()
+        }
+        for item in window.items {
+            item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+            item.view.frame = item.frame.offsetBy(dx: 0, dy: -window.minY)
+            item.view.layer.opacity = 1
+            item.view.onContentDidChange = { [weak self, weak view = item.view] animated in
+                guard let self, let view else { return }
+                self.markDirty(view, animated: animated)
             }
-            for item in window.items {
-                item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-                item.view.frame = item.frame.offsetBy(dx: 0, dy: -window.minY)
-                item.view.layer.opacity = 1
-                item.view.onContentDidChange = { [weak self, weak view = item.view] animated in
-                    guard let self, let view else { return }
-                    self.markDirty(view, animated: animated)
-                }
-                if item.view.superview !== container { container.addSubview(item.view) }
-            }
+            if item.view.superview !== container { container.addSubview(item.view) }
         }
 
         let edges = loadedEdgeRange(for: window, originY: newOriginY)
@@ -2080,9 +2074,7 @@ public final class CoreVirtualListView: UIView {
            abs(carry.settledContentY - newSettledContentY) <= 1e-6 {
             return
         }
-        CoreListTransition.commit {
-            old.view.layer.position.y = newSettledContentY
-        }
+        old.view.layer.position.y = newSettledContentY
         carry.settledContentY = newSettledContentY
         crossingCarries[old.identity] = carry
 
@@ -2144,9 +2136,7 @@ public final class CoreVirtualListView: UIView {
 
         for blockID in Array(ghostRenders.keys) {
             guard var render = ghostRenders[blockID] else { continue }
-            CoreListTransition.commit {
-                render.wrapper.layer.bounds.size.width = logicalSize.width
-            }
+            render.wrapper.layer.bounds.size.width = logicalSize.width
             for key in Array(render.members.keys) {
                 guard var member = render.members[key] else { continue }
                 animationController.transitionPositionX(
@@ -2265,24 +2255,22 @@ public final class CoreVirtualListView: UIView {
         wrapper.clipsToBounds = false
         wrapper.isUserInteractionEnabled = false
 
-        CoreListTransition.commit {
-            wrapper.layer.anchorPoint = CGPoint(x: 0, y: 0)
-            wrapper.layer.bounds = CGRect(x: 0,
-                                          y: 0,
-                                          width: logicalSize.width,
-                                          height: max(1, localMaxY - localMinY))
-            wrapper.layer.position = CGPoint(x: 0, y: rootY)
-            exitOverlay.addSubview(wrapper)
-            for (item, localY) in zip(items, localYs) {
-                item.view.onContentDidChange = nil
-                item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
-                wrapper.addSubview(item.view)
-                item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
-                                         y: localY,
-                                         width: item.visualWidth,
-                                         height: item.visualHeight)
-                item.view.layer.opacity = Float(item.opacity)
-            }
+        wrapper.layer.anchorPoint = CGPoint(x: 0, y: 0)
+        wrapper.layer.bounds = CGRect(x: 0,
+                                      y: 0,
+                                      width: logicalSize.width,
+                                      height: max(1, localMaxY - localMinY))
+        wrapper.layer.position = CGPoint(x: 0, y: rootY)
+        exitOverlay.addSubview(wrapper)
+        for (item, localY) in zip(items, localYs) {
+            item.view.onContentDidChange = nil
+            item.view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+            wrapper.addSubview(item.view)
+            item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
+                                     y: localY,
+                                     width: item.visualWidth,
+                                     height: item.visualHeight)
+            item.view.layer.opacity = Float(item.opacity)
         }
 
         animationController.seedGhostBlock(owner: owner,
@@ -2329,13 +2317,11 @@ public final class CoreVirtualListView: UIView {
                           blockID: GhostBlockID,
                           transition: CoreListTransition,
                           transactionTime: TimeInterval) -> ListAnimationOwner {
-        CoreListTransition.commit {
-            item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
-                                     y: localY,
-                                     width: item.visualWidth,
-                                     height: item.visualHeight)
-            item.view.layer.opacity = Float(item.opacity)
-        }
+        item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
+                                 y: localY,
+                                 width: item.visualWidth,
+                                 height: item.visualHeight)
+        item.view.layer.opacity = Float(item.opacity)
 
         return animationController.makeExit(
             identity: item.identity,
@@ -2760,12 +2746,10 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func layoutExitOverlay() {
-        CoreListTransition.commit {
-            crossingOverlay.frame = CGRect(origin: .zero,
-                                           size: engine.contentHost.bounds.size)
-            exitOverlay.frame = CGRect(origin: .zero,
+        crossingOverlay.frame = CGRect(origin: .zero,
                                        size: engine.contentHost.bounds.size)
-        }
+        exitOverlay.frame = CGRect(origin: .zero,
+                                   size: engine.contentHost.bounds.size)
     }
 
     private func applyEngineShift(_ delta: CGFloat) {
@@ -2777,13 +2761,11 @@ public final class CoreVirtualListView: UIView {
 
     private func shiftExitOverlayChildren(by delta: CGFloat) {
         guard delta != 0 else { return }
-        CoreListTransition.commit {
-            for view in crossingOverlay.subviews {
-                view.layer.position.y += delta
-            }
-            for view in exitOverlay.subviews {
-                view.layer.position.y += delta
-            }
+        for view in crossingOverlay.subviews {
+            view.layer.position.y += delta
+        }
+        for view in exitOverlay.subviews {
+            view.layer.position.y += delta
         }
         for identity in Array(crossingCarries.keys) {
             guard var carry = crossingCarries[identity] else { continue }

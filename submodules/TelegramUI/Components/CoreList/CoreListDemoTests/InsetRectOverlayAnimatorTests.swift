@@ -4,13 +4,17 @@ import QuartzCore
 
 final class InsetRectOverlayAnimatorTests: XCTestCase {
     private func animation(_ property: ListAnimatedProperty,
-                           on layer: CALayer) throws -> CAKeyframeAnimation {
+                           on layer: CALayer) throws -> CABasicAnimation {
         let key = CoreAnimationCompiler().animationKey(for: property)
-        return try XCTUnwrap(layer.animation(forKey: key) as? CAKeyframeAnimation)
+        return try XCTUnwrap(layer.animation(forKey: key) as? CABasicAnimation)
     }
 
-    private func values(_ animation: CAKeyframeAnimation) throws -> [NSNumber] {
-        try XCTUnwrap(animation.values as? [NSNumber])
+    /// Endpoints as `[from, to]`. CoreList emits CAAnimationUtils-shaped `CABasicAnimation`s, so
+    /// there is no sampled array; the callers here only ever read the first entry.
+    private func values(_ animation: CABasicAnimation) throws -> [NSNumber] {
+        let from = try XCTUnwrap(animation.fromValue as? NSNumber)
+        let to = try XCTUnwrap(animation.toValue as? NSNumber)
+        return [from, to]
     }
 
     func testTransitionCompilesAdditivePositionAndAbsoluteExtentTracks() throws {
@@ -41,15 +45,18 @@ final class InsetRectOverlayAnimatorTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(try values(y).first).doubleValue, 10, accuracy: 1e-6)
         XCTAssertEqual(try XCTUnwrap(try values(width).first).doubleValue, 100, accuracy: 1e-6)
         XCTAssertEqual(try XCTUnwrap(try values(height).first).doubleValue, 200, accuracy: 1e-6)
-        let xValues = try values(x)
-        // Sampled at QUARTER phase, not the midpoint. This assertion exists to prove the compiler
-        // samples the track's curve rather than interpolating linearly, and `.easeInOut` is
-        // symmetric about (0.5, 0.5) — so its midpoint sample equals the linear one exactly and
-        // cannot distinguish the two. easeInOut(0.25) = 0.12916193104731982, against linear's 0.25.
-        XCTAssertEqual(xValues[xValues.count / 4].doubleValue, -17.416761379053604, accuracy: 1e-6,
-                       "the quarter point must use the track's curve, not linear interpolation")
-        XCTAssertEqual(xValues[xValues.count / 2].doubleValue, -10.0, accuracy: 1e-6,
-                       "easeInOut is symmetric, so its midpoint is exactly halfway")
+        // The curve is no longer a sampled array — CA evaluates it from the timing function, so what
+        // there is to verify is that the right control points were handed over. `.easeInOut` is
+        // bezierPoint(0.42, 0, 0.58, 1); `Curve.solve` computes that same bezier, and
+        // CoreAnimationCompilerParityTests' paused-layer sweep proves the rendered result matches.
+        let timing = try XCTUnwrap(x.timingFunction)
+        var controlPoint = [Float](repeating: 0, count: 2)
+        timing.getControlPoint(at: 1, values: &controlPoint)
+        XCTAssertEqual(controlPoint[0], 0.42, accuracy: 1e-6)
+        XCTAssertEqual(controlPoint[1], 0.0, accuracy: 1e-6)
+        timing.getControlPoint(at: 2, values: &controlPoint)
+        XCTAssertEqual(controlPoint[0], 0.58, accuracy: 1e-6)
+        XCTAssertEqual(controlPoint[1], 1.0, accuracy: 1e-6)
     }
 
     func testReplacementStartsFromSampledPresentationAndRejectsStaleCompletion() throws {

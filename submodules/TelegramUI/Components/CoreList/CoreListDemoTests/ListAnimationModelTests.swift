@@ -304,8 +304,13 @@ final class ListAnimationModelTests: XCTestCase {
         XCTAssertEqual(first.positionY, -69.66704551621442, accuracy: 1e-9)
         XCTAssertEqual(first.height, 78.229048276183, accuracy: 1e-9)
         XCTAssertNil(model.value(for: owner, property: .opacity, at: 1))
-        XCTAssertEqual(model.value(for: first.owner, property: .positionY, at: 1), -69.66704551621442)
-        XCTAssertEqual(model.value(for: first.owner, property: .height, at: 1), 78.229048276183)
+        // accuracy, not exact equality: these are bezier-solver outputs, and the two assertions
+        // directly above already compare the same values with 1e-9. Exact comparison was accidental
+        // and broke on a 2e-14 change of convergence path.
+        XCTAssertEqual(model.value(for: first.owner, property: .positionY, at: 1) ?? .nan,
+                       -69.66704551621442, accuracy: 1e-9)
+        XCTAssertEqual(model.value(for: first.owner, property: .height, at: 1) ?? .nan,
+                       78.229048276183, accuracy: 1e-9)
         XCTAssertNil(model.track(for: first.owner, property: .height),
                      "an exit freezes analytic height and remains fade-only")
         guard case let .started(firstFade) = first.opacityMutation else {
@@ -526,7 +531,7 @@ final class ListAnimationModelTests: XCTestCase {
     func testControllerGhostBlockUsesStablePositionKeyAndExactTransactionClock() throws {
         var time: CFTimeInterval = 10
         let controller = ListAnimationController(
-            compiler: CoreAnimationCompiler(samplesPerSecond: 240),
+            compiler: CoreAnimationCompiler(),
             mediaTime: { time },
             durationFactor: { 1 }
         )

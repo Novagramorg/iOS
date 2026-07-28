@@ -36,7 +36,7 @@ final class InsetRectOverlayAnimator {
         // Settled write only; the granular tracks below are what animate. Same reasoning as
         // ListAnimationController's write helpers — `commit` rather than an `.immediate` setter, so
         // the standard animation keys are left alone.
-        CoreListTransition.commit { layer.frame = finalFrame }
+        layer.frame = finalFrame
 
         install(from: currentFrame.midX - finalFrame.midX,
                 to: 0,
