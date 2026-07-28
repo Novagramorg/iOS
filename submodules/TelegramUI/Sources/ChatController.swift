@@ -8983,7 +8983,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard let peerId = self.chatLocation.peerId else {
             return
         }
-        
+
         let _ = (self.shouldDivertMessagesToScheduled(messages: messages)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] shouldDivert in
             guard let self else {

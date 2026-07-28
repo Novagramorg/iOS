@@ -868,6 +868,10 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
                     break
                 case let .copyText(payload):
                     item.controllerInteraction.copyText(payload)
+                case .disabled:
+                    // A forward stripped this button's behaviour; it renders dimmed and does
+                    // nothing. The tap is also blocked upstream in ChatMessageActionButtonsNode.
+                    break
             }
         }
     }

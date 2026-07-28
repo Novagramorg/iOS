@@ -35,6 +35,8 @@ private enum InstantPageBlockType: Int32 {
     case heading = 28
     case formula = 29
     case thinking = 30
+    case buttonRow = 31
+    case document = 32
 }
 
 private func decodeListItems(_ decoder: PostboxDecoder) -> [InstantPageListItem] {
@@ -76,6 +78,10 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
     case image(id: MediaId, caption: InstantPageCaption, url: String?, webpageId: MediaId?, spoiler: Bool)
     case video(id: MediaId, caption: InstantPageCaption, autoplay: Bool, loop: Bool, spoiler: Bool)
     case audio(id: MediaId, caption: InstantPageCaption)
+    /// A generic file. Its own case rather than a widened `.audio`, which renders a music player.
+    case document(id: MediaId, caption: InstantPageCaption)
+    /// A row of inline buttons, laid out across the width (max 8 per row per the schema).
+    case buttonRow(buttons: [InstantPageButton])
     case cover(InstantPageBlock)
     case webEmbed(url: String?, html: String?, dimensions: PixelDimensions?, caption: InstantPageCaption, stretchToWidth: Bool, allowScrolling: Bool, coverId: MediaId?)
     case postEmbed(url: String, webpageId: MediaId?, avatarId: MediaId?, author: String, date: Int32, blocks: [InstantPageBlock], caption: InstantPageCaption)
@@ -169,6 +175,10 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 self = .channelBanner(decoder.decodeObjectForKey("c") as? TelegramChannel)
             case InstantPageBlockType.audio.rawValue:
                 self = .audio(id: MediaId(namespace: decoder.decodeInt32ForKey("i.n", orElse: 0), id: decoder.decodeInt64ForKey("i.i", orElse: 0)), caption: decodeCaption(decoder))
+            case InstantPageBlockType.document.rawValue:
+                self = .document(id: MediaId(namespace: decoder.decodeInt32ForKey("i.n", orElse: 0), id: decoder.decodeInt64ForKey("i.i", orElse: 0)), caption: decodeCaption(decoder))
+            case InstantPageBlockType.buttonRow.rawValue:
+                self = .buttonRow(buttons: decoder.decodeObjectArrayWithDecoderForKey("btns") as [InstantPageButton])
             case InstantPageBlockType.kicker.rawValue:
                 self = .kicker(decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case InstantPageBlockType.thinking.rawValue:
@@ -346,6 +356,14 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 encoder.encodeInt32(id.namespace, forKey: "i.n")
                 encoder.encodeInt64(id.id, forKey: "i.i")
                 encoder.encodeObject(caption, forKey: "mc")
+            case let .document(id, caption):
+                encoder.encodeInt32(InstantPageBlockType.document.rawValue, forKey: "r")
+                encoder.encodeInt32(id.namespace, forKey: "i.n")
+                encoder.encodeInt64(id.id, forKey: "i.i")
+                encoder.encodeObject(caption, forKey: "mc")
+            case let .buttonRow(buttons):
+                encoder.encodeInt32(InstantPageBlockType.buttonRow.rawValue, forKey: "r")
+                encoder.encodeObjectArray(buttons, forKey: "btns")
             case let .kicker(text):
                 encoder.encodeInt32(InstantPageBlockType.kicker.rawValue, forKey: "r")
                 encoder.encodeObject(text, forKey: "t")
@@ -539,6 +557,18 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
+            case let .document(id, caption):
+                if case .document(id, caption) = rhs {
+                    return true
+                } else {
+                    return false
+                }
+            case let .buttonRow(buttons):
+                if case .buttonRow(buttons) = rhs {
+                    return true
+                } else {
+                    return false
+                }
             case let .kicker(text):
                 if case .kicker(text) = rhs {
                     return true
@@ -677,6 +707,16 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 throw FlatBuffersError.missingRequiredField()
             }
             self = .audio(id: MediaId(value.id), caption: try InstantPageCaption(flatBuffersObject: value.caption))
+        case .instantpageblockDocument:
+            guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Document.self) else {
+                throw FlatBuffersError.missingRequiredField()
+            }
+            self = .document(id: MediaId(value.id), caption: try InstantPageCaption(flatBuffersObject: value.caption))
+        case .instantpageblockButtonrow:
+            guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_ButtonRow.self) else {
+                throw FlatBuffersError.missingRequiredField()
+            }
+            self = .buttonRow(buttons: try (0 ..< value.buttonsCount).map { try InstantPageButton(flatBuffersObject: value.buttons(at: $0)!) })
         case .instantpageblockCover:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Cover.self) else {
                 throw FlatBuffersError.missingRequiredField()
@@ -885,6 +925,20 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_Audio.add(id: id.asFlatBuffersObject(), &builder)
             TelegramCore_InstantPageBlock_Audio.add(caption: captionOffset, &builder)
             offset = TelegramCore_InstantPageBlock_Audio.endInstantPageBlock_Audio(&builder, start: start)
+        case let .document(id, caption):
+            valueType = .instantpageblockDocument
+            let captionOffset = caption.encodeToFlatBuffers(builder: &builder)
+            let start = TelegramCore_InstantPageBlock_Document.startInstantPageBlock_Document(&builder)
+            TelegramCore_InstantPageBlock_Document.add(id: id.asFlatBuffersObject(), &builder)
+            TelegramCore_InstantPageBlock_Document.add(caption: captionOffset, &builder)
+            offset = TelegramCore_InstantPageBlock_Document.endInstantPageBlock_Document(&builder, start: start)
+        case let .buttonRow(buttons):
+            valueType = .instantpageblockButtonrow
+            let buttonOffsets = buttons.map { $0.encodeToFlatBuffers(builder: &builder) }
+            let buttonsOffset = builder.createVector(ofOffsets: buttonOffsets)
+            let start = TelegramCore_InstantPageBlock_ButtonRow.startInstantPageBlock_ButtonRow(&builder)
+            TelegramCore_InstantPageBlock_ButtonRow.addVectorOf(buttons: buttonsOffset, &builder)
+            offset = TelegramCore_InstantPageBlock_ButtonRow.endInstantPageBlock_ButtonRow(&builder, start: start)
         case let .cover(block):
             valueType = .instantpageblockCover
             let blockOffset = block.encodeToFlatBuffers(builder: &builder)
@@ -1699,7 +1753,9 @@ public extension InstantPage {
 private extension InstantPageBlock {
     func allMedia(mediaDict: [MediaId: Media]) -> [Media] {
         switch self {
-        case let .audio(id, _):
+        case let .audio(id, _), let .document(id, _):
+            // NOTE: this switch ends in `default:`, so omitting .document here would compile and
+            // then silently stop the page from fetching the file.
             if let file = mediaDict[id] {
                 return [file]
             } else {

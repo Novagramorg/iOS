@@ -95,6 +95,9 @@ public enum InstantPageV2LaidOutItem {
     case mediaCoverImage(InstantPageV2MediaCoverImageItem)
     case mediaAudio(InstantPageV2MediaAudioItem)
     case formula(InstantPageV2FormulaItem)
+    case inlineButton(InstantPageV2InlineButtonItem)
+    case buttonRow(InstantPageV2ButtonRowItem)
+    case document(InstantPageV2DocumentItem)
     case thinking(InstantPageV2ThinkingItem)
     case slideshow(InstantPageV2SlideshowItem)
     case quoteFrame(InstantPageV2QuoteFrameItem)
@@ -118,6 +121,9 @@ public enum InstantPageV2LaidOutItem {
         case let .mediaCoverImage(item):   return item.frame
         case let .mediaAudio(item):        return item.frame
         case let .formula(item):           return item.frame
+        case let .inlineButton(item):      return item.frame
+        case let .buttonRow(item):         return item.frame
+        case let .document(item):          return item.frame
         case let .thinking(item):          return item.frame
         case let .slideshow(item):         return item.frame
         case let .quoteFrame(item):        return item.frame
@@ -146,6 +152,9 @@ public enum InstantPageV2LaidOutItem {
         case var .mediaCoverImage(item):   item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .mediaCoverImage(item)
         case var .mediaAudio(item):        item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .mediaAudio(item)
         case var .formula(item):          item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .formula(item)
+        case var .inlineButton(item):     item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .inlineButton(item)
+        case var .buttonRow(item):        item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .buttonRow(item)
+        case var .document(item):         item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .document(item)
         case var .thinking(item):         item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .thinking(item)
         case var .slideshow(item):        item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .slideshow(item)
         case var .quoteFrame(item):       item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .quoteFrame(item)
@@ -248,6 +257,34 @@ public struct InstantPageV2FormulaItem {
     public let isScrollable: Bool                     // true only for block formulas wider than bounds
     public let imageFrame: CGRect                     // image rect in this item's local coords; size must equal attachment.rendered.size for pixel-perfect rendering
     public let scrollContentSize: CGSize              // == frame.size unless isScrollable
+}
+
+/// An inline `RichText.textButton`. Emitted as a top-level item next to the text item it visually
+/// sits inside, exactly as inline formulas are.
+public struct InstantPageV2InlineButtonItem {
+    public var frame: CGRect                                  // parent coords
+    public let attachment: InstantPageInlineButtonAttachment   // model + laid-out label + metrics
+}
+
+/// A block-level `pageBlockButtonRow`. One item per block (which may wrap onto several visual rows);
+/// each entry's frame is local to the item.
+public struct InstantPageV2ButtonRowItem {
+    public var frame: CGRect
+    public let buttons: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)]
+}
+
+/// A generic file row (`InstantPageBlock.document`). Same shape as `InstantPageV2MediaAudioItem`,
+/// deliberately: it is the same kind of thing minus playback.
+public struct InstantPageV2DocumentItem {
+    public var frame: CGRect
+    public let media: InstantPageMedia
+    public let webPage: TelegramMediaWebpage
+
+    public init(frame: CGRect, media: InstantPageMedia, webPage: TelegramMediaWebpage) {
+        self.frame = frame
+        self.media = media
+        self.webPage = webPage
+    }
 }
 
 public enum InstantPageV2MediaPlaceholderKind {
@@ -1090,6 +1127,78 @@ private func layoutBlock(
     case let .thinking(text):
         return layoutThinking(text, boundingWidth: boundingWidth,
                               horizontalInset: horizontalInset, context: &context)
+    case let .buttonRow(buttons):
+        if buttons.isEmpty {
+            return []
+        }
+        // Fixed height rather than label-derived, because this is a touch target. The pill centres its
+        // label, so the inner vertical inset is (buttonHeight − labelBox) / 2 — i.e. raising the height
+        // by 4 adds 2pt of inset at the top and 2pt at the bottom.
+        let buttonHeight: CGFloat = 40.0
+        let buttonSpacing: CGFloat = 6.0
+        let maxButtonsPerRow = 8
+        // Unlike .audio/media, which are flush at full boundingWidth, a button row is chrome and
+        // respects the page's horizontal inset.
+        let availableWidth = max(0.0, boundingWidth - horizontalInset * 2.0)
+
+        var entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)] = []
+        var y: CGFloat = 0.0
+        var index = 0
+        while index < buttons.count {
+            let rowButtons = Array(buttons[index ..< min(index + maxButtonsPerRow, buttons.count)])
+            let totalSpacing = buttonSpacing * CGFloat(max(0, rowButtons.count - 1))
+            let buttonWidth = max(0.0, (availableWidth - totalSpacing) / CGFloat(rowButtons.count))
+            var x = horizontalInset
+            for button in rowButtons {
+                // Measured with the paragraph style stack, exactly as layoutSimpleText builds one, so
+                // a row pill's typography matches an inline pill's.
+                let labelStyleStack = InstantPageTextStyleStack()
+                setupStyleStack(labelStyleStack, theme: context.theme, category: .paragraph, link: false)
+                // Block buttons are a point larger than inline ones; both semibold.
+                labelStyleStack.push(.fontSize(instantPageBlockButtonFontSize))
+                labelStyleStack.push(.semibold)
+                let labelString = attributedStringForRichText(button.text, styleStack: labelStyleStack, formatDate: context.formatDate)
+                let attachment = instantPageInlineButtonAttachment(button: button, labelString: labelString)
+                entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: buttonHeight)))
+                x += buttonWidth + buttonSpacing
+            }
+            y += buttonHeight + buttonSpacing
+            index += maxButtonsPerRow
+        }
+        let totalHeight = max(0.0, y - buttonSpacing)
+        return [.buttonRow(InstantPageV2ButtonRowItem(
+            frame: CGRect(x: 0.0, y: 0.0, width: boundingWidth, height: totalHeight),
+            buttons: entries
+        ))]
+    case let .document(documentId, caption):
+        guard case let .file(file) = context.media[documentId] else {
+            return []
+        }
+        let mediaIndex = context.mediaIndexCounter
+        context.mediaIndexCounter += 1
+        let instantPageMedia = InstantPageMedia(
+            index: mediaIndex,
+            media: .file(file),
+            url: nil,
+            caption: nil,
+            credit: nil
+        )
+        // Flush at full boundingWidth like .audio; 52pt rather than audio's 44 to fit the file row.
+        let documentFrame = CGRect(x: 0.0, y: 0.0, width: boundingWidth, height: 52.0)
+        var result: [InstantPageV2LaidOutItem] = [.document(InstantPageV2DocumentItem(
+            frame: documentFrame,
+            media: instantPageMedia,
+            webPage: context.webpage
+        ))]
+        let (captionItems, _) = layoutCaptionAndCredit(
+            caption,
+            offset: documentFrame.height,
+            boundingWidth: boundingWidth,
+            horizontalInset: horizontalInset,
+            context: &context
+        )
+        result.append(contentsOf: captionItems)
+        return result
     case .unsupported:
         return []
     }
@@ -2334,7 +2443,13 @@ private func layoutParagraph(
 
     let styleStack = InstantPageTextStyleStack()
     setupStyleStack(styleStack, theme: context.theme, category: kind == .cell ? .table : .paragraph, link: false)
-    let attributedString = attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
+    // `inlineButtonMaxWidth` caps a `textButton` pill, which cannot be re-broken onto the next line
+    // once it is wider than the line itself. Must match the width handed to `layoutTextItem` below.
+    //
+    // Deliberately NOT passed as `boundingWidth`: that parameter also drives the inline-IMAGE clamp
+    // (`fittedToWidthOrSmaller`), which has never been active on this path, and switching it on would
+    // silently resize existing inline images.
+    let attributedString = attributedStringForRichText(text, styleStack: styleStack, inlineButtonMaxWidth: boundingWidth - horizontalInset * 2.0, formatDate: context.formatDate)
 
     let (_, items, _) = layoutTextItem(
         attributedString,
@@ -2812,7 +2927,7 @@ private func layoutList(
     let checkboxColors = InstantPageV2CheckboxColors(
         background: context.theme.panelAccentColor,
         stroke: context.theme.pageBackgroundColor,
-        border: context.theme.controlColor
+        border: context.theme.tableBorderColor
     )
     // Track maxIndexWidth for ALL marker kinds (ordered + unordered, all three shapes), not
     // just ordered as V1/older V2 did. With every kind contributing to the marker column width
@@ -3251,7 +3366,7 @@ private func v2LeadingOffsetForRange(_ line: CTLine, range: NSRange) -> CGFloat 
     return min(startOffset, endOffset)
 }
 
-private func v2LocalAttachmentBoundsForRange(_ range: NSRange, imageItems: [InstantPageTextImageItem], formulaItems: [InstantPageTextFormulaRun]) -> CGRect? {
+private func v2LocalAttachmentBoundsForRange(_ range: NSRange, imageItems: [InstantPageTextImageItem], formulaItems: [InstantPageTextFormulaRun], buttonItems: [InstantPageTextButtonRun] = []) -> CGRect? {
     var result: CGRect?
 
     for imageItem in imageItems {
@@ -3274,6 +3389,16 @@ private func v2LocalAttachmentBoundsForRange(_ range: NSRange, imageItems: [Inst
         }
     }
 
+    for buttonItem in buttonItems {
+        if NSIntersectionRange(range, buttonItem.range).length != 0 {
+            if let current = result {
+                result = current.union(buttonItem.frame)
+            } else {
+                result = buttonItem.frame
+            }
+        }
+    }
+
     return result
 }
 
@@ -3288,6 +3413,13 @@ private struct PendingV2FormulaAttachment {
     let xOffset: CGFloat
     let range: NSRange
     let attachment: InstantPageMathAttachment
+    let baselineOffset: CGFloat
+}
+
+private struct PendingV2ButtonAttachment {
+    let xOffset: CGFloat
+    let range: NSRange
+    let attachment: InstantPageInlineButtonAttachment
     let baselineOffset: CGFloat
 }
 
@@ -3452,6 +3584,8 @@ func layoutTextItem(
             var lineFormulaItems: [InstantPageTextFormulaRun] = []
             var pendingImages: [PendingV2ImageAttachment] = []
             var pendingFormulas: [PendingV2FormulaAttachment] = []
+            var lineButtonItems: [InstantPageTextButtonRun] = []
+            var pendingButtons: [PendingV2ButtonAttachment] = []
             var lineEmojiItems: [InstantPageTextEmojiItem] = []
             var pendingEmoji: [PendingV2EmojiAttachment] = []
             var isRTL = false
@@ -3472,6 +3606,13 @@ func layoutTextItem(
                             let xOffset = v2LeadingOffsetForRange(line, range: range)
                             let baselineOffset = (attributes[NSAttributedString.Key.baselineOffset] as? CGFloat) ?? 0.0
                             pendingFormulas.append(PendingV2FormulaAttachment(xOffset: xOffset, range: range, attachment: attachment, baselineOffset: baselineOffset))
+                        } else if let attachment = attributes[NSAttributedString.Key(rawValue: InstantPageInlineButtonAttribute)] as? InstantPageInlineButtonAttachment {
+                            // x MUST come from v2LeadingOffsetForRange: a bare start-index offset
+                            // returns the glyph's RIGHT edge on RTL lines, shifting the pill by ~one
+                            // advance.
+                            let xOffset = v2LeadingOffsetForRange(line, range: range)
+                            let baselineOffset = (attributes[NSAttributedString.Key.baselineOffset] as? CGFloat) ?? 0.0
+                            pendingButtons.append(PendingV2ButtonAttachment(xOffset: xOffset, range: range, attachment: attachment, baselineOffset: baselineOffset))
                         } else if let emoji = attributes[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
                             let xOffset = v2LeadingOffsetForRange(line, range: range)
                             let font = (attributes[NSAttributedString.Key.font] as? UIFont) ?? UIFont.systemFont(ofSize: 17.0)
@@ -3505,6 +3646,29 @@ func layoutTextItem(
                     lineDescent = formula.attachment.rendered.descent
                 }
             }
+            // Buttons may grow the line, but only after consuming the leeway the line already
+            // reserves — the same headroom inline formulas bleed into.
+            //
+            // UNIT MISMATCH TO BEWARE: `lineAscent` starts at `fontLineHeight`, which is the REDUCED
+            // box `floor(ascender + descender)` (≈12.4pt at 17pt, since descender is negative), while
+            // `attachment.ascent` comes from `CTLineGetTypographicBounds` and is the FULL font ascent
+            // (≈16.3pt for a 15pt label + padding). Comparing them directly inflated every
+            // button-bearing line by ~4pt even though the pill fits inside the existing headroom.
+            //
+            // So discount the headroom first: `lineBoxTopInset` above the cap line (the line stack is
+            // already shifted down by it) and `baselineToNextTopSlack` below the baseline (the
+            // inter-line spacing the following line does not need). Anything beyond that genuinely
+            // overflows and does grow the line.
+            for button in pendingButtons {
+                let effectiveAscent = button.attachment.ascent - lineBoxTopInset
+                if effectiveAscent > lineAscent {
+                    lineAscent = effectiveAscent
+                }
+                let effectiveDescent = button.attachment.descent - baselineToNextTopSlack
+                if effectiveDescent > lineDescent {
+                    lineDescent = effectiveDescent
+                }
+            }
             let baselineY = workingLineOrigin.y + lineAscent
 
             for image in pendingImages {
@@ -3529,6 +3693,15 @@ func layoutTextItem(
                     height: attachment.rendered.size.height
                 )
                 lineFormulaItems.append(InstantPageTextFormulaRun(frame: formulaFrame, range: formula.range, attachment: attachment))
+            }
+            for button in pendingButtons {
+                let buttonFrame = CGRect(
+                    x: workingLineOrigin.x + button.xOffset,
+                    y: baselineY - button.attachment.ascent + button.baselineOffset,
+                    width: button.attachment.size.width,
+                    height: button.attachment.size.height
+                )
+                lineButtonItems.append(InstantPageTextButtonRun(frame: buttonFrame, range: button.range, attachment: button.attachment))
             }
             for emoji in pendingEmoji {
                 // Center on the font line box (baseline − fontLineHeight/2) so a 24pt emoji on a
@@ -3561,6 +3734,14 @@ func layoutTextItem(
                 }
                 if let formulaItem = lineFormulaItems.last {
                     indexOffset = -(lastIndex + lineCharacterCount - formulaItem.range.lowerBound)
+                    continue
+                }
+                // Without this arm an overflowing inline button stayed on the line and spilled past the
+                // bounding width instead of moving to the next line: the pill's width lives entirely in
+                // a CTRunDelegate on a single placeholder character, so the typesetter's suggested break
+                // can land after it. Re-break before the pill, exactly as images and formulas do.
+                if let buttonItem = lineButtonItems.last {
+                    indexOffset = -(lastIndex + lineCharacterCount - buttonItem.range.lowerBound)
                     continue
                 }
             }
@@ -3623,7 +3804,7 @@ func layoutTextItem(
             let height = lineAscent
             if !markedItems.isEmpty {
                 markedItems = markedItems.map { item in
-                    if let attachmentBounds = v2LocalAttachmentBoundsForRange(item.range, imageItems: lineImageItems, formulaItems: lineFormulaItems) {
+                    if let attachmentBounds = v2LocalAttachmentBoundsForRange(item.range, imageItems: lineImageItems, formulaItems: lineFormulaItems, buttonItems: lineButtonItems) {
                         return InstantPageTextMarkedItem(frame: attachmentBounds, color: item.color, range: item.range)
                     } else {
                         return item
@@ -3709,7 +3890,7 @@ func layoutTextItem(
             } else {
                 lineCharacterRects = nil
             }
-            let textLine = InstantPageTextLine(line: line, range: lineRange, frame: CGRect(x: workingLineOrigin.x, y: workingLineOrigin.y, width: lineWidth, height: height), strikethroughItems: strikethroughItems, underlineItems: underlineItems, markedItems: markedItems, spoilerItems: spoilerItems, imageItems: lineImageItems, formulaItems: lineFormulaItems, emojiItems: lineEmojiItems, anchorItems: anchorItems, isRTL: isRTL, characterRects: lineCharacterRects)
+            let textLine = InstantPageTextLine(line: line, range: lineRange, frame: CGRect(x: workingLineOrigin.x, y: workingLineOrigin.y, width: lineWidth, height: height), strikethroughItems: strikethroughItems, underlineItems: underlineItems, markedItems: markedItems, spoilerItems: spoilerItems, imageItems: lineImageItems, formulaItems: lineFormulaItems, buttonItems: lineButtonItems, emojiItems: lineEmojiItems, anchorItems: anchorItems, isRTL: isRTL, characterRects: lineCharacterRects)
 
             lines.append(textLine)
             imageItems.append(contentsOf: lineImageItems)
@@ -3775,6 +3956,12 @@ func layoutTextItem(
         // attached to the text view's imageContainerView. The pop-in animation reuses the
         // emoji-style ownership model. See the inline-image design doc:
         // docs/superpowers/specs/2026-05-28-instantpage-v2-inline-image-design.md.
+        for buttonItem in line.buttonItems {
+            let buttonFrame = buttonItem.frame.offsetBy(dx: lineFrame.minX + effectiveOffset.x, dy: effectiveOffset.y)
+            additionalItems.append(.inlineButton(InstantPageV2InlineButtonItem(frame: buttonFrame, attachment: buttonItem.attachment)))
+            if buttonFrame.minY < topInset { topInset = buttonFrame.minY }
+            if buttonFrame.maxY > height { bottomInset = max(bottomInset, buttonFrame.maxY - height) }
+        }
         for formulaItem in line.formulaItems {
             let formulaFrame = formulaItem.frame.offsetBy(dx: lineFrame.minX + effectiveOffset.x, dy: effectiveOffset.y)
             let item = InstantPageV2FormulaItem(

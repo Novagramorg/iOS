@@ -543,6 +543,181 @@ Spec: [`docs/superpowers/specs/2026-05-29-instantpage-blockquote-blocks-design.m
 - **Entity-expressibility:** a quote is entity-expressible (→ regular message path) only if its caption is empty AND every child is an entity-expressible `.paragraph`. A nested-structure or multi-paragraph quote is not, so it sends via the rich path. **Behavior change:** markdown `> p1\n>\n> p2` is now ONE quote with two paragraphs (rich) rather than two consecutive entity quotes — correct semantics.
 - **The enum-arity change is compile-enforced** across all modules; the full Bazel build is the completeness gate (no per-module build). `CachedFaqInstantPage.swift` matches `case .blockQuote:` payload-less and needs no edit. `BrowserReadability.swift` constructs `.blockQuote(blocks: [.paragraph(.italic(...))], …)` and is easy to miss in the spec's file list — grep `\.blockQuote(` repo-wide when touching the case again.
 
+## Inline buttons & document blocks
+
+The TL schema that unified `keyboardButton`/`keyboardInlineButton` also added inline buttons inside
+`RichText` (`textButton`), block-level button rows (`pageBlockButtonRow`), and a generic file block
+(`pageBlockDocument`). All three are modelled losslessly (Postbox + FlatBuffers + both Api
+directions) **and rendered in V2**; V1 Instant View still skips them via its `default:` arms.
+Because the models round-trip, no cached page needed re-fetching when the rendering landed.
+
+The models were added first and left unrendered on purpose, so that the rendering could land as a pure
+view change with no cache migration. That is why the sections below separate the (lossless, tested)
+model layer from the V2 rendering built on top of it.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_InstantPageButton.swift` | `InstantPageButton` (`text`/`action`/`color`) + Postbox coding, **and** the `ReplyMarkupButtonAction` FlatBuffers codec — which exists only to serve page buttons, hence living beside its consumer. |
+| `submodules/TelegramCore/Sources/ApiUtils/InstantPageButton.swift` | `Api.PageButton` ⇄ model, `richButtonStyle` ⇄ `ReplyMarkupButton.Style.Color`, and `apiInlineButtonType()` for the outgoing direction. |
+| `submodules/TelegramCore/FlatSerialization/Models/RichText.fbs` | `RichText_TextButton`, `InstantPageButton`, and the 10-member `InstantPageButtonAction` union + tables. |
+| `submodules/TelegramCore/FlatSerialization/Models/InstantPageBlock.fbs` | `InstantPageBlock_ButtonRow`, `InstantPageBlock_Document`. |
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_RichText.swift` | `case textButton` (Postbox tag **29**) + `==` + `plainText` (returns the label) + FlatBuffers codec. |
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_InstantPage.swift` | `case buttonRow` (tag **31**), `case document` (tag **32**), codecs, and the `allMedia(mediaDict:)` arm. |
+| `submodules/TextFormat/Tests/` | `InstantPageButtonModelTests`, `RichTextButtonTests`, `InstantPageBlockNewCasesTests` — 24 tests over both codecs. |
+| `submodules/InstantPageUI/Sources/InstantPageInlineButton.swift` | `InstantPageInlineButtonAttachment` (the measured payload) + `instantPageInlineButtonAttachment(button:labelString:maxWidth:)`, the **single** construction path for both inline and row pills, incl. the ellipsis truncation + `instantPageButtonColors(_:theme:isInline:isDisabled:)` + the padding and font-size constants. |
+| `submodules/InstantPageUI/Sources/InstantPageV2ButtonViews.swift` | `InstantPageV2ButtonPillView` (one pill: `backgroundColor` fill + `draw(_:)` label + press state + label recolour), `InstantPageV2InlineButtonView`, `InstantPageV2ButtonRowView`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2DocumentContentNode.swift` | `InstantPageV2DocumentContentNode` (file row) + `InstantPageV2DocumentView` (item view). |
+| `submodules/InstantPageUI/Sources/InstantPageTextStyleStack.swift` | `.semibold` / `.medium` baseline weights (button labels are semibold regardless of the surrounding paragraph) + the `InstantPageInlineButtonAttribute` key. |
+| `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `buttonDangerColor`, `buttonSuccessColor`, `checkboxFill`, `checkboxForeground` — all defaulted, all threaded through `withUpdatedFontStyles`. |
+| `submodules/TelegramUI/Sources/ChatControllerSyntheticButtons.swift` | Debug fixture (`#if DEBUG`): `/synthetic_buttons` inserts a local rich message — one incoming, one outgoing — covering all four colours, disabled pills, a very long label (exercising truncation + re-break) and a button row. Hooked into the `sendMessages` **closure** in `ChatControllerLoadDisplayNode.swift:986`, itself `#if DEBUG`. |
+
+### Geometry (as shipped; tuned by eye, not derived)
+
+| | Inline `textButton` | Block `pageBlockButtonRow` |
+|---|---|---|
+| Label font | 15pt semibold | 16pt semibold |
+| Horizontal inner padding | 7pt | 7pt |
+| Vertical inner padding | 1pt | implied by the fixed height |
+| Height | derived: label ink + 2·vPad | fixed **40pt** (a touch target) |
+| Corner radius | `bounds.height / 2` (capsule) | `bounds.height / 2` → 20pt |
+| Width | label ink + 2·hPad, capped at the line width | equal share of the row, wrapping at 8 |
+
+Font sizes are **fixed**, not scaled by the Instant View font-size setting — the chat bubble's own text
+categories are hardcoded too. The two pill shapes therefore read differently side by side: a block pill
+is much taller than an inline one, and its radius is correspondingly larger. If they ever need to look
+related, a fixed radius rather than `height / 2` is the lever.
+
+### Non-obvious invariants
+
+- **`InstantPageButton` and `InstantPageButtonAction` tables MUST live in `RichText.fbs`, not
+  `InstantPageBlock.fbs`.** `RichText_TextButton` needs them and `InstantPageBlock.fbs` already
+  `include`s `RichText.fbs`, so defining them there creates an include cycle.
+- **`ReplyMarkupButtonAction` is deliberately reused as the page-button action type**, so a Stage 2
+  page-button tap can call the existing `ChatMessageItemView.performMessageButtonAction` instead of a
+  parallel dispatch. The type is therefore **wider than the schema allows**: `text`, `requestPhone`,
+  `requestMap`, `setupPoll` and `requestPeer` come only from `Api.ButtonType` and cannot occur on a
+  page button. Only 10 cases are reachable, which is exactly the FlatBuffers union's membership; the
+  five unreachable ones collapse onto `disabled` when encoded (Postbox stays lossless).
+- **`richTextIsEntityExpressible` returns `false` for `textButton`** (`BrowserMarkdown.swift`), so a
+  button forces the rich send path. That file has `default:` clauses — had this defaulted to `true`,
+  button-bearing content would be sent as plain message entities and the buttons destroyed at send
+  time.
+- **`allMedia(mediaDict:)` and `applyMediaResourceChanges` both need `.document`, and neither is
+  fully compiler-protected.** `allMedia` ends in `default:` (omitting `.document` compiles and then
+  silently stops the page fetching its file). `applyMediaResourceChanges`
+  (`State/ApplyUpdateMessage.swift`) hands a locally uploaded file's resource data to the cloud
+  resource on send confirmation — omitting `.document` re-downloads a just-sent file.
+- **`InstantPageAnchorPath` intentionally does NOT recurse into `.buttonRow`.** That file's recursion
+  set must match what `InstantPageV2Layout.layoutBlock` recurses through, because both drive a shared
+  `detailsIndexCounter` ordinal; since V2 does not lay out `.buttonRow`, recursing would
+  desynchronise `<details>` anchor navigation. Anchors inside a **`RichText.textButton`** *do*
+  resolve — that descent lives in `richTextContainsAnchor`.
+- **A button behaves as a discrete atom, never as flowing text**, in every text-shaping helper: not
+  split by a prefix drop (`markdownDroppingPrefixLength`), always displayable
+  (`markdownHasDisplayableContent`), never whitespace-only (`markdownIsWhitespaceOnly`), and not
+  trimmed internally (`BrowserReadability`'s `trimStart`/`trimEnd`/`trim`/`addNewLine`). It sits with
+  `.image` and `.textCustomEmoji`.
+- **KNOWN LOSSY, deferred: editing a button-bearing rich message drops its buttons.** Markdown has
+  no spelling for a button, so the InstantPage → markdown → InstantPage round-trip keeps the label
+  and loses action + style. `InstantPageToMarkdown.swift` states this at the site. The fix, if picked
+  up, is a positive `InstantPage.containsButtons` check gating the edit affordance — not a `default:`
+  clause.
+- **`keyboardButtonStyle` is bit-identical at `flags.10`** to the pre-unification constructors, so
+  `ReplyMarkupButton.Style` and its rendering in `ChatMessageActionButtonsNode` were untouched by the
+  migration.
+
+### Rendering invariants (V2)
+
+- **`textButton` follows the inline-FORMULA path, not the inline-image path.** The two disagree twice,
+  and both choices matter. (1) The formula run delegate reports **real** ascent/descent
+  (`InstantPageTextItem.swift:854`) so CoreText grows the line box; the image one reports `0/0`
+  (:818) and then owns manual centring with symmetric bleed. A pill is taller than its glyphs, so the
+  image model would overlap the lines above and below. (2) Formulas are emitted as **top-level items**
+  into `additionalItems`; images are created at view-update time into a sibling container above the
+  reveal mask. A button must *be* a view (own press state, own tap target), which the formula path
+  already gives.
+- **The attachment must carry its own measurements.** The V2 line-breaker raises
+  `lineAscent`/`lineDescent` from the attachment itself and has no `styleStack` to re-measure with —
+  hence `InstantPageInlineButtonAttachment` holds `size`/`ascent`/`descent`, mirroring
+  `InstantPageMathAttachment.rendered`.
+- **`instantPageInlineButtonAttachment(button:labelString:)` is the ONLY construction path.** Inline
+  and row pills must agree on whether `size` includes padding, because the pill view's label centring
+  reads exactly `size.width - 2 · hPad`. Two independent constructions drifted apart once already.
+- **The pill recolours its label in the view, not at construction.**
+  `attributedStringForRichText` bakes the *paragraph* colour and has no `InstantPageTheme`, so
+  `instantPageButtonColors(...).label` can only be applied where the theme exists — the view. Skipping
+  this silently renders `danger`/`success` labels in body-text colour and never dims disabled ones.
+- **`clipsToBounds` is what makes the pill a pill.** The view implements `draw(_:)`, so UIKit paints
+  `backgroundColor` **into the layer's `contents` bitmap**; `cornerRadius` rounds the layer's own
+  background but does **not** clip `contents` without `masksToBounds`. Without the clip the rounded
+  corners are drawn and then covered by the square bitmap, and the pill renders as a rect.
+- **Line-height inflation: never compare `attachment.ascent` against `lineAscent` directly.**
+  `lineAscent` starts at `fontLineHeight`, which is the *reduced* `floor(ascender + descender)` box
+  (~12.4pt at 17pt — `descender` is negative), whereas `attachment.ascent` comes from
+  `CTLineGetTypographicBounds` and is a *full* font ascent (~16.3pt for a 15pt label plus padding).
+  Comparing them grew every button-bearing line by ~4pt. The button loop therefore discounts
+  `lineBoxTopInset` (the ascender headroom the line stack is already shifted down by) and
+  `baselineToNextTopSlack` (inter-line spacing the next line does not need) — the same reserves inline
+  formulas bleed into — and only genuine overflow grows the line.
+- **An overflowing pill needs an arm in the re-break block.** A pill's entire width lives in a
+  `CTRunDelegate` on one placeholder character, so `CTTypesetterSuggestLineBreak` can suggest a break
+  *after* it. The layout recovers by discarding a line wider than the bound and re-breaking before the
+  attachment — but only for attachment kinds listed there. Images, formulas and buttons each have an
+  arm; a new inline attachment kind needs one too or it will silently spill past the bubble.
+- **A pill wider than the whole line is truncated, because it cannot be re-broken.** That recovery path
+  is guarded by `lineCharacterCount > 1`, so a pill alone on a line is left alone. Hence
+  `instantPageInlineButtonAttachment(maxWidth:)` truncates the label with a tail ellipsis on cluster
+  boundaries (`CTTypesetterSuggestClusterBreak`), the ellipsis inheriting the label's own attributes.
+- **The cap arrives via `inlineButtonMaxWidth`, deliberately NOT `boundingWidth`.** Three traps here:
+  (1) `boundingWidth` is `nil` on the V2 paragraph path — only table cells pass it — so a cap routed
+  through it silently never applies; `layoutParagraph` passes the width explicitly. (2) The 31 recursive
+  `attributedStringForRichText` calls must forward the cap, or a button nested in a `.concat` (the normal
+  case) loses it. (3) `boundingWidth` *also* drives the inline-**image** clamp
+  (`fittedToWidthOrSmaller`), which has never been active on this path, so reusing it would silently
+  resize existing inline images.
+- **KNOWN BUG, pre-existing and unfixed: recursion never forwards `boundingWidth`.** A *nested* inline
+  image therefore never gets its `fittedToWidthOrSmaller` clamp — only a top-level one, and only on
+  paths that pass the width at all (table cells). Independent of the button work.
+- **`checkboxFill` / `checkboxForeground` are misnamed for their current use.** They are the `.primary`
+  button's solid fill and label colour; nothing checkbox-related reads them. `InstantPageListItem`
+  checkboxes still derive their own colours. Rename or wire them up before relying on the names.
+- **Interactive V2 items route taps through a pageView closure, NOT `tapActionAtPoint`.**
+  `buttonTapped` on `InstantPageV2View` mirrors the pre-existing `checkboxTapped`
+  (`InstantPageRenderer.swift:178`). `.custom` + `rects` on `ChatMessageBubbleContentTapAction` is for
+  *text-attribute* taps (entities, spoilers, "Show more"), not item views.
+- **The `reuse` arm must re-wire `onButtonTapped`.** A recycled view may have been created against a
+  previous `InstantPageV2View`; without re-wiring, taps silently stop working after scrolling away and
+  back.
+- **`performMessageButtonAction` lives on `ChatMessageItemView`, so a content node cannot call it.**
+  The rich bubble synthesises a `ReplyMarkupButton` and calls
+  `ChatMessageBubbleContentNode.performRichTextButtonAction`, a closure wired by
+  `ChatMessageBubbleItemNode` (~:5060) alongside `requestInlineUpdate`/`requestFullUpdate`.
+- **`InstantPageTheme.withUpdatedFontStyles` (:173) reconstructs the struct field by field.** Any
+  field omitted there silently reverts to its `init` default — for
+  `buttonDangerColor`/`buttonSuccessColor` that resets a bubble's theme-derived colours the moment the
+  user changes Instant View font size. Nothing warns; it compiles.
+- **Mid-paragraph buttons pop in when their whole paragraph finishes revealing**, not when the cursor
+  reaches them, because an inline attachment lands in `additionalItems` *after* the text item it sits
+  inside and the cost map walks items in array order. **Formulas already behave this way**; fixing it
+  means interleaving sub-item cost entries inside a text entry, i.e. changing the cost model.
+- **`pageBlockDocument`: tapping a downloaded file is inert, by decision.** Opening needs a
+  document-preview presenter, and `presentDocumentPreviewController` is internal to the TelegramUI
+  target — unreachable from `InstantPageUI` *and* from the rich-bubble component module. Routing via
+  `controllerInteraction.openMessage` was rejected: the file lives in the `RichTextMessageAttribute`'s
+  `InstantPage`, not the message's media, so it could open the wrong attachment. Download and cancel
+  do work, through the **fetch manager** (`messageMediaFileStatus` keys progress off its `hasEntry`,
+  so `freeMediaFileInteractiveFetched` would show no ring).
+- **`/synthetic_buttons` is hooked into the `sendMessages` CLOSURE, not the method.** Typed input goes
+  `ChatControllerNode.sendCurrentMessage` → the `sendMessages` closure property
+  (`ChatControllerNode.swift:333`, assigned `ChatControllerLoadDisplayNode.swift:986`) →
+  `transformEnqueueMessages` + `enqueueMessages`. It never reaches
+  `ChatControllerImpl.sendMessages`, so a hook there compiles and silently never runs.
+- **`.buttonRow` still sits in `InstantPageAnchorPath`'s `default:`** — Stage 1's reason ("V2 does not
+  lay it out") has expired, but the outcome is unchanged for a new one: a button's label renders
+  inside its own view, so it is not a page-text anchor scroll target.
+
 ## InstantPage thinking blocks (InstantPageBlock.thinking)
 
 `InstantPageBlock.thinking(RichText)` renders server-sent reasoning as dimmed, continuously-shimmering text inside rich-data bubbles. V2 renderer only; V1 ignores the block (returns `[]`). The shimmer and fade-in mechanics are deliberately separate from the char-reveal cursor so thinking blocks do not affect the reveal pacing of the answer content that follows them.

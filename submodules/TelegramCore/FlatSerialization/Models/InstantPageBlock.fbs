@@ -37,7 +37,9 @@ union InstantPageBlock_Value {
     InstantPageBlock_Map,
     InstantPageBlock_Heading,
     InstantPageBlock_Formula,
-    InstantPageBlock_Thinking
+    InstantPageBlock_Thinking,
+    InstantPageBlock_ButtonRow,
+    InstantPageBlock_Document
 }
 
 table InstantPageBlock {
@@ -119,6 +121,17 @@ table InstantPageBlock_Video {
 }
 
 table InstantPageBlock_Audio {
+    id:MediaId (id: 0, required);
+    caption:InstantPageCaption (id: 1, required);
+}
+
+// InstantPageButton is defined in RichText.fbs, which this file already includes.
+table InstantPageBlock_ButtonRow {
+    buttons:[InstantPageButton] (id: 0, required);
+}
+
+// A generic file. Its own case rather than a widened Audio: .audio renders a music player.
+table InstantPageBlock_Document {
     id:MediaId (id: 0, required);
     caption:InstantPageCaption (id: 1, required);
 }

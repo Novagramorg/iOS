@@ -408,6 +408,10 @@ private func trimStart(_ input: RichText) -> RichText {
         break
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         break
+    case .textButton:
+        // A button is a discrete atom, like .image or .textCustomEmoji above — its label is not
+        // flowing text to be trimmed or appended to.
+        break
     }
     return text
 }
@@ -455,6 +459,10 @@ private func trimEnd(_ input: RichText) -> RichText {
     case .textCustomEmoji:
         break
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
+        break
+    case .textButton:
+        // A button is a discrete atom, like .image or .textCustomEmoji above — its label is not
+        // flowing text to be trimmed or appended to.
         break
     }
     return text
@@ -505,6 +513,10 @@ private func trim(_ input: RichText) -> RichText {
         break
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         break
+    case .textButton:
+        // A button is a discrete atom, like .image or .textCustomEmoji above — its label is not
+        // flowing text to be trimmed or appended to.
+        break
     }
     return text
 }
@@ -552,6 +564,10 @@ private func addNewLine(_ input: RichText) -> RichText {
     case .textCustomEmoji:
         break
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
+        break
+    case .textButton:
+        // A button is a discrete atom, like .image or .textCustomEmoji above — its label is not
+        // flowing text to be trimmed or appended to.
         break
     }
     return text

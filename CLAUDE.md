@@ -166,6 +166,32 @@ The public surface is being narrowed incrementally (e.g. `scroller` is fully rem
 
 Typed markdown with structure the regular message-entity set can't represent (headings, lists, tables, formulas, nested blockquotes) is sent as a **rich message** — a `RichTextMessageAttribute` carrying an `InstantPage`, drawn by `ChatMessageRichDataBubbleContentNode` via the **InstantPage V2** renderer (with AI-streaming progressive reveal, inline custom emoji, and entity cases). The detailed architecture and non-obvious invariants — streaming reveal, V2 table/text-box layout, custom-emoji & entity round-trips, task-list checkboxes, nested blockquotes, thinking blocks, the markdown send / edit / copy / paste paths, and surfacing rich-message media through the shared-media/gallery/preview pipelines via `Message.effectiveMedia` — live in [`docs/instantpage-richtext.md`](docs/instantpage-richtext.md).
 
+**Inline buttons & document blocks** — `textButton` (inline, inside `RichText`),
+`pageBlockButtonRow`, and `pageBlockDocument`, from the TL change that unified
+`keyboardButton`/`keyboardInlineButton`. All three are modelled losslessly (Postbox + FlatBuffers +
+both Api directions) **and rendered in V2**; V1 Instant View still skips them. `/synthetic_buttons`
+(**`#if DEBUG` only**) in a 1:1 chat inserts a local fixture message — one incoming, one outgoing —
+since the server does not emit these constructs yet. `pageBlockDocument` has **no** fixture and has
+never been verified on screen: it needs a real fetchable `TelegramMediaFile`.
+
+The load-bearing invariants are in [`docs/instantpage-richtext.md`](docs/instantpage-richtext.md)
+under "Inline buttons & document blocks". The ones that bite hardest: `textButton` follows the inline
+**formula** attachment path (real run-delegate ascent/descent, top-level item) and *not* the
+inline-image path; the attachment must carry its own measurements because the line-breaker cannot
+re-measure; interactive V2 items route taps through a **pageView closure** (`buttonTapped`, mirroring
+`checkboxTapped`) rather than `tapActionAtPoint`; `InstantPageTheme.withUpdatedFontStyles`
+reconstructs field-by-field so omitting a colour there silently reverts it; the `InstantPageButton`
+FlatBuffers tables must live in `RichText.fbs` (include cycle); `ReplyMarkupButtonAction` is reused
+and therefore wider than the schema permits; two media sites fail *silently* for `.document`; and
+`InstantPageAnchorPath` must NOT recurse into `.buttonRow`. On the rendering side: a pill needs
+`clipsToBounds` or `cornerRadius` is drawn and then covered by the `draw(_:)` background bitmap
+(it renders as a rect); `attachment.ascent` is a *full* font ascent and must not be compared directly
+against `lineAscent`, which is the *reduced* `floor(ascender + descender)` box; and a width cap must
+travel as `inlineButtonMaxWidth`, forwarded through all 31 recursive
+`attributedStringForRichText` calls — `boundingWidth` is nil on the paragraph path and also drives
+the inline-image clamp. Deferred: markdown-edit data loss, tapping an already-downloaded document,
+and `checkboxFill`/`checkboxForeground` being misnamed (they are the `.primary` button colours).
+
 ## Postbox → TelegramEngine refactor (in progress)
 
 A gradual migration is underway to eliminate direct `import Postbox` from consumer submodules in favor of `TelegramEngine`.

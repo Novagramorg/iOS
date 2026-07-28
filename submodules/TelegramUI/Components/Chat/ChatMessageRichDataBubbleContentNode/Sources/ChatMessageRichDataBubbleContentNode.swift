@@ -498,7 +498,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     overlayPanelColor: isDark ? UIColor(white: 0.0, alpha: 0.13) : UIColor(white: 1.0, alpha: 0.13),
                     separatorColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
                     secondaryControlColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
-                    quoteAccentColor: mainColor
+                    quoteAccentColor: mainColor,
+                    buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
+                    buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
+                    checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
+                    checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor
                 )
                 
                 var hasDraft = false
@@ -984,6 +988,21 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 }
                             } else {
                                 pageView.checkboxTapped = nil
+                            }
+                            pageView.buttonTapped = { [weak self] button in
+                                guard let self else {
+                                    return
+                                }
+                                // Reuse the whole bot-button dispatch by synthesising the
+                                // ReplyMarkupButton it expects. Only InlineButtonType-derived actions
+                                // can occur on a page button, so .text (which would sendMessage) is
+                                // unreachable here.
+                                self.performRichTextButtonAction?(ReplyMarkupButton(
+                                    title: button.text.plainText,
+                                    titleWhenForwarded: nil,
+                                    action: button.action,
+                                    style: nil
+                                ))
                             }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
                             pageView.frame = CGRect(

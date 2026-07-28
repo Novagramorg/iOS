@@ -2375,6 +2375,21 @@ public extension Api.functions.auth {
     }
 }
 public extension Api.functions.auth {
+    static func finishFirebasePnvLogin(googleToken: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.Authorization>) {
+        let buffer = Buffer()
+        buffer.appendInt32(746916172)
+        serializeString(googleToken, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "auth.finishFirebasePnvLogin", parameters: [("googleToken", ConstructorParameterDescription(googleToken))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.Authorization? in
+            let reader = BufferReader(buffer)
+            var result: Api.auth.Authorization?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.auth.Authorization
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.auth {
     static func finishPasskeyLogin(flags: Int32, credential: Api.InputPasskeyCredential, fromDcId: Int32?, fromAuthKeyId: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.Authorization>) {
         let buffer = Buffer()
         buffer.appendInt32(-1739084537)
@@ -2387,6 +2402,23 @@ public extension Api.functions.auth {
             serializeInt64(fromAuthKeyId!, buffer: buffer, boxed: false)
         }
         return (FunctionDescription(name: "auth.finishPasskeyLogin", parameters: [("flags", ConstructorParameterDescription(flags)), ("credential", ConstructorParameterDescription(credential)), ("fromDcId", ConstructorParameterDescription(fromDcId)), ("fromAuthKeyId", ConstructorParameterDescription(fromAuthKeyId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.Authorization? in
+            let reader = BufferReader(buffer)
+            var result: Api.auth.Authorization?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.auth.Authorization
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.auth {
+    static func firebasePnvSignUp(flags: Int32, firstName: String, lastName: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.Authorization>) {
+        let buffer = Buffer()
+        buffer.appendInt32(2017422166)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(firstName, buffer: buffer, boxed: false)
+        serializeString(lastName, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "auth.firebasePnvSignUp", parameters: [("flags", ConstructorParameterDescription(flags)), ("firstName", ConstructorParameterDescription(firstName)), ("lastName", ConstructorParameterDescription(lastName))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.Authorization? in
             let reader = BufferReader(buffer)
             var result: Api.auth.Authorization?
             if let signature = reader.readInt32() {
@@ -2457,6 +2489,22 @@ public extension Api.functions.auth {
             var result: Api.auth.Authorization?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.auth.Authorization
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.auth {
+    static func initFirebasePnvLogin(apiId: Int32, apiHash: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.FirebasePnvIntent>) {
+        let buffer = Buffer()
+        buffer.appendInt32(2004743034)
+        serializeInt32(apiId, buffer: buffer, boxed: false)
+        serializeString(apiHash, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "auth.initFirebasePnvLogin", parameters: [("apiId", ConstructorParameterDescription(apiId)), ("apiHash", ConstructorParameterDescription(apiHash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.FirebasePnvIntent? in
+            let reader = BufferReader(buffer)
+            var result: Api.auth.FirebasePnvIntent?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.auth.FirebasePnvIntent
             }
             return result
         })
@@ -3642,21 +3690,6 @@ public extension Api.functions.channels {
     }
 }
 public extension Api.functions.channels {
-    static func getCategories(langCode: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.ChannelCategory]>) {
-        let buffer = Buffer()
-        buffer.appendInt32(-1814446679)
-        serializeString(langCode, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "channels.getCategories", parameters: [("langCode", ConstructorParameterDescription(langCode))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.ChannelCategory]? in
-            let reader = BufferReader(buffer)
-            var result: [Api.ChannelCategory]?
-            if let _ = reader.readInt32() {
-                result = Api.parseVector(reader, elementSignature: 0, elementType: Api.ChannelCategory.self)
-            }
-            return result
-        })
-    }
-}
-public extension Api.functions.channels {
     static func getChannelRecommendations(flags: Int32, channel: Api.InputChannel?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Chats>) {
         let buffer = Buffer()
         buffer.appendInt32(631707458)
@@ -3688,20 +3721,6 @@ public extension Api.functions.channels {
             var result: Api.messages.Chats?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.messages.Chats
-            }
-            return result
-        })
-    }
-}
-public extension Api.functions.channels {
-    static func getContactPersonalChannels() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.channels.PersonalChannels>) {
-        let buffer = Buffer()
-        buffer.appendInt32(1352350822)
-        return (FunctionDescription(name: "channels.getContactPersonalChannels", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.channels.PersonalChannels? in
-            let reader = BufferReader(buffer)
-            var result: Api.channels.PersonalChannels?
-            if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.channels.PersonalChannels
             }
             return result
         })
@@ -4006,28 +4025,6 @@ public extension Api.functions.channels {
             var result: Api.Updates?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.Updates
-            }
-            return result
-        })
-    }
-}
-public extension Api.functions.channels {
-    static func search(flags: Int32, q: String?, categoryId: Int32?, offset: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.channels.Found>) {
-        let buffer = Buffer()
-        buffer.appendInt32(-940686817)
-        serializeInt32(flags, buffer: buffer, boxed: false)
-        if Int(flags) & Int(1 << 0) != 0 {
-            serializeString(q!, buffer: buffer, boxed: false)
-        }
-        if Int(flags) & Int(1 << 1) != 0 {
-            serializeInt32(categoryId!, buffer: buffer, boxed: false)
-        }
-        serializeString(offset, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "channels.search", parameters: [("flags", ConstructorParameterDescription(flags)), ("q", ConstructorParameterDescription(q)), ("categoryId", ConstructorParameterDescription(categoryId)), ("offset", ConstructorParameterDescription(offset))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.channels.Found? in
-            let reader = BufferReader(buffer)
-            var result: Api.channels.Found?
-            if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.channels.Found
             }
             return result
         })
@@ -5208,6 +5205,21 @@ public extension Api.functions.contacts {
     }
 }
 public extension Api.functions.ephemeral {
+    static func deleteAllWelcomeMessages(peer: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1934595873)
+        peer.serialize(buffer, true)
+        return (FunctionDescription(name: "ephemeral.deleteAllWelcomeMessages", parameters: [("peer", ConstructorParameterDescription(peer))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
     static func deleteMessage(peer: Api.InputPeer, receiverId: Api.InputUser, id: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
         buffer.appendInt32(-1547643631)
@@ -5219,6 +5231,59 @@ public extension Api.functions.ephemeral {
             var result: Api.Bool?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
+    static func deleteWelcomeMessage(peer: Api.InputPeer, id: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-394090015)
+        peer.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "ephemeral.deleteWelcomeMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
+    static func editMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, id: Int32, message: String?, media: Api.InputMedia?, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-360046135)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        peer.serialize(buffer, true)
+        receiverId.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(message!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 3) != 0 {
+            media!.serialize(buffer, true)
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            buffer.appendInt32(481674261)
+            buffer.appendInt32(Int32(entities!.count))
+            for item in entities! {
+                item.serialize(buffer, true)
+            }
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            replyMarkup!.serialize(buffer, true)
+        }
+        if Int(flags) & Int(1 << 4) != 0 {
+            richMessage!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "ephemeral.editMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("id", ConstructorParameterDescription(id)), ("message", ConstructorParameterDescription(message)), ("media", ConstructorParameterDescription(media)), ("entities", ConstructorParameterDescription(entities)), ("replyMarkup", ConstructorParameterDescription(replyMarkup)), ("richMessage", ConstructorParameterDescription(richMessage))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+            let reader = BufferReader(buffer)
+            var result: Api.Updates?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Updates
             }
             return result
         })
@@ -5239,6 +5304,22 @@ public extension Api.functions.ephemeral {
             var result: Api.messages.BotCallbackAnswer?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.messages.BotCallbackAnswer
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
+    static func getWelcomeMessages(peer: Api.InputPeer, hash: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.ephemeral.WelcomeMessages>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-610614899)
+        peer.serialize(buffer, true)
+        serializeInt64(hash, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "ephemeral.getWelcomeMessages", parameters: [("peer", ConstructorParameterDescription(peer)), ("hash", ConstructorParameterDescription(hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.ephemeral.WelcomeMessages? in
+            let reader = BufferReader(buffer)
+            var result: Api.ephemeral.WelcomeMessages?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.ephemeral.WelcomeMessages
             }
             return result
         })
@@ -14164,6 +14245,28 @@ public extension Api.functions.stories {
             var result: Api.StoryAlbum?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.StoryAlbum
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.toncenter {
+    static func performApiRequest(flags: Int32, endpoint: String, query: String?, payload: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.toncenter.ApiResponse>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1921262239)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(endpoint, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeString(query!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            serializeString(payload!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "toncenter.performApiRequest", parameters: [("flags", ConstructorParameterDescription(flags)), ("endpoint", ConstructorParameterDescription(endpoint)), ("query", ConstructorParameterDescription(query)), ("payload", ConstructorParameterDescription(payload))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.toncenter.ApiResponse? in
+            let reader = BufferReader(buffer)
+            var result: Api.toncenter.ApiResponse?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.toncenter.ApiResponse
             }
             return result
         })

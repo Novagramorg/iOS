@@ -139,6 +139,10 @@ extension RichText {
             return NSAttributedString(string: alt)
         case let .textAutoEmail(value), let .textAutoPhone(value), let .textAutoUrl(value), let .textBankCard(value), let .textBotCommand(value), let .textCashtag(value), let .textHashtag(value), let .textMention(value), let .textMentionName(value, _), let .textSpoiler(value), let .textDate(value, _, _):
             return value.previewAttributedText(strings: strings)
+        case let .textButton(button):
+            // A preview shows the button's label; a button-only paragraph would otherwise preview
+            // as empty. Deliberately unstyled — the pill is a Stage 2 rendering concern.
+            return button.text.previewAttributedText(strings: strings)
         }
     }
 
@@ -238,6 +242,24 @@ extension InstantPageBlock {
             } else {
                 return NSAttributedString(string: strings.RichTextPreview_Music)
             }
+        case let .document(id, _):
+            // Prefer the real filename, as the chat list does for file messages; fall back to the
+            // generic label when the media is not resolvable here.
+            if let file = media[id] as? TelegramMediaFile,
+               let fileName = file.fileName, !fileName.isEmpty {
+                return NSAttributedString(string: fileName)
+            }
+            return NSAttributedString(string: strings.Message_File)
+        case let .buttonRow(buttons):
+            // Join the labels, so a button-only message previews as its buttons rather than blank.
+            let result = NSMutableAttributedString()
+            for button in buttons {
+                if result.length != 0 {
+                    result.append(NSAttributedString(string: " "))
+                }
+                result.append(button.text.previewAttributedText(strings: strings))
+            }
+            return result
         case .cover, .webEmbed, .postEmbed, .collage, .slideshow, .channelBanner, .kicker, .thinking, .details, .relatedArticles:
             return NSAttributedString()
         case .table:

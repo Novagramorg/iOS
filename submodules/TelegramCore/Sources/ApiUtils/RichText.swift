@@ -82,9 +82,15 @@ extension RichText {
             self = .textSpoiler(text: RichText(apiText: textSpoilerData.text))
         case .textDiff:
             self = .empty
+        case let .textButton(data):
+            self = .textButton(InstantPageButton(
+                text: RichText(apiText: data.text),
+                action: ReplyMarkupButtonAction.from(apiType: data.type).action,
+                color: data.style.flatMap(ReplyMarkupButton.Style.Color.init(apiRichStyle:))
+            ))
         }
     }
-    
+
     func apiRichText() -> Api.RichText {
         switch self {
         case .empty:
@@ -145,6 +151,14 @@ extension RichText {
             return .textSpoiler(Api.RichText.Cons_textSpoiler(text: text.apiRichText()))
         case let .textDate(text, date, format):
             return .textDate(Api.RichText.Cons_textDate(flags: format?.rawValue ?? 0, text: text.apiRichText(), date: date))
+        case let .textButton(button):
+            let (flags, style) = button.apiFlagsAndStyle()
+            return .textButton(Api.RichText.Cons_textButton(
+                flags: flags,
+                text: button.text.apiRichText(),
+                type: button.action.apiInlineButtonType(),
+                style: style
+            ))
         }
     }
 }

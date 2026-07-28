@@ -1,81 +1,3 @@
-public extension Api.channels {
-    enum SponsoredMessageReportResult: TypeConstructorDescription {
-        public class Cons_sponsoredMessageReportResultChooseOption: TypeConstructorDescription {
-            public var title: String
-            public var options: [Api.SponsoredMessageReportOption]
-            public init(title: String, options: [Api.SponsoredMessageReportOption]) {
-                self.title = title
-                self.options = options
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("sponsoredMessageReportResultChooseOption", [("title", ConstructorParameterDescription(self.title)), ("options", ConstructorParameterDescription(self.options))])
-            }
-        }
-        case sponsoredMessageReportResultAdsHidden
-        case sponsoredMessageReportResultChooseOption(Cons_sponsoredMessageReportResultChooseOption)
-        case sponsoredMessageReportResultReported
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .sponsoredMessageReportResultAdsHidden:
-                if boxed {
-                    buffer.appendInt32(1044107055)
-                }
-                break
-            case .sponsoredMessageReportResultChooseOption(let _data):
-                if boxed {
-                    buffer.appendInt32(-2073059774)
-                }
-                serializeString(_data.title, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.options.count))
-                for item in _data.options {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .sponsoredMessageReportResultReported:
-                if boxed {
-                    buffer.appendInt32(-1384544183)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .sponsoredMessageReportResultAdsHidden:
-                return ("sponsoredMessageReportResultAdsHidden", [])
-            case .sponsoredMessageReportResultChooseOption(let _data):
-                return ("sponsoredMessageReportResultChooseOption", [("title", ConstructorParameterDescription(_data.title)), ("options", ConstructorParameterDescription(_data.options))])
-            case .sponsoredMessageReportResultReported:
-                return ("sponsoredMessageReportResultReported", [])
-            }
-        }
-
-        public static func parse_sponsoredMessageReportResultAdsHidden(_ reader: BufferReader) -> SponsoredMessageReportResult? {
-            return Api.channels.SponsoredMessageReportResult.sponsoredMessageReportResultAdsHidden
-        }
-        public static func parse_sponsoredMessageReportResultChooseOption(_ reader: BufferReader) -> SponsoredMessageReportResult? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: [Api.SponsoredMessageReportOption]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.SponsoredMessageReportOption.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.channels.SponsoredMessageReportResult.sponsoredMessageReportResultChooseOption(Cons_sponsoredMessageReportResultChooseOption(title: _1!, options: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_sponsoredMessageReportResultReported(_ reader: BufferReader) -> SponsoredMessageReportResult? {
-            return Api.channels.SponsoredMessageReportResult.sponsoredMessageReportResultReported
-        }
-    }
-}
 public extension Api.chatlists {
     enum ChatlistInvite: TypeConstructorDescription {
         public class Cons_chatlistInvite: TypeConstructorDescription {
@@ -1338,6 +1260,73 @@ public extension Api.contacts {
         }
     }
 }
+public extension Api.ephemeral {
+    enum WelcomeMessages: TypeConstructorDescription {
+        public class Cons_welcomeMessages: TypeConstructorDescription {
+            public var hash: Int64
+            public var messages: [Api.EphemeralMessage]
+            public init(hash: Int64, messages: [Api.EphemeralMessage]) {
+                self.hash = hash
+                self.messages = messages
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("welcomeMessages", [("hash", ConstructorParameterDescription(self.hash)), ("messages", ConstructorParameterDescription(self.messages))])
+            }
+        }
+        case welcomeMessages(Cons_welcomeMessages)
+        case welcomeMessagesNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .welcomeMessages(let _data):
+                if boxed {
+                    buffer.appendInt32(273664114)
+                }
+                serializeInt64(_data.hash, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.messages.count))
+                for item in _data.messages {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .welcomeMessagesNotModified:
+                if boxed {
+                    buffer.appendInt32(1509940017)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .welcomeMessages(let _data):
+                return ("welcomeMessages", [("hash", ConstructorParameterDescription(_data.hash)), ("messages", ConstructorParameterDescription(_data.messages))])
+            case .welcomeMessagesNotModified:
+                return ("welcomeMessagesNotModified", [])
+            }
+        }
+
+        public static func parse_welcomeMessages(_ reader: BufferReader) -> WelcomeMessages? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.EphemeralMessage]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.EphemeralMessage.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.ephemeral.WelcomeMessages.welcomeMessages(Cons_welcomeMessages(hash: _1!, messages: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_welcomeMessagesNotModified(_ reader: BufferReader) -> WelcomeMessages? {
+            return Api.ephemeral.WelcomeMessages.welcomeMessagesNotModified
+        }
+    }
+}
 public extension Api.fragment {
     enum CollectibleInfo: TypeConstructorDescription {
         public class Cons_collectibleInfo: TypeConstructorDescription {
@@ -1818,6 +1807,83 @@ public extension Api.help {
             else {
                 return nil
             }
+        }
+    }
+}
+public extension Api.help {
+    enum DeepLinkInfo: TypeConstructorDescription {
+        public class Cons_deepLinkInfo: TypeConstructorDescription {
+            public var flags: Int32
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public init(flags: Int32, message: String, entities: [Api.MessageEntity]?) {
+                self.flags = flags
+                self.message = message
+                self.entities = entities
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("deepLinkInfo", [("flags", ConstructorParameterDescription(self.flags)), ("message", ConstructorParameterDescription(self.message)), ("entities", ConstructorParameterDescription(self.entities))])
+            }
+        }
+        case deepLinkInfo(Cons_deepLinkInfo)
+        case deepLinkInfoEmpty
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .deepLinkInfo(let _data):
+                if boxed {
+                    buffer.appendInt32(1783556146)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.message, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.entities!.count))
+                    for item in _data.entities! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                break
+            case .deepLinkInfoEmpty:
+                if boxed {
+                    buffer.appendInt32(1722786150)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .deepLinkInfo(let _data):
+                return ("deepLinkInfo", [("flags", ConstructorParameterDescription(_data.flags)), ("message", ConstructorParameterDescription(_data.message)), ("entities", ConstructorParameterDescription(_data.entities))])
+            case .deepLinkInfoEmpty:
+                return ("deepLinkInfoEmpty", [])
+            }
+        }
+
+        public static func parse_deepLinkInfo(_ reader: BufferReader) -> DeepLinkInfo? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: [Api.MessageEntity]?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                if let _ = reader.readInt32() {
+                    _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MessageEntity.self)
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.help.DeepLinkInfo.deepLinkInfo(Cons_deepLinkInfo(flags: _1!, message: _2!, entities: _3))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_deepLinkInfoEmpty(_ reader: BufferReader) -> DeepLinkInfo? {
+            return Api.help.DeepLinkInfo.deepLinkInfoEmpty
         }
     }
 }

@@ -1028,8 +1028,11 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
                     case let .copyText(payload):
                         controllerInteraction.copyText(payload)
                         return
+                    case .disabled:
+                        // A forward stripped this button's behaviour; tapping does nothing.
+                        return
                     }
-                    
+
                     break
                 }
             }

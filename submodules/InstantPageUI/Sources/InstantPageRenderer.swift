@@ -36,7 +36,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame, inlineButton, buttonRow
 }
 
 // MARK: - Render context
@@ -176,6 +176,10 @@ public final class InstantPageV2View: UIView {
     /// Fired when an interactive checklist checkbox is tapped. `path` is the marker's
     /// structural path (see InstantPage.togglingCheckbox); `newValue` is the toggled state.
     public var checkboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
+
+    /// Fired when an InstantPage button is tapped — an inline `RichText.textButton` or a member of a
+    /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch.
+    public var buttonTapped: ((InstantPageButton) -> Void)?
 
     var itemViews: [InstantPageItemView] = []
     private var itemViewStableIds: [InstantPageV2StableItemId] = []
@@ -726,6 +730,22 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2FormulaView else { return nil }
             v.update(item: formula, theme: theme)
             return v
+        case let .inlineButton(button):
+            guard let v = existingView as? InstantPageV2InlineButtonView else { return nil }
+            v.update(item: button, theme: theme)
+            // Re-wire on reuse: the closure captures self, and a reused view may have been created
+            // against a previous InstantPageV2View.
+            v.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return v
+        case let .buttonRow(row):
+            guard let v = existingView as? InstantPageV2ButtonRowView else { return nil }
+            v.update(item: row, theme: theme)
+            v.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return v
         case let .mediaImage(media):
             guard let v = existingView as? InstantPageV2MediaImageView, let rc = self.renderContext else { return nil }
             v.update(item: media, theme: theme, renderContext: rc)
@@ -746,6 +766,10 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2MediaAudioView, let rc = self.renderContext else { return nil }
             v.update(item: media, theme: theme, renderContext: rc)
             return v
+        case let .document(document):
+            guard let v = existingView as? InstantPageV2DocumentView, let rc = self.renderContext else { return nil }
+            v.update(item: document, theme: theme, renderContext: rc)
+            return v
         case let .thinking(thinking):
             guard let v = existingView as? InstantPageV2ThinkingView else { return nil }
             v.update(item: thinking, theme: theme)
@@ -764,6 +788,7 @@ public final class InstantPageV2View: UIView {
         case let .mediaMap(m):         return .media(m.media.index)
         case let .mediaCoverImage(m):  return .media(m.media.index)
         case let .mediaAudio(m):       return .media(m.media.index)
+        case let .document(d):         return .media(d.media.index)
         case let .details(d):          return .details(d.index)
         case .text:                    return .positional(.text, position)
         case .codeBlock:               return .positional(.codeBlock, position)
@@ -777,6 +802,8 @@ public final class InstantPageV2View: UIView {
         case .table:                   return .positional(.table, position)
         case .anchor:                  return .positional(.anchor, position)
         case .formula:                 return .positional(.formula, position)
+        case .inlineButton:            return .positional(.inlineButton, position)
+        case .buttonRow:               return .positional(.buttonRow, position)
         case .thinking:                return .thinking(position)
         case .slideshow:               return .positional(.slideshow, position)
         }
@@ -882,8 +909,26 @@ public final class InstantPageV2View: UIView {
             } else {
                 return InstantPageV2MediaPlaceholderView(item: InstantPageV2MediaPlaceholderItem(frame: media.frame, kind: .audio, cornerRadius: 0.0), theme: theme)
             }
+        case let .document(document):
+            if let renderContext = self.renderContext {
+                return InstantPageV2DocumentView(item: document, renderContext: renderContext, theme: theme)
+            } else {
+                return InstantPageV2MediaPlaceholderView(item: InstantPageV2MediaPlaceholderItem(frame: document.frame, kind: .audio, cornerRadius: 0.0), theme: theme)
+            }
         case let .formula(formula):
             return InstantPageV2FormulaView(item: formula, theme: theme)
+        case let .inlineButton(button):
+            let view = InstantPageV2InlineButtonView(item: button, theme: theme)
+            view.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return view
+        case let .buttonRow(row):
+            let view = InstantPageV2ButtonRowView(item: row, theme: theme)
+            view.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return view
         case let .thinking(thinking):
             return InstantPageV2ThinkingView(item: thinking, theme: theme)
         case let .slideshow(slideshow):

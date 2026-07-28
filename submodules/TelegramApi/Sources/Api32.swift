@@ -1187,52 +1187,48 @@ public extension Api.auth {
     }
 }
 public extension Api.auth {
-    enum LoggedOut: TypeConstructorDescription {
-        public class Cons_loggedOut: TypeConstructorDescription {
-            public var flags: Int32
-            public var futureAuthToken: Buffer?
-            public init(flags: Int32, futureAuthToken: Buffer?) {
-                self.flags = flags
-                self.futureAuthToken = futureAuthToken
+    enum FirebasePnvIntent: TypeConstructorDescription {
+        public class Cons_firebasePnvIntent: TypeConstructorDescription {
+            public var nonce: String
+            public var digitalCredentialPayload: String
+            public init(nonce: String, digitalCredentialPayload: String) {
+                self.nonce = nonce
+                self.digitalCredentialPayload = digitalCredentialPayload
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("loggedOut", [("flags", ConstructorParameterDescription(self.flags)), ("futureAuthToken", ConstructorParameterDescription(self.futureAuthToken))])
+                return ("firebasePnvIntent", [("nonce", ConstructorParameterDescription(self.nonce)), ("digitalCredentialPayload", ConstructorParameterDescription(self.digitalCredentialPayload))])
             }
         }
-        case loggedOut(Cons_loggedOut)
+        case firebasePnvIntent(Cons_firebasePnvIntent)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
-            case .loggedOut(let _data):
+            case .firebasePnvIntent(let _data):
                 if boxed {
-                    buffer.appendInt32(-1012759713)
+                    buffer.appendInt32(-547700724)
                 }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeBytes(_data.futureAuthToken!, buffer: buffer, boxed: false)
-                }
+                serializeString(_data.nonce, buffer: buffer, boxed: false)
+                serializeString(_data.digitalCredentialPayload, buffer: buffer, boxed: false)
                 break
             }
         }
 
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
-            case .loggedOut(let _data):
-                return ("loggedOut", [("flags", ConstructorParameterDescription(_data.flags)), ("futureAuthToken", ConstructorParameterDescription(_data.futureAuthToken))])
+            case .firebasePnvIntent(let _data):
+                return ("firebasePnvIntent", [("nonce", ConstructorParameterDescription(_data.nonce)), ("digitalCredentialPayload", ConstructorParameterDescription(_data.digitalCredentialPayload))])
             }
         }
 
-        public static func parse_loggedOut(_ reader: BufferReader) -> LoggedOut? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Buffer?
-            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
-                _2 = parseBytes(reader)
-            }
+        public static func parse_firebasePnvIntent(_ reader: BufferReader) -> FirebasePnvIntent? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: String?
+            _2 = parseString(reader)
             let _c1 = _1 != nil
-            let _c2 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _2 != nil
+            let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.auth.LoggedOut.loggedOut(Cons_loggedOut(flags: _1!, futureAuthToken: _2))
+                return Api.auth.FirebasePnvIntent.firebasePnvIntent(Cons_firebasePnvIntent(nonce: _1!, digitalCredentialPayload: _2!))
             }
             else {
                 return nil

@@ -538,6 +538,52 @@ public extension Api.stories {
         }
     }
 }
+public extension Api.toncenter {
+    enum ApiResponse: TypeConstructorDescription {
+        public class Cons_apiResponse: TypeConstructorDescription {
+            public var response: Api.DataJSON
+            public init(response: Api.DataJSON) {
+                self.response = response
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("apiResponse", [("response", ConstructorParameterDescription(self.response))])
+            }
+        }
+        case apiResponse(Cons_apiResponse)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .apiResponse(let _data):
+                if boxed {
+                    buffer.appendInt32(-1399980519)
+                }
+                _data.response.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .apiResponse(let _data):
+                return ("apiResponse", [("response", ConstructorParameterDescription(_data.response))])
+            }
+        }
+
+        public static func parse_apiResponse(_ reader: BufferReader) -> ApiResponse? {
+            var _1: Api.DataJSON?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.DataJSON
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.toncenter.ApiResponse.apiResponse(Cons_apiResponse(response: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
 public extension Api.updates {
     indirect enum ChannelDifference: TypeConstructorDescription {
         public class Cons_channelDifference: TypeConstructorDescription {
