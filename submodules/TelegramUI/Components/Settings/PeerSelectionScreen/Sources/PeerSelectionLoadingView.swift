@@ -203,7 +203,7 @@ final class PeerSelectionLoadingView: UIView {
                     if let itemNode = node as? ContactsPeerItemNode {
                         itemNodes.append(itemNode)
                     }
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
             }
             

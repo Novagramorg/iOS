@@ -1520,9 +1520,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private func internalUpdateLayout() {
-        if let inputParams = self.currentInputParams, let currentApplyParams = self.currentApplyParams {
+        if let inputParams = self.currentInputParams, self.currentApplyParams != nil {
             let (_, applyLayout) = self.asyncLayout()(inputParams.item, inputParams.params, inputParams.mergedTop, inputParams.mergedBottom, inputParams.dateHeaderAtBottom)
-            applyLayout(.None, ListViewItemApply(isOnScreen: currentApplyParams.isOnScreen, timestamp: nil), false)
+            applyLayout(.None, ListViewItemApply(timestamp: nil), false)
         }
     }
     

@@ -573,13 +573,13 @@ private final class ItemView: UIView, SparseItemGridView {
                 current.contentSize = layout.contentSize
                 current.insets = layout.insets
 
-                apply(ListViewItemApply(isOnScreen: true))
+                apply(ListViewItemApply())
             })
         } else {
             var itemNode: ListViewItemNode?
             messageItem.nodeConfiguredForParams(async: { f in f() }, params: ListViewItemLayoutParams(width: size.width, leftInset: insets.left, rightInset: insets.right, availableHeight: 0.0), synchronousLoads: false, neighbors: .none, completion: { node, apply in
                 itemNode = node
-                apply().1(ListViewItemApply(isOnScreen: true))
+                apply().1(ListViewItemApply())
             })
             messageItemNode = itemNode!
             self.messageItemNode = messageItemNode
@@ -605,7 +605,7 @@ private final class ItemView: UIView, SparseItemGridView {
                 messageItemNode.contentSize = layout.contentSize
                 messageItemNode.insets = layout.insets
 
-                apply(ListViewItemApply(isOnScreen: true))
+                apply(ListViewItemApply())
             })
             
             messageItemNode.frame = CGRect(origin: CGPoint(), size: size)
@@ -771,7 +771,7 @@ private final class SparseItemGridBindingImpl: SparseItemGridBinding, ListShimme
             var itemNode: ListViewItemNode?
             messageItem.nodeConfiguredForParams(async: { f in f() }, params: ListViewItemLayoutParams(width: 400.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 0.0), synchronousLoads: false, neighbors: .none, completion: { node, apply in
                 itemNode = node
-                apply().1(ListViewItemApply(isOnScreen: true))
+                apply().1(ListViewItemApply())
             })
 
             guard let fileItemNode = itemNode as? ListMessageFileItemNode else {
@@ -2270,7 +2270,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
                 var itemNode: ListViewItemNode?
                 messageItem.nodeConfiguredForParams(async: { f in f() }, params: ListViewItemLayoutParams(width: size.width, leftInset: 0.0, rightInset: 0.0, availableHeight: 0.0), synchronousLoads: false, neighbors: .none, completion: { node, apply in
                     itemNode = node
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
 
                 if let itemNode = itemNode {

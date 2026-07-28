@@ -259,7 +259,7 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                         itemNode.isUserInteractionEnabled = false
                         
                         Queue.mainQueue().after(0.01) {
-                            apply(ListViewItemApply(isOnScreen: true))
+                            apply(ListViewItemApply())
                         }
                     })
                 }
@@ -269,7 +269,7 @@ final class PeerNameColorChatPreviewItemNode: ListViewItemNode {
                     var itemNode: ListViewItemNode?
                     items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                         itemNode = node
-                        apply().1(ListViewItemApply(isOnScreen: true))
+                        apply().1(ListViewItemApply())
                     })
                     itemNode!.isUserInteractionEnabled = false
                     messageNodes.append(itemNode!)

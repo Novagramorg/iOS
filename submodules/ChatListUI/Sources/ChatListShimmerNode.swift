@@ -228,7 +228,7 @@ public final class ChatListShimmerNode: ASDisplayNode {
                     if let itemNode = node as? ChatListItemNode {
                         itemNodes.append(itemNode)
                     }
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
             }
             

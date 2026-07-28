@@ -702,7 +702,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
             let (layout, apply) = doLayout(item, params, merged.top, merged.bottom, merged.dateAtBottom)
             self.contentSize = layout.contentSize
             self.insets = layout.insets
-            apply(.None, ListViewItemApply(isOnScreen: false), false)
+            apply(.None, ListViewItemApply(), false)
         }
     }
     

@@ -88,6 +88,40 @@ Both paths drive the item **synchronously** (`async: { f in f() }`); this is sou
 which runs inline when already on the main queue (the transaction path is main-thread). CoreList owns
 the actual insert/move/height animations; the item update passes `ListViewItemUpdateAnimation.None`.
 
+Both paths also stamp `contentSize` / `insets` / `apparentHeight` on the node, as `ListViewImpl` does
+on every node it lays out. This is not bookkeeping for its own sake — see "Item visibility" below for
+what reads it. Note `ChatMessageItemImpl` assigns `contentSize`/`insets` itself on the
+`nodeConfiguredForParams` path but **not** on `updateNode`, which is why the host must.
+
+## Item visibility
+
+`CoreVirtualListView` pushes each loaded row its visible rect through
+`CoreListItemView.visibleRectUpdated(_:)` (see the CoreList `CLAUDE.md` embedding-seam paragraph);
+`CoreListNodeHostView` maps it onto `ListViewItemNode.visibility` — `subRect` is the rect as given,
+`fraction` is its overlap with the node's content box over that box's height, matching what
+`ListViewImpl` derives from `apparentContentFrame`. That property is what makes animated stickers,
+GIFs, video and instant video play, flips `visibilityStatus`, registers one-time media as seen, and
+fades ad messages in. Before this existed every hosted row sat at `.none` for its whole life, so none
+of that happened at all.
+
+Three things about it are load-bearing:
+
+- **The fraction divides by the node's content box**, so the host must keep `insets` / `contentSize` /
+  `apparentHeight` stamped on the hosted node exactly as `ListViewImpl` does — including on the
+  update path, which `ChatMessageItemImpl.updateNode` does not do for itself.
+- **The rect is measured against the full viewport**, not the inset-reduced band. This diverges from
+  `ListViewImpl`, which reduces by `visualInsets ?? insets`; a row sliding under the input panel keeps
+  playing. `forEachVisibleItemNode` / `itemNodeVisibleInsideInsets` deliberately keep the
+  inset-reduced `visibleBand`, because they drive read tracking and unseen-reaction animations, where
+  under-reporting is the safe direction.
+- **There is no `onlyPositive` deferral and no animation-completion pass.** `ListViewImpl` needs both
+  because its geometry is settled-only while an inset transition animates; here the loaded window and
+  the reported rects are both destination-based within one pass, so a single full update is coherent.
+
+Rotation needs no handling: CoreList lays index 0 at its own top and the wrapper's π maps that to the
+screen bottom — the convention `ListViewImpl(rotated: true)` uses — so the values are already in the
+space `ChatMessageBubbleItemNode.mapVisibility` expects.
+
 ## Pagination
 
 `CoreVirtualListView.onVisibleWindowChanged` / `onLoadedEdgeReached` call

@@ -13,6 +13,25 @@ public protocol CoreListItemView: AnyObject {
     /// transition's setters early-out on an equal target, so the second call is a no-op.
     func update(width: CGFloat, transition: CoreListTransition) -> CGFloat
     var onContentDidChange: ((_ animated: Bool) -> Void)? { get set }
+
+    /// The part of this row currently inside the viewport, in the row's OWN coordinate space (its
+    /// origin is `(0, 0)`); `nil` when the row is not visible.
+    ///
+    /// Fired wherever the list maintains its window — after every render, and on every user-scroll
+    /// frame including momentum and edge bounce — using the same projection `rebalanceActiveWindow`
+    /// uses: settled window frames at the live engine offset. During a programmatic animated viewport
+    /// move that describes the row's DESTINATION, which is deliberate: it is the same window the pass
+    /// has already loaded, and there is no clock here to re-sample an in-flight animation.
+    ///
+    /// Insets are NOT subtracted: inset space is visible, interactive list space.
+    ///
+    /// A row leaving the live window — unloaded by rebalancing, or transferred to the exit overlay as
+    /// a departure — receives `nil`.
+    func visibleRectUpdated(_ visibleRect: CGRect?)
+}
+
+public extension CoreListItemView {
+    func visibleRectUpdated(_ visibleRect: CGRect?) {}
 }
 
 public protocol CoreListItem: AnyObject {
@@ -1662,6 +1681,10 @@ public final class CoreVirtualListView: UIView {
         previousOffset = engine.offset
         rebalanceActiveWindow()
         refreshReachedLoadedEdges()
+        // Before the host callback, so a host reacting to it already sees fresh row visibility. A
+        // scroll that leaves the window untouched runs no render(), so this is the only path that
+        // reports the new rects.
+        notifyVisibleRects()
         onVisibleWindowChanged?()
     }
 
@@ -1737,6 +1760,51 @@ public final class CoreVirtualListView: UIView {
             if !preRebalanceIdentities.contains(identity) {
                 attachLive(identity: identity, layer: item.view.layer)
             }
+        }
+    }
+
+    /// Views last notified with a NON-nil rect, held weakly so a departed row is not retained. Lets
+    /// one uniform rule deliver the `nil` for every way a row can leave the live window — a rebalance
+    /// unload, a ghost-block member, the transient exit-overlay carry — instead of threading a call
+    /// through each departure site.
+    private let visibleRectNotifiedViews = NSHashTable<UIView>.weakObjects()
+
+    /// Reports each loaded row the part of itself inside the viewport. Uses the same projection
+    /// `rebalanceActiveWindow` uses, against the FULL viewport rect — insets stay visible space.
+    private func notifyVisibleRects() {
+        let viewportRect = CGRect(origin: .zero, size: logicalSize)
+        let contentBaseY = containerOriginY - activeWindow.minY
+        let scrollY = engine.offset
+
+        var visibleNow: [UIView] = []
+        var visibleIDs = Set<ObjectIdentifier>()
+        visibleNow.reserveCapacity(activeWindow.items.count)
+
+        for item in activeWindow.items {
+            let viewportFrame = projectedFrame(item.frame,
+                                               contentBaseY: contentBaseY,
+                                               viewportOffset: scrollY)
+            let intersection = viewportFrame.intersection(viewportRect)
+            // Null OR empty is "not visible": `intersection` is empty for rects that merely touch at
+            // an edge, which `CGRect.intersects` — ListViewImpl's gate — also calls false.
+            if intersection.isNull || intersection.isEmpty {
+                item.view.visibleRectUpdated(nil)
+            } else {
+                item.view.visibleRectUpdated(intersection.offsetBy(dx: -viewportFrame.minX,
+                                                                   dy: -viewportFrame.minY))
+                visibleNow.append(item.view)
+                visibleIDs.insert(ObjectIdentifier(item.view))
+            }
+        }
+
+        for view in visibleRectNotifiedViews.allObjects
+        where !visibleIDs.contains(ObjectIdentifier(view)) {
+            (view as? CoreListItemView)?.visibleRectUpdated(nil)
+        }
+
+        visibleRectNotifiedViews.removeAllObjects()
+        for view in visibleNow {
+            visibleRectNotifiedViews.add(view)
         }
     }
 
@@ -2014,6 +2082,8 @@ public final class CoreVirtualListView: UIView {
         engine.setEdges(min: edges.min, max: edges.max)
         shiftExitOverlayChildren(by: engine.offset - offsetBeforeEdges)
         containerOriginY = newOriginY
+        // After the assignment above: the notifier projects against it.
+        notifyVisibleRects()
     }
 
     private func settledState(_ window: Window,

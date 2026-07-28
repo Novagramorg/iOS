@@ -184,6 +184,18 @@ but yields `(index, view)` pairs, for hosts that need each row's collection inde
 pass (computing a visible range, say) without counting iterations — array position equals collection
 index only while the window still starts at 0.
 
+`visibleRectUpdated(_:)` on `CoreListItemView` pushes each loaded row the part of itself inside the
+viewport, in the row's own coordinate space, or `nil` when it is not visible. It fires at the end of
+`render()` and at the end of `handleUserScroll` — the two points the window is maintained — using the
+projection `rebalanceActiveWindow` uses (settled frames at the live engine offset), against the FULL
+viewport rect: inset space is visible, interactive list space. During a programmatic animated viewport
+move it therefore reports the destination, which is the window that pass already loaded; there is no
+display link here to sample an in-flight animation. A row leaving the live window is notified `nil`
+by one uniform rule — the notifier holds weak references to the views it last reported visible — which
+covers rebalance unloads, ghost-block members and the transient exit-overlay carry alike. It has a
+default no-op, so item views opt in. `CoreListNodeHostView` (TelegramUI) maps it onto
+`ListViewItemNode.visibility`.
+
 📖 **Read before changing:** `CoreVirtualListView.Window`, `buildWindow`, `render`,
 `rebalanceActiveWindow`, `loadedEdgeRange`, and design
 `docs/plans/2026-03-21-virtual-list-rewrite-design.md`, plus

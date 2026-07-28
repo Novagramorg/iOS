@@ -203,6 +203,54 @@ final class SelfUpdatingItem: CoreListItem {
     }
 }
 
+// MARK: - Visible-rect recording item
+
+/// Records every `visibleRectUpdated(_:)` it receives, so tests can assert both the value and the
+/// fact that a notification happened at all.
+final class VisibleRectRecordingItemView: UIView, CoreListItemView {
+    let fixedHeight: CGFloat
+    var onContentDidChange: ((Bool) -> Void)?
+    private(set) var visibleRects: [CGRect?] = []
+
+    /// The most recent rect, flattening "never notified" and "notified nil" — use `wasNotifiedNil`
+    /// when that distinction matters.
+    var lastRect: CGRect? { visibleRects.last ?? nil }
+    var wasNotifiedNil: Bool { visibleRects.last == .some(nil) }
+
+    init(height: CGFloat) {
+        self.fixedHeight = height
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat { fixedHeight }
+
+    nonisolated func visibleRectUpdated(_ visibleRect: CGRect?) {
+        visibleRects.append(visibleRect)
+    }
+}
+
+final class VisibleRectRecordingItem: CoreListItem {
+    let id: UUID
+    var identity: AnyHashable { id }
+    let height: CGFloat
+
+    init(id: UUID, height: CGFloat) {
+        self.id = id
+        self.height = height
+    }
+
+    func view() -> UIView & CoreListItemView {
+        VisibleRectRecordingItemView(height: height)
+    }
+
+    func isEqual(to other: CoreListItem) -> Bool {
+        guard let other = other as? VisibleRectRecordingItem else { return false }
+        return id == other.id
+    }
+}
+
 // MARK: - Content-reconcile item
 
 /// A test item that OPTS INTO content-reconcile: same id ⇒ identity-equal (a survivor), but a changed

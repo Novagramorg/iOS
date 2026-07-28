@@ -249,7 +249,7 @@ public final class ListItemComponentAdaptor: Component {
                         itemNode.insets = layout.insets
                         itemNode.frame = nodeFrame
                         
-                        apply(ListViewItemApply(isOnScreen: true))
+                        apply(ListViewItemApply())
                     }
                 )
                 
@@ -273,7 +273,7 @@ public final class ListItemComponentAdaptor: Component {
                     neighbors: .none,
                     completion: { result, apply in
                         itemNode = result
-                        apply().1(ListViewItemApply(isOnScreen: true))
+                        apply().1(ListViewItemApply())
                     }
                 )
                 if let itemNode {

@@ -418,7 +418,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
                     itemNode.frame = nodeFrame
                     itemNode.isUserInteractionEnabled = false
                     
-                    apply(ListViewItemApply(isOnScreen: true))
+                    apply(ListViewItemApply())
                 })
             }
         } else {
@@ -427,7 +427,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
                 var itemNode: ListViewItemNode?
                 items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
                 itemNode!.isUserInteractionEnabled = false
                 chatNodes.append(itemNode!)
@@ -500,7 +500,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
                     itemNode.frame = nodeFrame
                     itemNode.isUserInteractionEnabled = false
                     
-                    apply(ListViewItemApply(isOnScreen: true))
+                    apply(ListViewItemApply())
                 })
             }
         } else {
@@ -509,7 +509,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
                 var itemNode: ListViewItemNode?
                 items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
                 itemNode!.subnodeTransform = CATransform3DMakeScale(-1.0, 1.0, 1.0)
                 itemNode!.isUserInteractionEnabled = false
@@ -843,7 +843,7 @@ private final class TextSelectionToolbarNode: ASDisplayNode {
             self.switchItemNode.insets = layout.insets
             transition.updateFrame(node: self.switchItemNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: layout.contentSize))
             contentHeight += layout.contentSize.height
-            apply(ListViewItemApply(isOnScreen: true))
+            apply(ListViewItemApply())
         })
         
         fontSizeItem.updateNode(async: { f in
@@ -855,7 +855,7 @@ private final class TextSelectionToolbarNode: ASDisplayNode {
             self.fontSizeItemNode.insets = layout.insets
             transition.updateFrame(node: self.fontSizeItemNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: layout.contentSize))
             contentHeight += layout.contentSize.height
-            apply(ListViewItemApply(isOnScreen: true))
+            apply(ListViewItemApply())
         })
         
         self.cancelButton.frame = CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: CGSize(width: floor(width / 2.0), height: 49.0))

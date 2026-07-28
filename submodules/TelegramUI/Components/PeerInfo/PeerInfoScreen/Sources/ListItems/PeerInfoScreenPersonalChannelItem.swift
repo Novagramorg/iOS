@@ -253,7 +253,7 @@ public final class LoadingOverlayNode: ASDisplayNode {
                     if let itemNode = node as? ChatListItemNode {
                         itemNodes.append(itemNode)
                     }
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
             }
             
@@ -639,7 +639,7 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
                     current.insets = layout.insets
                     current.frame = nodeFrame
                     
-                    apply(ListViewItemApply(isOnScreen: true))
+                    apply(ListViewItemApply())
                 })
         } else {
             var outItemNode: ListViewItemNode?
@@ -650,7 +650,7 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
                 neighbors: .none,
                 completion: { node, apply in
                     outItemNode = node
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 }
             )
             itemNode = outItemNode

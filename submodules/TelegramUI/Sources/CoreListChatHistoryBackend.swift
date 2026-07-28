@@ -739,6 +739,40 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         self.contentDirty = true
     }
 
+    /// The most recent rect from CoreList, held so a node built after the notification still gets it.
+    private var visibleRect: CGRect?
+
+    func visibleRectUpdated(_ visibleRect: CGRect?) {
+        self.visibleRect = visibleRect
+        self.applyVisibility()
+    }
+
+    // ListViewImpl's own formula (Display/Source/ListView.swift:4344) with the host's geometry:
+    // `subRect` is the visible part in the row's own space, and `fraction` is that part's overlap
+    // with the node's content box — the row minus its insets — over that box's height, which is what
+    // `apparentContentFrame` gives ListViewImpl. Assign only on change: the property's didSet fans
+    // out to every content node.
+    private func applyVisibility() {
+        guard let itemNode = self.itemNode else {
+            return
+        }
+        var visibility: ListViewItemNodeVisibility = .none
+        if let rect = self.visibleRect {
+            let insets = itemNode.insets
+            let contentTop = insets.top
+            let contentBottom = self.lastHeight - insets.bottom
+            let contentHeight = contentBottom - contentTop
+            var fraction: CGFloat = 0.0
+            if contentHeight > 0.0 {
+                fraction = max(0.0, min(rect.maxY, contentBottom) - max(rect.minY, contentTop)) / contentHeight
+            }
+            visibility = .visible(fraction, rect)
+        }
+        if itemNode.visibility != visibility {
+            itemNode.visibility = visibility
+        }
+    }
+
     func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         // Deferred: map `transition` onto ListViewItemUpdateAnimation so a reconciled chat row
         // animates its internal layout. Today the node relayouts with .None and the row's outer
@@ -764,8 +798,15 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
             })
             if let (nodeLayout, nodeApply) = layoutAndApply {
                 let height = nodeLayout.contentSize.height + nodeLayout.insets.top + nodeLayout.insets.bottom
-                nodeApply(ListViewItemApply(isOnScreen: true))
-                itemNode.frame = CGRect(x: 0.0, y: 0.0, width: width, height: self.lastHeight)
+                nodeApply(ListViewItemApply())
+                // Same fields, same order ListViewImpl stamps in updateNodeAtIndex. Load-bearing:
+                // `insets` is the content-box term the visibility fraction divides by, and the flip
+                // term inside ChatMessageBubbleItemNode.mapVisibility. ChatMessageItemImpl assigns
+                // these on its nodeConfiguredForParams path only, so without this they go stale
+                // whenever a relayout changes them — a date header appearing, say.
+                itemNode.contentSize = nodeLayout.contentSize
+                itemNode.insets = nodeLayout.insets
+                itemNode.apparentHeight = height
                 self.lastHeight = height
             } else {
                 print("[CoreList] async-only item, no synchronous node: \(type(of: self.listItem))")
@@ -781,9 +822,13 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
             if let node = resolvedNode {
                 if let applyClosure {
                     let (_, applyFn) = applyClosure()
-                    applyFn(ListViewItemApply(isOnScreen: true))
+                    applyFn(ListViewItemApply())
                 }
+                // contentSize/insets are already assigned on this path by
+                // ChatMessageItemImpl.nodeConfiguredForParams; only apparentHeight is missing, and
+                // ListViewImpl keeps it in step with the row's rendered height.
                 let height = node.contentSize.height + node.insets.top + node.insets.bottom
+                node.apparentHeight = height
                 self.itemNode = node
                 self.addSubview(node.view)
                 self.lastHeight = height
@@ -794,5 +839,8 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         }
         self.lastWidth = width
         self.contentDirty = false
+        // A rect may have arrived before this node existed, and a relayout can change the insets the
+        // fraction divides by, so re-derive visibility from the rect we hold.
+        self.applyVisibility()
     }
 }
