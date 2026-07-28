@@ -88,6 +88,10 @@ private func syntheticButtonsInstantPage() -> InstantPage {
                 syntheticButton("Start", kind: .accent),
                 syntheticButton("Skip", kind: .regular),
                 syntheticButton("Share", kind: .regular, disabled: true)
+            ]),
+            .buttonRow(buttons: [
+                syntheticButton("Accept", kind: .success),
+                syntheticButton("Decline", kind: .destructive),
             ])
         ],
         media: [:],
