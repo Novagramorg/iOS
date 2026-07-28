@@ -530,7 +530,9 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                     }, action: { _, f in
                                         f(.default)
                                         SecretVaultManager.shared.removeFromVault([peerId])
-                                        _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: 0).startStandalone()
+                                        // nil restores the global category default. Passing 0 would write an explicit
+                                        // per-peer unmute, which outranks "Group Chats / Channels: off" forever.
+                                        _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: nil).startStandalone()
                                     })))
                                 }
 

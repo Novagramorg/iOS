@@ -1653,8 +1653,10 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             pincodeVC = ChatPincodeViewController(mode: .verify(passwordType: meta.passwordType, biometricEnabled: meta.biometricEnabled, onVerify: { code in
                 ChatPincodeManager.shared.verifyVault(code)
             }, onSuccess: {
+                // Restore the global category default (nil). Passing 0 would write an explicit
+                // per-peer unmute for every vaulted chat, overriding "Group Chats / Channels: off".
                 for peerId in SecretVaultManager.shared.vaultedPeerIds() {
-                    _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: 0).startStandalone()
+                    _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: nil).startStandalone()
                 }
                 SecretVaultManager.shared.clearVault()
                 ChatPincodeManager.shared.removeVault()

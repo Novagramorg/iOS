@@ -3219,3 +3219,42 @@ if showProTranslate && !messageText.isEmpty {
 ```
 
 Ordering matters: the force is BEFORE the SecretChat `canTranslate = false` block, so secret chats stay excluded. Media with no caption stays excluded (`!messageText.isEmpty`). The translate action itself is Telegram's own `.translate` → `TextProcessingScreen` (server auto-detects source language), so translation works unchanged; only button visibility is forced. Toggle off `show_translate_messages` to restore native language-detection gating. No BUILD change.
+
+---
+
+## 📌 Runaway push notifications — two fixes (2026-07-28)
+
+From the "notifications keep arriving although Group Chats / Channels are OFF" report (~180K users, build 12.9.2 (64)). Both changes are additive; neither removes a user-visible feature.
+
+### A. Secret Vault unhide must restore the DEFAULT, not force an unmute
+
+`updatePeerMuteSetting(muteInterval:)` semantics (`TelegramCore/.../ChangePeerNotificationSettings.swift:192` vs `:203`):
+
+| value | resulting `muteState` | effect |
+|---|---|---|
+| `Int32.max` | `.muted(until: max)` | muted forever |
+| `0` | `.unmuted` | **explicit per-peer exception — outranks the global category** |
+| `nil` | `.default` | inherits Group Chats / Channels / Private Chats |
+
+The vault mutes a chat on hide and un-mutes it on unhide. It was passing **`0`**, which writes a permanent server-side exception: the chat then notifies forever even with "Group Chats: OFF", and shows up in the exceptions list the user never created. Upstream uses `nil` at every restore-default site (`TelegramEnginePeers.swift:437`, `ChatContextMenus.swift:912`/`:1157`, `ChatController.swift:6208`). Changed `0` → `nil` at all four vault sites:
+
+- **`submodules/ChatListUI/Sources/ChatContextMenus.swift`** — the per-chat "Unhide from Vault" long-press action.
+- **`submodules/ChatListUI/Sources/ChatListController.swift`** — `fenixSetChatsVaulted(_:peerIds:)`: hoisted `let vaultMuteInterval: Int32? = vaulted ? Int32.max : nil`, and the Undo closure's `let undoMuteInterval: Int32? = vaulted ? nil : Int32.max`.
+- **`submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift`** (module-owned) — vault master toggle OFF, which loops every vaulted peer at once.
+
+Behaviour delta to be aware of: an un-hidden chat now inherits the global category instead of being guaranteed to notify. That matches both the fork's own intent ("undo our mute") and upstream semantics. **No migration ships** — rewriting already-affected peers back to `.default` would also wipe exceptions the user created deliberately; those users clear them via Settings ▸ Notifications ▸ Group Chats ▸ Delete All Exceptions.
+
+### B. `submodules/SettingsUI/Sources/Notifications/NotificationsAndSoundsController.swift` — "Show Notifications From: All Accounts" was invisible
+
+```swift
+// Fenixuz: count LOGGED-IN RECORDS, not live contexts. ...
+let hasMoreThanOneAccount = context.sharedContext.accountManager.accountRecords()
+|> map { view -> Bool in ... count records without .loggedOut ... return count > 1 }
+|> distinctUntilChanged
+```
+
+`hasMoreThanOneAccount` gates the whole `accountsHeader` / `allAccounts` / `accountsInfo` section (`:531-535`). It was derived from `activeAccountContexts`, but the fork's account working-set (`SharedAccountContext.swift:750`, `fenixuzWorkingSet`) keeps only the **primary** account live — the pinned set defaults to empty (`:195`, `:204`) — so `contexts.count > 1` is permanently false and the section never rendered. Multi-account users therefore had no way to reach the one switch that stops notifications from their other accounts. Counting logged-in records restores upstream behaviour. `import Postbox` added (already a `SettingsUI/BUILD` dep, used by three sibling files) — no BUILD change.
+
+**Note — `HOOKS.md` correction:** the working-set note at "Multi-account working set" says the cap "only engages at 4+ accounts". That is **wrong**: `fenixuzOrdered = [primary] + pinned` and pinned defaults to empty, so eviction engages at **2** accounts.
+
+**Still open (needs owner approval):** an evicted account is never unregistered from APNs — `unregisterNotificationToken` has exactly two call sites (`SharedAccountContext.swift:1871`, `:1885`), both inside the `for (_, account, _) in activeAccounts` loop at `:1865`, which an evicted account is not in. So the server keeps pushing for it. Fixing that unconditionally would remove documented intended behaviour (suspended accounts keep push).

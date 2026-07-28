@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import SwiftSignalKit
+import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
@@ -847,9 +848,25 @@ public func notificationsAndSoundsController(context: AccountContext, exceptions
             }))
     }
     
-    let hasMoreThanOneAccount = context.sharedContext.activeAccountContexts
-    |> map { _, contexts, _ -> Bool in
-        return contexts.count > 1
+    // Fenixuz: count LOGGED-IN RECORDS, not live contexts. The fork's account working-set keeps only
+    // the primary account live, so activeAccountContexts is permanently 1 and this section - the only
+    // way to stop notifications from the other accounts - never rendered for multi-account users.
+    let hasMoreThanOneAccount = context.sharedContext.accountManager.accountRecords()
+    |> map { view -> Bool in
+        var count = 0
+        for record in view.records {
+            let isLoggedOut = record.attributes.contains(where: { attribute in
+                if case .loggedOut = attribute {
+                    return true
+                } else {
+                    return false
+                }
+            })
+            if !isLoggedOut {
+                count += 1
+            }
+        }
+        return count > 1
     }
     |> distinctUntilChanged
     

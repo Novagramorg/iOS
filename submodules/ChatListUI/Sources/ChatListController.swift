@@ -6299,9 +6299,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         } else {
             SecretVaultManager.shared.removeFromVault(peerIds)
         }
-        // Mute hidden chats so no push notification leaks them; unmute on unhide.
+        // Mute hidden chats so no push notification leaks them; on unhide restore the global
+        // category default (nil) - passing 0 writes an explicit unmute that outranks it forever.
+        let vaultMuteInterval: Int32? = vaulted ? Int32.max : nil
         for peerId in peerIds {
-            let _ = engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: vaulted ? Int32.max : 0).startStandalone()
+            let _ = engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: vaultMuteInterval).startStandalone()
         }
 
         node.setCurrentRemovingItemId(nil)
@@ -6316,8 +6318,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 } else {
                     SecretVaultManager.shared.addToVault(peerIds)
                 }
+                // Undo of a hide re-applies the default (nil), not an explicit unmute.
+                let undoMuteInterval: Int32? = vaulted ? nil : Int32.max
                 for peerId in peerIds {
-                    let _ = strongSelf.context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: vaulted ? 0 : Int32.max).startStandalone()
+                    let _ = strongSelf.context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: undoMuteInterval).startStandalone()
                 }
                 return true
             }
