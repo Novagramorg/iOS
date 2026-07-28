@@ -298,8 +298,18 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
     
     private var touchesPosition = CGPoint()
     public private(set) var isTracking = false
-    public private(set) var trackingOffset: CGFloat = 0.0
-    public private(set) var beganTrackingAtTopOrigin = false
+    // Per-gesture drag state. Private deliberately: the two halves mean nothing apart, and a consumer
+    // recombining them is a consumer that can get half of it wrong — read
+    // `didInteractivelyDragFromTopOrigin` instead. `trackingOffset` is reset on pan-begin (NOT on
+    // pan-end), so it stays readable by whatever layout pass follows the gesture.
+    private var trackingOffset: CGFloat = 0.0
+    private var beganTrackingAtTopOrigin = false
+    /// True when the current-or-most-recent touch sequence was a real interactive drag — the finger moved
+    /// the content — that began pinned to the content origin (within 10pt). In a rotated chat list that
+    /// origin is the newest-message edge.
+    public var didInteractivelyDragFromTopOrigin: Bool {
+        return !self.trackingOffset.isZero && self.beganTrackingAtTopOrigin
+    }
     public private(set) var isDragging = false
     public private(set) var isDeceleratingAfterTracking = false
     

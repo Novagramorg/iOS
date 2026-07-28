@@ -71,9 +71,12 @@ scroll-engine seam.
 
 `CoreVirtualListView` consumes `ScrollEngine`; it does not touch `UIScrollView` directly. The seam
 provides `offset`, programmatic `setOffset`/`applyShift`, edge declaration, user-scroll callbacks
-(`onScroll` per-frame, and `onWillBeginDragging` when the pan reaches `.began` — UIKit via
-`scrollViewWillBeginDragging`, physics via `handlePan(.began)`), `contentHost`, and
-`containerOrigin(windowHeight:topLoaded:bottomLoaded:)`.
+(`onScroll` per-frame, plus `onWillBeginDragging`/`onDidEndDragging` when the pan reaches
+`.began` and `.ended`/`.cancelled` — UIKit via `scrollViewWillBeginDragging` /
+`scrollViewDidEndDragging`, physics via `handlePan`), `contentHost`, and
+`containerOrigin(windowHeight:topLoaded:bottomLoaded:)`. The drag pair brackets the **finger-down
+interval only**: neither fires for momentum, bounce or programmatic writes, so a host can maintain a
+`ListViewImpl.isTracking` equivalent from them.
 
 - `UIKitScrollEngine` is the production default and the only list component that knows
   `UIScrollView`. It owns the private 10,000,000-point virtual canvas and prevents programmatic
@@ -138,7 +141,9 @@ offset and any exit-overlay children receive the same shift so their visible pos
 For size/inset transitions, the shared anchor's old-to-new absolute content-Y delta identifies that
 coordinate-only rebase. Without an explicit `scrollTo`, a top-inset change projects the resolved anchor
 point by `newTopInset - oldTopInset` before the one-pass window build, preserving the anchor's settled
-distance from the inset edge. Window construction traverses toward lower indices and clips at the loaded
+distance from the inset edge — unless the caller passes `compensatesInsetChange: false`, which drops
+**only** that addend so content holds its screen position while the inset edge moves under it (see
+`applyChanges` below). Window construction traverses toward lower indices and clips at the loaded
 top first, then traverses toward higher indices and clips at the loaded bottom; top wins for an underfilled
 collection. The completed projected window is the sole source of the new settled engine offset. The
 anchor coordinate shift is used only to cancel container parking in the additive viewport track. Shared rows do
@@ -163,8 +168,10 @@ caller-owned.
 
 **Host-facing embedding seam** (used by the TelegramUI `ChatHistoryListViewBackend` adapter):
 `onVisibleWindowChanged` fires after each user-scroll rebalance; `onLoadedEdgeReached` reports
-edge transitions (above); `willBeginDragging` fires on interactive drag start (forwarded from
-`ScrollEngine.onWillBeginDragging`; the analogue of `ListViewImpl.beganInteractiveDragging`).
+edge transitions (above); `willBeginDragging` / `didEndDragging` fire on interactive drag start and end
+(forwarded from `ScrollEngine.onWillBeginDragging`/`onDidEndDragging`; the analogues of
+`ListViewImpl.beganInteractiveDragging`/`endedInteractiveDragging`, and together the finger-down
+interval a host needs to reproduce `ListViewImpl.isTracking`).
 `loadedItemViews` is a **non-copying** `Sequence` over the settled window's item views in ascending
 index order — it walks `activeWindow.items` in place (a COW snapshot; no array built, no element
 copied, safe to mutate the list mid-iteration), the iterator-based analogue of
@@ -187,9 +194,24 @@ index only while the window still starts at 0.
 ```swift
 func applyChanges(items: [CoreListItem]? = nil,
                   newSize: CGSize? = nil,
+                  newInsets: UIEdgeInsets? = nil,
                   scrollTo: (index: Int, pointOffset: CGFloat)? = nil,
-                  animationDuration: TimeInterval)
+                  additionalScrollDistance: CGFloat = 0.0,
+                  anchorMode: CoreListAnchorMode = .automatic,
+                  compensatesInsetChange: Bool = true,
+                  transition: CoreListTransition)
 ```
+
+`compensatesInsetChange: false` drops the `newTopInset - oldTopInset` anchor projection and nothing
+else — the new insets still drive content x/width, the viewport band, the load band and the
+loaded-top pin, so at the loaded top index 0 still rides the inset edge. It is the analogue of
+`ListViewImpl` zeroing `offsetFix` while tracking (`Display/Source/ListView.swift:3276`) — which
+likewise still assigns `self.insets` and still runs `snapToBounds`. It exists for an inset change
+produced by the user's own in-progress drag, where compensating on top of the scroll doubles the
+finger's travel; deciding that a pass is such a case is caller policy (`CoreListChatHistoryBackend`
+does, from `willBeginDragging`/`didEndDragging`). Do NOT emulate it with
+`additionalScrollDistance: -topInsetDelta`: a non-zero distance halts momentum and opts the pass out
+of `pinsLoadedTop`, so the loaded top stops tracking the inset edge.
 
 All mutations flow through one transaction. A pass:
 
@@ -378,6 +400,17 @@ An explicit `scrollTo.pointOffset` is relative to the received top inset: its pr
 `viewportInsets.top + pointOffset`. This conversion happens before projected window construction, so same-pass
 inset changes, loaded membership, edge clipping, crossing carries, and carousel placement all use one final
 coordinate system.
+`additionalScrollDistance` is a caller-chosen displacement of that same viewport, in points, positive moving
+content DOWN — the analogue of `ListViewImpl.transaction`'s parameter of the same name, folded into the same
+addend as the inset compensation (`Display/Source/ListView.swift:3275`) so one pass can re-inset and scroll by
+a delta as a single movement. It displaces the resolved anchor before window construction rather than writing
+an offset afterwards, so it composes with edge clipping, loaded membership, crossing carries, and an explicit
+`scrollTo` (which positions content first, the displacement then moving it). A non-zero value halts momentum
+for the same reason `scrollTo` does, except under `.preserveVisibleContent` — ListViewImpl's stationary-item
+branch does not halt either. It also opts the pass out of the loaded-top pin, which would otherwise swallow the
+displacement whole; ListViewImpl's equivalent (`snapToBounds`) only closes a gap above the top item, so a
+downward displacement at the top edge is clipped by both and an upward one is honoured by both.
+
 Every changed positive-duration viewport replacement first remaps all detached overlay content from the old
 rendered viewport coordinate base into the replacement base. The exact mapping subtracts the engine shift
 once and applies equally to carousel carries, crossing survivors, and ghost blocks; no viewport-producing
@@ -579,6 +612,15 @@ Animation an authority.
   genuinely clamps on a `contentSize` shrink, and the realized shift is the only correct amount); and any
   lurch test must measure against `TestScrollEngine.liveViewportOffset`, never `engine.offset`, or it passes
   by its own measuring stick freezing.
+- **Anything that displaces screen-space content must join `displacesViewport`, or it silently degrades
+  to per-row tracks.** The predicate (`logicalSizeChanged || insetsChanged || hasAdditionalScrollDistance`)
+  gates the ONE shared additive viewport track that owns a pass's displacement. Omitted from it, a pass
+  that moves the settled engine offset reads as a pure coordinate rebase, and every loaded row animates
+  its own position instead. That renders as the *same* rigid motion for the rows that happen to be loaded
+  — which is what makes it so easy to ship — while ghost blocks, viewport carries, and rows entering the
+  window stay behind, because they follow the viewport track and nothing else. It caught
+  `additionalScrollDistance` during implementation: the shift was correct, exact, and animating on the
+  right curve, through the wrong owner.
 - **A zero duration is immediate, which is the opposite of ComponentFlow.** `ComponentTransition`
   treats only `.none` as immediate and animates `.curve(duration: 0, …)`. CoreList settles a
   zero-duration property immediately, and roughly half the test suite says "no animation" as

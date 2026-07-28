@@ -39,9 +39,13 @@ The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` 
 ```sh
 K3=FA6F7462-AA97-42FE-9E57-8DA0593CE756   # iPhone 17 Pro K3 (use the dedicated K-sims, not the shared default)
 BUNDLE=ph.telegra.Telegraph
-# Fresh build output (unzipped bundle, not the .ipa). `-L` is REQUIRED — `bazel-out` is a symlink,
-# so a plain `find bazel-out …` silently returns nothing:
-SRC="$(find -L bazel-out -maxdepth 14 -path '*/Telegram_archive-root/Payload/Telegram.app' -type d | head -1)"
+# Fresh build output (unzipped bundle, not the .ipa). Go through `bazel-bin`, which bazel repoints at
+# the LAST BUILD's configuration. Do NOT `find` under `bazel-out`: it keeps one directory per
+# configuration you have ever built, so `… | head -1` can hand you a stale *device* archive. That copies
+# fine and then refuses to launch ("request was denied by service delegate (SBMainWorkspace)"), which
+# reads like a crash rather than an arch mismatch — and `lipo -archs` does not disambiguate, since device
+# and simulator arm64 slices both report plain `arm64`.
+SRC="bazel-bin/Telegram/Telegram_archive-root/Payload/Telegram.app"
 DEST="$(xcrun simctl get_app_container "$K3" "$BUNDLE" app)"   # installed bundle path
 # GUARD before the destructive rm: never rm the installed app unless SRC actually resolved,
 # or a failed cp leaves the sim with NO app installed (relaunch then fails).
@@ -156,7 +160,7 @@ These invariants are **compiler-invisible** — getting them wrong silently brea
 - **Item nodes are one level deeper.** Any `.supernode` chain / hierarchy-depth assumption passing through the history node gained one level (item → child `listView` → wrapper). E.g. `ChatMessageTransitionNode` converts item rects up `supernode?.supernode?.supernode?.view` (was 2 hops) so the wrapper's rotation is applied as an intermediate transform; a missing hop reflects effect-burst overlays ~180°.
 - Child geometry is driven inside `updateLayout` via `transition.updateFrame(node: self.listView, …)` — the project never relies on ASDisplayNode's automatic `layout()`.
 
-The public surface is being narrowed incrementally (e.g. `scroller` is fully removed from the backend, replaced by `bounces`/`contentHeight`/`setTopContentInset(_:)`; the `trackingOffset`/`beganTrackingAtTopOrigin` pair → `didInteractivelyDragFromTopOrigin`). Prefer intent-named accessors over re-exposing raw `ListView` state. (Note: most config knobs like `preloadPages`/`experimentalSnapScrollToItem` are set at deferred/lifecycle points — `viewDidAppear`, post-snapshot animation completions — not at construction, so they can't be hoisted into `makeListView` without changing behavior; and `transaction(stationaryItemRange:)` is load-bearing (`.Reload`/`.HoleReload` pass `(0, Int.max)`; the send-animation-v2 insertion path passes `(maxInsertedItem+1, Int.max)`).)
+The public surface is being narrowed incrementally (e.g. `scroller` is fully removed from the backend, replaced by `bounces`/`contentHeight`/`setTopContentInset(_:)`; the `trackingOffset`/`beganTrackingAtTopOrigin` pair → `didInteractivelyDragFromTopOrigin`, now the only spelling anywhere: the pair is private to `ListViewImpl` and gone from both the `ListView` and backend protocols). Prefer intent-named accessors over re-exposing raw `ListView` state — **a pair of raw members is a pair a backend can half-implement.** Those two were stubbed to `0.0`/`false` in `CoreListChatHistoryBackend`, which type-checked, read as plausible state, and silently disabled the chat's keyboard-dismissal snap-back; one combined member cannot be half-stubbed. (Note: most config knobs like `preloadPages`/`experimentalSnapScrollToItem` are set at deferred/lifecycle points — `viewDidAppear`, post-snapshot animation completions — not at construction, so they can't be hoisted into `makeListView` without changing behavior; and `transaction(stationaryItemRange:)` is load-bearing (`.Reload`/`.HoleReload` pass `(0, Int.max)`; the send-animation-v2 insertion path passes `(maxInsertedItem+1, Int.max)`).)
 
 ## InstantPage V2 & rich-text messages
 

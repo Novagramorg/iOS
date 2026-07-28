@@ -31,8 +31,11 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
 
     var insets: UIEdgeInsets { get }
     var visibleSize: CGSize { get }
-    var trackingOffset: CGFloat { get }
-    var beganTrackingAtTopOrigin: Bool { get }
+    // One member rather than the raw `trackingOffset`/`beganTrackingAtTopOrigin` pair those two used to
+    // be. Its only consumer needs them combined, and as separate members a backend could implement one
+    // and stub the other — which is exactly what happened: `CoreListChatHistoryBackend` stubbed both to
+    // constants, silently disabling the chat's keyboard-dismissal snap-back rather than failing to build.
+    var didInteractivelyDragFromTopOrigin: Bool { get }
     var displayedItemRange: ListViewDisplayedItemRange { get }
     var opaqueTransactionState: Any? { get }
 

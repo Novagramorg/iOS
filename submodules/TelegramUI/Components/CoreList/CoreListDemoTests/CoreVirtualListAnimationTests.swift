@@ -655,6 +655,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let contentHost = UIView()
         var onScroll: ((CGFloat) -> Void)?
         var onWillBeginDragging: (() -> Void)?
+        var onDidEndDragging: (() -> Void)?
         private(set) var offset: CGFloat = 0
 
         func setOffset(_ y: CGFloat) {

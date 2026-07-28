@@ -90,14 +90,52 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // MARK: - Geometry / range (real values populated in later tasks)
     var insets: UIEdgeInsets = .zero
     var visibleSize: CGSize = .zero
-    var trackingOffset: CGFloat = 0.0
-    var beganTrackingAtTopOrigin: Bool = false
     var displayedItemRange: ListViewDisplayedItemRange = ListViewDisplayedItemRange(loadedRange: nil, visibleRange: nil)
     // ListViewImpl keeps this mirror alongside displayedItemRange so updateVisibleItemRange can fire
     // displayedItemRangeChanged only on an actual change. Optional (not the empty range) so the very
     // first computation always counts as a change.
     private var internalDisplayedItemRange: ListViewDisplayedItemRange?
     var opaqueTransactionState: Any? = nil
+
+    // MARK: - Interactive-drag origin
+    //
+    // Parity with `ListViewImpl.didInteractivelyDragFromTopOrigin`: the current-or-most-recent gesture was
+    // a real drag — content actually moved — that began pinned to the newest-message edge. Its one
+    // consumer is the chat's keyboard-dismissal path, which reads it to decide whether to snap back to the
+    // newest message once the keyboard is gone (`ChatControllerNode.swift:2453`). Both halves reset on
+    // drag BEGIN, never on drag end, so the value survives to the layout pass that reads it — as in
+    // ListViewImpl, where `trackingOffset` is reset only in the pan's `.began`.
+    private var beganDragPinnedToNewestEdge = false
+    private var didMoveContentDuringDrag = false
+
+    var didInteractivelyDragFromTopOrigin: Bool {
+        return self.beganDragPinnedToNewestEdge && self.didMoveContentDuringDrag
+    }
+
+    // MARK: - Tracking
+    //
+    // Parity with `ListViewImpl.isTracking`: a finger is on the list right now. Unlike the two flags
+    // above — which deliberately survive drag end so a later layout pass can read them — this one is
+    // strictly the finger-down interval, and it is false throughout the momentum phase (ListViewImpl
+    // keeps that distinction too: momentum is `isDeceleratingAfterTracking`, and the inset-compensation
+    // suppression below checks only `isTracking`).
+    //
+    // Its consumer is that suppression. The chat's insets change WHILE the list is being dragged, by the
+    // same finger: `Window1`'s `WindowPanRecognizer` implements interactive system-keyboard dismissal
+    // (`Display/Source/WindowContent.swift:1332`) and its delegate returns true from
+    // `shouldRecognizeSimultaneouslyWith` (`WindowContent.swift:254`), so one downward drag both scrolls
+    // the history and shrinks `inputHeight` frame by frame. Each frame therefore reaches the list twice —
+    // once as a scroll delta, once as a smaller bottom inset — and compensating the inset change on top of
+    // the scroll moves content by double the finger's travel. ListViewImpl answers this by zeroing
+    // `offsetFix` while tracking (`Display/Source/ListView.swift:3276`).
+    //
+    // Sampled at drag BEGIN rather than finger-down, which is the same approximation
+    // `beganDragPinnedToNewestEdge` makes above and for the same reason: drag-begin is the earliest hook
+    // the scroll-engine seam has. The residual is bounded by the pan recognizer's threshold and is not
+    // visible, because in that pre-threshold window the content is not yet scrolling — so the inset
+    // compensation is the only thing moving it, in the same direction and by the same amount the finger
+    // would have. The handover is continuous rather than a step.
+    private var isTracking = false
 
     // MARK: - Callbacks the controller installs
     var displayedItemRangeChanged: (ListViewDisplayedItemRange, Any?) -> Void = { _, _ in }
@@ -199,6 +237,15 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // transaction end instead (see chatHistoryTransaction).
         self.coreList.onVisibleWindowChanged = { [weak self] in
             guard let self else { return }
+            // Reaching here means USER-driven content movement, which is what makes it the analogue of
+            // ListViewImpl accumulating a non-zero `trackingOffset`: `handleUserScroll` is the
+            // `engine.onScroll` sink, programmatic offset writes are isProgrammatic-guarded, and the
+            // additive viewport track moves content with no engine offset change at all.
+            //
+            // It also fires during momentum, where ListViewImpl has stopped accumulating (`isTracking` is
+            // false by then). Harmless: momentum only follows a drag that already moved content, so the
+            // flag is set either way.
+            self.didMoveContentDuringDrag = true
             self.updateVisibleItemRange(force: false)
             self.updateVisibleContentOffset(transition: .immediate)
         }
@@ -211,7 +258,20 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // consumer ignores it, so pass .zero.
         self.coreList.willBeginDragging = { [weak self] in
             guard let self else { return }
-            
+
+            // Sample the drag's origin before it can move anything. ListViewImpl samples in
+            // `touchesBegan` — finger down — whereas CoreVirtualListView's earliest hook is drag-begin,
+            // which fires after the pan recognizer's own threshold, i.e. a few points of movement. The
+            // 10pt tolerance (verbatim from ListView.swift:4959) is wide enough to absorb exactly that,
+            // which is plausibly why it is 10 and not 0.
+            if case let .known(value) = self.visibleContentOffset(), value <= 10.0 {
+                self.beganDragPinnedToNewestEdge = true
+            } else {
+                self.beganDragPinnedToNewestEdge = false
+            }
+            self.didMoveContentDuringDrag = false
+            self.isTracking = true
+
             func cancelContextGestures(view: UIView) {
                 if let gestureRecognizers = view.gestureRecognizers {
                     for gesture in gestureRecognizers {
@@ -230,6 +290,16 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
             
             self.beganInteractiveDragging(.zero)
+        }
+        // Close the tracking interval. Fires on `.ended` AND `.cancelled`, so a drag torn down by a
+        // competing recognizer cannot leave the flag stuck on and permanently suppress inset compensation.
+        //
+        // Deliberately does NOT call `self.endedInteractiveDragging`: that callback drives the
+        // overscroll-to-open-next-channel behavior, which is a separate unimplemented item rather than
+        // something to switch on as a side effect of this hook becoming available.
+        self.coreList.didEndDragging = { [weak self] in
+            guard let self else { return }
+            self.isTracking = false
         }
     }
 
@@ -340,13 +410,52 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             transition = .spring(duration: 0.4)
         }
 
-        if structurallyChanged || sizeChanged || scrollTo != nil {
+        // `additionalScrollDistance` displaces content by a caller-chosen delta in the same pass that
+        // re-insets it — positive moves content DOWN, composing with the inset compensation rather
+        // than replacing it. ListViewImpl folds it into the very same `offsetFix`
+        // (Display/Source/ListView.swift:3275) and CoreList folds it into the same anchor projection,
+        // so both animate it on the pass curve as one movement.
+        //
+        // Two deliberate divergences from ListViewImpl, neither reachable from the chat's producer:
+        //   • ListViewImpl applies the delta ONLY inside the branch where the size or insets genuinely
+        //     changed, and silently drops it otherwise (the addend sits inside
+        //     `if let updateSizeAndInsets` at ListView.swift:3257). Here a non-zero delta always moves
+        //     content, which is what the parameter means. Every real producer pairs it with an
+        //     `updateSizeAndInsets` that does change geometry, so the two agree in practice.
+        //   • The halt for a non-zero delta lives inside `applyChanges`, so it needs the pass to run;
+        //     ListViewImpl halts before deciding anything (ListView.swift:3238). Same reachability
+        //     argument — a delta with nothing else to do would be a layout pass that changes nothing.
+        //
+        // NOTE the chat never sends a non-zero value: `ChatControllerNode.containerLayoutUpdated`
+        // declares `let additionalScrollDistance: CGFloat = 0.0` (ChatControllerNode.swift:2451) and has
+        // since the first commit, and `ChatHistoryListNodeImpl.updateLayout` zeroes it again whenever
+        // the live sibling `scrollToTop` is set. This exists so the two backends answer a non-zero value
+        // the same way if one is ever wired up — it is not load-bearing today.
+
+        // An inset change arriving mid-drag was produced by the drag itself (see `isTracking`), so its
+        // compensation would double the finger's travel. Suppressing it leaves the scroll as the single
+        // owner of the movement — ListViewImpl's `offsetFix = 0.0` while tracking
+        // (Display/Source/ListView.swift:3276). The insets themselves still apply, so the viewport band,
+        // the load band, content width and the loaded-top pin all move: at the newest-message edge the pin
+        // keeps index 0 on the inset edge, which is how the bottom of the chat still follows the keyboard
+        // down under suppression. Note the read happens HERE rather than inside CoreList, so the value is
+        // the one that held when this transaction was submitted even if `applyChanges` defers it past a
+        // re-entrant pass.
+        //
+        // Cancelling the compensation with `additionalScrollDistance: -topInsetDelta` would look
+        // equivalent and is not: a non-zero distance halts momentum and opts the pass out of
+        // `pinsLoadedTop`, so the newest message would stop tracking the inset edge — the one case that
+        // must keep working.
+        let compensatesInsetChange = !self.isTracking
+        if structurallyChanged || sizeChanged || scrollTo != nil || additionalScrollDistance != 0.0 {
             self.coreList.applyChanges(
                 items: structurallyChanged ? self.entries : nil,
                 newSize: self.currentSize == .zero ? nil : self.currentSize,
                 newInsets: self.currentInsets,
                 scrollTo: scrollTo,
+                additionalScrollDistance: additionalScrollDistance,
                 anchorMode: stationaryItemRange == nil ? .automatic : .preserveVisibleContent,
+                compensatesInsetChange: compensatesInsetChange,
                 transition: transition
             )
         }

@@ -17,7 +17,9 @@ The PoC targets **display / scroll / load-more only**. Every `ChatHistoryListVie
 outside that scope is a **safe stub** — no-op closure or plain stored property — that must never
 crash. Real geometry/range values are populated only for the members the display path needs
 (`displayedItemRange`, `visibleContentOffset`, `contentHeight`) plus the item-node enumerators
-(`forEachItemNode` / `forEachVisibleItemNode` / `enumerateItemNodes` — see below).
+(`forEachItemNode` / `forEachVisibleItemNode` / `enumerateItemNodes` — see below) and
+`didInteractivelyDragFromTopOrigin`, which is outside that scope but was implemented because its stub
+silently disabled a user-visible behavior (see "Interactive drag start").
 
 ## Architecture
 
@@ -51,9 +53,23 @@ via `CoreVirtualListView.applyChanges`:
 - `newSize:` / `newInsets:` — the current size/insets (an unchanged inset is an exact no-op in
   CoreList, so passing it on every pass is safe and correctly propagates `setTopContentInset` deltas).
 - `scrollTo:` — mapped from `ListViewScrollToItem` (see Deferred #1).
-- `anchorMode: .automatic`, `animation: .easeOut(duration: 0.3)`.
+- `additionalScrollDistance:` — passed straight through. Both backends fold it into the same addend as
+  the inset compensation, so a pass can re-inset and scroll by a caller-chosen delta as one movement;
+  positive moves content down. **The chat never sends a non-zero value** —
+  `ChatControllerNode.containerLayoutUpdated` declares `let additionalScrollDistance: CGFloat = 0.0`
+  (`ChatControllerNode.swift:2451`) and has since the repo's first commit, and
+  `ChatHistoryListNodeImpl.updateLayout` zeroes it again whenever the live sibling `scrollToTop` is set.
+  It is implemented so the two backends answer a non-zero value the same way if one is ever wired up,
+  not because anything depends on it today. Two divergences from `ListViewImpl`, both unreachable from
+  that producer: ListViewImpl drops the value entirely unless the pass also changed size/insets (the
+  addend sits inside `if let updateSizeAndInsets`, `ListView.swift:3257`), and its momentum halt does not
+  need the pass to run.
+- `anchorMode:` — `.preserveVisibleContent` when `stationaryItemRange != nil`, else `.automatic`.
+- `transition:` — derived once and reused as both the applied animation and the reported transition, in
+  ListViewImpl's own precedence: an animated `scrollToItem` (`.spring(0.4)`), then a size/inset update's
+  curve, then `.AnimateInsertion` (`.spring(0.4)`), else `.immediate`.
 
-`applyChanges` fires when *any* of structural / size / scroll changed.
+`applyChanges` fires when *any* of structural / size / scroll / displacement changed.
 
 ## Node hosting
 
@@ -89,6 +105,81 @@ scrolling), then reports `beganInteractiveDragging` to the history controller. T
 `CoreVirtualListView.loadedItemViews` (each loaded item view is a `CoreListNodeHostView`, mapped to
 its hosted `ListViewItemNode`). Nothing materializes an array. `beganInteractiveDragging` is passed
 `.zero`: CoreList doesn't surface the touch point and every consumer ignores it.
+
+It also **samples the drag's origin** for `didInteractivelyDragFromTopOrigin` — "the current-or-most-recent
+gesture was a real drag, and it began pinned to the newest-message edge". The chat's one consumer reads it
+after the keyboard is dismissed by dragging, to decide whether to snap back to the newest message
+(`ChatControllerNode.swift:2453`). Two pieces of state, both reset on drag **begin** and never on drag end,
+so the value survives to the layout pass that reads it (`ListViewImpl` likewise resets `trackingOffset` only
+in the pan's `.began`):
+
+- *began pinned* — `visibleContentOffset()` is `.known(value)` with `value <= 10.0`, the tolerance copied
+  verbatim from `ListView.swift:4959`. `ListViewImpl` samples this at `touchesBegan` (finger down) while
+  the earliest hook here is drag-begin, after the pan recognizer's threshold; 10pt is wide enough to absorb
+  that difference, which is plausibly why the tolerance is 10 and not 0.
+- *content moved* — set on any `onVisibleWindowChanged`, which is the `engine.onScroll` sink and therefore
+  user-driven movement only: programmatic offset writes are isProgrammatic-guarded, and the additive
+  viewport track moves content with no engine offset change at all. It also fires during momentum, where
+  `ListViewImpl` has stopped accumulating; harmless, since momentum only follows a drag that already moved
+  content.
+
+This was previously two stubbed constants (`trackingOffset = 0.0`, `beganTrackingAtTopOrigin = false`),
+which made the predicate permanently false and silently disabled the snap-back under this backend. The
+contract now carries the single combined member, so a backend can no longer implement one half.
+**Manually verified working** (2026-07-28) on the CoreList backend — this is behavior no build or test
+in the repo covers, so it is the only kind of evidence available for it.
+
+### Inset changes while tracking (keyboard dismissal)
+
+A third piece of drag state, `isTracking`, is the analogue of `ListViewImpl.isTracking`: a finger is on
+the list **right now**. Unlike the two above it does not survive drag end — it is set on
+`willBeginDragging` and cleared on `didEndDragging`, and is false throughout momentum. `ListViewImpl`
+keeps the same distinction (momentum is `isDeceleratingAfterTracking`, and the suppression below tests
+only `isTracking`).
+
+Its single consumer is inset-compensation suppression. **The chat's insets change while the list is being
+dragged, by the same finger.** `Window1` installs a `WindowPanRecognizer` implementing interactive
+system-keyboard dismissal (`Display/Source/WindowContent.swift:1332`), and its delegate returns `true`
+from `shouldRecognizeSimultaneouslyWith` (`WindowContent.swift:254`), so one downward drag both scrolls
+the history and shrinks `inputHeight` frame by frame. Each frame therefore reaches the list twice — once
+as a scroll delta, once as a smaller bottom inset — and compensating the inset change on top of the
+scroll moves content by **double** the finger's travel. `ListViewImpl` answers this by zeroing
+`offsetFix` while tracking:
+
+```swift
+if (self.isTracking && !self.allowInsetFixWhileTracking) || isExperimentalSnapToScrollToItem {
+    offsetFix = 0.0                       // Display/Source/ListView.swift:3276
+}
+```
+
+The backend reproduces it by passing `compensatesInsetChange: !self.isTracking` to `applyChanges`, which
+drops CoreList's `newTopInset - oldTopInset` anchor projection — the exact analogue of `offsetFix` — and
+nothing else. Three properties are load-bearing:
+
+- **The insets themselves still apply.** Content x/width, the viewport band, the load band and the
+  loaded-top pin all move. That is what keeps the bottom of the chat following the keyboard down under
+  suppression: under the wrapper's π rotation the newest message is CoreList's *loaded top*, and
+  `pinsLoadedTop` puts index 0 on the new inset edge regardless of the anchor projection. `ListViewImpl`
+  splits it identically — `self.insets` is still assigned and `snapToBounds` still runs.
+- **`additionalScrollDistance` is untouched.** It is a caller-chosen displacement, not compensation;
+  `ListViewImpl` orders it the same way (the `+=` comes after the tracking branch).
+- **The flag is read at the call site**, not inside CoreList, so the value is the one that held when the
+  transaction was submitted even if `applyChanges` defers it past a re-entrant pass.
+
+Cancelling the compensation with `additionalScrollDistance: -topInsetDelta` instead looks equivalent and
+is not: a non-zero distance halts momentum and opts the pass out of `pinsLoadedTop`, so the newest
+message would stop tracking the inset edge — the one case that must keep working.
+
+`didEndDragging` was added to the seam for this (`ScrollEngine.onDidEndDragging` → both engines →
+`CoreVirtualListView.didEndDragging`). It deliberately does **not** yet call the backend's
+`endedInteractiveDragging`: that callback drives overscroll-to-open-next-channel, a separate
+unimplemented item rather than something to switch on as a side effect of the hook existing.
+
+Covered by `CoreListDemoTests/InsetCompensationSuppressionTests` on the CoreList side (8 tests). The
+chat-side wiring — that a real interactive keyboard dismissal no longer double-offsets — has no
+automated coverage; it was **manually verified working** (2026-07-28) on the CoreList backend, which is
+the only kind of evidence available for it. Before the fix the history visibly moved by roughly twice the
+finger's travel as the keyboard was dragged away.
 
 ### Long-press / context menu (gesture arbitration)
 
@@ -258,15 +349,23 @@ option:
    scroll-to-unread (a mid-history target) land at the bottom of the screen** instead of near the top
    or center, and a `.animated == false` jump still animates (0.3s). Improve by mapping `.position` to
    a real `pointOffset` and honoring `.animated == false` with duration 0.0.
-2. **Unconditional animation.** Every transaction animates `.easeOut(0.3)` — including initial
-   population, size/inset changes (keyboard, rotation), and pagination — whereas `ListViewImpl`
-   animates selectively via `options` (`.AnimateInsertion` etc.). A production version should derive
-   the animation spec from `options`.
-3. **Fine-grained transaction features ignored.** `stationaryItemRange` and
-   `customAnimationTransition` are not honored, and `anchorMode: .automatic` (rather than
-   `.preserveVisibleContent`) means prepending older messages on scroll-up can jump the viewport.
+2. **Per-item animation selectivity.** The pass transition is now derived from `scrollToItem` /
+   `updateSizeAndInsets` / `options` (see Transaction flow), but it applies to the pass as a whole:
+   `options` distinctions finer than "does this animate, and on what curve" — per-index insertion
+   animations, `.AnimateCrossfade`, `.AnimateTopItemPosition` — still have no analogue.
+3. **Fine-grained transaction features ignored.** `customAnimationTransition` is not honored, and
+   `stationaryItemRange` is mapped only by its nil-ness (to `anchorMode`): the range's actual bounds
+   are discarded, so a transaction asking to hold a *specific* index range stationary gets CoreList's
+   general visible-content preservation instead.
 4. **Config/geometry stubs.** The `// Config flags` and `// Geometry / range` members are plain
-   storage with no behavior; only the display-path values are real.
+   storage with no behavior; only the display-path values are real. (`didInteractivelyDragFromTopOrigin`
+   used to be two of these and is now real — see "Interactive drag start". It is worth reading that
+   entry as a warning about the rest: a stub that returns a plausible constant reports *no* problem,
+   and this one disabled a user-visible behavior for as long as it existed.) Several installed callbacks
+   are likewise never fired: `endedInteractiveDragging` (overscroll-to-open-next-channel),
+   `didEndScrolling`, `didEndScrollingWithOverscroll`. `endedInteractiveDragging` now *could* be — the
+   seam gained `didEndDragging` for the tracking flag — but wiring it would switch on the next-channel
+   behavior, so it stays a deliberate follow-up rather than a side effect.
 5. **`itemNode.frame` is host-local, so point-hit-testing callers are wrong.** Each item node's view
    is a subview of its `CoreListNodeHostView` at frame `(0, 0, width, height)`, so
    `ListViewItemNode.frame` is host-local rather than list-space. `messagesAtPoint`

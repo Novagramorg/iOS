@@ -8,6 +8,7 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
     let scrollView: UIScrollView
     var onScroll: ((CGFloat) -> Void)?
     var onWillBeginDragging: (() -> Void)?
+    var onDidEndDragging: (() -> Void)?
 
     /// Raised around programmatic writes so the re-entrant `scrollViewDidScroll` is suppressed.
     /// This is the old `CoreVirtualListView.isUpdating`, now encapsulated.
@@ -98,5 +99,9 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         onWillBeginDragging?()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        onDidEndDragging?()
     }
 }

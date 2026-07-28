@@ -18,6 +18,13 @@ protocol ScrollEngine: AnyObject {
     /// `UIScrollViewDelegate.scrollViewWillBeginDragging`.
     var onWillBeginDragging: (() -> Void)? { get set }
 
+    /// Fires when the user's interactive drag ENDS (the pan gesture reaches `.ended`/`.cancelled`),
+    /// whether or not momentum follows — so `onWillBeginDragging`/`onDidEndDragging` bracket exactly the
+    /// finger-down interval, and NOT the momentum phase after it. Not fired for programmatic writes, nor
+    /// when deceleration or a bounce finishes. The UIKit analogue is
+    /// `UIScrollViewDelegate.scrollViewDidEndDragging(_:willDecelerate:)`.
+    var onDidEndDragging: (() -> Void)? { get set }
+
     /// Programmatic absolute write (the old `setBoundsOriginY` + the fast-flick delta clamp).
     func setOffset(_ y: CGFloat)
 

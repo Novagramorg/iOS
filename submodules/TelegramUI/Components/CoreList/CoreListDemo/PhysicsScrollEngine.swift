@@ -69,6 +69,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         set { core.onScroll = newValue }
     }
     var onWillBeginDragging: (() -> Void)?
+    var onDidEndDragging: (() -> Void)?
     /// The physics scroll position, advanced once per frame by whichever driver is running — NEVER a sample of
     /// the flight. Consumers may read this as many times as they like within a frame and get one coherent
     /// value; a consumer that reads it twice around its own work (the list does, three times per mutation
@@ -180,6 +181,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             if core.endDrag() { startDeceleration() }
             trackpadForcedBegan = false
             trackpadTranslationBaseline = 0
+            // Paired with the `.began` notification above: the pan can only reach `.ended`/`.cancelled`
+            // after `.began`, so the two callbacks always bracket the finger-down interval. Fired AFTER
+            // deceleration is launched so an observer reading motion state sees the post-release truth.
+            onDidEndDragging?()
         default:
             break
         }

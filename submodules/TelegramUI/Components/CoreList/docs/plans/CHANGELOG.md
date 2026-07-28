@@ -25,6 +25,41 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-07-28 — inset compensation is suppressible while dragging**: `applyChanges` gained
+  `compensatesInsetChange` (default `true`), and the seam gained `ScrollEngine.onDidEndDragging` →
+  `CoreVirtualListView.didEndDragging` so a host can close a finger-down interval at all — only
+  drag-*begin* existed. `false` drops the `newTopInset - oldTopInset` anchor projection and nothing else:
+  the new insets still drive content x/width, the viewport band, the load band and the loaded-top pin, so
+  index 0 still rides the inset edge. That split is what `ListViewImpl` does when it zeroes `offsetFix`
+  while tracking (`Display/Source/ListView.swift:3276`) — it still assigns `self.insets` and still runs
+  `snapToBounds` — and it is why the newest message keeps following the keyboard down under suppression.
+  This fixed a real chat defect rather than buying parity: the chat's keyboard is dismissed interactively
+  by a window-level pan that recognizes SIMULTANEOUSLY with the history list's scroll pan
+  (`Display/Source/WindowContent.swift:1332` and `:254`), so one downward drag reached the list twice —
+  as a scroll delta and as a smaller bottom inset — and the history moved by roughly twice the finger's
+  travel. The trap worth remembering is that `additionalScrollDistance: -topInsetDelta` looks like the
+  same thing and is not: a non-zero distance halts momentum and opts the pass out of `pinsLoadedTop`, so
+  the newest message would stop tracking the inset edge — the one case that must keep working. Deciding
+  that a pass is drag-caused stays caller policy (`CoreListChatHistoryBackend` maintains its own
+  `isTracking`); this view exposes only the switch. 593 tests, clean Bazel build, manually verified in the
+  chat.
+
+- **2026-07-28 — `additionalScrollDistance`**: `applyChanges` gained the `ListViewImpl.transaction`
+  parameter of the same name — a caller-chosen viewport displacement in points, positive moving content
+  down. It rides the same addend as the inset compensation (`Display/Source/ListView.swift:3275`), so a
+  pass can re-inset and scroll by a delta as one movement, and it displaces the resolved anchor before
+  window construction rather than writing an offset afterwards, which is what makes it compose with edge
+  clipping, loaded membership, crossing carries, and an explicit `scrollTo`. A non-zero value halts
+  momentum and opts the pass out of the loaded-top pin (which would otherwise swallow it whole); both
+  match ListViewImpl, including its non-halt under a stationary anchor. The one non-obvious part was
+  ownership: the first implementation shifted content correctly, exactly, and on the right curve, but
+  through per-row position tracks instead of the shared viewport track, because it was missing from the
+  predicate that decides who owns a pass's screen displacement — invisible in the rendered motion of the
+  loaded rows, and wrong for ghosts, carries, and rows entering the window. That predicate is now the
+  named `displacesViewport` with a gotcha in `CLAUDE.md`. The chat's only producer passes 0.0 and has
+  since the repo's first commit, so this buys contract parity rather than behavior. 585 tests, clean
+  Bazel build.
+
 - **2026-07-28 — CAAnimationUtils parity**
   ([design](../superpowers/specs/2026-07-28-corelist-caanimationutils-parity-design.md)): CoreList
   stopped sampling curves into 240Hz keyframes. Both emitters now build through one shared factory

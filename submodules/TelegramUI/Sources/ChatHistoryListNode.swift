@@ -5385,12 +5385,12 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         get { self.listView.verticalScrollIndicatorColor }
         set { self.listView.verticalScrollIndicatorColor = newValue }
     }
-    // True when the current/most-recent scroll gesture was a real interactive drag (the finger moved
-    // the content: trackingOffset is per-gesture, reset on pan-begin) that began pinned to the content
-    // origin (within 10pt; index 0, which is the newest-message edge given the rotated list). Replaces
-    // the previously-exposed raw `trackingOffset`/`beganTrackingAtTopOrigin` ListView state reads.
+    // True when the current/most-recent scroll gesture was a real interactive drag (the finger moved the
+    // content) that began pinned to the content origin — within 10pt of index 0, which is the
+    // newest-message edge given the rotated list. Each backend owns the predicate now; this used to
+    // recombine a raw `trackingOffset`/`beganTrackingAtTopOrigin` pair read off the backend.
     public var didInteractivelyDragFromTopOrigin: Bool {
-        return !self.listView.trackingOffset.isZero && self.listView.beganTrackingAtTopOrigin
+        return self.listView.didInteractivelyDragFromTopOrigin
     }
     public var beganInteractiveDragging: (CGPoint) -> Void {
         get { self.listView.beganInteractiveDragging }

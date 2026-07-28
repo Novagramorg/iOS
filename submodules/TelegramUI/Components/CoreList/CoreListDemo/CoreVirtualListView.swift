@@ -333,6 +333,11 @@ public final class CoreVirtualListView: UIView {
     // fired for programmatic scrolls or momentum/bounce. Analogous to ListViewImpl's
     // `beganInteractiveDragging`.
     public var willBeginDragging: (() -> Void)?
+    // Fired when that interactive drag ends (the pan reaches `.ended`/`.cancelled`), whether or not
+    // momentum follows — so this and `willBeginDragging` bracket the finger-down interval, not the
+    // momentum phase after it. Analogous to ListViewImpl's `endedInteractiveDragging`, and the signal a
+    // host needs to maintain its own `ListViewImpl.isTracking` equivalent.
+    public var didEndDragging: (() -> Void)?
     // The contiguous loaded item-index span of the settled window, or nil when empty.
     public var loadedIndexRange: (first: Int, last: Int)? {
         activeWindow.isEmpty ? nil : (activeWindow.startIndex, activeWindow.endIndex)
@@ -477,6 +482,9 @@ public final class CoreVirtualListView: UIView {
         engine.onWillBeginDragging = { [weak self] in
             self?.willBeginDragging?()
         }
+        engine.onDidEndDragging = { [weak self] in
+            self?.didEndDragging?()
+        }
         container.backgroundColor = .clear
         container.clipsToBounds = false
         crossingOverlay.backgroundColor = .clear
@@ -499,11 +507,30 @@ public final class CoreVirtualListView: UIView {
         layoutExitOverlay()
     }
 
+    /// `additionalScrollDistance` displaces the resolved anchor by that many points, on top of
+    /// whatever compensation an inset change already applies — positive moves content DOWN, the same
+    /// sign convention as a growing top inset. It is the analogue of `ListViewImpl.transaction`'s
+    /// parameter of the same name, which folds into the identical `offsetFix`
+    /// (`Display/Source/ListView.swift:3275`) so that one pass can both re-inset and scroll by a
+    /// caller-chosen delta. Being an anchor displacement rather than a post-hoc offset write, it
+    /// composes with the pass's window build and edge clipping instead of fighting them.
+    ///
+    /// `compensatesInsetChange` selects whether a top-inset change moves content. The default `true`
+    /// projects the resolved anchor by `newTopInset - oldTopInset`, preserving its settled distance from
+    /// the inset edge. Passing `false` drops only that addend, so content keeps its screen position while
+    /// the inset edge moves under it — the geometry ListViewImpl produces when it zeroes `offsetFix`
+    /// (`Display/Source/ListView.swift:3276`). Everything else is unaffected: the new insets still take
+    /// effect for content x/width, the viewport band, the load band, and the loaded-top pin, exactly as
+    /// ListViewImpl still assigns `self.insets` and still runs `snapToBounds`. Whether an inset change was
+    /// caused by the user's own in-progress gesture — the only reason to pass `false` — is caller policy;
+    /// this view stays policy-free.
     public func applyChanges(items newItems: [CoreListItem]? = nil,
                       newSize: CGSize? = nil,
                       newInsets: UIEdgeInsets? = nil,
                       scrollTo: (index: Int, pointOffset: CGFloat)? = nil,
+                      additionalScrollDistance: CGFloat = 0.0,
                       anchorMode: CoreListAnchorMode = .automatic,
+                      compensatesInsetChange: Bool = true,
                       transition: CoreListTransition) {
         let animationDuration = transition.duration
         if isApplyingChanges {
@@ -512,7 +539,9 @@ public final class CoreVirtualListView: UIView {
                                    newSize: newSize,
                                    newInsets: newInsets,
                                    scrollTo: scrollTo,
+                                   additionalScrollDistance: additionalScrollDistance,
                                    anchorMode: anchorMode,
+                                   compensatesInsetChange: compensatesInsetChange,
                                    transition: transition)
             }
             return
@@ -531,7 +560,9 @@ public final class CoreVirtualListView: UIView {
         let hasNewInsets = newInsets != nil
         let hasScrollTo = scrollTo != nil
         let hasDirty = !dirtyIndices.isEmpty
-        guard hasItems || hasNewSize || hasNewInsets || hasScrollTo || hasDirty else { return }
+        let hasAdditionalScrollDistance = additionalScrollDistance != 0.0
+        guard hasItems || hasNewSize || hasNewInsets || hasScrollTo || hasDirty
+                || hasAdditionalScrollDistance else { return }
 
         if let newItems, let duplicate = Self.firstDuplicatePair(in: newItems) {
             preconditionFailure(
@@ -567,6 +598,15 @@ public final class CoreVirtualListView: UIView {
         // docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
         if hasScrollTo { engine.haltMotionInPlace() }
 
+        // A non-zero `additionalScrollDistance` is a programmatic displacement too, so it halts for the
+        // same reason — and `ListViewImpl` halts on it identically (`ListView.swift:3238`). The
+        // `.automatic` guard is that halt's else-if chain: ListViewImpl reaches it only when the pass
+        // did not position content itself, i.e. no `scrollToItem` (halted just above) and no stationary
+        // item range, whose analogue here is `.preserveVisibleContent`.
+        if !hasScrollTo, hasAdditionalScrollDistance, anchorMode == .automatic {
+            engine.haltMotionInPlace()
+        }
+
         // Re-anchor on the presented viewport once, before the first `engine.offset` read below. Everything
         // downstream — the anchor witness (:1481), buildWindow's projected load band, the overscroll gate
         // (:588, :819-828), refreshReachedLoadedEdges and the final coordinate re-base — then resolves
@@ -578,6 +618,14 @@ public final class CoreVirtualListView: UIView {
         let effectiveItems = newItems ?? oldItems
         let logicalSizeChanged = newSize.map { $0 != logicalSize } ?? false
         let insetsChanged = newInsets.map { $0 != viewportInsets } ?? false
+        // A caller-chosen `additionalScrollDistance` displaces screen-space content exactly as a
+        // size/inset change does, so it must take the same three decisions below: settled-membership
+        // crossing, ghost geometry, and — the load-bearing one — the ONE shared additive viewport track
+        // that owns a pass's screen displacement. Without this the pass reads as a pure coordinate
+        // rebase and each loaded row animates its own position instead: the same rigid motion for the
+        // rows that happen to be loaded, but ghost blocks, viewport carries and rows entering the window
+        // stay behind, because they follow the viewport track and nothing else.
+        let displacesViewport = logicalSizeChanged || insetsChanged || hasAdditionalScrollDistance
         let diff: ItemDiff
         if hasItems {
             diff = Self.computeDiff(old: oldItems, new: effectiveItems)
@@ -713,12 +761,29 @@ public final class CoreVirtualListView: UIView {
 
         let newWindow: Window
         if let resolvedAnchor {
-            let topInsetDelta = viewportInsets.top - oldViewportInsets.top
-            let projectedPointOffset = hasScrollTo
+            // Zero when the caller declined inset compensation, which is the whole of what
+            // `compensatesInsetChange: false` does: content holds its screen position while the inset edge
+            // moves under it. The new insets are already installed above and still drive content x/width,
+            // the viewport band, the load band and the loaded-top pin below — the same split ListViewImpl
+            // makes when it zeroes `offsetFix` but still assigns `self.insets` and still snaps to bounds.
+            let topInsetDelta = compensatesInsetChange
+                ? viewportInsets.top - oldViewportInsets.top
+                : 0.0
+            // `additionalScrollDistance` rides the same addend as the inset compensation, which is
+            // exactly where ListViewImpl puts it (`offsetFix += additionalScrollDistance`), and it
+            // composes with an explicit `scrollTo` for the same reason it does there: the scroll
+            // positions content first, then the displacement moves it.
+            let projectedPointOffset = (hasScrollTo
                 ? viewportInsets.top + resolvedAnchor.pointOffset
-                : resolvedAnchor.pointOffset + topInsetDelta
+                : resolvedAnchor.pointOffset + topInsetDelta) + additionalScrollDistance
+            // The loaded-top pin would swallow the displacement whole, so a caller asking for one opts
+            // out of it and lets the window build clip instead. That reproduces ListViewImpl, where the
+            // equivalent pin is `snapToBounds` — which only closes a GAP above the top item. A positive
+            // displacement at the top edge opens such a gap and is clipped away by both; a negative one
+            // scrolls down into content, which ListViewImpl honours and the pin would discard.
             let pinsLoadedTop = !resolvedAnchor.preservesVisibleContent
                 && !hasScrollTo
+                && !hasAdditionalScrollDistance
                 && oldWindow.startIndex == 0
                 && oldEdges.min.map { abs(oldSettledOffset - $0) <= 1e-6 } == true
             newWindow = buildWindow(anchoredAt: resolvedAnchor.index,
@@ -754,8 +819,7 @@ public final class CoreVirtualListView: UIView {
         let hasStructuralMutation = !diff.deletes.isEmpty
             || !diff.inserts.isEmpty || !diff.moves.isEmpty
         let hasSettledMembershipTransition = hasStructuralMutation
-            || logicalSizeChanged
-            || insetsChanged
+            || displacesViewport
         let outgoingCrossingIdentities: Set<AnyHashable> = {
             guard hasSettledMembershipTransition else { return [] }
             return Set(oldRenderedState.keys)
@@ -942,7 +1006,7 @@ public final class CoreVirtualListView: UIView {
                     || abs(old.size.height - new.size.height) > epsilon
             }
         let hasGhostGeometryPass = hasGhostOrderChange
-            || logicalSizeChanged || insetsChanged
+            || displacesViewport
             || hasMeasuredGhostGeometryChange
         let movedOldIndices = Set(diff.moves.map { $0.old })
         let movedNewIndices = Set(diff.moves.map { $0.new })
@@ -1129,7 +1193,7 @@ public final class CoreVirtualListView: UIView {
             }
         }
 
-        if viewportTrack == nil, logicalSizeChanged || insetsChanged {
+        if viewportTrack == nil, displacesViewport {
             let syntheticOldOffset = oldBoundsOriginY + anchorCoordinateShift
             let mutation = transitionViewportPreservingDetachedBoundary(
                 oldEngineOffset: oldBoundsOriginY,

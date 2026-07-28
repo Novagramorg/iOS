@@ -37,6 +37,7 @@ final class TestScrollEngine: ScrollEngine {
         set { core.onScroll = newValue }
     }
     var onWillBeginDragging: (() -> Void)?
+    var onDidEndDragging: (() -> Void)?
     /// Mirrors `PhysicsScrollEngine.offset`: the physics position, advanced once per frame, never a sample of
     /// the flight. See that property and the clock-free-mutation-pass spec.
     var offset: CGFloat { core.offset }
@@ -115,6 +116,7 @@ final class TestScrollEngine: ScrollEngine {
 
     @discardableResult func endDrag() -> Bool {
         let decelerate = core.endDrag()
+        defer { onDidEndDragging?() }                            // parity with PhysicsScrollEngine.handlePan(.ended)
         if decelerate && decelerationMode == .keyframe {
             let f = KeyframeFlight(core: core, startTime: clock.now)
             flight = f
@@ -133,6 +135,10 @@ final class TestScrollEngine: ScrollEngine {
     /// target without moving the offset; the recognizer velocity is the opposite sign of the offset
     /// velocity (the finger moves opposite the content).
     func simulateFlick(offsetVelocity v: CGFloat) {
+        // Fired directly rather than by going through `beginDrag()`, which would also catch a live flight
+        // and change the physics of a flick chained onto a decelerating one. This keeps the
+        // will-begin/did-end pair balanced (`endDrag()` fires did-end) without altering any offset.
+        onWillBeginDragging?()
         core.beginDrag()
         core.drag(translation: 0, velocity: -v)
         core.drag(translation: 0, velocity: -v)
