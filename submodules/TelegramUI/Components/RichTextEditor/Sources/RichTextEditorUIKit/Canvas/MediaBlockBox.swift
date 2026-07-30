@@ -18,6 +18,7 @@ final class MediaBlockBox: CanvasBlock {
     var items: [MediaItem]
     var displayWidth: Double?
     var alignment: MediaAlignment
+    var displayMode: MediaDisplayMode
     let caption: BlockLayoutEngine
     let mapper: AttributedStringMapper
     /// How far the media bleeds beyond its text-strip `frame` on each side (points). Default
@@ -67,6 +68,7 @@ final class MediaBlockBox: CanvasBlock {
         items = block.items
         displayWidth = block.displayWidth
         alignment = block.alignment
+        displayMode = block.displayMode
         self.mapper = mapper
         self.horizontalBleed = horizontalBleed
         layoutWidth = max(width, 1)
@@ -121,9 +123,28 @@ final class MediaBlockBox: CanvasBlock {
         return size
     }
 
+    /// Slideshow-assembled size for a multi-item container: full width × the TALLEST item's aspect height
+    /// fitted to `maxWidth`, capped at `min(1000, maxWidth)` (matches `layoutSlideshow`'s per-image
+    /// `fitted(width × 1200)` taking the max, and the mosaic cap). Each page renders aspect-fit within this.
+    private func slideshowSize(maxWidth: CGFloat) -> CGSize {
+        let cap = min(1000.0, maxWidth)
+        var tallest: CGFloat = 0
+        for item in items {
+            let w = CGFloat(item.naturalSize.width), h = CGFloat(item.naturalSize.height)
+            let fitted = (w > 0 && h > 0) ? h * (maxWidth / w) : maxWidth * 0.5625
+            tallest = max(tallest, fitted)
+        }
+        return CGSize(width: maxWidth, height: min(tallest, cap))
+    }
+
+    /// The container size for the current mode (count >= 2 only): slideshow vs mosaic.
+    private func containerSize(maxWidth: CGFloat) -> CGSize {
+        displayMode == .slideshow ? slideshowSize(maxWidth: maxWidth) : mosaicSize(maxWidth: maxWidth)
+    }
+
     var imageAreaHeight: CGFloat {
         if isAudio { return MediaBlockBox.audioRowHeight }
-        if items.count >= 2 { return mosaicSize(maxWidth: max(canvasWidth, 1)).height }
+        if items.count >= 2 { return containerSize(maxWidth: max(canvasWidth, 1)).height }
         return imageDisplaySize(maxWidth: max(canvasWidth, 1)).height
     }
 
@@ -156,7 +177,7 @@ final class MediaBlockBox: CanvasBlock {
         if isAudio { return verticalInset + MediaBlockBox.audioRowHeight + verticalInset }
         let imageArea: CGFloat
         if items.count >= 2 {
-            imageArea = mosaicSize(maxWidth: max(width + horizontalBleed * 2, 1)).height
+            imageArea = containerSize(maxWidth: max(width + horizontalBleed * 2, 1)).height
         } else {
             imageArea = imageDisplaySize(maxWidth: max(width + horizontalBleed * 2, 1)).height
         }
@@ -205,6 +226,7 @@ final class MediaBlockBox: CanvasBlock {
 
     func currentBlock() -> Block {
         .media(MediaBlock(id: id, items: items, displayWidth: displayWidth, alignment: alignment,
+                          displayMode: displayMode,
                           caption: isAudio ? [] : mapper.runs(from: caption.attributedString, style: .caption)))
     }
 

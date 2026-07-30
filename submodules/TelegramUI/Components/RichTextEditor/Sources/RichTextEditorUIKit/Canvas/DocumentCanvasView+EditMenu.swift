@@ -76,6 +76,7 @@ extension DocumentCanvasView {
     /// on touch-down before the gesture's setter runs. `dismissMenu()`/`hideMenu()` is a no-op when nothing
     /// is presented.
     func dismissEditMenuForSelectionOrTextChange() {
+        pendingSpellingMenu = nil
         dismissEditMenu()
     }
 
@@ -94,6 +95,9 @@ extension DocumentCanvasView {
              #selector(legacyLookUp), #selector(legacyShare):
             // The custom items of the UIMenuController (iOS 13–15) fallback — a non-collapsed selection only.
             return selFrom < selTo
+        case #selector(spellGuess0), #selector(spellGuess1), #selector(spellGuess2),
+             #selector(spellGuess3), #selector(spellNoop), #selector(spellRevert):
+            return pendingSpellingMenu != nil
         default:
             return super.canPerformAction(action, withSender: sender)
         }
@@ -117,7 +121,7 @@ extension DocumentCanvasView {
     /// `Translate` is iOS 17.4+, so it never appears on this path. Reuses the shared responder actions.
     private func presentLegacyEditMenu(targetRect: CGRect) {
         let mc = UIMenuController.shared
-        mc.menuItems = legacyCustomMenuItems()
+        mc.menuItems = pendingSpellingMenu != nil ? legacySpellingMenuItems() : legacyCustomMenuItems()
         mc.showMenu(from: self, rect: targetRect)
         editMenuVisible = true
     }
@@ -138,6 +142,40 @@ extension DocumentCanvasView {
     @objc private func legacyUnderline() { toggleUnderline() }
     @objc private func legacyLookUp() { presentLookUp() }
     @objc private func legacyShare() { presentShare() }
+
+    private func legacySpellingMenuItems() -> [UIMenuItem] {
+        guard let pending = pendingSpellingMenu else {
+            return [UIMenuItem(title: "No Replacements Found", action: #selector(spellNoop))]
+        }
+        var items: [UIMenuItem] = []
+        // N5: a fixed selector (mirrors spellGuess0…3) — UIMenuItem needs an Obj-C #selector, so unlike the
+        // iOS-16+ UIAction closure this can't just close over `revertTo`; `spellRevert` re-reads it from
+        // `pendingSpellingMenu` at invocation time.
+        if pending.revertTo != nil {
+            items.append(UIMenuItem(title: "Revert to \u{201C}\(pending.revertTo!)\u{201D}", action: #selector(spellRevert)))
+        }
+        if pending.guesses.isEmpty {
+            items.append(UIMenuItem(title: "No Replacements Found", action: #selector(spellNoop)))
+            return items
+        }
+        let sels: [Selector] = [#selector(spellGuess0), #selector(spellGuess1),
+                                #selector(spellGuess2), #selector(spellGuess3)]
+        items.append(contentsOf: zip(pending.guesses.prefix(4), sels).map { UIMenuItem(title: $0.0, action: $0.1) })
+        return items
+    }
+    @objc private func spellNoop() {}
+    @objc private func spellRevert() {
+        guard let revertTo = pendingSpellingMenu?.revertTo else { return }
+        applySpellingReplacement(revertTo)
+    }
+    @objc private func spellGuess0() { applyLegacyGuess(0) }
+    @objc private func spellGuess1() { applyLegacyGuess(1) }
+    @objc private func spellGuess2() { applyLegacyGuess(2) }
+    @objc private func spellGuess3() { applyLegacyGuess(3) }
+    private func applyLegacyGuess(_ i: Int) {
+        guard let g = pendingSpellingMenu?.guesses, i < g.count else { return }
+        applySpellingReplacement(g[i])
+    }
 }
 
 /// iOS 16+ system edit menu: the `UIEditMenuInteraction` install + its delegate. Below 16 this whole

@@ -10,6 +10,36 @@ private struct SqliteValueBoxTable {
 let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 let SQLITE_PREPARE_PERSISTENT: UInt32 = 1
 
+private var valueBoxStrictErrorHandling: Bool = false
+
+/// When enabled, BEGIN/COMMIT and statement failures crash the process (after flushing
+/// logs) instead of being silently ignored in release builds. Intended for short-lived
+/// extension processes (the notification service): continuing past a failed BEGIN under
+/// cross-process lock contention produces non-atomic writes and a non-advancing account
+/// state that livelocks the difference polling loop, while a crash safely falls back to
+/// system push handling and self-heals on the next notification. Must be set before any
+/// database is opened; never enable in the main app.
+public func setValueBoxStrictErrorHandling(_ value: Bool) {
+    valueBoxStrictErrorHandling = value
+}
+
+private func checkTransactionResult(_ resultCode: Bool, database: Database, operation: String) {
+    if !resultCode {
+        let errorMessage: String
+        if let error = sqlite3_errmsg(database.handle), let str = NSString(utf8String: error) {
+            errorMessage = str as String
+        } else {
+            errorMessage = "unknown error"
+        }
+        postboxLog("SqliteValueBox: \(operation) failed: \(errorMessage)")
+        if valueBoxStrictErrorHandling {
+            postboxLogSync()
+            preconditionFailure("SqliteValueBox: \(operation) failed: \(errorMessage)")
+        }
+    }
+    assert(resultCode)
+}
+
 private func checkTableKey(_ table: ValueBoxTable, _ key: ValueBoxKey) {
     switch table.keyType {
         case .binary:
@@ -50,12 +80,14 @@ struct SqlitePreparedStatement {
     func step(handle: OpaquePointer?, _ initial: Bool = false, pathToRemoveOnError: String?) -> Bool {
         let res = sqlite3_step(statement)
         if res != SQLITE_ROW && res != SQLITE_DONE {
+            let errorString: String
             if let error = sqlite3_errmsg(handle), let str = NSString(utf8String: error) {
-                postboxLog("SQL error \(res): \(str) on step")
+                errorString = "SQL error \(res): \(str) on step"
             } else {
-                postboxLog("SQL error \(res) on step")
+                errorString = "SQL error \(res) on step"
             }
-            
+            postboxLog(errorString)
+
             if res == SQLITE_CORRUPT {
                 if let path = pathToRemoveOnError {
                     postboxLog("Corrupted DB at step, dropping")
@@ -63,6 +95,11 @@ struct SqlitePreparedStatement {
                     postboxLogSync()
                     preconditionFailure()
                 }
+            }
+
+            if valueBoxStrictErrorHandling {
+                postboxLogSync()
+                preconditionFailure(errorString)
             }
         }
         return res == SQLITE_ROW
@@ -530,17 +567,17 @@ public final class SqliteValueBox: ValueBox {
         precondition(self.queue.isCurrent())
         if self.isReadOnly {
             let resultCode = self.database.execute("BEGIN DEFERRED")
-            assert(resultCode)
+            checkTransactionResult(resultCode, database: self.database, operation: "BEGIN DEFERRED")
         } else {
             let resultCode = self.database.execute("BEGIN IMMEDIATE")
-            assert(resultCode)
+            checkTransactionResult(resultCode, database: self.database, operation: "BEGIN IMMEDIATE")
         }
     }
-    
+
     public func commit() {
         precondition(self.queue.isCurrent())
         let resultCode = self.database.execute("COMMIT")
-        assert(resultCode)
+        checkTransactionResult(resultCode, database: self.database, operation: "COMMIT")
     }
     
     public func checkpoint() {
@@ -553,17 +590,17 @@ public final class SqliteValueBox: ValueBox {
         precondition(self.queue.isCurrent())
         if self.isReadOnly {
             let resultCode = database.execute("BEGIN DEFERRED")
-            assert(resultCode)
+            checkTransactionResult(resultCode, database: database, operation: "BEGIN DEFERRED")
         } else {
             let resultCode = database.execute("BEGIN IMMEDIATE")
-            assert(resultCode)
+            checkTransactionResult(resultCode, database: database, operation: "BEGIN IMMEDIATE")
         }
     }
-    
+
     private func commitInternal(database: Database) {
         precondition(self.queue.isCurrent())
         let resultCode = database.execute("COMMIT")
-        assert(resultCode)
+        checkTransactionResult(resultCode, database: database, operation: "COMMIT")
     }
     
     private func isEncrypted(_ database: Database) -> Bool {

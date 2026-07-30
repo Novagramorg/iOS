@@ -85,6 +85,10 @@ extension DocumentCanvasView {
             } else {
                 continue   // no view available yet (re-tried on the next layout pass)
             }
+            // Keep the template-emoji tint synced to the current text color, every pass — cheap (the host
+            // setter no-ops on an unchanged value) and self-healing across theme changes (a theme reload
+            // relays out → syncEmojiViews). `primaryText` is the default run foreground the mapper bakes in.
+            hosted.view.dynamicColor = self.mapper.theme.primaryText
             hosted.canvasFrame = o.canvasRect
             placeEmoji(hosted, canvasRect: o.canvasRect, regionStart: o.regionStart)
         }
@@ -135,6 +139,6 @@ extension DocumentCanvasView {
 
     // MARK: Test accessors
     var hostedEmojiCountForTesting: Int { emojiViews.count }
-    var firstHostedEmojiForTesting: UIView? { emojiViews.values.first?.view }
+    var firstHostedEmojiForTesting: (UIView & RichTextEmojiView)? { emojiViews.values.first?.view }
 }
 #endif

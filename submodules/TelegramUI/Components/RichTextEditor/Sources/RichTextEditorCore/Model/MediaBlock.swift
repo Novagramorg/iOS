@@ -1,5 +1,13 @@
 import Foundation
 
+/// How a multi-item media container (`items.count >= 2`) is laid out. Meaningful only for containers;
+/// a single item is always a plain block. Default `.mosaic` (a packed grid → InstantPage `.collage`);
+/// `.slideshow` is a swipeable carousel → InstantPage `.slideshow`.
+public enum MediaDisplayMode: String, Codable, Equatable {
+    case mosaic
+    case slideshow
+}
+
 /// An attached media container (one or more images/videos) with a single shared editable caption. In the
 /// position model this is a non-leaf node containing ONE media atom (size 1) — representing the whole
 /// container — followed by the caption paragraph, regardless of how many items it holds. `.audio` /
@@ -12,6 +20,8 @@ public struct MediaBlock: Codable, Equatable {
     public var displayWidth: Double?
     /// Honored only when `items.count == 1` (a mosaic fills the width).
     public var alignment: MediaAlignment
+    /// Layout mode for a multi-item container; honored only when `items.count >= 2`. Default `.mosaic`.
+    public var displayMode: MediaDisplayMode
     public var caption: [TextRun]
 
     /// Container initializer.
@@ -20,12 +30,14 @@ public struct MediaBlock: Codable, Equatable {
         items: [MediaItem],
         displayWidth: Double? = nil,
         alignment: MediaAlignment = .center,
+        displayMode: MediaDisplayMode = .mosaic,
         caption: [TextRun] = []
     ) {
         self.id = id
         self.items = items
         self.displayWidth = displayWidth
         self.alignment = alignment
+        self.displayMode = displayMode
         self.caption = caption
     }
 
@@ -38,11 +50,12 @@ public struct MediaBlock: Codable, Equatable {
         naturalSize: Size2D,
         displayWidth: Double? = nil,
         alignment: MediaAlignment = .center,
+        displayMode: MediaDisplayMode = .mosaic,
         caption: [TextRun] = []
     ) {
         self.init(id: id,
                   items: [MediaItem(mediaID: mediaID, kind: kind, naturalSize: naturalSize)],
-                  displayWidth: displayWidth, alignment: alignment, caption: caption)
+                  displayWidth: displayWidth, alignment: alignment, displayMode: displayMode, caption: caption)
     }
 
     // Single-media convenience accessors (the FIRST item). Correct wherever the caller predates containers
@@ -58,7 +71,7 @@ public struct MediaBlock: Codable, Equatable {
     // MARK: Codable (back-compat: a legacy flat mediaID/kind/naturalSize decodes into one item)
 
     private enum CodingKeys: String, CodingKey {
-        case id, items, displayWidth, alignment, caption
+        case id, items, displayWidth, alignment, displayMode, caption
         // Legacy (pre-container) keys:
         case mediaID, kind, naturalSize
     }
@@ -68,6 +81,7 @@ public struct MediaBlock: Codable, Equatable {
         self.id = try c.decode(BlockID.self, forKey: .id)
         self.displayWidth = try c.decodeIfPresent(Double.self, forKey: .displayWidth)
         self.alignment = try c.decode(MediaAlignment.self, forKey: .alignment)
+        self.displayMode = try c.decodeIfPresent(MediaDisplayMode.self, forKey: .displayMode) ?? .mosaic
         self.caption = try c.decode([TextRun].self, forKey: .caption)
         if let items = try c.decodeIfPresent([MediaItem].self, forKey: .items) {
             self.items = items
@@ -86,6 +100,7 @@ public struct MediaBlock: Codable, Equatable {
         try c.encode(items, forKey: .items)
         try c.encodeIfPresent(displayWidth, forKey: .displayWidth)
         try c.encode(alignment, forKey: .alignment)
+        try c.encode(displayMode, forKey: .displayMode)
         try c.encode(caption, forKey: .caption)
     }
 }

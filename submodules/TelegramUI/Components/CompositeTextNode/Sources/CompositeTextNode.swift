@@ -45,6 +45,7 @@ public class CompositeTextNode: ASDisplayNode {
                     textNode = current
                 } else {
                     textNode = ImmediateTextNode()
+                    textNode.displaysAsynchronously = false
                     textNode.maximumNumberOfLines = 1
                     textNode.insets = UIEdgeInsets(top: 3.0, left: 0.0, bottom: 3.0, right: 0.0)
                     textNode.layer.layerTintColor = self.imageTintColor?.cgColor

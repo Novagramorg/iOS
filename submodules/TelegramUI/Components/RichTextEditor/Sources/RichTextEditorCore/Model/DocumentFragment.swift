@@ -28,13 +28,18 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             return .pullQuote(PullQuote(id: .generate(), runs: pq.runs, author: pq.author))
         case .blockQuote(let bq):
             return .blockQuote(BlockQuote(id: .generate(), children: regeneratingIDs(bq.children), collapsed: bq.collapsed, author: bq.author))
+        case .details(let d):
+            return .details(DetailsBlock(id: .generate(), title: d.title,
+                                         children: regeneratingIDs(d.children), expanded: d.expanded))
         case .table(let t):
             // Regenerate the table AND its nested row/cell/inner-block IDs — a pasted "Copy Table" carries the
             // source table's IDs verbatim, and block views are keyed by BlockID, so a duplicate-ID paste would
             // steal the original table's view and make the original disappear.
             return .table(TableBlock(id: .generate(), columns: t.columns, rows: t.rows.map { row in
-                Row(id: .generate(), height: row.height, isHeader: row.isHeader, cells: row.cells.map { cell in
-                    Cell(id: .generate(), blocks: regeneratingIDs(cell.blocks), background: cell.background)
+                Row(id: .generate(), height: row.height, cells: row.cells.map { cell in
+                    Cell(id: .generate(), blocks: regeneratingIDs(cell.blocks), background: cell.background,
+                         horizontalAlignment: cell.horizontalAlignment, verticalAlignment: cell.verticalAlignment,
+                         isHeader: cell.isHeader)
                 })
             }))
         case .media(let m):
@@ -153,6 +158,10 @@ public func blockPlainText(_ block: Block) -> String {
     case .code(let c): return c.text
     case .pullQuote(let pq): return pq.text
     case .blockQuote(let bq): return bq.children.map(blockPlainText).joined(separator: "\n")
+    case .details(let d):
+        let titleText = d.title.map(\.text).joined()
+        let body = d.children.map(blockPlainText).joined(separator: "\n")
+        return body.isEmpty ? titleText : titleText + "\n" + body
     default: return ""
     }
 }
@@ -183,6 +192,40 @@ extension Document {
             }
             cursor += size
         }
+        return nil
+    }
+
+    /// The nearest top-level paragraph/code text position for a caret that falls OUTSIDE the document's
+    /// editable text range — below the first text block's start, or above the last text block's end. Returns
+    /// nil for a caret INSIDE the range that simply isn't a top-level text locus (e.g. a table cell / media
+    /// caption), so callers keep their in-cell behavior. Recovers a paste whose caret was reported as 0 — a
+    /// freshly-latched chat composer sets its selection before its layout boxes exist, so the flat→global map
+    /// yields 0 (below the first text start), which `insertingFragment` cannot resolve.
+    public func nearestTopLevelTextPosition(to caret: Int) -> Int? {
+        var cursor = 0
+        var firstStart: Int? = nil
+        var lastTextEnd: Int? = nil
+        for i in blocks.indices {
+            let size = DocumentTree.documentSize(Document(blocks: [blocks[i]]))
+            let textStart = cursor + 1
+            switch blocks[i] {
+            case .paragraph(let p):
+                if firstStart == nil { firstStart = textStart }
+                lastTextEnd = textStart + p.utf16Count
+            case .code(let c):
+                if firstStart == nil { firstStart = textStart }
+                lastTextEnd = textStart + c.utf16Count
+            default: break
+            }
+            cursor += size
+        }
+        let documentSize = cursor
+        guard let firstStart, let lastTextEnd else { return nil }   // no top-level text block to land in
+        if caret < firstStart { return firstStart }        // e.g. the freshly-latched composer caret == 0
+        if caret > documentSize { return lastTextEnd }      // beyond the whole document
+        // Inside the document but not a top-level text locus — e.g. a caret in a table cell / media caption,
+        // INCLUDING one that sits past the last text paragraph. Return nil so the caller keeps its in-cell
+        // (flatten) behavior rather than redirecting the paste to a paragraph.
         return nil
     }
 
@@ -393,6 +436,13 @@ extension Document {
                                                       children: regeneratingIDs(bq.children),
                                                       collapsed: bq.collapsed,
                                                       author: bq.author)))
+                }
+            case .details(let d):
+                // Capture the whole detail block only on full coverage (mirrors `.blockQuote`). Interactive
+                // copy/paste of details is deferred (v1); this arm keeps the AI-edit full-range path lossless.
+                if lo <= cursor && hi >= cursor + size {
+                    out.append(.details(DetailsBlock(id: .generate(), title: d.title,
+                                                     children: regeneratingIDs(d.children), expanded: d.expanded)))
                 }
             case .media, .table:
                 // Carried only for the AI-edit path, and only when the selection FULLY covers the block's

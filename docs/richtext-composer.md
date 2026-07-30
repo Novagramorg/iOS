@@ -57,6 +57,13 @@ currency. It is a block/run tree mirroring the editor `Document` 1:1:
 Conversions:
 - **Display-neutral TextFormat utility** (`Sources/ChatInputContentConversion.swift`): `chatInputContent(from:)`
   / `attributedString(from:)`, round-trip-identity tested in `//submodules/TextFormat:TextFormatTests`.
+  **Contiguity is load-bearing for quotes:** `chatInputContent(from:)` carves each maximal contiguous
+  `.block`/.quote run (via `enumerateAttribute`, like `codeBlockRanges` for code) into ONE multi-paragraph
+  `.blockQuote` — it must NOT split per-`\n`. A multi-line quote is one `.block` object spanning its interior
+  newlines; splitting it produced one `.blockQuote` per line, which `attributedString(from:)` then re-emitted as
+  non-contiguous runs separated by plain `\n`s → multiple on-screen quote boxes (seen both on format-apply and,
+  since this feeds the persisted `"cm"` model, after re-opening a chat). Two *genuinely* separate quotes are
+  divided by a non-block `\n`, so they remain two runs → two blocks (no coalescing across a non-quote gap).
 - **Direct editor bridge** (`ChatRichTextEditorComposer/Sources/DocumentChatInputContentBridge.swift`):
   `Document ↔ ChatInputContent`, used by the native node — it **bypasses the `NSAttributedString` hop** where
   structural blocks (media/table/heading/list) would be flattened.
@@ -80,6 +87,11 @@ Conversions:
   numbers are explicit `Int32`/`Int64`. Test the model Codable via `AdaptedPostboxEncoder` (a JSON round-trip
   masks this). The polymorphic `Media` persists via a concrete-type discriminator + `TelegramMediaImage/File(decoder:)`,
   **not** `decodeRootObjectWithHash` (that needs the app-startup `declareEncodable` registry, empty in tests).
+  **This applies to *every* raw enum, `String`-raw included:** a `RawRepresentable` enum's *synthesized* Codable
+  uses a `singleValueContainer`, so each raw enum in `ChatInputContentModel.swift` carries a CUSTOM keyed Codable
+  encoding its `.rawValue` under a `"raw"` key. `ChatInputMediaDisplayMode` (a `String`-raw enum) was missed and
+  crashed at `AdaptedPostboxEncoder.swift:94` when a draft containing a `.media` block was persisted (it is
+  encoded by `ChatInputMedia.encode(to:)`) — fixed by giving it the same custom keyed Codable.
 
 `isEntityExpressible(options:)` is the routing switch: text / quote / collapsed-quote / code / mention / date /
 custom-emoji-in-body are entity-expressible (normal text+entities path); heading / list / table / media are
@@ -115,6 +127,18 @@ send-options preview and the attachment-menu rich-editor send — see §5).
   precedent — one value seen by undo/drafts/send/observers). Thin converters:
   `ChatRichTextEditorComposer/Sources/ComposerExpandedEditorBridge.swift`. Custom-emoji **files** (`[Int64:
   TelegramMediaFile]`) and media are threaded both ways (a fileId-only emoji ref renders blank).
+- **OUT back-fills emoji files the composer content only holds by fileId.** A `ChatInputContent` custom-emoji
+  run may carry the fileId **without** the `TelegramMediaFile` attached; the plain `documentMediaAndEmoji(...)`
+  then returns an `emojiFiles` map missing those ids, seeding the editor's emoji store (and, on the initial
+  `.edit`/`.standalone` seed, the keyboard's file set) empty — so the emoji renders blank and its file is dropped
+  on collapse-back / send. The OUT path therefore uses the **async** `documentMediaAndEmojiAsync(engine:…)`
+  (awaited inside `openExpandedInput`'s `Task { @MainActor }`), which resolves any fileId with no inline file from
+  the **local** sticker cache (`engine.stickers.resolveInlineStickersLocal`, a postbox `getMedia` over
+  `Namespaces.Media.CloudFile`). Local-only is deliberate — composer emoji are always already cached, so no
+  network round-trip stalls the expand; a fileId absent even locally simply stays unresolved (renders blank, as
+  before). Persisted **drafts** need no resolution (their `emojiFiles` are stored/decoded whole in
+  `RichTextDraft`); the in-editor AI-insert paths still use the sync `documentMediaAndEmoji` (their
+  completion closures are synchronous, and AI-generated content rarely carries custom emoji).
 
 > **Invariant — the cycle constraint.** `InstantPageUI` transitively deps `ChatTextInputPanelNode`, so the
 > panel/node **cannot** dep `InstantPageUI` / `RichTextEditorMediaView`. `TelegramUI` (above the cycle) builds
@@ -194,10 +218,17 @@ All inline / structural features round-trip losslessly through the native compos
   same one grouped album messages use), with per-cell view reuse keyed by media identity so surviving
   cells aren't rebuilt/re-fetched on an add/remove. A container of `items.count >= 2` sends as an
   InstantPage **`.collage`** rich message (see `instantpage-richtext.md`); `count == 1` still sends the
-  byte-identical `.image`/`.video` block. **Authoring is split:** per-cell delete-one is wired in both
-  hosts; "Add another photo/video" is wired in the **article editor**'s more-menu only — the composer's
-  in-place Add is a deferred follow-up (the composer already renders/edits multi-media from sent albums
-  and drafts). Design + plan: `docs/superpowers/{specs,plans}/2026-07-08-richtext-multi-media-container*`.
+  byte-identical `.image`/`.video` block. **Layout mode (added 2026-07-17).** A `MediaBlock`/`ChatInputMedia`
+  now carries a `displayMode` (`.mosaic` default / `.slideshow`, Codable back-compat → `.mosaic`); a
+  `count >= 2` container in `.slideshow` mode renders in-editor as a swipeable carousel + paging dots and
+  **sends as InstantPage `.slideshow`** instead of `.collage` (both forward converters branch on it; the
+  reverse recovers it on edit). The toggle button that flips the mode is **article-editor only** (left of
+  "+"); the composer stays mosaic-only. Design + plan:
+  `docs/superpowers/{specs,plans}/2026-07-17-richtext-media-layout-toggle*`. **Authoring is split:** per-cell
+  delete-one is wired in both hosts; "Add another photo/video" and the layout toggle are wired in the
+  **article editor**'s chrome only — the composer's in-place Add is a deferred follow-up (the composer
+  already renders/edits multi-media from sent albums and drafts). Design + plan:
+  `docs/superpowers/{specs,plans}/2026-07-08-richtext-multi-media-container*`.
   **Media spoilers (added 2026-07-08).** A photo/video can be marked a Telegram-style spoiler (dust-covered
   until tapped), per **item**: `MediaItem.isSpoiler` (editor Core) ↔ `ChatInputMediaItem.isSpoiler`
   (both additive, optional-Codable, absent ⇒ `false`, so all existing docs/drafts/messages decode
@@ -297,8 +328,9 @@ as a **`RichTextMessageAttribute`** carrying an `InstantPage`, rendered by the V
   `forSendPreview: true`, so a **blockquote forces the rich (InstantPage) path here** even though a quote is
   entity-expressible (`documentNeedsRichLayout` honors the same flag at the editor-`Document` level). The composer
   Send / Edit gates above pass **default** options, so a quote sent from the composer is still plain text + a
-  blockquote entity — a deliberate, localized divergence (this rich-editor send has no long-press preview; the
-  composer's preview opts into the same quote-as-rich rule, below).
+  blockquote entity — a deliberate, localized divergence (this rich-editor send's long-press now opens
+  send-options with no preview — see "Expanded-editor send-options" below; the composer's preview opts into the
+  same quote-as-rich rule, below).
 - **Pending edits display optimistically:** `ChatUpdatingMessageMedia` carries an optional `richText`; the
   bubble prefers `itemAttributes.updatingMedia.map(\.richText) ?? item.message.richText` (display `:360`,
   anchor `:1449`, "Show more" gate `:567` in `ChatMessageRichDataBubbleContentNode`). The render-cache key
@@ -357,6 +389,36 @@ the `ChatSendMessageContextScreenRichTextPreview` protocol (mirroring the existi
   bubble's `image.defaultCornerRadius`) within the tail-excluded content rect `[1, width − 7]` (same as the text
   path), so images/tables round to the bubble and stay clear of the outgoing tail.
 
+### Expanded-editor send-options (`RichTextAttachmentScreen`, no preview)
+
+The **expanded** rich-text editor's own **Send** button (`RichTextAttachmentScreen`, the full-screen article
+editor — *not* the chat composer's Send above) gained an optional long-press → send-options action (Send / Send
+silently / Schedule / Send when online) via `makeChatSendMessageActionSheetController(params: .sendMessage(…
+mediaPreview: nil …))` — **no message preview** (distinct from the composer's preview subsection above). It is
+**caller-supplied**: the screen takes an optional `RichTextAttachmentScreenSendContextActions` (a module-local
+type — `peerId` + `send`/`schedule` closures over the screen's native `(Document, [String: Media], [Int64:
+TelegramMediaFile], withoutFormatting: Bool, SendMode, SendParameters?)` tuple; kept out of `AccountContext` because
+that tuple's `RichTextEditorCoreDocument` must not pull `RichTextEditorCore` into `AccountContext`). When it is
+`nil` the button is tap-only (feature off). The long-press is offered only when `sendContextActions != nil &&
+isSendEnabled && !isSendRichFormattingLocked` — **suppressed while a non-premium formatting lock is active**, so the
+tap path's remove-formatting alert can't be side-stepped (⇒ `withoutFormatting` is always `false` on this path). The
+send button is wrapped in a `ContextExtractedContentContainingView` for the extract-out animation (mirrors
+`TextProcessingScreen`'s `ActionButtonsComponent`). Screen side: `displayLongPressSendMenu` in
+`RichTextAttachmentScreen.swift`.
+
+Two callers supply the actions, gated identically on `editMessage == nil && chatLocation.peerId != nil`:
+
+- **Composer handoff** (`ChatControllerNode.openExpandedInput`): `send`/`schedule` set the chat's effective input
+  state from the editor content, then route through the **same `self.sendCurrentMessage(...)` the tap path uses**
+  (`.generic`/`.silently`, `.whenOnline` → `scheduleTime: scheduleWhenOnlineTimestamp`) and
+  `controllerInteraction?.scheduleCurrentMessage` — so tap-Send and long-press-Send stay identical.
+- **Article route** (`ChatControllerOpenAttachmentMenu`'s `.richText` case, which sends by building an
+  `EnqueueMessage` directly, not via `sendCurrentMessage`): shared `buildRichTextContent` + `performRichTextSend`
+  locals feed `transformEnqueueMessages(silentPosting:scheduleTime:)` per mode (`.whenOnline` →
+  `scheduleWhenOnlineTimestamp`) with `presentScheduleTimePicker` for Schedule, then
+  `presentPaidMessageAlertIfNeeded` → `sendMessages`. Here message **effects are ignored** and **when-online just
+  sends** (no scheduled-view navigation).
+
 ---
 
 ## 6. Draft persistence
@@ -408,7 +470,55 @@ also called by the incremental `updateDraftMessage` path) + `_internal_applyFetc
 
 ---
 
-## 7. Accepted limitations & deferred work
+## 7. Markdown on paste (plain text → rich)
+
+Pasting **plain text that parses as CommonMark markdown** inserts it as rich content instead of a literal
+string — `**bold**` becomes bold, `# Heading` / `- list` / a `|`-table become real blocks. Clipboard paste
+only (no drag-&-drop, programmatic insert, or share-extension prefill). Always-on; undo is the escape hatch.
+
+**Pipeline (reuses the send-path parser).** `chatInputContentFromPastedMarkdown(context:plainText:)`
+(`TelegramUI/Sources/PastedMarkdownConversion.swift`) runs the same CommonMark parser the rich-message *send*
+path uses — `inputRichTextAttributeFromText` (`BrowserUI/BrowserMarkdown.swift`, Apple `NSAttributedString(markdown:)`
+with default options) → `InstantPage` → `chatInputContent(fromInstantPage:)` → `ChatInputContent`. A pure gate
+`pastedMarkdownContentIsRicherThanPlain(_:)` (`TextFormat/PastedMarkdownGate.swift`) returns nil when the parse
+is nothing but unformatted `.body` paragraphs, so ordinary text (incl. multi-line) falls through to the default
+plain paste; CommonMark's paired-delimiter rules mean a stray `*`/`-` never triggers.
+
+**Why the monolith owns the parse.** `BrowserUI` already depends on `ChatRichTextEditorComposer`, so neither the
+panel, the attachment screen, nor the `RichTextEditor` package may import it (cycle). The parse therefore lives in
+the `TelegramUI` monolith (the one layer that can import `BrowserUI` + `AccountContext`) and is **injected downward
+as a closure**. The `RichTextEditor` package stays markdown-free: it exposes a neutral
+`plainTextFragmentTransformer: ((String) -> Document?)?` it calls without knowing what markdown is.
+
+**Wiring.**
+- Chat composer: `ChatTextInputPanelNode.pastedMarkdownParser` (set at panel construction — `ChatControllerNode`
+  / `ChatInterfaceStateInputPanels`). It sets `ChatRichTextInputNode.pastedMarkdownFragmentParser` on the native
+  node (→ `RichTextEditorView.plainTextFragmentTransformer`), and in `chatInputTextNodeShouldPaste()` (legacy
+  field), **any** markdown latches to the native editor via `pasteRichFragmentFromPasteboard()`. So all markdown
+  paste — inline or structural, legacy-surface or native — flows through the native editor uniformly.
+- Article editor: `RichTextAttachmentScreen(pastedMarkdownParser:)` threads the closure to its `RichTextEditorView`.
+
+**Two-step undo (load-bearing).** The native paste (`DocumentCanvasView.pasteMarkdownTwoStep`) inserts the **raw
+markdown text** as step 1, then **replaces that range with the rich content** as step 2 — so one Cmd+Z / shake
+reverts rich → plain and a second removes it. Step 2 is deferred to the **next run-loop cycle** on purpose: the
+editor's private `UndoManager` uses the default `groupsByEvent`, which coalesces every registration made in one
+run-loop event into a single undo group, so a synchronous step 2 would collapse both into one undo. To avoid a
+visible flash of the raw markdown, step 1 sets `DocumentCanvasView.suppressHostChangeNotification`, which makes
+`notifyContentSizeChanged()` (gated at its definition — `setBlocks` calls it too, not just `editing {}`) and the
+`editing {}` trailing `refreshSelectionUI()`/`onSelectionChange()` no-op; the canvas has no `draw(_:)` and is
+parent-driven, so with the host un-notified the intermediate state neither lays out nor moves the caret. Step 2
+runs the normal, host-notifying edit, so only the rich result is drawn and the caret moves once (to its end).
+
+**Nested lists.** `chatInputBlocks(fromInstantPageBlocks:)` recurses into `InstantPageListItem.blocks` items — a
+list item that carries continuation paragraphs and/or a nested sub-list, which the markdown parser emits for an
+indented sub-list — preserving indent via `ChatInputListMembership.level` (mapped on to the editor's
+`ListMembership.level` by the bridge). Skipping `.blocks` used to silently drop a whole nested sub-list on paste.
+
+**Accepted limitation.** The ChatInputContent → InstantPage *forward* (send) still coalesces list items to a flat
+level (canonicalizes indent), so a pasted nested list **displays** nested in the composer/editor but may flatten
+when the message is sent — a separate send-path change.
+
+## 8. Accepted limitations & deferred work
 
 - **Cross-device collapsed-quote fidelity:** the MTProto `Api.RichMessage`/`InputRichMessage` has no `collapsed`
   flag, so the three model quote states collapse to one on the wire (`.quote(isCollapsed:false)` /
@@ -438,8 +548,13 @@ also called by the incremental `updateDraftMessage` path) + `_internal_applyFetc
 | markers (mention/date, code) | `TextFormat/.../MentionDateMarkers.swift`, `CodeBlockMarkers.swift` |
 | native node | `Chat/ChatRichTextEditorComposer/Sources/RichTextEditorChatInputNode.swift` |
 | panel (GET/SET, node select) | `Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` |
+| markdown-on-paste parse (monolith) | `TelegramUI/Sources/PastedMarkdownConversion.swift` |
+| markdown-on-paste gate | `TextFormat/Sources/PastedMarkdownGate.swift` (`+ Tests/PastedMarkdownGateTests.swift`) |
+| CommonMark → InstantPage (send + paste) | `BrowserUI/Sources/BrowserMarkdown.swift` (`inputRichTextAttributeFromText`) |
+| two-step paste + neutral transformer hook | `RichTextEditor/.../Canvas/DocumentCanvasView+Clipboard.swift` (`pasteMarkdownTwoStep`), `DocumentCanvasView.swift` (`plainTextFragmentTransformer`, `suppressHostChangeNotification`) |
 | state value-equality | `AccountContext/Sources/ChatController.swift` |
 | send / edit | `TelegramUI/Sources/ChatControllerNode.swift`, `Chat/ChatControllerLoadDisplayNode.swift` |
+| expanded-editor send-options | `RichTextAttachmentScreen/Sources/RichTextAttachmentScreen.swift`; callers `ChatControllerNode.swift` (`openExpandedInput`), `ChatControllerOpenAttachmentMenu.swift` (`.richText`) |
 | rich attribute + wire | `TelegramCore/Sources/SyncCore/SyncCore_RichTextMessageAttribute.swift` |
 | upload + assemble | `TelegramCore/Sources/PendingMessages/PendingMessageUploadedContent.swift` |
 | draft persistence | `TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift`, `ChatInterfaceState/Sources/ChatInterfaceState.swift` |

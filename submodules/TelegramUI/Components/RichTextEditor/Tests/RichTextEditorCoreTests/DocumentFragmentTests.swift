@@ -8,6 +8,21 @@ final class DocumentFragmentTests: XCTestCase {
     }
     func doc(_ blocks: Block...) -> Document { Document(blocks: blocks) }
 
+    func test_nearestTopLevelTextPosition_clampsOutOfRangeCaret_nilInsideRange() {
+        // "ab" paragraph: text occupies globals 1...3 (textStart 1, len 2).
+        let d = doc(para("p", "ab"))
+        XCTAssertEqual(d.nearestTopLevelTextPosition(to: 0), 1, "caret 0 (below first text start) → 1")
+        XCTAssertNil(d.nearestTopLevelTextPosition(to: 1), "caret already at a text locus → nil (no clamp)")
+        XCTAssertNil(d.nearestTopLevelTextPosition(to: 2), "interior caret → nil")
+        XCTAssertEqual(d.nearestTopLevelTextPosition(to: 99), 3, "caret past the last text end → clamps to it")
+
+        // A lone table has no top-level text block: every caret → nil (caller flattens).
+        let tableDoc = doc(.table(TableBlock(id: .generate(), columns: [ColumnSpec(width: 90)],
+            rows: [Row(id: .generate(), cells: [Cell(id: .generate(),
+                blocks: [.paragraph(ParagraphBlock(id: .generate(), runs: [TextRun(text: "x")]))])])])))
+        XCTAssertNil(tableDoc.nearestTopLevelTextPosition(to: 0))
+    }
+
     // Pasting a copied table must NOT reuse the source table's BlockIDs — block views are keyed by BlockID,
     // so a duplicate-ID paste steals the original's view and the original table disappears. `regeneratingIDs`
     // (used by every paste via `insertingFragment`) must therefore recurse into tables: table + rows + cells +
@@ -707,5 +722,20 @@ final class DocumentFragmentTests: XCTestCase {
         let size = DocumentTree.documentSize(d)
         let (out, _) = d.replacingRange(globalFrom: 0, globalTo: size, with: doc(para("n", "New")))
         XCTAssertEqual(texts(out), ["New"])
+    }
+
+    func test_regeneratingIDs_preservesPerCellHeaderAndAlignment() {
+        var h = Cell(id: BlockID("a"), blocks: [.paragraph(ParagraphBlock(id: BlockID("ap")))],
+                     horizontalAlignment: .right, verticalAlignment: .bottom)
+        h.isHeader = true
+        let body = Cell(id: BlockID("b"), blocks: [.paragraph(ParagraphBlock(id: BlockID("bp")))])
+        let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 100), ColumnSpec(width: 100)],
+                               rows: [Row(id: BlockID("r"), cells: [h, body])])
+        let regen = Document(blocks: [.table(table)]).regeneratingTopLevelIDs()
+        guard case .table(let out) = regen.blocks[0] else { return XCTFail() }
+        XCTAssertTrue(out.rows[0].cells[0].isHeader)
+        XCTAssertEqual(out.rows[0].cells[0].horizontalAlignment, .right)
+        XCTAssertEqual(out.rows[0].cells[0].verticalAlignment, .bottom)
+        XCTAssertFalse(out.rows[0].cells[1].isHeader)
     }
 }

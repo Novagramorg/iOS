@@ -91,7 +91,9 @@ func makeMediaWrapper(
     renderContext: InstantPageV2RenderContext,
     theme: InstantPageTheme,
     openMedia: @escaping (InstantPageMedia) -> Void,
-    longPressMedia: @escaping (InstantPageMedia) -> Void
+    longPressMedia: @escaping (InstantPageMedia) -> Void,
+    emptyColor: UIColor? = nil,
+    fit: Bool = false
 ) -> InstantPageImageNode {
     let imageNode = InstantPageImageNode(
         context: renderContext.context,
@@ -102,7 +104,7 @@ func makeMediaWrapper(
         attributes: attributes,
         interactive: true,
         roundCorners: false,
-        fit: false,
+        fit: fit,
         openMedia: openMedia,
         longPressMedia: longPressMedia,
         activatePinchPreview: nil,
@@ -111,6 +113,7 @@ func makeMediaWrapper(
         fileReferenceForMedia: renderContext.fileReference,
         autoDownloadImage: renderContext.shouldAutoDownloadImage,
         autoDownloadFile: renderContext.shouldAutoDownloadFile,
+        emptyColor: emptyColor,
         getPreloadedResource: { _ in nil }
     )
     imageNode.frame = CGRect(origin: .zero, size: frame.size)
@@ -207,7 +210,8 @@ final class InstantPageV2MediaImageView: UIView, InstantPageItemView {
             renderContext: renderContext,
             theme: theme,
             openMedia: openMedia,
-            longPressMedia: { _ in }
+            longPressMedia: { _ in },
+            fit: item.fit
         )
 
         super.init(frame: item.frame)
@@ -239,11 +243,19 @@ final class InstantPageV2MediaImageView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaImageItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
+        let previousMediaId = self.item.media.media.id
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        // On the Local→Cloud send flip the media id changes but the view is reused (see the
+        // rich-bubble "Send-time media continuity" doc). Re-point the wrapped node's interactive
+        // bindings at the Cloud media so tap-to-open works without a rebuild; the image is not
+        // reloaded (no blink).
+        if item.media.media.id != previousMediaId {
+            self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+        }
         self.updateSpoiler(renderContext: renderContext)
     }
 
@@ -323,7 +335,8 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
             renderContext: renderContext,
             theme: theme,
             openMedia: openMedia,
-            longPressMedia: { _ in }
+            longPressMedia: { _ in },
+            fit: item.fit
         )
 
         super.init(frame: item.frame)
@@ -357,11 +370,18 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaVideoItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
+        let previousMediaId = self.item.media.media.id
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        // See the image view: refresh the poster node's `self.media` identity on the Local→Cloud
+        // send flip so the gallery centralIndex match (and transitionNode) use the Cloud media. The
+        // inline video node is rebuilt separately below (keyed by media id).
+        if item.media.media.id != previousMediaId {
+            self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+        }
         self.updateSpoiler(renderContext: renderContext)
         self.updateInlineVideo(renderContext: renderContext)
     }
@@ -592,11 +612,16 @@ final class InstantPageV2MediaCoverImageView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaCoverImageItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
+        let previousMediaId = self.item.media.media.id
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        // See the image view: refresh interactive bindings on the Local→Cloud send media-id flip.
+        if item.media.media.id != previousMediaId {
+            self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+        }
     }
 
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {

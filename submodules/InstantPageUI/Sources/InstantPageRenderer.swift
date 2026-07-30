@@ -36,7 +36,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame, inlineButton, buttonRow
 }
 
 // MARK: - Render context
@@ -53,8 +53,8 @@ public final class InstantPageV2RenderContext {
     public let context: AccountContext
     public private(set) var webpage: TelegramMediaWebpage
     public let sourceLocation: InstantPageSourceLocation
-    public let imageReference: (TelegramMediaImage) -> ImageMediaReference
-    public let fileReference: (TelegramMediaFile) -> FileMediaReference
+    public private(set) var imageReference: (TelegramMediaImage) -> ImageMediaReference
+    public private(set) var fileReference: (TelegramMediaFile) -> FileMediaReference
     public let present: (ViewController, Any?) -> Void
     public let push: (ViewController) -> Void
     public let openUrl: (InstantPageUrlItem) -> Void
@@ -63,7 +63,7 @@ public final class InstantPageV2RenderContext {
     /// key audio playback per message (`.richMessage(message.id)`) AND to fetch audio files via a
     /// message reference (so a stale file reference can revalidate); `nil` in the send preview,
     /// which falls back to the webpage-keyed playlist id + webpage file reference.
-    public let message: MessageReference?
+    public private(set) var message: MessageReference?
     /// Per-media auto-download decision for a photo, computed by the host (chat bubble) from the
     /// message's download settings. Default `{ _ in false }` — V1/web-IV and the send preview keep
     /// their existing behavior (the node's own global-settings gate). See the video/autodownload spec.
@@ -104,13 +104,30 @@ public final class InstantPageV2RenderContext {
         self.shouldAutoplayVideo = shouldAutoplayVideo
     }
 
-    /// Update the content-bearing fields for a later chunk of the SAME message. Enables the
-    /// streaming bubble to reuse one V2View across `stableVersion` bumps instead of rebuilding.
-    /// Only `webpage` changes across chunks; the `imageReference`/`fileReference` closures keep
-    /// their construction-time `MessageReference` snapshot, which is acceptable because the message
-    /// id is stable across chunks (media resolves by id) and streamed AI content carries no media.
+    /// Update the content-bearing webpage for a later chunk of the SAME message with the SAME
+    /// server id (streamed AI `stableVersion` bumps). The `imageReference`/`fileReference`/`message`
+    /// snapshot is intentionally NOT refreshed here: the message id is stable across chunks (media
+    /// resolves by id) and streamed AI content carries no media. For the Local→Cloud send transition
+    /// (same stableId, NEW id, real media) use `updateContent(webpage:message:imageReference:fileReference:)`.
     public func updateContent(webpage: TelegramMediaWebpage) {
         self.webpage = webpage
+    }
+
+    /// Refresh content AND the message-scoped references when the SAME logical message (same
+    /// `stableId`) transitions to a new server id (Local→Cloud on send). Already-built media item
+    /// VIEWS keep their construction-time (local) reference — their bytes are already local
+    /// (`ApplyUpdateMessage` moved them), so the poster does not reload — but LIVE reads (inline
+    /// video content-id/fetch, audio playlist key/fetch, gallery) now use the Cloud reference.
+    public func updateContent(
+        webpage: TelegramMediaWebpage,
+        message: MessageReference?,
+        imageReference: @escaping (TelegramMediaImage) -> ImageMediaReference,
+        fileReference: @escaping (TelegramMediaFile) -> FileMediaReference
+    ) {
+        self.webpage = webpage
+        self.message = message
+        self.imageReference = imageReference
+        self.fileReference = fileReference
     }
 }
 
@@ -156,6 +173,13 @@ public final class InstantPageV2View: UIView {
 
     /// Invoked when a details title is tapped. Bubble routes to its expand-state mutation + requestUpdate.
     public var detailsTapped: ((_ index: Int) -> Void)?
+    /// Fired when an interactive checklist checkbox is tapped. `path` is the marker's
+    /// structural path (see InstantPage.togglingCheckbox); `newValue` is the toggled state.
+    public var checkboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
+
+    /// Fired when an InstantPage button is tapped — an inline `RichText.textButton` or a member of a
+    /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch.
+    public var buttonTapped: ((InstantPageButton) -> Void)?
 
     var itemViews: [InstantPageItemView] = []
     private var itemViewStableIds: [InstantPageV2StableItemId] = []
@@ -668,7 +692,7 @@ public final class InstantPageV2View: UIView {
             return v
         case let .listMarker(marker):
             guard let v = existingView as? InstantPageV2ListMarkerView else { return nil }
-            v.update(item: marker, theme: theme)
+            v.update(item: marker, theme: theme, interactive: self.checkboxTapped != nil)
             return v
         case let .blockQuoteBar(bar):
             guard let v = existingView as? InstantPageV2BlockQuoteBarView else { return nil }
@@ -706,6 +730,22 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2FormulaView else { return nil }
             v.update(item: formula, theme: theme)
             return v
+        case let .inlineButton(button):
+            guard let v = existingView as? InstantPageV2InlineButtonView else { return nil }
+            v.update(item: button, theme: theme)
+            // Re-wire on reuse: the closure captures self, and a reused view may have been created
+            // against a previous InstantPageV2View.
+            v.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return v
+        case let .buttonRow(row):
+            guard let v = existingView as? InstantPageV2ButtonRowView else { return nil }
+            v.update(item: row, theme: theme)
+            v.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return v
         case let .mediaImage(media):
             guard let v = existingView as? InstantPageV2MediaImageView, let rc = self.renderContext else { return nil }
             v.update(item: media, theme: theme, renderContext: rc)
@@ -726,6 +766,10 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2MediaAudioView, let rc = self.renderContext else { return nil }
             v.update(item: media, theme: theme, renderContext: rc)
             return v
+        case let .document(document):
+            guard let v = existingView as? InstantPageV2DocumentView, let rc = self.renderContext else { return nil }
+            v.update(item: document, theme: theme, renderContext: rc)
+            return v
         case let .thinking(thinking):
             guard let v = existingView as? InstantPageV2ThinkingView else { return nil }
             v.update(item: thinking, theme: theme)
@@ -744,6 +788,7 @@ public final class InstantPageV2View: UIView {
         case let .mediaMap(m):         return .media(m.media.index)
         case let .mediaCoverImage(m):  return .media(m.media.index)
         case let .mediaAudio(m):       return .media(m.media.index)
+        case let .document(d):         return .media(d.media.index)
         case let .details(d):          return .details(d.index)
         case .text:                    return .positional(.text, position)
         case .codeBlock:               return .positional(.codeBlock, position)
@@ -757,6 +802,8 @@ public final class InstantPageV2View: UIView {
         case .table:                   return .positional(.table, position)
         case .anchor:                  return .positional(.anchor, position)
         case .formula:                 return .positional(.formula, position)
+        case .inlineButton:            return .positional(.inlineButton, position)
+        case .buttonRow:               return .positional(.buttonRow, position)
         case .thinking:                return .thinking(position)
         case .slideshow:               return .positional(.slideshow, position)
         }
@@ -806,7 +853,12 @@ public final class InstantPageV2View: UIView {
         case let .anchor(anchor):
             return InstantPageV2AnchorView(item: anchor, theme: theme)
         case let .listMarker(marker):
-            return InstantPageV2ListMarkerView(item: marker, theme: theme)
+            let view = InstantPageV2ListMarkerView(item: marker, theme: theme)
+            view.onCheckboxTapped = { [weak self] path, newValue in
+                self?.checkboxTapped?(path, newValue)
+            }
+            view.update(item: marker, theme: theme, interactive: self.checkboxTapped != nil)
+            return view
         case let .codeBlock(block):
             return InstantPageV2CodeBlockView(item: block, theme: theme)
         case let .blockQuoteBar(bar):
@@ -857,8 +909,26 @@ public final class InstantPageV2View: UIView {
             } else {
                 return InstantPageV2MediaPlaceholderView(item: InstantPageV2MediaPlaceholderItem(frame: media.frame, kind: .audio, cornerRadius: 0.0), theme: theme)
             }
+        case let .document(document):
+            if let renderContext = self.renderContext {
+                return InstantPageV2DocumentView(item: document, renderContext: renderContext, theme: theme)
+            } else {
+                return InstantPageV2MediaPlaceholderView(item: InstantPageV2MediaPlaceholderItem(frame: document.frame, kind: .audio, cornerRadius: 0.0), theme: theme)
+            }
         case let .formula(formula):
             return InstantPageV2FormulaView(item: formula, theme: theme)
+        case let .inlineButton(button):
+            let view = InstantPageV2InlineButtonView(item: button, theme: theme)
+            view.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return view
+        case let .buttonRow(row):
+            let view = InstantPageV2ButtonRowView(item: row, theme: theme)
+            view.onButtonTapped = { [weak self] button in
+                self?.buttonTapped?(button)
+            }
+            return view
         case let .thinking(thinking):
             return InstantPageV2ThinkingView(item: thinking, theme: theme)
         case let .slideshow(slideshow):
@@ -1595,21 +1665,63 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2ListMarkerItem
     var itemFrame: CGRect { return self.item.frame }
 
+    /// Fired on tap of an interactive checkbox: (path, newValue).
+    var onCheckboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
+
+    private var checkNode: CheckNode?
+    private var tapRecognizer: UITapGestureRecognizer?
+    private var interactive: Bool = false
+
     init(item: InstantPageV2ListMarkerItem, theme: InstantPageTheme) {
         self.item = item
         super.init(frame: item.frame)
         self.backgroundColor = .clear   // structural
         self.isOpaque = false           // structural
-        self.update(item: item, theme: theme)
+        self.update(item: item, theme: theme, interactive: false)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(item: InstantPageV2ListMarkerItem, theme: InstantPageTheme) {
+    func update(item: InstantPageV2ListMarkerItem, theme: InstantPageTheme, interactive: Bool) {
         let _ = theme
         self.item = item
+        self.interactive = interactive
         self.rebuildContents()
+        self.updateInteractivity()
+    }
+
+    /// Whether this marker is an interactive checkbox (has a path and interactivity is enabled).
+    private var isInteractiveCheckbox: Bool {
+        if case .checklist = self.item.kind, self.interactive, self.item.checkboxPath != nil {
+            return true
+        }
+        return false
+    }
+
+    private func updateInteractivity() {
+        let shouldBeInteractive = self.isInteractiveCheckbox
+        self.isUserInteractionEnabled = shouldBeInteractive
+        if shouldBeInteractive {
+            if self.tapRecognizer == nil {
+                let recognizer = UITapGestureRecognizer(target: self, action: #selector(self.handleTap))
+                self.addGestureRecognizer(recognizer)
+                self.tapRecognizer = recognizer
+            }
+        } else if let recognizer = self.tapRecognizer {
+            self.removeGestureRecognizer(recognizer)
+            self.tapRecognizer = nil
+        }
+    }
+
+    @objc private func handleTap() {
+        guard case let .checklist(checked, _) = self.item.kind, let path = self.item.checkboxPath else {
+            return
+        }
+        let newValue = !checked
+        // Optimistic visual flip; the model re-render supersedes (or reverts) this.
+        self.checkNode?.setSelected(newValue, animated: true)
+        self.onCheckboxTapped?(path, newValue)
     }
 
     private func rebuildContents() {
@@ -1621,6 +1733,7 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
                 sublayer.removeFromSuperlayer()
             }
         }
+        self.checkNode = nil
 
         let item = self.item
         switch item.kind {
@@ -1659,6 +1772,7 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
             checkNode.frame = CGRect(origin: .zero, size: item.frame.size)
             checkNode.setSelected(checked, animated: false)
             self.addSubview(checkNode.view)
+            self.checkNode = checkNode
         }
     }
 }
@@ -1892,7 +2006,7 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         )
         self.titleTextView.update(item: titleV2Item, theme: theme)
 
-        self.chevronView.tintColor = theme.secondaryControlColor
+        self.chevronView.tintColor = theme.textCategories.paragraph.color
         let chevronSize = CGSize(width: 18.0, height: 18.0)
         self.chevronView.bounds = CGRect(origin: .zero, size: chevronSize)
         self.chevronView.center = CGPoint(
@@ -2152,7 +2266,6 @@ final class InstantPageV2TableView: UIView, InstantPageItemView {
         self.scrollView.alwaysBounceHorizontal = false
         self.scrollView.alwaysBounceVertical = false
         self.scrollView.showsVerticalScrollIndicator = false
-        self.scrollView.disablesInteractiveTransitionGestureRecognizer = true
         self.addSubview(self.scrollView)
         self.scrollView.addSubview(self.contentView)
 
@@ -2197,6 +2310,7 @@ final class InstantPageV2TableView: UIView, InstantPageItemView {
 
         self.scrollView.frame = CGRect(origin: .zero, size: item.frame.size)
         self.scrollView.contentSize = CGSize(width: item.contentSize.width + item.contentInset * 2.0, height: item.contentSize.height)
+        self.scrollView.disablesInteractiveTransitionGestureRecognizer = self.scrollView.contentSize.width > item.frame.width
         self.scrollView.showsHorizontalScrollIndicator = item.contentSize.width + item.contentInset * 2.0 > item.frame.width
         self.contentView.frame = CGRect(x: item.contentInset, y: 0.0, width: item.contentSize.width, height: item.contentSize.height)
 

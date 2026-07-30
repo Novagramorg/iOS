@@ -22,8 +22,11 @@ import TelegramCore
 import CheckNode
 import GlassControls
 import ChatRichTextEditorComposer
+import ChatTextLinkEditUI
 import TextFormat
 import UndoUI
+import SwiftSignalKit
+import ChatSendMessageActionUI
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -50,20 +53,30 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
 
 private final class RichTextSendButtonComponent: Component {
     let theme: PresentationTheme
+    let isEnabled: Bool
     let isLocked: Bool
     let action: () -> Void
+    let longPressAction: (() -> Void)?
 
-    init(theme: PresentationTheme, isLocked: Bool, action: @escaping () -> Void) {
+    init(theme: PresentationTheme, isEnabled: Bool, isLocked: Bool, action: @escaping () -> Void, longPressAction: (() -> Void)?) {
         self.theme = theme
+        self.isEnabled = isEnabled
         self.isLocked = isLocked
         self.action = action
+        self.longPressAction = longPressAction
     }
 
     static func ==(lhs: RichTextSendButtonComponent, rhs: RichTextSendButtonComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
         }
+        if lhs.isEnabled != rhs.isEnabled {
+            return false
+        }
         if lhs.isLocked != rhs.isLocked {
+            return false
+        }
+        if (lhs.longPressAction == nil) != (rhs.longPressAction == nil) {
             return false
         }
         return true
@@ -75,6 +88,7 @@ private final class RichTextSendButtonComponent: Component {
         private let buttonCutoutMaskView = UIImageView()
         private let lockBackgroundView = GlassBackgroundView()
         private let lockIconView = UIImageView()
+        private var longPressGestureRecognizer: UILongPressGestureRecognizer?
 
         private var component: RichTextSendButtonComponent?
 
@@ -90,23 +104,35 @@ private final class RichTextSendButtonComponent: Component {
             super.init(frame: frame)
 
             self.clipsToBounds = false
+            let longPressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:)))
+            longPressGestureRecognizer.isEnabled = false
+            self.longPressGestureRecognizer = longPressGestureRecognizer
+            self.addGestureRecognizer(longPressGestureRecognizer)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
+        @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, let component = self.component else {
+                return
+            }
+            component.longPressAction?()
+        }
+
         func update(component: RichTextSendButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
+            self.longPressGestureRecognizer?.isEnabled = component.longPressAction != nil
 
             let buttonSize = self.button.update(
                 transition: transition,
                 component: AnyComponent(GlassControlGroupComponent(
                     theme: component.theme,
                     preferClearGlass: false,
-                    background: .activeTint(inset: false),
+                    background: component.isEnabled ? .activeTint(inset: false) : .color(component.theme.chat.inputPanel.panelControlDisabledColor),
                     items: [
-                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: component.action)
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: component.isEnabled ? component.action : nil)
                     ],
                     minWidth: 44.0
                 )),
@@ -213,11 +239,54 @@ private final class RichTextSendButtonComponent: Component {
     }
 }
 
+public final class RichTextAttachmentScreenSendContextActions {
+    public let peerId: EnginePeer.Id
+    public let send: (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendMode, ChatSendMessageActionSheetController.SendParameters?) -> Void
+    public let schedule: (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendParameters?) -> Void
+
+    public init(
+        peerId: EnginePeer.Id,
+        send: @escaping (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendMode, ChatSendMessageActionSheetController.SendParameters?) -> Void,
+        schedule: @escaping (RichTextAttachmentScreen.Document, [String: Media], [Int64: TelegramMediaFile], Bool, ChatSendMessageActionSheetController.SendParameters?) -> Void
+    ) {
+        self.peerId = peerId
+        self.send = send
+        self.schedule = schedule
+    }
+}
+
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
+    public typealias Document = RichTextEditorCoreDocument
+    
+    public enum Mode {
+        case standalone(savedDraft: Document?, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile])
+        case edit(initialDocument: Document?, media: [String: Media], emojiFiles: [Int64: TelegramMediaFile])
+    }
+    
     public enum RichTextAttachment {
         case image(ImageMediaReference)
         case file(FileMediaReference)
         case location(TelegramMediaMap)
+    }
+    
+    public struct MediaRequest {
+        public struct ImageOrVideo {
+            public let limit: Int
+            
+            public init(limit: Int) {
+                self.limit = limit
+            }
+        }
+        
+        public let imageOrVideo: ImageOrVideo?
+        public let music: Bool
+        public let location: Bool
+        
+        public init(imageOrVideo: ImageOrVideo?, music: Bool, location: Bool) {
+            self.imageOrVideo = imageOrVideo
+            self.music = music
+            self.location = location
+        }
     }
     
     public var requestAttachmentMenuExpansion: () -> Void = {}
@@ -244,26 +313,25 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     private let context: AccountContext
     private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void
     private let syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)?
+    private let sendContextActions: RichTextAttachmentScreenSendContextActions?
 
     public convenience init(
         context: AccountContext,
-        initialContents: Document? = nil,
-        initialMedia: [String: Media] = [:],
-        initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
+        mode: Mode,
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
-        presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
+        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
         self.init(
             context: context,
-            initialContents: initialContents,
-            initialMedia: initialMedia,
-            initialEmojiFiles: initialEmojiFiles,
+            mode: mode,
             sendMessage: { document, media, emojiFiles, _ in
                 sendMessage(document, media, emojiFiles)
             },
             syncContent: syncContent,
+            sendContextActions: sendContextActions,
             presentAttachmentMenu: presentAttachmentMenu,
             presentFormulaEditor: presentFormulaEditor
         )
@@ -271,28 +339,29 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     public init(
         context: AccountContext,
-        initialContents: Document? = nil,
-        initialMedia: [String: Media] = [:],
-        initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
+        mode: Mode,
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
-        presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
-        presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
+        sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
+        presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
+        presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?,
+        pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)? = nil
     ) {
         self.context = context
         self.sendMessage = sendMessage
         self.syncContent = syncContent
+        self.sendContextActions = sendContextActions
 
         let overNavigationContainer = SparseContainerView()
 
         super.init(context: context, component: RichTextAttachmentScreenComponent(
             context: context,
-            initialContents: initialContents,
-            initialMedia: initialMedia,
-            initialEmojiFiles: initialEmojiFiles,
+            mode: mode,
+            sendContextActions: sendContextActions,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu,
-            presentFormulaEditor: presentFormulaEditor
+            presentFormulaEditor: presentFormulaEditor,
+            pastedMarkdownParser: pastedMarkdownParser
         ), navigationBarAppearance: .transparent, theme: .default)
 
         self._hasGlassStyle = true
@@ -316,6 +385,13 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    public func resetForReuse() {
+        guard let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+            return
+        }
+        syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
     }
     
     fileprivate func donePressed() {
@@ -366,6 +442,110 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         self.dismiss()
     }
+
+    fileprivate func displayLongPressSendMenu(sourceSendButton: UIView) {
+        guard let sendContextActions = self.sendContextActions else {
+            return
+        }
+        let context = self.context
+        Task { @MainActor [weak self, weak sourceSendButton] in
+            guard let self, let sourceSendButton else {
+                return
+            }
+            let peerId = sendContextActions.peerId
+            let previousSupportedOrientations = self.supportedOrientations
+
+            let availableMessageEffects = await (context.availableMessageEffects |> take(1)).get()
+            let hasPremium = await (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+            |> map { peer -> Bool in
+                guard case let .user(user) = peer else {
+                    return false
+                }
+                return user.isPremium
+            }).get()
+
+            let peerStatus = await (context.engine.data.get(
+                TelegramEngine.EngineData.Item.Peer.Presence(id: peerId)
+            )).get()
+            guard let peer = await (context.engine.data.get(
+                TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
+            )).get() else {
+                return
+            }
+
+            let initialData = await ChatSendMessageContextScreen.initialData(context: context, currentMessageEffectId: nil).get()
+
+            var sendWhenOnlineAvailable = false
+            if let peerStatus, case let .present(until) = peerStatus.status {
+                let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                if currentTime > until {
+                    sendWhenOnlineAvailable = true
+                }
+            }
+            if peerId.namespace == Namespaces.Peer.CloudUser && peerId.id._internalGetInt64Value() == 777000 {
+                sendWhenOnlineAvailable = false
+            }
+
+            let messageActionsController = makeChatSendMessageActionSheetController(
+                initialData: initialData,
+                context: context,
+                updatedPresentationData: nil,
+                peerId: peerId,
+                params: .sendMessage(SendMessageActionSheetControllerParams.SendMessage(
+                    isScheduledMessages: false,
+                    mediaPreview: nil,
+                    mediaCaptionIsAbove: nil,
+                    messageEffect: (nil, { _ in }),
+                    attachment: false,
+                    canSendWhenOnline: sendWhenOnlineAvailable,
+                    forwardMessageIds: [],
+                    canMakePaidContent: false,
+                    currentPrice: nil,
+                    hasTimers: false,
+                    sendPaidMessageStars: nil,
+                    isMonoforum: peer.isMonoForum
+                )),
+                hasEntityKeyboard: false,
+                gesture: nil,
+                sourceSendButton: sourceSendButton,
+                textInputSource: nil,
+                emojiViewProvider: nil,
+                completion: { [weak self] in
+                    self?.supportedOrientations = previousSupportedOrientations
+                },
+                sendMessage: { [weak self] mode, parameters in
+                    guard let self, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+                        return
+                    }
+                    sendContextActions.send(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, false, mode, parameters)
+                    self.dismiss()
+                },
+                schedule: { [weak self] params in
+                    guard let self, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+                        return
+                    }
+                    sendContextActions.schedule(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, false, params)
+                    self.dismiss()
+                },
+                editPrice: { _ in
+                },
+                openPremiumPaywall: { [weak self] c in
+                    guard let self else {
+                        return
+                    }
+                    if let parentController = self.parentController() {
+                        parentController.push(c)
+                    } else {
+                        self.push(c)
+                    }
+                },
+                reactionItems: nil,
+                availableMessageEffects: availableMessageEffects,
+                isPremium: hasPremium
+            )
+            self.present(messageActionsController, in: .window(.root))
+        }
+    }
 }
 
 final class RichTextAttachmentScreenComponent: Component {
@@ -374,21 +554,21 @@ final class RichTextAttachmentScreenComponent: Component {
     // Held for the next step: the RichTextEditor demo will read context and add
     // its editor view into the View's content container.
     let context: AccountContext
-    let initialContents: Document?
-    let initialMedia: [String: Media]
-    let initialEmojiFiles: [Int64: TelegramMediaFile]
+    let mode: RichTextAttachmentScreen.Mode
+    let sendContextActions: RichTextAttachmentScreenSendContextActions?
     let overNavigationContainer: UIView
-    let presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
+    let presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
+    let pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?
 
-    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((_ photoVideoOnly: Bool, @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?, pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?) {
         self.context = context
-        self.initialContents = initialContents
-        self.initialMedia = initialMedia
-        self.initialEmojiFiles = initialEmojiFiles
+        self.mode = mode
+        self.sendContextActions = sendContextActions
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
         self.presentFormulaEditor = presentFormulaEditor
+        self.pastedMarkdownParser = pastedMarkdownParser
     }
 
     static func ==(lhs: RichTextAttachmentScreenComponent, rhs: RichTextAttachmentScreenComponent) -> Bool {
@@ -396,6 +576,7 @@ final class RichTextAttachmentScreenComponent: Component {
     }
 
     final class View: UIView {
+        private let navigationTapView: UIView
         private let title = ComponentView<Empty>()
         private let leftNavActionsBar = ComponentView<Empty>()
         private let rightNavActionsBar = ComponentView<Empty>()
@@ -438,6 +619,7 @@ final class RichTextAttachmentScreenComponent: Component {
         private let actionBar = ComponentView<Empty>()
         private let aiButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
+        private let sendButtonExtractedContainer = ContextExtractedContentContainingView()
 
         private var emojiKeyboard: RichTextEmojiKeyboardController?
         private var componentState: EmptyComponentState?
@@ -451,6 +633,8 @@ final class RichTextAttachmentScreenComponent: Component {
         private var appliedTheme: PresentationTheme?
 
         override init(frame: CGRect) {
+            self.navigationTapView = UIView()
+            
             super.init(frame: frame)
         }
 
@@ -473,89 +657,452 @@ final class RichTextAttachmentScreenComponent: Component {
         /// Picks one medium via the host attachment menu, registers its raw `Media` in `attachedMedia` (so the
         /// media-view provider can resolve it), and hands back the editor-facing `(mediaID, naturalSize, kind,
         /// caption)`. Callers decide what to do with it (insert a new block, or append to an existing one).
-        private func pickMedia(photoVideoOnly: Bool, completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
+        private func pickMedia(request: RichTextAttachmentScreen.MediaRequest, completion: @escaping (_ items: [(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun])]) -> Void) {
             guard let component = self.component else {
                 return
             }
-            component.presentAttachmentMenu?(photoVideoOnly, { [weak self] attachment in
+            component.presentAttachmentMenu?(request, { [weak self] attachments in
                 guard let self else {
                     return
                 }
-                let media: Media
-                let kind: MediaKind
-                let naturalSize: CGSize
-                switch attachment {
-                case let .image(imageReference):
-                    let image = imageReference.media
-                    media = image
-                    kind = .image
-                    naturalSize = image.representations.last?.dimensions.cgSize ?? CGSize(width: 1, height: 1)
-                case let .file(fileReference):
-                    let file = fileReference.media
-                    if file.isVideo {
-                        media = file
-                        kind = .video
-                        naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
-                    } else if file.isMusic || file.isVoice {
-                        // Audio (music from the Audio picker; voice only via edit round-trips). The block is a
-                        // fixed-height row, so naturalSize is ignored by MediaBlockBox — pass a 1x1 placeholder.
-                        media = file
-                        kind = .audio
-                        naturalSize = CGSize(width: 1.0, height: 1.0)
-                    } else {
-                        return   // unsupported document type
+                var results: [(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun])] = []
+                for attachment in attachments {
+                    let media: Media
+                    let kind: MediaKind
+                    let naturalSize: CGSize
+                    switch attachment {
+                    case let .image(imageReference):
+                        let image = imageReference.media
+                        media = image
+                        kind = .image
+                        naturalSize = image.representations.last?.dimensions.cgSize ?? CGSize(width: 1, height: 1)
+                    case let .file(fileReference):
+                        let file = fileReference.media
+                        if file.isVideo {
+                            media = file
+                            kind = .video
+                            naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                        } else if file.isMusic || file.isVoice {
+                            // Audio (music from the Audio picker; voice only via edit round-trips). The block is a
+                            // fixed-height row, so naturalSize is ignored by MediaBlockBox — pass a 1x1 placeholder.
+                            media = file
+                            kind = .audio
+                            naturalSize = CGSize(width: 1.0, height: 1.0)
+                        } else {
+                            continue   // unsupported document type
+                        }
+                    case let .location(map):
+                        // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
+                        // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained, since
+                        // the shared `media.id` path below can't key an id-less medium.
+                        let mediaID = "map:\(map.latitude):\(map.longitude)"
+                        self.attachedMedia[mediaID] = map
+                        let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
+                        results.append((mediaID, CGSize(width: 600.0, height: 300.0), .location, caption))
+                        continue
                     }
-                case let .location(map):
-                    // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
-                    // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained insert,
-                    // since the shared `media.id` path below can't key an id-less medium.
-                    let mediaID = "map:\(map.latitude):\(map.longitude)"
-                    self.attachedMedia[mediaID] = map
-                    let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
-                    completion(mediaID, CGSize(width: 600.0, height: 300.0), .location, caption)
-                    return
+                    guard let mediaId = media.id else { continue }
+                    let mediaID = "\(mediaId.namespace):\(mediaId.id)"
+                    self.attachedMedia[mediaID] = media
+                    results.append((mediaID, naturalSize, kind, []))
                 }
-                guard let mediaId = media.id else { return }
-                let mediaID = "\(mediaId.namespace):\(mediaId.id)"
-                self.attachedMedia[mediaID] = media
-                completion(mediaID, naturalSize, kind, [])
+                completion(results)
             })
         }
 
         private func presentImagePicker() {
-            self.pickMedia(photoVideoOnly: false) { [weak self] mediaID, naturalSize, kind, caption in
-                self?.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
+            self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
+                imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 10),
+                music: true,
+                location: true
+            )) { [weak self] items in
+                guard let self else { return }
+                if items.count == 1 {
+                    let item = items[0]
+                    self.editor.insertMedia(mediaID: item.mediaID, naturalSize: item.naturalSize, kind: item.kind, caption: item.caption)
+                } else if items.count >= 2 {
+                    // Multi-select only ever surfaces photos/videos (the gallery tab is the only
+                    // multiselect-enabled source; music/location are single). So a >=2 batch is always a
+                    // valid photo/video album -> one mosaic MediaBlock, inserted as one undo step.
+                    let mediaItems = items.map { item in
+                        MediaItem(
+                            mediaID: item.mediaID,
+                            kind: item.kind,
+                            naturalSize: Size2D(width: Double(item.naturalSize.width), height: Double(item.naturalSize.height))
+                        )
+                    }
+                    let block = MediaBlock(id: BlockID.generate(), items: mediaItems)
+                    self.editor.insertDocument(Document(blocks: [.media(block)]))
+                }
             }
         }
 
         private func presentLinkPrompt() {
-            guard let component = self.component else {
+            guard let component = self.component, let environment = self.environment,
+                  let controller = environment.controller() as? RichTextAttachmentScreen else {
                 return
             }
+
+            // Reuse the shared chat link-editing UI (title/selected-text label/URL field + webpage preview),
+            // reading the current selection + existing link from the editor's native API and applying the
+            // result back through it — mirrors the chat composer's `openLinkEditing` rich-text branch.
+            let selectedText = self.editor.selectedText()
+            let existingLink = self.editor.currentLink()
+
+            let linkController = chatTextLinkEditController(
+                context: component.context,
+                text: environment.strings.TextFormat_AddLinkText(selectedText).string,
+                link: existingLink,
+                apply: { [weak self] link, _ in
+                    guard let self, let link else { return }
+                    self.editor.becomeFirstResponder()
+                    if link.isEmpty {
+                        self.editor.removeLink()
+                    } else {
+                        self.editor.setLink(link)
+                    }
+                }
+            )
+            controller.present(linkController, in: .window(.root))
+        }
+
+        /// Presents the list-marker picker (None / Bullet / Numbered / Checklist), applying the choice to
+        /// the paragraphs the current caret or selection touches. Shared by the caret-case "add block"
+        /// bar and the text-only selection bar.
+        private func presentListMenu(from sourceView: UIView) {
+            guard let component = self.component, let environment = self.environment else {
+                return
+            }
+            guard let controller = environment.controller() as? RichTextAttachmentScreen else {
+                return
+            }
+
+            let current = self.editor.currentState().listMarker
+
+            var items: [ContextMenuItem] = []
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_None, icon: { theme in
+                UIImage()
+            }, additionalLeftIcon: { theme in
+                return current == nil ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(nil)
+            })))
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Bullet, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatBulletList"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: { theme in
+                return current == .bullet ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(.bullet)
+            })))
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Numbered, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatNumberList"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: { theme in
+                return current == .ordered ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(.ordered)
+            })))
+
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Checklist, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatChecklist"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: { theme in
+                return current == .checklist ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.setList(.checklist)
+            })))
+
+            // "Detail Block" — an INSERT action (no checkmark, unlike the marker toggles above): inserts a
+            // fresh, expanded folding block at the caret. Not premium-gated (matches its list-menu siblings).
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Detail, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Expand"), color: theme.contextMenu.primaryColor)
+            }, iconPosition: .left, action: { [weak self] _, f in
+                f(.default)
+                guard let self else {
+                    return
+                }
+                self.editor.insertDetailsBlock()
+            })))
+
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let contextController = makeContextController(
+                presentationData: presentationData,
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            )
+            (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+        }
+        
+        /// Normalizes the caret's / selection's paragraph(s) to plain body text, stripping any block
+        /// container they sit in: a code block or pull quote is toggled back to body paragraphs; a list
+        /// marker and every enclosing block-quote level are removed; a heading (or any other non-body
+        /// style) is down-converted. Backs the "Text" item in `presentAddMenu`.
+        private func convertToBodyText() {
+            let live = self.editor.currentState()
+            // Code blocks and pull quotes are standalone box types, each with its own toggle-off that
+            // splits back into body paragraphs — so they replace, rather than compose with, the steps below.
+            if live.isCodeBlock {
+                self.editor.makeCodeBlock()
+                return
+            }
+            if live.isPullQuote {
+                self.editor.makePullQuote()
+                return
+            }
+            // Unwrap every enclosing block-quote level FIRST: `setList` only mutates top-level boxes, so a
+            // quoted list item must be promoted to a top-level paragraph before its list marker can be cleared.
+            var guardCount = 0
+            while self.editor.currentState().blockQuoteDepth > 0 && guardCount < 32 {
+                self.editor.unwrapBlockQuoteLevel()
+                guardCount += 1
+            }
+            if self.editor.currentState().listMarker != nil {
+                self.editor.setList(nil)
+            }
+            self.editor.setParagraphStyle(.body)
+        }
+
+        /// When the editor is unfocused (no caret), an Add-menu format/insert action should target the END of
+        /// the document, not the default offset-0 start (which touches no paragraph, so the command no-ops).
+        /// Focuses the editor and drops the caret at the end so the following command applies there. No-op when
+        /// a caret already exists — the user's position is preserved.
+        private func focusEditorAtDocumentEndIfNeeded(hasCursor: Bool) {
+            guard !hasCursor else { return }
+            self.editor.becomeFirstResponder()
+            self.editor.moveCaretToDocumentEnd()
+        }
+
+        private func presentAddMenu(from sourceView: UIView) {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() as? RichTextAttachmentScreen else {
+                return
+            }
+
+            let editorState = self.editor.currentState()
+            // Captured at menu-open time (before presenting can change first-responder state): whether the user
+            // has a live caret. When false, the Add-menu actions target the document end instead of offset 0.
+            let hasCursor = viewTreeContainsFirstResponder(view: self.editor)
+
+            var items: [ContextMenuItem] = []
             
-            let existing = editor.currentLink()
-            let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
-            let alert = UIAlertController(title: strings.RichText_LinkTitle, message: strings.RichText_LinkText, preferredStyle: .alert)
-            alert.addTextField { tf in
-                tf.placeholder = "https://example.com"
-                tf.text = existing
-                tf.keyboardType = .URL
-                tf.autocapitalizationType = .none
-                tf.autocorrectionType = .no
+            if !editorState.hasSelection {
+                items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeading, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
+                }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                    return UIImage(bundleImageName: "Premium/ContextStar")
+                }, action: { [weak self] c, _ in
+                    guard let self, let environment = self.environment else {
+                        c?.dismiss(completion: nil)
+                        return
+                    }
+                    
+                    let live = self.editor.currentState()
+                    
+                    var subItems: [ContextMenuItem] = []
+                    subItems.append(.action(ContextMenuActionItem(text: environment.strings.ChatList_Context_Back, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                    }, iconPosition: .left, action: { c, _ in
+                        c?.popItems()
+                    })))
+                    subItems.append(.separator)
+                    for level in 0 ..< 6 {
+                        let fontSize: CGFloat
+                        switch level {
+                        case 0:
+                            fontSize = 24
+                        case 1:
+                            fontSize = 21
+                        case 2:
+                            fontSize = 19
+                        case 3:
+                            fontSize = 18
+                        case 4:
+                            fontSize = 17
+                        case 5:
+                            fontSize = 16
+                        default:
+                            fontSize = 24
+                        }
+                        
+                        let mappedStyle: ParagraphStyleName
+                        switch level {
+                        case 0:
+                            mappedStyle = .heading1
+                        case 1:
+                            mappedStyle = .heading2
+                        case 2:
+                            mappedStyle = .heading3
+                        case 3:
+                            mappedStyle = .heading4
+                        case 4:
+                            mappedStyle = .heading5
+                        case 5:
+                            mappedStyle = .heading6
+                        default:
+                            mappedStyle = .heading1
+                        }
+                        
+                        subItems.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeadingItem("\(level + 1)").string, textFont: .custom(font: Font.with(size: fontSize, design: .serif, weight: .semibold), height: nil, verticalOffset: nil), icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading\(level + 1)"), color: theme.contextMenu.primaryColor)
+                        }, additionalLeftIcon: { theme in
+                            return live.paragraphStyle == mappedStyle ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+                        }, iconPosition: .left, action: { [weak self] _, f in
+                            guard let self else {
+                                f(.default)
+                                return
+                            }
+
+                            if hasCursor {
+                                self.editor.setParagraphStyle(mappedStyle)
+                            } else {
+                                // No caret: append a NEW empty paragraph with this heading style at the end and
+                                // focus it, rather than converting an existing paragraph (a no-op at offset 0).
+                                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                                self.editor.insertDocument(Document(blocks: [.paragraph(ParagraphBlock(id: BlockID.generate(), style: mappedStyle))]))
+                            }
+
+                            f(.default)
+                        })))
+                    }
+                    c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+                })))
             }
-            alert.addAction(UIAlertAction(title: strings.RichText_LinkSet, style: .default) { [weak self, weak alert] _ in
-                guard let url = alert?.textFields?.first?.text, !url.isEmpty else { return }
-                self?.editor.becomeFirstResponder()
-                self?.editor.setLink(url)
-            })
-            if existing != nil {
-                alert.addAction(UIAlertAction(title: strings.RichText_LinkRemove, style: .destructive) { [weak self] _ in
-                    self?.editor.becomeFirstResponder()
-                    self?.editor.removeLink()
+            
+            // "Text" normalizes to a plain body paragraph. Offer it whenever there is no selection (so the
+            // caret's paragraph can always be reset — e.g. a heading down-converted), or when the selection
+            // is not already plain body text: it sits in a block container (quote / code / list / pull quote)
+            // or carries a non-body paragraph style (a heading). Tapping it strips that container/style.
+            let isPlainBody = !editorState.isCodeBlock
+                && !editorState.isPullQuote
+                && editorState.listMarker == nil
+                && editorState.blockQuoteDepth == 0
+                && (editorState.paragraphStyle == nil || editorState.paragraphStyle == .body)
+            if !editorState.hasSelection || !isPlainBody {
+                items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuText, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatText"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] c, _ in
+                    guard let self else {
+                        c?.dismiss(completion: nil)
+                        return
+                    }
+
+                    self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                    self.convertToBodyText()
+                    c?.dismiss(completion: nil)
+                })))
+            }
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuQuote, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatQuote"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                let live = self.editor.currentState()
+                if live.blockQuoteDepth > 0 {
+                    self.editor.unwrapBlockQuoteLevel()
+                } else {
+                    self.editor.wrapInBlockQuote()
+                }
+                c?.dismiss(completion: nil)
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuPullquote, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatPullquote"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                return UIImage(bundleImageName: "Premium/ContextStar")
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+                
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                let live = self.editor.currentState()
+                if live.blockQuoteDepth > 0 {
+                    self.editor.unwrapBlockQuoteLevel()
+                }
+                if live.isPullQuote {
+                } else {
+                    self.editor.makePullQuote()
+                }
+                c?.dismiss(completion: nil)
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuCode, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatCode"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                return UIImage(bundleImageName: "Premium/ContextStar")
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+                
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                let live = self.editor.currentState()
+                if live.blockQuoteDepth > 0 {
+                    self.editor.unwrapBlockQuoteLevel()
+                }
+                if live.isCodeBlock {
+                } else {
+                    self.editor.makeCodeBlock()
+                }
+                c?.dismiss(completion: nil)
+            })))
+            
+            items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuFormula, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
+            }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                return UIImage(bundleImageName: "Premium/ContextStar")
+            }, action: { [weak self] c, _ in
+                guard let self else {
+                    c?.dismiss(completion: nil)
+                    return
+                }
+
+                self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                self.component?.presentFormulaEditor?(nil, { [weak self] latex in
+                    guard let self else {
+                        return
+                    }
+                    self.editor.insertFormula(latex: latex)
+                    DispatchQueue.main.async { [weak self] in
+                        self?.editor.becomeFirstResponder()
+                    }
                 })
-            }
-            alert.addAction(UIAlertAction(title: strings.Common_Cancel, style: .cancel))
-            component.context.sharedContext.mainWindow?.presentNative(alert)
+                
+                c?.dismiss(completion: nil)
+            })))
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let contextController = makeContextController(
+                presentationData: presentationData,
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            )
+            (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
         }
 
         private func presentActionMenu(from sourceView: UIView, items: [ContextMenuItem]) {
@@ -632,31 +1179,8 @@ final class RichTextAttachmentScreenComponent: Component {
             defer { self.isUpdating = false }
 
             if self.component == nil {
-                /*let table = TableBlock(id: BlockID("t"),
-                    columns: [ColumnSpec(width: 140), ColumnSpec(width: 110), ColumnSpec(width: 110)],
-                    rows: [
-                        Row(id: BlockID("r0"), isHeader: true, cells: [textCell("h0", ["Name"]), textCell("h1", ["Mass (suns)"]), textCell("h2", ["Distance"])]),
-                        Row(id: BlockID("r1"), cells: [
-                            Cell(id: BlockID("c0"), blocks: [.paragraph(ParagraphBlock(id: BlockID("c0p"),
-                                runs: [TextRun(text: "Sagittarius A*")]))]),
-                            textCell("c1", ["4.3 M"]), textCell("c2", ["26,000 ly"])]),
-                        Row(id: BlockID("r2"), cells: [textCell("d0", ["M87*"]), textCell("d1", ["6.5 B"]), textCell("d2", ["53M ly"])]),
-                    ])
-                let wideTable = TableBlock(id: BlockID("wt"),
-                    columns: [ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100),
-                              ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100)],
-                    rows: [
-                        Row(id: BlockID("wr0"), isHeader: true, cells: [
-                            textCell("w00", ["Col 1"]), textCell("w01", ["Col 2"]), textCell("w02", ["Col 3"]),
-                            textCell("w03", ["Col 4"]), textCell("w04", ["Col 5"]), textCell("w05", ["Col 6"]),
-                            textCell("w06", ["Col 7"]),
-                        ]),
-                        Row(id: BlockID("wr1"), cells: [
-                            textCell("w10", ["A"]), textCell("w11", ["B"]), textCell("w12", ["C"]),
-                            textCell("w13", ["D"]), textCell("w14", ["E"]), textCell("w15", ["F"]),
-                            textCell("w16", ["G"]),
-                        ]),
-                    ])*/
+                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode, detailsTitle: environment.strings.RichText_PlaceholderDetailTitle)
+                
                 // The screen paints `list.plainBackgroundColor` (below); clear the editor's opaque default
                 // `.systemBackground` so that themed surface shows through.
                 editor.canvasBackgroundColor = .clear
@@ -677,6 +1201,18 @@ final class RichTextAttachmentScreenComponent: Component {
                 if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
                    let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
                     editor.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
+                }
+                // Detail-block fold chevron — the same vertical arrow the InstantPage V2 renderer uses.
+                editor.detailsChevronImage = UIImage(bundleImageName: "Item List/ExpandingItemVerticalRegularArrow")?.withRenderingMode(.alwaysTemplate)
+                // Markdown-on-paste: plain pasted text that parses as markdown with formatting/structure is
+                // spliced as rich content instead of literal text. The parser is injected by the host (only
+                // the monolith can reach the BrowserUI-backed markdown pipeline); nil falls back to the
+                // editor's built-in plain-text paste.
+                editor.plainTextFragmentTransformer = { [weak self] text in
+                    guard let self, let component = self.component, let parser = component.pastedMarkdownParser, let content = parser(component.context, text) else {
+                        return nil
+                    }
+                    return pasteFragmentDocument(fromChatInputContent: content)
                 }
                 // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-
                 // dismiss gestures. These Display flags can only be set host-side (the editor package can't
@@ -722,12 +1258,18 @@ final class RichTextAttachmentScreenComponent: Component {
                         }
                     case .add:
                         guard let addMore = request.addMore else { break }
-                        self.pickMedia(photoVideoOnly: true) { mediaID, naturalSize, kind, _ in
-                            guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
-                            addMore(mediaID, naturalSize, kind)
+                        self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
+                            imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
+                            music: false,
+                            location: false
+                        )) { items in
+                            guard let item = items.first, item.kind == .image || item.kind == .video else { return }   // mosaic is photo/video only
+                            addMore(item.mediaID, item.naturalSize, item.kind)
                         }
                     case .delete:
                         request.delete()
+                    case .toggleLayout:
+                        request.toggleLayout?()
                     }
                 }
                 editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
@@ -735,10 +1277,25 @@ final class RichTextAttachmentScreenComponent: Component {
                 editor.disablesInteractiveKeyboardGestureRecognizer = true
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
-                editor.document = component.initialContents ?? Document()
+                
+                var initialContents: Document?
+                var initialMedia: [String: Media] = [:]
+                var initialEmojiFiles: [Int64: TelegramMediaFile] = [:]
+                switch component.mode {
+                case let .edit(documentValue, mediaValue, emojiFilesValue):
+                    initialContents = documentValue
+                    initialMedia = mediaValue
+                    initialEmojiFiles = emojiFilesValue
+                case let .standalone(documentValue, mediaValue, emojiFilesValue):
+                    initialContents = documentValue
+                    initialMedia = mediaValue
+                    initialEmojiFiles = emojiFilesValue
+                }
+                
+                editor.document = initialContents ?? Document()
                 // Seed the picked-media store alongside the document (before the media-view provider runs)
                 // so any media referenced by the initial document resolves on first layout.
-                self.attachedMedia = component.initialMedia
+                self.attachedMedia = initialMedia
 
                 let emojiKeyboard = RichTextEmojiKeyboardController(context: component.context, editor: editor, requestLayout: { [weak self] in
                     guard let self, !self.isUpdating else { return }
@@ -748,7 +1305,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Seed the keyboard's file store with the files of any custom emoji the initial document
                 // references (the `Document` carries only fileIds) — before the editor's first layout, so a
                 // custom emoji carried in from the chat composer renders, and its file survives back out.
-                emojiKeyboard.seedEmojiFiles(component.initialEmojiFiles)
+                emojiKeyboard.seedEmojiFiles(initialEmojiFiles)
 
                 editor.registerEmojiViewProvider { [weak self] id, size in
                     return self?.emojiKeyboard?.customEmojiView(forId: id, size: size)
@@ -783,7 +1340,7 @@ final class RichTextAttachmentScreenComponent: Component {
                     })
                 }
 
-                editor.registerMediaViewProvider { [weak self] items, _, existing in
+                editor.registerMediaViewProvider { [weak self] items, _, displayMode, existing in
                     guard let self, let component = self.component else { return nil }
                     // Theme an audio row to the editor's accent/text scheme (same `list.item*` sources as
                     // `mapEditorTheme` / the table); ignored for image/map media.
@@ -802,10 +1359,10 @@ final class RichTextAttachmentScreenComponent: Component {
                     // In-place update: reuse the existing container (surviving photo/video cells keep their bound
                     // fetch, no re-flash) across add-more / delete-one; else build a fresh one.
                     if let view = existing as? MediaItemNodeView {
-                        view.updateResolvedItems(resolved)
+                        view.updateResolvedItems(resolved, displayMode: displayMode)
                         return view
                     }
-                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors)
+                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors, displayMode: displayMode)
                 }
 
                 // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette
@@ -861,6 +1418,11 @@ final class RichTextAttachmentScreenComponent: Component {
             
             let editorState = self.editor.currentState()
             
+            if self.navigationTapView.superview == nil {
+                component.overNavigationContainer.addSubview(self.navigationTapView)
+            }
+            transition.setFrame(view: self.navigationTapView, frame: CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: environment.navigationHeight)))
+            
             let leftNavActionsBarSize = self.leftNavActionsBar.update(
                 transition: transition,
                 component: AnyComponent(GlassControlGroupComponent(
@@ -913,7 +1475,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 transition.setFrame(view: rightNavActionsBarView, frame: rightNavActionsBarFrame)
             }
 
-            if component.initialContents == nil {
+            if case .standalone = component.mode {
                 let titleSize = self.title.update(
                     transition: .immediate,
                     component: AnyComponent(
@@ -990,270 +1552,37 @@ final class RichTextAttachmentScreenComponent: Component {
                     action: editorState.hasSelection ? { [weak self] _ in self?.presentLinkPrompt() } : nil,
                     isSelected: editorState.link != nil
                 ))
+                // A list/quote/etc. marker can only apply to paragraph text, so offer it only when the selection
+                // covers no media or table block (see `EditorState.selectionIsTextOnly`).
+                if editorState.selectionIsTextOnly {
+                    barActions.append(RichTextActionBarComponent.Action(
+                        id: AnyHashable("list"), icon: "RichText/ToolList",
+                        action: { [weak self] sourceView in self?.presentListMenu(from: sourceView) },
+                        isSelected: editorState.listMarker != nil,
+                        showsPremiumBadge: !component.context.isPremium
+                    ))
+                    
+                    barActions.append(RichTextActionBarComponent.Action(
+                        id: AnyHashable("quote"), icon: "RichText/ToolQuote",
+                        action: { [weak self] sourceView in self?.presentAddMenu(from: sourceView) },
+                        isSelected: editorState.listMarker != nil,
+                        showsPremiumBadge: !component.context.isPremium
+                    ))
+                }
             } else {
                 barActionsId = 0
                 
                 barActions.append(RichTextActionBarComponent.Action(
                     id: AnyHashable("add"), icon: "Chat/Context Menu/Add",
                     action: editorState.isInTable ? nil : { [weak self] sourceView in
-                        guard let self else {
-                            return
-                        }
-                        guard let controller = environment.controller() as? RichTextAttachmentScreen else {
-                            return
-                        }
-                        
-                        var items: [ContextMenuItem] = []
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeading, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self, let environment = self.environment else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            
-                            var subItems: [ContextMenuItem] = []
-                            subItems.append(.action(ContextMenuActionItem(text: environment.strings.ChatList_Context_Back, icon: { theme in
-                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
-                            }, iconPosition: .left, action: { c, _ in
-                                c?.popItems()
-                            })))
-                            subItems.append(.separator)
-                            for level in 0 ..< 6 {
-                                let fontSize: CGFloat
-                                switch level {
-                                case 0:
-                                    fontSize = 24
-                                case 1:
-                                    fontSize = 21
-                                case 2:
-                                    fontSize = 19
-                                case 3:
-                                    fontSize = 18
-                                case 4:
-                                    fontSize = 17
-                                case 5:
-                                    fontSize = 16
-                                default:
-                                    fontSize = 24
-                                }
-                                
-                                let mappedStyle: ParagraphStyleName
-                                switch level {
-                                case 0:
-                                    mappedStyle = .heading1
-                                case 1:
-                                    mappedStyle = .heading2
-                                case 2:
-                                    mappedStyle = .heading3
-                                case 3:
-                                    mappedStyle = .heading4
-                                case 4:
-                                    mappedStyle = .heading5
-                                case 5:
-                                    mappedStyle = .heading6
-                                default:
-                                    mappedStyle = .heading1
-                                }
-                                
-                                subItems.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuHeadingItem("\(level + 1)").string, textFont: .custom(font: Font.with(size: fontSize, design: .serif, weight: .semibold), height: nil, verticalOffset: nil), icon: { theme in
-                                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading\(level + 1)"), color: theme.contextMenu.primaryColor)
-                                }, additionalLeftIcon: { theme in
-                                    return live.paragraphStyle == mappedStyle ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                                }, iconPosition: .left, action: { [weak self] _, f in
-                                    guard let self else {
-                                        f(.default)
-                                        return
-                                    }
-                                    
-                                    self.editor.setParagraphStyle(mappedStyle)
-                                    
-                                    f(.default)
-                                })))
-                            }
-                            c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuText, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatText"), color: theme.contextMenu.primaryColor)
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            self.editor.setParagraphStyle(.body)
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuQuote, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatQuote"), color: theme.contextMenu.primaryColor)
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            if live.blockQuoteDepth > 0 {
-                                self.editor.unwrapBlockQuoteLevel()
-                            } else {
-                                self.editor.wrapInBlockQuote()
-                            }
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuPullquote, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatPullquote"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            if live.blockQuoteDepth > 0 {
-                                self.editor.unwrapBlockQuoteLevel()
-                            }
-                            if live.isPullQuote {
-                            } else {
-                                self.editor.makePullQuote()
-                            }
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuCode, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatCode"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            let live = self.editor.currentState()
-                            if live.blockQuoteDepth > 0 {
-                                self.editor.unwrapBlockQuoteLevel()
-                            }
-                            if live.isCodeBlock {
-                            } else {
-                                self.editor.makeCodeBlock()
-                            }
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuFormula, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
-                            return UIImage(bundleImageName: "Premium/ContextStar")
-                        }, action: { [weak self] c, _ in
-                            guard let self else {
-                                c?.dismiss(completion: nil)
-                                return
-                            }
-                            
-                            self.component?.presentFormulaEditor?(nil, { [weak self] latex in
-                                guard let self else {
-                                    return
-                                }
-                                self.editor.insertFormula(latex: latex)
-                                DispatchQueue.main.async { [weak self] in
-                                    self?.editor.becomeFirstResponder()
-                                }
-                            })
-                            
-                            c?.dismiss(completion: nil)
-                        })))
-                        
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                        let contextController = makeContextController(
-                            presentationData: presentationData,
-                            source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
-                            items: .single(ContextController.Items(content: .list(items))),
-                            gesture: nil
-                        )
-                        (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+                        self?.presentAddMenu(from: sourceView)
                     },
                     isSelected: false
                 ))
                 barActions.append(RichTextActionBarComponent.Action(
                     id: AnyHashable("list"), icon: "RichText/ToolList",
                     action: editorState.isInTable ? nil : { [weak self] sourceView in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        guard let controller = environment.controller() as? RichTextAttachmentScreen else {
-                            return
-                        }
-                        
-                        let current = self.editor.currentState().listMarker
-                        
-                        var items: [ContextMenuItem] = []
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_None, icon: { theme in
-                            UIImage()
-                        }, additionalLeftIcon: { theme in
-                            return current == nil ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(nil)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Bullet, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatBulletList"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { theme in
-                            return current == .bullet ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, iconPosition: .left, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(.bullet)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Numbered, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatNumberList"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { theme in
-                            return current == .ordered ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, iconPosition: .left, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(.ordered)
-                        })))
-                        
-                        items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_List_Checklist, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatChecklist"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { theme in
-                            return current == .checklist ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
-                        }, iconPosition: .left, action: { [weak self] _, f in
-                            f(.default)
-                            guard let self else {
-                                return
-                            }
-                            self.editor.setList(.checklist)
-                        })))
-                        
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                        let contextController = makeContextController(
-                            presentationData: presentationData,
-                            source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
-                            items: .single(ContextController.Items(content: .list(items))),
-                            gesture: nil
-                        )
-                        (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
+                        self?.presentListMenu(from: sourceView)
                     },
                     isSelected: false,
                     showsPremiumBadge: !component.context.isPremium
@@ -1276,6 +1605,9 @@ final class RichTextAttachmentScreenComponent: Component {
                                 f(.default); self?.editor.deleteTable()
                             })))
                         } else {
+                            // No caret: drop the table at the document end (become FR + caret to end), not at
+                            // the default offset-0 start. With a caret it inserts at the caret as before.
+                            self.focusEditorAtDocumentEndIfNeeded(hasCursor: viewTreeContainsFirstResponder(view: self.editor))
                             self.editor.insertTable(rows: 2, cols: 2)
                         }
                         self.presentActionMenu(from: sourceView, items: items)
@@ -1418,17 +1750,31 @@ final class RichTextAttachmentScreenComponent: Component {
                 containerSize: CGSize(width: 44.0, height: 44.0)
             )
             
+            var isSendEnabled = true
+            let content = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
+            if content.isEmptyWhitespaceTrimmed {
+                isSendEnabled = false
+            }
+            
+            let longPressSendAvailable = component.sendContextActions != nil && isSendEnabled && !isSendRichFormattingLocked
             let sendButtonSize = self.sendButton.update(
                 transition: transition,
                 component: AnyComponent(RichTextSendButtonComponent(
                     theme: environment.theme,
+                    isEnabled: isSendEnabled,
                     isLocked: isSendRichFormattingLocked,
                     action: { [weak self] in
                         guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
                             return
                         }
                         controller.donePressed()
-                    }
+                    },
+                    longPressAction: longPressSendAvailable ? { [weak self] in
+                        guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
+                            return
+                        }
+                        controller.displayLongPressSendMenu(sourceSendButton: self.sendButtonExtractedContainer)
+                    } : nil
                 )),
                 environment: {},
                 containerSize: CGSize(width: 44.0, height: 44.0)
@@ -1456,12 +1802,19 @@ final class RichTextAttachmentScreenComponent: Component {
             }
             
             let sendButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - (sideInset + environment.safeInsets.left) - sendButtonSize.width, y: availableSize.height - bottomInset - 6.0 - sendButtonSize.height), size: sendButtonSize)
+            if self.sendButtonExtractedContainer.superview == nil {
+                self.addSubview(self.sendButtonExtractedContainer)
+            }
             if let sendButtonView = self.sendButton.view {
                 if sendButtonView.superview == nil {
-                    self.addSubview(sendButtonView)
+                    self.sendButtonExtractedContainer.contentView.addSubview(sendButtonView)
                 }
-                transition.setFrame(view: sendButtonView, frame: sendButtonFrame)
+                sendButtonView.frame = CGRect(origin: CGPoint(), size: sendButtonFrame.size)
             }
+            transition.setPosition(view: self.sendButtonExtractedContainer, position: sendButtonFrame.center)
+            transition.setBounds(view: self.sendButtonExtractedContainer, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
+            transition.setPosition(view: self.sendButtonExtractedContainer.contentView, position: CGPoint(x: sendButtonFrame.width * 0.5, y: sendButtonFrame.height * 0.5))
+            transition.setBounds(view: self.sendButtonExtractedContainer.contentView, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
             
             let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + environment.safeInsets.left + aiButtonSize.width + actionBarSpacing, y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
             if let actionBarView = self.actionBar.view {
@@ -1476,7 +1829,7 @@ final class RichTextAttachmentScreenComponent: Component {
             // Only one of (system keyboard / emoji panel) is up at a time (the emoji panel uses an
             // EmptyInputView, so inputHeight ≈ 0 while it shows); the home-indicator safe area is the floor.
             _ = self.editor.update(size: editorFrame.size,
-                                   insets: UIEdgeInsets(top: editorTop, left: 0.0, bottom: bottomInset, right: 0.0),
+                                   insets: UIEdgeInsets(top: editorTop, left: 0.0, bottom: bottomInset + 16.0, right: 0.0),
                                    contentMargins: UIEdgeInsets(top: 12.0, left: 0.0, bottom: 12.0, right: 0.0))
 
             // Top edge effect (mirrors ComposePollScreen): a blurred gradient at the screen top that content

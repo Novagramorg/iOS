@@ -929,7 +929,7 @@ extension ChatControllerImpl {
                         let _ = options.insert(.PreferSynchronousResourceLoading)
 
                         var deleteItems = transition.deleteItems
-                        var insertItems: [ListViewInsertItem] = []
+                        var insertItems: [ChatHistoryListViewInsertItem] = []
                         var stationaryItemRange: (Int, Int)?
                         var scrollToItem: ListViewScrollToItem?
 
@@ -949,7 +949,7 @@ extension ChatControllerImpl {
                                     maxInsertedItem = item.index
                                 }
                                 insertedIndex = item.index
-                                insertItems.append(ListViewInsertItem(index: item.index, previousIndex: item.previousIndex, item: item.item, directionHint: item.directionHint == .Down ? .Up : nil))
+                                insertItems.append(ChatHistoryListViewInsertItem(index: item.index, previousIndex: item.previousIndex, stableId: item.stableId, item: item.item, directionHint: item.directionHint == .Down ? .Up : nil))
                             }
 
                             if isScheduledMessages, let insertedIndex {
@@ -987,7 +987,20 @@ extension ChatControllerImpl {
             guard let strongSelf = self else {
                 return
             }
-            
+
+            #if DEBUG
+            // Debug fixture, intercepted here rather than in ChatControllerImpl.sendMessages: typed
+            // input reaches THIS closure (via ChatControllerNode.sendCurrentMessage) and then goes
+            // straight to transformEnqueueMessages + enqueueMessages, never through that method.
+            // See ChatControllerSyntheticButtons.swift.
+            // The input field is already cleared by sendCurrentMessage before this closure runs, so
+            // returning early leaves the composer empty as expected.
+            if let peerId = strongSelf.chatLocation.peerId, strongSelf.isSyntheticButtonsCommand(messages) {
+                strongSelf.insertSyntheticButtonsMessage(peerId: peerId, threadId: strongSelf.chatLocation.threadId)
+                return
+            }
+            #endif
+
             var correlationIds: [Int64] = []
             for message in messages {
                 switch message {

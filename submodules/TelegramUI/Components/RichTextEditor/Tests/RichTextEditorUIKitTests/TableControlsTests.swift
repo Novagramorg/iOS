@@ -417,10 +417,12 @@ final class TableControlsTests: XCTestCase {
         v.selectTableColumn(1)
         let knobs = v.tableResizeKnobs()
         XCTAssertEqual(knobs.count, 2)
-        let outline = v.tableSelectionOutlineRect()!
+        // Knobs center on the outline STROKE's centerline (the raw rect inset by half the line width).
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
         let lower = knobs.first { $0.end == .lower }!.rect
         let upper = knobs.first { $0.end == .upper }!.rect
-        XCTAssertEqual(lower.midX, outline.minX, accuracy: 0.5)   // left edge
+        XCTAssertEqual(lower.midX, outline.minX, accuracy: 0.5)   // left edge (on the stroke line)
         XCTAssertEqual(upper.midX, outline.maxX, accuracy: 0.5)   // right edge
         XCTAssertEqual(lower.midY, outline.midY, accuracy: 0.5)
     }
@@ -430,8 +432,9 @@ final class TableControlsTests: XCTestCase {
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
         v.selectTableRow(1)
         let knobs = v.tableResizeKnobs()
-        let outline = v.tableSelectionOutlineRect()!
-        XCTAssertEqual(knobs.first { $0.end == .lower }!.rect.midY, outline.minY, accuracy: 0.5)   // top
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
+        XCTAssertEqual(knobs.first { $0.end == .lower }!.rect.midY, outline.minY, accuracy: 0.5)   // top (on the stroke line)
         XCTAssertEqual(knobs.first { $0.end == .upper }!.rect.midY, outline.maxY, accuracy: 0.5)   // bottom
     }
 
@@ -440,12 +443,14 @@ final class TableControlsTests: XCTestCase {
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
         v.selectTableColumns(0...1)
         let knobs = v.tableResizeKnobs()
-        let outline = v.tableSelectionOutlineRect()!
+        let inset = DocumentCanvasView.selectionOutlineWidth / 2
+        let outline = v.tableSelectionOutlineRect()!.insetBy(dx: inset, dy: inset)
         let lower = knobs.first { $0.end == .lower }!.rect
         let upper = knobs.first { $0.end == .upper }!.rect
-        // lower knob at the left edge of col 0; upper at the right edge of col 1 (range ends, not one cell)
-        XCTAssertEqual(lower.midX, t.cellRect(row: 0, column: 0)!.minX - TableBlockBox.border, accuracy: 0.5)
-        XCTAssertEqual(upper.midX, t.cellRect(row: 0, column: 1)!.maxX + TableBlockBox.border, accuracy: 0.5)
+        // lower knob at the left edge of col 0; upper at the right edge of col 1 (range ends, not one cell) —
+        // each on the stroke centerline, i.e. the cell-range edge pulled in by the half-line-width inset.
+        XCTAssertEqual(lower.midX, t.cellRect(row: 0, column: 0)!.minX - TableBlockBox.border + inset, accuracy: 0.5)
+        XCTAssertEqual(upper.midX, t.cellRect(row: 0, column: 1)!.maxX + TableBlockBox.border - inset, accuracy: 0.5)
         XCTAssertEqual(lower.midX, outline.minX, accuracy: 0.5)
         XCTAssertEqual(upper.midX, outline.maxX, accuracy: 0.5)
     }
@@ -646,6 +651,28 @@ final class TableControlsTests: XCTestCase {
         let range = v.selectedTextRange as? DocumentTextRange
         XCTAssertEqual(range?.to.offset, t.cellTextStart(row: 0, column: 2),
                        "the synced OS selection sits in the selected column's first cell")
+    }
+
+    // MARK: - structural menu header descriptor (Task 5)
+
+    func test_structuralMenu_carriesHeaderDescriptor_reflectingMixedState() {
+        func cell(_ id: String) -> Cell { Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p")))]) }
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(TableBlock(id: BlockID("t"),
+            columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [cell("a"), cell("b")]),
+                   Row(id: BlockID("r1"), cells: [cell("c"), cell("d")])]))], width: 390)
+        v.frame = CGRect(x: 0, y: 0, width: 390, height: 400); v.layoutIfNeeded()
+        let t = v.boxes[0] as! TableBlockBox
+        v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
+        v.selectTableColumn(0)   // column 0: r0 header, r1 body → mixed
+        let req = v.tableStructuralMenuRequest()
+        XCTAssertNotNil(req?.header)
+        XCTAssertNil(req?.header?.isHeader, "mixed selection reports nil (indeterminate)")
+        // Applying flips the mixed column ON.
+        req?.header?.apply()
+        guard case .table(let out) = v.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertTrue(out.rows[0].cells[0].isHeader && out.rows[1].cells[0].isHeader)
     }
 }
 #endif

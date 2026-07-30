@@ -101,6 +101,13 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
 
     let rotated: Bool
     public internal(set) final var index: Int?
+
+    /// The neighbors value the current layout was computed with.
+    ///
+    /// ListView relayouts a node exactly when this differs from its current neighbors, which is
+    /// why `ListViewItem.neighborDescriptor` must encode everything a neighbor reads — a fact
+    /// omitted there is a fact that will not trigger a relayout when it changes.
+    public internal(set) final var appliedNeighbors: ListViewItemNeighbors = .none
     
     public var isHighlightedInOverlay: Bool = false
     
@@ -388,7 +395,7 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
         return continueAnimations
     }
     
-    open func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    open func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
     }
     
     public func animationForKey(_ key: String) -> ListViewAnimation? {

@@ -1,5 +1,32 @@
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+_WASI_SDK_BUILD = """
+exports_files(["bin/clang++"])
+filegroup(
+    name = "all_files",
+    srcs = glob(["bin/**", "lib/**", "share/**"]),
+    visibility = ["//visibility:public"],
+)
+"""
+
+http_archive(
+    name = "wasi_sdk_macos",
+    urls = ["https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-arm64-macos.tar.gz"],
+    sha256 = "85c997a2665ead91673b5bb88b7d0df3fc8900df3bfa244f720d478187bbdc78",
+    strip_prefix = "wasi-sdk-33.0-arm64-macos",
+    build_file_content = _WASI_SDK_BUILD,
+)
+
+http_archive(
+    name = "wasi_sdk_linux",
+    urls = ["https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-arm64-linux.tar.gz"],
+    sha256 = "4f98ee738c7abb45c81a94d1461fc53cc569d1cd01498951c8184d841a027844",
+    strip_prefix = "wasi-sdk-33.0-arm64-linux",
+    build_file_content = _WASI_SDK_BUILD,
+)
+
 bazel_dep(name = "bazel_features", version = "1.33.0")
 bazel_dep(name = "bazel_skylib", version = "1.8.1")
 bazel_dep(name = "platforms", version = "0.0.11")
@@ -82,8 +109,3 @@ local_path_override(
     path = "./build-input/configuration-repository",
 )
 
-bazel_dep(name = "sourcekit_bazel_bsp", version = "0.7.1")
-local_path_override(
-    module_name = "sourcekit_bazel_bsp",
-    path = "build-system/bazel-rules/sourcekit-bazel-bsp",
-)

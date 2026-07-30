@@ -311,6 +311,7 @@ swift_library(
         "//submodules/TelegramUI/Components/SendInviteLinkScreen",
         "//submodules/TelegramUI/Components/ChatFolderLinkPreviewScreen",
         "//submodules/TelegramUI/Components/SliderContextItem:SliderContextItem",
+        "//submodules/TelegramUI/Components/CoreList:CoreList",
         "//submodules/TelegramUI/Components/Stories/StoryContainerScreen",
         "//submodules/TelegramUI/Components/CameraScreen",
         "//submodules/TelegramUI/Components/MediaEditorScreen",

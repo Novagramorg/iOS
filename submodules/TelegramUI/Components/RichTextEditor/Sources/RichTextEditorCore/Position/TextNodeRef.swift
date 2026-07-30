@@ -12,4 +12,6 @@ public enum TextNodeRef: Equatable {
     case pullQuote(BlockID)
     /// The author (attribution) runs of a block quote or pull quote.
     case quoteAuthor(BlockID)
+    /// The title (summary) runs of a detail (folding) block.
+    case detailsTitle(BlockID)
 }

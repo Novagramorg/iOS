@@ -8,12 +8,16 @@ import ListSectionHeaderNode
 import AppBundle
 
 class ChatListEmptyHeaderItem: ListViewItem {
+    var neighborDescriptor: AnyEquatable {
+        return AnyEquatable.noNeighborInfluence
+    }
+
     let selectable: Bool = false
     
     init() {
     }
     
-    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
             let node = ChatListEmptyHeaderItemNode()
             
@@ -32,14 +36,14 @@ class ChatListEmptyHeaderItem: ListViewItem {
         }
     }
     
-    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             assert(node() is ChatListEmptyHeaderItemNode)
             if let nodeValue = node() as? ChatListEmptyHeaderItemNode {
                 
                 let layout = nodeValue.asyncLayout()
                 async {
-                    let (nodeLayout, apply) = layout(self, params, nextItem == nil)
+                    let (nodeLayout, apply) = layout(self, params, neighbors.next == nil)
                     Queue.mainQueue().async {
                         completion(nodeLayout, { _ in
                             apply()
@@ -58,9 +62,9 @@ class ChatListEmptyHeaderItemNode: ListViewItemNode {
         super.init(layerBacked: false)
     }
     
-    override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         let layout = self.asyncLayout()
-        let (_, apply) = layout(item as! ChatListEmptyHeaderItem, params, nextItem == nil)
+        let (_, apply) = layout(item as! ChatListEmptyHeaderItem, params, neighbors.next == nil)
         apply()
     }
     

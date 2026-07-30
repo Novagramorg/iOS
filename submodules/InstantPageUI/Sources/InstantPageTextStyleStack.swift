@@ -9,6 +9,10 @@ enum InstantPageTextStyle {
     case fontSerif(Bool)
     case fontFixed(Bool)
     case bold
+    /// Baseline semibold weight. Used by button pills, whose labels are semibold regardless of the
+    /// surrounding paragraph weight. An explicit `.bold` in the label still wins over this.
+    case semibold
+    case medium
     case italic
     case underline
     case strikethrough
@@ -29,6 +33,7 @@ let InstantPageMediaIdAttribute = "MediaIdAttribute"
 let InstantPageMediaDimensionsAttribute = "MediaDimensionsAttribute"
 let InstantPageAnchorAttribute = "AnchorAttribute"
 let InstantPageFormulaAttribute = "FormulaAttribute"
+let InstantPageInlineButtonAttribute = "InlineButtonAttribute"
 
 final class InstantPageTextStyleStack {
     private var items: [InstantPageTextStyle] = []
@@ -48,6 +53,8 @@ final class InstantPageTextStyleStack {
         var fontSerif: Bool?
         var fontFixed: Bool?
         var bold: Bool?
+        var semibold: Bool?
+        var medium: Bool?
         var italic: Bool?
         var strikethrough: Bool?
         var underline: Bool?
@@ -78,6 +85,14 @@ final class InstantPageTextStyleStack {
                 case .bold:
                     if bold == nil {
                         bold = true
+                    }
+                case .semibold:
+                    if semibold == nil {
+                        semibold = true
+                    }
+                case .medium:
+                    if medium == nil {
+                        medium = true
                     }
                 case .italic:
                     if italic == nil {
@@ -174,14 +189,25 @@ final class InstantPageTextStyleStack {
                 attributes[NSAttributedString.Key.font] = UIFont(name: "Georgia-Italic", size: parsedFontSize)
             } else if fontFixed != nil && fontFixed! {
                 attributes[NSAttributedString.Key.font] = UIFont(name: "Menlo-Italic", size: parsedFontSize)
+            } else if semibold != nil && semibold! {
+                attributes[NSAttributedString.Key.font] = Font.semiboldItalic(parsedFontSize)
+            } else if medium != nil && medium! {
+                attributes[NSAttributedString.Key.font] = Font.mediumItalic(parsedFontSize)
             } else {
                 attributes[NSAttributedString.Key.font] = Font.italic(parsedFontSize)
             }
         } else {
+            // `.semibold` only affects the sans variant: Georgia and Menlo ship no semibold face, so a
+            // serif or fixed run keeps its regular face rather than silently falling back to a
+            // synthesised weight.
             if fontSerif != nil && fontSerif! {
                 attributes[NSAttributedString.Key.font] = UIFont(name: "Georgia", size: parsedFontSize)
             } else if fontFixed != nil && fontFixed! {
                 attributes[NSAttributedString.Key.font] = UIFont(name: "Menlo", size: parsedFontSize)
+            } else if semibold != nil && semibold! {
+                attributes[NSAttributedString.Key.font] = Font.semibold(parsedFontSize)
+            } else if medium != nil && medium! {
+                attributes[NSAttributedString.Key.font] = Font.medium(parsedFontSize)
             } else {
                 attributes[NSAttributedString.Key.font] = Font.regular(parsedFontSize)
             }

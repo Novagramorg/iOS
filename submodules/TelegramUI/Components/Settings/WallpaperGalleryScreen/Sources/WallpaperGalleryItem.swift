@@ -1744,7 +1744,7 @@ final class WallpaperGalleryItemNode: GalleryItemNode {
         let params = ListViewItemLayoutParams(width: layout.size.width, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, availableHeight: layout.size.height)
         if let messageNodes = self.messageNodes {
             for i in 0 ..< items.count {
-                items[i].updateNode(async: { f in f() }, node: { return messageNodes[i] }, params: params, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], animation: .None) { layout, apply in
+                items[i].updateNode(async: { f in f() }, node: { return messageNodes[i] }, params: params, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), animation: .None) { layout, apply in
                     let nodeFrame = CGRect(origin: messageNodes[i].frame.origin, size: CGSize(width: layout.size.width, height: layout.size.height))
 
                     messageNodes[i].contentSize = layout.contentSize
@@ -1759,7 +1759,7 @@ final class WallpaperGalleryItemNode: GalleryItemNode {
             var messageNodes: [ListViewItemNode] = []
             for i in 0 ..< items.count {
                 var itemNode: ListViewItemNode?
-                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
                     apply().1(ListViewItemApply(isOnScreen: true))
                 })

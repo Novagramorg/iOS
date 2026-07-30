@@ -60,8 +60,10 @@ always-available), with only genuine higher-OS APIs kept at their real floor: th
 analog), no loupe, no inline predictions — everything else (editing, tables, lists, links, emoji, selection,
 IME, edit menu) works. Full SwiftPM suite is green on both engines (TK1 via the DEBUG `forceTextKit1`). The
 app-side consumers (`RichTextEditorChatInputNode`, `RichTextAttachmentScreen` + its helpers,
-`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor is now the **default** chat composer,
-with the `forceLegacyTextInput` ("Force Legacy Text Input") experimental flag opting back out to the legacy input.
+`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor is the native chat-composer backend,
+**opted into** via the `forceNewTextInput` ("Force Text Field v2") experimental flag. By default the composer is a
+dual-field switch — the legacy input, latching to the native editor only when content becomes legacy-non-representable
+(`ChatTextInputPanelNode`; `ios_rich_input_mode` server flag). (Inverted the earlier default + `forceLegacyTextInput` opt-out.)
 
 **Spoiler-texture resource access is build-system-split (via `#if SWIFT_PACKAGE`).** `SpoilerDustView`
 resolves the particle texture two ways: under **SwiftPM** it uses `UIImage(named: "TextSpeckle", in:
@@ -215,6 +217,22 @@ wired **consumer-side** in `RichTextAttachmentScreen` (`RichTextEmojiKeyboardCon
 `ChatEntityKeyboardInputNode`) — the package itself stays free of `AccountContext`/TelegramUI. Custom emoji
 insert via the existing `insertEmoji(id:altText:)` (id = the Telegram fileId string) + a host
 `registerEmojiViewProvider` that renders an `InlineStickerItemLayer`.
+
+**Emoji-view template tinting (`RichTextEmojiView`, added 2026-07-17).** `registerEmojiViewProvider` returns a
+`(UIView & RichTextEmojiView)?` (not a bare `UIView?`) — `RichTextEmojiView` (in `DocumentCanvasView.swift`,
+alongside `RichTextChecklistMarkerView`) requires one settable `var dynamicColor: UIColor?`. The editor keeps it
+synced to the current text color (`mapper.theme.primaryText`) on **every** `syncEmojiViews` pass (cheap — the
+host setter no-ops on an unchanged value; self-healing across theme changes, since a theme reload relays out), so
+a Telegram **custom *template* emoji** (single-color, `file.isCustomTemplateEmoji`) mask-tints to the surrounding
+text — matching the legacy input. Both hosts conform their view: the **chat composer** builds an
+`EmojiTextAttachmentView` (which gained a `dynamicColor` property forwarding to its `InlineStickerItemLayer`;
+the `RichTextEmojiView` conformance is declared retroactively in `ChatTextInputPanelNode`, the one module importing
+both — so `EmojiTextAttachmentView` stays free of a rich-text-editor dep). The `ChatRichTextInputNode` protocol
+seam that carries the provider stays `-> UIView?` (unchanged; the legacy backend shares it), so
+`RichTextEditorChatInputNode`'s registration closure `as?`-casts the returned view to the conforming type (the
+runtime finds the panel-module conformance in the linked app). The **article editor**
+(`RichTextEmojiKeyboardController.customEmojiView`) returns a small `RichTextInlineEmojiView` wrapper forwarding
+`dynamicColor` to its `InlineStickerItemLayer`. A non-template (full-color) emoji ignores `dynamicColor`.
 
 **Parent-driven layout + state query (added 2026-06-12, branch `feature/richtext-message-serialization`).**
 The façade is now driven by its host rather than self-laying-out:
@@ -565,7 +583,9 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   drops a fresh empty `.body` paragraph in its slot, caret there — NOT the old delete-and-merge-into-the-block-above
   (`deleteImageBox`) nor the old "act on the previous paragraph" gap behavior. It unifies every way a Backspace
   "lands on" a media block, reached on FOUR paths in `deleteBackward` / `applySelectionReplace`:
-  - **collapsed caret at the media's leading gap** (`mediaBox(atGap: head)` branch);
+  - **collapsed caret at the media's leading gap** (`mediaBox(atGap: head)` branch) — **NOTE: narrowed
+    2026-07-21** to the TAP-SELECTED case only (`imageSelection == img.id`); a plain non-selected gap caret now
+    acts on the PREVIOUS block instead (see the "Backspace at a media block's leading gap" note below);
   - **collapsed caret at the start of the caption** (`pos.box is MediaBlockBox, pos.local == 0`) — empty OR
     non-empty caption (the caption text is **discarded**);
   - **a selection whose bounds EXACTLY equal a media node's span** (`from == nodeStart && to == textStart +
@@ -587,6 +607,21 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   A media delete never leaves a zero-block document (a lone-block replace yields the empty paragraph). The image
   edit-menu **"Delete"** still fully REMOVES the block (`deleteImageBox`, merges up) — only Backspace was
   respecified. (`deleteBlock(at:parkingCaretAtGapOf:)` was removed with its sole caller.)
+
+**Backspace at a media block's leading gap (2026-07-21).** A plain, NON-tap-selected caret at a media
+block's leading gap (`nodeStart`, the slot to the LEFT of the image) now acts on the PREVIOUS block
+rather than the media: it deletes the previous block's last grapheme (caret moves into that block), or,
+if the previous block is empty, deletes the empty block (caret stays at the image's shifted gap); a
+non-text previous atom (table / block quote whose boundary isn't renderable) is a safe no-op with the
+caret left at the gap; a LEADING image (no previous block) is a no-op. A TAP-SELECTED image (the tint;
+`imageSelection == img.id`, or the `imageObjectDeletePending` range path) still replaces the media with
+an empty paragraph on Backspace, as does Backspace at CAPTION start (offset 0). Both the collapsed-caret
+gap Backspace and the OS object-replacement RANGE `[prevEnd … gap]` (collapsed to a gap caret before the
+gap branch) route through the same logic. This keys on `mediaBox(atGap:)`, so it applies to EVERY
+`MediaBlockBox` including caption-less **audio** (`MediaKind.audio`) — consistent with images; audio stays
+deletable via tap-select + Backspace through the `imageSelection == img.id` branch. See `deleteBackward`
+(`DocumentCanvasView+UITextInput.swift`) and `CanvasImageEditTests` (`test_backspaceAtGap_*`).
+
 - **Backspace at the start of a paragraph AFTER a non-text block deletes the empty paragraph, never the block**
   (`deleteBackward`, the mirror of the leading-gap rule above). A collapsed caret at the start (`local == 0`) of
   a paragraph whose previous block is a non-text **atom** — an image (`MediaBlockBox`), a table (`TableBlockBox`),
@@ -783,6 +818,106 @@ RTL paragraphs (Arabic/Hebrew/…) lay out per-paragraph, **auto-detected by def
   change on-screen — the *model* is correct (what a sent message carries).
 - **Deferred:** gutter-ornament mirroring (list markers / quote bar / checklist / indents to the right gutter),
   table-column direction, a composer override UI, and mapping the override → rich-message `InstantPage.rtl`.
+
+## Text checking — native `UITextCheckingController` engine (rewritten 2026-07-14; supersedes the public-`UITextChecker` pass)
+
+Spelling + **grammar** underlines + tap-to-fix + **autocorrect-revert**, driven by iOS's **private**
+`UITextCheckingController` hosted with the **canvas as its client**, with our **own-drawn** underline. This
+**replaced** the earlier public-`UITextChecker` pass (2026-07-12): that engine (`SpellChecking`/
+`UITextCheckerAdapter`/`runSpellCheckPass`/`scheduleSpellCheck`/`resolveSpellLanguage`) is **deleted**; the
+rendering, `spellResults` store, and tap-to-fix menu are **reused**. Default **on**
+(`RichTextEditorView.isSpellCheckingEnabled`, gates `spellCheckingType`).
+
+**⚠️ SHIPS PRIVATE API IN RELEASE, by owner decision.** `UITextCheckingController` is resolved via
+`NSClassFromString` — App Store Guideline **2.5.1** risk (a static binary scan for the private class/selector
+*strings* can bounce the whole app submission). Mitigation: every private symbol WE **send** (the class name, the
+selectors we call — `initWithClient:`/`preheatTextChecker`/`checkSpellingForWordInRange:`/
+`checkGrammarForSentenceInRange:onPause:`/`invalidate` — and the `NSTextAlternatives*` attribute keys + KVC
+accessors) is **obfuscated** (XOR-0x5A byte arrays decoded at runtime, `ObfuscatedStrings` in
+`NativeTextChecking.swift`). **No fallback** — if the class won't resolve (future iOS), checking is simply off.
+All private-API *dispatch* is **confined to `NativeTextChecking.swift`**. **Residual, unavoidable plaintext:** the
+private `UITextChecking` **client-protocol** selectors the controller **calls back on us** —
+`@objc(replaceRange:withAnnotatedString:relativeReplacementRange:)` / `@objc(removeAnnotation:forRange:)` /
+`@objc(annotatedSubstringForRange:)` / `validAnnotations` in `DocumentCanvasView+NativeTextCheckingClient.swift`
+— MUST keep their exact fixed selector names (the controller messages them by name), so they land in the binary's
+`__objc_methname` as plaintext and can't be obfuscated on a Swift `@objc` method. So the obfuscation covers the
+*sent* surface, not the *vended* client selectors; a thorough scanner could still recognize the client-protocol
+conformance. (`smart*Type` are public `UITextInputTraits`; `nativeTextRangeForGlobalLocation:length:` is our own.)
+
+**RE + driving model (the plan's original driving was WRONG — verified live via disassembly + a sim probe):**
+- The controller's `didChange*`/`consider*`/`inserted*` **notify methods are no-op stubs** on modern iOS
+  (`considerTextCheckingForRange:` = bare `ret`). Real driving is **synchronous per-word
+  `checkSpellingForWordInRange:`** (`NativeTextChecker.checkSpellingForWord`) + per-sentence
+  `checkGrammarForSentenceInRange:onPause:`, from `driveNativeChecking()` — word/sentence-enumerated via
+  `NSString.enumerateSubstrings(.byWords/.bySentences)`, debounced ~0.35s, rebuilding each region's flags.
+- `-textChecker` is **lazy + async** (`_initWithAsynchronousLoading:1`, nil until `_doneLoading`) → `preheat()`
+  then let the runloop spin.
+- **Bridging (LOAD-BEARING):** the controller reads text via the canvas's public `UITextInput` methods, but
+  driving needs a `UITextRange` from a global offset. `perform(_:with:with:)` would box the scalar offset as a
+  pointer (garbage), and `positionFromPosition:offset:` is relative to `beginningOfDocument` (global **1** on this
+  1-based axis → off-by-one). Fixed by a canvas converter `nativeTextRangeForGlobalLocation:length:` (wraps
+  `DocumentTextPosition` directly) called through an **IMP cast** (`@convention(c)`).
+
+**Delivery + translation.** The controller flags a range by calling back the client's
+`replaceRange:withAnnotatedString:relativeReplacementRange:` with an `NSTextAlternativesDisplayStyle` attribute
+(and `NSTextAlternatives` for a correction), and `removeAnnotation:forRange:` to clear. `nativeReplace` translates
+the global `DocumentTextRange` → region-local (`clampedSpellRegionLocal`, shared with the stash — **clamps to the
+region**, since a grammar range can span a boundary and overrun `enumerateAttributes`) → `spellResults[BlockID]`
+(now `[(range, style)]`). **Style** (`SpellStyle` .spelling/.grammar/.correction) from `style(from:)`: alternatives
+present ⇒ `.correction`; `NSTextAlternativesDisplayStyle == 2` (live-observed) ⇒ `.spelling`; else ⇒ `.grammar`.
+- **Style-aware render:** `drawSpellingUnderlines`/`drawCellSpelling` group flags by style and stroke each with its
+  themed color — `misspellingUnderline` (red) / `grammarUnderline` (green) / `correctionUnderline` (blue).
+- **Tap-to-fix guesses** come by style: `.spelling`/`.grammar` from a **public `UITextChecker.guesses`** call
+  (candidate lookup only — the checking PASS stays native; the deleted `SpellChecking` seam was NOT re-added);
+  `.correction` from the stashed `NSTextAlternatives` (read via guarded KVC on the delivered instance —
+  `alternativeStrings`/`primaryString`). A `.correction` also offers **"Revert to '<original>'"**
+  (`pendingSpellingMenu.revertTo` → `applySpellingReplacement(primary)`, one undo step).
+
+**Runtime status (2026-07-14):** spelling is **live-proven** — `NativeTextCheckingLiveTests` drives a real
+`DocumentCanvasView` client and the controller flags `{0,6}`+`{7,5}` for "helllo wrold today" ("today" not
+flagged). Full Bazel build green; SwiftPM suite green (1392, incl. `NativeTextChecking*Tests` + the reused
+`SpellCheck*Tests`); app smoke-launch stable with native checking wired. **Grammar + correction are UNVERIFIED
+in-app:** grammar checking did NOT fire in the unit-test host (OS-grammar-service-dependent/async), and corrections
+are keyboard-driven — both are ready infrastructure, to confirm **on-device**. Also **the sim test account's chat
+composer is the LEGACY `UITextView` input** (RTE not active there), so there is no in-composer visual confirmation
+yet — verify via an RTE-active composer (`forceNewTextInput` ON — Debug Settings ▸ "Force Text Field v2") or the attachment editor.
+
+- **Exclusions** (`isExcludedSpellRange`, applied in `clampedSpellRegionLocal`): a flagged range overlapping a `.link` / `.rtInlineCode` / **`.rtSpoiler`**
+  run, the active IME `markedRange` (clamped to the region), or the caret's in-progress word is dropped. Emoji/
+  spoiler `U+FFFC` atoms are word boundaries so never inside a flagged word. **`.rtSpoiler` MUST stay excluded** —
+  else a squiggle draws over hidden-spoiler dust and leaks the word (found in final review).
+- **Own-drawn, both TextKit engines.** Rects come from the shared `selectionRects`/`layout.selectionRects` (no
+  TK2-only API). Body/caption/quote/list draw via `drawSpellingUnderlines(in:)` in `SelectionHighlightView.draw`
+  (filtered `!isInsideTable`); **table cells** draw via `drawCellSpelling(in:)` in the per-table `CellSelectionView`
+  (rides horizontal scroll). Color: `RichTextEditorTheme.misspellingUnderline` (default `.systemRed`).
+  **LOAD-BEARING:** `drawCellSpelling` mirrors `drawCellSelection`'s `-box.blockViewFrame.origin` translate + raw
+  `region.canvasOrigin` (NOT `canvas.selectionRects`, which subtracts scroll → double-count). `drawCellSelection`
+  had to gain a `saveGState`/`restoreGState` bracket around its own translate — once a second draw call
+  (`drawCellSpelling`) chained after it in the same context, its un-popped CTM double-translated the underline
+  (invisible for any off-origin table). Any future third draw in that overlay must keep every drawer GState-balanced.
+- **Tap-to-fix.** `misspelledWord(atCanvasPoint:)` (unfiltered for tables — `selectionRects` folds cell h-scroll,
+  so tap-to-fix works in cells too) → `beginSpellingCorrection` selects the word (reuses `applySelection` for the
+  `onSelectionChange` + input-delegate bracket) and clears any stale `tableSelection` (**after** the hit-guard, so
+  a stray Backspace can't then delete table rows), sets `pendingSpellingMenu`, presents the menu. The iOS-16
+  `menuFor` short-circuits to the guesses `UIMenu` when `pendingSpellingMenu != nil` (bypasses the host
+  `contextMenuItemsProvider`); iOS 13–15 uses `UIMenuController` + fixed `spellGuess0…3` selectors. Replace =
+  `editing { applySelectionReplace(...) }` (one undo step) then re-check. Gated on `wasFirstResponder` (a focusing
+  tap only places the caret). `pendingSpellingMenu` cleared at the top of `dismissEditMenuForSelectionOrTextChange`.
+- **Display-only** — nothing spell-related enters `Document`; **no `RichTextEditorCore` change**.
+- **LOAD-BEARING (kept from the public feature):** `drawCellSpelling` mirrors `drawCellSelection`'s
+  `-box.blockViewFrame.origin` translate + raw `region.canvasOrigin` (NOT `canvas.selectionRects`, which subtracts
+  scroll); `drawCellSelection` keeps its `saveGState`/`restoreGState` bracket so its CTM translate doesn't
+  double-translate the chained `drawCellSpelling`. `.rtSpoiler` MUST stay excluded (else a squiggle leaks a hidden
+  word). The global position axis is **1-based** (first paragraph `textStart == 1`).
+- **On-device / follow-up verification (non-blocking):** confirm grammar underlines fire on a real device (green,
+  `.grammar`) + the `.correction`/autocorrect-revert path (blue + Revert) with a live autocorrection; confirm the
+  in-composer visual with an RTE-active composer. Async-grammar staleness (a late grammar callback landing after a
+  newer edit rebuilt the region — bounded/non-crashing via the clamp, self-corrects next edit); UITextChecker
+  cold-start may leave the FIRST tap-to-fix guesses empty (separate engine from the native preheat); the
+  `.correction` stash + revert are best-effort infra. Minor cleanups: share the `stashedAlternatives` lookup
+  between `spellingGuesses`/`revertTarget`; `if let` the legacy `revertTo!`. Spec/plan:
+  `docs/superpowers/{specs/2026-07-14-richtext-native-textchecking-design.md,plans/2026-07-14-richtext-native-textchecking.md}`;
+  the RE + spike record is the `project_uitextcheckingcontroller_spike` memory.
 
 ## DEBUG layout overlay (added 2026-06-28, `RichTextEditorView+DebugOverlay.swift`)
 
@@ -1101,7 +1236,7 @@ free; raw enum value appended, optional Codable back-compat), threaded through `
 (both directions) and BOTH `Document→InstantPage` builders (`ChatInputContentInstantPage` for the composer +
 `RichTextEditorMessageConversion/InstantPageBuilder` for the attachment-screen send) into `InstantPageListItem.checked`.
 Recipient checkboxes are display-only/static; the SENDER can re-edit (falls out of the reverse bridge). No
-strikethrough on checked text (matches the InstantPage rendering). Default-on (legacy via `forceLegacyTextInput`); runtime-verified.
+strikethrough on checked text (matches the InstantPage rendering). Active when the native composer is (opt-in via `forceNewTextInput`); runtime-verified.
 
 **Quote + list combine as a container (added 2026-07-02).** A paragraph can be BOTH `style == .quote` AND a
 list item (`setParagraphStyle`/`setList` never clear each other), i.e. a list *inside* a quote. Two subsystems
@@ -1169,7 +1304,7 @@ the folded preview + a corner expand glyph; `collapseQuoteRun(atIndex:)` folds a
 atom, `expandCollapsedQuote(atIndex:)` restores them — caret relocation on collapse/expand is conditional (only a
 caret that was INSIDE the run moves). Composer round-trip: one flat char + `ChatTextInputTextQuoteAttribute(
 isCollapsed: true)` via `ComposerDocumentBridge`, sent through the InstantPage builder. Available in both hosts
-(the composer is the default rich-text input; `forceLegacyTextInput` opts out). Runtime-verified.
+(the native composer is opt-in via `forceNewTextInput`). Runtime-verified.
 
 **Collapsed-quote atom — caret/nav/delete invariants (compiler-invisible, device-log-verified).** The collapsed
 quote behaves like a caption-less media atom: it owns NO leaf region (`leafRegions() == []`), so it routes through
@@ -1273,6 +1408,8 @@ paragraph" bug (a trailing empty *in the fragment* — handled earlier at higher
 case; the host-tail empty is the general one and lives here in Core, shared by both editors).
 
 **Paste-media-to-send is host-delegated (2026-06-25).** The editor never embeds pasted media inline — images/GIF/video/stickers go to the chat *send* flow. Two façade hooks (`RichTextEditorView.canPasteMedia` / `onPasteMedia`, both `(() -> Bool)?`, forwarded to `DocumentCanvasView`): `paste(_:)` pastes a TEXT rep if one exists (fragment/RTF/plain — **text wins**), else calls `onPasteMedia?()`; `clipboardCanPerformAction(.paste)` also offers Paste when `canPasteMedia?()` is true (so the menu shows for an image-only clipboard). The editor stays Telegram-UTI-agnostic — the hooks are plain closures the host fills. The chat composer wires them (`ChatTextInputPanelNode.loadTextInputNode`) to a shared `handlePastedMedia(perform:)` (the gif/mp4/heics/png-sticker/jpeg detection extracted from the legacy `chatInputTextNodeShouldPaste`, so both the old and new composers route media identically), restoring the legacy paste-to-send the new composer had lost.
+
+**Host plain-text transform hook + two-step paste (2026-07-24, markdown-on-paste).** `RichTextEditorView.plainTextFragmentTransformer: ((String) -> Document?)?` (forwarded to `DocumentCanvasView`) lets a host convert pasted PLAIN text into a rich `Document` — the editor stays markdown-agnostic (the composer/article hosts inject a CommonMark parser; see `docs/richtext-composer.md` §7). `paste(_:)` consults it only when the pasteboard has **no** richer rep (fragment/RTF) and it returns a non-empty `Document`, then runs `pasteMarkdownTwoStep(plainText:rich:)`: step 1 splices the RAW text (`spliceFragmentInEditing`, one undo step), step 2 — **deferred to the next run-loop cycle** — `replaceRange`s it with `rich`. Two events are REQUIRED for two undo groups: the private `UndoManager` uses default `groupsByEvent`, so a synchronous step 2 would coalesce into one group (one undo would wipe the paste instead of reverting rich→plain). Step 1 sets **`suppressHostChangeNotification`** so `notifyContentSizeChanged()` (gated at its definition — `setBlocks` also calls it) and the `editing {}` trailing `refreshSelectionUI()`/`onSelectionChange()` no-op, keeping the intermediate raw-text state off-screen (no text flash, no caret jump — the caret moves once, in step 2). Undo therefore steps rich → plain → gone.
 
 **RTF export is hand-rolled and emits real tables (2026-06-25, `RTFConversion.swift`).** iOS has **no `NSTextTable` / `NSParagraphStyle.textBlocks`** (AppKit-only) — confirmed by spike — so `NSAttributedString` cannot represent or round-trip a real RTF table; a genuine table can only be produced by emitting the control words by hand. So `rtfData(from:)` now builds the **entire** RTF document by hand for ALL documents (one path; the old `NSAttributedString` export is gone) via one shared inline-run encoder (`inlineRTF`) + `escapeRTFText` (UTF-16 `\u<signed-16>?` escaping). Tables emit `\trowd`/`\trhdr`/`\cellx<cumulative-twips>`/`\intbl`/`\cell`/`\row` (`tableRTF`), so a Telegram table copied into Word/Pages/Notes becomes a **real table**. Parity kept on export (not added): no list markers, no foreground/theme colors, media-in-cell dropped, cell background colors dropped. Custom emoji ride the `tg://emoji?id=<id>&n=<seq>` hyperlink marker (the `&n=` per-export sequence stops adjacent identical emoji from coalescing). Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-tables-design.md,plans/2026-06-25-richtext-rtf-tables.md}`.
 

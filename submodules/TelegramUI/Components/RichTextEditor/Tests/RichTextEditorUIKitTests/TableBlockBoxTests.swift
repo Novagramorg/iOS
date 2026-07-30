@@ -34,6 +34,27 @@ final class TableBlockBoxTests: XCTestCase {
         }
     }
 
+    // Dense parity (Phase 2b Task 3): a fully dense table's cellRect must be byte-identical to the pre-2b
+    // single-slot formula (Σ preceding widths/heights + border, this cell's own width/height) — the
+    // anchor-resolution rewrite collapses to exactly this when every cell is colspan==rowspan==1.
+    func test_cellRect_denseTable_matchesPreexistingSingleSlotFormula() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(table2x2())], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 400); v.layoutIfNeeded()
+        let t = v.boxes[0] as! TableBlockBox
+        for row in 0..<t.rowCount {
+            for col in 0..<t.columnCount {
+                var y = t.frame.minY + TableBlockBox.border
+                for r in 0..<row { y += t.rowHeights[r] + TableBlockBox.border }
+                var x = t.frame.minX + TableBlockBox.border
+                for c in 0..<col { x += t.columnWidths[c] + TableBlockBox.border }
+                let expected = CGRect(x: x, y: y, width: t.columnWidths[col], height: t.rowHeights[row])
+                XCTAssertEqual(t.cellRect(row: row, column: col), expected,
+                               "dense cellRect (\(row),\(col)) matches the pre-2b single-slot rect")
+            }
+        }
+    }
+
     func test_tableRoundTripsThroughCurrentBlocks() {
         let v = DocumentCanvasView()
         v.setBlocks([.table(table2x2())], width: 320)
@@ -123,20 +144,16 @@ extension TableBlockBoxTests {
         XCTAssertFalse(cellFont(t, 1, 1).fontDescriptor.symbolicTraits.contains(.traitBold), "body row col 1 not bold")
     }
 
-    func test_headerRowBackground_coversFirstRowOnly_withGrayTint() {
+    func test_perCellHeader_flagsFirstRowCells_withTranslucentTint() {
         let v = DocumentCanvasView()
         v.setBlocks([.table(headerTable())], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 400); v.layoutIfNeeded()
         let t = box(v)
-        let rect = t.headerRowBackgroundRect()!
-        let header = t.cellRect(row: 0, column: 1)!, body = t.cellRect(row: 1, column: 0)!
-        XCTAssertEqual(rect.minY, t.frame.minY, accuracy: 0.5)                       // starts at the table top
-        XCTAssertTrue(rect.contains(CGPoint(x: header.midX, y: header.midY)))        // covers the header row
-        XCTAssertFalse(rect.contains(CGPoint(x: body.midX, y: body.midY)))           // not the body row
-        XCTAssertGreaterThan(rect.width, t.cellRect(row: 0, column: 0)!.width)       // spans the full table width
+        XCTAssertTrue(t.isHeaderCell(0, 0)); XCTAssertTrue(t.isHeaderCell(0, 1))
+        XCTAssertFalse(t.isHeaderCell(1, 0))
         var alpha: CGFloat = 1
         RichTextEditorTheme.default.tableHeaderBackground.getWhite(nil, alpha: &alpha)
-        XCTAssertLessThan(alpha, 1)                                                  // a translucent gray tint
+        XCTAssertLessThan(alpha, 1)
     }
 
     func test_headerBold_isStrippedFromModelOnExtraction() {

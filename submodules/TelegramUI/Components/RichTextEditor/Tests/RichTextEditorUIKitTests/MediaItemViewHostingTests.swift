@@ -41,7 +41,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         let editor = RichTextEditorView()
         editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
         var requested: [String] = []
-        editor.registerMediaViewProvider { items, _, _ in
+        editor.registerMediaViewProvider { items, _, _, _ in
             let mediaID = items.first?.mediaID ?? ""
             requested.append(mediaID)
             return StubMediaView(mediaID: mediaID)
@@ -68,7 +68,7 @@ final class MediaItemViewHostingTests: XCTestCase {
     func testZeroBoundsDocumentSetDefersMediaViewCreationUntilFramed() {
         let editor = RichTextEditorView()
         var requested: [String] = []
-        editor.registerMediaViewProvider { items, _, _ in
+        editor.registerMediaViewProvider { items, _, _, _ in
             let mediaID = items.first?.mediaID ?? ""
             requested.append(mediaID); return StubMediaView(mediaID: mediaID)
         }
@@ -97,7 +97,7 @@ final class MediaItemViewHostingTests: XCTestCase {
     func testZeroBoundsLayoutPassDoesNotCreateMediaViews() {
         let editor = RichTextEditorView()
         var requested: [String] = []
-        editor.registerMediaViewProvider { items, _, _ in
+        editor.registerMediaViewProvider { items, _, _, _ in
             let mediaID = items.first?.mediaID ?? ""
             requested.append(mediaID); return StubMediaView(mediaID: mediaID)
         }
@@ -123,7 +123,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         let editor = RichTextEditorView()
         editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
         var count = 0
-        editor.registerMediaViewProvider { items, _, _ in
+        editor.registerMediaViewProvider { items, _, _, _ in
             count += 1; return StubMediaView(mediaID: items.first?.mediaID ?? "")
         }
         editor.document = emptyDoc([.paragraph(ParagraphBlock(id: BlockID("p0"), runs: [TextRun(text: "x")]))])
@@ -146,7 +146,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         let editor = RichTextEditorView()
         editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
         var stub: ControlStubMediaView?
-        editor.registerMediaViewProvider { _, _, _ in let v = ControlStubMediaView(); stub = v; return v }
+        editor.registerMediaViewProvider { _, _, _, _ in let v = ControlStubMediaView(); stub = v; return v }
         editor.document = emptyDoc([
             .media(MediaBlock(id: BlockID("m0"), mediaID: "m1", kind: .image,
                               naturalSize: Size2D(width: 200, height: 100)))

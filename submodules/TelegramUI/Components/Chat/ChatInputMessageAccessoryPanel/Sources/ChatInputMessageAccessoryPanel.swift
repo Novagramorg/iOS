@@ -309,6 +309,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
             
             self.lineView = UIImageView()
             self.titleNode = CompositeTextNode()
+            self.titleNode.displaysAsynchronously = false
             
             super.init(frame: frame)
             
@@ -588,6 +589,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
                     titleStringValue = environment.strings.Conversation_EditingMessagePanelTitle
                 }
                 titleText = [.text(NSAttributedString(string: titleStringValue, font: Font.medium(14.0), textColor: environment.theme.chat.inputPanel.panelControlAccentColor))]
+                textString = renderInstantPagePreviewIcons(textString, font: Font.regular(14.0), textColor: environment.theme.chat.inputPanel.primaryTextColor)
             case let .reply(reply):
                 if let peer = self.messages.first?.peers[reply.id.peerId] as? TelegramChannel, case .broadcast = peer.info {
                     let icon: UIImage?
@@ -923,10 +925,12 @@ public final class ChatInputMessageAccessoryPanel: Component {
             self.titleNode.components = titleText
             let titleSize = self.titleNode.update(constrainedSize: CGSize(width: availableSize.width - lineFrame.maxX - textInsets.left - textInsets.right, height: 100.0))
             
+            let textRenderInsets = UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)
             let textSize = self.text.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(textString),
+                    insets: textRenderInsets
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - lineFrame.maxX - textInsets.left - textInsets.right, height: 100.0)
@@ -945,7 +949,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
             let titleTextSpacing: CGFloat = 1.0
             
             let titleFrame = CGRect(origin: CGPoint(x: lineFrame.maxX + textInsets.left, y: textInsets.top), size: titleSize)
-            let textFrame = CGRect(origin: CGPoint(x: lineFrame.maxX + textInsets.left, y: titleFrame.maxY + titleTextSpacing), size: textSize)
+            let textFrame = CGRect(origin: CGPoint(x: lineFrame.maxX + textInsets.left - textRenderInsets.left, y: titleFrame.maxY + titleTextSpacing - textRenderInsets.top), size: textSize)
             
             transition.setFrame(view: self.titleNode.view, frame: titleFrame)
             

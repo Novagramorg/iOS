@@ -695,10 +695,10 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
         self.accessibilityData = accessibilityData
     }
     
-    override open func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override open func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         if let item = item as? ChatMessageItem {
             let doLayout = self.asyncLayout()
-            let merged = item.mergedWithItems(top: previousItem, bottom: nextItem, isRotated: item.controllerInteraction.chatIsRotated)
+            let merged = item.merged(with: ChatHistoryItemNeighbors(neighbors), isRotated: item.controllerInteraction.chatIsRotated)
             let (layout, apply) = doLayout(item, params, merged.top, merged.bottom, merged.dateAtBottom)
             self.contentSize = layout.contentSize
             self.insets = layout.insets
@@ -868,6 +868,10 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
                     break
                 case let .copyText(payload):
                     item.controllerInteraction.copyText(payload)
+                case .disabled:
+                    // A forward stripped this button's behaviour; it renders dimmed and does
+                    // nothing. The tap is also blocked upstream in ChatMessageActionButtonsNode.
+                    break
             }
         }
     }

@@ -32,6 +32,50 @@ These are detailed, non-obvious invariants — read the relevant section before 
 - **The hardcoded "Thinking…" header was removed.** `streamingStatusTextNode`, `streamingStatusShimmerView`, and the header-layout machinery no longer exist. `streamingHeaderOffset` is now a constant `0.0` — the pageView starts at the top of the bubble. The "Thinking…" indicator is now server-sent as `InstantPageBlock.thinking` and rendered inside the pageView (see "InstantPage thinking blocks" section below).
 - **Display-link tick re-layouts on extent change.** Tick reads `revealedContentSize` at the new cursor; if the height differs from the previous cursor, calls `requestFullUpdate`. So the bubble grows in flight when the cursor crosses a line/item boundary, not just between chunks. Tick passes `animated: true` to `applyReveal` to fire the snippet pop-in.
 
+### Send-time media continuity (no blink on Local→Cloud)
+
+A rich message with media used to **blink** on send because `ensurePageView` keyed pageView
+reuse on `message.id`, which flips namespace Local→Cloud at send time, forcing a full pageView
+rebuild → fresh `InstantPageImageNode`s → `setSignal` re-run → fade-in flash.
+
+- **The reuse key is `message.stableId`, NOT `message.id`.** `stableId` is preserved across the
+  Local→Cloud transition (it is also what `ChatMessageBubbleItemNode` uses to reuse the content
+  node instance), so the pageView and its positional `.media(index)` media views survive send;
+  the reused views keep their already-rendered pixels. A genuinely recycled bubble has a
+  different `stableId`, so recycling still rebuilds.
+- **The data layer already re-homes the bytes.** `ApplyUpdateMessage.swift` calls
+  `applyMediaResourceChanges` for `RichTextMessageAttribute`, moving the local upload bytes onto
+  the new Cloud resource ids — so even the reference node's pattern (reload only if not
+  semantically equal) would resolve from cache. Here we avoid the reload entirely by keeping the
+  views.
+- **The render context's `MessageReference` is refreshed on the id flip.**
+  `InstantPageV2RenderContext.updateContent(webpage:message:imageReference:fileReference:)` swaps
+  the message-scoped reference + closures when `messageId` changes (Local→Cloud), so LIVE
+  consumers — inline video `NativeVideoContentId.message`/fetch, audio playlist key/fetch,
+  gallery — use the Cloud reference immediately. The webpage-only `updateContent(webpage:)`
+  remains for streamed AI chunks (message id stable → no refresh).
+- **The reused media node's INTERACTIVE bindings are refreshed too — its image is NOT.** The
+  poster `InstantPageImageNode` is reused (its already-decoded pixels are byte-identical to the
+  Cloud image, since `ApplyUpdateMessage` *moved* the bytes onto the new resource id — so the
+  image signal is deliberately never re-set, which is what avoids the blink). But its `self.media`
+  identity and fetch-status subscription are still bound to the stale *local* resource, and
+  tap-to-open depends on both: `openInstantPageMedia`'s `centralIndex` match compares the tapped
+  `self.media` against the fresh (Cloud) gallery entries via `InstantPageMedia ==`
+  (full `EngineMedia` equality), and the image tap gate keys on `fetchStatus`. Left stale, tap
+  silently no-ops (image) or opens nothing (video) until a scroll-recycle rebuild. So the V2 media
+  views (`InstantPageV2MediaImageView`/`VideoView`/`CoverImageView`) call
+  `InstantPageImageNode.updateInteractiveMediaBinding(sourceLocation:media:imageReferenceForMedia:fileReferenceForMedia:)`
+  from `update(item:)` **only when `item.media.media.id` changed** — re-pointing `self.media`, the
+  status subscription, and `fetchControls` at the Cloud resource *without* touching the image
+  signal. (Gated on the id change so it never churns during AI-streaming relayouts, where the id
+  is stable.)
+- **Coverage.** Single image, video, and **collage** cells are covered — collage flattens into
+  ordinary positional `.mediaImage`/`.mediaVideo` views, so each cell gets the reuse + binding
+  refresh for free. **Slideshow** was verified to send with no blink and working tap-to-open with
+  **no slideshow-specific code** (its container view + pages reconcile through the same positional
+  reuse). If a future change makes a slideshow rich message blink or break tap-to-open on send,
+  apply the same `updateInteractiveMediaBinding` refresh to `InstantPageV2SlideshowView`'s pages.
+
 ### Status node (date/time/checks) positioning
 
 The `ChatMessageDateAndStatusNode` mirrors TextBubble's placement, adapted to the heterogeneous V2 layout. The node is a child of `self` (the content node), **not** of the clipping `containerNode`, so it is never clipped — the bubble height must be grown to contain it.
@@ -53,6 +97,7 @@ A V2 `.table` block's item frame is **full-width / flush** with the bubble inter
 - **`InstantPageV2TableItem.contentInset` (= page `horizontalInset`) is the linchpin.** `layoutTable` (`InstantPageV2Layout.swift`) sizes columns against `contentBoundingWidth = boundingWidth − horizontalInset·2` (so a fitting table aligns with body text on both sides) and stores `contentInset` on the item; the item `frame.width` is the flush `boundingWidth`, and `contentSize.width` stays the **bare grid width** (`totalWidth`, no inset).
 - **The renderer (`InstantPageV2TableView`) realizes the inset as a view shift, not baked coordinates.** In `init` AND `update` it shifts the grid `contentView` to `x: contentInset`, sets `scrollView.contentSize.width = contentSize.width + contentInset * 2.0` (**margin on both sides**, mirroring V1's `InstantPageScrollableNode`), and `scrollView.clipsToBounds = true`. Cells, inner border lines, and the title stay x=0-relative inside `contentView`, so the single shift carries them all; the rounded outer border is `contentView.layer`'s own border (see below), which wraps the shifted layer automatically.
 - **Scrollable tables clip to the full width with no inset on the clip.** The inset lives inside the scroll content as a symmetric margin on both sides (`contentInset * 2.0`): a fitting table (`grid + 2·inset ≤ boundingWidth`) doesn't scroll and shows both-side inset; an overflowing table rests with its left border at the inset and scrolls until its right border reaches a matching trailing inset (it does **not** jam flush against the screen edge — matches V1). The scroll-indicator threshold and `contentSize.width` use the same `+ contentInset * 2.0`, so "does it scroll" is exactly `grid > boundingWidth − 2·inset`.
+- **Overflowing tables compress instead of scrolling wide (V2 second pass).** When the sum of columns' minimum (maximally-wrapped) widths exceeds the content width, `layoutTable` (`InstantPageV2Layout.swift`) runs `compressTableColumnsToFit(...)`: it scales columns proportionally to their **natural (`maxColumnWidths`)** widths down to a per-column floor (`v2TableMinCompressedColumnWidth = 60.0`, of which 26pt is cell padding), clamping any column that would drop below the floor and redistributing the remaining shrink (water-filling). A column narrower than its widest word wraps that word (taller cell). Two outcomes: **(a) fits** (`Σ min(floor, naturalWidth) ≤ contentBoundingWidth`) → the widths sum to exactly `contentBoundingWidth`, no scroll; **(b) doesn't fit** (floors still overflow) → columns stay at the fully-compressed floored width and the table **still scrolls, but at that narrow floored width** (`totalWidth = Σ floored + borderWidth`), NOT the full natural widths — i.e. the compressed shape is always preferred over the wide one, minimizing the scroll extent. Natural widths are used only for a degenerate zero-column table. The floor is an absolute value, not derived from glyph widths, so a single very long token can still overflow its cell horizontally (accepted trade-off; no word-overflow guard).
 - **Manual cell-coordinate helpers MUST add `contentInset`.** Because the shift is a real `contentView` frame change, UIKit `hitTest` and `self.convert(_:to:)` paths (`propagateVisibilityRect`, the row-reveal mask) handle it automatically — but the *manual* coordinate helpers `findTextItem` / `collectSelectableTextItems` (the live tap / URL / text-selection path) compute cell/title positions arithmetically and must add `table.contentInset` to the x-offset, or in-cell hit-testing is off by the inset. (These helpers still do **not** account for the table's live horizontal `scrollView.contentOffset` — a pre-existing limitation, so in-cell hit-testing is only correct at scroll offset 0.) The dead-but-symmetric `lastTextLineFrame(in:)` table branch has the same omission but has no callers.
 - **The 10pt rounded outer border is `contentView.layer`'s own border, NOT sublayers.** `v2TableCornerRadius = 10.0` (`InstantPageV2Layout.swift`). The renderer sets `contentView.layer.cornerRadius`/`borderColor`/`borderWidth = bordered ? v2TableBorderWidth : 0.0` in BOTH `init` and `update` (the four straight outer-edge rect layers were removed; `lineLayers` now holds only inner grid lines). **Border-only — deliberately no `masksToBounds`:** `cornerRadius` rounds the layer's border without clipping contents (filled corner cells round their own fills separately — see next bullet), and there is **zero interaction with the streaming reveal mask** (`contentView.layer.mask`, set only during AI streaming) — the border reveals row-by-row with the rows and is part of the masked layer. The rounded card belongs to the grid (scrolls with it). For a non-empty-title table (never produced by markdown/AI), the border wraps title+grid since `contentView` includes the title region — an accepted, approved nuance.
 - **Filled corner cells round their own fills to match the border.** A header/striped cell's background is a stripe `CALayer`; `tableStripeCornerMask(cellFrame:gridWidth:gridHeight:effectiveBorderWidth:)` detects which grid corners the cell's (grid-local) frame touches — `firstCol/firstRow` via `frame.min{X,Y} <= effectiveBorderWidth/2 + 0.5`, `lastCol/lastRow` via `frame.max{X,Y} >= grid{Width,Height} - …` (gridWidth = `item.contentSize.width`, gridHeight = `item.contentSize.height - gridOffsetY`) — and rounds only those corners: `stripe.cornerRadius = max(0, v2TableCornerRadius - effectiveBorderWidth)` (the `-borderWidth` leaves an even border ring; borderless → full radius) + `stripe.maskedCorners`, in BOTH `init` and `update`. A `CALayer`'s `backgroundColor` honors `cornerRadius`+`maskedCorners` with no `masksToBounds`. A full-width (colspan) header rounds both top corners; a one-row filled table rounds all four; bottom corners round only when the last row is filled. The empty-mask branch resets `cornerRadius = 0` **and** `maskedCorners = []` so reused stripes (persist across streaming chunks) don't keep stale rounding. Detection is grid-local, so it's independent of the `contentInset` shift / horizontal scroll.
@@ -122,8 +167,17 @@ Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026
 composer (`ChatInputContentInstantPage`) and the article editor (`RichTextEditorMessageConversion`'s
 `InstantPageBuilder`) converters — the first editor/rich-message path to produce a `.collage` block
 (needed zero codec work; it was already first-class through Postbox/FlatBuffers/upload). A container of
-exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before. `.slideshow`
-remains produced only by real web Instant View articles.
+exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before.
+
+**`.slideshow` is now editor-produced too (added 2026-07-17).** A multi-media container carries a
+`displayMode` (`.mosaic` default / `.slideshow`; mirrored `MediaBlock.displayMode` ↔
+`ChatInputMedia.displayMode`, Codable back-compat → `.mosaic`). Both forward converters branch on it:
+`.mosaic → .collage`, `.slideshow → .slideshow` (same inner `.image`/`.video` blocks); the reverse
+`chatInputBlocks(fromInstantPageBlocks:)` gained a `.slideshow` arm (sharing the collage arm's item
+helper) so the mode round-trips on edit. The mode is toggled in the **article editor** via a top-right
+button (mosaic↔slideshow); the composer stays mosaic-only. So `.slideshow` is now produced both by real
+web Instant View articles and by editor-authored slideshow albums. Design + plan:
+`docs/superpowers/{specs,plans}/2026-07-17-richtext-media-layout-toggle*`.
 
 ### Where things live
 
@@ -438,6 +492,29 @@ Spec: [`docs/superpowers/specs/2026-05-27-instantpage-list-checkbox-design.md`](
 - **Forward parser keeps `[ ]` detection but routes to `checked`.** `markdownApplyTaskListMarker`/`markdownStrippingTaskListMarker`/`markdownTaskListMarker` still strip the marker from the item text; the state flows into `checked` while ordered items keep their real `"\(ordinal)"` number. The reverse converter emits lowercase `[x]` / `[ ]`, which the forward `hasPrefix` guards re-parse — that is the round-trip contract.
 - **The enum-arity change is compile-enforced.** Adding the third associated value broke every `.text`/`.blocks` construction/destructure; the full build is the completeness gate. Read-only consumers outside the core set exist (`BrowserInstantPageContent.swift`, `CachedFaqInstantPage.swift`) — grep `\.(text|blocks)\(` repo-wide when touching the enum again.
 
+### Tap-to-toggle (editable rich messages)
+
+Task-list checkboxes in a rendered rich message are **interactive when the message is editable**: tapping one flips it and persists the change by editing the message.
+
+Where things live:
+
+| File | Responsibility |
+|---|---|
+| `submodules/TelegramCore/Sources/InstantPageCheckboxToggle.swift` | Pure transform `InstantPage.togglingCheckbox(at: [Int], to: Bool) -> InstantPage` — rebuilds the block tree following a structural path and flips the target list item's `checked` (no-op on an unresolvable/non-checkbox path). |
+| `submodules/InstantPageUI/Sources/InstantPageV2Layout.swift` | `InstantPageV2ListMarkerItem.checkboxPath: [Int]?`; a `pathPrefix: [Int]` threaded through `layoutBlockSequence`/`layoutBlock`/`layoutList`/`layoutDetails`/`layoutBlockQuote` stamps each `.checklist` marker with its path. |
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2ListMarkerView` installs a tap gesture when `interactive`, flips its own `CheckNode` optimistically, and fires `onCheckboxTapped(path, newValue)`; `InstantPageV2View.checkboxTapped` routes it up (mirrors `detailsTapped`). |
+| `submodules/TelegramUI/Components/ChatControllerInteraction/Sources/ChatControllerInteraction.swift` | `canEditMessageRichText: (EngineRawMessage) -> Bool` (sync gate, mirrors `canSetupReply`) + `toggleMessageRichTextCheckbox: (EngineMessage.Id, [Int], Bool) -> Void` (the edit action). Both have no-op defaults so only the real chat wires them. |
+| `submodules/TelegramUI/Sources/ChatController.swift` | Implements both closures. The toggle looks up the message, re-checks `canEditMessage`, applies `togglingCheckbox`, and submits via `pendingUpdateMessageManager.add(text: "", richText:)` — the composer's rich-edit path (mirrors the native-todo `requestToggleTodoMessageItem`). |
+| `submodules/TelegramUI/Components/Chat/.../ChatMessageRichDataBubbleContentNode.swift` | `checkboxesInteractive(item:resolved:)` gate + sets `pageView.checkboxTapped` per apply. |
+
+Non-obvious invariants:
+
+- **Checkbox identity is a structural `[Int]` path**, not an ordinal: each element indexes the current container's children — block-array index at page/`.details`/`.blockQuote`/list-item-`.blocks` levels; item index at `.list` level. The layout stamping (`InstantPageV2Layout`) and the toggle walker (`InstantPageCheckboxToggle`) MUST keep identical semantics — they were built and reviewed as a matched pair. Decoupled from `<details>` expand/collapse state.
+- **The path is absolute-from-root only because every `layoutBlockSequence` that can reach a list is entered with a correct prefix.** The two secondary `layoutBlockSequence` call sites (table cells, hard-coded `[.paragraph]`; and the details title) contain no lists, so no checkbox is produced there; a `kind != .cell` guard in `layoutList` is belt-and-suspenders against future misrouting.
+- **The toggle applies to `attribute.instantPage`, so taps must only ever fire against that page.** The bubble's `checkboxesInteractive` gate enforces this: interactive only when `resolved.key` is `.original` AND `resolved.instantPage === attribute.instantPage` (class identity — excludes the show-more `fullInstantPage` rendering, which shares the `.original` key but is a different `InstantPage` object) AND `canEditMessageRichText(item.message)`. Translations (`.translated`) and in-flight pending edits (`.pendingEdit`) are inert. Non-editable messages (incoming, past the edit window) are inert — and AI-streamed rich messages are incoming, hence never tappable.
+- **Optimistic flip, model supersedes.** The marker view flips its own `CheckNode` on tap; the pending/edited attribute re-render then supersedes (or, on failure, reverts, since the model was unchanged). Known minor edges of this state-free optimism: (1) an unrelated `update()` before the pending edit lands rebuilds the marker from the old `checked`, briefly reverting the visual; (2) a rapid double-tap re-reads the still-stale `checked` and re-sends the same value rather than toggling back — the pending-edit manager coalesces, so the net state is consistent, just not a double-toggle. Both are acceptable given the edit lands promptly.
+- **Gating uses closures because `canEditMessage` is `internal` to the `TelegramUI` module** and the rich-data bubble lives in a separate component module that cannot call it. The two closures bridge the boundary; **their init-parameter order must match the `ChatController` call-site order** (Swift requirement) — they sit between `displayTodoToggleUnavailable` and `openStarsPurchase`.
+
 ## InstantPageBlock.blockQuote nested blocks
 
 `InstantPageBlock.blockQuote` carries `(blocks: [InstantPageBlock], caption: RichText)` — a sequence of nested page blocks (paragraphs, headings, lists, code, even nested quotes), not the legacy text-only payload. `.pullQuote` is unchanged (still `(text: RichText, caption: RichText)`; the TL API has no `pullQuoteBlocks` constructor).
@@ -465,6 +542,181 @@ Spec: [`docs/superpowers/specs/2026-05-29-instantpage-blockquote-blocks-design.m
 - **Nested children use a FIXED 10pt inter-child gap, not `spacingBetweenBlocks`.** The full page-flow spacing (~27pt around quotes) is too airy when nested, and 0 is too tight. `childSpacing = 10.0` lives in both layout files; the first child hugs the container's `verticalInset` (no leading gap). Combined with a nested quote's own 4pt top inset this gives ~14pt effective separation.
 - **Entity-expressibility:** a quote is entity-expressible (→ regular message path) only if its caption is empty AND every child is an entity-expressible `.paragraph`. A nested-structure or multi-paragraph quote is not, so it sends via the rich path. **Behavior change:** markdown `> p1\n>\n> p2` is now ONE quote with two paragraphs (rich) rather than two consecutive entity quotes — correct semantics.
 - **The enum-arity change is compile-enforced** across all modules; the full Bazel build is the completeness gate (no per-module build). `CachedFaqInstantPage.swift` matches `case .blockQuote:` payload-less and needs no edit. `BrowserReadability.swift` constructs `.blockQuote(blocks: [.paragraph(.italic(...))], …)` and is easy to miss in the spec's file list — grep `\.blockQuote(` repo-wide when touching the case again.
+
+## Inline buttons & document blocks
+
+The TL schema that unified `keyboardButton`/`keyboardInlineButton` also added inline buttons inside
+`RichText` (`textButton`), block-level button rows (`pageBlockButtonRow`), and a generic file block
+(`pageBlockDocument`). All three are modelled losslessly (Postbox + FlatBuffers + both Api
+directions) **and rendered in V2**; V1 Instant View still skips them via its `default:` arms.
+Because the models round-trip, no cached page needed re-fetching when the rendering landed.
+
+The models were added first and left unrendered on purpose, so that the rendering could land as a pure
+view change with no cache migration. That is why the sections below separate the (lossless, tested)
+model layer from the V2 rendering built on top of it.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_InstantPageButton.swift` | `InstantPageButton` (`text`/`action`/`color`) + Postbox coding, **and** the `ReplyMarkupButtonAction` FlatBuffers codec — which exists only to serve page buttons, hence living beside its consumer. |
+| `submodules/TelegramCore/Sources/ApiUtils/InstantPageButton.swift` | `Api.PageButton` ⇄ model, `richButtonStyle` ⇄ `ReplyMarkupButton.Style.Color`, and `apiInlineButtonType()` for the outgoing direction. |
+| `submodules/TelegramCore/FlatSerialization/Models/RichText.fbs` | `RichText_TextButton`, `InstantPageButton`, and the 10-member `InstantPageButtonAction` union + tables. |
+| `submodules/TelegramCore/FlatSerialization/Models/InstantPageBlock.fbs` | `InstantPageBlock_ButtonRow`, `InstantPageBlock_Document`. |
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_RichText.swift` | `case textButton` (Postbox tag **29**) + `==` + `plainText` (returns the label) + FlatBuffers codec. |
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_InstantPage.swift` | `case buttonRow` (tag **31**), `case document` (tag **32**), codecs, and the `allMedia(mediaDict:)` arm. |
+| `submodules/TextFormat/Tests/` | `InstantPageButtonModelTests`, `RichTextButtonTests`, `InstantPageBlockNewCasesTests` — 24 tests over both codecs. |
+| `submodules/InstantPageUI/Sources/InstantPageInlineButton.swift` | `InstantPageInlineButtonAttachment` (the measured payload) + `instantPageInlineButtonAttachment(button:labelString:maxWidth:)`, the **single** construction path for both inline and row pills, incl. the ellipsis truncation + `instantPageButtonColors(_:theme:isInline:isDisabled:)` + the padding and font-size constants. |
+| `submodules/InstantPageUI/Sources/InstantPageV2ButtonViews.swift` | `InstantPageV2ButtonPillView` (one pill: `backgroundColor` fill + `draw(_:)` label + press state + label recolour), `InstantPageV2InlineButtonView`, `InstantPageV2ButtonRowView`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2DocumentContentNode.swift` | `InstantPageV2DocumentContentNode` (file row) + `InstantPageV2DocumentView` (item view). |
+| `submodules/InstantPageUI/Sources/InstantPageTextStyleStack.swift` | `.semibold` / `.medium` baseline weights (button labels are semibold regardless of the surrounding paragraph) + the `InstantPageInlineButtonAttribute` key. |
+| `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `buttonDangerColor`, `buttonSuccessColor`, `checkboxFill`, `checkboxForeground` — all defaulted, all threaded through `withUpdatedFontStyles`. |
+| `submodules/TelegramUI/Sources/ChatControllerSyntheticButtons.swift` | Debug fixture (`#if DEBUG`): `/synthetic_buttons` inserts a local rich message — one incoming, one outgoing — covering all four colours, disabled pills, a very long label (exercising truncation + re-break) and a button row. Hooked into the `sendMessages` **closure** in `ChatControllerLoadDisplayNode.swift:986`, itself `#if DEBUG`. |
+
+### Geometry (as shipped; tuned by eye, not derived)
+
+| | Inline `textButton` | Block `pageBlockButtonRow` |
+|---|---|---|
+| Label font | 15pt semibold | 16pt semibold |
+| Horizontal inner padding | 7pt | 7pt |
+| Vertical inner padding | 1pt | implied by the fixed height |
+| Height | derived: label ink + 2·vPad | fixed **40pt** (a touch target) |
+| Corner radius | `bounds.height / 2` (capsule) | `bounds.height / 2` → 20pt |
+| Width | label ink + 2·hPad, capped at the line width | equal share of the row, wrapping at 8 |
+
+Font sizes are **fixed**, not scaled by the Instant View font-size setting — the chat bubble's own text
+categories are hardcoded too. The two pill shapes therefore read differently side by side: a block pill
+is much taller than an inline one, and its radius is correspondingly larger. If they ever need to look
+related, a fixed radius rather than `height / 2` is the lever.
+
+### Non-obvious invariants
+
+- **`InstantPageButton` and `InstantPageButtonAction` tables MUST live in `RichText.fbs`, not
+  `InstantPageBlock.fbs`.** `RichText_TextButton` needs them and `InstantPageBlock.fbs` already
+  `include`s `RichText.fbs`, so defining them there creates an include cycle.
+- **`ReplyMarkupButtonAction` is deliberately reused as the page-button action type**, so a Stage 2
+  page-button tap can call the existing `ChatMessageItemView.performMessageButtonAction` instead of a
+  parallel dispatch. The type is therefore **wider than the schema allows**: `text`, `requestPhone`,
+  `requestMap`, `setupPoll` and `requestPeer` come only from `Api.ButtonType` and cannot occur on a
+  page button. Only 10 cases are reachable, which is exactly the FlatBuffers union's membership; the
+  five unreachable ones collapse onto `disabled` when encoded (Postbox stays lossless).
+- **`richTextIsEntityExpressible` returns `false` for `textButton`** (`BrowserMarkdown.swift`), so a
+  button forces the rich send path. That file has `default:` clauses — had this defaulted to `true`,
+  button-bearing content would be sent as plain message entities and the buttons destroyed at send
+  time.
+- **`allMedia(mediaDict:)` and `applyMediaResourceChanges` both need `.document`, and neither is
+  fully compiler-protected.** `allMedia` ends in `default:` (omitting `.document` compiles and then
+  silently stops the page fetching its file). `applyMediaResourceChanges`
+  (`State/ApplyUpdateMessage.swift`) hands a locally uploaded file's resource data to the cloud
+  resource on send confirmation — omitting `.document` re-downloads a just-sent file.
+- **`InstantPageAnchorPath` intentionally does NOT recurse into `.buttonRow`.** That file's recursion
+  set must match what `InstantPageV2Layout.layoutBlock` recurses through, because both drive a shared
+  `detailsIndexCounter` ordinal; since V2 does not lay out `.buttonRow`, recursing would
+  desynchronise `<details>` anchor navigation. Anchors inside a **`RichText.textButton`** *do*
+  resolve — that descent lives in `richTextContainsAnchor`.
+- **A button behaves as a discrete atom, never as flowing text**, in every text-shaping helper: not
+  split by a prefix drop (`markdownDroppingPrefixLength`), always displayable
+  (`markdownHasDisplayableContent`), never whitespace-only (`markdownIsWhitespaceOnly`), and not
+  trimmed internally (`BrowserReadability`'s `trimStart`/`trimEnd`/`trim`/`addNewLine`). It sits with
+  `.image` and `.textCustomEmoji`.
+- **KNOWN LOSSY, deferred: editing a button-bearing rich message drops its buttons.** Markdown has
+  no spelling for a button, so the InstantPage → markdown → InstantPage round-trip keeps the label
+  and loses action + style. `InstantPageToMarkdown.swift` states this at the site. The fix, if picked
+  up, is a positive `InstantPage.containsButtons` check gating the edit affordance — not a `default:`
+  clause.
+- **`keyboardButtonStyle` is bit-identical at `flags.10`** to the pre-unification constructors, so
+  `ReplyMarkupButton.Style` and its rendering in `ChatMessageActionButtonsNode` were untouched by the
+  migration.
+
+### Rendering invariants (V2)
+
+- **`textButton` follows the inline-FORMULA path, not the inline-image path.** The two disagree twice,
+  and both choices matter. (1) The formula run delegate reports **real** ascent/descent
+  (`InstantPageTextItem.swift:854`) so CoreText grows the line box; the image one reports `0/0`
+  (:818) and then owns manual centring with symmetric bleed. A pill is taller than its glyphs, so the
+  image model would overlap the lines above and below. (2) Formulas are emitted as **top-level items**
+  into `additionalItems`; images are created at view-update time into a sibling container above the
+  reveal mask. A button must *be* a view (own press state, own tap target), which the formula path
+  already gives.
+- **The attachment must carry its own measurements.** The V2 line-breaker raises
+  `lineAscent`/`lineDescent` from the attachment itself and has no `styleStack` to re-measure with —
+  hence `InstantPageInlineButtonAttachment` holds `size`/`ascent`/`descent`, mirroring
+  `InstantPageMathAttachment.rendered`.
+- **`instantPageInlineButtonAttachment(button:labelString:)` is the ONLY construction path.** Inline
+  and row pills must agree on whether `size` includes padding, because the pill view's label centring
+  reads exactly `size.width - 2 · hPad`. Two independent constructions drifted apart once already.
+- **The pill recolours its label in the view, not at construction.**
+  `attributedStringForRichText` bakes the *paragraph* colour and has no `InstantPageTheme`, so
+  `instantPageButtonColors(...).label` can only be applied where the theme exists — the view. Skipping
+  this silently renders `danger`/`success` labels in body-text colour and never dims disabled ones.
+- **`clipsToBounds` is what makes the pill a pill.** The view implements `draw(_:)`, so UIKit paints
+  `backgroundColor` **into the layer's `contents` bitmap**; `cornerRadius` rounds the layer's own
+  background but does **not** clip `contents` without `masksToBounds`. Without the clip the rounded
+  corners are drawn and then covered by the square bitmap, and the pill renders as a rect.
+- **Line-height inflation: never compare `attachment.ascent` against `lineAscent` directly.**
+  `lineAscent` starts at `fontLineHeight`, which is the *reduced* `floor(ascender + descender)` box
+  (~12.4pt at 17pt — `descender` is negative), whereas `attachment.ascent` comes from
+  `CTLineGetTypographicBounds` and is a *full* font ascent (~16.3pt for a 15pt label plus padding).
+  Comparing them grew every button-bearing line by ~4pt. The button loop therefore discounts
+  `lineBoxTopInset` (the ascender headroom the line stack is already shifted down by) and
+  `baselineToNextTopSlack` (inter-line spacing the next line does not need) — the same reserves inline
+  formulas bleed into — and only genuine overflow grows the line.
+- **An overflowing pill needs an arm in the re-break block.** A pill's entire width lives in a
+  `CTRunDelegate` on one placeholder character, so `CTTypesetterSuggestLineBreak` can suggest a break
+  *after* it. The layout recovers by discarding a line wider than the bound and re-breaking before the
+  attachment — but only for attachment kinds listed there. Images, formulas and buttons each have an
+  arm; a new inline attachment kind needs one too or it will silently spill past the bubble.
+- **A pill wider than the whole line is truncated, because it cannot be re-broken.** That recovery path
+  is guarded by `lineCharacterCount > 1`, so a pill alone on a line is left alone. Hence
+  `instantPageInlineButtonAttachment(maxWidth:)` truncates the label with a tail ellipsis on cluster
+  boundaries (`CTTypesetterSuggestClusterBreak`), the ellipsis inheriting the label's own attributes.
+- **The cap arrives via `inlineButtonMaxWidth`, deliberately NOT `boundingWidth`.** Three traps here:
+  (1) `boundingWidth` is `nil` on the V2 paragraph path — only table cells pass it — so a cap routed
+  through it silently never applies; `layoutParagraph` passes the width explicitly. (2) The 31 recursive
+  `attributedStringForRichText` calls must forward the cap, or a button nested in a `.concat` (the normal
+  case) loses it. (3) `boundingWidth` *also* drives the inline-**image** clamp
+  (`fittedToWidthOrSmaller`), which has never been active on this path, so reusing it would silently
+  resize existing inline images.
+- **KNOWN BUG, pre-existing and unfixed: recursion never forwards `boundingWidth`.** A *nested* inline
+  image therefore never gets its `fittedToWidthOrSmaller` clamp — only a top-level one, and only on
+  paths that pass the width at all (table cells). Independent of the button work.
+- **`checkboxFill` / `checkboxForeground` are misnamed for their current use.** They are the `.primary`
+  button's solid fill and label colour; nothing checkbox-related reads them. `InstantPageListItem`
+  checkboxes still derive their own colours. Rename or wire them up before relying on the names.
+- **Interactive V2 items route taps through a pageView closure, NOT `tapActionAtPoint`.**
+  `buttonTapped` on `InstantPageV2View` mirrors the pre-existing `checkboxTapped`
+  (`InstantPageRenderer.swift:178`). `.custom` + `rects` on `ChatMessageBubbleContentTapAction` is for
+  *text-attribute* taps (entities, spoilers, "Show more"), not item views.
+- **The `reuse` arm must re-wire `onButtonTapped`.** A recycled view may have been created against a
+  previous `InstantPageV2View`; without re-wiring, taps silently stop working after scrolling away and
+  back.
+- **`performMessageButtonAction` lives on `ChatMessageItemView`, so a content node cannot call it.**
+  The rich bubble synthesises a `ReplyMarkupButton` and calls
+  `ChatMessageBubbleContentNode.performRichTextButtonAction`, a closure wired by
+  `ChatMessageBubbleItemNode` (~:5060) alongside `requestInlineUpdate`/`requestFullUpdate`.
+- **`InstantPageTheme.withUpdatedFontStyles` (:173) reconstructs the struct field by field.** Any
+  field omitted there silently reverts to its `init` default — for
+  `buttonDangerColor`/`buttonSuccessColor` that resets a bubble's theme-derived colours the moment the
+  user changes Instant View font size. Nothing warns; it compiles.
+- **Mid-paragraph buttons pop in when their whole paragraph finishes revealing**, not when the cursor
+  reaches them, because an inline attachment lands in `additionalItems` *after* the text item it sits
+  inside and the cost map walks items in array order. **Formulas already behave this way**; fixing it
+  means interleaving sub-item cost entries inside a text entry, i.e. changing the cost model.
+- **`pageBlockDocument`: tapping a downloaded file is inert, by decision.** Opening needs a
+  document-preview presenter, and `presentDocumentPreviewController` is internal to the TelegramUI
+  target — unreachable from `InstantPageUI` *and* from the rich-bubble component module. Routing via
+  `controllerInteraction.openMessage` was rejected: the file lives in the `RichTextMessageAttribute`'s
+  `InstantPage`, not the message's media, so it could open the wrong attachment. Download and cancel
+  do work, through the **fetch manager** (`messageMediaFileStatus` keys progress off its `hasEntry`,
+  so `freeMediaFileInteractiveFetched` would show no ring).
+- **`/synthetic_buttons` is hooked into the `sendMessages` CLOSURE, not the method.** Typed input goes
+  `ChatControllerNode.sendCurrentMessage` → the `sendMessages` closure property
+  (`ChatControllerNode.swift:333`, assigned `ChatControllerLoadDisplayNode.swift:986`) →
+  `transformEnqueueMessages` + `enqueueMessages`. It never reaches
+  `ChatControllerImpl.sendMessages`, so a hook there compiles and silently never runs.
+- **`.buttonRow` still sits in `InstantPageAnchorPath`'s `default:`** — Stage 1's reason ("V2 does not
+  lay it out") has expired, but the outcome is unchanged for a new one: a button's label renders
+  inside its own view, so it is not a page-text anchor scroll target.
 
 ## InstantPage thinking blocks (InstantPageBlock.thinking)
 

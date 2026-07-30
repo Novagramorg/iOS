@@ -8,9 +8,9 @@ final class EmojiViewHostingTests: XCTestCase {
     /// A provider that hands out a fresh tagged view per call and records how many times it was asked.
     private final class Provider {
         var calls = 0
-        func make(_ id: String, _ size: CGSize) -> UIView {
+        func make(_ id: String, _ size: CGSize) -> UIView & RichTextEmojiView {
             calls += 1
-            let v = UIView(frame: CGRect(origin: .zero, size: size))
+            let v = TestEmojiView(frame: CGRect(origin: .zero, size: size))
             v.accessibilityIdentifier = id
             return v
         }
@@ -77,7 +77,7 @@ final class EmojiViewHostingTests: XCTestCase {
     func test_facade_insertEmoji_andProvider_forwardToCanvas() {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         editor.registerEmojiViewProvider { id, size in
-            let v = UIView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
+            let v = TestEmojiView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
         }
         editor.document = Document(
             blocks: [.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "ab")]))])
@@ -90,5 +90,11 @@ final class EmojiViewHostingTests: XCTestCase {
         }
         XCTAssertTrue(hasEmoji, "façade insertEmoji forwards to the canvas")
     }
+}
+
+/// A minimal `RichTextEmojiView` for the emoji-hosting tests. Shared across the test target; the editor
+/// pushes `dynamicColor` (the template-emoji tint), which the tests can read back.
+final class TestEmojiView: UIView, RichTextEmojiView {
+    var dynamicColor: UIColor?
 }
 #endif

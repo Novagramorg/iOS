@@ -71,6 +71,7 @@ public func chatInputContent(
                 items: resolvedItems,
                 displayWidth: media.displayWidth,
                 alignment: chatInputMediaAlignment(fromAlignment: media.alignment),
+                displayMode: media.displayMode == .slideshow ? .slideshow : .mosaic,
                 caption: chatInputRuns(fromRuns: media.caption, resolveEmoji: resolveEmoji)
             )))
         case let .table(table):
@@ -82,6 +83,14 @@ public func chatInputContent(
             blocks.append(.blockQuote(ChatInputBlockQuote(
                 content: inner, collapsed: bq.collapsed,
                 author: chatInputRuns(fromRuns: bq.author, resolveEmoji: resolveEmoji))))
+        case let .details(d):
+            // Editor detail (folding) container → currency .details, recursing its children as a sub-document.
+            let inner = chatInputContent(fromDocument: Document(blocks: d.children),
+                                         resolveEmoji: resolveEmoji, resolveMedia: resolveMedia)
+            blocks.append(.details(ChatInputDetails(
+                content: inner,
+                title: chatInputRuns(fromRuns: d.title, resolveEmoji: resolveEmoji),
+                expanded: d.expanded)))
         }
     }
     return ChatInputContent(blocks: blocks)
@@ -194,10 +203,13 @@ private func chatInputTable(
                 runs: chatInputRuns(fromRuns: cellRuns(fromBlocks: cell.blocks), resolveEmoji: resolveEmoji),
                 background: cell.background.map(chatInputColor(fromColor:)),
                 horizontalAlignment: chatInputTextAlignment(fromAlignment: cell.horizontalAlignment),
-                verticalAlignment: chatInputTableVerticalAlignment(fromCore: cell.verticalAlignment)
+                verticalAlignment: chatInputTableVerticalAlignment(fromCore: cell.verticalAlignment),
+                isHeader: cell.isHeader,
+                colspan: cell.colspan,
+                rowspan: cell.rowspan
             )
         }
-        return ChatInputTableRow(height: row.height, isHeader: row.isHeader, cells: cells)
+        return ChatInputTableRow(height: row.height, cells: cells)
     }
     return ChatInputTable(columns: columns, rows: rows)
 }
@@ -229,6 +241,13 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
                 runs.append(contentsOf: cellRuns(fromBlocks: [child]))
             }
             runs.append(contentsOf: bq.author)
+        case let .details(d):
+            // A table cell is inline-only; detail-block structure is not representable inside a cell.
+            // Flatten the title then the children's runs inline.
+            runs.append(contentsOf: d.title)
+            for child in d.children {
+                runs.append(contentsOf: cellRuns(fromBlocks: [child]))
+            }
         }
     }
     return runs
@@ -340,6 +359,7 @@ private func documentBlocks(
             },
             displayWidth: media.displayWidth,
             alignment: mediaAlignment(fromChatInputAlignment: media.alignment),
+            displayMode: media.displayMode == .slideshow ? .slideshow : .mosaic,
             caption: runs(fromChatInputRuns: media.caption, registerEmoji: registerEmoji)
         ))]
     case let .table(table):
@@ -352,6 +372,15 @@ private func documentBlocks(
         }
         return [.blockQuote(BlockQuote(id: BlockID.generate(), children: children, collapsed: bq.collapsed,
                                        author: runs(fromChatInputRuns: bq.author, registerEmoji: registerEmoji)))]
+    case let .details(d):
+        // Currency .details → a real editor Block.details, recursing the inner ChatInputContent back to
+        // editor blocks. `expanded` maps 1:1.
+        let children = d.content.blocks.flatMap {
+            documentBlocks(fromChatInputBlock: $0, registerEmoji: registerEmoji, registerMedia: registerMedia)
+        }
+        return [.details(DetailsBlock(id: BlockID.generate(),
+                                      title: runs(fromChatInputRuns: d.title, registerEmoji: registerEmoji),
+                                      children: children, expanded: d.expanded))]
     }
 }
 
@@ -453,10 +482,13 @@ private func tableBlock(
                 ))],
                 background: cell.background.map(color(fromChatInputColor:)),
                 horizontalAlignment: textAlignment(fromChatInputAlignment: cell.horizontalAlignment),
-                verticalAlignment: verticalAlignment(fromChatInput: cell.verticalAlignment)
+                verticalAlignment: verticalAlignment(fromChatInput: cell.verticalAlignment),
+                isHeader: cell.isHeader,
+                colspan: cell.colspan,
+                rowspan: cell.rowspan
             )
         }
-        return Row(id: BlockID.generate(), height: row.height, isHeader: row.isHeader, cells: cells)
+        return Row(id: BlockID.generate(), height: row.height, cells: cells)
     }
     return TableBlock(id: BlockID.generate(), columns: columns, rows: rows)
 }
@@ -510,4 +542,36 @@ private func characterAttributes(
         }
     }
     return result
+}
+
+/// True when pasted RTF carries a block the legacy input can't render even as text — a TABLE or MEDIA — and
+/// should therefore latch the composer to the native editor. Lists, headings, code and quotes are deliberately
+/// EXCLUDED: they have a linear text form, so they stay in the legacy field (a list renders its markers as text
+/// via `legacyChatInputAttributedString`). Returns false when the data isn't parseable as RTF.
+public func rtfRequiresNativeRichInput(_ data: Data) -> Bool {
+    guard let document = RTFImport.document(fromRTF: data) else { return false }
+    return document.blocks.contains { block in
+        switch block {
+        case .table, .media, .details:
+            return true
+        case .paragraph, .code, .pullQuote, .blockQuote:
+            return false
+        }
+    }
+}
+
+/// Legacy-input paste of external RTF that carries a LIST. iOS's own `NSAttributedString(rtf:)` flattens block
+/// structure (no `NSTextList`), so `chatInputStateStringFromRTF` drops list markers entirely. This path instead
+/// parses the RTF with the structure-preserving `RTFImport`, then renders each list item's marker (•, 1., …) as
+/// LITERAL TEXT via `attributedString(from:renderListMarkers:)`, preserving inline formatting. Returns nil when
+/// the RTF has no list (or doesn't parse) so the caller keeps its existing inline-preserving conversion.
+public func legacyChatInputAttributedString(fromRTF data: Data) -> NSAttributedString? {
+    guard let document = RTFImport.document(fromRTF: data) else { return nil }
+    let hasList = document.blocks.contains { block in
+        if case .paragraph(let paragraph) = block, paragraph.list != nil { return true }
+        return false
+    }
+    guard hasList else { return nil }
+    let content = chatInputContent(fromDocument: document, resolveEmoji: { _ in nil }, resolveMedia: { _ in nil })
+    return attributedString(from: content, renderListMarkers: true)
 }

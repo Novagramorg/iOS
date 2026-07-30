@@ -58,7 +58,10 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                         continue
                     }
                 }
-                pageBlocks.append(.collage(items: innerBlocks, caption: caption))
+                switch mediaBlock.displayMode {
+                case .mosaic:    pageBlocks.append(.collage(items: innerBlocks, caption: caption))
+                case .slideshow: pageBlocks.append(.slideshow(items: innerBlocks, caption: caption))
+                }
             } else if let resolved = media[mediaBlock.mediaID] {
                 switch mediaBlock.kind {
                 case .image, .video, .audio:
@@ -99,6 +102,14 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             let innerPage = buildInstantPage(from: bq.children, media: media)
             for (id, m) in innerPage.media { pageMedia[id] = m }
             pageBlocks.append(.blockQuote(blocks: innerPage.blocks, caption: authorCaption(bq.author), collapsed: bq.collapsed))
+            index += 1
+        case let .details(d):
+            // A detail (folding) block → an InstantPage `.details`. Recurse children through the same builder;
+            // merge child media into the page dict. The title becomes the details title RichText; `expanded`
+            // maps straight across (it is the inverse of a block-quote's `collapsed`).
+            let innerPage = buildInstantPage(from: d.children, media: media)
+            for (id, m) in innerPage.media { pageMedia[id] = m }
+            pageBlocks.append(.details(title: richText(from: d.title), blocks: innerPage.blocks, expanded: d.expanded))
             index += 1
         }
     }
@@ -174,7 +185,8 @@ private func buildListBlocks(from paragraphs: ArraySlice<ParagraphBlock>) -> [In
     return result
 }
 
-/// A table block → `.table`, mapping each cell's own per-cell H+V alignment and the header row.
+/// A table block → `.table`, mapping each cell's own per-cell H+V alignment, per-cell header flag, and
+/// per-cell colspan/rowspan (editor `Int`, default 1, forwarded as InstantPage `Int32`).
 private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
     let rows = table.rows.map { row -> InstantPageTableRow in
         let cells = row.cells.map { cell -> InstantPageTableCell in
@@ -198,11 +210,11 @@ private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
             }
             return InstantPageTableCell(
                 text: cellRichText(cell),
-                header: row.isHeader,
+                header: cell.isHeader,
                 alignment: alignment,
                 verticalAlignment: vAlignment,
-                colspan: 1,
-                rowspan: 1
+                colspan: Int32(cell.colspan),
+                rowspan: Int32(cell.rowspan)
             )
         }
         return InstantPageTableRow(cells: cells)

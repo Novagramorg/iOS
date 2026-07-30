@@ -251,7 +251,7 @@ public final class DrawingMessageRenderer {
                     let itemNode = messageNodes[i]
                     items[i].updateNode(async: { $0() }, node: {
                         return itemNode
-                    }, params: params, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], animation: .None, completion: { (layout, apply) in
+                    }, params: params, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), animation: .None, completion: { (layout, apply) in
                         let nodeFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: containerWidth, height: layout.size.height))
                         
                         itemNode.contentSize = layout.contentSize
@@ -266,7 +266,7 @@ public final class DrawingMessageRenderer {
                 var messageNodes: [ListViewItemNode] = []
                 for i in 0 ..< items.count {
                     var itemNode: ListViewItemNode?
-                    items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                    items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                         itemNode = node
                         apply().1(ListViewItemApply(isOnScreen: true))
                     })

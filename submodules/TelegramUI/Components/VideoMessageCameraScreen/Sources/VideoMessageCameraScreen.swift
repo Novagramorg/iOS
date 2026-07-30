@@ -11,6 +11,8 @@ import AccountContext
 import TelegramCore
 import PresentationDataUtils
 import Camera
+import CameraLegacy
+import CameraNeo
 import MultilineTextComponent
 import BlurredBackgroundComponent
 import PlainButtonComponent
@@ -860,7 +862,9 @@ public class VideoMessageCameraScreen: ViewController {
     fileprivate final class Node: ViewControllerTracingNode, ASGestureRecognizerDelegate {
         private weak var controller: VideoMessageCameraScreen?
         private let context: AccountContext
-        fileprivate var camera: Camera?
+        private let cameraImpl: CameraImpl
+        fileprivate var camera: CameraProtocol?
+        private var pinchStartTimestamp: Double?
         private let updateState: ActionSlot<CameraState>
         
         fileprivate var liveUploadInterface: LegacyLiveUploadInterface?
@@ -933,6 +937,12 @@ public class VideoMessageCameraScreen: ViewController {
         init(controller: VideoMessageCameraScreen) {
             self.controller = controller
             self.context = controller.context
+            
+            if let _ = self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera") {
+                self.cameraImpl = LegacyCameraImpl.shared
+            } else {
+                self.cameraImpl = NeoCameraImpl.shared
+            }
             self.updateState = ActionSlot<CameraState>()
             
             self.presentationData = controller.updatedPresentationData?.initial ?? self.context.sharedContext.currentPresentationData.with { $0 }
@@ -949,11 +959,11 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.clipsToBounds = true
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
-            let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)
+            let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true)
             let isFrontPosition = "".isEmpty
             
-            self.mainPreviewView = CameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
-            self.additionalPreviewView = CameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)
+            self.mainPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
+            self.additionalPreviewView = cameraImpl.makeCameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)
             
             self.progressView = RecordingProgressView(frame: .zero)
             
@@ -1069,7 +1079,7 @@ public class VideoMessageCameraScreen: ViewController {
                 return
             }
             
-            let camera = Camera(
+            let camera = self.cameraImpl.makeCamera(
                 configuration: Camera.Configuration(
                     preset: .hd1920x1080,
                     position: self.cameraState.position,
@@ -1111,16 +1121,28 @@ public class VideoMessageCameraScreen: ViewController {
         }
         
         @objc private func handlePinch(_ gestureRecognizer: UIPinchGestureRecognizer) {
-            guard let camera = self.camera else {
-                return
-            }
             switch gestureRecognizer.state {
+            case .began:
+                self.pinchStartTimestamp = CACurrentMediaTime()
             case .changed:
+                guard let camera = self.camera else {
+                    return
+                }
                 let scale = gestureRecognizer.scale
                 camera.setZoomDelta(scale)
                 gestureRecognizer.scale = 1.0
-            case .ended, .cancelled:
-                camera.rampZoom(1.0, rate: 8.0)
+            case .ended:
+                let pinchStartTimestamp = self.pinchStartTimestamp
+                self.pinchStartTimestamp = nil
+                if let pinchStartTimestamp, CACurrentMediaTime() - pinchStartTimestamp <= 0.5 {
+                    return
+                }
+                self.camera?.rampZoom(1.0, rate: 8.0)
+            case .cancelled:
+                self.pinchStartTimestamp = nil
+                self.camera?.rampZoom(1.0, rate: 8.0)
+            case .failed:
+                self.pinchStartTimestamp = nil
             default:
                 break
             }
@@ -1652,7 +1674,7 @@ public class VideoMessageCameraScreen: ViewController {
     
     private var validLayout: ContainerViewLayout?
     
-    fileprivate var camera: Camera? {
+    fileprivate var camera: CameraProtocol? {
         return self.node.camera
     }
     

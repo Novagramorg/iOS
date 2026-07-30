@@ -89,20 +89,6 @@ public enum ChatMessageItemAdditionalContent {
     case eventLogGroupedMessages([EngineRawMessage], Bool)
 }
 
-public enum ChatMessageMerge: Int32 {
-    case none = 0
-    case fullyMerged = 1
-    case semanticallyMerged = 2
-    
-    public var merged: Bool {
-        if case .none = self {
-            return false
-        } else {
-            return true
-        }
-    }
-}
-
 public struct ChatMessageHeaderSpec: Equatable {
     public var hasDate: Bool
     public var hasTopic: Bool
@@ -141,7 +127,7 @@ public protocol ChatMessageItem: ListViewItem {
     var sending: Bool { get }
     var failed: Bool { get }
     
-    func mergedWithItems(top: ListViewItem?, bottom: ListViewItem?, isRotated: Bool) -> (top: ChatMessageMerge, bottom: ChatMessageMerge, dateAtBottom: ChatMessageHeaderSpec)
+    func merged(with neighbors: ChatHistoryItemNeighbors, isRotated: Bool) -> (top: ChatMessageMerge, bottom: ChatMessageMerge, dateAtBottom: ChatMessageHeaderSpec)
 }
 
 public func hasCommentButton(item: ChatMessageItem) -> Bool {

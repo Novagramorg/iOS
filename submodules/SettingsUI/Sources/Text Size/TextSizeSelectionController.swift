@@ -410,7 +410,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
                 let itemNode = chatNodes[i]
                 items[i].updateNode(async: { $0() }, node: {
                     return itemNode
-                }, params: params, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], animation: .None, completion: { (layout, apply) in
+                }, params: params, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), animation: .None, completion: { (layout, apply) in
                     let nodeFrame = CGRect(origin: itemNode.frame.origin, size: CGSize(width: width, height: layout.size.height))
                     
                     itemNode.contentSize = layout.contentSize
@@ -425,7 +425,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
             var chatNodes: [ListViewItemNode] = []
             for i in 0 ..< items.count {
                 var itemNode: ListViewItemNode?
-                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
                     apply().1(ListViewItemApply(isOnScreen: true))
                 })
@@ -492,7 +492,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
                 let itemNode = messageNodes[i]
                 items[i].updateNode(async: { $0() }, node: {
                     return itemNode
-                }, params: params, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], animation: .None, completion: { (layout, apply) in
+                }, params: params, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), animation: .None, completion: { (layout, apply) in
                     let nodeFrame = CGRect(origin: itemNode.frame.origin, size: CGSize(width: width, height: layout.size.height))
                     
                     itemNode.contentSize = layout.contentSize
@@ -507,7 +507,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, ASScrollView
             var messageNodes: [ListViewItemNode] = []
             for i in 0 ..< items.count {
                 var itemNode: ListViewItemNode?
-                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
                     apply().1(ListViewItemApply(isOnScreen: true))
                 })
@@ -838,7 +838,7 @@ private final class TextSelectionToolbarNode: ASDisplayNode {
             f()
         }, node: {
             return self.switchItemNode
-        }, params: ListViewItemLayoutParams(width: width, leftInset: layout.intrinsicInsets.left, rightInset: layout.intrinsicInsets.right, availableHeight: 1000.0), previousItem: nil, nextItem: fontSizeItem, animation: .None, completion: { layout, apply in
+        }, params: ListViewItemLayoutParams(width: width, leftInset: layout.intrinsicInsets.left, rightInset: layout.intrinsicInsets.right, availableHeight: 1000.0), neighbors: ListViewItemNeighbors(previous: nil, next: fontSizeItem.neighborDescriptor), animation: .None, completion: { layout, apply in
             self.switchItemNode.contentSize = layout.contentSize
             self.switchItemNode.insets = layout.insets
             transition.updateFrame(node: self.switchItemNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: layout.contentSize))
@@ -850,7 +850,7 @@ private final class TextSelectionToolbarNode: ASDisplayNode {
             f()
         }, node: {
             return self.fontSizeItemNode
-        }, params: ListViewItemLayoutParams(width: width, leftInset: layout.intrinsicInsets.left, rightInset: layout.intrinsicInsets.right, availableHeight: 1000.0), previousItem: switchItem, nextItem: nil, animation: .None, completion: { layout, apply in
+        }, params: ListViewItemLayoutParams(width: width, leftInset: layout.intrinsicInsets.left, rightInset: layout.intrinsicInsets.right, availableHeight: 1000.0), neighbors: ListViewItemNeighbors(previous: switchItem.neighborDescriptor, next: nil), animation: .None, completion: { layout, apply in
             self.fontSizeItemNode.contentSize = layout.contentSize
             self.fontSizeItemNode.insets = layout.insets
             transition.updateFrame(node: self.fontSizeItemNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: layout.contentSize))

@@ -50,6 +50,7 @@ extension DocumentCanvasView {
             for (i, b) in stack.boxes.enumerated() {
                 if b === box { return (stack, i) }
                 if let bq = b as? BlockQuoteBox, let found = descend(bq.children) { return found }
+                if let d = b as? DetailsBox, let found = descend(d.children) { return found }
                 if let t = b as? TableBlockBox {
                     for row in t.cells { for cell in row { if let found = descend(cell) { return found } } }
                 }

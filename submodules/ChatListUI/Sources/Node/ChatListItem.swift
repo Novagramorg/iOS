@@ -505,7 +505,15 @@ public class ChatListItem: ListViewItem {
     }
     
     let header: ListViewItemHeader?
-    
+
+    public var neighborDescriptor: AnyEquatable {
+        return AnyEquatable(ChatListItemNeighborDescriptor(
+            headerId: self.header?.id,
+            isPinned: self.isPinned,
+            hasActiveRevealControls: self.hasActiveRevealControls
+        ))
+    }
+
     public var isPinned: Bool {
         switch self.index {
         case let .chatList(index):
@@ -538,10 +546,10 @@ public class ChatListItem: ListViewItem {
         self.displayHiddenPeerIcon = displayHiddenPeerIcon
     }
     
-    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
             let node = ChatListItemNode()
-            let mergeType = ChatListItem.mergeType(item: self, previousItem: previousItem, nextItem: nextItem)
+            let mergeType = ChatListItem.mergeType(item: self, neighbors: neighbors)
             let first = mergeType.first
             var last = mergeType.last
             let firstWithHeader = mergeType.firstWithHeader
@@ -569,14 +577,14 @@ public class ChatListItem: ListViewItem {
         }
     }
     
-    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             assert(node() is ChatListItemNode)
             if let nodeValue = node() as? ChatListItemNode {
                 nodeValue.setupItem(item: self, synchronousLoads: false)
                 let layout = nodeValue.asyncLayout()
                 async {
-                    let mergeType = ChatListItem.mergeType(item: self, previousItem: previousItem, nextItem: nextItem)
+                    let mergeType = ChatListItem.mergeType(item: self, neighbors: neighbors)
                     let first = mergeType.first
                     var last = mergeType.last
                     let firstWithHeader = mergeType.firstWithHeader
@@ -637,14 +645,14 @@ public class ChatListItem: ListViewItem {
         }
     }
         
-    static func mergeType(item: ChatListItem, previousItem: ListViewItem?, nextItem: ListViewItem?) -> (first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, nextHasActiveRevealControls: Bool) {
+    static func mergeType(item: ChatListItem, neighbors: ListViewItemNeighbors) -> (first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, nextHasActiveRevealControls: Bool) {
         var first = false
         var last = false
         var firstWithHeader = false
-        if let previousItem = previousItem {
+        if neighbors.previous != nil {
             if let header = item.header {
-                if let previousItem = previousItem as? ChatListItem {
-                    firstWithHeader = header.id != previousItem.header?.id
+                if let previousItem = neighbors.previous?.base(HeaderNeighborFacet.self), previousItem.headerFamily == .chatList {
+                    firstWithHeader = header.id != previousItem.headerId
                 } else {
                     firstWithHeader = true
                 }
@@ -655,10 +663,8 @@ public class ChatListItem: ListViewItem {
         }
         var nextIsPinned = false
         var nextHasActiveRevealControls = false
-        if let nextItem = nextItem as? ChatListItem {
-            if case let .chatList(nextIndex) = nextItem.index, nextIndex.pinningIndex != nil {
-                nextIsPinned = true
-            }
+        if let nextItem = neighbors.next?.base(ChatListNeighborFacet.self) {
+            nextIsPinned = nextItem.isPinned
             nextHasActiveRevealControls = nextItem.hasActiveRevealControls
         } else {
             last = true
@@ -2138,9 +2144,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.contextContainer.isGestureEnabled = enablePreview && !item.editing
     }
     
-    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         let layout = self.asyncLayout()
-        let (first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls) = ChatListItem.mergeType(item: item as! ChatListItem, previousItem: previousItem, nextItem: nextItem)
+        let (first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls) = ChatListItem.mergeType(item: item as! ChatListItem, neighbors: neighbors)
         let (nodeLayout, apply) = layout(item as! ChatListItem, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
         apply(false, false)
         self.contentSize = nodeLayout.contentSize

@@ -743,6 +743,12 @@ private final class NotificationServiceHandler {
         //debug_linker_fail_test()
         self.queue = queue
 
+        // In the extension, database BEGIN/COMMIT/step failures must crash (the system then
+        // falls back to displaying the unmodified push) instead of failing silently: silent
+        // failures under cross-process lock contention produce non-atomic writes and pin the
+        // account state, turning the difference polling loop into an infinite livelock.
+        setValueBoxStrictErrorHandling(true)
+
         guard let appBundleIdentifier = Bundle.main.bundleIdentifier, let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
             return nil
         }
@@ -2594,6 +2600,12 @@ final class NotificationService: UNNotificationServiceExtension {
     }
     
     override func serviceExtensionTimeWillExpire() {
+        // Releasing impl deallocates the handler on its queue, which disposes the in-flight
+        // poll (getDifference/state replay) and drops the keep-alive network connection.
+        // Without this, that work keeps running after the system takes back control and
+        // continues to consume CPU for as long as the extension process stays alive.
+        self.impl = nil
+
         if let contentHandler = self.contentHandler {
             self.contentHandler = nil
             

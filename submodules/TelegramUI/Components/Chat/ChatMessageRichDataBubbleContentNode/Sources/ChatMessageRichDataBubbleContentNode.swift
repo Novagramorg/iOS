@@ -44,7 +44,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // The synthesized webpage uses a sentinel id (namespace 0, id 0) shared across all richText
     // messages, so we key cache invalidation on the message itself. When the bubble is recycled
     // with a different message we must discard pageView (render context is constructor-fixed).
-    private var pageViewMessageKey: (id: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
+    // `stableId` (not `id`) is the reuse identity: it is preserved across the Local→Cloud send
+    // transition (whereas `id` flips namespace), so the pageView — and its media views' already-
+    // rendered pixels — survive send instead of being rebuilt (which caused the media blink). A
+    // genuinely recycled bubble carries a different stableId, so recycling still rebuilds.
+    // `messageId` is kept only to detect the Local→Cloud id flip, gating the reference refresh.
+    private var pageViewMessageKey: (stableId: UInt32, messageId: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
     // messageStableVersion is in the cache key because the synthesized instantPage content
     // mutates between streamed AI message chunks (each chunk bumps stableVersion); without
     // this, the cached layout would shadow newly-arrived content during streaming.
@@ -186,21 +191,42 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         )
     }
 
+    /// The message-scoped media-reference closures for the render context. Extracted so the
+    /// initial build and the Local→Cloud reference refresh construct identical closures.
+    private static func mediaReferenceClosures(messageReference: MessageReference) -> (image: (TelegramMediaImage) -> ImageMediaReference, file: (TelegramMediaFile) -> FileMediaReference) {
+        return (
+            image: { image in ImageMediaReference.message(message: messageReference, media: image) },
+            file: { file in FileMediaReference.message(message: messageReference, media: file) }
+        )
+    }
+
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
     /// the existing view, updating only the webpage content in place. The view is rebuilt only when
-    /// the bubble is recycled with a different message/webpage (different message id).
+    /// the bubble is recycled with a genuinely different message (different stableId).
     private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool) -> InstantPageV2View {
-        let key = (id: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
-        if let existing = self.pageView, let current = self.pageViewMessageKey, current.id == key.id {
-            if current.stableVersion == key.stableVersion && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
+        let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
+        if let existing = self.pageView, let current = self.pageViewMessageKey, current.stableId == key.stableId {
+            if current.stableVersion == key.stableVersion && current.messageId == key.messageId && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
                 return existing
             }
-            // Same message, new chunk: reuse the view. Update only the content-bearing webpage on
-            // the existing render context; the subsequent pageView.update(layout:) call diffs item
-            // views by stable id (content blocks keep their ids, so their views and in-flight
-            // reveal state persist; only added/removed blocks change). This replaces the old
-            // wholesale rebuild and eliminates the per-chunk full-text-then-mask flash.
-            existing.renderContext?.updateContent(webpage: webpage)
+            // Same logical message (stableId), new content. Two sub-cases:
+            //  - messageId unchanged (streamed AI chunk / pending edit): swap only the webpage;
+            //    the construction-time reference snapshot stays valid (media resolves by id). The
+            //    subsequent pageView.update(layout:) diffs item views by stable id, so content
+            //    blocks keep their views + in-flight reveal state (only added/removed blocks
+            //    change) — eliminating the per-chunk full-text-then-mask flash.
+            //  - messageId changed (Local→Cloud send flip): also refresh the render context's
+            //    MessageReference + reference closures, so live consumers (inline video/audio/
+            //    gallery) use the Cloud reference. The reused media VIEWS keep their init-time
+            //    (local) reference — their bytes are already local, so the poster does not reload
+            //    and there is no blink; a later scroll-recycle rebuilds them against the Cloud ref.
+            if current.messageId != key.messageId {
+                let messageReference = MessageReference(item.message)
+                let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
+                existing.renderContext?.updateContent(webpage: webpage, message: messageReference, imageReference: closures.image, fileReference: closures.file)
+            } else {
+                existing.renderContext?.updateContent(webpage: webpage)
+            }
             self.pageViewMessageKey = key
             return existing
         }
@@ -211,6 +237,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // render context which is owned by the V2View, so we must avoid making them retain
         // the bubble (`self`) or the message indirectly via `item`.
         let messageReference = MessageReference(item.message)
+        let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
         let policyContext = item.context
         let autoDownloadSettings = item.controllerInteraction.automaticMediaDownloadSettings
         let autoDownloadPeerType = item.associatedData.automaticDownloadPeerType
@@ -222,12 +249,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             context: item.context,
             webpage: webpage,
             sourceLocation: InstantPageSourceLocation(userLocation: .peer(messagePeerId), peerType: autoDownloadPeerType),
-            imageReference: { image in
-                return ImageMediaReference.message(message: messageReference, media: image)
-            },
-            fileReference: { file in
-                return FileMediaReference.message(message: messageReference, media: file)
-            },
+            imageReference: closures.image,
+            fileReference: closures.file,
             present: { [weak self] controller, args in
                 self?.item?.controllerInteraction.presentController(controller, args)
             },
@@ -266,6 +289,33 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             }
         }
         return view
+    }
+
+    /// True when the rendered page is the message's primary (non-translated, non-full,
+    /// non-pending-edit) InstantPage — the only rendering whose checkbox paths are safe to
+    /// edit — AND the message is editable.
+    private func checkboxesInteractive(item: ChatMessageBubbleContentItem, resolved: ResolvedRichDataContent) -> Bool {
+        // `.original` (server state) and `.pendingEdit` (an in-flight edit) are both eligible —
+        // keeping checkboxes live during the pending round-trip lets the user toggle several boxes
+        // in a row. `.translated` is inert, as is the translation-pending fallback (which reports an
+        // `.original` key over the genuine original page but with `isTranslating == true`).
+        switch resolved.key {
+        case .original, .pendingEdit:
+            break
+        case .translated:
+            return false
+        }
+        if resolved.isTranslating {
+            return false
+        }
+        // The primary page is the resolved attribute's `instantPage` (class identity). The show-more
+        // (`fullInstantPage`) rendering carries the same key but a different page object, so an
+        // identity check excludes it. `originalAttribute` is Optional (it is the pending edit's
+        // attribute in the `.pendingEdit` case).
+        guard let attribute = resolved.originalAttribute, resolved.instantPage === attribute.instantPage else {
+            return false
+        }
+        return item.controllerInteraction.canEditMessageRichText(item.message)
     }
 
     private func defaultExpanded(forDetailsIndex index: Int) -> Bool {
@@ -329,7 +379,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     wantsReactionsOutside = hasReactions && !inline
                 }
             }
-            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
+            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 8.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
                 let suggestedBoundingWidth: CGFloat = constrainedSize.width
@@ -448,7 +498,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     overlayPanelColor: isDark ? UIColor(white: 0.0, alpha: 0.13) : UIColor(white: 1.0, alpha: 0.13),
                     separatorColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
                     secondaryControlColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
-                    quoteAccentColor: mainColor
+                    quoteAccentColor: mainColor,
+                    buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
+                    buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
+                    checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
+                    checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor
                 )
                 
                 var hasDraft = false
@@ -547,7 +601,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         effectiveSize = pageLayout.contentSize
                     }
                     boundingSize.width = effectiveSize.width
-                    boundingSize.height = effectiveSize.height + 2.0
+                    boundingSize.height = effectiveSize.height
                 }
 
                 // Authoritative detector: the bottom-most laid-out item is full-width visual media,
@@ -744,7 +798,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         dateText: dateText,
                         type: statusType,
                         layoutInput: dateLayoutInput,
-                        constrainedSize: CGSize(width: suggestedBoundingWidth, height: .greatestFiniteMagnitude),
+                        constrainedSize: CGSize(width: boundingSize.width, height: .greatestFiniteMagnitude),
                         availableReactions: item.associatedData.availableReactions,
                         savedMessageTags: item.associatedData.savedMessageTags,
                         // Empty the status node's own reactions exactly when they are externalized
@@ -835,7 +889,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         }
                         self.appliedShowMoreExpanded = showMoreExpanded
 
-                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: 1.0, y: 1.0), size: CGSize(width: boundingWidth - 2.0, height: boundingSize.height)), completion: nil)
+                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: 1.0, y: 0.0), size: CGSize(width: boundingWidth - 2.0, height: boundingSize.height)), completion: nil)
                         self.containerNode.cornerRadius = layoutConstants.image.defaultCornerRadius
 
                         if let statusSizeAndApply {
@@ -925,6 +979,31 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 pageLayout
                             )
                             let pageView = self.ensurePageView(item: item, webpage: pageWebpage, richPageKey: resolvedContent.key, showMoreExpanded: showMoreExpanded)
+                            if self.checkboxesInteractive(item: item, resolved: resolvedContent) {
+                                pageView.checkboxTapped = { [weak self] path, newValue in
+                                    guard let self, let item = self.item else {
+                                        return
+                                    }
+                                    item.controllerInteraction.toggleMessageRichTextCheckbox(item.message.id, path, newValue)
+                                }
+                            } else {
+                                pageView.checkboxTapped = nil
+                            }
+                            pageView.buttonTapped = { [weak self] button in
+                                guard let self else {
+                                    return
+                                }
+                                // Reuse the whole bot-button dispatch by synthesising the
+                                // ReplyMarkupButton it expects. Only InlineButtonType-derived actions
+                                // can occur on a page button, so .text (which would sendMessage) is
+                                // unreachable here.
+                                self.performRichTextButtonAction?(ReplyMarkupButton(
+                                    title: button.text.plainText,
+                                    titleWhenForwarded: nil,
+                                    action: button.action,
+                                    style: nil
+                                ))
+                            }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
                             pageView.frame = CGRect(
                                 origin: CGPoint(x: -1.0, y: streamingHeaderOffset),
