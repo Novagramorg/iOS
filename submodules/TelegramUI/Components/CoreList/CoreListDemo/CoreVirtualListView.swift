@@ -59,6 +59,51 @@ public enum CoreListAnchorMode: Equatable {
     case preserveVisibleContent
 }
 
+/// Where a programmatic scroll should place one row.
+///
+/// `resolve` returns the row's settled Y as an offset from the top inset edge — the convention the
+/// old `pointOffset` tuple used, i.e. the projected screen target is `viewportInsets.top + returned
+/// value`. It is called exactly once per pass, immediately after the anchor row has been measured,
+/// with that row's measured height and its view. That is the only point at which a height-dependent
+/// placement (bottom-align, center, "make visible") can be computed for a target that is not in the
+/// loaded window — which is what a host's far jump always is.
+///
+/// The closure MUST be pure with respect to this list: it may read geometry, but it must not mutate
+/// the collection or re-enter `applyChanges`. It runs inside the mutation pass.
+public struct CoreListScrollTarget {
+    /// Travel direction for a viewport transition that has no anchor witness — i.e. when no old
+    /// identity survives into the new collection, so index comparison has nothing to compare. `nil`
+    /// keeps the historical hardcoded `.forward`.
+    public enum Direction {
+        case forward
+        case backward
+    }
+
+    public let index: Int
+    public let resolve: (_ measuredHeight: CGFloat, _ view: UIView & CoreListItemView) -> CGFloat
+    public let direction: Direction?
+
+    public init(index: Int, pointOffset: CGFloat) {
+        self.index = index
+        self.resolve = { _, _ in pointOffset }
+        self.direction = nil
+    }
+
+    public init(index: Int,
+                direction: Direction? = nil,
+                resolve: @escaping (CGFloat, UIView & CoreListItemView) -> CGFloat) {
+        self.index = index
+        self.resolve = resolve
+        self.direction = direction
+    }
+}
+
+extension CoreListScrollTarget: CustomStringConvertible {
+    public var description: String {
+        "CoreListScrollTarget(index: \(index), direction: \(String(describing: direction)))"
+    }
+}
+
 public enum CoreListLoadedEdge: Hashable {
     case top
     case bottom
@@ -111,9 +156,30 @@ public final class CoreVirtualListView: UIView {
     }
 
     private struct ResolvedAnchor {
+        /// `.resolved` is produced by `resolveAnchor`'s `scrollTo` branch and by nothing else, so the
+        /// two cases are exactly the old `hasScrollTo` split in the offset composition below.
+        enum Offset {
+            case fixed(CGFloat)
+            case resolved((CGFloat, UIView & CoreListItemView) -> CGFloat)
+        }
+
         let index: Int
-        let pointOffset: CGFloat
+        let offset: Offset
         let preservesVisibleContent: Bool
+
+        // Every non-scrollTo branch of resolveAnchor computes a plain point offset, so they keep
+        // their existing call shape.
+        init(index: Int, pointOffset: CGFloat, preservesVisibleContent: Bool) {
+            self.index = index
+            self.offset = .fixed(pointOffset)
+            self.preservesVisibleContent = preservesVisibleContent
+        }
+
+        init(index: Int, offset: Offset, preservesVisibleContent: Bool) {
+            self.index = index
+            self.offset = offset
+            self.preservesVisibleContent = preservesVisibleContent
+        }
     }
 
     static func computeDiff(old: [CoreListItem], new: [CoreListItem]) -> ItemDiff {
@@ -546,7 +612,7 @@ public final class CoreVirtualListView: UIView {
     public func applyChanges(items newItems: [CoreListItem]? = nil,
                       newSize: CGSize? = nil,
                       newInsets: UIEdgeInsets? = nil,
-                      scrollTo: (index: Int, pointOffset: CGFloat)? = nil,
+                      scrollTo: CoreListScrollTarget? = nil,
                       additionalScrollDistance: CGFloat = 0.0,
                       anchorMode: CoreListAnchorMode = .automatic,
                       compensatesInsetChange: Bool = true,
@@ -792,9 +858,21 @@ public final class CoreVirtualListView: UIView {
             // exactly where ListViewImpl puts it (`offsetFix += additionalScrollDistance`), and it
             // composes with an explicit `scrollTo` for the same reason it does there: the scroll
             // positions content first, then the displacement moves it.
-            let projectedPointOffset = (hasScrollTo
-                ? viewportInsets.top + resolvedAnchor.pointOffset
-                : resolvedAnchor.pointOffset + topInsetDelta) + additionalScrollDistance
+            //
+            // The two branches below are the two halves of what used to be one `projectedPointOffset`
+            // expression; only the `scrollTo` half is deferred, because only it needs the anchor's
+            // measured height. `.resolved` is produced by resolveAnchor's `scrollTo` branch and by
+            // nothing else, so the branch split here is exactly the old `hasScrollTo` split — note
+            // in particular that it does NOT add `topInsetDelta`.
+            let resolveY: (CGFloat, UIView & CoreListItemView) -> CGFloat
+            switch resolvedAnchor.offset {
+            case let .fixed(pointOffset):
+                let value = pointOffset + topInsetDelta + additionalScrollDistance
+                resolveY = { _, _ in value }
+            case let .resolved(resolve):
+                let base = viewportInsets.top + additionalScrollDistance
+                resolveY = { height, view in base + resolve(height, view) }
+            }
             // The loaded-top pin would swallow the displacement whole, so a caller asking for one opts
             // out of it and lets the window build clip instead. That reproduces ListViewImpl, where the
             // equivalent pin is `snapToBounds` — which only closes a GAP above the top item. A positive
@@ -806,7 +884,7 @@ public final class CoreVirtualListView: UIView {
                 && oldWindow.startIndex == 0
                 && oldEdges.min.map { abs(oldSettledOffset - $0) <= 1e-6 } == true
             newWindow = buildWindow(anchoredAt: resolvedAnchor.index,
-                                    pointOffset: projectedPointOffset,
+                                    resolveY: resolveY,
                                     pinsLoadedTop: pinsLoadedTop,
                                     sourceWindow: oldWindow,
                                     survivorMapNewToOld: survivorMapNewToOld,
@@ -827,6 +905,23 @@ public final class CoreVirtualListView: UIView {
         let isOverlappingScroll = hasScrollTo && !sharedLoadedIdentities.isEmpty
         let isCarouselScroll = hasScrollTo && sharedLoadedIdentities.isEmpty
             && !oldWindow.isEmpty && !newWindow.isEmpty
+        // A carousel travelling to a destination that is entirely new content: the incoming strip IS
+        // the context, not an insertion into one, so neither end should fade — it is one rigid
+        // movement between two strips, already owned by the shared viewport track.
+        //
+        // The test is the DESTINATION WINDOW, not the whole collection. Both narrower and wider than
+        // it sounds:
+        //   • narrower than `isCarouselScroll` (which only says the two LOADED windows are disjoint):
+        //     a far jump within a surviving collection is a carousel too, and a genuinely new row
+        //     landing among survivors in its destination is real new content that must still fade.
+        //   • wider than whole-collection disjointness, which is what this used to test and which is
+        //     wrong for real hosts. A chat's non-message rows carry CONSTANT identities — an unread
+        //     separator is `4 << 40`, chat-info `6 << 40` — so one of them survives a wholesale
+        //     history replace and made the collection-level test permanently false. What matters is
+        //     whether anything in the place we are travelling TO was already there.
+        let destinationIsEntirelyNew = !newLoadedIdentities.isEmpty
+            && Set(newLoadedIdentities).isDisjoint(with: Set(oldItems.map(\.identity)))
+        let isFullReplaceCarousel = isCarouselScroll && destinationIsEntirelyNew
         let potentialCarryIdentities: Set<AnyHashable> = {
             guard (isOverlappingScroll || isCarouselScroll), animationDuration > 0 else {
                 return []
@@ -895,7 +990,8 @@ public final class CoreVirtualListView: UIView {
         let newGhostBlockIDs = departingRuns.map {
             makeGhostBlock(from: $0,
                            transition: transition,
-                           transactionTime: transactionTime)
+                           transactionTime: transactionTime,
+                           fadesOut: !isFullReplaceCarousel)
         }
         var newGhostBlockByDepartedIdentity: [AnyHashable: GhostBlockID] = [:]
         for (run, blockID) in zip(departingRuns, newGhostBlockIDs) {
@@ -1121,7 +1217,13 @@ public final class CoreVirtualListView: UIView {
             let direction = ViewportTransitionGeometry.direction(
                 currentAnchor: directionAnchorIdentity,
                 targetIndex: scrollTo.index,
-                newOrder: newOrder
+                newOrder: newOrder,
+                fallback: {
+                    switch scrollTo.direction {
+                    case .backward: return .backward
+                    case .forward, nil: return .forward
+                    }
+                }()
             )
             if isOverlappingScroll,
                let reference = ViewportTransitionGeometry.overlapReference(
@@ -1465,17 +1567,28 @@ public final class CoreVirtualListView: UIView {
             )
         }
 
-        let insertedIDs = Set(diff.inserts.compactMap { newIndex in
-            effectiveItems.indices.contains(newIndex)
-                ? effectiveItems[newIndex].identity
-                : nil
-        }).subtracting(movedIDs)
-        for identity in newIDs.subtracting(oldIDs).intersection(insertedIDs) {
-            guard let new = newState[identity] else { continue }
-            animationController.insert(identity: identity,
-                                       layer: new.view.layer,
-                                       transition: transition,
-                                       transactionTime: transactionTime)
+        // A full-replace carousel is a rigid travel between two strips: both ends ride the shared
+        // viewport track at full opacity, which is what ListViewImpl does with its
+        // temporaryPreviousNodes. Fading here would be an artifact of the host expressing a jump as
+        // delete-all + insert-all, not a wanted animation. Scoped tightly — an overlapping scrollTo,
+        // or a carousel within a surviving collection, carrying a genuinely new row must still fade
+        // that row in; see `isFullReplaceCarousel`.
+        //
+        // Nothing else is needed for the incoming side — render() already stamps `layer.opacity = 1`
+        // on every window item, and it runs earlier in this pass.
+        if !isFullReplaceCarousel {
+            let insertedIDs = Set(diff.inserts.compactMap { newIndex in
+                effectiveItems.indices.contains(newIndex)
+                    ? effectiveItems[newIndex].identity
+                    : nil
+            }).subtracting(movedIDs)
+            for identity in newIDs.subtracting(oldIDs).intersection(insertedIDs) {
+                guard let new = newState[identity] else { continue }
+                animationController.insert(identity: identity,
+                                           layer: new.view.layer,
+                                           transition: transition,
+                                           transactionTime: transactionTime)
+            }
         }
     }
 
@@ -1519,7 +1632,7 @@ public final class CoreVirtualListView: UIView {
               !_items.isEmpty else { return }
 
         activeWindow = buildWindow(anchoredAt: 0,
-                                   pointOffset: 0,
+                                   resolveY: { _, _ in 0 },
                                    pinsLoadedTop: true,
                                    sourceWindow: nil)
         render()
@@ -1535,7 +1648,7 @@ public final class CoreVirtualListView: UIView {
         }
     }
 
-    private func resolveAnchor(scrollTo: (index: Int, pointOffset: CGFloat)?,
+    private func resolveAnchor(scrollTo: CoreListScrollTarget?,
                                anchorMode: CoreListAnchorMode,
                                isNoOverlapSwap: Bool,
                                diff: ItemDiff,
@@ -1548,7 +1661,7 @@ public final class CoreVirtualListView: UIView {
             // Momentum was already halted at pass entry (see applyChanges) — deliberately, so this pass's
             // geometry is built against the caught position rather than a stale sample.
             return ResolvedAnchor(index: scrollTo.index,
-                                  pointOffset: scrollTo.pointOffset,
+                                  offset: .resolved(scrollTo.resolve),
                                   preservesVisibleContent: false)
         }
         if anchorMode == .preserveVisibleContent,
@@ -1837,7 +1950,7 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func buildWindow(anchoredAt index: Int,
-                             pointOffset: CGFloat,
+                             resolveY: (CGFloat, UIView & CoreListItemView) -> CGFloat,
                              pinsLoadedTop: Bool = false,
                              sourceWindow: Window?,
                              survivorMapNewToOld: [Int: Int]? = nil,
@@ -1850,10 +1963,14 @@ public final class CoreVirtualListView: UIView {
                                moveReuseNewToOld: moveReuseNewToOld)
         let height = view.update(width: width,
                                  transition: measureTransition(forItemAt: index))
+        // The anchor's placement may depend on its own height (bottom-align, center, make-visible),
+        // so it is resolved here rather than by the caller: this is the first moment the height
+        // exists.
+        let anchorY = resolveY(height, view)
         var window = Window(items: [
             Window.Item(index: index,
                         view: view,
-                        frame: CGRect(x: itemX, y: pointOffset, width: width, height: height))
+                        frame: CGRect(x: itemX, y: anchorY, width: width, height: height))
         ])
 
         let band = projectedLoadBand
@@ -2370,7 +2487,8 @@ public final class CoreVirtualListView: UIView {
 
     private func makeGhostBlock(from items: [SettledLiveItem],
                                 transition: CoreListTransition,
-                                transactionTime: TimeInterval) -> GhostBlockID {
+                                transactionTime: TimeInterval,
+                                fadesOut: Bool) -> GhostBlockID {
         precondition(!items.isEmpty)
         let rootY = items[0].contentY + items[0].positionOffset
         let localYs = items.map { $0.contentY + $0.positionOffset - rootY }
@@ -2429,7 +2547,8 @@ public final class CoreVirtualListView: UIView {
                                        localY: localY,
                                        blockID: id,
                                        transition: transition,
-                                       transactionTime: transactionTime)
+                                       transactionTime: transactionTime,
+                                       fadesOut: fadesOut)
             let key = ObjectIdentifier(item.view)
             if var render = ghostRenders[id], render.members[key] != nil {
                 render.members[key] = GhostMember(
@@ -2450,7 +2569,8 @@ public final class CoreVirtualListView: UIView {
                           localY: CGFloat,
                           blockID: GhostBlockID,
                           transition: CoreListTransition,
-                          transactionTime: TimeInterval) -> ListAnimationOwner {
+                          transactionTime: TimeInterval,
+                          fadesOut: Bool) -> ListAnimationOwner {
         item.view.frame = CGRect(x: item.contentX + item.positionOffsetX,
                                  y: localY,
                                  width: item.visualWidth,
@@ -2462,7 +2582,8 @@ public final class CoreVirtualListView: UIView {
             layer: item.view.layer,
             contentY: localY,
             transition: transition,
-            transactionTime: transactionTime
+            transactionTime: transactionTime,
+            fadesOut: fadesOut
         ) { [weak self, weak view = item.view] in
             guard let view else { return }
             self?.finishGhostMember(blockID: blockID, view: view)

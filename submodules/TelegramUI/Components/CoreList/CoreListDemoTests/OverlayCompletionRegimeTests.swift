@@ -19,7 +19,7 @@ final class OverlayCompletionRegimeTests: XCTestCase {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400),
                                          emitsCA: false)
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         XCTAssertGreaterThan(fixture.viewportCarryViews.count, 0,

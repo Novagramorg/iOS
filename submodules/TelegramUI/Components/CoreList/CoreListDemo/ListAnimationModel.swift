@@ -312,7 +312,8 @@ final class ListAnimationModel {
 
     func beginExit(from owner: ListAnimationOwner,
                    at time: TimeInterval,
-                   transition: CoreListTransition) -> ListAnimationExit {
+                   transition: CoreListTransition,
+                   fadesOut: Bool = true) -> ListAnimationExit {
         precondition(owner.isLive)
         ensureLive(owner)
 
@@ -332,8 +333,13 @@ final class ListAnimationModel {
                                        height: height,
                                        opacity: opacity,
                                        tracks: [:])
+        // A non-fading exit still installs a real opacity track, deliberately: `replace` does not
+        // early-out on an equal endpoint, so the track keeps the pass duration and therefore the
+        // completion deadline that tears the ghost member down. Routing this through the guarded
+        // equal-target helper above would return `.unchanged`, which `apply` short-circuits without
+        // running cleanup — leaking every member into the overlay forever.
         let mutation = replace(owner: exitOwner, property: .opacity,
-                               from: opacity, to: 0,
+                               from: opacity, to: fadesOut ? 0 : opacity,
                                at: time, transition: transition)
         return ListAnimationExit(owner: exitOwner,
                                  positionX: positionX,

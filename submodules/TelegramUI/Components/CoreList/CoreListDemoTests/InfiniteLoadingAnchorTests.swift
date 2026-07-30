@@ -69,7 +69,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             transition: .easeInOut(duration: 0)
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 20, pointOffset: -20),
+            scrollTo: .init(index: 20, pointOffset: -20),
             transition: .easeInOut(duration: 0)
         )
         XCTAssertEqual(
@@ -259,7 +259,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
 
         context.fixture.listView.applyChanges(
             items: changed,
-            scrollTo: (index: 40, pointOffset: 0),
+            scrollTo: .init(index: 40, pointOffset: 0),
             anchorMode: .preserveVisibleContent,
             transition: .easeInOut(duration: 0)
         )
@@ -314,7 +314,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             transition: .easeInOut(duration: 0)
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 20, pointOffset: -20),
+            scrollTo: .init(index: 20, pointOffset: -20),
             transition: .easeInOut(duration: 0)
         )
         let witness = ids[20]
@@ -350,7 +350,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
             preloadMargin: 100
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 40, pointOffset: 0),
+            scrollTo: .init(index: 40, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         let oldLoadedIDs = Set(fixture.activeWindow.items.map {
@@ -482,7 +482,7 @@ final class InfiniteLoadingAnchorTests: XCTestCase {
                 transition: .easeInOut(duration: 0)
             )
             fixture.listView.applyChanges(
-                scrollTo: (index: 20, pointOffset: -20),
+                scrollTo: .init(index: 20, pointOffset: -20),
                 transition: .easeInOut(duration: 0)
             )
             fixture.listView.applyChanges(

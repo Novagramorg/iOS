@@ -55,7 +55,7 @@ final class PhysicsListIntegrationTests: XCTestCase {
     func test_bottomEdge_flickPastBottom_springsBackToBottomEdge() {
         let fixture = makeFixture()
         // Reach the bottom region via the list's own scrollTo (keeps offset/window/previousOffset in sync).
-        fixture.listView.applyChanges(scrollTo: (index: 199, pointOffset: 750), transition: .easeInOut(duration: 0))
+        fixture.listView.applyChanges(scrollTo: .init(index: 199, pointOffset: 750), transition: .easeInOut(duration: 0))
         // Flick into the bottom edge and let the spring settle there — this offset IS the bottom edge.
         fixture.simulateFlick(offsetVelocity: 2500)
         _ = fixture.runUntilSettled(max: 6.0)
@@ -102,7 +102,7 @@ final class PhysicsListIntegrationTests: XCTestCase {
 
     func test_keyframe_bottomEdge_flickPastBottom_springsBackToBottomEdge() {
         let fixture = PhysicsListFixture(itemCount: 200, itemHeight: 50, decelerationMode: .keyframe)
-        fixture.listView.applyChanges(scrollTo: (index: 199, pointOffset: 750), transition: .easeInOut(duration: 0))
+        fixture.listView.applyChanges(scrollTo: .init(index: 199, pointOffset: 750), transition: .easeInOut(duration: 0))
         fixture.simulateFlick(offsetVelocity: 2500)
         _ = fixture.runUntilSettled(max: 6.0)
         XCTAssertTrue(Set(fixture.loadedIndices).contains(199), "last row loaded at the bottom")

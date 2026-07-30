@@ -25,7 +25,7 @@ final class PresentedGeometryTests: XCTestCase {
 
     func test_atRest_presentedFrameEqualsConvert() {
         let (f, _) = fixture()
-        f.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
+        f.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
         let item = f.activeWindow.items[3]
         let converted = f.listView.convert(item.view.bounds, from: item.view)
         XCTAssertEqual(f.listView.presentedFrame(of: item.view).minY, converted.minY, accuracy: 0.001,
@@ -34,7 +34,7 @@ final class PresentedGeometryTests: XCTestCase {
 
     func test_duringAFlight_convertReportsTheDestination_presentedFrameReportsTheScreen() {
         let (f, _) = fixture()
-        f.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
+        f.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
         f.simulateFlick(offsetVelocity: 9000)
         for _ in 0..<6 { f.tick(dt: 1.0 / 120) }
 
@@ -56,7 +56,7 @@ final class PresentedGeometryTests: XCTestCase {
     /// reads in the same frame must agree even though the render server has moved on between them.
     func test_offTick_presentedFrameIsStable_notInstantaneous() {
         let (f, clock) = fixture()
-        f.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
+        f.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
         f.simulateFlick(offsetVelocity: 9000)
         for _ in 0..<6 { f.tick(dt: 1.0 / 120) }
 
@@ -75,8 +75,8 @@ final class PresentedGeometryTests: XCTestCase {
 
     func test_duringAProgrammaticScroll_presentedFrameFollowsTheViewportTrack() {
         let (f, _) = fixture()
-        f.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
-        f.listView.applyChanges(scrollTo: (index: 66, pointOffset: 0), transition: .easeInOut(duration: 0.3))
+        f.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
+        f.listView.applyChanges(scrollTo: .init(index: 66, pointOffset: 0), transition: .easeInOut(duration: 0.3))
         XCTAssertGreaterThan(abs(f.viewportCorrection), 1, "precondition: a viewport track must be live")
 
         let item = f.activeWindow.items[3]
@@ -85,7 +85,7 @@ final class PresentedGeometryTests: XCTestCase {
 
     func test_afterTheFlightSettles_presentedFrameEqualsConvertAgain() {
         let (f, _) = fixture()
-        f.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
+        f.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
         f.simulateFlick(offsetVelocity: 3000)
         var ticks = 0
         while f.engine.isDecelerating && ticks < 900 {

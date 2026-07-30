@@ -114,7 +114,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             items: expanded,
-            scrollTo: (index: 30, pointOffset: 0),
+            scrollTo: .init(index: 30, pointOffset: 0),
             transition: .easeInOut(duration: 2)
         )
 
@@ -140,7 +140,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
         let currentViewportCorrection = fixture.viewportCorrection
         let oldReferenceY = try XCTUnwrap(fixture.settledContentY(identity: identity))
 
-        fixture.listView.applyChanges(scrollTo: (index: 4, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 4, pointOffset: 0),
                                       transition: .easeInOut(duration: 2))
 
         let track = try XCTUnwrap(fixture.viewportTrack)
@@ -174,7 +174,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
         let identity = AnyHashable(4)
         let rowTrack = try XCTUnwrap(fixture.positionTrack(identity: identity))
         let before = try XCTUnwrap(fixture.screenY(identity: identity))
-        fixture.listView.applyChanges(scrollTo: (index: 3, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 3, pointOffset: 0),
                                       transition: .easeInOut(duration: 2))
         XCTAssertEqual(fixture.positionTrack(identity: identity), rowTrack)
         XCTAssertEqual(try XCTUnwrap(fixture.screenY(identity: identity)),
@@ -187,7 +187,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
                                                      preload: 100)
         let createdBefore = counter.views
 
-        fixture.listView.applyChanges(scrollTo: (index: 300, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 300, pointOffset: 0),
                                       transition: .easeInOut(duration: 2))
 
         XCTAssertLessThanOrEqual(counter.views - createdBefore,
@@ -221,7 +221,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
         )
 
         for target in [60, 120, 180, 240, 300, 360, 420] {
-            driver.listView.applyChanges(scrollTo: (index: target, pointOffset: 0),
+            driver.listView.applyChanges(scrollTo: .init(index: target, pointOffset: 0),
                                          transition: .easeInOut(duration: 1))
             XCTAssertFalse(driver.viewportCarryViews.isEmpty)
             XCTAssertEqual(viewportCompletions.count, 1)
@@ -241,10 +241,10 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testFarTopUsesBackwardCarousel() {
         let fixture = makeFixture(itemCount: 500, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 300, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 300, pointOffset: 0),
                                       transition: .easeInOut(duration: 0))
 
-        fixture.listView.applyChanges(scrollTo: (index: 0, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 0, pointOffset: 0),
                                       transition: .easeInOut(duration: 2))
 
         XCTAssertGreaterThan(fixture.viewportCorrection, 0)
@@ -258,7 +258,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
         )
         XCTAssertNotEqual(fixture.activeWindow.minY, 0)
 
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
 
         var incoming = try loadedScreenBounds(fixture)
@@ -276,7 +276,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 300, left: 0, bottom: 0, right: 0),
-            scrollTo: (index: 40, pointOffset: 0),
+            scrollTo: .init(index: 40, pointOffset: 0),
             transition: .easeInOut(duration: 0.5)
         )
 
@@ -326,11 +326,11 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
             newInsets: UIEdgeInsets(top: 300, left: 0, bottom: 0, right: 0),
             transition: .easeInOut(duration: 0)
         )
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 0))
         XCTAssertNotEqual(fixture.activeWindow.minY, 0)
 
-        fixture.listView.applyChanges(scrollTo: (index: 0, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 0, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
 
         var incoming = try loadedScreenBounds(fixture)
@@ -345,7 +345,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testCarouselDirectionFallsBackToNearestSurvivorWhenAnchorIsDeleted() {
         let fixture = makeFixture(itemCount: 500, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 300, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 300, pointOffset: 0),
                                       transition: .easeInOut(duration: 0))
         var changed = fixture.listView.items
         let survivorAbove = changed[299]
@@ -357,7 +357,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
         changed.insert(survivorAbove, at: 400)
 
         fixture.listView.applyChanges(items: changed,
-                                      scrollTo: (index: 200, pointOffset: 0),
+                                      scrollTo: .init(index: 200, pointOffset: 0),
                                       transition: .easeInOut(duration: 2))
 
         XCTAssertGreaterThan(fixture.viewportCorrection, 0)
@@ -372,7 +372,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
         fixture.listView.applyChanges(
             items: changed,
             newSize: CGSize(width: 320, height: 360),
-            scrollTo: (index: 300, pointOffset: 25),
+            scrollTo: .init(index: 300, pointOffset: 25),
             transition: .easeInOut(duration: 2)
         )
 
@@ -387,13 +387,13 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testRetargetCarriesExistingStripsWithoutBoundaryJump() throws {
         let fixture = makeFixture(itemCount: 500, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 300, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 300, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         fixture.tick(dt: 1)
 
         let beforeY = try XCTUnwrap(fixture.renderedY(identity: AnyHashable(300)))
         let oldCarryCount = fixture.viewportCarryViews.count
-        fixture.listView.applyChanges(scrollTo: (index: 20, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 20, pointOffset: 0),
                                       transition: .easeInOut(duration: 3))
 
         XCTAssertNotNil(fixture.viewportTrack)
@@ -406,7 +406,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testInsetChangeDuringCarouselPreservesEveryDetachedCarryBoundary() throws {
         let fixture = makeFixture(itemCount: 100, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .linear(duration: 4))
         fixture.tick(dt: 0.1)
 
@@ -437,12 +437,12 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testOldDeadlineCannotClearReplacementTrackOrCarries() throws {
         let fixture = makeFixture(itemCount: 500, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 300, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 300, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         fixture.tick(dt: 1)
         let firstGeneration = try XCTUnwrap(fixture.viewportTrack).generation
 
-        fixture.listView.applyChanges(scrollTo: (index: 20, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 20, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         let replacement = try XCTUnwrap(fixture.viewportTrack)
         XCTAssertNotEqual(replacement.generation, firstGeneration)
@@ -454,7 +454,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testDeleteAddLeavesExactViewportTrackUntouched() throws {
         let fixture = makeFixture(itemCount: 100, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         fixture.tick(dt: 1)
         let before = try XCTUnwrap(fixture.viewportTrack)
@@ -467,7 +467,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testUserDragChangesSettledStateWithoutTouchingViewportTrack() throws {
         let fixture = makeFixture(itemCount: 100, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         fixture.tick(dt: 1)
         let before = try XCTUnwrap(fixture.viewportTrack)
@@ -479,15 +479,15 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testSameTargetIsExactNoOpAndZeroDurationSettlesImmediately() throws {
         let fixture = makeFixture(itemCount: 100, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         fixture.tick(dt: 1)
         let before = try XCTUnwrap(fixture.viewportTrack)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 9))
         XCTAssertEqual(fixture.viewportTrack, before)
 
-        fixture.listView.applyChanges(scrollTo: (index: 0, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 0, pointOffset: 0),
                                       transition: .easeInOut(duration: 0))
         XCTAssertNil(fixture.viewportTrack)
         XCTAssertTrue(fixture.viewportCarryViews.isEmpty)
@@ -530,7 +530,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     func testRebuildClearsViewportTrackAndCarries() {
         let fixture = makeFixture(itemCount: 100, viewportHeight: 300, preload: 100)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 4))
         XCTAssertFalse(fixture.viewportCarryViews.isEmpty)
         fixture.listView.items = (0..<20).map { fixedItem(id: 1_000 + $0) }

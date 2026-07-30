@@ -2,6 +2,7 @@ import UIKit
 import AsyncDisplayKit
 import SwiftSignalKit
 import Display
+import ChatMessageItemImpl
 
 // A chat-specific abstraction of the list-view backend used by ChatHistoryListNodeImpl.
 //
@@ -51,6 +52,20 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     var tapped: (() -> Void)? { get set }
     var reorderItem: (Int, Int, Any?) -> Signal<Bool, NoError> { get set }
 
+    // `maintainsUnreadItemAlignment` asks the backend to keep the unread separator pinned to the
+    // bottom inset edge across this pass's geometry change — the chat's `enableUnreadAlignment`
+    // policy. It is ONE member rather than the measure-then-reapply pair it decomposes into, because
+    // the predicate ("is the separator currently pinned?") must be evaluated against the OLD insets
+    // and the re-pin applied with the NEW ones. As two members a backend could implement one and
+    // stub the other, which is exactly how `trackingOffset`/`beganTrackingAtTopOrigin` silently
+    // disabled keyboard-dismissal snap-back until they were collapsed into
+    // `didInteractivelyDragFromTopOrigin`.
+    //
+    // This lived in `ChatHistoryListNodeImpl.updateLayout` and read `itemNode.index`, which is
+    // `public internal(set)` to Display and therefore always nil for a hosted node — so under the
+    // CoreList backend the whole behavior was dead code with no build error. The nav bar changing
+    // height mid-open (a Report Spam bar appearing) is what makes it load-bearing: without the
+    // re-pin the separator keeps the position computed against the pre-panel geometry.
     func chatHistoryTransaction(
         deleteIndices: [ListViewDeleteItem],
         insertIndicesAndItems: [ChatHistoryListViewInsertItem],
@@ -61,9 +76,19 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
         updateSizeAndInsets: ListViewUpdateSizeAndInsets?,
         stationaryItemRange: (Int, Int)?,
         customAnimationTransition: ControlledTransition?,
+        maintainsUnreadItemAlignment: Bool,
         updateOpaqueState: Any?,
         completion: @escaping (ListViewDisplayedItemRange) -> Void
     )
+
+    // A loaded item node's frame in LIST space, or nil when the node is not currently loaded.
+    //
+    // `ListViewItemNode.frame` is list-space only on `ListViewImpl`. Under a hosting backend the
+    // node's view is a subview of its host at (0, 0, width, height), so its own frame is host-local
+    // and every chat-layer geometry comparison against it silently reads the wrong space. The nil
+    // case is the liveness guard: `ListViewImpl` answers it from `index != nil`, CoreList from
+    // absence from the loaded window.
+    func itemNodeFrame(_ node: ListViewItemNode) -> CGRect?
 
     func addAfterTransactionsCompleted(_ f: @escaping () -> Void)
     func visibleContentOffset() -> ListViewVisibleContentOffset
@@ -104,6 +129,7 @@ public extension ChatHistoryListViewBackend {
         updateSizeAndInsets: ListViewUpdateSizeAndInsets? = nil,
         stationaryItemRange: (Int, Int)? = nil,
         customAnimationTransition: ControlledTransition? = nil,
+        maintainsUnreadItemAlignment: Bool = false,
         updateOpaqueState: Any?,
         completion: @escaping (ListViewDisplayedItemRange) -> Void = { _ in }
     ) {
@@ -117,6 +143,7 @@ public extension ChatHistoryListViewBackend {
             updateSizeAndInsets: updateSizeAndInsets,
             stationaryItemRange: stationaryItemRange,
             customAnimationTransition: customAnimationTransition,
+            maintainsUnreadItemAlignment: maintainsUnreadItemAlignment,
             updateOpaqueState: updateOpaqueState,
             completion: completion
         )
@@ -142,6 +169,15 @@ extension ListViewImpl: ChatHistoryListViewBackend {
         self.scroller.contentInset = UIEdgeInsets(top: inset, left: 0.0, bottom: 0.0, right: 0.0)
     }
     
+    public func itemNodeFrame(_ node: ListViewItemNode) -> CGRect? {
+        // On ListViewImpl a node's own frame IS list space; `index != nil` is its liveness guard,
+        // skipping removed-but-still-animating nodes exactly as its internal scans do.
+        guard node.index != nil else {
+            return nil
+        }
+        return node.frame
+    }
+
     public func chatHistoryTransaction(
         deleteIndices: [ListViewDeleteItem],
         insertIndicesAndItems: [ChatHistoryListViewInsertItem],
@@ -152,9 +188,50 @@ extension ListViewImpl: ChatHistoryListViewBackend {
         updateSizeAndInsets: ListViewUpdateSizeAndInsets?,
         stationaryItemRange: (Int, Int)?,
         customAnimationTransition: ControlledTransition?,
+        maintainsUnreadItemAlignment: Bool,
         updateOpaqueState: Any?,
         completion: @escaping (ListViewDisplayedItemRange) -> Void
     ) {
+        // Measured against the OLD insets, before the transaction below installs the new ones — this
+        // is the code that used to sit in ChatHistoryListNodeImpl.updateLayout, moved here verbatim
+        // (including its 6.0, which is ChatUnreadItem's scrollPositioningInsets.bottom). ListViewImpl
+        // cannot compose the re-pin into the same pass, so it is re-issued as a second transaction
+        // from the completion, exactly as before.
+        var postScrollToItem: ListViewScrollToItem?
+        if maintainsUnreadItemAlignment, let updateSizeAndInsets, updateSizeAndInsets.insets.bottom != self.insets.bottom {
+            self.forEachVisibleItemNode { itemNode in
+                if let itemNode = itemNode as? ChatUnreadItemNode, let index = itemNode.index {
+                    if abs(itemNode.frame.maxY - (self.visibleSize.height - self.insets.bottom + 6.0)) < 1.0 {
+                        postScrollToItem = ListViewScrollToItem(index: index, position: .bottom(0.0), animated: updateSizeAndInsets.duration != 0.0, curve: updateSizeAndInsets.curve, directionHint: .Up)
+                    }
+                }
+            }
+        }
+
+        let wrappedCompletion: (ListViewDisplayedItemRange) -> Void
+        if let postScrollToItem {
+            wrappedCompletion = { [weak self] displayedRange in
+                guard let self else {
+                    completion(displayedRange)
+                    return
+                }
+                self.transaction(
+                    deleteIndices: [],
+                    insertIndicesAndItems: [],
+                    updateIndicesAndItems: [],
+                    options: [.Synchronous, .LowLatency],
+                    scrollToItem: postScrollToItem,
+                    additionalScrollDistance: 0.0,
+                    updateSizeAndInsets: nil,
+                    stationaryItemRange: nil,
+                    updateOpaqueState: nil,
+                    completion: completion
+                )
+            }
+        } else {
+            wrappedCompletion = completion
+        }
+
         self.transaction(
             deleteIndices: deleteIndices,
             insertIndicesAndItems: insertIndicesAndItems.map { item in
@@ -181,7 +258,7 @@ extension ListViewImpl: ChatHistoryListViewBackend {
             stationaryItemRange: stationaryItemRange,
             customAnimationTransition: customAnimationTransition,
             updateOpaqueState: updateOpaqueState,
-            completion: completion
+            completion: wrappedCompletion
         )
     }
 }

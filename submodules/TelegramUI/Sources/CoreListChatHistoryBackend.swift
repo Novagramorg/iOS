@@ -5,6 +5,7 @@ import Display
 import CoreList
 import ComponentFlow
 import ComponentDisplayAdapters
+import ChatMessageItemImpl
 
 // CoreList cannot depend on ComponentFlow — its Bazel target has no `deps` and its demo builds
 // standalone in Xcode — so it carries a case-for-case copy of the transition value model. This is
@@ -219,6 +220,97 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return self.listFrame(of: view)
     }
 
+    // The collection index of a loaded row, or nil when `node` is not currently loaded.
+    //
+    // ListViewImpl's ensureItemNodeVisible opens with `if let index = node.index`, which cannot work
+    // here: ListViewItemNode.index is `public internal(set)` to Display, so a hosted node never
+    // carries one. Resolving through CoreList's loadedItemEntries — the (index, view) sibling of
+    // loadedItemViews — is the equivalent, and its nil case is the same liveness guard
+    // loadedFrame(of:) relies on: genuine departures move to the exitOverlay and never appear here.
+    private func loadedIndex(of node: ListViewItemNode) -> Int? {
+        for entry in self.coreList.loadedItemEntries {
+            if (entry.view as? CoreListNodeHostView)?.itemNode === node {
+                return entry.index
+            }
+        }
+        return nil
+    }
+
+    // ListViewImpl's scroll-position arithmetic (Display/Source/ListView.swift:3166-3204),
+    // translated from "a delta added to every frame" into "the target row's minY, minus insets.top"
+    // — which is what CoreList's resolver returns (its projected screen target for the row's minY is
+    // viewportInsets.top + the returned value).
+    //
+    // Runs inside CoreList's mutation pass, at the moment the anchor row has been measured. It reads
+    // geometry only: never mutate the entry array or re-enter a transaction from here.
+    //
+    // Geometry comes from currentSize/currentInsets, which chatHistoryTransaction has already
+    // updated to this pass's values before calling applyChanges — the same values CoreList is
+    // resolving against, since they are what was submitted as newSize/newInsets. This diverges from
+    // ListViewImpl, which reads the OLD self.insets in this branch (note the commented-out
+    // `// updateSizeAndInsets?.insets ?? self.insets` at ListView.swift:3143) and applies the
+    // size/inset change separately afterwards.
+    private func pointOffset(for position: ListViewScrollPosition,
+                             index: Int,
+                             height: CGFloat,
+                             view: UIView & CoreListItemView) -> CGFloat {
+        let node = (view as? CoreListNodeHostView)?.itemNode
+        // ChatUnreadItem and ChatReplyCountItem set (top: 5, bottom: 6) — the unread separator is a
+        // primary scroll target, so this is load-bearing rather than a rounding detail.
+        let scrollPositioningInsets = node?.scrollPositioningInsets ?? UIEdgeInsets()
+        let viewportHeight = self.currentSize.height
+        let insetTop = self.currentInsets.top
+        let insetBottom = self.currentInsets.bottom
+        let contentAreaHeight = viewportHeight - insetTop - insetBottom
+
+        switch position {
+        case let .top(additionalOffset):
+            return additionalOffset + scrollPositioningInsets.top
+        case let .bottom(additionalOffset):
+            let targetMaxY = (viewportHeight - insetBottom)
+                + scrollPositioningInsets.bottom
+                + additionalOffset
+            return targetMaxY - height - insetTop
+        case let .center(overflow):
+            if height <= contentAreaHeight + CGFloat.ulpOfOne {
+                return floor((contentAreaHeight - height) / 2.0)
+            }
+            switch overflow {
+            case .top:
+                return 0.0
+            case .bottom:
+                return (viewportHeight - insetBottom) - height - insetTop
+            case let .custom(getOverflow):
+                guard let node else {
+                    return 0.0
+                }
+                let targetMaxY = (viewportHeight - insetBottom)
+                    + node.insets.top
+                    + getOverflow(node)
+                    - floor(contentAreaHeight * 0.5)
+                return targetMaxY - height - insetTop
+            }
+        case .visible:
+            // `.visible` is the one position that depends on where the row already is, so it needs
+            // the row loaded. It is produced only by ensureItemNodeVisible — which always holds a
+            // loaded node — and by the experimentalSnapScrollToItem path, which nothing in chat ever
+            // enables. An unloaded target therefore falls back to center-with-top-overflow.
+            guard let frame = self.loadedFrame(atIndex: index) else {
+                return height <= contentAreaHeight + CGFloat.ulpOfOne
+                    ? floor((contentAreaHeight - height) / 2.0)
+                    : 0.0
+            }
+            if frame.maxY > viewportHeight - insetBottom {
+                let targetMaxY = (viewportHeight - insetBottom) + scrollPositioningInsets.bottom
+                return targetMaxY - height - insetTop
+            }
+            if height <= contentAreaHeight + CGFloat.ulpOfOne, frame.minY < insetTop {
+                return -scrollPositioningInsets.top
+            }
+            return frame.minY - insetTop
+        }
+    }
+
     override init() {
         self.coreList = CoreVirtualListView(forEmbedding: .zero)
         super.init()
@@ -325,6 +417,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         updateSizeAndInsets: ListViewUpdateSizeAndInsets?,
         stationaryItemRange: (Int, Int)?,
         customAnimationTransition: ControlledTransition?,
+        maintainsUnreadItemAlignment: Bool,
         updateOpaqueState: Any?,
         completion: @escaping (ListViewDisplayedItemRange) -> Void
     ) {
@@ -332,8 +425,44 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             self.opaqueTransactionState = updateOpaqueState
         }
 
+        // Evaluated HERE, before the new insets are installed below, because the predicate is "is the
+        // separator sitting exactly where the previous pass pinned it" and that is a question about
+        // the OLD geometry. Same reason `compensatesInsetChange` is read at this call site rather
+        // than inside CoreList: the value must be the one that held when the transaction was
+        // submitted.
+        //
+        // Unlike ListViewImpl, which cannot compose a scroll with an inset change and so re-issues
+        // the re-pin as a second transaction from its completion, `applyChanges` takes `newInsets`
+        // and `scrollTo` together — so this rides the same pass as one movement, with no
+        // intermediate frame and a single animation.
+        var effectiveScrollToItem = scrollToItem
+        if maintainsUnreadItemAlignment,
+           effectiveScrollToItem == nil,
+           let sizeAndInsets = updateSizeAndInsets,
+           sizeAndInsets.insets.bottom != self.currentInsets.bottom {
+            let pinnedMaxY = self.currentSize.height - self.currentInsets.bottom + 6.0
+            for entry in self.coreList.loadedItemEntries {
+                guard let hostView = entry.view as? CoreListNodeHostView,
+                      let itemNode = hostView.itemNode,
+                      itemNode is ChatUnreadItemNode else {
+                    continue
+                }
+                if abs(self.listFrame(of: hostView).maxY - pinnedMaxY) < 1.0 {
+                    effectiveScrollToItem = ListViewScrollToItem(
+                        index: entry.index,
+                        position: .bottom(0.0),
+                        animated: sizeAndInsets.duration != 0.0,
+                        curve: sizeAndInsets.curve,
+                        directionHint: .Up
+                    )
+                    break
+                }
+            }
+        }
+        let scrollToItem = effectiveScrollToItem
+
         var sizeChanged = false
-        if let sizeAndInsets = updateSizeAndInsets {
+        if let sizeAndInsets = updateSizeAndInsets, (sizeAndInsets.size != self.currentSize || sizeAndInsets.insets != self.currentInsets) {
             self.currentSize = sizeAndInsets.size
             self.currentInsets = sizeAndInsets.insets
             self.visibleSize = sizeAndInsets.size
@@ -378,13 +507,33 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             self.entries = updated
         }
         
-        // Deferred: this drops scrollToItem.position/curve/animated/directionHint and anchors at
-        // pointOffset 0.0 (CoreList's top → screen bottom under the wrapper's π), so mid-history
-        // jump-to-reply / scroll-to-unread land at the bottom. See deferred item #1 in
-        // docs/chat/corelist-chat-history-backend.md
-        var scrollTo: (index: Int, pointOffset: CGFloat)?
-        if let scrollToItem {
-            scrollTo = (scrollToItem.index, 0.0)
+        // The row's placement can depend on its own measured height (bottom-align, center,
+        // make-visible), and on a history jump the target is not loaded — the entries array was
+        // replaced wholesale — so the backend cannot measure it. CoreList measures the anchor as the
+        // first act of its window build and calls back here at that point. See pointOffset(for:...).
+        var scrollTo: CoreListScrollTarget?
+        if let scrollToItem, !self.entries.isEmpty {
+            // buildWindow traps on an out-of-range anchor; ListViewImpl instead no-ops silently when
+            // no node carries the index, so clamp rather than crash on a stale index.
+            let index = min(max(scrollToItem.index, 0), self.entries.count - 1)
+            let position = scrollToItem.position
+            // ListViewImpl's `.Down` pins the old content's bottom to the new content's top, so the
+            // new content arrives from higher indices — CoreList's `.forward`. Chat's index space is
+            // reversed (0 = newest), which is why ChatHistoryViewForLocation.swift:59 picks `.Down`
+            // for an older target. The hint only decides a travel CoreList cannot witness itself.
+            let direction: CoreListScrollTarget.Direction
+            switch scrollToItem.directionHint {
+            case .Down:
+                direction = .forward
+            case .Up:
+                direction = .backward
+            }
+            scrollTo = CoreListScrollTarget(index: index, direction: direction) { [weak self] height, view in
+                guard let self else {
+                    return 0.0
+                }
+                return self.pointOffset(for: position, index: index, height: height, view: view)
+            }
         }
 
         // The applied animation and the reported transition are one value, so they cannot drift.
@@ -392,7 +541,18 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // size/inset update's curve, then an insertion animation.
         var transition: CoreListTransition = .immediate
         if let scrollToItem, scrollToItem.animated {
-            transition = .spring(duration: 0.4)
+            // ListViewImpl's own switch (Display/Source/ListView.swift:3611-3618) rather than one
+            // flat spring; `.Default` resolves a nil duration to 0.3 exactly as it does there. A
+            // zero duration lands immediate, because CoreList reads 0 as immediate.
+            switch scrollToItem.curve {
+            case let .Spring(duration):
+                transition = .spring(duration: duration)
+            case let .Default(duration):
+                transition = .easeInOut(duration: duration ?? 0.3)
+            case let .Custom(duration, x1, y1, x2, y2):
+                transition = .init(animation: .curve(duration: duration,
+                                                     curve: .custom(x1, y1, x2, y2)))
+            }
         } else if let updateSizeAndInsets, updateSizeAndInsets.duration != 0.0 {
             switch updateSizeAndInsets.curve {
             case let .Spring(duration):
@@ -469,8 +629,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         //
         // The transition mirrors the animation applied above. ContainedViewLayoutTransitionCurve has no
         // .easeOut, so the standard ease-out bezier approximates CoreList's .easeOut(0.3); this is
-        // cosmetic, since consumers use the transition only to co-animate their own chrome. The
-        // hardcoded duration goes away with deferred item #2 (derive the animation spec from `options`).
+        // cosmetic, since consumers use the transition only to co-animate their own chrome.
         let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
         self.updateVisibleContentOffset(transition: offsetTransition)
@@ -609,7 +768,68 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     }
     func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {}
 
-    func ensureItemNodeVisible(_ node: ListViewItemNode, animated: Bool, overflow: CGFloat, allowIntersection: Bool, atTop: Bool, curve: ListViewAnimationCurve) {}
+    // ListViewImpl's own body (Display/Source/ListView.swift:5159-5199) with four substitutions: the
+    // index comes from loadedIndex(of:) because a hosted node carries no ListView index; the node's
+    // frame comes from loadedFrame(of:), which is list-space and presented rather than host-local;
+    // apparentHeight is that rect's height; and the geometry is currentSize/currentInsets.
+    //
+    // Every branch issues its scroll through chatHistoryTransaction, exactly as ListViewImpl issues
+    // its own through self.transaction — one code path, and the "already visible, do nothing" shape
+    // is preserved by simply not reaching a branch.
+    func ensureItemNodeVisible(_ node: ListViewItemNode, animated: Bool, overflow: CGFloat, allowIntersection: Bool, atTop: Bool, curve: ListViewAnimationCurve) {
+        guard let index = self.loadedIndex(of: node), let frame = self.loadedFrame(of: node) else {
+            return
+        }
+        let viewportHeight = self.currentSize.height
+        let insetTop = self.currentInsets.top
+        let insetBottom = self.currentInsets.bottom
+
+        func scroll(to position: ListViewScrollPosition, directionHint: ListViewScrollToItemDirectionHint) {
+            self.chatHistoryTransaction(
+                deleteIndices: [],
+                insertIndicesAndItems: [],
+                updateIndicesAndItems: [],
+                options: ListViewDeleteAndInsertOptions(),
+                scrollToItem: ListViewScrollToItem(index: index,
+                                                   position: position,
+                                                   animated: animated,
+                                                   curve: curve,
+                                                   directionHint: directionHint),
+                additionalScrollDistance: 0.0,
+                updateSizeAndInsets: nil,
+                stationaryItemRange: nil,
+                customAnimationTransition: nil,
+                updateOpaqueState: nil,
+                completion: { _ in }
+            )
+        }
+
+        if frame.height > viewportHeight - insetTop - insetBottom {
+            if atTop {
+                if frame.maxY > viewportHeight - insetBottom {
+                    scroll(to: .top(-overflow), directionHint: .Down)
+                } else if frame.minY < insetTop && overflow > 0.0 {
+                    scroll(to: .top(-overflow), directionHint: .Up)
+                }
+            } else {
+                if frame.maxY > viewportHeight - insetBottom {
+                    scroll(to: .bottom(-overflow), directionHint: .Down)
+                } else if frame.minY < insetTop && overflow > 0.0 {
+                    scroll(to: .top(-overflow), directionHint: .Up)
+                }
+            }
+        } else if self.experimentalSnapScrollToItem {
+            scroll(to: .visible, directionHint: .Up)
+        } else if frame.minY < insetTop + overflow {
+            if !allowIntersection || frame.maxY < insetTop {
+                scroll(to: allowIntersection ? .center(.top) : .top(overflow), directionHint: .Up)
+            }
+        } else if frame.maxY > viewportHeight - insetBottom - overflow {
+            if !allowIntersection || frame.minY > viewportHeight - insetBottom {
+                scroll(to: allowIntersection ? .center(.bottom) : .bottom(-overflow), directionHint: .Down)
+            }
+        }
+    }
 
     // Parity with ListViewImpl.updateVisibleItemRange (ListView.swift:4673): recompute, and fire
     // displayedItemRangeChanged only when the range actually changed (or when forced). This is the one
@@ -639,13 +859,20 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // ListViewScrollToItem(position: .top(offset)), which ListViewImpl resolves to
     // `frame.minY == insets.top + offset` — the exact inverse. CoreList's scrollTo pointOffset uses
     // the identical convention (screen target = viewportInsets.top + pointOffset), so no unit
-    // conversion is needed here. Note the restore path still discards the offset until deferred item
-    // #1 (scrollTo fidelity) is fixed, so only the write side is live today.
+    // conversion is needed here. Both sides are live: the restore path resolves `.top(offset)`
+    // through pointOffset(for:index:height:view:).
     func itemNodeRelativeOffset(_ node: ListViewItemNode) -> CGFloat? {
         guard let frame = self.loadedFrame(of: node) else {
             return nil
         }
         return frame.minY - self.currentInsets.top
+    }
+
+    // The loaded row's rect in list space — what `ListViewItemNode.frame` means on ListViewImpl and
+    // does NOT mean here, since a hosted node's view sits at (0, 0, width, height) inside its host.
+    // Chat-layer geometry must go through this rather than the node's own frame.
+    func itemNodeFrame(_ node: ListViewItemNode) -> CGRect? {
+        return self.loadedFrame(of: node)
     }
 
     // Same predicate as forEachVisibleItemNode's filter, via the shared band.

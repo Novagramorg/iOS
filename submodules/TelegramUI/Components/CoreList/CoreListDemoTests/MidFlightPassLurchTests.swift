@@ -83,7 +83,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         let clock = SyntheticClock()
         let items: [CoreListItem] = (0..<200).map { SlowRow(id: $0, clock: clock, cost: cost) }
         let fixture = PhysicsListFixture(items: items, decelerationMode: mode, clock: clock)
-        fixture.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
+        fixture.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0), transition: .easeInOut(duration: 0))
         fixture.simulateFlick(offsetVelocity: velocity)
         for _ in 0..<6 { fixture.tick(dt: 1.0 / 120) }
         return (fixture, clock)
@@ -162,7 +162,7 @@ final class MidFlightPassLurchTests: XCTestCase {
         clock.advance(by: 0.008)          // the pass arrives between sampling ticks
         let before = screenY(f, identity: probe)!
 
-        f.listView.applyChanges(scrollTo: (index: 70, pointOffset: 0), transition: .easeInOut(duration: 0.3))
+        f.listView.applyChanges(scrollTo: .init(index: 70, pointOffset: 0), transition: .easeInOut(duration: 0.3))
 
         let after = screenY(f, identity: probe)!
         XCTAssertEqual(after, before, accuracy: 0.5, """

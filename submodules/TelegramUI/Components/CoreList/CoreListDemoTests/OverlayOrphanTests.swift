@@ -74,10 +74,10 @@ final class OverlayOrphanTests: XCTestCase {
     func testOverlappingScrollToDoesNotStrandCarries() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
-        fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         assertNoOrphans(fixture, "overlapping scrollTo")
         assertOverlaysDrainAfterSettle(fixture, "overlapping scrollTo")
@@ -89,7 +89,7 @@ final class OverlayOrphanTests: XCTestCase {
         let fixture = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
         for index in [200, 120, 40] {
-            fixture.listView.applyChanges(scrollTo: (index: index, pointOffset: 0),
+            fixture.listView.applyChanges(scrollTo: .init(index: index, pointOffset: 0),
                                           transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.05)
         }
@@ -104,7 +104,7 @@ final class OverlayOrphanTests: XCTestCase {
     func testEmptyingListMidTransitionDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
@@ -117,7 +117,7 @@ final class OverlayOrphanTests: XCTestCase {
     func testDoubleEmptyApplicationDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
@@ -131,7 +131,7 @@ final class OverlayOrphanTests: XCTestCase {
     func testEmptyThenRepopulateMidTransitionDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
@@ -151,11 +151,11 @@ final class OverlayOrphanTests: XCTestCase {
     func testScrollToWithNilItemsAfterEmptyDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
-        fixture.listView.applyChanges(scrollTo: (index: 0, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 0, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         assertNoOrphans(fixture, "scrollTo with nil items after empty")
         assertOverlaysDrainAfterSettle(fixture, "scrollTo with nil items after empty")
@@ -169,7 +169,7 @@ final class OverlayOrphanTests: XCTestCase {
     func testSizeChangeDuringScrollToDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.listView.applyChanges(newSize: CGSize(width: 390, height: 300),
@@ -183,7 +183,7 @@ final class OverlayOrphanTests: XCTestCase {
     func testImmediateSizeChangeDuringScrollToDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 200, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.listView.applyChanges(newSize: CGSize(width: 390, height: 300),

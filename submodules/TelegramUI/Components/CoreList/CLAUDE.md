@@ -207,7 +207,7 @@ default no-op, so item views opt in. `CoreListNodeHostView` (TelegramUI) maps it
 func applyChanges(items: [CoreListItem]? = nil,
                   newSize: CGSize? = nil,
                   newInsets: UIEdgeInsets? = nil,
-                  scrollTo: (index: Int, pointOffset: CGFloat)? = nil,
+                  scrollTo: CoreListScrollTarget? = nil,
                   additionalScrollDistance: CGFloat = 0.0,
                   anchorMode: CoreListAnchorMode = .automatic,
                   compensatesInsetChange: Bool = true,
@@ -224,6 +224,18 @@ finger's travel; deciding that a pass is such a case is caller policy (`CoreList
 does, from `willBeginDragging`/`didEndDragging`). Do NOT emulate it with
 `additionalScrollDistance: -topInsetDelta`: a non-zero distance halts momentum and opts the pass out
 of `pinsLoadedTop`, so the loaded top stops tracking the inset edge.
+
+`CoreListScrollTarget` carries the target index and a **resolver** rather than a fixed offset:
+`resolve(measuredHeight, view)` returns the row's settled Y as an offset from the top inset edge
+(projected screen target = `viewportInsets.top + returned value`). It is called exactly once, inside
+`buildWindow`, immediately after the anchor row is measured — the only point at which a
+height-dependent placement (bottom-align, center, make-visible) can be computed for a target outside
+the loaded window, which is what a host's far jump always is. The closure must be pure with respect
+to the list: it may read geometry, never mutate the collection or re-enter `applyChanges`.
+`CoreListScrollTarget(index:pointOffset:)` is the constant-resolver shorthand and is exactly the old
+tuple. This keeps every host-specific placement semantic in the host —
+`CoreListChatHistoryBackend` resolves `ListViewScrollPosition` there, including
+`scrollPositioningInsets` and quote rects, and CoreList learns none of it.
 
 All mutations flow through one transaction. A pass:
 
@@ -286,6 +298,20 @@ strict:
   retention threshold and the settled loaded-window extent, and all known member spacing is preserved;
   ownership, tracks, and completion remain per identity. This fallback never expands the settled window or
   measures unloaded geometry;
+- a **full-replace carousel** — an explicit `scrollTo` whose old and new loaded windows share no
+  identity, AND whose **destination window** is entirely new content — fades nothing at either end.
+  Incoming rows install at full geometry and full opacity, and departing rows ride their ghost block
+  at the opacity they had. It is one rigid travel between two strips, already owned by the shared
+  additive viewport track; the fades only appear because a host expressing a jump as delete-all +
+  insert-all makes every row look genuinely new or genuinely departed. `ListViewImpl` slides its
+  `temporaryPreviousNodes` out at full opacity too. **The destination window is the right unit, and
+  this predicate has been wrong in BOTH directions:** plain loaded-window disjointness fades a
+  genuinely new row inserted among survivors where you are travelling to, while whole-*collection*
+  disjointness never fires for a real host — chat's non-message rows carry constant identities (the
+  unread separator is `4 << 40`) that survive any replace, so one always lives somewhere. What
+  decides it is whether anything in the destination was already there. A non-fading exit still
+  installs an opacity track with the pass duration — `replace` does not early-out on an equal
+  endpoint — so the teardown deadline, generation, binding and completion ledger are unchanged;
 - moved identities retain their view and identity and animate each changed geometry property independently;
 - resize, inset changes, content reconciliation, and self-update write final settled frames immediately,
   then animate each changed survivor x/y/width/height independently on the pass duration and curve.
@@ -427,6 +453,14 @@ Every changed positive-duration viewport replacement first remaps all detached o
 rendered viewport coordinate base into the replacement base. The exact mapping subtracts the engine shift
 once and applies equally to carousel carries, crossing survivors, and ghost blocks; no viewport-producing
 branch may replace the track without this boundary remap.
+
+Carousel travel direction comes from comparing the current anchor's position in the new order against
+the target index. When no old identity survives into the new collection — a full replace, which is
+how a host expresses a jump to a disjoint region — there is no witness to compare, and
+`CoreListScrollTarget.direction` supplies the answer; `nil` keeps the historical `.forward`. A
+present witness always wins, mirroring `ListViewImpl`, which computes the offset geometrically from a
+surviving anchor node and consults its own `directionHint` only when that yields nothing
+(`Display/Source/ListView.swift:3590`).
 
 Carousel adjacency is computed from normalized loaded-strip tops
 (`containerOriginY - renderedViewport`), never by subtracting `Window.minY` again after render
