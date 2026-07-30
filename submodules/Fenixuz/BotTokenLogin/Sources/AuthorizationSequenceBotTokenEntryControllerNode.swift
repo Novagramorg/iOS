@@ -74,7 +74,6 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
         }
     }
 
-    private var timer: SwiftSignalKit.Timer?
 
     private let appearanceTimestamp = CACurrentMediaTime()
 
@@ -83,7 +82,7 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
         self.theme = theme
 
         self.animationNode = DefaultAnimatedStickerNodeImpl()
-        self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "IntroPassword"), width: 256, height: 256, playbackMode: .still(.start), mode: .direct(cachePathPrefix: nil))
+        self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "BusinessChatbot"), width: 256, height: 256, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
 
         self.titleNode = ASTextNode()
         self.titleNode.isUserInteractionEnabled = false
@@ -171,14 +170,6 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
             }
         }
 
-        self.timer = SwiftSignalKit.Timer(timeout: 7.5, repeat: true, completion: { [weak self] in
-            self?.animationNode.playOnce()
-        }, queue: Queue.mainQueue())
-        self.timer?.start()
-    }
-
-    deinit {
-        self.timer?.invalidate()
     }
 
     func updateData() {

@@ -414,7 +414,8 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         self.hasOtherAccounts = hasOtherAccounts
 
         self.animationNode = DefaultAnimatedStickerNodeImpl()
-        self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "IntroPhone"), width: 256, height: 256, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
+        // Fenixuz: loop the intro phone instead of playing it once. See HOOKS.md.
+        self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "IntroPhone"), width: 256, height: 256, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
 
         self.managedAnimationNode = ManagedPhoneAnimationNode()
         self.managedAnimationNode.isHidden = true
@@ -501,9 +502,17 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             self?.proceedNode.isEnabled = hasNumber
         }
         self.phoneAndCountryNode.keyPressed = { [weak self] num in
-            if let strongSelf = self, !strongSelf.managedAnimationNode.isHidden {
-                strongSelf.managedAnimationNode.animate(num: num)
+            guard let strongSelf = self else {
+                return
             }
+            // Fenixuz: the intro phone now loops while the field is empty, so the hand-off to the
+            // dialling animation happens on the first keypress instead of when the loop's first
+            // cycle ends. See HOOKS.md.
+            if strongSelf.managedAnimationNode.isHidden {
+                strongSelf.animationNode.removeFromSupernode()
+                strongSelf.managedAnimationNode.isHidden = false
+            }
+            strongSelf.managedAnimationNode.animate(num: num)
         }
 
         if let account = account {
@@ -517,10 +526,9 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             self?.checkPhone?()
         }
 
-        self.animationNode.completed = { [weak self] _ in
-            self?.animationNode.removeFromSupernode()
-            self?.managedAnimationNode.isHidden = false
-        }
+        // Fenixuz: upstream swapped in the dialling node the moment the intro animation finished,
+        // which also defeats .loop — the node is torn down after one cycle. The swap moved to the
+        // first keypress (above); the dialling animation is unchanged.
     }
 
     deinit {

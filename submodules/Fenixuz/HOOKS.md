@@ -3258,3 +3258,49 @@ let hasMoreThanOneAccount = context.sharedContext.accountManager.accountRecords(
 **Note — `HOOKS.md` correction:** the working-set note at "Multi-account working set" says the cap "only engages at 4+ accounts". That is **wrong**: `fenixuzOrdered = [primary] + pinned` and pinned defaults to empty, so eviction engages at **2** accounts.
 
 **Still open (needs owner approval):** an evicted account is never unregistered from APNs — `unregisterNotificationToken` has exactly two call sites (`SharedAccountContext.swift:1871`, `:1885`), both inside the `for (_, account, _) in activeAccounts` loop at `:1865`, which an evicted account is not in. So the server keeps pushing for it. Fixing that unconditionally would remove documented intended behaviour (suspended accounts keep push).
+
+---
+
+### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` — looping intro phone (2026-07-30)
+
+In `init(...)`, the `IntroPhone` sticker setup. Find:
+
+```swift
+self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "IntroPhone"), width: 256, height: 256, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
+```
+
+Replace `.once` with `.loop` (keep the `// Fenixuz:` comment above it).
+
+Reason: upstream plays the phone once on appear and then freezes until the user starts typing, at
+which point `managedAnimationNode` takes over with the per-digit dialling animation. Azimjon wants
+the resting state to keep moving, matching the looping chatbot on the bot-token screen.
+
+**A second hook in the same file is required, or the first one does nothing.** Upstream wires:
+
+```swift
+self.animationNode.completed = { [weak self] _ in
+    self?.animationNode.removeFromSupernode()
+    self?.managedAnimationNode.isHidden = false
+}
+```
+
+That tears the node down as soon as the animation finishes — which with `.loop` fires at the end of
+the first cycle, so the looping node is removed and the static dialling node takes its place. The
+`.loop` change alone is a no-op.
+
+Fix: delete that `completed` closure (replaced by a comment) and move the hand-off into
+`phoneAndCountryNode.keyPressed`, which already existed for the dialling animation:
+
+```swift
+self.phoneAndCountryNode.keyPressed = { [weak self] num in
+    guard let strongSelf = self else { return }
+    if strongSelf.managedAnimationNode.isHidden {
+        strongSelf.animationNode.removeFromSupernode()
+        strongSelf.managedAnimationNode.isHidden = false
+    }
+    strongSelf.managedAnimationNode.animate(num: num)
+}
+```
+
+Net effect: the phone loops while the field is empty, and the per-digit dialling animation still
+takes over the moment the user types — **no upstream behaviour is lost**, only its trigger moves.
