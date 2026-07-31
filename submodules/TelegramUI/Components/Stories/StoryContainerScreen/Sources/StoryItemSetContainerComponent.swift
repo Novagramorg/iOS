@@ -45,6 +45,7 @@ import SliderContextItem
 import SaveProgressScreen
 import DirectMediaImageCache
 import PromptUI
+import FenixuzStoryUnlock
 
 public final class StoryAvailableReactions: Equatable {
     let reactionItems: [ReactionItem]
@@ -7307,7 +7308,7 @@ public final class StoryItemSetContainerComponent: Component {
                             if isHq {
                                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QualitySd"), color: theme.contextMenu.primaryColor)
                             } else {
-                                return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/QualityHd" : "Chat/Context Menu/QualityHdLocked"), color: theme.contextMenu.primaryColor)
+                                return generateTintedImage(image: UIImage(bundleImageName: (accountUser.isPremium || FenixuzStoryUnlock.isEnabled) ? "Chat/Context Menu/QualityHd" : "Chat/Context Menu/QualityHdLocked"), color: theme.contextMenu.primaryColor)
                             }
                         }, action: { [weak self] _, a in
                             a(.default)
@@ -7316,7 +7317,7 @@ public final class StoryItemSetContainerComponent: Component {
                                 return
                             }
                             
-                            if !component.slice.additionalPeerData.preferHighQualityStories && !accountUser.isPremium {
+                            if !component.slice.additionalPeerData.preferHighQualityStories && !accountUser.isPremium && !FenixuzStoryUnlock.isEnabled {
                                 self.presentQualityUpgradeScreen()
                                 
                                 return
@@ -7424,7 +7425,7 @@ public final class StoryItemSetContainerComponent: Component {
                     } else if !component.slice.item.storyItem.isForwardingDisabled {
                         let saveText: String = component.strings.Story_Context_SaveToGallery
                         items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
+                            return generateTintedImage(image: UIImage(bundleImageName: (accountUser.isPremium || FenixuzStoryUnlock.isEnabled) ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, a in
                             a(.default)
                             
@@ -7432,7 +7433,7 @@ public final class StoryItemSetContainerComponent: Component {
                                 return
                             }
                             
-                            if accountUser.isPremium {
+                            if accountUser.isPremium || FenixuzStoryUnlock.isEnabled {
                                 self.requestSave()
                             } else {
                                 self.presentSaveUpgradeScreen()

@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Fenixuz/StoryUnlock:FenixuzStoryUnlock",
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
         "//submodules/Fenixuz/SecretVault:FenixuzSecretVault",
         "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",

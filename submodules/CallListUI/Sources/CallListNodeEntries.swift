@@ -3,6 +3,7 @@ import UIKit
 import TelegramCore
 import TelegramPresentationData
 import MergeLists
+import FenixuzSecretVault
 
 enum CallListNodeEntryId: Hashable {
     case setting(Int32)
@@ -29,8 +30,8 @@ enum CallListNodeEntry: Comparable, Identifiable {
         case groupCall(EnginePeer.Id, String)
         case message(EngineMessage.Index)
         case hole(EngineMessage.Index)
-        
-        static func <(lhs: SortIndex, rhs: SortIndex) -> Bool {
+
+        static func < (lhs: SortIndex, rhs: SortIndex) -> Bool {
             switch lhs {
             case .displayTab:
                 return false
@@ -79,18 +80,18 @@ enum CallListNodeEntry: Comparable, Identifiable {
                 case let .message(rhsIndex):
                     return lhsIndex < rhsIndex
                 }
-                
+
             }
         }
     }
-    
+
     case displayTab(PresentationTheme, String, Bool)
     case displayTabInfo(PresentationTheme, String)
     case openNewCall
     case groupCall(peer: EnginePeer, editing: Bool, isActive: Bool)
     case messageEntry(topMessage: EngineMessage, messages: [EngineMessage], theme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, editing: Bool, hasActiveRevealControls: Bool, displayHeader: Bool, missed: Bool)
     case holeEntry(index: EngineMessage.Index, theme: PresentationTheme)
-    
+
     var sortIndex: SortIndex {
         switch self {
         case .displayTab:
@@ -107,7 +108,7 @@ enum CallListNodeEntry: Comparable, Identifiable {
             return .hole(index)
         }
     }
-    
+
     var stableId: CallListNodeEntryId {
         switch self {
         case .displayTab:
@@ -124,12 +125,12 @@ enum CallListNodeEntry: Comparable, Identifiable {
             return .hole(index)
         }
     }
-    
-    static func <(lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
+
+    static func < (lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
         return lhs.sortIndex < rhs.sortIndex
     }
-    
-    static func ==(lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
+
+    static func == (lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
         switch lhs {
         case let .displayTab(lhsTheme, lhsText, lhsValue):
             if case let .displayTab(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
@@ -214,18 +215,25 @@ enum CallListNodeEntry: Comparable, Identifiable {
 
 func callListNodeEntriesForView(view: EngineCallList, displayOpenNewCall: Bool, groupCalls: [EnginePeer], state: CallListNodeState, showSettings: Bool, showCallsTab: Bool, isRecentCalls: Bool, currentGroupCallPeerId: EnginePeer.Id?) -> [CallListNodeEntry] {
     var result: [CallListNodeEntry] = []
+    // Fenixuz Secret Vault: a hidden chat's call history belongs to that chat. The call list
+    // builds its own feed straight from the message view, so it never passed through the
+    // chat-list filter and every hidden peer's calls stayed visible here.
+    let vaultEnabled = SecretVaultManager.shared.isEnabled
     for entry in view.items {
         switch entry {
             case let .message(topMessage, messages):
+                if vaultEnabled && SecretVaultManager.shared.isVaulted(topMessage.id.peerId) {
+                    continue
+                }
                 result.append(.messageEntry(topMessage: topMessage, messages: messages, theme: state.presentationData.theme, strings: state.presentationData.strings, dateTimeFormat: state.dateTimeFormat, editing: state.editing, hasActiveRevealControls: state.messageIdWithRevealedOptions == topMessage.id, displayHeader: !showSettings && isRecentCalls, missed: !isRecentCalls))
             case let .hole(index):
                 result.append(.holeEntry(index: index, theme: state.presentationData.theme))
         }
     }
-    
+
     if !view.hasLater {
         if !showSettings && isRecentCalls {
-            for peer in groupCalls.sorted(by: { lhs, rhs in
+            for peer in SecretVaultManager.shared.removingVaulted(groupCalls, peerId: { $0.id }).sorted(by: { lhs, rhs in
                 let lhsTitle = lhs.compactDisplayTitle
                 let rhsTitle = rhs.compactDisplayTitle
                 if lhsTitle != rhsTitle {
@@ -240,7 +248,7 @@ func callListNodeEntriesForView(view: EngineCallList, displayOpenNewCall: Bool, 
         if displayOpenNewCall {
             result.append(.openNewCall)
         }
-        
+
         if showSettings {
             result.append(.displayTabInfo(state.presentationData.theme, state.presentationData.strings.CallSettings_TabIconDescription))
             result.append(.displayTab(state.presentationData.theme, state.presentationData.strings.CallSettings_TabIcon, showCallsTab))

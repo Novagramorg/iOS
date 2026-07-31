@@ -3304,3 +3304,391 @@ self.phoneAndCountryNode.keyPressed = { [weak self] num in
 
 Net effect: the phone loops while the field is empty, and the per-digit dialling animation still
 takes over the moment the user types — **no upstream behaviour is lost**, only its trigger moves.
+
+---
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` — Secret Vault leak via the story bar (2026-07-30)
+
+**Bug:** a chat hidden into the Secret Vault disappeared from the chat list, but when that peer
+posted a Story their avatar still appeared in the story bar at the top of the list.
+
+**Cause:** the vault filter lived only in `ChatListUI/Sources/Node/ChatListNodeEntries.swift`, which
+builds *chat-list entries*. The story bar does not come from that pipeline — it has its own feed,
+`context.engine.messages.storySubscriptions(...)`, which was never filtered.
+
+Filtering had to go at the **source**, not where the ordered list is built: `ChatListController` also
+assigns `self.orderedStorySubscriptions = self.rawStorySubscriptions` directly on reset (`:928-930`),
+so a filter applied only in the ordering loop would be bypassed on that path. Putting it in the
+signal means every consumer — `hasStorySubscriptions`, the ordering loop, and
+`shouldDisplayStoriesInChatListHeader` (so the whole bar hides when the only story was vaulted) —
+sees the filtered set.
+
+**Hook — two sites, both the same shape.** Insert after `|> deliverOnMainQueue` in the
+`storySubscriptionsDisposable` (main list) and `storyArchiveSubscriptionsDisposable` (archive)
+pipelines:
+
+```swift
+|> map { subscriptions -> EngineStorySubscriptions in
+    return EngineStorySubscriptions(accountItem: subscriptions.accountItem, items: SecretVaultManager.shared.removingVaulted(subscriptions.items, peerId: { $0.peer.id }), hasMoreToken: subscriptions.hasMoreToken)
+}
+```
+
+The filter itself is `SecretVaultManager.removingVaulted(_:peerId:)` (Fenixuz-owned, generic over
+any peer-keyed list, no-ops when the vault is disabled or empty). `ChatListController.swift` already
+imports `FenixuzSecretVault` and `ChatListUI/BUILD` already carries the dep — no BUILD change.
+
+**Nothing removed** — the map only drops vaulted peers; non-vaulted stories are untouched.
+
+**Known scope limit:** vaulted peers' stories are hidden in *every* story bar, including while the
+user is inside the vault list (`fenixVaultMode`). If they should be visible there, that needs a
+`fenixVaultMode` check threaded into the map — deliberately not done, hiding is the safer default.
+
+**Generalise this:** any other surface that builds its own peer feed instead of going through
+`ChatListNodeEntries` will have the same leak. Audit candidates: global search results, forward /
+share peer pickers, contacts list, call list.
+
+---
+
+## Hidden Chats — empty state uses the bundled duck sticker (2026-07-31)
+
+The pushed Hidden Chats list is a plain root `ChatListControllerImpl`, so an empty vault fell
+through to the generic `.chats` empty state: "You have no conversations yet" plus a **New Message**
+button that makes no sense on that screen. It now gets its own subject.
+
+**Animation:** `ChatListNoResults` — the search-duck sticker already bundled at
+`submodules/TelegramUI/Resources/Animations/ChatListNoResults.tgs`. It is byte-identical to the
+`.tgs` that prompted this change, so nothing new ships and the binary does not grow. Loaded through
+the normal `AnimatedStickerNodeLocalFileSource` path like every other empty state.
+
+- **`submodules/ChatListUI/Sources/ChatListEmptyNode.swift`** — `import FenixuzSecretVault`;
+  `Subject` gains `case fenixVault`; `gloss = false`, `animationName = "ChatListNoResults"` +
+  `buttonIsHidden = true` for it; `updateThemeAndStrings` maps it to `SecretVaultStrings.emptyTitle`
+  / `.emptyText` with `buttonText = nil`.
+- **`submodules/ChatListUI/Sources/ChatListContainerItemNode.swift`** — the subject selection starts
+  with `if strongSelf.controller?.fenixIsVaultList == true { subject = .fenixVault }`.
+- **`submodules/ChatListUI/Sources/ChatListController.swift`** — `fenixIsVaultList` went from
+  `fileprivate` to internal so `ChatListContainerItemNode` (same module, different file) can read it.
+
+`SecretVaultStrings.emptyTitle` / `.emptyText` already existed and were unused — no new strings.
+`ChatListUI/BUILD` already deps on `FenixuzSecretVault` — no BUILD change.
+
+---
+
+## Hidden Chats — long-press entry point survives the collapsed story bar (2026-07-31)
+
+**Symptom:** long-pressing the "Chats" title did nothing; a tap expanded the story panel instead.
+Reproduced on the simulator — the story panel expanded on long press.
+
+**Root cause — two independent faults, both confirmed with runtime logging:**
+
+1. **`findTitleView()` returns nil in this header layout.** It resolves
+   `primaryContentView?.chatListTitleView`, and the root chat list's current header never builds a
+   `ChatListTitleView`. The whole attach block was gated on `let titleView = self.findTitleView()`,
+   so **no gesture was ever attached** — not the long press, not the 10-tap. Logged live:
+   `attached=0 navbar=ChatListNavigationBar.View header=ChatListHeaderComponent.View title=nil
+   titleContent=nil story=StoryPeerListComponent.View`.
+2. **The collapsed story bar owns the title band.** `StoryPeerListComponent.View.collapsedButton`
+   (`StoryPeerListComponent.swift:1372`) is a full-width `HighlightableButton` spanning
+   `minTitleX…maxTitleX`, enabled whenever the bar is collapsed (`:1722`); its `hitTest` (`:1552`)
+   claims every touch there. It is a **sibling** of the title view, not a descendant — so even if
+   fault 1 were fixed alone, a title-anchored recognizer still would not fire.
+
+**Fix:** anchor the attach and the long press on the navigation bar — which always exists and is an
+ancestor of every title variant — and filter by hit target.
+
+- **`submodules/Fenixuz/SecretVault/Sources/SecretVaultTitleLongPressGestureRecognizer.swift`**
+  (module-owned, new) — `UILongPressGestureRecognizer` subclass that fails in `touchesBegan` when a
+  supplied predicate rejects the point. Filtering there (not via a delegate) means a press outside
+  the title fails immediately and never cancels the touch for the view that owns it.
+- **`submodules/ChatListUI/Sources/ChatListController.swift`** — `import StoryPeerListComponent`;
+  in `fenixSetupSecretVaultIfNeeded` the attach is now gated on
+  `chatListDisplayNode.navigationBarView.view` instead of `findTitleView()`, and the long press
+  goes on that navigation bar. The 10-tap recogniser still goes on the title view when one exists
+  (`if let titleView = self.findTitleView()`), so it is no longer load-bearing for the attach.
+  New `fenixVaultLongPressCanBegin(at:)` accepts the press when the hit view is the title view, the
+  header's `titleContentView`, or a **direct** subview of `storyPeerListView()` (the collapsed
+  button).
+
+**Nothing removed.** Verified on the simulator against the exact repro:
+
+| Gesture | Before | After |
+|---|---|---|
+| Long press "Chats" | story panel expands | Hidden Chats PIN screen |
+| Short tap "Chats" | story panel expands | story panel expands (unchanged) |
+| Long press story avatar | context menu | context menu (gate logs `REJECTED` — its superview is `Display.ContextExtractedContentView`, not the story list) |
+
+**Do not re-gate the attach on `findTitleView()`.** That is what broke this, and it fails silently:
+no crash, no log, the entry point simply never exists.
+
+---
+
+## NovagramPro toggles that now default OFF (2026-07-31)
+
+Opt-in instead of opt-out, so a fresh install ships the stock Telegram surface and the user turns
+on what they want. Only the fallback in `?? true` → `?? false` changed; stored values are untouched,
+so anyone who already toggled these keeps their setting.
+
+| Toggle | Key | Sites |
+|---|---|---|
+| Round video from gallery | `round_video_from_gallery` | `Fenixuz/RoundVideoFromGallery/Sources/FenixRoundVideoFromGallery.swift` `isEnabled`; `Fenixuz/ProMessager/Sources/FenixSettingsController.swift:971` |
+| Voice to text (STT shortcut) | `stt_enabled` | `Fenixuz/ProMessager/.../FenixSettingsController.swift:978`; **`submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift`** ×3 (`:2740`, `:6028`, `:6328`) |
+| Camera picker (long-press video button) | `long_press_camera_selection` | `Fenixuz/ProMessager/.../FenixSettingsController.swift:969`; **`ChatTextInputPanelNode.swift`** ×2 (`:968`, `:1022`) |
+
+The `ChatTextInputPanelNode.swift` sites are upstream-owned and were already Fenixuz hooks; only the
+default literal changed. Every read of these keys must stay in sync — a site left on `?? true` makes
+the feature half-on (button hidden but layout inset reserved, or vice versa).
+
+---
+
+## Hidden Chats — Contacts page: no leak, plus hide / view-hidden from there (2026-07-31)
+
+**Symptom:** a chat hidden from the chat list still appeared in the Contacts tab, phone number and
+all. `HOOKS.md`'s own "Generalise this" note under the story-bar fix predicted exactly this — the
+contacts list builds its own peer feed and never passes through `ChatListNodeEntries`.
+
+**Filtering.** Applied inside `contactListNodeEntries`, not through the existing `filters` array,
+because that array is captured once at init while this function re-runs on every rebuild and so
+always reads the current vaulted set.
+
+- **`submodules/ContactListUI/Sources/ContactListNode.swift`** — `import FenixuzSecretVault`; new
+  `filterVaultedPeers: Bool = false` on `ContactListNode.init` (stored, threaded to both
+  `contactListNodeEntries` call sites); that function's `peers` parameter became `rawPeers` and the
+  filtered `peers` is derived at the top.
+- **`submodules/ContactListUI/Sources/ContactsControllerNode.swift`** — passes
+  `filterVaultedPeers: true`, and its presentation signal now also combines
+  `fenixSecretVaultRevisionSignal()` so hiding a contact drops the row immediately instead of after
+  some unrelated update.
+- **`submodules/Fenixuz/SecretVault/Sources/SecretVaultRevisionSignal.swift`** (module-owned, new) —
+  emits once, then on every `.fenixSecretVaultChanged`.
+- **`submodules/Fenixuz/SecretVault/Sources/SecretVaultManager.swift`** — new
+  `removingVaulted(_:optionalPeerId:)` overload; the contacts list mixes Telegram peers with
+  device-only contacts, and the latter have no peerId to match on (they are always kept).
+
+**Default is `false`** — only the Contacts tab opts in. Share / forward / add-member pickers and the
+contacts *search* still show vaulted peers **on purpose**: those are deliberate "pick a person"
+flows, and silently omitting someone there would look like data loss. Revisit only if asked.
+
+**Hide from a contact row.**
+- **`submodules/ContactListUI/Sources/ContactContextMenus.swift`** — `import FenixuzSecretVault`;
+  a Hide / Unhide item before Delete, shown only when `SecretVaultManager.shared.isEnabled`. Mute
+  semantics match the chat list: `Int32.max` on hide, **`nil`** on unhide (`0` would write a
+  permanent per-peer unmute exception).
+
+**View hidden from the Contacts page.** Long press the "Contacts" title, same as the chat list.
+- **`submodules/AccountContext/Sources/AccountContext.swift`** — new
+  `makeFenixVaultChatListController(context:)`. A separate factory rather than a parameter on
+  `makeChatListController` so that signature and its 7 call sites stay untouched on upstream merges.
+- **`submodules/TelegramUI/Sources/SharedAccountContext.swift`** — implements it (+
+  `import FenixuzSecretVault`, + `TelegramUI/BUILD` dep). `ContactListUI` cannot depend on
+  `ChatListUI`, which is the whole reason for the factory.
+- **`submodules/ContactListUI/Sources/ContactsController.swift`** — `viewDidAppear` override
+  attaching the vault gesture, plus `fenixVaultLongPressCanBegin(at:)`, `fenixVaultLongPress`,
+  `fenixPresentVaultList`. BUILD gains `FenixuzSecretVault`, `FenixuzChatLock`,
+  `StoryPeerListComponent`.
+
+**Gate hardening (applies to BOTH controllers).** The first version only accepted a press whose hit
+view was the title view or the collapsed story button. Runtime logging showed that is not enough:
+
+| Screen | `findTitleView()` | title band hit view |
+|---|---|---|
+| Contacts | `ChatListTitleView` | `ChatListTitleView` |
+| Chats, stories collapsed | **nil** | story `HighlightableButton` |
+| Chats, no stories | **nil** | the navigation bar itself |
+
+So with no stories the chat-list long press did nothing. Both gates now bound the press to the
+centered title band — x within 28–72% of the width, y above the search field's real frame — and
+then accept the title view, the header's `titleContentView`, a **direct** subview of
+`storyPeerListView()` (the collapsed button), **or the navigation bar itself** (a plain text title
+is not hit-testable, so "nothing interactive claimed this point" means the title).
+
+Expanded story avatars are still rejected — they sit inside the story scroll container, so they are
+not direct subviews — and keep their own long-press context menu.
+
+---
+
+## More NovagramPro toggles defaulting OFF (2026-07-31)
+
+Same rationale as the earlier batch: opt-in, stored values untouched.
+
+| Toggle | Key | Sites |
+|---|---|---|
+| Translate button | `show_translate_messages` | `Fenixuz/ProMessager/.../FenixSettingsController.swift:974`; **`submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift:1483`** |
+
+The `ChatInterfaceStateContextMenus.swift` site is upstream-owned and was already a Fenixuz hook;
+only the default literal changed. Both sites must stay in sync — the settings row and the actual
+context-menu gate read the same key independently.
+
+---
+
+## Per-feature deep links into NovagramPro Settings (2026-07-31)
+
+Feature #40 grew a second half. `tg://settings/novagrampro` used to be the only link and it always
+landed at the top of the screen. Every row now has its own link, and arriving on one scrolls that
+row into view and traces an accent outline around it.
+
+```
+tg://settings/novagrampro                        → screen, top, no animation   (unchanged)
+tg://settings/novagrampro/<slug>                 → screen + scroll + outline
+tg://settings/novagrampro?f=<slug>               → alias for the line above
+```
+
+**Why the slug rides in the path, not the query.** `OpenUrl.swift` builds the settings path from
+`parsedUrl.pathComponents` only (`case "settings"` lives in the **`else`** branch of
+`if let query = parsedUrl.query`), so a `tg://settings/...?f=x` URL never reaches the settings
+resolver at all today — it falls through to `.unknownDeepLink`. The path form therefore needs no
+parser change; the `?f=` alias is supported by one small additive hook that rewrites it.
+
+**Fenixuz-owned code** (all logic lives here — the hooks below only forward):
+
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsDeepLink.swift` — `FenixSettingsFeature`
+  (44 slugs), `FenixSettingsItemTag: ItemListItemTag`, `FenixSettingsDeepLink.open(settingsPath:…)`,
+  `.settingsPath(forUrlPath:featureParameter:)`, `.link(for:)`, `.screenLink`.
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsHighlight.swift` — the outline animation.
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsRowLinkMenu.swift` — long-press → Copy/Share.
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift` — `FenixEntry.linkInfo`
+  (slug + row title), `tag: self.fenixTag` on all 44 linkable rows, and
+  `fenixSettingsController(context:highlightFeature:)`.
+- `submodules/Fenixuz/ProMessager/BUILD` — `+ //submodules/OverlayStatusController` (the
+  "Link copied" toast). Fenixuz-owned BUILD, not a hook.
+
+### `submodules/TelegramUI/Sources/OpenResolvedUrl.swift`
+
+The Feature #40 intercept inside `case let .settings(section):` → `case let .path(path):` (after the
+`path.isEmpty` guard, before `handleSettingsPathUrl(...)`, around line 980) **replaces** the old
+`if path == "novagrampro" { … }` block:
+
+```swift
+// Fenixuz Feature #40: tg://settings/novagrampro[/<feature>] → NovagramPro settings screen
+if FenixSettingsDeepLink.open(settingsPath: path, context: context, navigationController: navigationController) {
+    return
+}
+```
+
+Reason: same interception point as before, but the slug parsing and the controller construction moved
+into the Fenixuz module. `open` returns false for every non-Novagram settings path, so upstream's
+`handleSettingsPathUrl` still runs for those. The `import FenixuzProMessager` at the top of the file
+(already documented in the earlier Feature #40 section) is unchanged.
+
+### `submodules/TelegramUI/Sources/OpenUrl.swift`
+
+**Imports — append after `import PresentationDataUtils`:**
+
+```swift
+// Fenixuz: Feature #40 — tg://settings/novagrampro?f=<feature> deep link
+import FenixuzProMessager
+```
+
+**Inside `if let query = parsedUrl.query, let params = QueryParameters(query) { switch host {`,
+as the first case (before `case "localpeer":`, around line 434):**
+
+```swift
+// Fenixuz Feature #40: tg://settings/novagrampro?f=<feature>. The settings path
+// below is built from pathComponents only, so a query form never reaches it —
+// rewrite it here. Returns nil for every non-Novagram settings URL, which then
+// falls through exactly as before.
+case "settings":
+    if let settingsPath = FenixSettingsDeepLink.settingsPath(forUrlPath: parsedUrl.path, featureParameter: params[FenixSettingsDeepLink.featureQueryKey]) {
+        handleResolvedUrl(.settings(.path(settingsPath)))
+        return
+    }
+```
+
+Reason: purely additive — `host == "settings"` had **no** case in this branch before, so every
+`tg://settings/…?query` URL ended at `.unknownDeepLink`. Returning nil from the helper reproduces
+that exactly. `FenixuzProMessager` is already a dep of `TelegramUI/BUILD` — no BUILD change.
+
+### Non-obvious details
+
+- **Slugs are permanent.** `FenixSettingsFeature`'s raw values travel inside URLs users have already
+  shared. Never rename a case or repoint one at a different row; add a new case instead. An unknown
+  slug deliberately resolves to `.screen` rather than falling through, so an old app opening a newer
+  link still lands somewhere sensible.
+- **Scrolling uses two upstream mechanisms, not one.** `ensureVisibleItemTag` only reaches rows whose
+  nodes already exist (`ItemListControllerNode` walks `forEachItemNode`), which is useless for a row
+  40 items down. `initialScrollToItem` (index-based, applied on the first transition only) does the
+  real work; the tag handles the already-visible case and the highlight lookup.
+- **The animation is opt-in by construction.** `highlightFeature` defaults to nil, so the only caller
+  that can trigger it is the deep-link handler. `PeerInfoScreenSettingsActions.swift` (Settings →
+  Novagram) passes nothing and behaves exactly as before.
+- **The long press needs two guards, not one.** `allowableMovement` alone is not enough: a slow drag
+  can outlast `minimumPressDuration` and pop an action sheet in the middle of a scroll. The
+  recognizer additionally fails itself from `touchesMoved`, and `attach` listens to
+  `ItemListController.beganInteractiveDragging` to veto a press once the list starts moving.
+  `cancelsTouchesInView = true` is what stops the pressed row's switch from also toggling.
+- **Row hit-testing goes through layers, not views.** Some ItemList rows are layer-backed nodes;
+  touching `itemNode.view` would trip an AsyncDisplayKit assertion, so the point is converted with
+  `itemNode.layer.convert(_:from:)` and tested against `contentBounds`.
+
+---
+
+## Hidden Chats — the screen no longer inherits the root list's chrome (2026-07-31)
+
+Three separate leaks, all the same root cause: the vault screen is its **own**
+`ChatListControllerImpl` instance (`fenixIsVaultList: true`), but it runs on the root chat list's
+data pipeline, so every root-list extra rode along unless explicitly excluded. They surfaced one at
+a time — folder tabs, then the Archive row after a pull-to-refresh.
+
+**1. Folder tabs listed every chat.** Each tab owns a **separate** `ChatListContainerItemNode`, and
+`fenixVaultMode` was only ever set on `mainContainerNode.currentItemNode` — the "All" tab. Tapping
+any other tab landed on a node with `fenixVaultMode == false`, i.e. the unfiltered root list.
+
+- **`submodules/ChatListUI/Sources/ChatListContainerItemNode.swift`** — `init` now sets
+  `fenixVaultMode` on its own `listNode` when `controller?.fenixIsVaultList == true`. Per node, so
+  no node can exist without the filter.
+- **`submodules/ChatListUI/Sources/ChatListController.swift`** — where `updateAvailableFilters` is
+  called, the vault list is forced to `[.all]` with `tabContainerData = ([], false, nil)`, so no tab
+  bar renders at all (`ChatListControllerNode` hides it once `availableFilters.count <= 1`).
+
+Both, deliberately: the tabs do not belong on that screen, **and** the per-node filter means a
+future code path that creates an item node cannot leak.
+
+**2. Archive row was a door back to the hidden chats.** Pull-to-refresh revealed an "Archived Chats"
+row; tapping it pushes the archive list, which is a different `groupId` and not vault-filtered.
+
+- **`submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift`** — the group-reference loop is
+  now `for groupReference in groupItems where !state.fenixVaultMode`, and `.EmptyIntro` (the
+  contact-suggestion placeholder) is gated the same way.
+
+**3. The empty-state duck was frozen.**
+
+- **`submodules/ChatListUI/Sources/ChatListEmptyNode.swift`** — `playbackMode` is `.loop` for
+  `.fenixVault`, `.once` for everything else. Upstream's empty states play once because they sit
+  under a call-to-action button; this screen has no button, so a stopped animation reads as broken.
+  Verified by diffing the sticker's pixels across ~12 s — every sample differs.
+
+**If another root-list element shows up on this screen, gate it on `state.fenixVaultMode` here**
+rather than adding a new screen. The pattern to look for is anything appended under
+`if !view.hasLater, case .chatList = mode`.
+
+**4. Compose and add-story buttons removed from the screen.** Same inheritance problem as the tabs
+and the Archive row — both are root-list actions.
+
+- **`submodules/ChatListUI/Sources/ChatListController.swift`** — `ChatListLocationContext.rightButtons`
+  drops `rightButton` (compose) and `storyButton` when `parentController?.fenixIsVaultList == true`.
+  Filtered in the getter, not at the two assignment sites, so a later assignment cannot put them
+  back. The left **Edit** button stays — it is how chats get selected and unhidden. Proxy and
+  ghost-mode buttons stay too; they are status/utility, not root-list navigation.
+
+---
+
+## Hidden Chats — Calls tab no longer leaks a hidden peer's call history (2026-07-31)
+
+Same class as the Contacts leak, and the third surface `HOOKS.md` predicted under the story-bar fix's
+"Generalise this" note. The call list builds its own feed straight from the message view, so it
+never passed through `ChatListNodeEntries` and every hidden peer's calls stayed listed.
+
+- **`submodules/CallListUI/Sources/CallListNodeEntries.swift`** — `import FenixuzSecretVault`;
+  `.message` entries whose `topMessage.id.peerId` is vaulted are skipped, and `groupCalls` runs
+  through `removingVaulted`. `isEnabled` is read once per rebuild, not per row.
+- **`submodules/CallListUI/Sources/CallListControllerNode.swift`** — `fenixSecretVaultRevisionSignal()`
+  joins the `callListNodeViewTransition` `combineLatest`, so hiding a chat drops its calls
+  immediately.
+- **`submodules/CallListUI/BUILD`** — `+ FenixuzSecretVault`.
+
+The empty placeholder still appears correctly when everything is filtered: `emptyStatePromise` is
+fed from `countMeaningfulCallListEntries(transition.callListView.filteredEntries)`, i.e. the
+post-filter entries.
+
+**Remaining known surfaces that still show vaulted peers, deliberately:** forward / share /
+add-member pickers, and the Contacts + global search. Those are "pick a person" flows where a
+silently missing row reads as data loss.

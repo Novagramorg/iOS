@@ -6,6 +6,7 @@ import TelegramCore
 import SwiftSignalKit
 import Display
 import TelegramPresentationData
+import FenixuzSecretVault
 import TelegramCallsUI
 import TelegramUIPreferences
 import TelegramStringFormatting
@@ -2535,6 +2536,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
 
     public func makeChatListController(context: AccountContext, location: ChatListControllerLocation, controlsHistoryPreload: Bool, hideNetworkActivityStatus: Bool, previewing: Bool, enableDebugActions: Bool) -> ChatListController {
         return ChatListControllerImpl(context: context, location: location, controlsHistoryPreload: controlsHistoryPreload, hideNetworkActivityStatus: hideNetworkActivityStatus, previewing: previewing, enableDebugActions: enableDebugActions)
+    }
+
+    public func makeFenixVaultChatListController(context: AccountContext) -> ChatListController {
+        let controller = ChatListControllerImpl(context: context, location: .chatList(groupId: .root), controlsHistoryPreload: false, enableDebugActions: false, fenixIsVaultList: true)
+        controller.title = SecretVaultStrings.screenTitle
+        return controller
     }
 
     public func makePeerSelectionController(_ params: PeerSelectionControllerParams) -> PeerSelectionController {

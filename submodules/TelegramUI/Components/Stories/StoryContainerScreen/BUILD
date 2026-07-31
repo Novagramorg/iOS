@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Fenixuz/StoryUnlock:FenixuzStoryUnlock",
         "//submodules/Display",
         "//submodules/AsyncDisplayKit",
         "//submodules/ComponentFlow",

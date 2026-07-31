@@ -729,19 +729,19 @@ private func allFeatureSpecs() -> [FeatureSpec] {
             symbol: "link.circle.fill", color: .teal,
             title: L3(en: "Settings Links", uz: "Sozlamalar havolalari", ru: "Ссылки в настройках"),
             enable: L3(
-                en: "Settings → Novagram → Features → turn on “Settings links”.",
-                uz: "Sozlamalar → Novagram → Imkoniyatlar → \"Sozlamalar havolalari\"ni yoqing.",
-                ru: "Настройки → Novagram → Функции → включите «Ссылки в настройках»."
+                en: "Nothing to turn on. Settings → Novagram → Features has a “Share Novagram Settings link” row, and every other row answers a long press.",
+                uz: "Hech narsani yoqish shart emas. Sozlamalar → Novagram → Imkoniyatlar bo'limida \"Novagram Settings havolasini ulashish\" qatori bor, qolgan har bir qatorni esa bosib turish kifoya.",
+                ru: "Ничего включать не нужно. В Настройки → Novagram → Функции есть строка «Поделиться ссылкой Novagram Settings», а любую другую строку достаточно нажать и удерживать."
             ),
             works: L3(
-                en: "Reveals a “Share Novagram Settings link” row that copies and shares a tg://settings/novagrampro deep link — tapping it on any device with Novagram installed opens this settings screen directly.",
-                uz: "\"Novagram Settings havolasini ulashish\" qatorini ochadi — u tg://settings/novagrampro deep linkini nusxalab, ulashadi. Novagram o'rnatilgan istalgan qurilmada uni bosish shu sozlamalar ekranini to'g'ridan-to'g'ri ochadi.",
-                ru: "Открывает строку «Поделиться ссылкой Novagram Settings», которая копирует и делится deep-ссылкой tg://settings/novagrampro — нажатие на неё на любом устройстве с Novagram сразу открывает этот экран настроек."
+                en: "The share row copies and shares tg://settings/novagrampro, which opens this settings screen. Press and hold any row instead and you get tg://settings/novagrampro/<feature> — that link opens the screen, scrolls straight to that row and traces an outline around it.",
+                uz: "Ulashish qatori tg://settings/novagrampro havolasini nusxalab ulashadi — u shu sozlamalar ekranini ochadi. Istalgan qatorni bosib tursangiz esa tg://settings/novagrampro/<feature> havolasini olasiz — u ekranni ochib, to'g'ridan-to'g'ri o'sha qatorga o'tadi va uning atrofida chiziq chizadi.",
+                ru: "Строка отправки копирует и отправляет tg://settings/novagrampro — она открывает этот экран настроек. А если нажать и удерживать любую строку, вы получите tg://settings/novagrampro/<feature> — такая ссылка открывает экран, прокручивает прямо к этой строке и обводит её контуром."
             ),
             disable: L3(
-                en: "Turn the same switch off to hide the share-link row again.",
-                uz: "Ulashish havolasi qatorini yana yashirish uchun shu switchni o'chiring.",
-                ru: "Выключите тот же переключатель, чтобы снова скрыть строку с ссылкой для отправки."
+                en: "Nothing to turn off — links are only created when you ask for one.",
+                uz: "O'chiradigan narsa yo'q — havola faqat siz so'raganingizda yaratiladi.",
+                ru: "Выключать нечего — ссылка создаётся только тогда, когда вы её запросите."
             )
         )
     ]

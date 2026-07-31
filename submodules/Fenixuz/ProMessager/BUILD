@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Fenixuz/StoryUnlock:FenixuzStoryUnlock",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
@@ -20,6 +21,7 @@ swift_library(
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/ItemListUI:ItemListUI",
+        "//submodules/OverlayStatusController:OverlayStatusController",
         "//submodules/ContextUI:ContextUI",
         "//submodules/CallListUI:CallListUI",
         "//submodules/AppBundle:AppBundle",

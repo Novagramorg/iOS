@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/Postbox:Postbox",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
     ],
     visibility = [
