@@ -16,6 +16,7 @@ import UndoUI
 import TelegramUIPreferences
 import TranslateUI
 import PremiumUI
+import FenixuzPremiumUnlock
 
 private enum LanguageListSection: ItemListSectionId {
     case translate
@@ -533,7 +534,7 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
                         entries.append(.translate(text: presentationData.strings.Localization_ShowTranslate, value: showTranslate))
                     }
                     if chatTranslationAvailable {
-                        entries.append(.translateEntire(text: presentationData.strings.Localization_TranslateEntireChat, value: translateChats, locked: !isPremium))
+                        entries.append(.translateEntire(text: presentationData.strings.Localization_TranslateEntireChat, value: translateChats, locked: !isPremium && !FenixuzPremiumUnlock.isTranslateChatsUnlocked))
                     }
                     
                     var value = ""
@@ -621,6 +622,10 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
                     strongSelf.push(translationSettingsController(context: strongSelf.context))
                 }
             }, selectLocalization: { [weak self] info in self?.selectLocalization(info) }, setItemWithRevealedOptions: setItemWithRevealedOptions, removeItem: removeItem, showPremiumInfo: {
+                // Fenixuz: never pitch Premium for a feature this build has already unlocked.
+                if FenixuzPremiumUnlock.isTranslateChatsUnlocked {
+                    return
+                }
                 var replaceImpl: ((ViewController) -> Void)?
                 let controller = PremiumDemoScreen(context: context, subject: .translation, action: {
                     let controller = PremiumIntroScreen(context: context, source: .translation)

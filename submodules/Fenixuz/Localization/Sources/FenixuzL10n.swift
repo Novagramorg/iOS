@@ -656,11 +656,20 @@ public struct FenixuzL10n {
     }
 
     public var accounts_sleeping: String {
-        pick(en: "sleeping", uz: "uyquda", ru: "спит")
+        pick(en: "Sleeping", uz: "Uyquda", ru: "Спит")
     }
 
     public var accounts_accountFallback: String {
-        pick(en: "Account", uz: "Account", ru: "Аккаунт")
+        pick(en: "Account", uz: "Hisob", ru: "Аккаунт")
+    }
+
+    // VoiceOver: read out after the account title + status pill.
+    public var accounts_a11ySwitchHint: String {
+        pick(
+            en: "Double-tap to switch to this account",
+            uz: "Bu accountga o'tish uchun ikki marta bosing",
+            ru: "Дважды коснитесь, чтобы перейти в этот аккаунт"
+        )
     }
 
     public var accounts_footer: String {

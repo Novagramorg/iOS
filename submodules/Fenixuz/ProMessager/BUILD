@@ -21,6 +21,8 @@ swift_library(
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/ItemListUI:ItemListUI",
+        "//submodules/AvatarNode:AvatarNode",
+        "//submodules/PhoneNumberFormat:PhoneNumberFormat",
         "//submodules/OverlayStatusController:OverlayStatusController",
         "//submodules/ContextUI:ContextUI",
         "//submodules/CallListUI:CallListUI",
@@ -32,6 +34,7 @@ swift_library(
         "//submodules/Fenixuz/UnreadReminder:FenixuzUnreadReminder",
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
         "//submodules/Fenixuz/SecretVault:FenixuzSecretVault",
+        "//submodules/Fenixuz/PremiumUnlock:FenixuzPremiumUnlock",
     ],
     visibility = [
         "//visibility:public",

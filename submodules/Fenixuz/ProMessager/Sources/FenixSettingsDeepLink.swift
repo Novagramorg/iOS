@@ -81,6 +81,9 @@ public enum FenixSettingsFeature: String, CaseIterable {
     case autoAccept = "auto-accept"
     case shareLink = "share-link"
     case storySaving = "story-saving"
+    // Slug avoids "unlock" on purpose — it surfaces in the share sheet, and no user-visible
+    // string in this fork may read as circumventing a paid tier (Apple 3.1.1).
+    case translateChatsUnlock = "translate-entire-chats"
 
     // Ads (hidden section)
     case ads = "ads"

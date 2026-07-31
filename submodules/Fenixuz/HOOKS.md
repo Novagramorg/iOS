@@ -1439,6 +1439,14 @@ is safe at any account count.
     ~line 858) now also persists `@username` (or `+phone`) per account under
     `fenixuz_account_usernames` (same UserDefaults suite `pro_messager`). Purely additive —
     name cache unchanged, new key added in parallel.
+  - **2026-07-31 phone cache:** `SharedAccountContext.swift` (same `fenixuzNameCacheDisposable`
+    block, ~line 960) now also persists the account's phone as `+<digits>` under
+    `fenixuz_account_phones` (same UserDefaults suite `pro_messager`). The username cache stores
+    only ONE identity string per account (`@handle` **or** `+phone`), so a sleeping account with a
+    username had no phone to render once the Accounts row grew to three lines. Purely additive —
+    name + username caches unchanged, third key written in the same `if changed` block. Backfill is
+    forward-only: an account already asleep shows `—` for the phone until it next goes live.
+    Read side: `FenixAccountsController.swift` `cachedAccountPhones()`.
   - **2026-06-08 FenixAccountsController — username + avatar:** `AccountRow` now carries `username`
     and `livePeer` fields. Live accounts get real avatar via `context + iconPeer` on
     `ItemListDisclosureItem`; suspended accounts get a colored initials monogram (`UIGraphicsImageRenderer`,
@@ -3692,3 +3700,61 @@ post-filter entries.
 **Remaining known surfaces that still show vaulted peers, deliberately:** forward / share /
 add-member pickers, and the Contacts + global search. Those are "pick a person" flows where a
 silently missing row reads as data loss.
+
+---
+
+## Novagram Settings — "Translate entire chats" toggle unlocks the Premium switch (2026-07-31)
+
+New Settings row, entirely inside `submodules/Fenixuz/ProMessager/` except for the three gate sites
+below — those were hooked in an earlier task and are documented here for the first time, closing a
+HOOKS.md coverage gap rather than changing them. Mirrors the `storyUnlockEnabled` row exactly, minus
+the confirmation alert: flipping this switch is instantly reversible with no data at risk, so there
+is nothing to confirm before turning it on.
+
+**Fenixuz-owned (no merge risk):**
+- `submodules/Fenixuz/PremiumUnlock/Sources/FenixuzPremiumUnlock.swift` — pre-existing;
+  `isTranslateChatsUnlocked` (`UserDefaults` suite `pro_messager`, key
+  `fenix_translate_chats_unlock`, default `false`). Not modified by this task.
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift` — `FenixEntry
+  .translateChatsUnlock` case (stableId `88`, sitting between `storyUnlockEnabled` = `87` and
+  `featuresFooter`; `featuresFooter` bumped `88` → `89` to make room), section membership, `==`,
+  `linkInfo` (slug `translate-chats-unlock`), the `ItemListSwitchItem` builder (icon
+  `character.bubble.fill`, `.lightBlue`), `FenixSettingsState.translateChatsUnlock`, and
+  `FenixSettingsArguments.updateTranslateChatsUnlock` (writes the flag then updates state — no
+  alert, unlike `updateStoryUnlock`).
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsDeepLink.swift` —
+  `FenixSettingsFeature.translateChatsUnlock = "translate-chats-unlock"`.
+- `submodules/Fenixuz/ProMessager/Sources/FenixTranslateUnlockStrings.swift` — new file,
+  `toggleTitle`/`toggleSubtitle` en/uz/ru.
+- `submodules/Fenixuz/ProMessager/BUILD` — `+ //submodules/Fenixuz/PremiumUnlock:FenixuzPremiumUnlock`.
+
+**Telegram-owned gate sites (already hooked before this task; listed here only because HOOKS.md had
+no entry for them yet):**
+
+- `submodules/SettingsUI/Sources/Language Selection/LocalizationListControllerNode.swift:537`:
+  ```swift
+  entries.append(.translateEntire(text: presentationData.strings.Localization_TranslateEntireChat, value: translateChats, locked: !isPremium && !FenixuzPremiumUnlock.isTranslateChatsUnlocked))
+  ```
+  `import FenixuzPremiumUnlock` at line 19. `SettingsUI/BUILD` already carries the dep.
+- `submodules/TelegramUI/Sources/ChatControllerContentData.swift:2201`:
+  ```swift
+  if (isPremium || maybeSuggestPremium || hasAutoTranslate || FenixuzPremiumUnlock.isTranslateChatsUnlocked) && !isHidden {
+  ```
+  `import FenixuzPremiumUnlock` at line 18.
+- `submodules/TelegramUI/Sources/ChatHistoryListNode.swift:2178`:
+  ```swift
+  if let translationState, (isPremium || autoTranslate || FenixuzPremiumUnlock.isTranslateChatsUnlocked) && translationState.isEnabled {
+  ```
+  `import FenixuzPremiumUnlock` at line 42. `TelegramUI/BUILD` already carries the dep.
+
+Why these three and only these three are safe to flip: see the doc comment on
+`FenixuzPremiumUnlock.isTranslateChatsUnlocked` — the gate is client-side in all three places (row
+lock state, translation-state construction, and the actual apply-to-message-list check), and
+`messages.translateText` has no Premium error path server-side (contrast
+`messages.composeMessageWithAI`, which does surface `AICOMPOSE_FLOOD_PREMIUM`). Channel
+auto-translate already routes non-Premium accounts through the identical RPC and code path today.
+
+Do not touch these three gate sites when re-applying hooks after an upstream pull — reapply the
+one-line `||`/`&&` addition verbatim; upstream's surrounding condition (`isPremium`,
+`maybeSuggestPremium`, `hasAutoTranslate`, `autoTranslate`, `isHidden`,
+`translationState.isEnabled`) is taken as-is.

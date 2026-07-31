@@ -20,6 +20,7 @@ import FenixuzChatLock
 import FenixuzAutoProxy
 import FenixuzSecretVault
 import FenixuzStoryUnlock
+import FenixuzPremiumUnlock
 
 private enum FenixSection: Int32 {
     case accounts = 5
@@ -143,6 +144,9 @@ private enum FenixEntry: ItemListNodeEntry {
     // Client-side unlock for two story-viewer actions upstream gates on isPremium with no
     // server enforcement. See submodules/Fenixuz/StoryUnlock/.
     case storyUnlockEnabled(PresentationTheme, String, String, Bool, Bool)
+    // Client-side unlock for the "Translate Entire Chats" switch upstream gates on isPremium with
+    // no server enforcement. See submodules/Fenixuz/PremiumUnlock/.
+    case translateChatsUnlock(PresentationTheme, String, String, Bool, Bool)
     case featuresFooter(PresentationTheme, String)
 
     // — Ads Section (hidden Easter-egg, revealed via 15-second long-press) —
@@ -180,7 +184,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.secretVault.rawValue
         case .reminderHeader, .reminderEnabled, .reminderTime, .reminderSound, .reminderFooter:
             return FenixSection.reminder.rawValue
-        case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .featuresFooter:
+        case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return FenixSection.features.rawValue
         case .adsHeader, .showAds, .adsAbout:
             return FenixSection.ads.rawValue
@@ -259,7 +263,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case .autoAcceptRequests:        return 85
         case .shareNovagramProLink:      return 86
         case .storyUnlockEnabled:        return 87
-        case .featuresFooter:            return 88
+        case .translateChatsUnlock:      return 88
+        case .featuresFooter:            return 89
         // Ads section (hidden Easter-egg)
         case .adsHeader:                 return 90
         case .showAds:                   return 91
@@ -410,6 +415,9 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .storyUnlockEnabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .storyUnlockEnabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
                lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .translateChatsUnlock(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .translateChatsUnlock(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .featuresFooter(lhsTheme, lhsText):
             if case let .featuresFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -493,6 +501,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .autoAcceptRequests(_, title, _, _, _):    return (.autoAccept, title)
         case let .shareNovagramProLink(_, title):           return (.shareLink, title)
         case let .storyUnlockEnabled(_, title, _, _, _):    return (.storySaving, title)
+        case let .translateChatsUnlock(_, title, _, _, _):  return (.translateChatsUnlock, title)
 
         case let .showAds(_, title, _, _, _):               return (.ads, title)
 
@@ -987,6 +996,23 @@ private enum FenixEntry: ItemListNodeEntry {
                 },
                 tag: self.fenixTag
             )
+        case let .translateChatsUnlock(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "character.bubble.fill", color: .lightBlue),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateTranslateChatsUnlock(val)
+                },
+                tag: self.fenixTag
+            )
         case let .adsAbout(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
@@ -1040,6 +1066,8 @@ private struct FenixSettingsState: Equatable {
     var autoAcceptEnabled: Bool
     // Mirrors FenixuzStoryUnlock.isEnabled; default false.
     var storyUnlockEnabled: Bool
+    // Mirrors FenixuzPremiumUnlock.isTranslateChatsUnlocked; default false.
+    var translateChatsUnlock: Bool
     // Ads section (Feature #6 — hidden Easter-egg)
     // Default true: sponsored messages shown (standard Telegram behavior)
     var showAds: Bool
@@ -1094,6 +1122,7 @@ private struct FenixSettingsState: Equatable {
         self.settingsLinksEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_settings_links") ?? false
         self.autoAcceptEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_autoaccept_global") ?? false
         self.storyUnlockEnabled = FenixuzStoryUnlock.isEnabled
+        self.translateChatsUnlock = FenixuzPremiumUnlock.isTranslateChatsUnlocked
         // Ads section — default true (show ads) and false (section hidden)
         self.showAds = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_show_ads") as? Bool ?? true
         self.adsSectionRevealed = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_ads_section_revealed") as? Bool ?? false
@@ -1209,6 +1238,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.storyUnlockEnabled != rhs.storyUnlockEnabled {
+            return false
+        }
+        if lhs.translateChatsUnlock != rhs.translateChatsUnlock {
             return false
         }
         if lhs.showAds != rhs.showAds {
@@ -1404,6 +1436,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     // sharing a link needs no on/off switch, and deep-link handling (OpenResolvedUrl) is independent of it.
     entries.append(.shareNovagramProLink(presentationData.theme, FenixFeaturesStrings.shareNovagramProLinkTitle(langCode: langCode)))
     entries.append(.storyUnlockEnabled(presentationData.theme, FenixStoryUnlockStrings.toggleTitle(langCode: langCode), FenixStoryUnlockStrings.toggleSubtitle(langCode: langCode), state.storyUnlockEnabled, true))
+    entries.append(.translateChatsUnlock(presentationData.theme, FenixTranslateUnlockStrings.toggleTitle(langCode: langCode), FenixTranslateUnlockStrings.toggleSubtitle(langCode: langCode), state.translateChatsUnlock, true))
     // The hint is what makes the per-row link long-press discoverable — it has no other affordance.
     let featuresFooter = FenixFeaturesStrings.footer(langCode: langCode) + " " + FenixSettingsLinkStrings.longPressHint(langCode: langCode)
     entries.append(.featuresFooter(presentationData.theme, featuresFooter))
@@ -1468,8 +1501,9 @@ private final class FenixSettingsArguments {
     // Ads section (Feature #6 — hidden Easter-egg)
     let updateShowAds: (Bool) -> Void
     let updateStoryUnlock: (Bool) -> Void
+    let updateTranslateChatsUnlock: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1515,6 +1549,7 @@ private final class FenixSettingsArguments {
         self.updateAutoAccept = updateAutoAccept
         self.updateShowAds = updateShowAds
         self.updateStoryUnlock = updateStoryUnlock
+        self.updateTranslateChatsUnlock = updateTranslateChatsUnlock
     }
 }
 
@@ -2127,6 +2162,13 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
             dismissOnOutsideTap: false
         )
         presentControllerImpl?(alert)
+    }, updateTranslateChatsUnlock: { value in
+        FenixuzPremiumUnlock.isTranslateChatsUnlocked = value
+        updateState { state in
+            var state = state
+            state.translateChatsUnlock = value
+            return state
+        }
     })
 
     // Feature #40 (part c): the long-press share menu names the row the user pressed, so it needs
