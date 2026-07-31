@@ -171,8 +171,10 @@ Typed markdown with structure the regular message-entity set can't represent (he
 `keyboardButton`/`keyboardInlineButton`. All three are modelled losslessly (Postbox + FlatBuffers +
 both Api directions) **and rendered in V2**; V1 Instant View still skips them. `/synthetic_buttons`
 (**`#if DEBUG` only**) in a 1:1 chat inserts a local fixture message — one incoming, one outgoing —
-since the server does not emit these constructs yet. `pageBlockDocument` has **no** fixture and has
-never been verified on screen: it needs a real fetchable `TelegramMediaFile`.
+since the server does not emit these constructs yet. `pageBlockDocument` needs no fixture — the
+**RichText article editor produces it**: attaching a file (Files tab) makes a `MediaKind.document`
+block that sends as `InstantPageBlock.document`, and tapping a downloaded one in the bubble opens it
+via `openMessage(…, mediaSubject: .richTextMedia(fileId))`.
 
 The load-bearing invariants are in [`docs/instantpage-richtext.md`](docs/instantpage-richtext.md)
 under "Inline buttons & document blocks". The ones that bite hardest: `textButton` follows the inline

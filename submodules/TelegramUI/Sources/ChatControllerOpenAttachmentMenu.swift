@@ -1169,6 +1169,9 @@ extension ChatControllerImpl {
         if request.music {
             availableButtons.append(.audio)
         }
+        if request.file {
+            availableButtons.append(.file)
+        }
         if request.location {
             availableButtons.append(.location)
         }

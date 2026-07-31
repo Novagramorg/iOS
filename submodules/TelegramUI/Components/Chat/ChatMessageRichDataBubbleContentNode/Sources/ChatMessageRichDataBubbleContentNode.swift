@@ -1007,6 +1007,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                     style: nil
                                 ))
                             }
+                            pageView.documentTapped = { [weak self] file in
+                                guard let self else {
+                                    return
+                                }
+                                self.openRichTextDocument?(file)
+                            }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
                             pageView.frame = CGRect(
                                 origin: CGPoint(x: -1.0, y: streamingHeaderOffset),

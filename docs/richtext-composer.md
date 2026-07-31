@@ -187,6 +187,20 @@ further 10pt is trimmed). Without this an empty field over-insets on the right.
 All inline / structural features round-trip losslessly through the native composer; the markers live in shared
 `TextFormat` codecs so live-edit, send, copy, and paste agree.
 
+> **Document (file) blocks (added 2026-07-31).** A generic file attached in the article editor is a
+> `MediaKind.document` block — a CAPTION-LESS atom (the audio shape: `nodeSize` 3, empty `leafRegions()`,
+> gap-caret), rendered as a fixed **52pt** row that must stay in lockstep with `InstantPageV2Layout`'s
+> `documentFrame`. It threads editor `Document` ↔ `ChatInputContent` (`ChatInputMediaKind.document`,
+> raw **4**) ↔ `InstantPage` (`.document(id:caption:)`). Like `.audio`, the chat currency CARRIES a
+> caption while the editor renders none — `MediaBlockBox` drops it at the boundary. Routing: everything
+> picked that is not video/music/voice becomes a document, including an image-mime file from the Files
+> tab (that tab's "send as file" meaning). Documents are permanently single-item and never grouped into
+> a collage or slideshow. The host renderer dispatches on the editor's `MediaKind` (threaded through the
+> media-view seam), NOT by sniffing the resolved `Media` — sniffing sent an image-mime file to the photo
+> pool. A file carrying a preview renders its **thumbnail** in the row (editor and bubble share the node,
+> so both get it at once). Recipient-side render, the thumbnail/status-colour traps, and tap-to-open live
+> in `instantpage-richtext.md`. Runtime-verified 2026-07-31.
+
 - **Formatting menu (iOS 16+):** the composer's **Format** submenu (Bold/Italic/Monospace/Link/Strikethrough/
   Underline/Quote/Spoiler/Date/Code, secret-chat gated) is spliced into the editor's edit menu via
   `RichTextEditorView.contextMenuItemsProvider`. Actions route to the native engine; **Link** through the host
@@ -535,6 +549,16 @@ when the message is sent — a separate send-path change.
 - **Writing-direction override in the composer:** auto-detect handles RTL while typing, but a manual whole-document
   LTR/RTL toggle is not surfaced in the chat composer (it exists on the façade + the attachment screen). Gutter
   ornaments (list markers / quote bar / indents) and table columns are not yet mirrored for RTL.
+- **Document blocks have no composer authoring affordance** — they enter the composer only via the edit
+  round-trip; the article editor is the only place to attach one. There is likewise **no editor-side
+  open/preview** of an attached document.
+- **Markdown copy drops a document block** (`InstantPageToMarkdown` has no spelling for it), the same class of
+  loss already accepted for inline buttons. Editing is unaffected — that path is structural.
+- **`ChatInputMediaKind` raw `4` fails to decode on an older build** reading a cross-device-synced draft (its
+  `init(from:)` rejects unknown raw values). Consistent with the `ChatInputListMarker.checklist` precedent.
+- **File-reference refresh for an EXPIRED rich-message document is unverified.** The open path builds
+  `FileMediaReference.message(…)`, but the file lives in the attribute rather than `message.media`.
+  Freshly-received messages are unaffected; the fallback if it fails is a `.standalone(media:)` reference.
 
 ## Key files
 

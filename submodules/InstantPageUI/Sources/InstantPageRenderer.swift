@@ -180,6 +180,8 @@ public final class InstantPageV2View: UIView {
     /// Fired when an InstantPage button is tapped — an inline `RichText.textButton` or a member of a
     /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch.
     public var buttonTapped: ((InstantPageButton) -> Void)?
+    /// Fires when a `.document` row whose file is already downloaded is tapped.
+    public var documentTapped: ((TelegramMediaFile) -> Void)?
 
     var itemViews: [InstantPageItemView] = []
     private var itemViewStableIds: [InstantPageV2StableItemId] = []
@@ -768,6 +770,10 @@ public final class InstantPageV2View: UIView {
             return v
         case let .document(document):
             guard let v = existingView as? InstantPageV2DocumentView, let rc = self.renderContext else { return nil }
+            // Re-wire: a recycled view may belong to a previous InstantPageV2View (see onDocumentTapped).
+            v.onDocumentTapped = { [weak self] file in
+                self?.documentTapped?(file)
+            }
             v.update(item: document, theme: theme, renderContext: rc)
             return v
         case let .thinking(thinking):
@@ -911,7 +917,11 @@ public final class InstantPageV2View: UIView {
             }
         case let .document(document):
             if let renderContext = self.renderContext {
-                return InstantPageV2DocumentView(item: document, renderContext: renderContext, theme: theme)
+                let view = InstantPageV2DocumentView(item: document, renderContext: renderContext, theme: theme)
+                view.onDocumentTapped = { [weak self] file in
+                    self?.documentTapped?(file)
+                }
+                return view
             } else {
                 return InstantPageV2MediaPlaceholderView(item: InstantPageV2MediaPlaceholderItem(frame: document.frame, kind: .audio, cornerRadius: 0.0), theme: theme)
             }

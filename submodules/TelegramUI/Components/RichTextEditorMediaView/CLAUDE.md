@@ -9,7 +9,10 @@ block to one of these views via a host-registered provider, then positions/sizes
 
 ## Types
 
-- **`MediaItemNodeView`** — the `RichTextMediaItemView` adapter + **3-way dispatcher** by media kind,
+- **`MediaItemNodeView`** — the `RichTextMediaItemView` adapter + **4-way dispatcher**, keyed on the
+  editor's `MediaKind` (threaded through the resolved-items tuple as `kind:`) — **not** by sniffing the
+  resolved `Media`. Sniffing would route an image-mime `.file` picked from the Files tab to the photo
+  pool, whereas the editor calls it a document. Dispatched by media kind,
   created once per media occurrence at three call sites (`RichTextAttachmentScreen`, `ChatControllerNode`,
   `ChatInterfaceStateInputPanels`). Accepts a `cornerRadius: CGFloat = 0` init param: when > 0 and the
   audio branch was NOT taken, sets `layer.cornerRadius` + `masksToBounds` on the container (child fills
@@ -22,6 +25,10 @@ block to one of these views via a host-registered provider, then positions/sizes
   identically to before. See "Mosaic containers" below.
   - **audio** (`.file` && (`isMusic` || `isVoice`)) → `StandaloneInstantPageAudioView` (a playable,
     themeable row; `audioColorOverride` themes it to the editor accent/text scheme).
+  - **document** (`kind == .document`) → `StandaloneInstantPageDocumentView` (a static file row —
+    authoring mode: no fetch control, inert tap; `documentColorOverride` themes it like audio's).
+    Stays square (excluded from `cornerRadius`) and non-interactive, so editor taps pass through to
+    caret placement / tap-select.
   - **location** (`.geo`) → `StandaloneInstantPageImageView` + an `InstantPageMapAttribute`
     (600×300, zoom 15) — the InstantPage `.geo` snapshot+pin path.
   - **photo / video** (everything else, incl. image-mime `.file`) → **`RichTextMediaContentComponent`**

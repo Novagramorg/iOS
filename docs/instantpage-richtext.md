@@ -702,13 +702,56 @@ related, a fixed radius rather than `height / 2` is the lever.
   reaches them, because an inline attachment lands in `additionalItems` *after* the text item it sits
   inside and the cost map walks items in array order. **Formulas already behave this way**; fixing it
   means interleaving sub-item cost entries inside a text entry, i.e. changing the cost model.
-- **`pageBlockDocument`: tapping a downloaded file is inert, by decision.** Opening needs a
-  document-preview presenter, and `presentDocumentPreviewController` is internal to the TelegramUI
-  target — unreachable from `InstantPageUI` *and* from the rich-bubble component module. Routing via
-  `controllerInteraction.openMessage` was rejected: the file lives in the `RichTextMessageAttribute`'s
-  `InstantPage`, not the message's media, so it could open the wrong attachment. Download and cancel
-  do work, through the **fetch manager** (`messageMediaFileStatus` keys progress off its `hasEntry`,
-  so `freeMediaFileInteractiveFetched` would show no ring).
+- **`pageBlockDocument` is produced by the RichText article editor** (attach a file → `MediaKind.document`
+  → `InstantPageBlock.document`), so the renderer is exercised by real content; `/synthetic_buttons`
+  remains a fixture for buttons only. Download and cancel work through the **fetch manager**
+  (`messageMediaFileStatus` keys progress off its `hasEntry`, so `freeMediaFileInteractiveFetched` would
+  show no ring). **Runtime-verified 2026-07-31** (thumbnails, download/cancel, tap-to-open) — this block
+  had never been on screen before.
+- **Tapping a downloaded file opens it through the stock pipeline.** The row's `.Local` tap travels
+  `InstantPageV2DocumentContentNode.openDocument` → `InstantPageV2DocumentView.onDocumentTapped` →
+  `InstantPageV2View.documentTapped` → `ChatMessageBubbleContentNode.openRichTextDocument` →
+  `ChatMessageBubbleItemNode` → `controllerInteraction.openMessage(…, mediaSubject:
+  .richTextMedia(file.fileId))`, which reaches `BrowserScreen` for pdf/markdown,
+  `presentDocumentPreviewController` otherwise, the SVG warning and `canShare`. **Naming the medium is
+  load-bearing**: a rich message's files live in the `RichTextMessageAttribute`'s `InstantPage`, not
+  `message.media`, so `mediaForMessage`'s default first-match resolution over `effectiveMedia` could open
+  a DIFFERENT attachment — which is exactly why this was previously left inert. `mediaForMessage` returns
+  `[]` on a named-but-absent medium: opening nothing beats opening the wrong file.
+- **`documentTapped` must be wired in BOTH renderer arms** (create and reuse), like `buttonTapped`. A
+  recycled view may have been created against a previous `InstantPageV2View`; without re-wiring, taps
+  silently stop working after scrolling away and back.
+- **The row has two modes.** `isAuthoring` (the editor, via `StandaloneInstantPageDocumentView`) shows the
+  thumbnail (or a static file glyph when there is none), never fetches, and its tap is inert — a just-picked
+  file is already local and an edit-loaded cloud file is re-sent by reference. Message mode keeps download /
+  progress / cancel plus the open affordance. Built with `message: nil` and NO authoring flag, `fetchStatus`
+  stays nil and `updateFetchState` maps that to `.download` — a download arrow over a file the user just chose.
+- **LOAD-BEARING — `tapped()` and `updateFetchState()` must partition `fetchStatus` IDENTICALLY**, or the
+  control lies about what tapping it does. In particular **`.none` means "status not known YET"** (the
+  `messageMediaFileStatus` subscription is async, so this is the window right after a bubble appears), **not
+  "downloaded"**: it renders as a download arrow, so it must FETCH. Mapping `.none` alongside `.Local` to
+  open — the shape the original inert `break` invited — opened undownloaded files instead of fetching them.
+  Partition: `.Local` → open; `.Fetching` → cancel; `.Remote`/`.Paused`/`.none` → fetch.
+- **The thumbnail is a sibling node, which changes which foreground colour the control uses.** A file with a
+  preview (`previewRepresentations` — the picker populates them for `image/*` and `application/pdf` in
+  `PollAttachmentScreen`; `immediateThumbnailData` or an `image/*` mime also qualify) renders a
+  `TransformImageNode` fed by `chatMessageImageFile(…, thumbnail: true)`, in the SAME Ø40 slot as the status
+  disc, with the disc scrimmed over it (`mediaOverlayControlColors`) and hidden entirely when idle
+  (authoring, or `.Local`). **Do NOT pass `foregroundNodeColor: .clear` for the overlay look:**
+  `SemanticStatusNodeAppearanceContext.effectiveForegroundColor` prefers `overlayForegroundNodeColor` only
+  when the status node owns a `backgroundImage`, and ours is nil — so a clear foreground renders the download
+  arrow and the progress ring **invisible** over artwork. Pass the overlay colour as the foreground.
+- **The thumbnail deliberately does NOT change the row height.** Telegram's own file bubbles grow to 59–74pt
+  for artwork, but `MediaBlockBox` sizes the editor's row from `kind` alone — it is account-free and cannot
+  resolve the file — so a thumbnail-dependent height would desync the editor preview from the V2 renderer.
+  Any height change must be uniform across all document rows and applied to `documentRowHeight` **and**
+  `InstantPageV2Layout`'s `documentFrame` together.
+- **`InstantPageDocumentColorOverride` is required outside a bubble.** The row's title/description colours
+  come from `theme.chat.message.incoming/outgoing`; without the override an editor-hosted row renders in
+  outgoing-bubble colours. Twin of `InstantPageAudioColorOverride`.
+- **KNOWN: `fetch`/`cancelFetch` and the status subscription all guard on `message?.id`**, so on a message
+  with no id (a pending/unsent one) the row shows a download arrow whose tap quietly does nothing. Routing
+  through a `.standalone(media:)` reference when there is no message id is the fix if it matters.
 - **`/synthetic_buttons` is hooked into the `sendMessages` CLOSURE, not the method.** Typed input goes
   `ChatControllerNode.sendCurrentMessage` → the `sendMessages` closure property
   (`ChatControllerNode.swift:333`, assigned `ChatControllerLoadDisplayNode.swift:986`) →

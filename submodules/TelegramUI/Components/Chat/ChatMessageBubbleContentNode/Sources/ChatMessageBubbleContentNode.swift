@@ -233,6 +233,8 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
     /// `ChatMessageBubbleItemNode`, which owns `performMessageButtonAction` — a content node cannot
     /// reach its item view directly, and the dispatch is not on `ControllerInteraction`.
     public var performRichTextButtonAction: ((ReplyMarkupButton) -> Void)?
+    /// Fires when a downloaded `.document` row in a rich message is tapped, with that exact file.
+    public var openRichTextDocument: ((TelegramMediaFile) -> Void)?
     
     open var disablesClipping: Bool {
         return false

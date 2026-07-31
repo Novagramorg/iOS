@@ -106,7 +106,7 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// native backend forwards it to the editor's media-view provider, resolving its private `mediaByID` →
     /// this factory; the legacy `UITextView` backend stores it but never uses it (no media). `naturalSize` is
     /// the medium's natural size, for aspect-correct display. Mirrors `emojiViewProvider`'s host-owned seam.
-    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? { get set }
+    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? { get set }
 
     /// Host-provided formula renderer. The native backend forwards it to `RichTextEditorView`; the legacy
     /// backend stores it but never uses it, matching the media seam.
@@ -538,7 +538,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
     // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
-    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
+    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
     // Stored-but-unused: the legacy backend has no formula atoms to render. The native backend wires this into
     // `RichTextEditorView`.

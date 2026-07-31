@@ -103,10 +103,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
             // Single item: byte-identical to the pre-container output.
             let item = m.items[0]
             switch item.kind {
-            case .image, .video, .audio:
+            case .image, .video, .audio, .document:
                 // Stash the Media in the page's `media` dict, keyed by its own MediaId; the block carries only the id.
-                // image/video/audio are always a concrete TelegramMediaImage/TelegramMediaFile with an id; a nil-id
-                // medium is dropped (it could not be resolved back from the dict anyway).
+                // image/video/audio/document are always a concrete TelegramMediaImage/TelegramMediaFile with an id;
+                // a nil-id medium is dropped (it could not be resolved back from the dict anyway).
                 guard let mediaId = item.media.id else {
                     break
                 }
@@ -118,6 +118,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                     // music & voice both serialize as `.audio`; the file's `.Audio(isVoice:)` attribute (carried on
                     // the stored Media) drives the music-vs-voice render. No size/alignment is representable.
                     result.append(.audio(id: mediaId, caption: caption))
+                case .document:
+                    // A caption-less block, so `caption` is .empty for editor-authored content; the field is
+                    // carried anyway because the wire block has one.
+                    result.append(.document(id: mediaId, caption: caption))
                 default:
                     result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false, spoiler: item.isSpoiler))
                 }
@@ -407,6 +411,14 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             // Music vs voice is intrinsic to the file (`.Audio(isVoice:)`), so a single `.audio` kind suffices.
             if let media = media[id] {
                 result.append(.media(ChatInputMedia(media: media, kind: .audio, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .document(id, caption):
+            // Mirror of `.audio`: resolve the concrete `TelegramMediaFile` from the page `media` dict (the
+            // forward always stores it). naturalSize/displayWidth/alignment restore the editor's media
+            // defaults; the caption rides the chat currency even though the editor renders none (a document
+            // is caption-less on screen — `MediaBlockBox` drops it at that boundary).
+            if let media = media[id] {
+                result.append(.media(ChatInputMedia(media: media, kind: .document, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .map(latitude, longitude, _, _, caption):
             // Reconstruct a `TelegramMediaMap` from the inline coordinates (no media-dict lookup — a `.map` block

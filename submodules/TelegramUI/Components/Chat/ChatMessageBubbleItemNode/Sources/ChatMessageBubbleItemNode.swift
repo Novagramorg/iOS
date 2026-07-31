@@ -5071,6 +5071,18 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
 
                         strongSelf.performMessageButtonAction(button: button, progress: nil)
                     }
+                    contentNode.openRichTextDocument = { [weak strongSelf] file in
+                        guard let strongSelf, let item = strongSelf.item else {
+                            return
+                        }
+                        // Name the exact medium: a rich message's files live in the RichTextMessageAttribute's
+                        // InstantPage, not message.media, so the default first-match resolution over
+                        // effectiveMedia could open a DIFFERENT attachment.
+                        let _ = item.controllerInteraction.openMessage(
+                            item.message,
+                            OpenMessageParams(mode: .default, mediaSubject: .richTextMedia(file.fileId))
+                        )
+                    }
                 }
             }
             

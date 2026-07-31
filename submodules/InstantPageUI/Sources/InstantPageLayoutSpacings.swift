@@ -12,11 +12,15 @@ enum BlockSequenceKind {
 func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, fitToWidth: Bool, kind: BlockSequenceKind) -> CGFloat {
     if let upper, let lower {
         var upperIsMediaBlock = false
+        var upperIsDocumentBlock = false
         var upperIsButtonBlock = false
         var otherBlock = upper
         switch upper {
         case .image, .video, .collage, .slideshow:
             upperIsMediaBlock = true
+            otherBlock = lower
+        case .document:
+            upperIsDocumentBlock = true
             otherBlock = lower
         case .buttonRow:
             upperIsButtonBlock = true
@@ -26,10 +30,14 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, fi
         }
         
         var lowerIsMediaBlock = false
+        var lowerIsDocumentBlock = false
         var lowerIsButtonBlock = false
         switch lower {
         case .image, .video, .collage, .slideshow:
             lowerIsMediaBlock = true
+            otherBlock = upper
+        case .document:
+            lowerIsDocumentBlock = true
             otherBlock = upper
         case .buttonRow:
             lowerIsButtonBlock = true
@@ -39,6 +47,16 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, fi
         }
         
         if upperIsMediaBlock || lowerIsMediaBlock {
+            switch otherBlock {
+            case .heading, .paragraph:
+                if fitToWidth {
+                    return 8.0
+                }
+            default:
+                break
+            }
+        }
+        if upperIsDocumentBlock || lowerIsDocumentBlock {
             switch otherBlock {
             case .heading, .paragraph:
                 if fitToWidth {

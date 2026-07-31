@@ -280,11 +280,13 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         
         public let imageOrVideo: ImageOrVideo?
         public let music: Bool
+        public let file: Bool
         public let location: Bool
         
-        public init(imageOrVideo: ImageOrVideo?, music: Bool, location: Bool) {
+        public init(imageOrVideo: ImageOrVideo?, music: Bool, file: Bool, location: Bool) {
             self.imageOrVideo = imageOrVideo
             self.music = music
+            self.file = file
             self.location = location
         }
     }
@@ -689,7 +691,12 @@ final class RichTextAttachmentScreenComponent: Component {
                             kind = .audio
                             naturalSize = CGSize(width: 1.0, height: 1.0)
                         } else {
-                            continue   // unsupported document type
+                            // Everything else from the Files tab is a document row — including an image-mime
+                            // file, matching that tab's "send as file" meaning. Also a fixed-height row, so
+                            // naturalSize is ignored by MediaBlockBox; pass the same 1x1 placeholder as audio.
+                            media = file
+                            kind = .document
+                            naturalSize = CGSize(width: 1.0, height: 1.0)
                         }
                     case let .location(map):
                         // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
@@ -714,6 +721,7 @@ final class RichTextAttachmentScreenComponent: Component {
             self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
                 imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 10),
                 music: true,
+                file: true,
                 location: true
             )) { [weak self] items in
                 guard let self else { return }
@@ -1261,6 +1269,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
                             imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
                             music: false,
+                            file: false,
                             location: false
                         )) { items in
                             guard let item = items.first, item.kind == .image || item.kind == .video else { return }   // mosaic is photo/video only
@@ -1351,9 +1360,16 @@ final class RichTextAttachmentScreenComponent: Component {
                         title: theme.list.itemPrimaryTextColor,
                         description: theme.list.itemSecondaryTextColor
                     )
-                    let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
+                    // Same `list.item*` sources as the audio row; ignored for image/map media.
+                    let documentColors = InstantPageDocumentColorOverride(
+                        control: theme.list.itemAccentColor,
+                        controlForeground: theme.list.itemCheckColors.foregroundColor,
+                        title: theme.list.itemPrimaryTextColor,
+                        description: theme.list.itemSecondaryTextColor
+                    )
+                    let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)] = items.compactMap { item in
                         guard let media = self.attachedMedia[item.mediaID] else { return nil }
-                        return (EngineMedia(media), item.naturalSize, item.isSpoiler)
+                        return (EngineMedia(media), item.naturalSize, item.isSpoiler, item.kind)
                     }
                     guard !resolved.isEmpty else { return nil }
                     // In-place update: reuse the existing container (surviving photo/video cells keep their bound
@@ -1362,7 +1378,10 @@ final class RichTextAttachmentScreenComponent: Component {
                         view.updateResolvedItems(resolved, displayMode: displayMode)
                         return view
                     }
-                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors, displayMode: displayMode)
+                    return MediaItemNodeView(context: component.context, items: resolved,
+                                             audioColorOverride: audioColors,
+                                             documentColorOverride: documentColors,
+                                             displayMode: displayMode)
                 }
 
                 // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette

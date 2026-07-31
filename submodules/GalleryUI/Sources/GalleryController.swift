@@ -62,6 +62,17 @@ private func galleryMediaForMedia(media: Media) -> Media? {
 }
 
 func mediaForMessage(message: Message, mediaSubject: GalleryMediaSubject? = nil) -> [(Media, TelegramMediaImage?)] {
+    if case let .richTextMedia(mediaId) = mediaSubject {
+        // The caller named the exact medium (a tap on one block of a rich message), so resolve it by id
+        // instead of falling into the first-match loop below. Returning [] on a miss is deliberate: a
+        // named-but-absent medium must open nothing, never fall back to some other attachment.
+        for media in message.effectiveMedia {
+            if media.id == mediaId, let result = galleryMediaForMedia(media: media) {
+                return [(result, nil)]
+            }
+        }
+        return []
+    }
     //TODO:rewrite to take all media (effectiveMedia returns all rich-text media; we return the first match)
     for media in message.effectiveMedia {
         if let result = galleryMediaForMedia(media: media) {

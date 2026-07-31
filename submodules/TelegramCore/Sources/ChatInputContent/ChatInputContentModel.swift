@@ -643,12 +643,17 @@ public struct ChatInputListMembership: Equatable, Codable {
     }
 }
 
-/// The medium's kind (image, video, audio, or location). Mirrors the editor `MediaKind`.
+/// The medium's kind (image, video, location, audio, or document). Mirrors the editor `MediaKind`.
+///
+/// NOTE: `init(from:)` below throws on an unknown raw value, so an OLDER build decoding a
+/// cross-device-synced draft containing `.document` (raw 4) fails that draft's decode. Accepted, and
+/// consistent with the precedent set when `ChatInputListMarker.checklist` was added.
 public enum ChatInputMediaKind: Int32, Equatable, Codable {
     case image = 0
     case video = 1
     case location = 2
     case audio = 3
+    case document = 4
 
     private enum CodingKeys: String, CodingKey {
         case raw

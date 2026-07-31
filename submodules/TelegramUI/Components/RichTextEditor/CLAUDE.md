@@ -648,6 +648,19 @@ deletable via tap-select + Backspace through the `imageSelection == img.id` bran
   `textStart + textLength` — because audio's `textStart + textLength` collapses to `nodeStart`. Backspace targeting
   audio still replaces it with an empty paragraph via the gap path (below); the caption-start branch never fires
   (no caption position exists).
+
+  **Generalised to documents (2026-07-31).** The predicate is now `MediaKind.isCaptionless` (`.audio ||
+  .document`), mirrored by `MediaBlock.isCaptionless` / `MediaBlockBox.isCaptionless`; every former `isAudio`
+  branch above — plus `DocumentTree` and the three `DocumentCanvasView+Editing` sites (`coverableContentEnd`,
+  the media-caption Enter guard, `insertMedia`'s caret landing) — keys on it. The ONE kind-specific value is
+  the row height: `audioRowHeight` 44 vs `documentRowHeight` **52**, selected by `MediaBlockBox.rowHeight`.
+  **Both must equal the matching V2 frame height in `InstantPageV2Layout`** (the box reserves the slot, the
+  renderer fills it), or the editor preview stops matching the sent bubble. The narrower `isAudio` accessor
+  survives on BOTH `MediaBlock` and `MediaBlockBox` for callers that mean audio *specifically* (several tests
+  assert audio identity — `isCaptionless` would silently also accept a document). Gap-caret Backspace,
+  tap-select delete, vertical nav and Select-All coverage needed no change at all: they key on
+  `mediaBox(atGap:)`, not the kind. Round-trip + recipient rendering: `docs/richtext-composer.md` §4 and
+  `docs/instantpage-richtext.md`.
 - **Inserting a table or image on an EMPTY paragraph replaces it; mid-paragraph it splits** (`insertTable`,
   `insertMedia`). Both share one branch order: an **empty** caret paragraph (`pos.box as? BlockBox` with
   `textLength == 0`) is **replaced** by the new block (`replaceSubrange(pos.index...pos.index)`) so no stray
