@@ -15,9 +15,10 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
+        "//submodules/WallpaperBackgroundNode",
+        "//submodules/AppBundle",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageItemCommon",
-        "//submodules/TelegramUI/Components/Chat/ChatMessageAttachedContentButtonNode",
     ],
     visibility = [
         "//visibility:public",

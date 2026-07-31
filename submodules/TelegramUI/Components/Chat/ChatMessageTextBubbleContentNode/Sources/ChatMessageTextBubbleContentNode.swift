@@ -356,7 +356,6 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 var mediaDuration: Double? = nil
                 var isSeekableWebMedia = false
-                var isUnsupportedMedia = false
                 var story: Stories.Item?
                 var invoice: TelegramMediaInvoice?
                 for media in item.message.media {
@@ -367,8 +366,6 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         invoice = media
                     } else if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content, webEmbedType(content: content).supportsSeeking {
                         isSeekableWebMedia = true
-                    } else if media is TelegramMediaUnsupported {
-                        isUnsupportedMedia = true
                     } else if let storyMedia = media as? TelegramMediaStory {
                         if let value = item.message.associatedStories[storyMedia.storyId]?.get(Stories.StoredItem.self) {
                             if case let .item(storyValue) = value {
@@ -385,9 +382,6 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 } else if let story {
                     rawText = story.text
                     messageEntities = story.entities
-                } else if isUnsupportedMedia {
-                    rawText = item.presentationData.strings.Conversation_UnsupportedMediaPlaceholder
-                    messageEntities = [MessageTextEntity(range: 0..<rawText.count, type: .Italic)]
                 } else {
                     if let updatingMedia = item.attributes.updatingMedia {
                         rawText = updatingMedia.text

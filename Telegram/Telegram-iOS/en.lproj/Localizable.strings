@@ -3997,6 +3997,9 @@ Unused sets are archived when you add more.";
 
 "Conversation.UnsupportedMediaPlaceholder" = "This message is not supported on your version of Telegram. Please update to the latest version.";
 "Conversation.UpdateTelegram" = "UPDATE TELEGRAM";
+"Conversation.UnsupportedMedia.Title" = "Unsupported message";
+"Conversation.UnsupportedMedia.Text" = "Update Telegram to view this message";
+"Conversation.UnsupportedMedia.Action" = "Update";
 
 "Cache.LowDiskSpaceText" = "Your phone has run out of available storage. Please free some space to download or upload media.";
 

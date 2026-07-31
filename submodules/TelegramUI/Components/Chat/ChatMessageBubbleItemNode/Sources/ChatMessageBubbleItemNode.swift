@@ -114,7 +114,7 @@ private final class ChatMessageBubbleClippingNode: ASDisplayNode {
     }
 }
 
-private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([(Message, AnyClass, ChatMessageEntryAttributes, BubbleItemAttributes)], Bool, Bool) {
+private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([(Message, AnyClass, ChatMessageEntryAttributes, BubbleItemAttributes)], Bool, Bool, Bool) {
     var result: [(Message, AnyClass, ChatMessageEntryAttributes, BubbleItemAttributes)] = []
     var skipText = false
     var messageWithCaptionToAdd: (Message, ChatMessageEntryAttributes)?
@@ -288,7 +288,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
             } else if let _ = media as? TelegramMediaExpiredContent {
                 result.removeAll()
                 result.append((message, ChatMessageActionBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
-                return (result, false, true)
+                return (result, false, true, false)
             } else if let poll = media as? TelegramMediaPoll {
                 if item.controllerInteraction.currentPollMessageWithTooltip == item.message.id, let _ = poll.results.solution {
                     result.append((message, ChatMessageQuizAnswerBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .media, neighborSpacing: .default)))
@@ -327,7 +327,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
             }
             previousItemIsFile = isFile
         }
-        
+
         var messageText = message.text
         if let updatingMedia = itemAttributes.updatingMedia {
             messageText = updatingMedia.text
@@ -345,7 +345,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
             }
         }
                 
-        if !messageText.isEmpty || (message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) && richText == nil) || isUnsupportedMedia || isStoryWithText {
+        if (!messageText.isEmpty || (message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) && richText == nil) || isStoryWithText) && !isUnsupportedMedia {
             if !skipText {
                 if case .group = item.content, !isFile {
                     messageWithCaptionToAdd = (message, itemAttributes)
@@ -508,7 +508,9 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         needReactions = false
     }
     
-    return (result, needSeparateContainers, needReactions)
+    // The last element reports unsupported content, which the caller needs before it can decide
+    // bubble width and share-button visibility.
+    return (result, needSeparateContainers, needReactions, isUnsupportedMedia)
 }
 
 private enum ContentNodeOperation {
@@ -1871,7 +1873,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         let isFailed = item.content.firstMessage.effectivelyFailed(timestamp: item.context.account.network.getApproximateRemoteTimestamp())
-        
+
+        // Resolved here rather than at its point of use below, because allowFullWidth and
+        // needsShareButton are both consumed before the bubble width is computed. The function
+        // depends only on `item`, so hoisting it is safe.
+        let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions, isUnsupportedContent) = contentNodeMessagesAndClassesForItem(item)
+
         var needsShareButton = false
         var needsSummarizeButton = false
     
@@ -1983,7 +1990,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         /*if isInlinePage {
             needsShareButton = false
         }*/
-                        
+
+        // Unsupported content draws a full-width service banner with no bubble behind it. There is
+        // nothing to share or summarize in a message this client cannot decode, and the banner
+        // reads as a strip across the line rather than a bubble sized to its text.
+        if isUnsupportedContent {
+            needsShareButton = false
+            needsSummarizeButton = false
+            allowFullWidth = true
+        }
+
         var tmpWidth: CGFloat
         if allowFullWidth {
             tmpWidth = baseWidth
@@ -2005,9 +2021,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         tmpWidth -= deliveryFailedInset
-        
-        let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions) = contentNodeMessagesAndClassesForItem(item)
-        
+
         var maximumContentWidth = floor(tmpWidth - layoutConstants.bubble.edgeInset * 3.0 - layoutConstants.bubble.contentInsets.left - layoutConstants.bubble.contentInsets.right - avatarInset)
         if (needsShareButton && !isSidePanelOpen) {
             maximumContentWidth -= 10.0
