@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Fenixuz/PremiumUnlock:FenixuzPremiumUnlock",
         "//submodules/Display",
         "//submodules/AsyncDisplayKit",
         "//submodules/TelegramPresentationData",

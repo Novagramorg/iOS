@@ -9,17 +9,21 @@ import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
 import ContextUI
+import PhoneNumberFormat
 import FenixuzLocalization
 
 // Fenixuz "Accounts" screen.
 //
 // With the user-controlled pinned set (up to 5 simultaneous live accounts), this screen lets the
-// user activate / put-to-sleep individual accounts. State labels:
-//   "Joriy"   (Current)  — the primary account, always live, accent-color badge.
-//   "Active"  (Active)   — pinned non-primary account, kept live, green badge.
-//   "Uyquda" (Sleeping)  — suspended account, plain grey text label.
+// user activate / put-to-sleep individual accounts. Every row is a chat-list shaped
+// FenixAccountItem: 60pt avatar, bold name, a "@username" line, a phone line and a status pill.
+// Pill states:
+//   "Joriy"   (Current)  — the primary account, always live, blue pill.
+//   "Active"  (Active)   — pinned non-primary account, kept live, green pill.
+//   "Uyquda" (Sleeping)  — suspended account, tinted grey pill.
 //
-// Long-press a non-primary row to get the Activate / Put to Sleep context menu.
+// Non-primary rows offer Activate / Put to Sleep three ways: long-press context menu, trailing
+// swipe, and a VoiceOver custom action.
 // Cap: at most 5 accounts live simultaneously (primary always counts). Attempting to activate
 // a 6th shows a localized warning alert and does NOT activate.
 
@@ -27,12 +31,13 @@ private struct AccountRow: Equatable {
     let recordId: AccountRecordId
     let peerId: Int64
     let title: String
-    let username: String   // "@handle" or "+phone" or ""
+    let username: String   // "@handle" or ""
+    let phone: String      // display-formatted "+998 90 123 45 67" or ""
     let isPrimary: Bool
     let isLive: Bool
     let isPinned: Bool
     let statusLabel: String
-    // Live account's peer (for real avatar via iconPeer); nil for suspended rows.
+    // Live account's peer (for the real avatar); nil for suspended rows.
     let livePeer: EnginePeer?
 }
 
@@ -42,7 +47,7 @@ private enum FenixAccountsSection: Int32 {
 
 private enum FenixAccountsEntry: ItemListNodeEntry {
     case header(String)
-    case account(Int, AccountRow, PresentationTheme)
+    case account(Int, AccountRow, PresentationTheme, Bool)
     case footer(String)
 
     var section: ItemListSectionId {
@@ -53,7 +58,7 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
         switch self {
         case .header:
             return 0
-        case let .account(index, _, _):
+        case let .account(index, _, _, _):
             return Int32(1000 + index)
         case .footer:
             return 1_000_000
@@ -65,9 +70,9 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
         case let .header(text):
             if case .header(text) = rhs { return true }
             return false
-        case let .account(index, row, lhsTheme):
-            if case let .account(rhsIndex, rhsRow, rhsTheme) = rhs,
-               index == rhsIndex, row == rhsRow, lhsTheme === rhsTheme { return true }
+        case let .account(index, row, lhsTheme, revealed):
+            if case let .account(rhsIndex, rhsRow, rhsTheme, rhsRevealed) = rhs,
+               index == rhsIndex, row == rhsRow, lhsTheme === rhsTheme, revealed == rhsRevealed { return true }
             return false
         case let .footer(text):
             if case .footer(text) = rhs { return true }
@@ -89,42 +94,50 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
                 sectionId: self.section
             )
 
-        case let .account(_, row, theme):
-            // Label badge colors:
-            //   primary  → accent color (system blue / tint)
-            //   active   → green (#4DC278)
-            //   sleeping → plain text (no badge, secondary color via .text style)
-            let labelStyle: ItemListDisclosureLabelStyle
+        case let .account(_, row, _, revealed):
+            let l10n = FenixuzL10n(presentationData.strings)
+            let status: FenixAccountStatus
             if row.isPrimary {
-                labelStyle = .badge(theme.list.itemAccentColor)
+                status = .current
             } else if row.isLive && row.isPinned {
-                labelStyle = .badge(UIColor(red: 0.30, green: 0.76, blue: 0.47, alpha: 1.0))
+                status = .active
             } else {
-                labelStyle = .text
+                status = .sleeping
             }
 
-            let subtitle = row.username.isEmpty ? nil : row.username
-            // Live rows render the real avatar via iconPeer. Suspended rows have no live peer, so use
-            // the photo cached to disk while the account was live; fall back to a colored initials circle.
-            let icon: UIImage? = row.livePeer == nil
-                ? (fenixCachedAccountAvatar(peerId: row.peerId) ?? fenixInitialsAvatar(name: row.title))
-                : nil
+            // The current account can't be activated or put to sleep, so it gets no toggle.
+            var toggle: FenixAccountToggle?
+            if !row.isPrimary {
+                let kind: FenixAccountToggle.Kind = (row.isLive && row.isPinned) ? .putToSleep : .activate
+                toggle = FenixAccountToggle(
+                    kind: kind,
+                    title: kind == .putToSleep ? l10n.accounts_putToSleep : l10n.accounts_activate,
+                    action: { arguments.toggleAccount(row.recordId) }
+                )
+            }
 
-            return ItemListDisclosureItem(
+            return FenixAccountItem(
                 presentationData: presentationData,
-                icon: icon,
                 context: arguments.context,
-                iconPeer: row.livePeer,
+                peerId: row.peerId,
                 title: row.title,
-                label: row.statusLabel,
-                labelStyle: labelStyle,
-                additionalDetailLabel: subtitle,
+                username: row.username,
+                phone: row.phone,
+                secondaryFallback: l10n.accounts_accountFallback,
+                status: status,
+                statusLabel: row.statusLabel,
+                accessibilityHintText: l10n.accounts_a11ySwitchHint,
+                livePeer: row.livePeer,
+                revealed: revealed,
                 sectionId: self.section,
-                style: .blocks,
                 action: {
                     if !row.isPrimary {
                         arguments.switchAccount(row.recordId)
                     }
+                },
+                toggle: toggle,
+                setRevealed: { revealed in
+                    arguments.setRevealedAccount(revealed ? row.recordId : nil, row.recordId)
                 }
             )
 
@@ -138,89 +151,40 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
     }
 }
 
-// Loads the account's real avatar that SharedAccountContext mirrored to disk while the account was
-// live (path formula duplicated from fenixAccountAvatarCachePath — same process, same Caches dir).
-// Returns nil when nothing is cached yet so the caller falls back to the initials circle below.
-private func fenixCachedAccountAvatar(peerId: Int64) -> UIImage? {
-    guard peerId != 0,
-          let caches = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first else {
-        return nil
+// Formats a raw digit string ("998901234567") the way the rest of the app shows phone numbers.
+// Accepts a leading "+" too, because the sleeping-account cache stores it that way.
+//
+// The context overload is the one the login screen uses: it groups digits by the server-supplied
+// country pattern first, so a UZ number reads "+998 33 599 94 79" instead of libphonenumber's
+// undifferentiated "+998 335999479".
+private func fenixDisplayPhone(context: AccountContext, _ raw: String) -> String {
+    let digits = raw.hasPrefix("+") ? String(raw.dropFirst()) : raw
+    if digits.isEmpty {
+        return ""
     }
-    let path = caches + "/fenixuz-account-avatars/\(peerId).png"
-    guard FileManager.default.fileExists(atPath: path),
-          let raw = UIImage(contentsOfFile: path) else {
-        return nil
-    }
-    // ItemListDisclosureItem sizes the icon node to the image's natural point size
-    // (see iconNode.frame = ... size: icon.size). The cached PNG is 120px @ scale 1.0,
-    // so it must be redrawn into the same 40pt box fenixInitialsAvatar uses — otherwise
-    // the avatar renders giant. Screen-scale render keeps it crisp; round alpha is preserved.
-    let target = CGSize(width: 40.0, height: 40.0)
-    return UIGraphicsImageRenderer(size: target).image { _ in
-        raw.draw(in: CGRect(origin: .zero, size: target))
-    }
-}
-
-// Generates a round colored initials avatar for suspended accounts.
-private func fenixInitialsAvatar(name: String) -> UIImage? {
-    let size = CGSize(width: 40, height: 40)
-    let initials = avatarInitials(from: name)
-    let color = avatarColor(for: name)
-    let renderer = UIGraphicsImageRenderer(size: size)
-    return renderer.image { ctx in
-        let rect = CGRect(origin: .zero, size: size)
-        ctx.cgContext.setFillColor(color.cgColor)
-        ctx.cgContext.fillEllipse(in: rect)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 16, weight: .semibold),
-            .foregroundColor: UIColor.white
-        ]
-        let text = initials as NSString
-        let textSize = text.size(withAttributes: attrs)
-        let textRect = CGRect(
-            x: (size.width - textSize.width) / 2,
-            y: (size.height - textSize.height) / 2,
-            width: textSize.width,
-            height: textSize.height
-        )
-        text.draw(in: textRect, withAttributes: attrs)
-    }
-}
-
-private func avatarInitials(from name: String) -> String {
-    let parts = name.split(separator: " ").prefix(2)
-    if parts.isEmpty { return "?" }
-    return parts.compactMap { $0.first.map { String($0).uppercased() } }.joined()
-}
-
-private let avatarPalette: [UIColor] = [
-    UIColor(red: 0.48, green: 0.63, blue: 0.91, alpha: 1),
-    UIColor(red: 0.55, green: 0.80, blue: 0.59, alpha: 1),
-    UIColor(red: 0.89, green: 0.52, blue: 0.50, alpha: 1),
-    UIColor(red: 0.97, green: 0.69, blue: 0.39, alpha: 1),
-    UIColor(red: 0.57, green: 0.74, blue: 0.82, alpha: 1),
-    UIColor(red: 0.80, green: 0.59, blue: 0.80, alpha: 1),
-    UIColor(red: 0.40, green: 0.73, blue: 0.64, alpha: 1)
-]
-
-private func avatarColor(for name: String) -> UIColor {
-    let hash = abs(name.unicodeScalars.reduce(0) { $0 &+ Int(bitPattern: UInt(bitPattern: Int($1.value))) })
-    return avatarPalette[hash % avatarPalette.count]
+    return formatPhoneNumber(context: context, number: digits)
 }
 
 private final class FenixAccountsArguments {
     let context: AccountContext
     let switchAccount: (AccountRecordId) -> Void
     let longTapAccount: (AccountRecordId, UIView) -> Void
+    // Activate / Put to Sleep — shared by the context menu, the swipe action and VoiceOver.
+    let toggleAccount: (AccountRecordId) -> Void
+    let setRevealedAccount: (AccountRecordId?, AccountRecordId?) -> Void
 
     init(
         context: AccountContext,
         switchAccount: @escaping (AccountRecordId) -> Void,
-        longTapAccount: @escaping (AccountRecordId, UIView) -> Void
+        longTapAccount: @escaping (AccountRecordId, UIView) -> Void,
+        toggleAccount: @escaping (AccountRecordId) -> Void,
+        setRevealedAccount: @escaping (AccountRecordId?, AccountRecordId?) -> Void
     ) {
         self.context = context
         self.switchAccount = switchAccount
         self.longTapAccount = longTapAccount
+        self.toggleAccount = toggleAccount
+        self.setRevealedAccount = setRevealedAccount
     }
 }
 
@@ -232,6 +196,12 @@ private func cachedAccountUsernames() -> [String: String] {
     (UserDefaults(suiteName: "pro_messager")?.dictionary(forKey: "fenixuz_account_usernames") as? [String: String]) ?? [:]
 }
 
+// Written alongside the username cache. The legacy username cache only ever kept one identity
+// string per account, so sleeping accounts that have a username had no phone to show at all.
+private func cachedAccountPhones() -> [String: String] {
+    (UserDefaults(suiteName: "pro_messager")?.dictionary(forKey: "fenixuz_account_phones") as? [String: String]) ?? [:]
+}
+
 public func fenixAccountsController(context: AccountContext) -> ViewController {
     // Shared mutable state: long-press handler needs a synchronous snapshot of rows.
     var currentRows: [AccountRow] = []
@@ -240,6 +210,58 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
 
     // Max live accounts cap (must match SharedAccountContextImpl.fenixuzMaxLiveAccounts).
     let maxLiveAccounts = 5
+
+    // Which row currently shows its swipe actions. Kept out of the model signals so a swipe only
+    // re-renders the list, never re-reads the account records.
+    let revealedRecordIdPromise = ValuePromise<Int64?>(nil, ignoreRepeated: true)
+    var revealedRecordIdValue: Int64?
+
+    // Enforces the live-account cap before activating a sleeping account. Returns false — and shows
+    // the warning alert — when activating would exceed it.
+    func canActivateAccount(l10n: FenixuzL10n) -> Bool {
+        let primaryId64 = currentPrimaryRecordId?.int64
+        let liveNonPrimaryCount = currentRows.filter {
+            !$0.isPrimary && $0.isLive && $0.isPinned && $0.recordId.int64 != primaryId64
+        }.count
+        // primary occupies slot 0; each pinned non-primary takes one more slot.
+        if liveNonPrimaryCount < maxLiveAccounts - 1 {
+            return true
+        }
+        // Cap reached — this is a genuine warning, so an alert is the right surface.
+        let alert = UIAlertController(
+            title: l10n.accounts_maxLiveTitle,
+            message: l10n.accounts_maxLiveBody,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: l10n.accounts_maxLiveOk, style: .default))
+        // Find the active window using the connected scenes API (avoids keyWindow deprecation).
+        let rootVC = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow })
+            .flatMap { $0.rootViewController }
+        if let topVC = rootVC?.fenixTopmostVC() {
+            topVC.present(alert, animated: true)
+        }
+        return false
+    }
+
+    // The single relevant action for a non-primary row: Put to Sleep (active) or Activate (sleeping).
+    func toggleAccount(_ recordId: AccountRecordId) {
+        guard let row = currentRows.first(where: { $0.recordId == recordId }), !row.isPrimary else {
+            return
+        }
+        if !(row.isLive && row.isPinned) {
+            let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
+            guard canActivateAccount(l10n: FenixuzL10n(strings)) else {
+                return
+            }
+        }
+        context.sharedContext.fenixuzTogglePinnedAccount(
+            recordId: recordId,
+            primaryRecordId: currentPrimaryRecordId
+        )
+    }
 
     let arguments = FenixAccountsArguments(
         context: context,
@@ -257,7 +279,6 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let l10n = FenixuzL10n(presentationData.strings)
 
-            // The single relevant action for this row: Put to Sleep (active) or Activate (sleeping).
             let actionTitle: String
             let actionIconName: String
             if row.isLive && row.isPinned {
@@ -265,30 +286,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                 actionIconName = "Chat/Context Menu/NightMode"
             } else {
                 // Account is sleeping — enforce the live cap before offering Activate.
-                let primaryId64 = currentPrimaryRecordId?.int64
-                let liveNonPrimaryCount = currentRows.filter {
-                    !$0.isPrimary && $0.isLive && $0.isPinned && $0.recordId.int64 != primaryId64
-                }.count
-                // primary occupies slot 0; each pinned non-primary takes one more slot.
-                if liveNonPrimaryCount >= maxLiveAccounts - 1 {
-                    // Cap reached — this is a genuine warning, so an alert is the right surface.
-                    let alert = UIAlertController(
-                        title: l10n.accounts_maxLiveTitle,
-                        message: l10n.accounts_maxLiveBody,
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: l10n.accounts_maxLiveOk, style: .default))
-                    // Find the active window using the connected scenes API (avoids keyWindow deprecation).
-                    let rootVC = UIApplication.shared.connectedScenes
-                        .compactMap { $0 as? UIWindowScene }
-                        .flatMap { $0.windows }
-                        .first(where: { $0.isKeyWindow })
-                        .flatMap { $0.rootViewController }
-                    if let topVC = rootVC?.fenixTopmostVC() {
-                        topVC.present(alert, animated: true)
-                    }
-                    return
-                }
+                guard canActivateAccount(l10n: l10n) else { return }
                 actionTitle = l10n.accounts_activate
                 actionIconName = "Chat/Context Menu/Check"
             }
@@ -303,10 +301,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                     },
                     action: { _, f in
                         f(.default)
-                        context.sharedContext.fenixuzTogglePinnedAccount(
-                            recordId: recordId,
-                            primaryRecordId: currentPrimaryRecordId
-                        )
+                        toggleAccount(recordId)
                     }
                 ))
             ]
@@ -318,6 +313,18 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                 gesture: nil
             )
             presentInGlobalOverlayImpl?(contextController)
+        },
+        toggleAccount: { recordId in
+            toggleAccount(recordId)
+        },
+        setRevealedAccount: { revealed, previous in
+            if let revealed = revealed {
+                revealedRecordIdValue = revealed.int64
+                revealedRecordIdPromise.set(revealed.int64)
+            } else if revealedRecordIdValue == previous?.int64 {
+                revealedRecordIdValue = nil
+                revealedRecordIdPromise.set(nil)
+            }
         }
     )
 
@@ -350,13 +357,15 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
         context.sharedContext.presentationData,
         allRecords,
         context.sharedContext.activeAccountsWithInfo,
-        context.sharedContext.fenixuzPinnedAccountsSignal
+        context.sharedContext.fenixuzPinnedAccountsSignal,
+        revealedRecordIdPromise.get()
     )
     |> deliverOnMainQueue
-    |> map { presentationData, recordsData, activeInfo, pinnedIds -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, recordsData, activeInfo, pinnedIds, revealedRecordId -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let l10n = FenixuzL10n(presentationData.strings)
         let names = cachedAccountNames()
         let usernames = cachedAccountUsernames()
+        let phones = cachedAccountPhones()
         let liveById: [AccountRecordId: AccountWithInfo] = Dictionary(
             activeInfo.accounts.map { ($0.account.id, $0) },
             uniquingKeysWith: { a, _ in a }
@@ -376,22 +385,32 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                 title = "\(l10n.accounts_accountFallback) \(peerId)"
             }
 
-            let username: String
+            // Username and phone occupy their own lines, so they are carried separately. A live
+            // account exposes both. A sleeping one is served by two parallel caches; the legacy
+            // username cache holds a single string that may be either, and the phone cache fills
+            // the gap once the account has been live at least once since the cache was added.
+            var username = ""
+            var phone = ""
             if let live = live {
-                switch live.peer {
-                case let .user(user):
+                if case let .user(user) = live.peer {
                     if let uname = user.usernames.first(where: { $0.isActive })?.username ?? user.username {
                         username = "@\(uname)"
-                    } else if let phone = user.phone, !phone.isEmpty {
-                        username = "+\(phone)"
-                    } else {
-                        username = ""
                     }
-                default:
-                    username = ""
+                    if let userPhone = user.phone, !userPhone.isEmpty {
+                        phone = fenixDisplayPhone(context: context, userPhone)
+                    }
                 }
             } else {
-                username = usernames[peerKey] ?? ""
+                if let cached = usernames[peerKey], !cached.isEmpty {
+                    if cached.hasPrefix("@") {
+                        username = cached
+                    } else {
+                        phone = fenixDisplayPhone(context: context, cached)
+                    }
+                }
+                if phone.isEmpty, let cachedPhone = phones[peerKey], !cachedPhone.isEmpty {
+                    phone = fenixDisplayPhone(context: context, cachedPhone)
+                }
             }
 
             let isPrimary = recordId == recordsData.current
@@ -412,6 +431,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                 peerId: peerId,
                 title: title,
                 username: username,
+                phone: phone,
                 isPrimary: isPrimary,
                 isLive: isLive,
                 isPinned: isPinned,
@@ -428,7 +448,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
         let liveCount = rows.filter({ $0.isLive }).count
         entries.append(.header(l10n.accounts_summary(total: rows.count, active: liveCount)))
         for (index, row) in rows.enumerated() {
-            entries.append(.account(index, row, presentationData.theme))
+            entries.append(.account(index, row, presentationData.theme, revealedRecordId == row.recordId.int64))
         }
         entries.append(.footer(l10n.accounts_footer))
 

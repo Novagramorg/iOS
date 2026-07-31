@@ -21,6 +21,7 @@ import ComponentDisplayAdapters
 import LocalMediaResources
 import AppBundle
 import TranslationLanguagesContextMenuContent
+import FenixuzPremiumUnlock
 
 final class ChatTranslationPanelNode: ASDisplayNode {
     private let context: AccountContext
@@ -29,17 +30,17 @@ final class ChatTranslationPanelNode: ASDisplayNode {
     private let controller: () -> ViewController?
     private let changeLanguage: (String) -> Void
     private let addDoNotTranslateLanguage: (String) -> Void
-    
+
     private let button: HighlightableButtonNode
     private let buttonIconNode: ASImageNode
     private let buttonTextNode: ImmediateTextNode
     private let moreButton: MoreButtonNode
     private let closeButton: HighlightableButtonNode
-    
+
     private var theme: PresentationTheme?
-    
+
     private var currentInfo: TranslateHeaderPanelComponent.Info?
-    
+
     init(context: AccountContext, close: @escaping () -> Void, toggle: @escaping () -> Void, changeLanguage: @escaping (String) -> Void, addDoNotTranslateLanguage: @escaping (String) -> Void, controller: @escaping () -> ViewController?) {
         self.context = context
         self.close = close
@@ -47,49 +48,49 @@ final class ChatTranslationPanelNode: ASDisplayNode {
         self.changeLanguage = changeLanguage
         self.addDoNotTranslateLanguage = addDoNotTranslateLanguage
         self.controller = controller
-        
+
         self.button = HighlightableButtonNode()
         self.buttonIconNode = ASImageNode()
         self.buttonIconNode.displaysAsynchronously = false
-        
+
         self.buttonTextNode = ImmediateTextNode()
         self.buttonTextNode.displaysAsynchronously = false
-        
+
         let theme: PresentationTheme = context.sharedContext.currentPresentationData.with { $0 }.theme
         self.moreButton = MoreButtonNode(theme: theme)
         self.moreButton.updateColor(theme.chat.inputPanel.panelControlColor, transition: .immediate)
         self.moreButton.iconNode.enqueueState(.more, animated: false)
         self.moreButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -8.0, bottom: -8.0, right: -8.0)
-        
+
         self.closeButton = HighlightableButtonNode()
         self.closeButton.hitTestSlop = UIEdgeInsets(top: -8.0, left: -8.0, bottom: -8.0, right: -8.0)
         self.closeButton.displaysAsynchronously = false
-    
+
         super.init()
 
         self.clipsToBounds = true
-        
+
         self.addSubnode(self.button)
         self.addSubnode(self.moreButton)
-        
+
         self.button.addSubnode(self.buttonIconNode)
         self.button.addSubnode(self.buttonTextNode)
-        
+
         self.button.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: [.touchUpInside])
         self.moreButton.action = { [weak self] _, gesture in
             if let strongSelf = self {
                 strongSelf.morePressed(node: strongSelf.moreButton.contextSourceNode, gesture: gesture)
             }
         }
-        
+
         self.closeButton.addTarget(self, action: #selector(self.closePressed), forControlEvents: [.touchUpInside])
         self.addSubnode(self.closeButton)
     }
-    
+
     func animateOut() {
         self.layer.animateBounds(from: self.bounds, to: self.bounds.offsetBy(dx: 0.0, dy: self.bounds.size.height), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
     }
-    
+
     func updateLayout(
         width: CGFloat,
         info: TranslateHeaderPanelComponent.Info,
@@ -99,16 +100,16 @@ final class ChatTranslationPanelNode: ASDisplayNode {
     ) -> CGFloat {
         let leftInset: CGFloat = 0.0
         let rightInset: CGFloat = 0.0
-        
+
         let previousInfo = self.currentInfo
         self.currentInfo = info
-        
+
         var themeUpdated = false
         if theme !== self.theme {
             themeUpdated = true
             self.theme = theme
         }
-        
+
         if themeUpdated {
             self.buttonIconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Title Panels/Translate"), color: theme.chat.inputPanel.panelControlColor)
             self.moreButton.theme = theme
@@ -134,7 +135,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             if languageCode.hasSuffix(rawSuffix) {
                 languageCode = String(languageCode.dropLast(rawSuffix.count))
             }
-            
+
             let toLang = info.toLang ?? languageCode
             let key = "Translation.Language.\(toLang)"
             let translateTitle: String
@@ -145,7 +146,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                 let toLanguage = languageLocale.localizedString(forLanguageCode: toLang) ?? ""
                 translateTitle = strings.Conversation_Translation_TranslateToOther(toLanguage).string
             }
-            
+
             let buttonText = info.isActive ? strings.Conversation_Translation_ShowOriginal : translateTitle
             if self.buttonTextNode.attributedText?.string != buttonText {
                 textUpdated = true
@@ -154,9 +155,9 @@ final class ChatTranslationPanelNode: ASDisplayNode {
         }
 
         let panelHeight: CGFloat = 40.0
-        
+
         let contentRightInset: CGFloat = 11.0 + rightInset
-        
+
         var copyTextView: UIView?
         if textUpdated, transition.isAnimated {
             if let copyView = self.buttonTextNode.layer.snapshotContentTreeAsView(unhide: false) {
@@ -166,36 +167,38 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                     copyView?.removeFromSuperview()
                 })
                 ComponentTransition(transition).setBlur(layer: copyView.layer, radius: 8.0)
-                
+
                 ComponentTransition(transition).animateBlur(layer: self.buttonTextNode.layer, fromRadius: 8.0, toRadius: 0.0)
                 self.buttonTextNode.alpha = 0.0
                 transition.updateAlpha(layer: self.buttonTextNode.layer, alpha: 1.0)
             }
         }
-                  
+
         let moreButtonSize = self.moreButton.measure(CGSize(width: 100.0, height: panelHeight))
         transition.updateFrame(node: self.moreButton, frame: CGRect(origin: CGPoint(x: width - contentRightInset - moreButtonSize.width, y: floorToScreenPixels((panelHeight - moreButtonSize.height) / 2.0) - 1.0), size: moreButtonSize))
-     
+
         let closeButtonSize = self.closeButton.measure(CGSize(width: 100.0, height: 100.0))
         self.closeButton.frame = CGRect(origin: CGPoint(x: width - contentRightInset - closeButtonSize.width, y: floorToScreenPixels((panelHeight - closeButtonSize.height) / 2.0)), size: closeButtonSize)
-        
-        if info.isPremium {
+
+        // Fenixuz: unlocked builds get the panel's settings ("more") button too, not the
+        // dismiss-only X that upstream shows a free account.
+        if info.isPremium || FenixuzPremiumUnlock.isTranslateChatsUnlocked {
             self.moreButton.isHidden = false
             self.closeButton.isHidden = true
         } else {
             self.moreButton.isHidden = true
             self.closeButton.isHidden = false
         }
-        
+
         let buttonPadding: CGFloat = 10.0
         let buttonSpacing: CGFloat = 10.0
         let buttonTextSize = self.buttonTextNode.updateLayout(CGSize(width: width - contentRightInset - moreButtonSize.width, height: panelHeight))
         if let icon = self.buttonIconNode.image {
             let buttonSize = CGSize(width: buttonTextSize.width + icon.size.width + buttonSpacing + buttonPadding * 2.0, height: panelHeight)
             transition.updateFrame(node: self.button, frame: CGRect(origin: CGPoint(x: leftInset + floorToScreenPixels((width - leftInset - rightInset - buttonSize.width) / 2.0), y: 0.0), size: buttonSize))
-            
+
             transition.updateFrame(node: self.buttonIconNode, frame: CGRect(origin: CGPoint(x: buttonPadding, y: floorToScreenPixels((buttonSize.height - icon.size.height) / 2.0)), size: icon.size))
-            
+
             let buttonTextFrame = CGRect(origin: CGPoint(x: buttonPadding + icon.size.width + buttonSpacing, y: floorToScreenPixels((buttonSize.height - buttonTextSize.height) / 2.0)), size: buttonTextSize)
             transition.updatePosition(node: self.buttonTextNode, position: buttonTextFrame.center)
             if let copyTextView {
@@ -203,40 +206,51 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             }
             self.buttonTextNode.bounds = CGRect(origin: CGPoint(), size: buttonTextFrame.size)
         }
-        
+
         return panelHeight
     }
-    
+
     @objc private func closePressed() {
         guard let info = self.currentInfo else {
             return
         }
         let isPremium = info.isPremium
-        
+
         var translationAvailable = isPremium
         if case let .channel(channel) = info.peer, channel.flags.contains(.autoTranslateEnabled) {
             translationAvailable = true
         }
-        
+        // Fenixuz: the NovagramPro "Translate entire chats" toggle is the fourth gate on this
+        // feature — without it here, tapping the panel still hit the Premium paywall even though
+        // the Settings row had already been unlocked.
+        if FenixuzPremiumUnlock.isTranslateChatsUnlocked {
+            translationAvailable = true
+        }
+
         if translationAvailable {
             self.close()
         } else if !isPremium {
-            let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: self.context.sharedContext.accountManager, count: -100, timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 7).startStandalone()
+            _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: self.context.sharedContext.accountManager, count: -100, timestamp: Int32(Date().timeIntervalSince1970) + 60 * 60 * 24 * 7).startStandalone()
         }
     }
-    
+
     @objc private func buttonPressed() {
         guard let info = self.currentInfo else {
             return
         }
-        
+
         let isPremium = info.isPremium
-        
+
         var translationAvailable = isPremium
         if case let .channel(channel) = info.peer, channel.flags.contains(.autoTranslateEnabled) {
             translationAvailable = true
         }
-        
+        // Fenixuz: this is the gate the panel's own button hits. Without it, tapping "Translate to
+        // …" still opened the Premium paywall even though the Settings row was already unlocked.
+        if FenixuzPremiumUnlock.isTranslateChatsUnlocked {
+            translationAvailable = true
+        }
+
         if translationAvailable {
             self.toggle()
         } else if !info.isActive {
@@ -254,21 +268,21 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             }
         }
     }
-    
+
     @objc private func morePressed(node: ContextReferenceContentNode, gesture: ContextGesture?) {
         guard let info = self.currentInfo else {
             return
         }
-        
+
         let context = self.context
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        
+
         var languageCode = presentationData.strings.baseLanguageCode
         let rawSuffix = "-raw"
         if languageCode.hasSuffix(rawSuffix) {
             languageCode = String(languageCode.dropLast(rawSuffix.count))
         }
-       
+
         let doNotTranslateTitle: String
         let fromLang = info.fromLang
         let key = "Translation.Language.\(fromLang)"
@@ -279,7 +293,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             let fromLanguage = languageLocale.localizedString(forLanguageCode: fromLang) ?? ""
             doNotTranslateTitle = presentationData.strings.Conversation_Translation_DoNotTranslateOther(fromLanguage).string
         }
-        
+
         let items: Signal<ContextController.Items, NoError> = context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.translationSettings])
         |> take(1)
         |> map { sharedData -> ContextController.Items in
@@ -289,7 +303,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             } else {
                 settings = TranslationSettings.defaultSettings
             }
-            
+
             var items: [ContextMenuItem] = []
             items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_Translation_ChooseLanguage, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.contextMenu.primaryColor)
@@ -297,12 +311,12 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                 guard let self else {
                     return
                 }
-                
+
                 var addedLanguages = Set<String>()
-                
+
                 var topLanguages: [String] = []
                 let langCode = normalizeTranslationLanguage(languageCode)
-                
+
                 var selectedLanguages: Set<String>
                 if let ignoredLanguages = settings.ignoredLanguages {
                     selectedLanguages = Set(ignoredLanguages)
@@ -317,12 +331,12 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                         topLanguages.append(code)
                     }
                 }
-                
+
                 topLanguages.append("")
-                                
+
                 var languages: [(String, String)] = []
                 let languageLocale = Locale(identifier: langCode)
-                
+
                 for code in topLanguages {
                     if !addedLanguages.contains(code) {
                         let displayTitle = languageLocale.localizedString(forLanguageCode: code) ?? ""
@@ -335,7 +349,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                         addedLanguages.insert(code)
                     }
                 }
-                
+
                 for code in supportedTranslationLanguages {
                     if !addedLanguages.contains(code) {
                         let displayTitle = languageLocale.localizedString(forLanguageCode: code) ?? ""
@@ -348,7 +362,7 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                         addedLanguages.insert(code)
                     }
                 }
-                          
+
                 c?.pushItems(items: .single(ContextController.Items(
                     content: .custom(
                         TranslationLanguagesContextMenuContent(
@@ -367,30 +381,30 @@ final class ChatTranslationPanelNode: ASDisplayNode {
                     )
                 )))
             })))
-            
+
             items.append(.separator)
-            
+
             items.append(.action(ContextMenuActionItem(text: doNotTranslateTitle, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self] c, _ in
                 c?.dismiss(completion: nil)
-                
+
                 guard let self, let info = self.currentInfo else {
                     return
                 }
                 self.addDoNotTranslateLanguage(info.fromLang)
             })))
-            
+
             items.append(.action(ContextMenuActionItem(text: presentationData.strings.Conversation_Translation_Hide, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Clear"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self] c, _ in
                 c?.dismiss(completion: nil)
-                
+
                 self?.close()
             })))
-            
+
             items.append(.separator)
-            
+
             let cocoonPath = getAppBundle().url(forResource: "Cocoon", withExtension: "tgs")?.path ?? ""
             let cocoonFile = TelegramMediaFile(
                 fileId: EngineMedia.Id(namespace: Namespaces.Media.CloudFile, id: -123456789),
@@ -411,16 +425,16 @@ final class ChatTranslationPanelNode: ASDisplayNode {
             let (cocoonText, entities) = parseCocoonMenuTextEntities(presentationData.strings.Conversation_Translation_CocoonInfo, emojiFileId: cocoonFile.fileId.id)
             items.append(.action(ContextMenuActionItem(text: cocoonText, entities: entities, entityFiles: [cocoonFile.fileId.id: cocoonFile], enableEntityAnimations: true, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: { [weak self] c, _ in
                 c?.dismiss(completion: nil)
-                
+
                 if let controller = self?.controller() {
                     let infoController = context.sharedContext.makeCocoonInfoScreen(context: context)
                     controller.push(infoController)
                 }
             })))
-            
+
             return ContextController.Items(content: .list(items))
         }
-            
+
         if let controller = self.controller() {
             let contextController = makeContextController(context: context, presentationData: presentationData, source: .reference(TranslationContextReferenceContentSource(controller: controller, sourceNode: node)), items: items, gesture: gesture)
             controller.presentInGlobalOverlay(contextController)
@@ -431,16 +445,16 @@ final class ChatTranslationPanelNode: ASDisplayNode {
 private final class TranslationContextReferenceContentSource: ContextReferenceContentSource {
     private let controller: ViewController
     private let sourceNode: ContextReferenceContentNode
-    
+
     var keepInPlace: Bool {
         return true
     }
-    
+
     init(controller: ViewController, sourceNode: ContextReferenceContentNode) {
         self.controller = controller
         self.sourceNode = sourceNode
     }
-    
+
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
         return ContextControllerReferenceViewInfo(referenceView: self.sourceNode.view, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
@@ -467,7 +481,7 @@ private func parseCocoonMenuTextEntities(_ input: String, emojiFileId: Int64) ->
         return idx < input.endIndex ? input[idx] : nil
     }
 
-    var boldStartOut: Int? = nil
+    var boldStartOut: Int?
     while i < input.endIndex {
         let c = input[i]
         if c == "*", peek(1) == "*" {
@@ -513,7 +527,7 @@ private func parseCocoonMenuTextEntities(_ input: String, emojiFileId: Int64) ->
             }
 
             let label = String(input[labelStart..<closeBracket])
-        
+
             let labelOutStart = outputCount
             output += label
             let labelLen = utf16Len(label)
