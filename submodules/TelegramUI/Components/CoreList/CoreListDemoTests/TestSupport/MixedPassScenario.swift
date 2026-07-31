@@ -96,7 +96,7 @@ struct MixedPassStep: CustomStringConvertible {
     let items: [MixedPassItem]
     let size: CGSize
     let insets: UIEdgeInsets
-    let scrollTo: (index: Int, pointOffset: CGFloat)?
+    let scrollTo: CoreListScrollTarget?
     let transition: CoreListTransition
     let advanceAfter: TimeInterval
     let actions: [MixedPassAction]
@@ -176,11 +176,11 @@ struct MixedPassScenario {
             }
         }
 
-        var scrollTo: (index: Int, pointOffset: CGFloat)?
+        var scrollTo: CoreListScrollTarget?
         if let pointOffset = pendingScrollOffset {
             let index = rng.int(in: items.indices)
             actions.append(.scroll(index: index, pointOffset: pointOffset))
-            scrollTo = (index, pointOffset)
+            scrollTo = CoreListScrollTarget(index: index, pointOffset: pointOffset)
         }
         if actions.isEmpty {
             actions.append(.sameTarget)

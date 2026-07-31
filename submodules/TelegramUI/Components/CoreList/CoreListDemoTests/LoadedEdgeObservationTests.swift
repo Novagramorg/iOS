@@ -74,7 +74,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
             transition: .easeInOut(duration: 0)
         )
         bottom.listView.applyChanges(
-            scrollTo: (index: 99, pointOffset: 0),
+            scrollTo: .init(index: 99, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         placeBottomBoundary(at: 300, in: bottom)
@@ -113,7 +113,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
             transition: .easeInOut(duration: 0)
         )
         bottom.listView.applyChanges(
-            scrollTo: (index: 99, pointOffset: 0),
+            scrollTo: .init(index: 99, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         bottom.listView.loadedEdgeMargin = 50
@@ -139,7 +139,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
             preloadMargin: 100
         )
         bottom.listView.applyChanges(
-            scrollTo: (index: 99, pointOffset: 0),
+            scrollTo: .init(index: 99, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         bottom.listView.loadedEdgeMargin = -50
@@ -219,7 +219,7 @@ final class LoadedEdgeObservationTests: XCTestCase {
         fixture.listView.onLoadedEdgeReached = { arrivals.append($0) }
 
         fixture.listView.applyChanges(
-            scrollTo: (index: 99, pointOffset: 0),
+            scrollTo: .init(index: 99, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         fixture.fireScroll()

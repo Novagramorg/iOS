@@ -55,7 +55,7 @@ final class VirtualListDriverTests: XCTestCase {
             IdentifiableFixedHeightItem(id: UUID(), height: 50)
         }
         let driver = VirtualListDriver(viewport: CGSize(width: 390, height: 800), items: items)
-        driver.listView.applyChanges(scrollTo: (index: 100, pointOffset: 125), transition: .easeInOut(duration: 0))
+        driver.listView.applyChanges(scrollTo: .init(index: 100, pointOffset: 125), transition: .easeInOut(duration: 0))
 
         let sampled = driver.sample()
         XCTAssertNil(sampled.snapshotOriginY)

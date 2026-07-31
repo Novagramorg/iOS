@@ -147,7 +147,7 @@ public final class ChatSendContactMessageContextPreview: UIView, ChatSendMessage
                     itemNode.frame = nodeFrame
                     itemNode.isUserInteractionEnabled = false
                     
-                    apply(ListViewItemApply(isOnScreen: true))
+                    apply(ListViewItemApply())
                 })
             }
         } else {
@@ -156,7 +156,7 @@ public final class ChatSendContactMessageContextPreview: UIView, ChatSendMessage
                 var itemNode: ListViewItemNode?
                 items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
                 itemNode!.isUserInteractionEnabled = false
                 messageNodes.append(itemNode!)
@@ -301,7 +301,7 @@ public final class ChatSendAudioMessageContextPreview: UIView, ChatSendMessageCo
                     itemNode.frame = nodeFrame
                     itemNode.isUserInteractionEnabled = false
                     
-                    apply(ListViewItemApply(isOnScreen: true))
+                    apply(ListViewItemApply())
                 })
             }
         } else {
@@ -310,7 +310,7 @@ public final class ChatSendAudioMessageContextPreview: UIView, ChatSendMessageCo
                 var itemNode: ListViewItemNode?
                 items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
                 itemNode!.isUserInteractionEnabled = false
                 messageNodes.append(itemNode!)

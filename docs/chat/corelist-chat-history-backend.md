@@ -19,7 +19,8 @@ crash. Real geometry/range values are populated only for the members the display
 (`displayedItemRange`, `visibleContentOffset`, `contentHeight`) plus the item-node enumerators
 (`forEachItemNode` / `forEachVisibleItemNode` / `enumerateItemNodes` — see below) and
 `didInteractivelyDragFromTopOrigin`, which is outside that scope but was implemented because its stub
-silently disabled a user-visible behavior (see "Interactive drag start").
+silently disabled a user-visible behavior (see "Interactive drag start"). `ListViewScrollToItem` is
+supported in full, and `ensureItemNodeVisible` with it (see "Scroll to item").
 
 ## Architecture
 
@@ -52,7 +53,7 @@ via `CoreVirtualListView.applyChanges`:
 - `items:` — the rebuilt `entries` on a structural change, else `nil`.
 - `newSize:` / `newInsets:` — the current size/insets (an unchanged inset is an exact no-op in
   CoreList, so passing it on every pass is safe and correctly propagates `setTopContentInset` deltas).
-- `scrollTo:` — mapped from `ListViewScrollToItem` (see Deferred #1).
+- `scrollTo:` — a `CoreListScrollTarget` mapped from `ListViewScrollToItem` (see "Scroll to item").
 - `additionalScrollDistance:` — passed straight through. Both backends fold it into the same addend as
   the inset compensation, so a pass can re-inset and scroll by a caller-chosen delta as one movement;
   positive moves content down. **The chat never sends a non-zero value** —
@@ -66,8 +67,8 @@ via `CoreVirtualListView.applyChanges`:
   need the pass to run.
 - `anchorMode:` — `.preserveVisibleContent` when `stationaryItemRange != nil`, else `.automatic`.
 - `transition:` — derived once and reused as both the applied animation and the reported transition, in
-  ListViewImpl's own precedence: an animated `scrollToItem` (`.spring(0.4)`), then a size/inset update's
-  curve, then `.AnimateInsertion` (`.spring(0.4)`), else `.immediate`.
+  ListViewImpl's own precedence: an animated `scrollToItem` (its own `.curve`, mapped case-for-case),
+  then a size/inset update's curve, then `.AnimateInsertion` (`.spring(0.4)`), else `.immediate`.
 
 `applyChanges` fires when *any* of structural / size / scroll / displacement changed.
 
@@ -87,6 +88,40 @@ Both paths drive the item **synchronously** (`async: { f in f() }`); this is sou
 `ChatMessageItemImpl.updateNode`/`nodeConfiguredForParams` wrap work in `Queue.mainQueue().async`,
 which runs inline when already on the main queue (the transaction path is main-thread). CoreList owns
 the actual insert/move/height animations; the item update passes `ListViewItemUpdateAnimation.None`.
+
+Both paths also stamp `contentSize` / `insets` / `apparentHeight` on the node, as `ListViewImpl` does
+on every node it lays out. This is not bookkeeping for its own sake — see "Item visibility" below for
+what reads it. Note `ChatMessageItemImpl` assigns `contentSize`/`insets` itself on the
+`nodeConfiguredForParams` path but **not** on `updateNode`, which is why the host must.
+
+## Item visibility
+
+`CoreVirtualListView` pushes each loaded row its visible rect through
+`CoreListItemView.visibleRectUpdated(_:)` (see the CoreList `CLAUDE.md` embedding-seam paragraph);
+`CoreListNodeHostView` maps it onto `ListViewItemNode.visibility` — `subRect` is the rect as given,
+`fraction` is its overlap with the node's content box over that box's height, matching what
+`ListViewImpl` derives from `apparentContentFrame`. That property is what makes animated stickers,
+GIFs, video and instant video play, flips `visibilityStatus`, registers one-time media as seen, and
+fades ad messages in. Before this existed every hosted row sat at `.none` for its whole life, so none
+of that happened at all.
+
+Three things about it are load-bearing:
+
+- **The fraction divides by the node's content box**, so the host must keep `insets` / `contentSize` /
+  `apparentHeight` stamped on the hosted node exactly as `ListViewImpl` does — including on the
+  update path, which `ChatMessageItemImpl.updateNode` does not do for itself.
+- **The rect is measured against the full viewport**, not the inset-reduced band. This diverges from
+  `ListViewImpl`, which reduces by `visualInsets ?? insets`; a row sliding under the input panel keeps
+  playing. `forEachVisibleItemNode` / `itemNodeVisibleInsideInsets` deliberately keep the
+  inset-reduced `visibleBand`, because they drive read tracking and unseen-reaction animations, where
+  under-reporting is the safe direction.
+- **There is no `onlyPositive` deferral and no animation-completion pass.** `ListViewImpl` needs both
+  because its geometry is settled-only while an inset transition animates; here the loaded window and
+  the reported rects are both destination-based within one pass, so a single full update is coherent.
+
+Rotation needs no handling: CoreList lays index 0 at its own top and the wrapper's π maps that to the
+screen bottom — the convention `ListViewImpl(rotated: true)` uses — so the values are already in the
+space `ChatMessageBubbleItemNode.mapVisibility` expects.
 
 ## Pagination
 
@@ -267,10 +302,9 @@ equivalent:
   `ListViewScrollToItem(position: .top(offset))`, which `ListViewImpl` resolves to
   `frame.minY == insets.top + offset` — the exact inverse. CoreList's `scrollTo.pointOffset` uses the
   identical convention (screen target = `viewportInsets.top + pointOffset`), so **no unit conversion is
-  needed**. Only the write side is live today: the restore path discards the offset until deferred
-  item #1 is fixed.
+  needed**. Both sides are live: the restore path resolves `.top(offset)` through the scroll resolver.
 
-`loadedFrame(of:)` is also the primitive a future fix for deferred item #5 would build on.
+`loadedFrame(of:)` is also what backs `itemNodeFrame(_:)` — see "Item-node geometry" below.
 
 ## Content offsets and displayed item range
 
@@ -336,28 +370,141 @@ descriptor-diff invalidation.
 See the "Neighbor descriptors" section of the root `CLAUDE.md` for the load-bearing invariant: a
 descriptor must encode everything a neighbor reads, or the omitted fact goes stale on screen.
 
+## Scroll to item
+
+`chatHistoryTransaction` maps `ListViewScrollToItem` onto a `CoreListScrollTarget` whose **resolver**
+computes the row's offset once CoreList has measured it. That indirection is the whole design: three
+of the four `ListViewScrollPosition` cases need the target row's height, and on a history jump the
+target is not loaded — the entries array is replaced wholesale — so the backend has nothing to
+measure. CoreList measures the anchor as the first act of `buildWindow` and calls back there.
+
+`pointOffset(for:index:height:view:)` holds `ListViewImpl`'s arithmetic
+(`Display/Source/ListView.swift:3166-3204`), translated from "a delta added to every frame" into "the
+target row's `minY`, minus `insets.top`" — CoreList's convention, where the projected screen target
+is `viewportInsets.top + pointOffset`. It reads `scrollPositioningInsets` and the `.center(.custom)`
+quote/subject rect off the hosted `ListViewItemNode`, which exists because `update(width:)` has
+already driven a synchronous layout. **All ListView placement semantics live here**, not in CoreList,
+which learns nothing about chat.
+
+The curve maps case-for-case onto `CoreListTransition` (`ListView.swift:3611-3618`) instead of
+collapsing to one spring, and `directionHint` becomes the carousel's travel direction —
+`.Down → .forward`, `.Up → .backward`. That mapping is what `ChatHistoryViewForLocation.swift:59`
+means: it picks `.Down` when the target is *older*, and chat's index space is reversed, so older is a
+higher index, which is forward. The hint is consumed **only** when the viewport transition has no
+anchor witness; a full replace is exactly that case, and without it every long jump travelled forward
+regardless of direction.
+
+A jump also fades nothing at either end. CoreList suppresses insert and exit opacity on a
+**full-replace** carousel — one whose loaded windows are disjoint *and* whose destination window is
+entirely new content — because that is a rigid travel between two strips already owned by the shared
+viewport track. The fades were an artifact of the chat expressing a jump as delete-all + insert-all.
+`ListViewImpl` likewise slides its `temporaryPreviousNodes` out at full opacity.
+
+**The destination window is the load-bearing unit**, and getting it wrong is easy in both directions.
+Testing only loaded-window disjointness fades a genuinely new row inserted among survivors at the
+destination. Testing whole-*collection* disjointness — which this did at first — never fires here at
+all: `ChatHistoryEntry` gives the non-message rows **constant** stable ids (`UnreadEntry` is
+`4 << 40`, `ReplyCountEntry` `5 << 40`, `ChatInfoEntry` `6 << 40`), so a wholesale history replace
+always leaves one identity alive and the collection-level test was permanently false. It looked
+correct in CoreList's own tests, whose synthetic collections are cleanly disjoint, and failed on
+every real jump. What decides it is whether anything in the place being travelled *to* was already
+there.
+
+`ensureItemNodeVisible` is built on the same path (as it is in `ListViewImpl`), with the collection
+index resolved through `CoreVirtualListView.loadedItemEntries` — a hosted node can never carry a
+`ListViewItemNode.index`.
+
+**Verification status (2026-07-31): runtime-verified.** `CoreListDemoTests` covers resolver placement
+against a far unloaded target, the direction fallback, and carousel fade suppression from both sides
+(616 tests green). All six chat behaviors were then confirmed on screen: scroll-to-unread (including
+in a chat whose navigation bar changes height mid-open), long-jump travel direction and opacity,
+jump-to-reply centering, quote centering in an over-tall bubble, scroll-position restore on chat
+open, and reply-thread unread refocus.
+
+**Two of those six failed on first contact, and neither failure was visible to the test suite.** The
+unread separator landed ~70pt off because `enableUnreadAlignment` was dead code under this backend
+(see "Unread item alignment"), and long jumps still cross-faded because the fade-suppression
+predicate tested whole-collection disjointness, which never holds for real chat data (see "Scroll to
+item"). Both bugs had green CoreList tests over them the whole time — the synthetic fixtures use
+disjoint identities, uniform row heights, and no constant-id rows, so they are systematically cleaner
+than what the chat produces. **Treat CoreList test coverage as necessary and not sufficient for
+anything in this backend; the on-screen check is the real gate.**
+
+## Item-node geometry
+
+`ListViewItemNode.frame` is list-space **only on `ListViewImpl`**. Here a node's view is a subview of
+its `CoreListNodeHostView` at `(0, 0, width, height)`, so the node's own frame is host-local and every
+comparison against it reads the wrong space — silently, since the values are plausible.
+`ChatHistoryListViewBackend.itemNodeFrame(_:)` is the list-space accessor both backends implement
+(`ListViewImpl` returns `node.frame` guarded on `index != nil`; the CoreList backend returns
+`loadedFrame(of:)`), and its nil case is the liveness guard on both.
+
+Nine chat-layer sites were migrated onto it: the visible-message scan, both scroll-reset anchor
+offsets, the animate-in delay factor, the next-item scroll-restore check, `messagesAtPoint`, and both
+snapshot inset loops. `messagesAtPoint` is the one that was outright broken — it tested a point
+against a host-local rect and could never match.
+
+## Unread item alignment
+
+The chat re-pins the unread separator to the bottom inset edge whenever that inset changes
+(`enableUnreadAlignment`, default true). This is **not** cosmetic: when the navigation bar changes
+height mid-open — a Report Spam bar appearing, which lives in `navigationBar.additionalContentNode`
+and so grows the chrome without moving `containerInsets` — the separator must be re-pinned, or it
+keeps the position computed against the pre-panel geometry.
+
+It used to live in `ChatHistoryListNodeImpl.updateLayout` gated on `itemNode.index`, which is
+`public internal(set)` to `Display` and therefore **always nil for a hosted node** — so the entire
+behavior was dead code under this backend, with no build error. It is now the
+`maintainsUnreadItemAlignment` parameter on `chatHistoryTransaction`.
+
+**One member, not two, deliberately.** The predicate ("is the separator currently pinned?") must be
+evaluated against the OLD insets and the re-pin applied with the NEW ones. As a measure-then-reapply
+pair a backend could implement one half and stub the other — precisely how
+`trackingOffset`/`beganTrackingAtTopOrigin` silently disabled keyboard-dismissal snap-back before they
+were collapsed into `didInteractivelyDragFromTopOrigin`.
+
+The two backends realise it differently, which is the point of the seam: `ListViewImpl` cannot compose
+a scroll with an inset change, so it measures, runs the transaction, and re-issues the scroll from the
+completion. The CoreList backend evaluates the predicate before overwriting `currentInsets` and
+submits the re-pin as the `scrollTo` of the *same* `applyChanges` — one movement, one animation, no
+intermediate frame. The read-at-the-call-site pattern is the same one `compensatesInsetChange` uses,
+and for the same reason: the value must be the one that held when the transaction was submitted.
+
+**Deliberate divergences from `ListViewImpl`:**
+
+- **`displayLink` is unused.** `ListViewImpl` re-samples the quote rect per frame during the scroll;
+  CoreList animates through analytic CA tracks with no per-frame host callback, so `.center(.custom)`
+  resolves once, at pass time.
+- **The insets used are the pass's *new* ones.** `ListViewImpl` reads the old `self.insets` here —
+  `ListView.swift:3143` still carries a commented-out `// updateSizeAndInsets?.insets ?? self.insets`
+  — and applies the size/inset change separately afterwards. The backend resolves both in one
+  coordinate system.
+- **`.center` uses the single measured height.** `ListViewImpl` guards on
+  `apparentFrame.size.height` but divides `itemNode.frame.size.height` (`:3173-3174`).
+- **`.visible` on an unloaded target** falls back to center-with-top-overflow. Only reachable from
+  the `experimentalSnapScrollToItem` path, which nothing in chat enables; `ensureItemNodeVisible`
+  always holds a loaded node.
+- **Pin-to-edge is still unimplemented.** `ListViewImpl` synthesizes its own `scrollToItem` for
+  `pinToEdgeWithInset` items via `experimentalSnapScrollToPinnedItem` (`ListView.swift:2737-2765`),
+  and `isStrictlyScrolledToPinToEdgeItem()` remains `false`.
+- **`resetScrolledToItem()` remains a no-op**, which is correct while nothing sets
+  `experimentalSnapScrollToItem = true` (the only assignments, `ChatHistoryListNode.swift:1023` and
+  `ChatController.swift:7674`, are both `false`).
+
 ## Deferred items / known limitations
 
 These are accepted for the PoC and are the follow-ups before the CoreList backend could be a real
 option:
 
-1. **`scrollTo` fidelity (deferred improvement).** `chatHistoryTransaction` maps
-   `ListViewScrollToItem` to `scrollTo: (index, 0.0)`, discarding `.position`
-   (`.top`/`.center`/`.bottom`/`.visible`), `.curve`, `.animated`, and `.directionHint`. Because
-   `pointOffset: 0.0` anchors the row at CoreList's own top edge — which the wrapper's π maps to the
-   *screen bottom* — scroll-to-newest (index 0) lands correctly, but **jump-to-reply and
-   scroll-to-unread (a mid-history target) land at the bottom of the screen** instead of near the top
-   or center, and a `.animated == false` jump still animates (0.3s). Improve by mapping `.position` to
-   a real `pointOffset` and honoring `.animated == false` with duration 0.0.
-2. **Per-item animation selectivity.** The pass transition is now derived from `scrollToItem` /
+1. **Per-item animation selectivity.** The pass transition is now derived from `scrollToItem` /
    `updateSizeAndInsets` / `options` (see Transaction flow), but it applies to the pass as a whole:
    `options` distinctions finer than "does this animate, and on what curve" — per-index insertion
    animations, `.AnimateCrossfade`, `.AnimateTopItemPosition` — still have no analogue.
-3. **Fine-grained transaction features ignored.** `customAnimationTransition` is not honored, and
+2. **Fine-grained transaction features ignored.** `customAnimationTransition` is not honored, and
    `stationaryItemRange` is mapped only by its nil-ness (to `anchorMode`): the range's actual bounds
    are discarded, so a transaction asking to hold a *specific* index range stationary gets CoreList's
    general visible-content preservation instead.
-4. **Config/geometry stubs.** The `// Config flags` and `// Geometry / range` members are plain
+3. **Config/geometry stubs.** The `// Config flags` and `// Geometry / range` members are plain
    storage with no behavior; only the display-path values are real. (`didInteractivelyDragFromTopOrigin`
    used to be two of these and is now real — see "Interactive drag start". It is worth reading that
    entry as a warning about the rest: a stub that returns a plausible constant reports *no* problem,
@@ -366,10 +513,9 @@ option:
    `didEndScrolling`, `didEndScrollingWithOverscroll`. `endedInteractiveDragging` now *could* be — the
    seam gained `didEndDragging` for the tracking flag — but wiring it would switch on the next-channel
    behavior, so it stays a deliberate follow-up rather than a side effect.
-5. **`itemNode.frame` is host-local, so point-hit-testing callers are wrong.** Each item node's view
-   is a subview of its `CoreListNodeHostView` at frame `(0, 0, width, height)`, so
-   `ListViewItemNode.frame` is host-local rather than list-space. `messagesAtPoint`
-   (`submodules/TelegramUI/Sources/ChatHistoryListNode.swift:5005`) filters visible nodes with
-   `itemNode.frame.contains(point)` and therefore cannot match. Correct visible-node enumeration does
-   not fix this; resolving it needs either list-space frames on hosted nodes or a caller rewrite that
-   converts coordinates through the host view.
+4. **`itemNode.frame` is still host-local** — the *fact* is unchanged, but every chat-layer consumer
+   has been migrated off it (see "Item-node geometry" above), so nothing in the chat currently reads
+   it. A hosted node's view remains a subview of its `CoreListNodeHostView` at
+   `(0, 0, width, height)`, so any **new** caller reaching for `ListViewItemNode.frame` will silently
+   read the wrong space. Use `ChatHistoryListViewBackend.itemNodeFrame(_:)`. Item **header** nodes
+   have no equivalent yet (`forEachItemHeaderNode` is still a stub).

@@ -86,13 +86,13 @@ private final class PeerInfoScreenInfoItemNode: PeerInfoScreenItemNode {
                 itemNode.insets = layout.insets
                 itemNode.frame = nodeFrame
                 
-                apply(ListViewItemApply(isOnScreen: true))
+                apply(ListViewItemApply())
             })
         } else {
             var itemNodeValue: ListViewItemNode?
             infoItem.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: .none, completion: { node, apply in
                 itemNodeValue = node
-                apply().1(ListViewItemApply(isOnScreen: true))
+                apply().1(ListViewItemApply())
             })
             itemNode = itemNodeValue as! InfoItemNode
             self.itemNode = itemNode

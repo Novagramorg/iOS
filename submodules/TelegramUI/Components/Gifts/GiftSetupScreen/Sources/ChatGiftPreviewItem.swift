@@ -276,7 +276,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                         itemNode.isUserInteractionEnabled = false
                         itemNode.visibility = .visible(1.0, .infinite)
                         
-                        apply(ListViewItemApply(isOnScreen: true))
+                        apply(ListViewItemApply())
                     })
                 }
             } else {
@@ -285,7 +285,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                     var itemNode: ListViewItemNode?
                     items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                         itemNode = node
-                        apply().1(ListViewItemApply(isOnScreen: true))
+                        apply().1(ListViewItemApply())
                     })
                     itemNode!.isUserInteractionEnabled = false
                     itemNode!.visibility = .visible(1.0, .infinite)

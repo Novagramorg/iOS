@@ -1158,7 +1158,11 @@ private func layoutBlock(
                 labelStyleStack.push(.fontSize(instantPageBlockButtonFontSize))
                 labelStyleStack.push(.semibold)
                 let labelString = attributedStringForRichText(button.text, styleStack: labelStyleStack, formatDate: context.formatDate)
-                let attachment = instantPageInlineButtonAttachment(button: button, labelString: labelString)
+                // Cap the label at the column it will be stretched to. The pill centres its label, so
+                // the reserve is taken off BOTH sides — otherwise a long label, centred, would run
+                // under the top-right type badge. Buttons without a badge reserve nothing.
+                let iconReserve = instantPageBlockButtonIconName(for: button.action) != nil ? instantPageBlockButtonIconReserve * 2.0 : 0.0
+                let attachment = instantPageInlineButtonAttachment(button: button, labelString: labelString, maxWidth: max(0.0, buttonWidth - iconReserve))
                 entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: buttonHeight)))
                 x += buttonWidth + buttonSpacing
             }

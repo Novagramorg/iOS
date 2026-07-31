@@ -402,7 +402,7 @@ final class DemoInteractionTests: XCTestCase {
     func testLoadButtonsPrependAndRemoveFiveWhilePreservingSettledAnchor() throws {
         let fixture = try makeLoadedController()
         fixture.list.applyChanges(
-            scrollTo: (index: 40, pointOffset: -20),
+            scrollTo: .init(index: 40, pointOffset: -20),
             transition: .easeInOut(duration: 0)
         )
         let witness = fixture.list.items[40].identity
@@ -482,7 +482,7 @@ final class DemoInteractionTests: XCTestCase {
         let before = fixture.list.items.map(\.identity)
 
         fixture.list.applyChanges(
-            scrollTo: (index: fixture.list.items.count - 1, pointOffset: 0),
+            scrollTo: .init(index: fixture.list.items.count - 1, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         deliverAutoLoadResponse(fixture.responseScheduler)
@@ -504,7 +504,7 @@ final class DemoInteractionTests: XCTestCase {
         fixture.responseScheduler.advance(by: 0.2)
 
         fixture.list.applyChanges(
-            scrollTo: (index: fixture.list.items.count - 1, pointOffset: 0),
+            scrollTo: .init(index: fixture.list.items.count - 1, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         drainMainQueue()
@@ -601,11 +601,11 @@ final class DemoInteractionTests: XCTestCase {
         formAutoLoadRequest(fixture.responseScheduler)
 
         fixture.list.applyChanges(
-            scrollTo: (index: 20, pointOffset: 0),
+            scrollTo: .init(index: 20, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         fixture.list.applyChanges(
-            scrollTo: (index: 0, pointOffset: 0),
+            scrollTo: .init(index: 0, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         drainMainQueue()
@@ -624,7 +624,7 @@ final class DemoInteractionTests: XCTestCase {
         button.sendActions(for: .touchUpInside)
         formAutoLoadRequest(fixture.responseScheduler)
         fixture.list.applyChanges(
-            scrollTo: (index: 20, pointOffset: 0),
+            scrollTo: .init(index: 20, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
 

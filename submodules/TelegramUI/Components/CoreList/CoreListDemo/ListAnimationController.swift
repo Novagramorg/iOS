@@ -321,6 +321,7 @@ final class ListAnimationController {
                   contentY: CGFloat,
                   transition: CoreListTransition,
                   transactionTime: TimeInterval? = nil,
+                  fadesOut: Bool = true,
                   completion: @escaping () -> Void) -> ListAnimationOwner {
         let liveOwner = ListAnimationOwner.live(identity)
         _ = bind(owner: liveOwner, to: layer)
@@ -329,7 +330,8 @@ final class ListAnimationController {
         let exit = model.beginExit(
             from: liveOwner,
             at: transactionTime ?? now(),
-            transition: transition.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor()),
+            fadesOut: fadesOut
         )
         // Detached layers store their sampled horizontal position absolutely.
         // Their new owner therefore starts with no additive x correction.

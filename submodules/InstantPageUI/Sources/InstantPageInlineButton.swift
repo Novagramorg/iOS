@@ -30,6 +30,13 @@ public final class InstantPageInlineButtonAttachment: NSObject {
 public let instantPageInlineButtonHorizontalPadding: CGFloat = 7.0
 public let instantPageInlineButtonVerticalPadding: CGFloat = 1.0
 
+/// Extra gap between two *directly adjacent* pills — two `textButton`s with no rich text between
+/// them. Without it they touch: each pill's width lives entirely on its placeholder's CTRunDelegate,
+/// which reports exactly the pill width, so consecutive placeholders leave no advance between the
+/// two fills. Only adjacency is padded; a pill next to ordinary text already gets that text's own
+/// spaces.
+public let instantPageInlineButtonAdjacentSpacing: CGFloat = 3.0
+
 /// Button labels carry their own typography rather than inheriting the paragraph's — semibold in both
 /// cases, one point smaller inline than in a block row. Fixed sizes, so they do not scale with the
 /// Instant View font-size setting; the chat bubble's own text categories are likewise fixed.
@@ -98,6 +105,52 @@ public func instantPageInlineButtonAttachment(button: InstantPageButton, labelSt
     )
 }
 
+/// True when `string`'s first (respectively last) character carries a pill. Asked of the *rendered*
+/// attributed string rather than of the `RichText` tree, so it also holds for a button wrapped in
+/// formatting — `bold(textButton(…))` — and for a button reached through nested `concat`s.
+func instantPageStringStartsWithInlineButton(_ string: NSAttributedString) -> Bool {
+    guard string.length != 0 else {
+        return false
+    }
+    return string.attribute(NSAttributedString.Key(rawValue: InstantPageInlineButtonAttribute), at: 0, effectiveRange: nil) != nil
+}
+
+func instantPageStringEndsWithInlineButton(_ string: NSAttributedString) -> Bool {
+    guard string.length != 0 else {
+        return false
+    }
+    return string.attribute(NSAttributedString.Key(rawValue: InstantPageInlineButtonAttribute), at: string.length - 1, effectiveRange: nil) != nil
+}
+
+/// The gap run inserted between two adjacent pills. The width has to travel on a CTRunDelegate: a
+/// plain space would advance by whatever the font says, and this is a tuned pixel amount.
+///
+/// Reports 0 ascent/descent — like the inline-image path and unlike the pill itself — so it can never
+/// grow the line box. Carries no button attribute, so the V2 line-breaker skips it when collecting
+/// pending pills.
+func instantPageInlineButtonSpacerString(attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+    struct RunStruct {
+        let ascent: CGFloat
+        let descent: CGFloat
+        let width: CGFloat
+    }
+    let extentBuffer = UnsafeMutablePointer<RunStruct>.allocate(capacity: 1)
+    extentBuffer.initialize(to: RunStruct(ascent: 0.0, descent: 0.0, width: instantPageInlineButtonAdjacentSpacing))
+    var callbacks = CTRunDelegateCallbacks(version: kCTRunDelegateVersion1, dealloc: { pointer in
+        pointer.assumingMemoryBound(to: RunStruct.self).deallocate()
+    }, getAscent: { (pointer) -> CGFloat in
+        return pointer.assumingMemoryBound(to: RunStruct.self).pointee.ascent
+    }, getDescent: { (pointer) -> CGFloat in
+        return pointer.assumingMemoryBound(to: RunStruct.self).pointee.descent
+    }, getWidth: { (pointer) -> CGFloat in
+        return pointer.assumingMemoryBound(to: RunStruct.self).pointee.width
+    })
+    let delegate = CTRunDelegateCreate(&callbacks, extentBuffer)
+    let result = NSMutableAttributedString(string: " ", attributes: attributes)
+    result.addAttribute(kCTRunDelegateAttributeName as NSAttributedString.Key, value: delegate as Any, range: NSMakeRange(0, result.length))
+    return result
+}
+
 /// Fill and label colours for a button pill. Mirrors the semantics of
 /// `ChatMessageActionButtonsNode.swift:468-472` (coloured background at reduced alpha) but sources
 /// from `InstantPageTheme`, which is what the V2 renderer is handed. Alphas are tunable.
@@ -120,8 +173,8 @@ public func instantPageButtonColors(
             fill = theme.panelBackgroundColor
             label = theme.panelAccentColor
         } else {
-            fill = theme.tableHeaderColor
-            label = theme.panelPrimaryColor
+            fill = theme.neutralButtonBackgroundColor
+            label = theme.neutralButtonForegroundColor
         }
     case .some(.primary):
         fill = theme.checkboxFill

@@ -259,7 +259,7 @@ public final class DrawingMessageRenderer {
                         itemNode.frame = nodeFrame
                         itemNode.isUserInteractionEnabled = false
                         
-                        apply(ListViewItemApply(isOnScreen: true))
+                        apply(ListViewItemApply())
                     })
                 }
             } else {
@@ -268,7 +268,7 @@ public final class DrawingMessageRenderer {
                     var itemNode: ListViewItemNode?
                     items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                         itemNode = node
-                        apply().1(ListViewItemApply(isOnScreen: true))
+                        apply().1(ListViewItemApply())
                     })
                     itemNode!.subnodeTransform = CATransform3DMakeScale(-1.0, 1.0, 1.0)
                     itemNode!.isUserInteractionEnabled = false

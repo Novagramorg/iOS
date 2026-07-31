@@ -28,7 +28,7 @@ final class MixedPassStressOracleTests: XCTestCase {
             items: changed,
             size: CGSize(width: 430, height: 874),
             insets: UIEdgeInsets(top: 120, left: 40, bottom: 40, right: 50),
-            scrollTo: (index: 40, pointOffset: 20),
+            scrollTo: .init(index: 40, pointOffset: 20),
             transition: .easeInOut(duration: 0.5),
             advanceAfter: 0.05,
             actions: [

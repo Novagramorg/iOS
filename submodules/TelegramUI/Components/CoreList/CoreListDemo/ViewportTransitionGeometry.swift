@@ -6,11 +6,16 @@ enum ViewportTravelDirection {
 }
 
 struct ViewportTransitionGeometry {
+    /// `fallback` is used when there is no anchor witness — no current anchor, or one that does not
+    /// appear in the new order, which is what a full collection replace produces. Index comparison
+    /// has nothing to compare there, so the caller's declared direction is the only information
+    /// available. A present witness always wins: the hint is a fallback, never an override.
     static func direction(currentAnchor: AnyHashable?, targetIndex: Int,
-                          newOrder: [AnyHashable]) -> ViewportTravelDirection {
+                          newOrder: [AnyHashable],
+                          fallback: ViewportTravelDirection = .forward) -> ViewportTravelDirection {
         guard let anchor = currentAnchor,
               let anchorIndex = newOrder.firstIndex(of: anchor)
-        else { return .forward }
+        else { return fallback }
         return targetIndex >= anchorIndex ? .forward : .backward
     }
 

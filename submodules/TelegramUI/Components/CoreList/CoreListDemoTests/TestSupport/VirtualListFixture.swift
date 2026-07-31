@@ -60,6 +60,7 @@ final class VirtualListFixture {
     var crossingCarryIdentities: [AnyHashable] { driver.crossingCarryIdentities }
     var crossingCarryViews: [UIView] { driver.crossingCarryViews }
     var ghostBlocks: [GhostBlockSnapshot] { listView.ghostBlockSnapshots }
+    var ghostMemberViews: [UIView] { driver.exitSubviews }
     var hasActiveAnimations: Bool {
         animationController.hasActiveAnimations(at: animationController.now())
     }

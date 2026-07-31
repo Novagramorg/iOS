@@ -20,6 +20,9 @@ final class InstantPageV2ButtonPillView: UIView {
     /// has no `InstantPageTheme` to resolve a button colour with — so the recolour happens here,
     /// where the theme is available.
     private var displayLabelString: NSAttributedString
+    /// The action's type badge, tinted to match the label. nil for an inline pill (too small to carry
+    /// one) and for the actions that have no badge — see `instantPageBlockButtonIconName`.
+    private var iconImage: UIImage?
 
     var onButtonTapped: ((InstantPageButton) -> Void)?
 
@@ -59,6 +62,9 @@ final class InstantPageV2ButtonPillView: UIView {
             mutableLabel.addAttribute(.foregroundColor, value: colors.label, range: NSRange(location: 0, length: mutableLabel.length))
         }
         self.displayLabelString = mutableLabel
+
+        // Same colour as the label, so a disabled button's badge dims with its text.
+        self.iconImage = self.isInline ? nil : instantPageBlockButtonIcon(for: self.attachment.button.action, color: colors.label)
     }
 
     override func layoutSubviews() {
@@ -84,6 +90,20 @@ final class InstantPageV2ButtonPillView: UIView {
         context.textPosition = CGPoint(x: x, y: y)
         let line = CTLineCreateWithAttributedString(self.displayLabelString)
         CTLineDraw(line, context)
+
+        // Top-right type badge, as on a bot keyboard button. Drawn after the label so a pill too
+        // narrow for both shows the badge rather than losing it under the text — the layout reserves
+        // room for it, but a stretched row column can still be tight.
+        if let iconImage = self.iconImage {
+            let iconFrame = CGRect(
+                origin: CGPoint(
+                    x: self.bounds.width - instantPageBlockButtonIconInset.x - instantPageBlockButtonIconSize.width,
+                    y: instantPageBlockButtonIconInset.y
+                ),
+                size: instantPageBlockButtonIconSize
+            )
+            iconImage.draw(in: iconFrame)
+        }
     }
 
     // MARK: - Press handling

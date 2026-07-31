@@ -337,11 +337,11 @@ final class ViewController: UIViewController {
     }
 
     @objc private func jumpToForty() {
-        listView.applyChanges(scrollTo: (index: 40, pointOffset: 0), transition: .easeInOut(duration: 0.3))
+        listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0), transition: .easeInOut(duration: 0.3))
     }
 
     @objc private func scrollToTop() {
-        listView.applyChanges(scrollTo: (index: 0, pointOffset: 0), transition: .easeInOut(duration: 0.3))
+        listView.applyChanges(scrollTo: .init(index: 0, pointOffset: 0), transition: .easeInOut(duration: 0.3))
     }
 
     @objc private func insertOne() { insert(count: 1) }
@@ -536,7 +536,7 @@ final class ViewController: UIViewController {
     private func applyMixedChanges(
         items: [CoreListItem]? = nil,
         testInsets updatedTestInsets: UIEdgeInsets? = nil,
-        scrollTo: (index: Int, pointOffset: CGFloat)? = nil
+        scrollTo: CoreListScrollTarget? = nil
     ) {
         if let updatedTestInsets {
             testInsets = updatedTestInsets
@@ -590,7 +590,7 @@ final class ViewController: UIViewController {
         var insets = testInsets
         insets.top = insets.top == 0 ? 300 : 0
         applyMixedChanges(testInsets: insets,
-                          scrollTo: (index: 40, pointOffset: 0))
+                          scrollTo: .init(index: 40, pointOffset: 0))
     }
 
     @objc private func mixedHorizontalInsetDelAdd() {

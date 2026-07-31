@@ -787,6 +787,11 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
             let string = NSMutableAttributedString()
             for text in texts {
                 let substring = attributedStringForRichText(text, styleStack: styleStack, url: url, boundingWidth: boundingWidth, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+                // Two pills with no rich text between them would otherwise touch — each placeholder's
+                // run delegate is exactly pill-wide, so consecutive placeholders leave no advance.
+                if instantPageStringEndsWithInlineButton(string), instantPageStringStartsWithInlineButton(substring) {
+                    string.append(instantPageInlineButtonSpacerString(attributes: styleStack.textAttributes()))
+                }
                 string.append(substring)
             }
             return string

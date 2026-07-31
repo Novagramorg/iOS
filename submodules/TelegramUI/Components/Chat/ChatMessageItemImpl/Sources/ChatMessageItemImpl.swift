@@ -389,7 +389,6 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
             Queue.mainQueue().async {
                 completion(node, {
                     return (nil, { info in
-                        info.setIsOffscreen()
                         apply(.None, info, synchronousLoads)
                     })
                 })
