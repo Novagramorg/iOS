@@ -5064,12 +5064,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         
                         item.controllerInteraction.requestMessageUpdate(item.message.id, false, customTransition)
                     }
-                    contentNode.performRichTextButtonAction = { [weak strongSelf] button in
+                    contentNode.performRichTextButtonAction = { [weak strongSelf] button, progress in
                         guard let strongSelf else {
                             return
                         }
 
-                        strongSelf.performMessageButtonAction(button: button, progress: nil)
+                        // `progress` is fulfilled for .url, .openWebApp and .callback — the only
+                        // arms of performMessageButtonAction that take it. The others leave it
+                        // unfulfilled and the tapped pill simply never shimmers.
+                        strongSelf.performMessageButtonAction(button: button, progress: progress)
                     }
                     contentNode.openRichTextDocument = { [weak strongSelf] file in
                         guard let strongSelf, let item = strongSelf.item else {

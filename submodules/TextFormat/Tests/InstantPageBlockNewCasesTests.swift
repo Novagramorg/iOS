@@ -152,4 +152,46 @@ final class InstantPageBlockNewCasesTests: XCTestCase {
         XCTAssertEqual(self.postboxRoundTrip(nested), nested)
         XCTAssertEqual(try self.flatBuffersRoundTrip(nested), nested)
     }
+
+    // MARK: - blockQuote collapsed
+
+    private func quote(_ collapsed: Bool?) -> InstantPageBlock {
+        return .blockQuote(
+            blocks: [.paragraph(.plain("body"))],
+            caption: .plain("author"),
+            collapsed: collapsed
+        )
+    }
+
+    /// Guards every other `collapsed` assertion in this file. The round-trip tests below are
+    /// `XCTAssertEqual(roundTrip(block), block)`, so if `==` ignored `collapsed` they would pass
+    /// whether or not the codecs carried the field.
+    func test_collapsed_discriminatesEquality() {
+        XCTAssertNotEqual(self.quote(true), self.quote(false))
+        XCTAssertNotEqual(self.quote(true), self.quote(nil))
+        XCTAssertNotEqual(self.quote(false), self.quote(nil))
+        XCTAssertEqual(self.quote(true), self.quote(true))
+        XCTAssertEqual(self.quote(false), self.quote(false))
+        XCTAssertEqual(self.quote(nil), self.quote(nil))
+    }
+
+    func test_collapsedTrue_roundTripsBothCodecs() throws {
+        let block = self.quote(true)
+        XCTAssertEqual(self.postboxRoundTrip(block), block)
+        XCTAssertEqual(try self.flatBuffersRoundTrip(block), block)
+    }
+
+    func test_collapsedFalse_roundTripsBothCodecs() throws {
+        let block = self.quote(false)
+        XCTAssertEqual(self.postboxRoundTrip(block), block)
+        XCTAssertEqual(try self.flatBuffersRoundTrip(block), block)
+    }
+
+    /// Blocks written before the field existed decode as `nil`. Neither codec may normalize that to
+    /// `false` — the model keeps the tri-state, and only the API layer collapses it.
+    func test_collapsedNil_roundTripsBothCodecs() throws {
+        let block = self.quote(nil)
+        XCTAssertEqual(self.postboxRoundTrip(block), block)
+        XCTAssertEqual(try self.flatBuffersRoundTrip(block), block)
+    }
 }

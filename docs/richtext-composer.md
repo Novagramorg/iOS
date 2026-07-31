@@ -534,10 +534,13 @@ when the message is sent — a separate send-path change.
 
 ## 8. Accepted limitations & deferred work
 
-- **Cross-device collapsed-quote fidelity:** the MTProto `Api.RichMessage`/`InputRichMessage` has no `collapsed`
-  flag, so the three model quote states collapse to one on the wire (`.quote(isCollapsed:false)` /
-  `.collapsedQuote` are round-trip identity; `.quote(isCollapsed:true)` normalizes to `.collapsedQuote`; `nil`/
-  `false` → visible quote — required, else every synced quote would fold).
+- **Cross-device collapsed-quote fidelity (multi-block only):** drafts sync as
+  `Api.InputRichMessage.inputRichMessage(blocks: [Api.PageBlock])`
+  (`ManagedSynchronizeChatInputStateOperations.swift`), so a **single-paragraph** collapsed quote now
+  keeps its collapsed state across devices — `pageBlockBlockquote` carries `collapsed:flags.0?true`.
+  A quote with two or more blocks still serializes as `pageBlockBlockquoteBlocks`, which has no such
+  flag, and arrives expanded. Closing that needs a server-side
+  `pageBlockBlockquoteBlocks flags:# collapsed:flags.0?true`.
 - **Custom-emoji `enableAnimation`** has no `RichText` carrier, so it canonicalizes to `true` on the reverse
   (re-derived at decoration; pinned by `test_customEmoji_enableAnimationFalse`).
 - **Forum/monoforum topic drafts** and **folder/archived dialog drafts** are not restored on the `fetchChatList`

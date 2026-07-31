@@ -1021,7 +1021,9 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
                         })
                         return
                     case let .openWebView(url, simple):
-                        controllerInteraction.openWebView(button.title, url, simple, .generic)
+                        // nil: this panel's buttons have no inline loading state, so the
+                        // `.requestInProgress` title panel stays their progress indicator.
+                        controllerInteraction.openWebView(button.title, url, simple, .generic, nil)
                         return
                     case .requestPeer:
                         break

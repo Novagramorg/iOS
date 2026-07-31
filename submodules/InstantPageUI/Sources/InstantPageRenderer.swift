@@ -178,8 +178,10 @@ public final class InstantPageV2View: UIView {
     public var checkboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
 
     /// Fired when an InstantPage button is tapped — an inline `RichText.textButton` or a member of a
-    /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch.
-    public var buttonTapped: ((InstantPageButton) -> Void)?
+    /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch, and reports the
+    /// action's progress back through the promise so the tapped pill can shimmer while it is in
+    /// flight. Leaving the promise unfulfilled is fine — the pill simply never shimmers.
+    public var buttonTapped: ((InstantPageButton, Promise<Bool>) -> Void)?
     /// Fires when a `.document` row whose file is already downloaded is tapped.
     public var documentTapped: ((TelegramMediaFile) -> Void)?
 
@@ -737,15 +739,15 @@ public final class InstantPageV2View: UIView {
             v.update(item: button, theme: theme)
             // Re-wire on reuse: the closure captures self, and a reused view may have been created
             // against a previous InstantPageV2View.
-            v.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            v.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return v
         case let .buttonRow(row):
             guard let v = existingView as? InstantPageV2ButtonRowView else { return nil }
             v.update(item: row, theme: theme)
-            v.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            v.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return v
         case let .mediaImage(media):
@@ -929,14 +931,14 @@ public final class InstantPageV2View: UIView {
             return InstantPageV2FormulaView(item: formula, theme: theme)
         case let .inlineButton(button):
             let view = InstantPageV2InlineButtonView(item: button, theme: theme)
-            view.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            view.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return view
         case let .buttonRow(row):
             let view = InstantPageV2ButtonRowView(item: row, theme: theme)
-            view.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            view.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return view
         case let .thinking(thinking):

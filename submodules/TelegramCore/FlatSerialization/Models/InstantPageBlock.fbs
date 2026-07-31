@@ -3,6 +3,7 @@ include "MediaId.fbs";
 include "TelegramChannel.fbs";
 include "PixelDimensions.fbs";
 include "RichText.fbs";
+include "Optional.fbs";
 
 namespace TelegramCore;
 
@@ -97,6 +98,7 @@ table InstantPageBlock_BlockQuote {
     text:RichText (id: 0);
     caption:RichText (id: 1, required);
     blocks:[InstantPageBlock] (id: 2);
+    collapsed:OptionalBool (id: 3);
 }
 
 table InstantPageBlock_PullQuote {

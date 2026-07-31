@@ -992,7 +992,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             } else {
                                 pageView.checkboxTapped = nil
                             }
-                            pageView.buttonTapped = { [weak self] button in
+                            pageView.buttonTapped = { [weak self] button, progress in
                                 guard let self else {
                                     return
                                 }
@@ -1005,7 +1005,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                     titleWhenForwarded: nil,
                                     action: button.action,
                                     style: nil
-                                ))
+                                ), progress)
                             }
                             pageView.documentTapped = { [weak self] file in
                                 guard let self else {

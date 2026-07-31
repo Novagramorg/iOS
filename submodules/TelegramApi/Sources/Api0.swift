@@ -597,9 +597,10 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1734105024] = { return Api.JoinChatBotResult.parse_joinChatBotResultQueued($0) }
     dict[-689719277] = { return Api.JoinChatBotResult.parse_joinChatBotResultWebView($0) }
     dict[795322159] = { return Api.KeyboardButton.parse_keyboardButton($0) }
-    dict[-1675883435] = { return Api.KeyboardButton.parse_keyboardInlineButton($0) }
     dict[2002815875] = { return Api.KeyboardButtonRow.parse_keyboardButtonRow($0) }
     dict[1339896880] = { return Api.KeyboardButtonStyle.parse_keyboardButtonStyle($0) }
+    dict[297902882] = { return Api.KeyboardInlineButton.parse_keyboardInlineButton($0) }
+    dict[423758582] = { return Api.KeyboardInlineButtonRow.parse_keyboardInlineButtonRow($0) }
     dict[-886477832] = { return Api.LabeledPrice.parse_labeledPrice($0) }
     dict[-209337866] = { return Api.LangPackDifference.parse_langPackDifference($0) }
     dict[-288727837] = { return Api.LangPackLanguage.parse_langPackLanguage($0) }
@@ -784,7 +785,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-837994576] = { return Api.PageBlock.parse_pageBlockAnchor($0) }
     dict[-2143067670] = { return Api.PageBlock.parse_pageBlockAudio($0) }
     dict[-1162877472] = { return Api.PageBlock.parse_pageBlockAuthorDate($0) }
-    dict[641563686] = { return Api.PageBlock.parse_pageBlockBlockquote($0) }
+    dict[1724999435] = { return Api.PageBlock.parse_pageBlockBlockquote($0) }
     dict[242108356] = { return Api.PageBlock.parse_pageBlockBlockquoteBlocks($0) }
     dict[1835270936] = { return Api.PageBlock.parse_pageBlockButtonRow($0) }
     dict[-283684427] = { return Api.PageBlock.parse_pageBlockChannel($0) }
@@ -941,7 +942,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1189204285] = { return Api.RecentMeUrl.parse_recentMeUrlUnknown($0) }
     dict[-1188296222] = { return Api.RecentMeUrl.parse_recentMeUrlUser($0) }
     dict[1897752877] = { return Api.RecentStory.parse_recentStory($0) }
-    dict[1492647094] = { return Api.ReplyMarkup.parse_replyInlineMarkup($0) }
+    dict[-1297000592] = { return Api.ReplyMarkup.parse_replyInlineMarkup($0) }
     dict[-2035021048] = { return Api.ReplyMarkup.parse_replyKeyboardForceReply($0) }
     dict[-1606526075] = { return Api.ReplyMarkup.parse_replyKeyboardHide($0) }
     dict[-2049074735] = { return Api.ReplyMarkup.parse_replyKeyboardMarkup($0) }
@@ -2167,6 +2168,10 @@ public extension Api {
         case let _1 as Api.KeyboardButtonRow:
             _1.serialize(buffer, boxed)
         case let _1 as Api.KeyboardButtonStyle:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.KeyboardInlineButton:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.KeyboardInlineButtonRow:
             _1.serialize(buffer, boxed)
         case let _1 as Api.LabeledPrice:
             _1.serialize(buffer, boxed)

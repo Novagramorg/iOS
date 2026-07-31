@@ -2528,7 +2528,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             },
             openJoinLink: { _ in
             },
-            openWebView: { _, _, _, _ in
+            openWebView: { _, _, _, _, _ in
             },
             activateAdAction: { _, _, _, _ in
             },

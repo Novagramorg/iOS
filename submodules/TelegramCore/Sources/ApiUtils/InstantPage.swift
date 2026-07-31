@@ -249,10 +249,14 @@ extension InstantPageBlock {
                 let name = pageBlockAnchorData.name
                 self = .anchor(name)
             case let .pageBlockBlockquote(pageBlockBlockquoteData):
-                let (text, caption) = (pageBlockBlockquoteData.text, pageBlockBlockquoteData.caption)
-                self = .blockQuote(blocks: [.paragraph(RichText(apiText: text))], caption: RichText(apiText: caption), collapsed: nil)
+                let (flags, text, caption) = (pageBlockBlockquoteData.flags, pageBlockBlockquoteData.text, pageBlockBlockquoteData.caption)
+                self = .blockQuote(blocks: [.paragraph(RichText(apiText: text))], caption: RichText(apiText: caption), collapsed: (flags & (1 << 0)) != 0)
             case let .pageBlockBlockquoteBlocks(pageBlockBlockquoteBlocksData):
-                self = .blockQuote(blocks: pageBlockBlockquoteBlocksData.blocks.map { InstantPageBlock(apiBlock: $0) }, caption: RichText(apiText: pageBlockBlockquoteBlocksData.caption), collapsed: nil)
+                // `pageBlockBlockquoteBlocks` has no `collapsed` flag, so a quote arriving in this form is
+                // not collapsed as far as the wire is concerned — `false`, not "unknown". Keeping every
+                // cloud-received quote non-nil is what lets `==` read the field without spurious inequality
+                // against locally-composed blocks (which always hold a concrete Bool).
+                self = .blockQuote(blocks: pageBlockBlockquoteBlocksData.blocks.map { InstantPageBlock(apiBlock: $0) }, caption: RichText(apiText: pageBlockBlockquoteBlocksData.caption), collapsed: false)
             case let .pageBlockPullquote(pageBlockPullquoteData):
                 let (text, caption) = (pageBlockPullquoteData.text, pageBlockPullquoteData.caption)
                 self = .pullQuote(text: RichText(apiText: text), caption: RichText(apiText: caption))
@@ -382,13 +386,18 @@ extension InstantPageBlock {
             } else {
                 return .pageBlockList(Api.PageBlock.Cons_pageBlockList(items: items.map { $0.apiInputPageListItem() }))
             }
-        case let .blockQuote(blocks, caption, _):
+        case let .blockQuote(blocks, caption, collapsed):
+            let quoteFlags: Int32 = collapsed == true ? (1 << 0) : 0
             if blocks.isEmpty {
-                return .pageBlockBlockquote(Api.PageBlock.Cons_pageBlockBlockquote(text: RichText.empty.apiRichText(), caption: caption.apiRichText()))
+                return .pageBlockBlockquote(Api.PageBlock.Cons_pageBlockBlockquote(flags: quoteFlags, text: RichText.empty.apiRichText(), caption: caption.apiRichText()))
             }
             if blocks.count == 1, case let .paragraph(text) = blocks[0] {
-                return .pageBlockBlockquote(Api.PageBlock.Cons_pageBlockBlockquote(text: text.apiRichText(), caption: caption.apiRichText()))
+                return .pageBlockBlockquote(Api.PageBlock.Cons_pageBlockBlockquote(flags: quoteFlags, text: text.apiRichText(), caption: caption.apiRichText()))
             }
+            // `pageBlockBlockquoteBlocks` has no `collapsed` flag in the schema, so a multi-block quote
+            // sends without it and arrives expanded. Not an oversight — see the "Known gap" section of
+            // docs/superpowers/specs/2026-07-31-inline-button-split-and-blockquote-collapsed-design.md.
+            // Fixing it needs `pageBlockBlockquoteBlocks flags:# collapsed:flags.0?true` server-side.
             return .pageBlockBlockquoteBlocks(Api.PageBlock.Cons_pageBlockBlockquoteBlocks(blocks: blocks.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: caption.apiRichText()))
         case let .pullQuote(text, caption):
             return .pageBlockPullquote(Api.PageBlock.Cons_pageBlockPullquote(text: text.apiRichText(), caption: caption.apiRichText()))

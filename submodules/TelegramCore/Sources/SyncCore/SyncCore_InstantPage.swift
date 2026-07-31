@@ -482,10 +482,14 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
-            case let .blockQuote(lhsBlocks, lhsCaption, _):
-                // `collapsed` is intentionally excluded from equality: no layout/render code reads it, so including
-                // it would only add spurious inequality (redraw/diff churn). Revisit alongside collapse rendering.
-                if case let .blockQuote(rhsBlocks, rhsCaption, _) = rhs, lhsBlocks == rhsBlocks, lhsCaption == rhsCaption {
+            case let .blockQuote(lhsBlocks, lhsCaption, lhsCollapsed):
+                // `collapsed` is part of equality now that `pageBlockBlockquote` carries it on the wire.
+                // While it was wire-invisible, excluding it only avoided diff churn; now excluding it would
+                // pin a stale collapse state whenever it is the only thing that changed. The API layer
+                // normalizes every cloud-received quote to a non-nil value, so a locally-composed `false`
+                // matches the server echo on the pending→confirmed swap. `nil` survives only on rows
+                // written before the field existed, which compare unequal once — a one-time re-render.
+                if case let .blockQuote(rhsBlocks, rhsCaption, rhsCollapsed) = rhs, lhsBlocks == rhsBlocks, lhsCaption == rhsCaption, lhsCollapsed == rhsCollapsed {
                     return true
                 } else {
                     return false
@@ -679,13 +683,15 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 throw FlatBuffersError.missingRequiredField()
             }
             let caption = try RichText(flatBuffersObject: value.caption)
+            // Absent on payloads written before the field existed, which is exactly the model's `nil`.
+            let collapsed = value.collapsed?.value
             if value.blocksCount > 0 {
                 let blocks = try (0 ..< value.blocksCount).map { try InstantPageBlock(flatBuffersObject: value.blocks(at: $0)!) }
-                self = .blockQuote(blocks: blocks, caption: caption, collapsed: nil)
+                self = .blockQuote(blocks: blocks, caption: caption, collapsed: collapsed)
             } else if let legacyText = value.text {
-                self = .blockQuote(blocks: [.paragraph(try RichText(flatBuffersObject: legacyText))], caption: caption, collapsed: nil)
+                self = .blockQuote(blocks: [.paragraph(try RichText(flatBuffersObject: legacyText))], caption: caption, collapsed: collapsed)
             } else {
-                self = .blockQuote(blocks: [], caption: caption, collapsed: nil)
+                self = .blockQuote(blocks: [], caption: caption, collapsed: collapsed)
             }
         case .instantpageblockPullquote:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_PullQuote.self) else {
@@ -876,7 +882,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_List.addVectorOf(items: itemsOffset, &builder)
             TelegramCore_InstantPageBlock_List.add(ordered: ordered, &builder)
             offset = TelegramCore_InstantPageBlock_List.endInstantPageBlock_List(&builder, start: start)
-        case let .blockQuote(blocks, caption, _):
+        case let .blockQuote(blocks, caption, collapsed):
             valueType = .instantpageblockBlockquote
             let blocksOffsets = blocks.map { $0.encodeToFlatBuffers(builder: &builder) }
             let blocksOffset = builder.createVector(ofOffsets: blocksOffsets, len: blocksOffsets.count)
@@ -884,6 +890,9 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             let start = TelegramCore_InstantPageBlock_BlockQuote.startInstantPageBlock_BlockQuote(&builder)
             TelegramCore_InstantPageBlock_BlockQuote.addVectorOf(blocks: blocksOffset, &builder)
             TelegramCore_InstantPageBlock_BlockQuote.add(caption: captionOffset, &builder)
+            if let collapsed = collapsed {
+                TelegramCore_InstantPageBlock_BlockQuote.add(collapsed: TelegramCore_OptionalBool(value: collapsed), &builder)
+            }
             offset = TelegramCore_InstantPageBlock_BlockQuote.endInstantPageBlock_BlockQuote(&builder, start: start)
         case let .pullQuote(text, caption):
             valueType = .instantpageblockPullquote

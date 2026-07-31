@@ -863,7 +863,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
                         }
                     })
                 case let .openWebView(url, simple):
-                    item.controllerInteraction.openWebView(button.title, url, simple, .generic)
+                    item.controllerInteraction.openWebView(button.title, url, simple, .generic, progress)
                 case .requestPeer:
                     break
                 case let .copyText(payload):
