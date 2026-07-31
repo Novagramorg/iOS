@@ -32,6 +32,43 @@ public extension ReplyMarkupButton.Style.Color {
     }
 }
 
+public extension InstantPageButtonRowAlignment {
+    /// `pageBlockButtonRow#6d640318 flags:# align_left:flags.0?true align_center:flags.1?true
+    /// align_right:flags.2?true`. No bit set means justified — the layout every row had before the
+    /// bits were honoured.
+    ///
+    /// A malformed row that sets several bits resolves left > center > right, mirroring
+    /// `ReplyMarkupButton.Style.Color.init(apiRichStyle:)` above, so the result is deterministic
+    /// rather than dependent on evaluation order.
+    ///
+    /// This lives here, public, rather than inline in `InstantPageBlock.init(apiBlock:)`: that
+    /// initialiser is internal to TelegramCore, so the bit mapping would otherwise be untestable.
+    init(apiFlags: Int32) {
+        if apiFlags & (1 << 0) != 0 {
+            self = .left
+        } else if apiFlags & (1 << 1) != 0 {
+            self = .center
+        } else if apiFlags & (1 << 2) != 0 {
+            self = .right
+        } else {
+            self = .justify
+        }
+    }
+
+    var apiFlags: Int32 {
+        switch self {
+        case .justify:
+            return 0
+        case .left:
+            return 1 << 0
+        case .center:
+            return 1 << 1
+        case .right:
+            return 1 << 2
+        }
+    }
+}
+
 extension ReplyMarkupButtonAction {
     /// Outgoing direction for page buttons. Only the inline-reachable cases are representable; the
     /// five keyboard-only cases collapse onto `inlineButtonTypeDisabled`, mirroring the FlatBuffers

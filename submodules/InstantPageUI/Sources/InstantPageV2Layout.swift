@@ -1127,49 +1127,27 @@ private func layoutBlock(
     case let .thinking(text):
         return layoutThinking(text, boundingWidth: boundingWidth,
                               horizontalInset: horizontalInset, context: &context)
-    case let .buttonRow(buttons):
-        if buttons.isEmpty {
+    case let .buttonRow(alignment, buttons):
+        let labelledButtons = buttons.map { button -> (button: InstantPageButton, labelString: NSAttributedString) in
+            // Measured with the paragraph style stack, exactly as layoutSimpleText builds one, so a
+            // row pill's typography matches an inline pill's. Block buttons are a point larger than
+            // inline ones; both semibold.
+            let labelStyleStack = InstantPageTextStyleStack()
+            setupStyleStack(labelStyleStack, theme: context.theme, category: .paragraph, link: false)
+            labelStyleStack.push(.fontSize(instantPageBlockButtonFontSize))
+            labelStyleStack.push(.semibold)
+            return (button, attributedStringForRichText(button.text, styleStack: labelStyleStack, formatDate: context.formatDate))
+        }
+        let (entries, totalHeight) = instantPageV2LayoutButtonRow(
+            labelledButtons: labelledButtons,
+            alignment: alignment,
+            boundingWidth: boundingWidth,
+            horizontalInset: horizontalInset,
+            rtl: context.rtl
+        )
+        if entries.isEmpty {
             return []
         }
-        // Fixed height rather than label-derived, because this is a touch target. The pill centres its
-        // label, so the inner vertical inset is (buttonHeight − labelBox) / 2 — i.e. raising the height
-        // by 4 adds 2pt of inset at the top and 2pt at the bottom.
-        let buttonHeight: CGFloat = 40.0
-        let buttonSpacing: CGFloat = 6.0
-        let maxButtonsPerRow = 8
-        // Unlike .audio/media, which are flush at full boundingWidth, a button row is chrome and
-        // respects the page's horizontal inset.
-        let availableWidth = max(0.0, boundingWidth - horizontalInset * 2.0)
-
-        var entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)] = []
-        var y: CGFloat = 0.0
-        var index = 0
-        while index < buttons.count {
-            let rowButtons = Array(buttons[index ..< min(index + maxButtonsPerRow, buttons.count)])
-            let totalSpacing = buttonSpacing * CGFloat(max(0, rowButtons.count - 1))
-            let buttonWidth = max(0.0, (availableWidth - totalSpacing) / CGFloat(rowButtons.count))
-            var x = horizontalInset
-            for button in rowButtons {
-                // Measured with the paragraph style stack, exactly as layoutSimpleText builds one, so
-                // a row pill's typography matches an inline pill's.
-                let labelStyleStack = InstantPageTextStyleStack()
-                setupStyleStack(labelStyleStack, theme: context.theme, category: .paragraph, link: false)
-                // Block buttons are a point larger than inline ones; both semibold.
-                labelStyleStack.push(.fontSize(instantPageBlockButtonFontSize))
-                labelStyleStack.push(.semibold)
-                let labelString = attributedStringForRichText(button.text, styleStack: labelStyleStack, formatDate: context.formatDate)
-                // Cap the label at the column it will be stretched to. The pill centres its label, so
-                // the reserve is taken off BOTH sides — otherwise a long label, centred, would run
-                // under the top-right type badge. Buttons without a badge reserve nothing.
-                let iconReserve = instantPageBlockButtonIconName(for: button.action) != nil ? instantPageBlockButtonIconReserve * 2.0 : 0.0
-                let attachment = instantPageInlineButtonAttachment(button: button, labelString: labelString, maxWidth: max(0.0, buttonWidth - iconReserve))
-                entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: buttonHeight)))
-                x += buttonWidth + buttonSpacing
-            }
-            y += buttonHeight + buttonSpacing
-            index += maxButtonsPerRow
-        }
-        let totalHeight = max(0.0, y - buttonSpacing)
         return [.buttonRow(InstantPageV2ButtonRowItem(
             frame: CGRect(x: 0.0, y: 0.0, width: boundingWidth, height: totalHeight),
             buttons: entries

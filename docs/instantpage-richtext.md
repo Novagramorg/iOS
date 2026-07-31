@@ -586,7 +586,7 @@ model layer from the V2 rendering built on top of it.
 | Vertical inner padding | 1pt | implied by the fixed height |
 | Height | derived: label ink + 2·vPad | fixed **40pt** (a touch target) |
 | Corner radius | `bounds.height / 2` (capsule) | `bounds.height / 2` → 20pt |
-| Width | label ink + 2·hPad, capped at the line width | equal share of the row, wrapping at 8 |
+| Width | label ink + 2·hPad, capped at the line width | justify: equal share of the row, wrapping at 8; left/center/right: label ink + 2·(badge ? 18 : 7), greedy wrap |
 
 Font sizes are **fixed**, not scaled by the Instant View font-size setting — the chat bubble's own text
 categories are hardcoded too. The two pill shapes therefore read differently side by side: a block pill
@@ -634,6 +634,25 @@ related, a fixed radius rather than `height / 2` is the lever.
 
 ### Rendering invariants (V2)
 
+- **A button row's alignment comes from `pageBlockButtonRow`'s flag bits**, read as
+  `InstantPageButtonRowAlignment` (`justify = 0`, so cached pages keep the old layout with no
+  migration; precedence `left > center > right` when a malformed row sets several bits). Justify keeps
+  the equal-column split and its fixed 8-per-row chunking; left/center/right hug the label and wrap
+  greedily by width, still capped at 8. **Each wrapped row is aligned on its own width**, so a short
+  last row re-centres rather than staying flush with the row above.
+- **One RTL rule covers all four modes: a row lays out in the page's reading direction.** `align_left`
+  means *leading* (the right edge on an RTL page), `align_right` means trailing, and the first button
+  of a row sits at the reading start — so pills run right-to-left on RTL pages, justify included. This
+  deliberately differs from V2 table cells, which apply `.left`/`.right` literally.
+- **Pass 1's `maxWidth` is what makes pass 2 safe.** Every pill is measured capped to
+  `availableWidth − 2·extra`, so no single pill can exceed the row; greedy packing therefore never
+  produces an overflowing row, and an over-long label ellipsises instead. `extra` is the badge reserve
+  *beyond* the padding the attachment builder already adds (`iconReserve − hPad`), because the pill
+  centres its label under a top-right badge.
+- **Justify's truncation cap is knowingly 14pt more conservative** than the hug path's: it passes
+  `columnWidth − 2·iconReserve` and the attachment builder subtracts `2·hPad` again. Unifying them
+  would shift where ellipses appear on already-published pages, so it is left alone and documented at
+  the site.
 - **`textButton` follows the inline-FORMULA path, not the inline-image path.** The two disagree twice,
   and both choices matter. (1) The formula run delegate reports **real** ascent/descent
   (`InstantPageTextItem.swift:854`) so CoreText grows the line box; the image one reports `0/0`

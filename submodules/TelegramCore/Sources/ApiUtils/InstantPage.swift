@@ -216,7 +216,7 @@ extension InstantPageBlock {
             case .pageBlockUnsupported:
                 self = .unsupported
             case let .pageBlockButtonRow(data):
-                self = .buttonRow(buttons: data.buttons.map(InstantPageButton.init(apiButton:)))
+                self = .buttonRow(alignment: InstantPageButtonRowAlignment(apiFlags: data.flags), buttons: data.buttons.map(InstantPageButton.init(apiButton:)))
             case let .pageBlockDocument(data):
                 self = .document(id: MediaId(namespace: Namespaces.Media.CloudFile, id: data.documentId), caption: InstantPageCaption(apiCaption: data.caption))
             case let .pageBlockTitle(pageBlockTitleData):
@@ -431,8 +431,8 @@ extension InstantPageBlock {
             // Same media-id remap as .audio: on send, local ids are rewritten to cloud ids.
             let documentId = mediaIdRemap[id] ?? id.id
             return .pageBlockDocument(Api.PageBlock.Cons_pageBlockDocument(documentId: documentId, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
-        case let .buttonRow(buttons):
-            return .pageBlockButtonRow(Api.PageBlock.Cons_pageBlockButtonRow(flags: 0, buttons: buttons.map { $0.apiPageButton() }))
+        case let .buttonRow(alignment, buttons):
+            return .pageBlockButtonRow(Api.PageBlock.Cons_pageBlockButtonRow(flags: alignment.apiFlags, buttons: buttons.map { $0.apiPageButton() }))
         case let .collage(items, caption):
             return .pageBlockCollage(Api.PageBlock.Cons_pageBlockCollage(items: items.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         case let .slideshow(items, caption):
