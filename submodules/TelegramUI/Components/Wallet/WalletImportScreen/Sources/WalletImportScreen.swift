@@ -8,6 +8,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import ViewControllerComponent
 import MultilineTextComponent
+import BalancedTextComponent
 import LottieComponent
 import ButtonComponent
 import SegmentControlComponent
@@ -866,7 +867,7 @@ private final class WalletImportScreenComponent: Component {
 
             let animationName: String
             let titleText: String
-            let bodyContent: MultilineTextComponent.TextContent
+            let bodyContent: BalancedTextComponent.TextContent
             let buttonTitle: String
             let isVerificationMode: Bool
             switch component.mode {
@@ -876,7 +877,7 @@ private final class WalletImportScreenComponent: Component {
                 //TODO:localize
                 titleText = "Import Wallet"
                 //TODO:localize
-                let bodyText = "Enter the 12- or 24-word recovery phrase from\nanother wallet you own."
+                let bodyText = "Enter the 12- or 24-word recovery phrase from another wallet you own."
                 bodyContent = .plain(NSAttributedString(
                     string: bodyText,
                     font: Font.regular(16.0),
@@ -1047,7 +1048,7 @@ private final class WalletImportScreenComponent: Component {
             self.body.parentState = state
             let bodySize = self.body.update(
                 transition: transition,
-                component: AnyComponent(MultilineTextComponent(
+                component: AnyComponent(BalancedTextComponent(
                     text: bodyContent,
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,

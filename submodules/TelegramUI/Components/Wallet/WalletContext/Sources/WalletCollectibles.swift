@@ -3,10 +3,35 @@ import TONWalletKit
 
 let walletCollectibleFetchLimit = 30
 private let walletCollectibleMetadataMaximumSize = 2 * 1024 * 1024
+private let walletTelegramAnonymousNumbersCollection = "0:0e41dc1dc3c9067ed24248580e12b3359818d83dee0304fabcf80845eafafdb2"
+private let walletTelegramUsernamesCollection = "0:80d78a35f955a14b679faa887ff4cd5bfc0f43b4a4eea2a7e6927f3701b273c2"
 
 struct WalletCollectibleMetadata {
     var name: String?
+    var description: String?
     var imageUrl: String?
+    var lottieUrl: String?
+    var collectionName: String?
+    var collectionUrl: String?
+    var attributes: [String: String] = [:]
+
+    init(
+        name: String?,
+        description: String? = nil,
+        imageUrl: String?,
+        lottieUrl: String? = nil,
+        collectionName: String? = nil,
+        collectionUrl: String? = nil,
+        attributes: [String: String] = [:]
+    ) {
+        self.name = name
+        self.description = description
+        self.imageUrl = imageUrl
+        self.lottieUrl = lottieUrl
+        self.collectionName = collectionName
+        self.collectionUrl = collectionUrl
+        self.attributes = attributes
+    }
 
     var isComplete: Bool {
         return self.name != nil && self.imageUrl != nil
@@ -16,8 +41,23 @@ struct WalletCollectibleMetadata {
         if self.name == nil {
             self.name = other.name
         }
+        if self.description == nil {
+            self.description = other.description
+        }
         if self.imageUrl == nil {
             self.imageUrl = other.imageUrl
+        }
+        if self.lottieUrl == nil {
+            self.lottieUrl = other.lottieUrl
+        }
+        if self.collectionName == nil {
+            self.collectionName = other.collectionName
+        }
+        if self.collectionUrl == nil {
+            self.collectionUrl = other.collectionUrl
+        }
+        for (key, value) in other.attributes where self.attributes[key] == nil {
+            self.attributes[key] = value
         }
     }
 }
@@ -63,18 +103,28 @@ func walletCollectible(
     let name: String
     if let metadataName = metadata.name {
         name = metadataName
-    } else if let collectionName = nonEmptyCollectibleString(nft.collection?.name), let index, index.count <= 18 {
+    } else if let collectionName = nonEmptyCollectibleString(nft.collection?.name), let index {
         name = "\(collectionName) #\(index)"
-    } else if let index, index.count <= 18 {
-        name = "Collectible #\(index)"
     } else {
         name = shortenedCollectibleAddress(address)
     }
+    let kind = walletCollectibleKind(from: nft)
 
     return WalletContext.Collectible(
         address: address,
         name: name,
         imageUrl: metadata.imageUrl,
+        subtitle: walletCollectibleSubtitle(from: nft, metadata: metadata),
+        kind: kind,
+        description: metadata.description,
+        lottieUrl: metadata.lottieUrl,
+        collectionName: metadata.collectionName ?? nonEmptyCollectibleString(nft.collection?.name),
+        collectionUrl: metadata.collectionUrl,
+        attributes: metadata.attributes,
+        giftSlug: kind == .gift ? walletCollectibleGiftSlug(
+            name: name,
+            metadataUrl: walletCollectibleMetadataUrl(from: nft)
+        ) : nil,
         receivedAt: receivedAt
     )
 }
@@ -82,12 +132,28 @@ func walletCollectible(
 func walletCollectibleMetadata(from nft: TONNFT) -> WalletCollectibleMetadata {
     let name = nonEmptyCollectibleString(nft.info?.name)
         ?? collectibleExtraString(nft.extra, keys: ["name", "title"])
+    let description = nonEmptyCollectibleString(nft.info?.description)
+        ?? collectibleExtraString(nft.extra, keys: ["description"])
     let imageUrl = collectibleImageUrl(info: nft.info?.image)
         ?? collectibleExtraUrlString(
             nft.extra,
             keys: ["_image_medium", "_image_small", "image", "image_url", "_image_big"]
         )
-    return WalletCollectibleMetadata(name: name, imageUrl: imageUrl)
+    let lottieUrl = collectibleLottieUrl(info: nft.info?.animation)
+        ?? normalizedFragmentLottieUrl(collectibleExtraString(nft.extra, keys: ["lottie"]))
+    let collectionName = nonEmptyCollectibleString(nft.collection?.name)
+    let collectionUrl = normalizedFragmentCollectibleUrl(
+        collectibleExtraString(nft.collection?.extra, keys: ["external_link"])
+    )
+    return WalletCollectibleMetadata(
+        name: name,
+        description: description,
+        imageUrl: imageUrl,
+        lottieUrl: lottieUrl,
+        collectionName: collectionName,
+        collectionUrl: collectionUrl,
+        attributes: collectibleAttributes(from: nft.attributes)
+    )
 }
 
 func walletCollectibleMetadataUrl(from nft: TONNFT) -> URL? {
@@ -111,6 +177,7 @@ func walletCollectibleMetadata(from url: URL) async throws -> WalletCollectibleM
 
     let name = nonEmptyCollectibleString(object["name"] as? String)
         ?? nonEmptyCollectibleString(object["title"] as? String)
+    let description = nonEmptyCollectibleString(object["description"] as? String)
     var imageUrl: String?
     for key in ["_image_medium", "_image_small", "image", "image_url", "_image_big"] {
         guard let value = nonEmptyCollectibleString(object[key] as? String),
@@ -120,7 +187,29 @@ func walletCollectibleMetadata(from url: URL) async throws -> WalletCollectibleM
         imageUrl = resolvedUrl.absoluteString
         break
     }
-    return WalletCollectibleMetadata(name: name, imageUrl: imageUrl)
+    return WalletCollectibleMetadata(
+        name: name,
+        description: description,
+        imageUrl: imageUrl,
+        lottieUrl: nonEmptyCollectibleString(object["lottie"] as? String)
+            .flatMap { normalizedFragmentLottieUrl($0, relativeTo: url) },
+        attributes: collectibleAttributes(from: object["attributes"])
+    )
+}
+
+func walletCollectibleNeedsRemoteMetadata(
+    from nft: TONNFT,
+    metadata: WalletCollectibleMetadata
+) -> Bool {
+    if !metadata.isComplete || metadata.description == nil {
+        return true
+    }
+    guard walletCollectibleKind(from: nft) == .gift else {
+        return false
+    }
+    return metadata.attributes["model"] == nil
+        || metadata.attributes["backdrop"] == nil
+        || metadata.lottieUrl == nil
 }
 
 private func walletCollectibleMetadataData(request: URLRequest) async throws -> Data {
@@ -155,6 +244,102 @@ private func nonEmptyCollectibleString(_ value: String?) -> String? {
     }
     value = value.trimmingCharacters(in: .whitespacesAndNewlines)
     return value.isEmpty ? nil : value
+}
+
+private func walletCollectibleSubtitle(
+    from nft: TONNFT,
+    metadata: WalletCollectibleMetadata
+) -> String {
+    let collectionName = nonEmptyCollectibleString(nft.collection?.name) ?? "NFT"
+    switch walletCollectibleKind(from: nft) {
+    case .gift:
+        guard let model = nonEmptyCollectibleString(metadata.attributes["model"]),
+              let backdrop = nonEmptyCollectibleString(metadata.attributes["backdrop"]) else {
+            return collectionName
+        }
+        return "\(model) on \(backdrop)"
+    case .username:
+        return "Username"
+    case .anonymousNumber:
+        return "Anonymous Number"
+    case .other:
+        return collectionName
+    }
+}
+
+private func walletCollectibleKind(from nft: TONNFT) -> WalletContext.Collectible.Kind {
+    let collectionAddress = nft.collection?.address.raw.string.lowercased()
+    if collectionAddress == walletTelegramUsernamesCollection {
+        return .username
+    }
+    if collectionAddress == walletTelegramAnonymousNumbersCollection {
+        return .anonymousNumber
+    }
+
+    let metadataUrl = walletCollectibleMetadataUrl(from: nft)?.absoluteString.lowercased()
+    if metadataUrl?.contains("nft.fragment.com/gift/") == true {
+        return .gift
+    }
+    if metadataUrl?.contains("nft.fragment.com/username/") == true {
+        return .username
+    }
+    if metadataUrl?.contains("nft.fragment.com/number/") == true {
+        return .anonymousNumber
+    }
+    return .other
+}
+
+private func walletCollectibleGiftSlug(name: String, metadataUrl: URL?) -> String? {
+    if let hashIndex = name.lastIndex(of: "#") {
+        let title = String(name[..<hashIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let number = String(name[name.index(after: hashIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty, !number.isEmpty, number.allSatisfy({ $0.isNumber }) {
+            let compactTitle = title.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }
+            if !compactTitle.isEmpty {
+                return String(compactTitle) + "-" + number
+            }
+        }
+    }
+    guard let metadataUrl,
+          metadataUrl.absoluteString.lowercased().contains("nft.fragment.com/gift/") else {
+        return nil
+    }
+    return nonEmptyCollectibleString(metadataUrl.deletingPathExtension().lastPathComponent)
+}
+
+private func collectibleAttributes(from attributes: [TONNFTAttribute]?) -> [String: String] {
+    guard let attributes else {
+        return [:]
+    }
+    var result: [String: String] = [:]
+    for attribute in attributes {
+        guard let key = normalizedCollectibleAttributeKey(attribute.traitType),
+              let value = nonEmptyCollectibleString(attribute.value) else {
+            continue
+        }
+        result[key] = value
+    }
+    return result
+}
+
+private func collectibleAttributes(from value: Any?) -> [String: String] {
+    guard let attributes = value as? [[String: Any]] else {
+        return [:]
+    }
+    var result: [String: String] = [:]
+    for attribute in attributes {
+        guard let key = normalizedCollectibleAttributeKey(
+            attribute["trait_type"] as? String ?? attribute["traitType"] as? String
+        ), let value = nonEmptyCollectibleString(attribute["value"] as? String) else {
+            continue
+        }
+        result[key] = value
+    }
+    return result
+}
+
+private func normalizedCollectibleAttributeKey(_ value: String?) -> String? {
+    return nonEmptyCollectibleString(value)?.lowercased()
 }
 
 func mergeCollectibles(
@@ -194,6 +379,10 @@ private func collectibleImageUrl(info: TONTokenImage?) -> String? {
     return nil
 }
 
+private func collectibleLottieUrl(info: TONTokenAnimation?) -> String? {
+    return normalizedFragmentLottieUrl(info?.lottie)
+}
+
 private func collectibleExtraString(_ extra: [String: AnyCodable]?, keys: [String]) -> String? {
     guard let extra else {
         return nil
@@ -214,7 +403,7 @@ private func collectibleExtraUrlString(_ extra: [String: AnyCodable]?, keys: [St
     return url.absoluteString
 }
 
-private func normalizedCollectibleUrl(_ value: String, relativeTo baseUrl: URL?) -> URL? {
+func normalizedCollectibleUrl(_ value: String, relativeTo baseUrl: URL?) -> URL? {
     guard let value = nonEmptyCollectibleString(value) else {
         return nil
     }
@@ -233,6 +422,26 @@ private func normalizedCollectibleUrl(_ value: String, relativeTo baseUrl: URL?)
         return nil
     }
     return URL(string: normalized)
+}
+
+func normalizedFragmentCollectibleUrl(_ value: String?, relativeTo baseUrl: URL? = nil) -> String? {
+    guard let value,
+          let url = normalizedCollectibleUrl(value, relativeTo: baseUrl),
+          url.scheme?.lowercased() == "https",
+          url.host?.lowercased() == "fragment.com" else {
+        return nil
+    }
+    return url.absoluteString
+}
+
+func normalizedFragmentLottieUrl(_ value: String?, relativeTo baseUrl: URL? = nil) -> String? {
+    guard let value,
+          let url = normalizedCollectibleUrl(value, relativeTo: baseUrl),
+          url.scheme?.lowercased() == "https",
+          url.host?.lowercased() == "nft.fragment.com" else {
+        return nil
+    }
+    return url.absoluteString
 }
 
 private func normalizedCollectibleImageUrl(_ url: URL) -> String? {
@@ -262,7 +471,7 @@ private func normalizedCollectibleImageUrl(_ url: URL) -> String? {
     }
 }
 
-private func shortenedCollectibleAddress(_ address: String) -> String {
+func shortenedCollectibleAddress(_ address: String) -> String {
     guard address.count > 14 else {
         return address
     }

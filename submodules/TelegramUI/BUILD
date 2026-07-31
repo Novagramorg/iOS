@@ -474,6 +474,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Wallet/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletTransactionScreen",
+        "//submodules/TelegramUI/Components/Wallet/WalletCollectibleScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftOptionsScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftStoreScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftSetupScreen",

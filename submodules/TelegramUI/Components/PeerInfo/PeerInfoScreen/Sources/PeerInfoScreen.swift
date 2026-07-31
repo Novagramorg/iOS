@@ -59,6 +59,7 @@ import PeerInfoAvatarListNode
 import PasswordSetupUI
 import CalendarMessageScreen
 import TooltipUI
+import QrCode
 import QrCodeUI
 import TranslateUI
 import ChatPresentationInterfaceState
@@ -6545,6 +6546,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         }
         
         if isSettings {
+            preloadQrCode()
+            
             if let starsContext = context.starsContext {
                 self.starsContext = starsContext
                 starsContext.load(force: true)

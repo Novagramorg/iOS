@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import CoreGraphics
 import SwiftSignalKit
 import Display
@@ -10,6 +11,65 @@ public enum QrCodeIcon {
     case cutout
     case proxy
     case custom(UIImage?)
+}
+
+private let qrCodeQueue = Queue(name: "QrCode", qos: .userInitiated)
+
+private final class QrCodeGeneratorContext {
+    private let context: CIContext
+    private let colorSpace: CGColorSpace
+    private var isPreloaded = false
+    
+    init() {
+        self.context = CIContext(options: [.cacheIntermediates: false])
+        self.colorSpace = CGColorSpaceCreateDeviceGray()
+    }
+    
+    func generate(data: Data, ecl: String) -> (Data, Int, Int)? {
+        assert(qrCodeQueue.isCurrent())
+        
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = data
+        filter.correctionLevel = ecl
+        
+        guard let output = filter.outputImage else {
+            return nil
+        }
+        
+        let size = Int(output.extent.width)
+        let bytesPerRow = size
+        var bitmapData = Data(count: bytesPerRow * size)
+        let rendered: Bool = bitmapData.withUnsafeMutableBytes { (bytes: UnsafeMutableRawBufferPointer) -> Bool in
+            guard let baseAddress = bytes.baseAddress else {
+                return false
+            }
+            self.context.render(output, toBitmap: baseAddress, rowBytes: bytesPerRow, bounds: output.extent, format: .L8, colorSpace: self.colorSpace)
+            return true
+        }
+        guard rendered else {
+            return nil
+        }
+        
+        self.isPreloaded = true
+        return (bitmapData, size, bytesPerRow)
+    }
+    
+    func preload() {
+        assert(qrCodeQueue.isCurrent())
+        
+        if self.isPreloaded {
+            return
+        }
+        let _ = self.generate(data: Data([0x30]), ecl: "M")
+    }
+}
+
+private let qrCodeGeneratorContext = QrCodeGeneratorContext()
+
+public func preloadQrCode() {
+    qrCodeQueue.async {
+        qrCodeGeneratorContext.preload()
+    }
 }
 
 private func floorToContextPixels(_ value: CGFloat, scale: CGFloat? = UIScreenScale) -> CGFloat {
@@ -40,36 +100,18 @@ public func qrCodeCutout(size: Int, dimensions: CGSize, scale: CGFloat?) -> (Int
 
 public func qrCode(string: String, color: UIColor, backgroundColor: UIColor? = nil, icon: QrCodeIcon, ecl: String = "M", onlyMarkers: Bool = false) -> Signal<(Int, (TransformImageArguments) -> DrawingContext?), NoError> {
     return Signal<(Data, Int, Int), NoError> { subscriber in
-        if let data = string.data(using: .isoLatin1, allowLossyConversion: false), let filter = CIFilter(name: "CIQRCodeGenerator") {
-            filter.setValue(data, forKey: "inputMessage")
-            filter.setValue(ecl, forKey: "inputCorrectionLevel")
-            
-            if let output = filter.outputImage {
-                let size = Int(output.extent.width)
-                let bytesPerRow = DeviceGraphicsContextSettings.shared.bytesPerRow(forWidth: Int(size))
-                let length = bytesPerRow * size
-                let bitmapInfo = CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.noneSkipFirst.rawValue)
-                
-                guard let bytes = malloc(length)?.assumingMemoryBound(to: UInt8.self) else {
-                    return EmptyDisposable
-                }
-                let data = Data(bytesNoCopy: bytes, count: length, deallocator: .free)
-                
-                guard let context = CGContext(data: bytes, width: size, height: size, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: deviceColorSpace, bitmapInfo: bitmapInfo.rawValue) else {
-                    return EmptyDisposable
-                }
-                
-                let ciContext = CIContext(cgContext: context, options: nil)
-                ciContext.draw(output, in: CGRect(x: 0, y: 0, width: size, height: size), from: output.extent)
-
-                subscriber.putNext((data, size, bytesPerRow))
-            }
+        if let data = string.data(using: .isoLatin1, allowLossyConversion: false), let result = qrCodeGeneratorContext.generate(data: data, ecl: ecl) {
+            subscriber.putNext(result)
         }
         subscriber.putCompletion()
         return EmptyDisposable
     }
+    |> runOn(qrCodeQueue)
+    |> deliverOnMainQueue
     |> map { data, size, bytesPerRow in
+        let bitmapData = data as NSData
         return (size, { arguments in
+            let bitmapBytes = bitmapData.bytes.assumingMemoryBound(to: UInt8.self)
             guard let context = DrawingContext(size: arguments.drawingSize, scale: arguments.scale ?? 0.0, clear: true) else {
                 return nil
             }
@@ -94,13 +136,7 @@ public func qrCode(string: String, color: UIColor, backgroundColor: UIColor? = n
                         return false
                     }
                     
-                    return data.withUnsafeBytes { bytes -> Bool in
-                        if let value = bytes.baseAddress?.advanced(by: y * bytesPerRow + x * 4).assumingMemoryBound(to: UInt8.self).pointee {
-                            return value < 255
-                        } else {
-                            return false
-                        }
-                    }
+                    return bitmapBytes[y * bytesPerRow + x] < 255
                 } else {
                     return false
                 }

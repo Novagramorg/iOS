@@ -409,6 +409,7 @@ final class PeerInfoScreenData {
     let chatPeer: EnginePeer?
     let savedMessagesPeer: EnginePeer?
     let cachedData: CachedPeerData?
+    let firstWelcomeMessageText: String?
     let status: PeerInfoStatusData?
     let peerNotificationSettings: TelegramPeerNotificationSettings?
     let threadNotificationSettings: TelegramPeerNotificationSettings?
@@ -466,6 +467,7 @@ final class PeerInfoScreenData {
         chatPeer: EnginePeer?,
         savedMessagesPeer: EnginePeer?,
         cachedData: CachedPeerData?,
+        firstWelcomeMessageText: String?,
         status: PeerInfoStatusData?,
         peerNotificationSettings: TelegramPeerNotificationSettings?,
         threadNotificationSettings: TelegramPeerNotificationSettings?,
@@ -512,6 +514,7 @@ final class PeerInfoScreenData {
         self.chatPeer = chatPeer
         self.savedMessagesPeer = savedMessagesPeer
         self.cachedData = cachedData
+        self.firstWelcomeMessageText = firstWelcomeMessageText
         self.status = status
         self.peerNotificationSettings = peerNotificationSettings
         self.threadNotificationSettings = threadNotificationSettings
@@ -1053,6 +1056,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
             chatPeer: peer.flatMap(EnginePeer.init),
             savedMessagesPeer: nil,
             cachedData: peerView.cachedData,
+            firstWelcomeMessageText: nil,
             status: nil,
             peerNotificationSettings: nil,
             threadNotificationSettings: nil,
@@ -1098,6 +1102,14 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
     }
 }
 
+private func peerInfoFirstWelcomeMessageText(context: AccountContext, peerId: PeerId) -> Signal<String?, NoError> {
+    return context.account.viewTracker.welcomeMessagesViewForLocation(peerId: peerId)
+    |> map { view, _, _ -> String? in
+        return view.entries.first?.message.text
+    }
+    |> distinctUntilChanged
+}
+
 func peerInfoScreenData(
     context: AccountContext,
     peerId: PeerId,
@@ -1127,6 +1139,7 @@ func peerInfoScreenData(
                 chatPeer: nil,
                 savedMessagesPeer: nil,
                 cachedData: nil,
+                firstWelcomeMessageText: nil,
                 status: nil,
                 peerNotificationSettings: nil,
                 threadNotificationSettings: nil,
@@ -1683,6 +1696,7 @@ func peerInfoScreenData(
                         chatPeer: peerView.peers[peerId].flatMap(EnginePeer.init),
                         savedMessagesPeer: savedMessagesPeer,
                         cachedData: peerView.cachedData,
+                        firstWelcomeMessageText: nil,
                         status: status,
                         peerNotificationSettings: peerView.notificationSettings as? TelegramPeerNotificationSettings,
                         threadNotificationSettings: nil,
@@ -1834,8 +1848,13 @@ func peerInfoScreenData(
             let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: peerId, allGiftsContext: profileGiftsContext)
             
             let personalChannel = peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false)
+            let personalChannelAndFirstWelcomeMessageText = combineLatest(
+                personalChannel,
+                peerInfoFirstWelcomeMessageText(context: context, peerId: peerId)
+            )
             
             let forcedLinkedCommunityId = Atomic<PeerId?>(value: nil)
+            let didRefreshWelcomeMessages = Atomic<Bool>(value: false)
             
             return combineLatest(
                 context.account.viewTracker.peerView(peerId, updateData: true),
@@ -1856,9 +1875,18 @@ func peerInfoScreenData(
                 starsRevenueContextAndState,
                 revenueContextAndState,
                 profileGiftsContext.state,
-                personalChannel
+                personalChannelAndFirstWelcomeMessageText
             )
-            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannel -> Signal<PeerInfoScreenData, NoError> in
+            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannelAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in
+                let (personalChannel, firstWelcomeMessageText) = personalChannelAndFirstWelcomeMessageText
+
+                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, case .group = channel.info, channel.hasPermission(.changeInfo) {
+                    let wasRefreshed = didRefreshWelcomeMessages.swap(true)
+                    if !wasRefreshed {
+                        let _ = context.engine.messages.refreshWelcomeMessages(peerId: peerId).startStandalone()
+                    }
+                }
+
                 var availablePanes = availablePanes
                 if let hasStories {
                     if hasStories {
@@ -1967,6 +1995,7 @@ func peerInfoScreenData(
                         chatPeer: peerView.peers[peerId].flatMap(EnginePeer.init),
                         savedMessagesPeer: nil,
                         cachedData: peerView.cachedData,
+                        firstWelcomeMessageText: firstWelcomeMessageText,
                         status: status,
                         peerNotificationSettings: peerView.notificationSettings as? TelegramPeerNotificationSettings,
                         threadNotificationSettings: nil,
@@ -2198,9 +2227,14 @@ func peerInfoScreenData(
                     return (starsRevenueStatsContext, state.stats)
                 }
             }
+            let starsRevenueContextAndStateAndFirstWelcomeMessageText = combineLatest(
+                starsRevenueContextAndState,
+                peerInfoFirstWelcomeMessageText(context: context, peerId: groupId)
+            )
             
             let isPremiumRequiredForStoryPosting: Signal<Bool, NoError> = isPremiumRequiredForStoryPosting(context: context)
             let forcedLinkedCommunityId = Atomic<PeerId?>(value: nil)
+            let didRefreshWelcomeMessages = Atomic<Bool>(value: false)
             
             return combineLatest(queue: .mainQueue(),
                 context.account.viewTracker.peerView(groupId, updateData: true),
@@ -2220,9 +2254,26 @@ func peerInfoScreenData(
                 hasSavedMessagesChats,
                 hasSavedMessageTags,
                 isPremiumRequiredForStoryPosting,
-                starsRevenueContextAndState
+                starsRevenueContextAndStateAndFirstWelcomeMessageText
             )
-            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, status, membersData, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, threadData, preferencesView, accountIsPremium, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState -> Signal<PeerInfoScreenData, NoError> in
+            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, status, membersData, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, threadData, preferencesView, accountIsPremium, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndStateAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in
+                let (starsRevenueContextAndState, firstWelcomeMessageText) = starsRevenueContextAndStateAndFirstWelcomeMessageText
+
+                if let group = peerViewMainPeer(peerView) as? TelegramGroup {
+                    var canManageWelcomeMessages = false
+                    if case .creator = group.role {
+                        canManageWelcomeMessages = true
+                    } else if case let .admin(rights, _) = group.role {
+                        canManageWelcomeMessages = rights.rights.contains(.canChangeInfo)
+                    }
+                    if canManageWelcomeMessages {
+                        let wasRefreshed = didRefreshWelcomeMessages.swap(true)
+                        if !wasRefreshed {
+                            let _ = context.engine.messages.refreshWelcomeMessages(peerId: groupId).startStandalone()
+                        }
+                    }
+                }
+
                 var discussionPeer: EnginePeer?
                 if case let .known(maybeLinkedDiscussionPeerId) = (peerView.cachedData as? CachedChannelData)?.linkedDiscussionPeerId, let linkedDiscussionPeerId = maybeLinkedDiscussionPeerId, let peer = peerView.peers[linkedDiscussionPeerId] {
                     discussionPeer = EnginePeer(peer)
@@ -2334,6 +2385,7 @@ func peerInfoScreenData(
                         chatPeer: peerView.peers[groupId].flatMap(EnginePeer.init),
                         savedMessagesPeer: nil,
                         cachedData: peerView.cachedData,
+                        firstWelcomeMessageText: firstWelcomeMessageText,
                         status: effectiveStatus,
                         peerNotificationSettings: peerNotificationSettings,
                         threadNotificationSettings: threadNotificationSettings,

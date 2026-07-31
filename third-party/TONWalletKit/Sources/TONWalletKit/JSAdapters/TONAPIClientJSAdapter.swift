@@ -309,6 +309,35 @@ class TONAPIClientJSAdapter: NSObject, JSAPIClient {
         }
     }
 
+    @objc(getAccountActions:) func getAccountActions(request: JSValue) -> JSValue {
+        guard let context else {
+            return JSValue(newPromiseRejectedWithReason: "No context exists to perform \(#function)", in: JSContext())
+        }
+
+        do {
+            let request: TONAccountActionsRequest = try request.decode()
+
+            return JSValue(newPromiseIn: context) { [weak self] resolve, reject in
+                Task {
+                    guard let self, let context = self.context else { return }
+
+                    do {
+                        let result = try await self.apiClient.accountActions(
+                            address: request.address,
+                            limit: request.limit,
+                            offset: request.offset
+                        )
+                        resolve?.call(withArguments: [try result.encode(in: context)])
+                    } catch {
+                        reject?.call(withArguments: [error.localizedDescription])
+                    }
+                }
+            }
+        } catch {
+            return JSValue(newPromiseRejectedWithReason: error.localizedDescription, in: context)
+        }
+    }
+
     @objc(getBalance::) func getBalance(address: JSValue, seqno: JSValue) -> JSValue {
         guard let context else {
             return JSValue(newPromiseRejectedWithReason: "No context exists to perform \(#function)", in: JSContext())

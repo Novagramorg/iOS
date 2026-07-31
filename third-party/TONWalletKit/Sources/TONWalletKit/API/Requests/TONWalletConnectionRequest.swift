@@ -87,6 +87,13 @@ public class TONWalletConnectionRequest {
     }
 
     public func reject(reason: String? = nil) async throws {
-        try await context.walletKit.rejectConnectRequest(event, reason)
+        try await self.reject(reason: reason, errorCode: nil)
+    }
+
+    public func reject(
+        reason: String?,
+        errorCode: TONConnectEventErrorCodes?
+    ) async throws {
+        try await context.walletKit.rejectConnectRequest(event, reason, errorCode)
     }
 }

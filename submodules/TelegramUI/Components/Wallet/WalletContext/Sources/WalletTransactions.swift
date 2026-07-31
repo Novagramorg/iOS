@@ -149,6 +149,342 @@ func walletTransactions(
     return result
 }
 
+func walletTransactions(
+    from response: TONAccountActionsResponse,
+    walletAddress: TONUserFriendlyAddress,
+    collectibleMetadata: [TONRawAddress: WalletCollectibleMetadata] = [:]
+) throws -> [WalletContext.Transaction] {
+    let usdtMasterRawAddress = try? TONUserFriendlyAddress(value: walletUsdtJettonMasterAddress).raw
+    var result: [WalletContext.Transaction] = []
+    result.reserveCapacity(response.actions.count)
+
+    for action in response.actions {
+        guard action.isSuccess != false,
+              let timestamp = walletActionTimestamp(action) else {
+            continue
+        }
+
+        let transactionHash = walletActionTransactionHash(action, walletAddress: walletAddress)
+        let logicalTime = action.endLt ?? action.startLt ?? action.transactionsFull.first?.logicalTime ?? "0"
+        let id = walletActionId(action, fallback: transactionHash ?? logicalTime)
+        let fee = try walletActionFee(action, walletAddress: walletAddress)
+
+        switch action.details {
+        case let .tonTransfer(details):
+            guard let source = details.source,
+                  let destination = details.destination,
+                  let value = details.value.flatMap(int64Amount),
+                  value > 0,
+                  let transfer = walletActionTransfer(
+                    source: source,
+                    destination: destination,
+                    walletAddress: walletAddress
+                  ) else {
+                continue
+            }
+            result.append(WalletContext.Transaction(
+                id: id,
+                transactionHash: transactionHash,
+                logicalTime: logicalTime,
+                timestamp: timestamp,
+                direction: transfer.direction,
+                amount: value,
+                fee: fee,
+                counterparty: walletActionDisplayAddress(transfer.counterparty),
+                counterpartyName: walletActionAddressName(transfer.counterparty, addressBook: response.addressBook),
+                comment: details.comment,
+                currency: .ton
+            ))
+        case let .jettonTransfer(details):
+            guard details.asset?.raw == usdtMasterRawAddress,
+                  let sender = details.sender,
+                  let receiver = details.receiver,
+                  let amount = Int64(details.amount),
+                  amount > 0,
+                  let transfer = walletActionTransfer(
+                    source: sender,
+                    destination: receiver,
+                    walletAddress: walletAddress
+                  ) else {
+                continue
+            }
+            result.append(WalletContext.Transaction(
+                id: id,
+                transactionHash: transactionHash,
+                logicalTime: logicalTime,
+                timestamp: timestamp,
+                direction: transfer.direction,
+                amount: amount,
+                fee: fee,
+                counterparty: walletActionDisplayAddress(transfer.counterparty),
+                counterpartyName: walletActionAddressName(transfer.counterparty, addressBook: response.addressBook),
+                comment: details.comment,
+                currency: .usdt
+            ))
+        case let .nftTransfer(details):
+            guard let oldOwner = details.oldOwner,
+                  let newOwner = details.newOwner,
+                  let transfer = walletActionTransfer(
+                    source: oldOwner,
+                    destination: newOwner,
+                    walletAddress: walletAddress
+                  ),
+                  let collectible = walletActionCollectible(
+                    details: details,
+                    metadata: response.metadata,
+                    resolvedMetadata: collectibleMetadata
+                  ) else {
+                continue
+            }
+            result.append(WalletContext.Transaction(
+                id: id,
+                transactionHash: transactionHash,
+                logicalTime: logicalTime,
+                timestamp: timestamp,
+                direction: transfer.direction,
+                amount: 1,
+                fee: fee,
+                counterparty: walletActionDisplayAddress(transfer.counterparty),
+                counterpartyName: walletActionAddressName(transfer.counterparty, addressBook: response.addressBook),
+                comment: nil,
+                collectible: collectible
+            ))
+        case .jettonSwap, .callContract, .unknown:
+            continue
+        }
+    }
+    return result
+}
+
+private func walletActionId(_ action: TONTransactionTraceAction, fallback: String) -> String {
+    let traceId = action.traceId ?? action.traceExternalHash?.value ?? "trace"
+    let logicalTime = action.startLt ?? action.endLt ?? "0"
+    let actionId = action.actionId ?? fallback
+    return "action:\(traceId):\(logicalTime):\(actionId)"
+}
+
+private func walletActionTimestamp(_ action: TONTransactionTraceAction) -> Int32? {
+    if let timestamp = action.endUtime ?? action.traceEndUtime,
+       timestamp >= Int(Int32.min), timestamp <= Int(Int32.max) {
+        return Int32(timestamp)
+    }
+    if let timestamp = action.startUtime,
+       timestamp.isFinite,
+       timestamp >= Double(Int32.min), timestamp <= Double(Int32.max) {
+        return Int32(timestamp)
+    }
+    if let timestamp = action.transactionsFull.first?.now,
+       timestamp.isFinite,
+       timestamp >= Double(Int32.min), timestamp <= Double(Int32.max) {
+        return Int32(timestamp)
+    }
+    return nil
+}
+
+private func walletActionTransactionHash(
+    _ action: TONTransactionTraceAction,
+    walletAddress: TONUserFriendlyAddress
+) -> String? {
+    if let transaction = action.transactionsFull.first(where: { $0.account.raw == walletAddress.raw }) {
+        return transaction.hash.value
+    }
+    return action.transactionsFull.first?.hash.value ?? action.transactions.first?.value
+}
+
+private func walletActionFee(
+    _ action: TONTransactionTraceAction,
+    walletAddress: TONUserFriendlyAddress
+) throws -> Int64 {
+    return try previewFee(action.transactionsFull.filter { $0.account.raw == walletAddress.raw })
+}
+
+private func walletActionTransfer(
+    source: TONUserFriendlyAddress,
+    destination: TONUserFriendlyAddress,
+    walletAddress: TONUserFriendlyAddress
+) -> (direction: WalletContext.Transaction.Direction, counterparty: TONUserFriendlyAddress)? {
+    if destination.raw == walletAddress.raw {
+        return (.incoming, source)
+    } else if source.raw == walletAddress.raw {
+        return (.outgoing, destination)
+    } else {
+        return nil
+    }
+}
+
+private func walletActionAddressName(
+    _ address: TONUserFriendlyAddress,
+    addressBook: [String: TONAddressBookEntry]
+) -> String? {
+    if let domain = addressBook[address.value]?.domain?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !domain.isEmpty {
+        return domain
+    }
+    return nil
+}
+
+private func walletActionDisplayAddress(_ address: TONUserFriendlyAddress) -> String {
+    return canonicalNonBounceableTonAddress(address.value) ?? address.value
+}
+
+private func walletActionCollectible(
+    details: TONTransactionTraceActionNFTTransferDetails,
+    metadata: [String: TONAccountActionMetadata],
+    resolvedMetadata: [TONRawAddress: WalletCollectibleMetadata]
+) -> WalletContext.Transaction.CollectibleTransfer? {
+    guard let itemMetadata = walletActionMetadata(address: details.nftItem, metadata: metadata),
+          let itemInfo = itemMetadata.tokenInfo.first(where: { $0.type == "nft_items" }),
+          itemInfo.valid != false,
+          itemInfo.isScam != true,
+          itemInfo.isNsfw != true else {
+        return nil
+    }
+    let collectionInfo = details.nftCollection
+        .flatMap { walletActionMetadata(address: $0, metadata: metadata) }
+        .flatMap { $0.tokenInfo.first(where: { $0.type == "nft_collections" }) }
+    guard let kind = walletActionCollectibleKind(itemInfo: itemInfo, collectionInfo: collectionInfo) else {
+        return nil
+    }
+
+    let address = details.nftItem.value
+    let resolvedItemMetadata = resolvedMetadata[details.nftItem.raw]
+    let name: String
+    if let value = walletActionNonEmptyString(resolvedItemMetadata?.name) {
+        name = value
+    } else if let value = walletActionNonEmptyString(itemInfo.name) {
+        name = value
+    } else if let collectionName = walletActionNonEmptyString(collectionInfo?.name) {
+        name = collectionName
+    } else {
+        name = shortenedCollectibleAddress(address)
+    }
+
+    let rawImageUrl = resolvedItemMetadata?.imageUrl
+        ?? walletActionExtraString(itemInfo.extra, key: "_image_medium")
+        ?? walletActionExtraString(itemInfo.extra, key: "_image_small")
+        ?? itemInfo.image
+        ?? walletActionExtraString(itemInfo.extra, key: "_image_big")
+    let imageUrl = rawImageUrl.flatMap { normalizedCollectibleUrl($0, relativeTo: nil)?.absoluteString }
+    let lottieUrl = resolvedItemMetadata?.lottieUrl ?? walletActionLottieUrl(itemInfo)
+    let collectionName = walletActionNonEmptyString(collectionInfo?.name)
+        ?? walletActionNonEmptyString(resolvedItemMetadata?.collectionName)
+    let collectionUrl = normalizedFragmentCollectibleUrl(
+        walletActionExtraString(collectionInfo?.extra, key: "external_link")
+    ) ?? resolvedItemMetadata?.collectionUrl
+    return WalletContext.Transaction.CollectibleTransfer(
+        address: address,
+        name: name,
+        imageUrl: imageUrl,
+        lottieUrl: lottieUrl,
+        collectionName: collectionName,
+        collectionUrl: collectionUrl,
+        kind: kind
+    )
+}
+
+func walletActionCollectibleNeedsResolvedMetadata(
+    details: TONTransactionTraceActionNFTTransferDetails,
+    metadata: [String: TONAccountActionMetadata],
+    resolvedMetadata: WalletCollectibleMetadata? = nil
+) -> Bool {
+    guard let itemMetadata = walletActionMetadata(address: details.nftItem, metadata: metadata),
+          let itemInfo = itemMetadata.tokenInfo.first(where: { $0.type == "nft_items" }) else {
+        return true
+    }
+    let collectionInfo = details.nftCollection
+        .flatMap { walletActionMetadata(address: $0, metadata: metadata) }
+        .flatMap { $0.tokenInfo.first(where: { $0.type == "nft_collections" }) }
+    guard let kind = walletActionCollectibleKind(itemInfo: itemInfo, collectionInfo: collectionInfo) else {
+        return false
+    }
+
+    let name = walletActionNonEmptyString(resolvedMetadata?.name)
+        ?? walletActionNonEmptyString(itemInfo.name)
+    let imageUrl = resolvedMetadata?.imageUrl
+        ?? walletActionExtraString(itemInfo.extra, key: "_image_medium")
+        ?? walletActionExtraString(itemInfo.extra, key: "_image_small")
+        ?? walletActionNonEmptyString(itemInfo.image)
+        ?? walletActionExtraString(itemInfo.extra, key: "_image_big")
+    let collectionName = walletActionNonEmptyString(collectionInfo?.name)
+        ?? walletActionNonEmptyString(resolvedMetadata?.collectionName)
+    let collectionUrl = normalizedFragmentCollectibleUrl(
+        walletActionExtraString(collectionInfo?.extra, key: "external_link")
+    ) ?? resolvedMetadata?.collectionUrl
+    let lottieUrl = resolvedMetadata?.lottieUrl ?? walletActionLottieUrl(itemInfo)
+
+    return name == nil
+        || imageUrl == nil
+        || collectionName == nil
+        || collectionUrl == nil
+        || (kind == .gift && lottieUrl == nil)
+}
+
+private func walletActionCollectibleKind(
+    itemInfo: TONAccountActionTokenInfo,
+    collectionInfo: TONAccountActionTokenInfo?
+) -> WalletContext.Transaction.CollectibleTransfer.Kind? {
+    let descriptors = [
+        walletActionExtraString(itemInfo.extra, key: "uri"),
+        walletActionExtraString(collectionInfo?.extra, key: "uri"),
+        walletActionExtraString(itemInfo.extra, key: "external_link"),
+        walletActionExtraString(collectionInfo?.extra, key: "external_link"),
+        itemInfo.name,
+        collectionInfo?.name,
+        itemInfo.description,
+        collectionInfo?.description
+    ].compactMap { $0?.lowercased() }
+
+    if descriptors.contains(where: {
+        $0.contains("nft.fragment.com/gift/")
+            || $0.contains("fragment.com/gifts/")
+            || $0.contains("telegram gift")
+    }) {
+        return .gift
+    } else if descriptors.contains(where: {
+        $0.contains("nft.fragment.com/username/") || $0.contains("telegram username")
+    }) {
+        return .username
+    } else if descriptors.contains(where: {
+        $0.contains("nft.fragment.com/number/") || $0.contains("anonymous number")
+    }) {
+        return .anonymousNumber
+    } else {
+        return nil
+    }
+}
+
+private func walletActionMetadata(
+    address: TONUserFriendlyAddress,
+    metadata: [String: TONAccountActionMetadata]
+) -> TONAccountActionMetadata? {
+    if let result = metadata[address.value] {
+        return result
+    }
+    return metadata.first(where: { key, _ in
+        (try? TONUserFriendlyAddress(value: key).raw) == address.raw
+    })?.value
+}
+
+private func walletActionExtraString(_ extra: [String: AnyCodable]?, key: String) -> String? {
+    guard let extra else {
+        return nil
+    }
+    return walletActionNonEmptyString(decodedString(extra[key]))
+}
+
+private func walletActionLottieUrl(_ itemInfo: TONAccountActionTokenInfo) -> String? {
+    let value = walletActionNonEmptyString(itemInfo.lottie)
+        ?? walletActionExtraString(itemInfo.extra, key: "lottie")
+    return normalizedFragmentLottieUrl(value)
+}
+
+private func walletActionNonEmptyString(_ value: String?) -> String? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+        return nil
+    }
+    return value
+}
+
 private func walletUsdtTransfer(
     transaction: TONTransaction,
     usdtJettonWalletRawAddress: TONRawAddress?
@@ -309,12 +645,29 @@ func mergeTransactions(
     existing: [WalletContext.Transaction],
     new: [WalletContext.Transaction]
 ) -> [WalletContext.Transaction] {
+    var actionTransactionKeys = Set<String>()
+    actionTransactionKeys.reserveCapacity(existing.count + new.count)
+    for transaction in existing where transaction.transactionHash != nil {
+        actionTransactionKeys.insert(transactionBlockchainKey(transaction))
+    }
+    for transaction in new where transaction.transactionHash != nil {
+        actionTransactionKeys.insert(transactionBlockchainKey(transaction))
+    }
+
     var transactionsByKey: [String: WalletContext.Transaction] = [:]
     transactionsByKey.reserveCapacity(existing.count + new.count)
     for transaction in existing {
+        if transaction.transactionHash == nil,
+           actionTransactionKeys.contains(transactionBlockchainKey(transaction)) {
+            continue
+        }
         transactionsByKey[transactionKey(transaction)] = transaction
     }
     for transaction in new {
+        if transaction.transactionHash == nil,
+           actionTransactionKeys.contains(transactionBlockchainKey(transaction)) {
+            continue
+        }
         transactionsByKey[transactionKey(transaction)] = transaction
     }
     return transactionsByKey.values.sorted { lhs, rhs in
@@ -327,6 +680,10 @@ func mergeTransactions(
 
 func transactionKey(_ transaction: WalletContext.Transaction) -> String {
     return transactionHashKey(transaction.id)
+}
+
+func transactionBlockchainKey(_ transaction: WalletContext.Transaction) -> String {
+    return transactionHashKey(transaction.transactionHash ?? transaction.id)
 }
 
 func transactionHashKey(_ value: String) -> String {

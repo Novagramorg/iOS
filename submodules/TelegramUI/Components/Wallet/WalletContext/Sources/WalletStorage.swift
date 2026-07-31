@@ -14,9 +14,76 @@ extension WalletContext {
         let publicKey: String
     }
 
-    struct MetadataRecord: Codable {
+    struct MetadataRecord: Codable, Equatable {
         var schemaVersion: Int
         var pendingTransfers: [PendingTransfer]
+        var balance: Int64?
+        var balanceUpdatedAt: Int32?
+        var fiatRates: [FiatCurrency: FiatRate]?
+        var fiatRatesUpdatedAt: Int32?
+        var selectedFiatCurrency: FiatCurrency?
+        var transactions: [Transaction]?
+        var collectibles: [Collectible]?
+
+        init(
+            schemaVersion: Int,
+            pendingTransfers: [PendingTransfer],
+            balance: Int64? = nil,
+            balanceUpdatedAt: Int32? = nil,
+            fiatRates: [FiatCurrency: FiatRate]? = nil,
+            fiatRatesUpdatedAt: Int32? = nil,
+            selectedFiatCurrency: FiatCurrency? = nil,
+            transactions: [Transaction]? = nil,
+            collectibles: [Collectible]? = nil
+        ) {
+            self.schemaVersion = schemaVersion
+            self.pendingTransfers = pendingTransfers
+            self.balance = balance
+            self.balanceUpdatedAt = balanceUpdatedAt
+            self.fiatRates = fiatRates
+            self.fiatRatesUpdatedAt = fiatRatesUpdatedAt
+            self.selectedFiatCurrency = selectedFiatCurrency
+            self.transactions = transactions
+            self.collectibles = collectibles
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case schemaVersion
+            case pendingTransfers
+            case balance
+            case balanceUpdatedAt
+            case fiatRates
+            case fiatRatesUpdatedAt
+            case selectedFiatCurrency
+            case transactions
+            case collectibles
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            self.pendingTransfers = try container.decode([PendingTransfer].self, forKey: .pendingTransfers)
+            self.balance = try? container.decode(Int64.self, forKey: .balance)
+            self.balanceUpdatedAt = try? container.decode(Int32.self, forKey: .balanceUpdatedAt)
+            self.fiatRates = try? container.decode([FiatCurrency: FiatRate].self, forKey: .fiatRates)
+            self.fiatRatesUpdatedAt = try? container.decode(Int32.self, forKey: .fiatRatesUpdatedAt)
+            self.selectedFiatCurrency = try? container.decode(FiatCurrency.self, forKey: .selectedFiatCurrency)
+            self.transactions = try? container.decode([Transaction].self, forKey: .transactions)
+            self.collectibles = try? container.decode([Collectible].self, forKey: .collectibles)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(self.schemaVersion, forKey: .schemaVersion)
+            try container.encode(self.pendingTransfers, forKey: .pendingTransfers)
+            try container.encodeIfPresent(self.balance, forKey: .balance)
+            try container.encodeIfPresent(self.balanceUpdatedAt, forKey: .balanceUpdatedAt)
+            try container.encodeIfPresent(self.fiatRates, forKey: .fiatRates)
+            try container.encodeIfPresent(self.fiatRatesUpdatedAt, forKey: .fiatRatesUpdatedAt)
+            try container.encodeIfPresent(self.selectedFiatCurrency, forKey: .selectedFiatCurrency)
+            try container.encodeIfPresent(self.transactions, forKey: .transactions)
+            try container.encodeIfPresent(self.collectibles, forKey: .collectibles)
+        }
     }
 }
 

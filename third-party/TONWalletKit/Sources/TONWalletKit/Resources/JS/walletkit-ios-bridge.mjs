@@ -36379,6 +36379,7 @@ function emulationActionToTransactionTraceAction(action) {
 		traceEndUtime: action.traceEndUtime,
 		traceMcSeqnoEnd: action.traceMcSeqnoEnd,
 		transactions: action.transactions,
+		transactionsFull: action.transactionsFull ?? [],
 		isSuccess: action.isSuccess,
 		traceExternalHash: action.traceExternalHash,
 		accounts: action.accounts,
@@ -36397,6 +36398,14 @@ function domainActionDetailsToTransactionTraceActionDetails(type, details) {
 	else if (type === "ton_transfer") return {
 		type: "ton_transfer",
 		value: toTransactionTraceActionTONTransferDetails(details)
+	};
+	else if (type === "jetton_transfer") return {
+		type: "jetton_transfer",
+		value: toTransactionTraceActionJettonTransferDetails(details)
+	};
+	else if (type === "nft_transfer") return {
+		type: "nft_transfer",
+		value: toTransactionTraceActionNFTTransferDetails(details)
 	};
 	else return {
 		type: "unknown",
@@ -36452,6 +36461,27 @@ function toTransactionTraceActionTONTransferDetails(details) {
 		valueExtraCurrencies: details.value_extra_currencies,
 		comment: details.comment ?? void 0,
 		isEncrypted: details.encrypted
+	};
+}
+function toTransactionTraceActionJettonTransferDetails(details) {
+	return {
+		asset: asMaybeAddressFriendly(details.asset) ?? void 0,
+		sender: asMaybeAddressFriendly(details.sender) ?? void 0,
+		receiver: asMaybeAddressFriendly(details.receiver) ?? void 0,
+		senderJettonWallet: asMaybeAddressFriendly(details.sender_jetton_wallet) ?? void 0,
+		receiverJettonWallet: asMaybeAddressFriendly(details.receiver_jetton_wallet) ?? void 0,
+		amount: details.amount,
+		comment: details.comment ?? void 0
+	};
+}
+function toTransactionTraceActionNFTTransferDetails(details) {
+	return {
+		nftCollection: asMaybeAddressFriendly(details.nft_collection) ?? void 0,
+		nftItem: asAddressFriendly(details.nft_item),
+		nftItemIndex: details.nft_item_index ?? void 0,
+		newOwner: asMaybeAddressFriendly(details.new_owner) ?? void 0,
+		oldOwner: asMaybeAddressFriendly(details.old_owner) ?? void 0,
+		isPurchase: details.is_purchase === true
 	};
 }
 var init_map_emulation_trace = __esmMin((() => {
@@ -41655,11 +41685,53 @@ function mapAction(action) {
 		traceEndUtime: action.trace_end_utime,
 		traceMcSeqnoEnd: action.trace_mc_seqno_end,
 		transactions: action.transactions.map(Base64ToHex),
+		transactionsFull: (action.transactions_full ?? []).map(mapTransaction$1),
 		isSuccess: action.success,
 		type: action.type,
 		traceExternalHash: Base64ToHex(action.trace_external_hash),
 		accounts: action.accounts.map(asMaybeAddressFriendly).filter((a) => a !== null),
 		details: action.details
+	};
+}
+function mapAccountActionsResponse(raw) {
+	const addressBook = {};
+	for (const [rawAddress, entry] of Object.entries(raw.address_book ?? {})) {
+		const address = asMaybeAddressFriendly(entry.user_friendly ?? rawAddress);
+		if (!address) continue;
+		addressBook[address] = {
+			address,
+			domain: entry.domain ?? void 0,
+			interfaces: entry.interfaces ?? []
+		};
+	}
+	const metadata = {};
+	for (const [rawAddress, entry] of Object.entries(raw.metadata ?? {})) {
+		const address = asMaybeAddressFriendly(rawAddress);
+		if (!address) continue;
+		metadata[address] = {
+			isIndexed: entry.is_indexed ?? void 0,
+			tokenInfo: (entry.token_info ?? []).map((info) => ({
+				type: info.type,
+				name: info.name ?? void 0,
+				description: info.description ?? void 0,
+				image: info.image ?? void 0,
+				symbol: info.symbol ?? void 0,
+				nftIndex: info.nft_index ?? void 0,
+				valid: info.valid ?? void 0,
+				isScam: info.is_scam ?? void 0,
+				isNsfw: info.is_nsfw ?? void 0,
+				extra: info.extra ?? {}
+			}))
+		};
+	}
+	return {
+		actions: (raw.actions ?? []).map((action) => {
+			const mappedAction = mapAction(action);
+			mappedAction.transactionsFull = (action.transactions_full ?? []).map(toTransaction);
+			return emulationActionToTransactionTraceAction(mappedAction);
+		}),
+		addressBook,
+		metadata
 	};
 }
 function mapToncenterEmulationResponse(raw) {
@@ -41921,6 +41993,26 @@ var init_ApiClientToncenter = __esmMin((() => {
 				limit,
 				offset
 			}));
+		}
+		async getAccountActions(request) {
+			const account = prepareAddress(request.address);
+			let offset = request.offset ?? 0;
+			let limit = request.limit ?? 10;
+			if (limit > 1e3) limit = 1e3;
+			else if (limit < 1) limit = 1;
+			if (offset < 0) offset = 0;
+			const raw = await this.fetch(this.buildUrl("/api/v3/actions", {
+				account,
+				limit,
+				offset,
+				sort: "desc",
+				include_accounts: true,
+				include_transactions: true
+			}), {
+				method: "GET",
+				headers: { "X-Actions-Version": "v1" }
+			});
+			return mapAccountActionsResponse(raw);
 		}
 		async getNftTransfers(request) {
 			const ownerAddresses = request.ownerAddresses?.map(prepareAddress);
@@ -50821,6 +50913,9 @@ var init_SwiftAPIClientAdapter = __esmMin((() => {
 		async getAccountTransactions(_request) {
 			return this.swiftApiClient.getAccountTransactions(_request);
 		}
+		async getAccountActions(_request) {
+			return this.swiftApiClient.getAccountActions(_request);
+		}
 		async getTransactionsByHash(_request) {
 			throw new Error("getTransactionsByHash is not implemented yet");
 		}
@@ -51199,10 +51294,10 @@ var init_main = __esmMin((() => {
 					throw error;
 				}
 			},
-			async rejectConnectRequest(event, reason) {
+			async rejectConnectRequest(event, reason, errorCode) {
 				if (!initialized) throw new Error("WalletKit Bridge not initialized");
 				try {
-					const result = await walletKit.rejectConnectRequest(event, reason);
+					const result = await walletKit.rejectConnectRequest(event, reason, errorCode);
 					return result;
 				} catch (error) {
 					console.error("❌ Failed to reject connect request:", error);

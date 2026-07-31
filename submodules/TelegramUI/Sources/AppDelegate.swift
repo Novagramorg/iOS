@@ -2687,19 +2687,33 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 generation: generation,
                 push: false,
                 makeController: { context in
+                    //TODO:localize
+                    let applicationName = "Fragment"
+                    //TODO:localize
+                    let permissionTitle = "Wallet Address"
+                    //TODO:localize
+                    let permissionText = "View your wallet address."
                     return context.sharedContext.makeWalletConnectScreen(
                         context: context,
                         walletContext: walletContext,
-                        application: WalletConnectApplication(
-                            name: "Fragment",
+                        request: WalletContext.TonConnectRequest(
+                            id: "debug",
+                            applicationName: applicationName,
                             domain: "fragment.com",
-                            iconName: "Wallet/FragmentMock",
-                            iconBackgroundColor: UIColor(rgb: 0x1a2026),
-                            isVerified: true
+                            iconUrl: nil,
+                            permissions: [
+                                WalletContext.TonConnectPermission(
+                                    name: "ton_addr",
+                                    title: permissionTitle,
+                                    text: permissionText
+                                )
+                            ],
+                            requestsProof: true
                         ),
                         cancelled: {
                         },
-                        connected: {
+                        connect: { completion in
+                            completion(.success(Void()))
                         }
                     )
                 }
@@ -3018,7 +3032,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             if let authContext = authContext, let confirmationCode = parseConfirmationCodeUrl(sharedContext: sharedContext, url: url) {
                 authContext.rootController.applyConfirmationCode(confirmationCode)
             } else if let context = context {
-                if url.scheme?.lowercased() == "ton" {
+                if WalletContext.isTonConnectUrl(url.absoluteString) {
+                    context.context.walletContext?.processTonConnectUrl(url.absoluteString)
+                } else if url.scheme?.lowercased() == "ton" {
                     if isTonTransferUrl(url), let walletContext = context.context.walletContext {
                         context.rootController.pushViewController(WalletSendScreen(
                             context: context.context,
@@ -3343,7 +3359,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         self.openUrlWhenReadyDisposable.set((signal
         |> deliverOnMainQueue).start(next: { [weak self] context in
-            if url.scheme?.lowercased() == "ton" {
+            if WalletContext.isTonConnectUrl(url.absoluteString) {
+                context.context.walletContext?.processTonConnectUrl(url.absoluteString)
+            } else if url.scheme?.lowercased() == "ton" {
                 if isTonTransferUrl(url), let walletContext = context.context.walletContext {
                     context.rootController.pushViewController(WalletSendScreen(
                         context: context.context,

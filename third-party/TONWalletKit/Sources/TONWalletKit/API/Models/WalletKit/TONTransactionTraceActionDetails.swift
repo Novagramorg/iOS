@@ -32,6 +32,8 @@ public enum TONTransactionTraceActionDetails: Codable {
     case jettonSwap(TONTransactionTraceActionJettonSwapDetails)
     case callContract(TONTransactionTraceActionCallContractDetails)
     case tonTransfer(TONTransactionTraceActionTONTransferDetails)
+    case jettonTransfer(TONTransactionTraceActionJettonTransferDetails)
+    case nftTransfer(TONTransactionTraceActionNFTTransferDetails)
     case unknown([String: AnyCodable])
 
     public init(from decoder: any Decoder) throws {
@@ -48,6 +50,12 @@ public enum TONTransactionTraceActionDetails: Codable {
         case "ton_transfer":
             let value = try container.decode(TONTransactionTraceActionTONTransferDetails.self, forKey: .value)
             self = .tonTransfer(value)
+        case "jetton_transfer":
+            let value = try container.decode(TONTransactionTraceActionJettonTransferDetails.self, forKey: .value)
+            self = .jettonTransfer(value)
+        case "nft_transfer":
+            let value = try container.decode(TONTransactionTraceActionNFTTransferDetails.self, forKey: .value)
+            self = .nftTransfer(value)
         case "unknown":
             let value = try container.decode([String: AnyCodable].self, forKey: .value)
             self = .unknown(value)
@@ -73,6 +81,12 @@ public enum TONTransactionTraceActionDetails: Codable {
         case .tonTransfer(let value):
             try container.encode("ton_transfer", forKey: .type)
             try container.encode(value, forKey: .value)
+        case .jettonTransfer(let value):
+            try container.encode("jetton_transfer", forKey: .type)
+            try container.encode(value, forKey: .value)
+        case .nftTransfer(let value):
+            try container.encode("nft_transfer", forKey: .type)
+            try container.encode(value, forKey: .value)
         case .unknown(let value):
             try container.encode("unknown", forKey: .type)
             try container.encode(value, forKey: .value)
@@ -87,4 +101,3 @@ public enum TONTransactionTraceActionDetails: Codable {
 
 
 extension TONTransactionTraceActionDetails: JSValueCodable {}
-

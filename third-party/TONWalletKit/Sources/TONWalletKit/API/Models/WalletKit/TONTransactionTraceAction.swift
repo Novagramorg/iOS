@@ -48,6 +48,8 @@ public struct TONTransactionTraceAction: Codable {
     public var traceMcSeqnoEnd: Double?
     /** List of transaction hashes involved in this action */
     public var transactions: [TONHex]
+    /** Full transaction data requested together with the action. */
+    public var transactionsFull: [TONTransaction]
     /** Indicates if the action was successful */
     public var isSuccess: Bool?
     public var traceExternalHash: TONHex?
@@ -55,7 +57,7 @@ public struct TONTransactionTraceAction: Codable {
     public var accounts: [TONUserFriendlyAddress]
     public var details: TONTransactionTraceActionDetails
 
-    public init(traceId: String? = nil, actionId: String? = nil, startLt: String? = nil, endLt: String? = nil, startUtime: Double? = nil, endUtime: Int? = nil, traceEndLt: String? = nil, traceEndUtime: Int? = nil, traceMcSeqnoEnd: Double? = nil, transactions: [TONHex], isSuccess: Bool? = nil, traceExternalHash: TONHex? = nil, accounts: [TONUserFriendlyAddress], details: TONTransactionTraceActionDetails) {
+    public init(traceId: String? = nil, actionId: String? = nil, startLt: String? = nil, endLt: String? = nil, startUtime: Double? = nil, endUtime: Int? = nil, traceEndLt: String? = nil, traceEndUtime: Int? = nil, traceMcSeqnoEnd: Double? = nil, transactions: [TONHex], transactionsFull: [TONTransaction] = [], isSuccess: Bool? = nil, traceExternalHash: TONHex? = nil, accounts: [TONUserFriendlyAddress], details: TONTransactionTraceActionDetails) {
         self.traceId = traceId
         self.actionId = actionId
         self.startLt = startLt
@@ -66,6 +68,7 @@ public struct TONTransactionTraceAction: Codable {
         self.traceEndUtime = traceEndUtime
         self.traceMcSeqnoEnd = traceMcSeqnoEnd
         self.transactions = transactions
+        self.transactionsFull = transactionsFull
         self.isSuccess = isSuccess
         self.traceExternalHash = traceExternalHash
         self.accounts = accounts
@@ -83,6 +86,7 @@ public struct TONTransactionTraceAction: Codable {
         case traceEndUtime
         case traceMcSeqnoEnd
         case transactions
+        case transactionsFull
         case isSuccess
         case traceExternalHash
         case accounts
@@ -103,6 +107,7 @@ public struct TONTransactionTraceAction: Codable {
         try container.encodeIfPresent(traceEndUtime, forKey: .traceEndUtime)
         try container.encodeIfPresent(traceMcSeqnoEnd, forKey: .traceMcSeqnoEnd)
         try container.encode(transactions, forKey: .transactions)
+        try container.encode(transactionsFull, forKey: .transactionsFull)
         try container.encodeIfPresent(isSuccess, forKey: .isSuccess)
         try container.encodeIfPresent(traceExternalHash, forKey: .traceExternalHash)
         try container.encode(accounts, forKey: .accounts)
@@ -114,4 +119,3 @@ public struct TONTransactionTraceAction: Codable {
 
 
 extension TONTransactionTraceAction: JSValueCodable {}
-

@@ -99,6 +99,20 @@ final class JSTONAPIClient: TONAPIClient {
         )
     }
 
+    func accountActions(
+        address: TONUserFriendlyAddress,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> TONAccountActionsResponse {
+        try await jsClient.getAccountActions(
+            TONAccountActionsRequest(
+                address: address,
+                limit: limit,
+                offset: offset
+            )
+        )
+    }
+
     func balance(address: TONUserFriendlyAddress, seqno: UInt?) async throws -> TONTokenAmount {
         try await jsClient.getBalance(address.value, seqno)
     }

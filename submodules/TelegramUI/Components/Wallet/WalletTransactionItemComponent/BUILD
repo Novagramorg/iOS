@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/ActivityIndicator",
         "//submodules/Display",
         "//submodules/AccountContext",
         "//submodules/ComponentFlow",
@@ -19,6 +20,7 @@ swift_library(
         "//submodules/TelegramStringFormatting",
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/Stars/StarsAvatarComponent",
+        "//submodules/TelegramUI/Components/Wallet/WalletCollectibleImageComponent",
         "//submodules/TelegramUI/Components/Wallet/WalletContext",
     ],
     visibility = [

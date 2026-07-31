@@ -932,6 +932,8 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
     for section in Section.allCases {
         items[section] = []
     }
+
+    let welcomeMessagesLabel: PeerInfoScreenDisclosureItem.Label = .text(data?.firstWelcomeMessageText ?? presentationData.strings.WelcomeMessages_Off)
     
     if let data = data {
         if case let .user(user) = data.peer {
@@ -1131,6 +1133,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 let ItemAddToCommunityInfo = 17
                 let ItemCommunity = 18
                 let ItemRemoveFromCommunity = 19
+                let ItemWelcomeMessages = 20
                 
                 let isCreator = channel.flags.contains(.isCreator)
                 
@@ -1207,6 +1210,12 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                     }))
                 }
                 
+                if channel.hasPermission(.changeInfo) {
+                    items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
+                        interaction.editingOpenWelcomeMessages()
+                    }))
+                }
+
                 if isCreator || (channel.adminRights?.rights.contains(.canChangeInfo) == true) {
                     var colors: [PeerNameColors.Colors] = []
                     if let nameColor = channel.nameColor.flatMap({ context.peerNameColors.get($0, dark: presentationData.theme.overallDarkAppearance) }) {
@@ -1526,7 +1535,11 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                         }
                     }
                     
-                    if isCreator || channel.adminRights?.rights.contains(.canChangeInfo) == true {
+                    if channel.hasPermission(.changeInfo) {
+                        items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
+                            interaction.editingOpenWelcomeMessages()
+                        }))
+
                         var colors: [PeerNameColors.Colors] = []
                         if let nameColor = channel.nameColor.flatMap({ context.peerNameColors.get($0, dark: presentationData.theme.overallDarkAppearance) }) {
                             colors.append(nameColor)
@@ -1546,13 +1559,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                             interaction.editingOpenNameColorSetup()
                         }))
                     }
-                    
-                    if channel.hasPermission(.changeInfo) {
-                        items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: .none, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
-                            interaction.editingOpenWelcomeMessages()
-                        }))
-                    }
-                    
+
                     if (isCreator || (channel.adminRights != nil && channel.hasPermission(.banMembers))) && cachedData.peerGeoLocation == nil, !isPublic, case .known(nil) = cachedData.linkedDiscussionPeerId, !channel.isForumOrMonoForum {
                         items[.peerPublicSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemPreHistory, label: .text(cachedData.flags.contains(.preHistoryEnabled) ? presentationData.strings.GroupInfo_GroupHistoryVisible : presentationData.strings.GroupInfo_GroupHistoryHidden), text: presentationData.strings.GroupInfo_GroupHistoryShort, icon: PresentationResourcesSettings.chatHistory, action: {
                             interaction.editingOpenPreHistorySetup()
@@ -1804,7 +1811,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
             }
 
             if canChangeInfo {
-                items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: .none, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
+                items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
                     interaction.editingOpenWelcomeMessages()
                 }))
             }

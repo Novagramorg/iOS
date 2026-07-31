@@ -67,6 +67,9 @@ import JavaScriptCore
     @objc(getAccountTransactions:)
     func getAccountTransactions(request: JSValue) -> JSValue
 
+    @objc(getAccountActions:)
+    func getAccountActions(request: JSValue) -> JSValue
+
     @objc(getBalance::)
     func getBalance(address: JSValue, seqno: JSValue) -> JSValue
 

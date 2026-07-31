@@ -62,6 +62,12 @@ public protocol TONAPIClient: AnyObject {
         offset: Int?
     ) async throws -> TONTransactionsResponse
 
+    func accountActions(
+        address: TONUserFriendlyAddress,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> TONAccountActionsResponse
+
     func balance(
         address: TONUserFriendlyAddress,
         seqno: UInt?
@@ -83,6 +89,14 @@ public extension TONAPIClient {
     ) async throws -> TONTransactionsResponse {
         throw TONWalletKitError.unsupportedAPIClientOperation("accountTransactions")
     }
+
+    func accountActions(
+        address: TONUserFriendlyAddress,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> TONAccountActionsResponse {
+        throw TONWalletKitError.unsupportedAPIClientOperation("accountActions")
+    }
 }
 
 struct TONAccountTransactionsRequest: Codable {
@@ -92,3 +106,11 @@ struct TONAccountTransactionsRequest: Codable {
 }
 
 extension TONAccountTransactionsRequest: JSValueCodable {}
+
+struct TONAccountActionsRequest: Codable {
+    let address: TONUserFriendlyAddress
+    let limit: Int?
+    let offset: Int?
+}
+
+extension TONAccountActionsRequest: JSValueCodable {}

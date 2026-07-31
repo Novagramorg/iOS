@@ -7,9 +7,22 @@ import TONWalletKit
 private let walletApiKey = "84f56a3a13a49c973bba18b3b69e5589c0a87c5227631629941155ef6ab0b555"
 private let walletFiatRatesUrl = "https://api.mywallet.io/currency-rates"
 private let walletFiatRatesRefreshInterval: TimeInterval = 15.0 * 60.0
+private let walletMetadataCachedItemLimit = 10
+
+private final class WalletTonConnectEventsHandler: TONBridgeEventsHandler {
+    private let handleEvent: (TONWalletKitEvent) -> Void
+
+    init(handleEvent: @escaping (TONWalletKitEvent) -> Void) {
+        self.handleEvent = handleEvent
+    }
+
+    func handle(event: TONWalletKitEvent) throws {
+        self.handleEvent(event)
+    }
+}
 
 public final class WalletContext {
-    public enum FiatCurrency: String, CaseIterable, Hashable {
+    public enum FiatCurrency: String, CaseIterable, Codable, Hashable {
         case usd = "USD"
         case eur = "EUR"
         case rub = "RUB"
@@ -29,7 +42,7 @@ public final class WalletContext {
         }
     }
 
-    public struct FiatRate: Equatable {
+    public struct FiatRate: Codable, Equatable {
         public let unitsPerUsd: Double
         public let unitsPerGram: Double
 
@@ -71,6 +84,78 @@ public final class WalletContext {
             self.publicKey = publicKey
             self.version = version
         }
+    }
+
+    public struct TonConnectPermission: Equatable {
+        public let name: String
+        public let title: String?
+        public let text: String?
+
+        public init(name: String, title: String?, text: String?) {
+            self.name = name
+            self.title = title
+            self.text = text
+        }
+    }
+
+    public struct TonConnectRequest: Equatable {
+        public let id: String
+        public let applicationName: String
+        public let domain: String
+        public let iconUrl: String?
+        public let permissions: [TonConnectPermission]
+        public let requestsProof: Bool
+
+        public init(
+            id: String,
+            applicationName: String,
+            domain: String,
+            iconUrl: String?,
+            permissions: [TonConnectPermission],
+            requestsProof: Bool
+        ) {
+            self.id = id
+            self.applicationName = applicationName
+            self.domain = domain
+            self.iconUrl = iconUrl
+            self.permissions = permissions
+            self.requestsProof = requestsProof
+        }
+    }
+
+    public struct TonConnectTransferRequest: Equatable {
+        public let id: String
+        public let applicationName: String
+        public let domain: String
+        public let iconUrl: String?
+        public let recipient: String
+        public let amount: Int64
+        public let fee: Int64
+
+        public init(
+            id: String,
+            applicationName: String,
+            domain: String,
+            iconUrl: String?,
+            recipient: String,
+            amount: Int64,
+            fee: Int64
+        ) {
+            self.id = id
+            self.applicationName = applicationName
+            self.domain = domain
+            self.iconUrl = iconUrl
+            self.recipient = recipient
+            self.amount = amount
+            self.fee = fee
+        }
+    }
+
+    public enum TonConnectPresentation {
+        case request(TonConnectRequest)
+        case transfer(TonConnectTransferRequest)
+        case dismiss(requestId: String)
+        case error(String)
     }
 
     public enum FatalStorageError: Error, Equatable {
@@ -131,48 +216,168 @@ public final class WalletContext {
         }
     }
 
-    public struct Transaction: Equatable {
-        public enum Direction: Equatable {
+    public struct Transaction: Codable, Equatable {
+        public enum Direction: String, Codable, Equatable {
             case incoming
             case outgoing
             case unknown
         }
 
-        public enum Currency: Equatable {
+        public enum Currency: String, Codable, Equatable {
             case ton
             case usdt
         }
 
+        public enum Status: String, Codable, Equatable {
+            case completed
+            case pending
+        }
+
+        public struct CollectibleTransfer: Codable, Equatable {
+            public enum Kind: String, Codable, Equatable {
+                case gift
+                case username
+                case anonymousNumber
+            }
+
+            public let address: String
+            public let name: String
+            public let imageUrl: String?
+            public let lottieUrl: String?
+            public let collectionName: String?
+            public let collectionUrl: String?
+            public let kind: Kind
+
+            public init(
+                address: String,
+                name: String,
+                imageUrl: String?,
+                lottieUrl: String? = nil,
+                collectionName: String? = nil,
+                collectionUrl: String? = nil,
+                kind: Kind
+            ) {
+                self.address = address
+                self.name = name
+                self.imageUrl = imageUrl
+                self.lottieUrl = lottieUrl
+                self.collectionName = collectionName
+                self.collectionUrl = collectionUrl
+                self.kind = kind
+            }
+        }
+
         public let id: String
+        public let transactionHash: String?
         public let logicalTime: String
         public let timestamp: Int32
         public let direction: Direction
         public let amount: Int64
         public let fee: Int64
         public let counterparty: String?
+        public let counterpartyName: String?
         public let comment: String?
         public let currency: Currency
+        public let collectible: CollectibleTransfer?
+        public let status: Status
 
         public init(
             id: String,
+            transactionHash: String? = nil,
             logicalTime: String,
             timestamp: Int32,
             direction: Direction,
             amount: Int64,
             fee: Int64,
             counterparty: String?,
+            counterpartyName: String? = nil,
             comment: String?,
-            currency: Currency = .ton
+            currency: Currency = .ton,
+            collectible: CollectibleTransfer? = nil,
+            status: Status = .completed
         ) {
             self.id = id
+            self.transactionHash = transactionHash
             self.logicalTime = logicalTime
             self.timestamp = timestamp
             self.direction = direction
             self.amount = amount
             self.fee = fee
             self.counterparty = counterparty
+            self.counterpartyName = counterpartyName
             self.comment = comment
             self.currency = currency
+            self.collectible = collectible
+            self.status = status
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case transactionHash
+            case logicalTime
+            case timestamp
+            case direction
+            case amount
+            case fee
+            case counterparty
+            case counterpartyName
+            case comment
+            case currency
+            case collectible
+            case status
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = try container.decode(String.self, forKey: .id)
+            self.transactionHash = try container.decodeIfPresent(String.self, forKey: .transactionHash)
+            self.logicalTime = try container.decode(String.self, forKey: .logicalTime)
+            self.timestamp = try container.decode(Int32.self, forKey: .timestamp)
+            self.direction = try container.decode(Direction.self, forKey: .direction)
+            self.amount = try container.decode(Int64.self, forKey: .amount)
+            self.fee = try container.decode(Int64.self, forKey: .fee)
+            self.counterparty = try container.decodeIfPresent(String.self, forKey: .counterparty)
+            self.counterpartyName = try container.decodeIfPresent(String.self, forKey: .counterpartyName)
+            self.comment = try container.decodeIfPresent(String.self, forKey: .comment)
+            self.currency = try container.decodeIfPresent(Currency.self, forKey: .currency) ?? .ton
+            self.collectible = try container.decodeIfPresent(CollectibleTransfer.self, forKey: .collectible)
+            self.status = try container.decodeIfPresent(Status.self, forKey: .status) ?? .completed
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(self.id, forKey: .id)
+            try container.encodeIfPresent(self.transactionHash, forKey: .transactionHash)
+            try container.encode(self.logicalTime, forKey: .logicalTime)
+            try container.encode(self.timestamp, forKey: .timestamp)
+            try container.encode(self.direction, forKey: .direction)
+            try container.encode(self.amount, forKey: .amount)
+            try container.encode(self.fee, forKey: .fee)
+            try container.encodeIfPresent(self.counterparty, forKey: .counterparty)
+            try container.encodeIfPresent(self.counterpartyName, forKey: .counterpartyName)
+            try container.encodeIfPresent(self.comment, forKey: .comment)
+            try container.encode(self.currency, forKey: .currency)
+            try container.encodeIfPresent(self.collectible, forKey: .collectible)
+            try container.encode(self.status, forKey: .status)
+        }
+
+        public var isVisibleInWalletHistory: Bool {
+            if self.collectible != nil {
+                return self.direction != .unknown
+            }
+            switch self.direction {
+            case .incoming:
+                switch self.currency {
+                case .ton:
+                    return self.amount >= 10_000_000
+                case .usdt:
+                    return true
+                }
+            case .outgoing:
+                return true
+            case .unknown:
+                return false
+            }
         }
     }
 
@@ -198,16 +403,52 @@ public final class WalletContext {
         }
     }
 
-    public struct Collectible: Equatable {
+    public struct Collectible: Codable, Equatable {
+        public enum Kind: String, Codable, Equatable {
+            case gift
+            case username
+            case anonymousNumber
+            case other
+        }
+
         public let address: String
         public let name: String
         public let imageUrl: String?
+        public let subtitle: String
+        public let kind: Kind
+        public let description: String?
+        public let lottieUrl: String?
+        public let collectionName: String?
+        public let collectionUrl: String?
+        public let attributes: [String: String]
+        public let giftSlug: String?
         public let receivedAt: Int32?
 
-        public init(address: String, name: String, imageUrl: String?, receivedAt: Int32? = nil) {
+        public init(
+            address: String,
+            name: String,
+            imageUrl: String?,
+            subtitle: String = "NFT",
+            kind: Kind = .other,
+            description: String? = nil,
+            lottieUrl: String? = nil,
+            collectionName: String? = nil,
+            collectionUrl: String? = nil,
+            attributes: [String: String] = [:],
+            giftSlug: String? = nil,
+            receivedAt: Int32? = nil
+        ) {
             self.address = address
             self.name = name
             self.imageUrl = imageUrl
+            self.subtitle = subtitle
+            self.kind = kind
+            self.description = description
+            self.lottieUrl = lottieUrl
+            self.collectionName = collectionName
+            self.collectionUrl = collectionUrl
+            self.attributes = attributes
+            self.giftSlug = giftSlug
             self.receivedAt = receivedAt
         }
     }
@@ -426,10 +667,212 @@ public final class WalletContext {
         return self.currentState
     }
 
+    public var tonConnectPresentations: Signal<TonConnectPresentation, NoError> {
+        return self.tonConnectPresentationPipe.signal()
+    }
+
+    public static func isTonConnectUrl(_ value: String) -> Bool {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "tg" || scheme == "tc" else {
+            return false
+        }
+        var parameters: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            if let value = item.value, !value.isEmpty {
+                parameters[item.name] = value
+            }
+        }
+        return parameters["v"] == "2"
+            && parameters["id"]?.isEmpty == false
+            && parameters["r"]?.isEmpty == false
+    }
+
+    public func processTonConnectUrl(_ value: String) {
+        guard Self.isTonConnectUrl(value) else {
+            return
+        }
+        self.withMainQueue { [weak self] in
+            guard let self, self.secretRecord != nil else {
+                return
+            }
+            if !self.pendingTonConnectUrls.contains(value) {
+                self.pendingTonConnectUrls.append(value)
+            }
+            self.evaluateRuntimeDemand()
+            self.processPendingTonConnectUrlIfPossible()
+        }
+    }
+
+    public func approveTonConnectRequest(id: String) -> Signal<Void, WalletError> {
+        return Signal { [weak self] subscriber in
+            guard let self else {
+                subscriber.putError(.unavailable)
+                return EmptyDisposable
+            }
+            let cancellation = WalletOperationCancellation()
+            self.withMainQueue { [weak self] in
+                guard let self,
+                      self.canUseNetworkRuntime,
+                      let pending = self.pendingTonConnectRequests.first,
+                      pending.id == id,
+                      case let .connection(_, request) = pending,
+                      let wallet = self.wallet,
+                      !self.approvingTonConnectRequestIds.contains(id) else {
+                    subscriber.putError(.unavailable)
+                    return
+                }
+
+                self.approvingTonConnectRequestIds.insert(id)
+                let generation = self.lifecycleGeneration
+                let task = Task { @MainActor [weak self] in
+                    guard let self else {
+                        subscriber.putError(.unavailable)
+                        return
+                    }
+                    do {
+                        let embeddedEvent = try await request.approve(wallet: wallet)
+                        try Task.checkCancellation()
+                        guard self.canUseNetworkRuntime,
+                              self.lifecycleGeneration == generation,
+                              self.pendingTonConnectRequests.first?.id == id else {
+                            throw WalletError.unavailable
+                        }
+                        self.approvingTonConnectRequestIds.remove(id)
+                        self.completeTonConnectRequest(id: id)
+                        if let embeddedEvent {
+                            self.rejectUnsupportedTonConnectEvent(embeddedEvent)
+                        }
+                        subscriber.putNext(Void())
+                        subscriber.putCompletion()
+                    } catch is CancellationError {
+                        self.approvingTonConnectRequestIds.remove(id)
+                        subscriber.putError(.unavailable)
+                    } catch {
+                        self.approvingTonConnectRequestIds.remove(id)
+                        subscriber.putError(walletError(error))
+                    }
+                }
+                cancellation.setTask(task)
+            }
+            return ActionDisposable {
+                cancellation.cancel()
+            }
+        }
+    }
+
+    public func approveTonConnectTransfer(id: String) -> Signal<Void, WalletError> {
+        return Signal { [weak self] subscriber in
+            guard let self else {
+                subscriber.putError(.unavailable)
+                return EmptyDisposable
+            }
+            let cancellation = WalletOperationCancellation()
+            self.withMainQueue { [weak self] in
+                guard let self,
+                      self.canUseNetworkRuntime,
+                      let pending = self.pendingTonConnectRequests.first,
+                      pending.id == id,
+                      case let .transfer(_, request) = pending,
+                      self.wallet != nil,
+                      !self.approvingTonConnectRequestIds.contains(id) else {
+                    subscriber.putError(.unavailable)
+                    return
+                }
+
+                self.approvingTonConnectRequestIds.insert(id)
+                let generation = self.lifecycleGeneration
+                let task = Task { @MainActor [weak self] in
+                    guard let self else {
+                        subscriber.putError(.unavailable)
+                        return
+                    }
+                    do {
+                        _ = try await request.approve()
+                        try Task.checkCancellation()
+                        guard self.canUseNetworkRuntime,
+                              self.lifecycleGeneration == generation,
+                              self.pendingTonConnectRequests.first?.id == id else {
+                            throw WalletError.unavailable
+                        }
+                        self.approvingTonConnectRequestIds.remove(id)
+                        self.completeTonConnectRequest(id: id)
+                        self.synchronizationRequested = true
+                        self.requestSynchronization()
+                        subscriber.putNext(Void())
+                        subscriber.putCompletion()
+                    } catch is CancellationError {
+                        self.approvingTonConnectRequestIds.remove(id)
+                        subscriber.putError(.unavailable)
+                    } catch {
+                        self.approvingTonConnectRequestIds.remove(id)
+                        subscriber.putError(walletError(error))
+                    }
+                }
+                cancellation.setTask(task)
+            }
+            return ActionDisposable {
+                cancellation.cancel()
+            }
+        }
+    }
+
+    public func rejectTonConnectRequest(id: String) -> Signal<Void, NoError> {
+        return Signal { [weak self] subscriber in
+            guard let self else {
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            self.withMainQueue { [weak self] in
+                guard let self,
+                      let index = self.pendingTonConnectRequests.firstIndex(where: { $0.id == id }) else {
+                    subscriber.putNext(Void())
+                    subscriber.putCompletion()
+                    return
+                }
+                let pending = self.pendingTonConnectRequests.remove(at: index)
+                self.approvingTonConnectRequestIds.remove(id)
+                if index == 0 {
+                    self.presentNextTonConnectRequestIfNeeded()
+                }
+                Task { @MainActor [weak self] in
+                    do {
+                        switch pending {
+                        case let .connection(_, request):
+                            try await request.reject(reason: "User rejected connection")
+                        case let .transfer(_, request):
+                            try await request.reject(reason: "User rejected transaction")
+                        }
+                    } catch {
+                        self?.log("ton_connect_reject_failed error=\(String(describing: type(of: error)))")
+                    }
+                    subscriber.putNext(Void())
+                    subscriber.putCompletion()
+                }
+            }
+            return EmptyDisposable
+        }
+    }
+
     private struct PreparedTransferRecord {
         let walletAddress: String
         let transfer: PreparedTransfer
         let request: TONTransactionRequest
+    }
+
+    private enum PendingTonConnectRequest {
+        case connection(model: TonConnectRequest, request: TONWalletConnectionRequest)
+        case transfer(model: TonConnectTransferRequest, request: TONWalletSendTransactionRequest)
+
+        var id: String {
+            switch self {
+            case let .connection(model, _):
+                return model.id
+            case let .transfer(model, _):
+                return model.id
+            }
+        }
     }
 
     private struct StreamTransactionOverlay {
@@ -444,13 +887,20 @@ public final class WalletContext {
     private let log: (String) -> Void
     private let toncenterProxy: WalletToncenterProxy
     private let vault: WalletKeychainVault
+    private let tonConnectStorage: WalletTonConnectStorage
     private let statePromise: ValuePromise<State>
+    private let tonConnectPresentationPipe = ValuePipe<TonConnectPresentation>()
     private var currentState: State
     private var secretRecord: SecretRecord?
     private var metadataRecord: MetadataRecord?
 
     private var kit: TONWalletKit?
     private var wallet: (any TONWalletProtocol)?
+    private var tonConnectEventsHandler: WalletTonConnectEventsHandler?
+    private var pendingTonConnectUrls: [String] = []
+    private var tonConnectUrlTask: Task<Void, Never>?
+    private var pendingTonConnectRequests: [PendingTonConnectRequest] = []
+    private var approvingTonConnectRequestIds = Set<String>()
     private var walletInitializationTask: Task<any TONWalletProtocol, Error>?
     private var runtimeTask: Task<Void, Never>?
     private var synchronizationTask: Task<Void, Never>?
@@ -494,6 +944,7 @@ public final class WalletContext {
         self.log = log
         self.toncenterProxy = WalletToncenterProxy(engine: engine)
         self.vault = WalletKeychainVault(namespace: storageNamespace)
+        self.tonConnectStorage = WalletTonConnectStorage(namespace: storageNamespace)
         let initialState = State(
             phase: .restoring,
             balance: .idle,
@@ -521,12 +972,45 @@ public final class WalletContext {
                     schemaVersion: 1,
                     pendingTransfers: []
                 )
+                let cachedBalance: Resource<Int64>
+                if let balance = self.metadataRecord?.balance {
+                    cachedBalance = .value(balance, updatedAt: self.metadataRecord?.balanceUpdatedAt ?? 0)
+                } else {
+                    cachedBalance = .idle
+                }
+                let cachedTransactions = Array((self.metadataRecord?.transactions ?? []).prefix(walletMetadataCachedItemLimit))
+                let cachedCollectibles = Array((self.metadataRecord?.collectibles ?? []).prefix(walletMetadataCachedItemLimit))
+                let cachedFiatRates: Resource<[FiatCurrency: FiatRate]>
+                if let fiatRates = self.metadataRecord?.fiatRates {
+                    cachedFiatRates = .value(fiatRates, updatedAt: self.metadataRecord?.fiatRatesUpdatedAt ?? 0)
+                } else {
+                    cachedFiatRates = .idle
+                }
+                self.balanceLastSuccessfulAt = self.metadataRecord?.balanceUpdatedAt
+                self.fiatRatesLastSuccessfulAt = self.metadataRecord?.fiatRatesUpdatedAt
                 self.currentState = State(
                     phase: .restoring,
-                    balance: .idle,
-                    transactions: initialState.transactions,
+                    balance: cachedBalance,
+                    transactions: TransactionsState(
+                        items: cachedTransactions,
+                        offset: cachedTransactions.count,
+                        canLoadMore: false,
+                        isLoadingMore: false,
+                        error: nil
+                    ),
+                    collectibles: CollectiblesState(
+                        items: cachedCollectibles,
+                        offset: cachedCollectibles.count,
+                        canLoadMore: false,
+                        isLoadingMore: false,
+                        error: nil
+                    ),
                     pendingTransfers: self.metadataRecord?.pendingTransfers ?? [],
-                    activeOperation: nil
+                    activeOperation: nil,
+                    fiat: FiatState(
+                        selectedCurrency: self.metadataRecord?.selectedFiatCurrency ?? .usd,
+                        rates: cachedFiatRates
+                    )
                 )
                 self.statePromise.set(self.currentState)
             }
@@ -571,6 +1055,7 @@ public final class WalletContext {
         self.toncenterProxy.cancelAll()
         self.walletInitializationTask?.cancel()
         self.runtimeTask?.cancel()
+        self.tonConnectUrlTask?.cancel()
         self.synchronizationTask?.cancel()
         self.retryTask?.cancel()
         self.streamRetryTask?.cancel()
@@ -1064,8 +1549,8 @@ public final class WalletContext {
                 activeOperation: context.currentState.activeOperation
             )
             do {
-                let response = try await wallet.client.accountTransactions(
-                    addresses: [wallet.address],
+                let response = try await wallet.client.accountActions(
+                    address: wallet.address,
                     limit: walletTransactionFetchLimit,
                     offset: requestOffset
                 )
@@ -1078,20 +1563,25 @@ public final class WalletContext {
                 guard context.canUseNetworkRuntime else {
                     throw WalletError.unavailable
                 }
+                let collectibleMetadata = try await context.resolvedWalletActionCollectibleMetadata(
+                    from: response,
+                    wallet: wallet
+                )
                 let page = try walletTransactions(
-                    from: response.transactions,
-                    usdtJettonWalletRawAddress: context.usdtJettonWalletRawAddress
+                    from: response,
+                    walletAddress: wallet.address,
+                    collectibleMetadata: collectibleMetadata
                 )
                 let currentTransactions = context.currentState.transactions
                 let existingItems = context.transactionsByReconcilingStreamOverlays(
                     in: currentTransactions.items,
-                    with: response.transactions
+                    with: response.actions
                 )
                 let items = mergeTransactions(existing: existingItems, new: page)
                 let state = TransactionsState(
                     items: items,
-                    offset: max(currentTransactions.offset, requestOffset + response.transactions.count),
-                    canLoadMore: response.transactions.count == walletTransactionFetchLimit,
+                    offset: max(currentTransactions.offset, requestOffset + response.actions.count),
+                    canLoadMore: response.actions.count == walletTransactionFetchLimit,
                     isLoadingMore: false,
                     error: nil
                 )
@@ -1243,6 +1733,10 @@ public final class WalletContext {
 
             let previousWalletId = context.wallet?.id
             let previousKit = context.kit
+            context.cancelPendingTonConnectRequests()
+            context.pendingTonConnectUrls.removeAll()
+            context.tonConnectUrlTask?.cancel()
+            context.tonConnectUrlTask = nil
             context.lifecycleGeneration &+= 1
             context.toncenterProxy.setEnabled(false)
             context.isStartingStreaming = false
@@ -1262,6 +1756,7 @@ public final class WalletContext {
             context.stopStreaming()
             context.wallet = nil
             context.kit = nil
+            context.tonConnectEventsHandler = nil
             context.secretRecord = nil
             context.metadataRecord = nil
             context.preparedTransfers.removeAll()
@@ -1280,13 +1775,27 @@ public final class WalletContext {
 
             var firstStorageError: FatalStorageError?
             var didDeleteSecret = false
+            if let previousWalletId, let previousKit {
+                try? await previousKit.remove(walletId: previousWalletId)
+            }
+            do {
+                try await context.tonConnectStorage.clear()
+            } catch let error as WalletTonConnectStorage.Error {
+                firstStorageError = fatalStorageError(error)
+            } catch {
+                firstStorageError = .corrupted
+            }
             do {
                 try context.vault.deleteSecret()
                 didDeleteSecret = true
             } catch let error as WalletKeychainVault.Error {
-                firstStorageError = fatalStorageError(error)
+                if firstStorageError == nil {
+                    firstStorageError = fatalStorageError(error)
+                }
             } catch {
-                firstStorageError = .corrupted
+                if firstStorageError == nil {
+                    firstStorageError = .corrupted
+                }
             }
             do {
                 try context.vault.deleteMetadata()
@@ -1308,11 +1817,6 @@ public final class WalletContext {
                 activeOperation: context.currentState.activeOperation
             )
 
-            if let previousWalletId, let previousKit {
-                Task { @MainActor in
-                    try? await previousKit.remove(walletId: previousWalletId)
-                }
-            }
             if let firstStorageError {
                 throw WalletError.storage(firstStorageError)
             }
@@ -1413,8 +1917,392 @@ public final class WalletContext {
         }
     }
 
+    private func handleTonConnectEvent(_ event: TONWalletKitEvent) {
+        assert(Queue.mainQueue().isCurrent())
+        switch event {
+        case let .connectRequest(request):
+            self.handleTonConnectConnectionRequest(request)
+        case let .transactionRequest(request):
+            self.handleTonConnectTransactionRequest(request)
+        case let .signMessageRequest(request):
+            Task { @MainActor [weak self] in
+                do {
+                    try await request.reject(reason: "Method not supported")
+                } catch {
+                    self?.log("ton_connect_sign_message_reject_failed error=\(String(describing: type(of: error)))")
+                }
+            }
+        case let .signDataRequest(request):
+            Task { @MainActor [weak self] in
+                do {
+                    try await request.reject(reason: "Method not supported")
+                } catch {
+                    self?.log("ton_connect_sign_data_reject_failed error=\(String(describing: type(of: error)))")
+                }
+            }
+        case .disconnect:
+            break
+        }
+    }
+
+    private func handleTonConnectConnectionRequest(_ request: TONWalletConnectionRequest) {
+        assert(Queue.mainQueue().isCurrent())
+
+        if let rawErrorCode = request.event.preview.manifestFetchErrorCode {
+            let errorCode = TONConnectEventErrorCodes(rawValue: Double(rawErrorCode)) ?? .unknownError
+            //TODO:localize
+            let errorText = "The app information could not be verified. Connection was cancelled."
+            self.rejectTonConnectConnectionRequest(
+                request,
+                reason: "Unable to load TON Connect manifest",
+                errorCode: errorCode,
+                errorText: errorText
+            )
+            return
+        }
+
+        if request.event.embeddedRequest != nil {
+            //TODO:localize
+            let errorText = "This connection request uses features that are not supported yet."
+            self.rejectTonConnectConnectionRequest(
+                request,
+                reason: "Embedded requests are not supported",
+                errorCode: .methodNotSupported,
+                errorText: errorText
+            )
+            return
+        }
+
+        var requestsProof = false
+        for item in request.event.requestedItems {
+            switch item {
+            case .tonAddr:
+                break
+            case .tonProof:
+                requestsProof = true
+            case .unknown:
+                //TODO:localize
+                let errorText = "This app requested a wallet permission that is not supported yet."
+                self.rejectTonConnectConnectionRequest(
+                    request,
+                    reason: "Requested item is not supported",
+                    errorCode: .methodNotSupported,
+                    errorText: errorText
+                )
+                return
+            }
+        }
+
+        let dAppInfo = request.event.preview.dAppInfo ?? request.event.dAppInfo
+        let applicationName = dAppInfo?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let domain = dAppInfo?.url?.host?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? request.event.domain?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? dAppInfo?.manifestUrl?.host?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+        guard !applicationName.isEmpty, !domain.isEmpty else {
+            //TODO:localize
+            let errorText = "The app manifest is incomplete. Connection was cancelled."
+            self.rejectTonConnectConnectionRequest(
+                request,
+                reason: "Invalid TON Connect manifest",
+                errorCode: .manifestContentError,
+                errorText: errorText
+            )
+            return
+        }
+
+        let iconUrl: String?
+        if dAppInfo?.iconUrl?.scheme?.lowercased() == "https" {
+            iconUrl = dAppInfo?.iconUrl?.absoluteString
+        } else {
+            iconUrl = nil
+        }
+        let permissions = request.event.preview.permissions.map {
+            return TonConnectPermission(
+                name: $0.name ?? "",
+                title: $0.title,
+                text: $0.description
+            )
+        }
+        let model = TonConnectRequest(
+            id: request.event.id,
+            applicationName: applicationName,
+            domain: domain,
+            iconUrl: iconUrl,
+            permissions: permissions,
+            requestsProof: requestsProof
+        )
+        guard !self.pendingTonConnectRequests.contains(where: { $0.id == model.id }) else {
+            return
+        }
+        let shouldPresent = self.pendingTonConnectRequests.isEmpty
+        self.pendingTonConnectRequests.append(.connection(model: model, request: request))
+        if shouldPresent {
+            self.presentNextTonConnectRequestIfNeeded()
+        }
+    }
+
+    private func handleTonConnectTransactionRequest(_ request: TONWalletSendTransactionRequest) {
+        assert(Queue.mainQueue().isCurrent())
+
+        let reject: (String, String) -> Void = { [weak self] reason, errorText in
+            self?.rejectTonConnectTransactionRequest(request, reason: reason, errorText: errorText)
+        }
+        guard let wallet = self.wallet, let secret = self.secretRecord else {
+            //TODO:localize
+            reject("Wallet is unavailable", "The transaction could not be opened because Wallet is unavailable.")
+            return
+        }
+        if let walletId = request.event.walletId, walletId != wallet.id {
+            //TODO:localize
+            reject("Transaction targets another wallet", "This transaction was requested for another wallet.")
+            return
+        }
+        if let walletAddress = request.event.walletAddress?.value,
+           canonicalNonBounceableTonAddress(walletAddress) != canonicalNonBounceableTonAddress(secret.address) {
+            //TODO:localize
+            reject("Transaction targets another wallet", "This transaction was requested for another wallet.")
+            return
+        }
+
+        let transaction = request.event.request
+        if let network = transaction.network, network.chainId != TONNetwork.mainnet.chainId {
+            //TODO:localize
+            reject("Network is not supported", "This transaction uses a network that is not supported.")
+            return
+        }
+        if let fromAddress = transaction.fromAddress,
+           canonicalNonBounceableTonAddress(fromAddress) != canonicalNonBounceableTonAddress(secret.address) {
+            //TODO:localize
+            reject("Transaction sender does not match wallet", "This transaction was requested for another wallet.")
+            return
+        }
+        if let validUntil = transaction.validUntil, validUntil <= Date().timeIntervalSince1970 {
+            //TODO:localize
+            reject("Transaction request has expired", "This transaction request has expired.")
+            return
+        }
+        if let items = transaction.items, !items.isEmpty {
+            //TODO:localize
+            reject("Structured transaction items are not supported", "This transaction type is not supported yet.")
+            return
+        }
+        guard transaction.messages.count == 1, let message = transaction.messages.first else {
+            //TODO:localize
+            reject("Only one transaction message is supported", "Transactions with multiple recipients are not supported yet.")
+            return
+        }
+        if let extraCurrency = message.extraCurrency, !extraCurrency.isEmpty {
+            //TODO:localize
+            reject("Extra currencies are not supported", "This transaction uses a currency that is not supported yet.")
+            return
+        }
+        guard let amount = int64Amount(message.amount), amount >= 0 else {
+            //TODO:localize
+            reject("Invalid transaction amount", "The transaction amount is invalid.")
+            return
+        }
+        guard let recipient = canonicalNonBounceableTonAddress(message.address),
+              let recipientAddress = try? TONUserFriendlyAddress(value: recipient),
+              !recipientAddress.isTestnetOnly else {
+            //TODO:localize
+            reject("Invalid recipient address", "The transaction recipient address is invalid.")
+            return
+        }
+        guard let preview = request.event.preview.data,
+              preview.result == .success,
+              let trace = preview.trace,
+              !trace.isIncomplete,
+              trace.transactions.values.contains(where: { $0.totalFees != nil }),
+              let fee = try? previewFee(trace.transactions.values),
+              fee >= 0 else {
+            //TODO:localize
+            reject("Transaction preview is unavailable", "The transaction could not be safely previewed.")
+            return
+        }
+
+        let dAppInfo = request.event.dAppInfo
+        let applicationName = dAppInfo?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let domain = dAppInfo?.url?.host?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? request.event.domain?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? dAppInfo?.manifestUrl?.host?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+        guard !applicationName.isEmpty, !domain.isEmpty else {
+            //TODO:localize
+            reject("Invalid TON Connect app information", "The app information for this transaction is incomplete.")
+            return
+        }
+        let iconUrl: String?
+        if dAppInfo?.iconUrl?.scheme?.lowercased() == "https" {
+            iconUrl = dAppInfo?.iconUrl?.absoluteString
+        } else {
+            iconUrl = nil
+        }
+        let model = TonConnectTransferRequest(
+            id: request.event.id,
+            applicationName: applicationName,
+            domain: domain,
+            iconUrl: iconUrl,
+            recipient: recipient,
+            amount: amount,
+            fee: fee
+        )
+        guard !self.pendingTonConnectRequests.contains(where: { $0.id == model.id }) else {
+            return
+        }
+        let shouldPresent = self.pendingTonConnectRequests.isEmpty
+        self.pendingTonConnectRequests.append(.transfer(model: model, request: request))
+        if shouldPresent {
+            self.presentNextTonConnectRequestIfNeeded()
+        }
+    }
+
+    private func rejectTonConnectTransactionRequest(
+        _ request: TONWalletSendTransactionRequest,
+        reason: String,
+        errorText: String
+    ) {
+        self.tonConnectPresentationPipe.putNext(.error(errorText))
+        Task { @MainActor [weak self] in
+            do {
+                try await request.reject(reason: reason)
+            } catch {
+                self?.log("ton_connect_transaction_reject_failed error=\(String(describing: type(of: error)))")
+            }
+        }
+    }
+
+    private func rejectTonConnectConnectionRequest(
+        _ request: TONWalletConnectionRequest,
+        reason: String,
+        errorCode: TONConnectEventErrorCodes,
+        errorText: String
+    ) {
+        self.tonConnectPresentationPipe.putNext(.error(errorText))
+        Task { @MainActor [weak self] in
+            do {
+                try await request.reject(reason: reason, errorCode: errorCode)
+            } catch {
+                self?.log("ton_connect_request_reject_failed error=\(String(describing: type(of: error)))")
+            }
+        }
+    }
+
+    private func rejectUnsupportedTonConnectEvent(_ event: TONWalletKitEvent) {
+        switch event {
+        case let .transactionRequest(request):
+            Task { @MainActor in
+                try? await request.reject(reason: "Method not supported")
+            }
+        case let .signMessageRequest(request):
+            Task { @MainActor in
+                try? await request.reject(reason: "Method not supported")
+            }
+        case let .signDataRequest(request):
+            Task { @MainActor in
+                try? await request.reject(reason: "Method not supported")
+            }
+        case let .connectRequest(request):
+            Task { @MainActor in
+                try? await request.reject(reason: "Method not supported", errorCode: .methodNotSupported)
+            }
+        case .disconnect:
+            break
+        }
+    }
+
+    private func presentNextTonConnectRequestIfNeeded() {
+        guard let request = self.pendingTonConnectRequests.first else {
+            return
+        }
+        switch request {
+        case let .connection(model, _):
+            self.tonConnectPresentationPipe.putNext(.request(model))
+        case let .transfer(model, _):
+            self.tonConnectPresentationPipe.putNext(.transfer(model))
+        }
+    }
+
+    private func completeTonConnectRequest(id: String) {
+        guard let index = self.pendingTonConnectRequests.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        self.pendingTonConnectRequests.remove(at: index)
+        if index == 0 {
+            Queue.mainQueue().after(0.4, { [weak self] in
+                self?.presentNextTonConnectRequestIfNeeded()
+            })
+        }
+    }
+
+    private func cancelPendingTonConnectRequests() {
+        guard !self.pendingTonConnectRequests.isEmpty else {
+            return
+        }
+        let requests = self.pendingTonConnectRequests
+        self.pendingTonConnectRequests.removeAll()
+        self.approvingTonConnectRequestIds.removeAll()
+        if let requestId = requests.first?.id {
+            self.tonConnectPresentationPipe.putNext(.dismiss(requestId: requestId))
+        }
+        for request in requests {
+            Task { @MainActor in
+                switch request {
+                case let .connection(_, request):
+                    try? await request.reject(reason: "Wallet is unavailable")
+                case let .transfer(_, request):
+                    try? await request.reject(reason: "Wallet is unavailable")
+                }
+            }
+        }
+    }
+
+    private func processPendingTonConnectUrlIfPossible() {
+        guard self.tonConnectUrlTask == nil,
+              self.canUseNetworkRuntime,
+              self.wallet != nil,
+              let kit = self.kit,
+              let url = self.pendingTonConnectUrls.first else {
+            return
+        }
+        let generation = self.lifecycleGeneration
+        self.tonConnectUrlTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            defer {
+                if self.lifecycleGeneration == generation {
+                    self.tonConnectUrlTask = nil
+                    self.processPendingTonConnectUrlIfPossible()
+                }
+            }
+            do {
+                try await kit.connect(url: url)
+                if self.pendingTonConnectUrls.first == url {
+                    self.pendingTonConnectUrls.removeFirst()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                if self.pendingTonConnectUrls.first == url {
+                    self.pendingTonConnectUrls.removeFirst()
+                }
+                self.log("ton_connect_url_failed error=\(String(describing: type(of: error)))")
+                //TODO:localize
+                let errorText = "Unable to open this TON Connect request."
+                self.tonConnectPresentationPipe.putNext(.error(errorText))
+            }
+        }
+    }
+
     private func environmentDidChange() {
         if !self.canUseNetworkRuntime {
+            self.cancelPendingTonConnectRequests()
+            self.tonConnectUrlTask?.cancel()
+            self.tonConnectUrlTask = nil
+            if !self.isApplicationInForeground || !self.isAccountCurrent {
+                self.pendingTonConnectUrls.removeAll()
+            }
             self.cancelFiatRatesRequest()
             self.toncenterProxy.setEnabled(false)
             self.activeOperationCancellation?.cancel()
@@ -1472,10 +2360,18 @@ public final class WalletContext {
         return self.isApplicationInForeground && self.isAccountCurrent && self.isNetworkAvailable
     }
 
-    private var hasRuntimeDemand: Bool {
+    private var hasWalletDataRuntimeDemand: Bool {
         return self.stateSubscriberCount > 0
             || self.currentState.activeOperation != nil
             || !self.currentState.pendingTransfers.isEmpty
+    }
+
+    private var hasTonConnectRuntimeDemand: Bool {
+        return self.secretRecord != nil
+    }
+
+    private var hasRuntimeDemand: Bool {
+        return self.hasWalletDataRuntimeDemand || self.hasTonConnectRuntimeDemand
     }
 
     private func evaluateRuntimeDemand() {
@@ -1484,7 +2380,11 @@ public final class WalletContext {
             return
         }
         self.toncenterProxy.setEnabled(true)
-        self.requestFiatRatesIfNeeded()
+        if self.hasWalletDataRuntimeDemand {
+            self.requestFiatRatesIfNeeded()
+        } else {
+            self.stopWalletDataRuntime()
+        }
         guard self.secretRecord != nil else {
             return
         }
@@ -1505,9 +2405,12 @@ public final class WalletContext {
                         return
                     }
                     self.retryAttempt = 0
-                    self.synchronizationRequested = true
-                    self.requestSynchronization()
-                    self.startPendingPollingIfNeeded()
+                    if self.hasWalletDataRuntimeDemand {
+                        self.synchronizationRequested = true
+                        self.requestSynchronization()
+                        self.startPendingPollingIfNeeded()
+                    }
+                    self.processPendingTonConnectUrlIfPossible()
                 } catch let error as WalletError {
                     guard self.lifecycleGeneration == generation else {
                         return
@@ -1549,9 +2452,29 @@ public final class WalletContext {
                 }
             }
         } else {
-            self.requestSynchronization()
-            self.startPendingPollingIfNeeded()
+            if self.hasWalletDataRuntimeDemand {
+                self.requestSynchronization()
+                self.startPendingPollingIfNeeded()
+            }
+            self.processPendingTonConnectUrlIfPossible()
         }
+    }
+
+    private func stopWalletDataRuntime() {
+        self.cancelFiatRatesRequest()
+        self.synchronizationRequested = true
+        self.synchronizationTask?.cancel()
+        self.synchronizationTask = nil
+        if self.wallet != nil {
+            self.retryTask?.cancel()
+            self.retryTask = nil
+            self.retryAttempt = 0
+        }
+        self.pendingPollTask?.cancel()
+        self.pendingPollTask = nil
+        self.streamSnapshotTask?.cancel()
+        self.streamSnapshotTask = nil
+        self.stopStreaming()
     }
 
     private func releaseRuntimeIfPossible() {
@@ -1577,14 +2500,17 @@ public final class WalletContext {
             self.walletInitializationTask = nil
             self.runtimeTask?.cancel()
             self.runtimeTask = nil
+            self.tonConnectUrlTask?.cancel()
+            self.tonConnectUrlTask = nil
             self.wallet = nil
             self.kit = nil
+            self.tonConnectEventsHandler = nil
         }
     }
 
     private func requestFiatRatesIfNeeded() {
         assert(Queue.mainQueue().isCurrent())
-        guard self.canUseNetworkRuntime, self.hasRuntimeDemand, self.fiatRatesDataTask == nil else {
+        guard self.canUseNetworkRuntime, self.hasWalletDataRuntimeDemand, self.fiatRatesDataTask == nil else {
             return
         }
         self.fiatRatesRefreshTask?.cancel()
@@ -1698,7 +2624,7 @@ public final class WalletContext {
     }
 
     private func scheduleFiatRatesRefresh() {
-        guard self.canUseNetworkRuntime, self.hasRuntimeDemand else {
+        guard self.canUseNetworkRuntime, self.hasWalletDataRuntimeDemand else {
             return
         }
         self.fiatRatesRefreshTask?.cancel()
@@ -1733,17 +2659,17 @@ public final class WalletContext {
             return kit
         }
         let generation = self.lifecycleGeneration
-        let toncenterProxy = self.toncenterProxy
+        //let toncenterProxy = self.toncenterProxy
         let configuration = TONWalletKitConfiguration(
             networkConfigurations: Set([
                 TONWalletKitConfiguration.NetworkConfiguration(
                     network: .mainnet,
                     apiClient: .toncenter(TONWalletKitConfiguration.APIClientConfiguration(
-                        key: "",
-                        timeout: 30.0,
-                        requestHandler: { request in
-                            return try await toncenterProxy.perform(request)
-                        }
+                        key: walletApiKey,
+                        timeout: 30.0//,
+//                        requestHandler: { request in
+//                            return try await toncenterProxy.perform(request)
+//                        }
                     ))
                 )
             ]),
@@ -1756,16 +2682,23 @@ public final class WalletContext {
                 deepLink: "tg://",
                 bridgeUrl: "https://connect.ton.org/bridge"
             ),
-            storage: .memory,
+            storage: .custom(self.tonConnectStorage),
             bridge: nil,
-            features: []
+            features: [TONSendTransactionFeature(maxMessages: 1)]
         )
         let kit = TONWalletKit(configuration: configuration)
+        let eventsHandler = WalletTonConnectEventsHandler(handleEvent: { [weak self] event in
+            self?.withMainQueue { [weak self] in
+                self?.handleTonConnectEvent(event)
+            }
+        })
+        try kit.add(eventsHandler: eventsHandler)
         try await kit.initialize()
         guard self.canUseNetworkRuntime, self.lifecycleGeneration == generation else {
             throw WalletError.unavailable
         }
         self.kit = kit
+        self.tonConnectEventsHandler = eventsHandler
         return kit
     }
 
@@ -1957,7 +2890,8 @@ public final class WalletContext {
             if let cachedMetadata = self.collectibleMetadataCache[address] {
                 metadata.merge(cachedMetadata)
             }
-            if !metadata.isComplete, let metadataUrl = walletCollectibleMetadataUrl(from: nft) {
+            if walletCollectibleNeedsRemoteMetadata(from: nft, metadata: metadata),
+               let metadataUrl = walletCollectibleMetadataUrl(from: nft) {
                 do {
                     let remoteMetadata = try await walletCollectibleMetadata(from: metadataUrl)
                     try Task.checkCancellation()
@@ -1971,7 +2905,13 @@ public final class WalletContext {
                     self.log("event=collectible_metadata_failed errorType=\(String(reflecting: type(of: error)))")
                 }
             }
-            if metadata.name != nil || metadata.imageUrl != nil {
+            if metadata.name != nil
+                || metadata.description != nil
+                || metadata.imageUrl != nil
+                || metadata.lottieUrl != nil
+                || metadata.collectionName != nil
+                || metadata.collectionUrl != nil
+                || !metadata.attributes.isEmpty {
                 self.collectibleMetadataCache[address] = metadata
             }
 
@@ -2024,9 +2964,78 @@ public final class WalletContext {
                 address: collectible.address,
                 name: collectible.name,
                 imageUrl: collectible.imageUrl,
+                subtitle: collectible.subtitle,
+                kind: collectible.kind,
+                description: collectible.description,
+                lottieUrl: collectible.lottieUrl,
+                collectionName: collectible.collectionName,
+                collectionUrl: collectible.collectionUrl,
+                attributes: collectible.attributes,
+                giftSlug: collectible.giftSlug,
                 receivedAt: receivedAtByAddress[address.raw]
             )
         }
+    }
+
+    private func resolvedWalletActionCollectibleMetadata(
+        from response: TONAccountActionsResponse,
+        wallet: any TONWalletProtocol
+    ) async throws -> [TONRawAddress: WalletCollectibleMetadata] {
+        var result: [TONRawAddress: WalletCollectibleMetadata] = [:]
+
+        for action in response.actions {
+            try Task.checkCancellation()
+            guard case let .nftTransfer(details) = action.details else {
+                continue
+            }
+
+            let address = details.nftItem.value
+            let cachedMetadata = self.collectibleMetadataCache[address]
+            guard result[details.nftItem.raw] == nil else {
+                continue
+            }
+            guard walletActionCollectibleNeedsResolvedMetadata(
+                details: details,
+                metadata: response.metadata,
+                resolvedMetadata: cachedMetadata
+            ) else {
+                if let cachedMetadata {
+                    result[details.nftItem.raw] = cachedMetadata
+                }
+                continue
+            }
+
+            var metadata = cachedMetadata ?? WalletCollectibleMetadata(name: nil, imageUrl: nil)
+            do {
+                let nft = try await wallet.nft(address: details.nftItem)
+                try Task.checkCancellation()
+                var fetchedMetadata = walletCollectibleMetadata(from: nft)
+                if walletCollectibleNeedsRemoteMetadata(from: nft, metadata: fetchedMetadata),
+                   let metadataUrl = walletCollectibleMetadataUrl(from: nft) {
+                    let remoteMetadata = try await walletCollectibleMetadata(from: metadataUrl)
+                    try Task.checkCancellation()
+                    fetchedMetadata.merge(remoteMetadata)
+                }
+                metadata.merge(fetchedMetadata)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                self.log("event=action_collectible_metadata_failed errorType=\(String(reflecting: type(of: error)))")
+            }
+
+            if metadata.name != nil
+                || metadata.description != nil
+                || metadata.imageUrl != nil
+                || metadata.lottieUrl != nil
+                || metadata.collectionName != nil
+                || metadata.collectionUrl != nil
+                || !metadata.attributes.isEmpty {
+                self.collectibleMetadataCache[address] = metadata
+            }
+            result[details.nftItem.raw] = metadata
+        }
+
+        return result
     }
 
     private func resolveUsdtJettonWalletAddressIfNeeded(wallet: any TONWalletProtocol) async {
@@ -2056,7 +3065,7 @@ public final class WalletContext {
     private func requestSynchronization() {
         guard self.synchronizationRequested,
               self.canUseNetworkRuntime,
-              self.hasRuntimeDemand,
+              self.hasWalletDataRuntimeDemand,
               self.currentState.activeOperation == nil,
               self.synchronizationTask == nil,
               let wallet = self.wallet else {
@@ -2148,8 +3157,8 @@ public final class WalletContext {
             }
 
             do {
-                let response = try await wallet.client.accountTransactions(
-                    addresses: [wallet.address],
+                let response = try await wallet.client.accountActions(
+                    address: wallet.address,
                     limit: walletTransactionFetchLimit,
                     offset: 0
                 )
@@ -2166,19 +3175,24 @@ public final class WalletContext {
                       self.wallet?.address.raw == wallet.address.raw else {
                     return
                 }
+                let collectibleMetadata = try await self.resolvedWalletActionCollectibleMetadata(
+                    from: response,
+                    wallet: wallet
+                )
                 let transactions = try walletTransactions(
-                    from: response.transactions,
-                    usdtJettonWalletRawAddress: self.usdtJettonWalletRawAddress
+                    from: response,
+                    walletAddress: wallet.address,
+                    collectibleMetadata: collectibleMetadata
                 )
                 let authoritativeExisting = self.transactionsByReconcilingStreamOverlays(
                     in: self.currentState.transactions.items,
-                    with: response.transactions
+                    with: response.actions
                 )
                 let merged = mergeTransactions(existing: authoritativeExisting, new: transactions)
                 let state = TransactionsState(
                     items: merged,
-                    offset: max(self.currentState.transactions.offset, response.transactions.count),
-                    canLoadMore: response.transactions.count == walletTransactionFetchLimit || self.currentState.transactions.canLoadMore,
+                    offset: max(self.currentState.transactions.offset, response.actions.count),
+                    canLoadMore: response.actions.count == walletTransactionFetchLimit || self.currentState.transactions.canLoadMore,
                     isLoadingMore: false,
                     error: nil
                 )
@@ -2389,7 +3403,7 @@ public final class WalletContext {
               !self.isStartingStreaming,
               self.streamRetryTask == nil,
               self.canUseNetworkRuntime,
-              self.hasRuntimeDemand,
+              self.hasWalletDataRuntimeDemand,
               let kit = self.kit,
               let wallet = self.wallet else {
             return
@@ -2407,7 +3421,7 @@ public final class WalletContext {
             }
             guard self.streamingProvider == nil,
                   self.canUseNetworkRuntime,
-                  self.hasRuntimeDemand,
+                  self.hasWalletDataRuntimeDemand,
                   self.lifecycleGeneration == generation else {
                 return
             }
@@ -2417,7 +3431,7 @@ public final class WalletContext {
                     apiKey: walletApiKey
                 ))
                 guard self.canUseNetworkRuntime,
-                      self.hasRuntimeDemand,
+                      self.hasWalletDataRuntimeDemand,
                       self.lifecycleGeneration == generation,
                       self.wallet?.address.raw == wallet.address.raw else {
                     try? provider.disconnect()
@@ -2498,7 +3512,7 @@ public final class WalletContext {
                                 from: update.transactions,
                                 usdtJettonWalletRawAddress: self.usdtJettonWalletRawAddress
                             )
-                            let keys = Set(transactions.map(transactionKey))
+                            let keys = Set(transactions.map(transactionBlockchainKey))
                             let existingItems = self.transactionsByRemovingStreamOverlay(
                                 for: traceKey,
                                 from: self.currentState.transactions.items
@@ -2582,22 +3596,33 @@ public final class WalletContext {
         guard let overlay = self.streamTransactionOverlaysByTrace.removeValue(forKey: traceKey) else {
             return transactions
         }
-        return transactions.filter { !overlay.transactionKeys.contains(transactionKey($0)) }
+        return transactions.filter { !overlay.transactionKeys.contains(transactionBlockchainKey($0)) }
     }
 
     private func transactionsByReconcilingStreamOverlays(
         in existing: [Transaction],
-        with restTransactions: [TONTransaction]
+        with actions: [TONTransactionTraceAction]
     ) -> [Transaction] {
         var transactionKeysByTrace: [String: Set<String>] = [:]
-        for transaction in restTransactions {
-            transactionKeysByTrace[transactionTraceKey(transaction.traceExternalHash.value), default: []]
-                .insert(transactionHashKey(transaction.hash.value))
+        var observedTransactionKeys = Set<String>()
+        for action in actions {
+            for transactionHash in action.transactions {
+                observedTransactionKeys.insert(transactionHashKey(transactionHash.value))
+            }
+            for transaction in action.transactionsFull {
+                let transactionKey = transactionHashKey(transaction.hash.value)
+                observedTransactionKeys.insert(transactionKey)
+                transactionKeysByTrace[transactionTraceKey(transaction.traceExternalHash.value), default: []]
+                    .insert(transactionKey)
+            }
         }
 
         var removableKeys = Set<String>()
-        for (traceKey, transactionKeys) in transactionKeysByTrace {
-            guard var overlay = self.streamTransactionOverlaysByTrace[traceKey] else {
+        for (traceKey, currentOverlay) in Array(self.streamTransactionOverlaysByTrace) {
+            var overlay = currentOverlay
+            let transactionKeys = transactionKeysByTrace[traceKey] ?? []
+            let matchesObservedTransaction = !overlay.transactionKeys.isDisjoint(with: observedTransactionKeys)
+            guard !transactionKeys.isEmpty || matchesObservedTransaction else {
                 continue
             }
             removableKeys.formUnion(overlay.transactionKeys)
@@ -2606,14 +3631,16 @@ public final class WalletContext {
             } else {
                 // REST can observe a transaction before the stream finalizes its trace.
                 // Keep tracking the canonical hashes so an empty invalidation update can remove them.
-                overlay.transactionKeys = transactionKeys
+                if !transactionKeys.isEmpty {
+                    overlay.transactionKeys = transactionKeys
+                }
                 self.streamTransactionOverlaysByTrace[traceKey] = overlay
             }
         }
         guard !removableKeys.isEmpty else {
             return existing
         }
-        return existing.filter { !removableKeys.contains(transactionKey($0)) }
+        return existing.filter { !removableKeys.contains(transactionBlockchainKey($0)) }
     }
 
     private func streamingDidDisconnect() {
@@ -2643,7 +3670,7 @@ public final class WalletContext {
     private func scheduleStreamRetry() {
         guard self.streamRetryTask == nil,
               self.canUseNetworkRuntime,
-              self.hasRuntimeDemand else {
+              self.hasWalletDataRuntimeDemand else {
             return
         }
         let delays: [Double] = [1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0]
@@ -2780,7 +3807,30 @@ public final class WalletContext {
         )
         if state != self.currentState {
             self.currentState = state
+            self.updateCachedMetadata(from: state)
             self.statePromise.set(state)
+        }
+    }
+
+    private func updateCachedMetadata(from state: State) {
+        guard var metadata = self.metadataRecord, metadata.schemaVersion == 1 else {
+            return
+        }
+        metadata.balance = state.balance.currentValue
+        metadata.balanceUpdatedAt = state.balance.lastSuccessfulAt ?? self.balanceLastSuccessfulAt
+        metadata.fiatRates = state.fiat.rates.currentValue
+        metadata.fiatRatesUpdatedAt = state.fiat.rates.lastSuccessfulAt ?? self.fiatRatesLastSuccessfulAt
+        metadata.selectedFiatCurrency = state.fiat.selectedCurrency
+        metadata.transactions = Array(state.transactions.items.prefix(walletMetadataCachedItemLimit))
+        metadata.collectibles = Array(state.collectibles.items.prefix(walletMetadataCachedItemLimit))
+        guard metadata != self.metadataRecord else {
+            return
+        }
+        do {
+            try self.vault.writeMetadata(metadata)
+            self.metadataRecord = metadata
+        } catch {
+            self.log("event=metadata_cache_write_failed errorType=\(String(reflecting: type(of: error)))")
         }
     }
 

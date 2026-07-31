@@ -10,21 +10,21 @@ import MultilineTextComponent
 import BalancedTextComponent
 import LottieComponent
 import ButtonComponent
-import EdgeEffect
+import BundleIconComponent
+import ResizableSheetComponent
+import GlassBarButtonComponent
 
 private final class WalletWordsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
     let words: [String]
-    let verify: Bool
-    let completion: (() -> Void)?
+    let bottomInset: CGFloat
 
-    init(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) {
+    init(context: AccountContext, words: [String], bottomInset: CGFloat) {
         self.context = context
         self.words = words
-        self.verify = verify
-        self.completion = completion
+        self.bottomInset = bottomInset
     }
 
     static func ==(lhs: WalletWordsScreenComponent, rhs: WalletWordsScreenComponent) -> Bool {
@@ -34,7 +34,7 @@ private final class WalletWordsScreenComponent: Component {
         if lhs.words != rhs.words {
             return false
         }
-        if lhs.verify != rhs.verify {
+        if lhs.bottomInset != rhs.bottomInset {
             return false
         }
         return true
@@ -46,105 +46,20 @@ private final class WalletWordsScreenComponent: Component {
             let word = ComponentView<Empty>()
         }
 
-        private let scrollView: UIScrollView
         private let animation = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
         private let text = ComponentView<Empty>()
         private var wordItems: [WordItem] = []
-        private let bottomEdgeEffect: EdgeEffectView
-        private let button = ComponentView<Empty>()
 
         private let playAnimation = ActionSlot<Void>()
         private var didPlayAnimation = false
-        private var isVerifying = false
-
-        private var environment: EnvironmentType?
-        private var component: WalletWordsScreenComponent?
 
         override init(frame: CGRect) {
-            self.scrollView = UIScrollView()
-            self.scrollView.showsVerticalScrollIndicator = true
-            self.scrollView.showsHorizontalScrollIndicator = false
-            self.scrollView.scrollsToTop = true
-            self.scrollView.delaysContentTouches = false
-            self.scrollView.canCancelContentTouches = true
-            self.scrollView.contentInsetAdjustmentBehavior = .never
-            if #available(iOS 13.0, *) {
-                self.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
-            }
-            self.scrollView.alwaysBounceVertical = true
-
-            self.bottomEdgeEffect = EdgeEffectView()
-            self.bottomEdgeEffect.isUserInteractionEnabled = false
-
             super.init(frame: frame)
-
-            self.addSubview(self.scrollView)
-            self.addSubview(self.bottomEdgeEffect)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
-        }
-
-        func scrollToTop() {
-            self.scrollView.setContentOffset(CGPoint(), animated: true)
-        }
-
-        private func dismiss() {
-            self.environment?.controller()?.dismiss()
-        }
-
-        private func complete() {
-            guard let component = self.component, !component.words.isEmpty, !self.isVerifying else {
-                return
-            }
-            if component.verify {
-                self.isVerifying = true
-                guard let wordsController = self.environment?.controller() else {
-                    self.isVerifying = false
-                    return
-                }
-                let verificationController = component.context.sharedContext.makeWalletImportScreen(
-                    context: component.context,
-                    mode: .verify(words: component.words),
-                    completion: { [weak self, weak wordsController] in
-                        guard let wordsController else {
-                            return
-                        }
-                        let navigationController = wordsController.navigationController as? NavigationController
-                        let remainingViewControllers: [UIViewController]?
-                        if let navigationController,
-                           let wordsControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === wordsController }) {
-                            remainingViewControllers = Array(navigationController.viewControllers.prefix(upTo: wordsControllerIndex))
-                        } else {
-                            remainingViewControllers = nil
-                        }
-
-                        self?.isVerifying = false
-                        component.completion?()
-
-                        guard let navigationController, let remainingViewControllers else {
-                            wordsController.dismiss()
-                            return
-                        }
-
-                        navigationController.setViewControllers(
-                            remainingViewControllers,
-                            animated: true
-                        )
-                    }
-                )
-                if let verificationController = verificationController as? ViewControllerComponentContainer {
-                    verificationController.wasDismissed = { [weak self] in
-                        self?.isVerifying = false
-                    }
-                }
-                wordsController.push(verificationController)
-            } else {
-                component.completion?()
-                self.dismiss()
-            }
         }
 
         func update(
@@ -155,37 +70,19 @@ private final class WalletWordsScreenComponent: Component {
             transition: ComponentTransition
         ) -> CGSize {
             let environment = environment[EnvironmentType.self].value
-            self.environment = environment
-            self.component = component
-
             let theme = environment.theme
-            self.backgroundColor = theme.list.plainBackgroundColor
+            self.backgroundColor = .clear
 
             //TODO:localize
             let titleText = "Your Recovery Phrase"
             //TODO:localize
             let bodyText = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
-            //TODO:localize
-            let buttonTitle = "Done"
-
-            let buttonInsets = ContainerViewLayout.concentricInsets(
-                bottomInset: environment.safeInsets.bottom,
-                innerDiameter: 52.0,
-                sideInset: 30.0
-            )
-            let bottomPanelTopInset: CGFloat = 12.0
-            let bottomPanelHeight = bottomPanelTopInset + 52.0 + buttonInsets.bottom
-            let bottomPanelFrame = CGRect(
-                origin: CGPoint(x: 0.0, y: availableSize.height - bottomPanelHeight),
-                size: CGSize(width: availableSize.width, height: bottomPanelHeight)
-            )
-
             let sideInset = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             let contentWidth = max(0.0, min(430.0, availableSize.width - sideInset * 2.0))
-            var contentHeight = environment.navigationHeight - 28.0
+            var contentHeight: CGFloat = 33.0
 
             self.animation.parentState = state
-            let animationSize = CGSize(width: 108.0, height: 108.0)
+            let animationSize = CGSize(width: 100.0, height: 100.0)
             let _ = self.animation.update(
                 transition: transition,
                 component: AnyComponent(LottieComponent(
@@ -200,7 +97,7 @@ private final class WalletWordsScreenComponent: Component {
             )
             if let animationView = self.animation.view {
                 if animationView.superview == nil {
-                    self.scrollView.addSubview(animationView)
+                    self.addSubview(animationView)
                 }
                 transition.setFrame(
                     view: animationView,
@@ -234,7 +131,7 @@ private final class WalletWordsScreenComponent: Component {
             )
             if let titleView = self.title.view {
                 if titleView.superview == nil {
-                    self.scrollView.addSubview(titleView)
+                    self.addSubview(titleView)
                 }
                 transition.setFrame(
                     view: titleView,
@@ -244,7 +141,7 @@ private final class WalletWordsScreenComponent: Component {
                     )
                 )
             }
-            contentHeight += titleSize.height + 5.0
+            contentHeight += titleSize.height + 11.0
             
             self.text.parentState = state
             let textSize = self.text.update(
@@ -264,7 +161,7 @@ private final class WalletWordsScreenComponent: Component {
             )
             if let textView = self.text.view {
                 if textView.superview == nil {
-                    self.scrollView.addSubview(textView)
+                    self.addSubview(textView)
                 }
                 transition.setFrame(
                     view: textView,
@@ -275,7 +172,7 @@ private final class WalletWordsScreenComponent: Component {
                 )
             }
             contentHeight += textSize.height
-            contentHeight += 33.0
+            contentHeight += 25.0
 
             while self.wordItems.count < component.words.count {
                 self.wordItems.append(WordItem())
@@ -347,10 +244,10 @@ private final class WalletWordsScreenComponent: Component {
                     )
 
                     if let numberView = item.number.view, numberView.superview == nil {
-                        self.scrollView.addSubview(numberView)
+                        self.addSubview(numberView)
                     }
                     if let wordView = item.word.view, wordView.superview == nil {
-                        self.scrollView.addSubview(wordView)
+                        self.addSubview(wordView)
                     }
 
                     layouts.append((
@@ -401,87 +298,9 @@ private final class WalletWordsScreenComponent: Component {
             }
 
             contentHeight += 24.0
-            contentHeight += bottomPanelHeight
+            contentHeight += component.bottomInset
 
-            transition.setFrame(
-                view: self.scrollView,
-                frame: CGRect(origin: CGPoint(), size: availableSize)
-            )
-            let contentSize = CGSize(
-                width: availableSize.width,
-                height: max(contentHeight, availableSize.height + 1.0)
-            )
-            if self.scrollView.contentSize != contentSize {
-                self.scrollView.contentSize = contentSize
-            }
-            let scrollInsets = UIEdgeInsets(
-                top: environment.navigationHeight,
-                left: 0.0,
-                bottom: bottomPanelHeight,
-                right: 0.0
-            )
-            if self.scrollView.verticalScrollIndicatorInsets != scrollInsets {
-                self.scrollView.verticalScrollIndicatorInsets = scrollInsets
-            }
-
-            transition.setFrame(view: self.bottomEdgeEffect, frame: bottomPanelFrame)
-            self.bottomEdgeEffect.update(
-                content: theme.list.blocksBackgroundColor,
-                blur: true,
-                alpha: 1.0,
-                rect: bottomPanelFrame,
-                edge: .bottom,
-                edgeSize: bottomPanelFrame.height,
-                transition: transition
-            )
-
-            self.button.parentState = state
-            let buttonSize = self.button.update(
-                transition: transition,
-                component: AnyComponent(ButtonComponent(
-                    background: ButtonComponent.Background(
-                        style: .glass,
-                        color: theme.list.itemCheckColors.fillColor,
-                        foreground: theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
-                    ),
-                    content: AnyComponentWithIdentity(
-                        id: AnyHashable(0),
-                        component: AnyComponent(Text(
-                            text: buttonTitle,
-                            font: Font.semibold(17.0),
-                            color: theme.list.itemCheckColors.foregroundColor
-                        ))
-                    ),
-                    isEnabled: true,
-                    displaysProgress: false,
-                    action: { [weak self] in
-                        self?.complete()
-                    }
-                )),
-                environment: {},
-                containerSize: CGSize(
-                    width: availableSize.width - buttonInsets.left - buttonInsets.right,
-                    height: 52.0
-                )
-            )
-            if let buttonView = self.button.view {
-                if buttonView.superview == nil {
-                    self.addSubview(buttonView)
-                }
-                transition.setFrame(
-                    view: buttonView,
-                    frame: CGRect(
-                        origin: CGPoint(
-                            x: buttonInsets.left,
-                            y: availableSize.height - buttonInsets.bottom - buttonSize.height
-                        ),
-                        size: buttonSize
-                    )
-                )
-            }
-
-            return availableSize
+            return CGSize(width: availableSize.width, height: contentHeight)
         }
     }
 
@@ -506,23 +325,161 @@ private final class WalletWordsScreenComponent: Component {
     }
 }
 
+private final class WalletWordsSheetComponent: CombinedComponent {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let words: [String]
+
+    init(context: AccountContext, words: [String]) {
+        self.context = context
+        self.words = words
+    }
+
+    static func ==(lhs: WalletWordsSheetComponent, rhs: WalletWordsSheetComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.words != rhs.words {
+            return false
+        }
+        return true
+    }
+
+    static var body: Body {
+        let sheet = Child(ResizableSheetComponent<EnvironmentType>.self)
+        let animateOut = StoredActionSlot(Action<Void>.self)
+
+        return { context in
+            let environment = context.environment[EnvironmentType.self]
+            let controller = environment.controller
+
+            let dismiss: (Bool) -> Void = { animated in
+                if animated {
+                    animateOut.invoke(Action { _ in
+                        controller()?.dismiss(completion: nil)
+                    })
+                } else {
+                    controller()?.dismiss(completion: nil)
+                }
+            }
+
+            let theme = environment.theme.withModalBlocksBackground()
+            let bottomInsets = ContainerViewLayout.concentricInsets(
+                bottomInset: environment.safeInsets.bottom,
+                innerDiameter: 52.0,
+                sideInset: 30.0
+            )
+            let contentBottomInset = bottomInsets.bottom + 52.0 + 16.0
+
+            //TODO:localize
+            let buttonTitle = "Done"
+            let sheetComponent = sheet.update(
+                component: ResizableSheetComponent<EnvironmentType>(
+                    content: AnyComponent<EnvironmentType>(WalletWordsScreenComponent(
+                        context: context.component.context,
+                        words: context.component.words,
+                        bottomInset: contentBottomInset
+                    )),
+                    titleItem: nil,
+                    leftItem: AnyComponent(GlassBarButtonComponent(
+                        size: CGSize(width: 44.0, height: 44.0),
+                        backgroundColor: nil,
+                        isDark: theme.overallDarkAppearance,
+                        state: .glass,
+                        component: AnyComponentWithIdentity(
+                            id: "close",
+                            component: AnyComponent(BundleIconComponent(
+                                name: "Navigation/Close",
+                                tintColor: theme.chat.inputPanel.panelControlColor
+                            ))
+                        ),
+                        action: { _ in
+                            dismiss(true)
+                        }
+                    )),
+                    rightItem: nil,
+                    hasTopEdgeEffect: false,
+                    bottomItem: AnyComponent(ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: theme.list.itemCheckColors.fillColor,
+                            foreground: theme.list.itemCheckColors.foregroundColor,
+                            pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
+                        ),
+                        content: AnyComponentWithIdentity(
+                            id: AnyHashable(0),
+                            component: AnyComponent(Text(
+                                text: buttonTitle,
+                                font: Font.semibold(17.0),
+                                color: theme.list.itemCheckColors.foregroundColor
+                            ))
+                        ),
+                        isEnabled: true,
+                        displaysProgress: false,
+                        action: {
+                            (controller() as? WalletWordsScreen)?.complete()
+                        }
+                    )),
+                    backgroundColor: .color(theme.list.plainBackgroundColor),
+                    animateOut: animateOut
+                ),
+                environment: {
+                    environment
+                    ResizableSheetComponentEnvironment(
+                        theme: theme,
+                        statusBarHeight: environment.statusBarHeight,
+                        safeInsets: environment.safeInsets,
+                        inputHeight: 0.0,
+                        metrics: environment.metrics,
+                        deviceMetrics: environment.deviceMetrics,
+                        isDisplaying: environment.value.isVisible,
+                        isCentered: environment.metrics.widthClass == .regular,
+                        screenSize: context.availableSize,
+                        regularMetricsSize: CGSize(width: 430.0, height: 900.0),
+                        dismiss: { animated in
+                            dismiss(animated)
+                        }
+                    )
+                },
+                availableSize: context.availableSize,
+                transition: context.transition
+            )
+            context.add(sheetComponent.position(CGPoint(
+                x: context.availableSize.width / 2.0,
+                y: context.availableSize.height / 2.0
+            )))
+
+            return context.availableSize
+        }
+    }
+}
+
 public final class WalletWordsScreen: ViewControllerComponentContainer {
+    private let context: AccountContext
+    private let words: [String]
+    private let verify: Bool
+    private let completion: (() -> Void)?
     private let idleTimerExtensionDisposable = MetaDisposable()
+    private var isVerifying = false
     
     public init(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) {
+        self.context = context
+        self.words = words
+        self.verify = verify
+        self.completion = completion
+
         super.init(
             context: context,
-            component: WalletWordsScreenComponent(context: context, words: words, verify: verify, completion: completion),
-            navigationBarAppearance: .transparent,
+            component: WalletWordsSheetComponent(context: context, words: words),
+            navigationBarAppearance: .none,
+            statusBarStyle: .ignore,
             theme: .default
         )
 
-        self.scrollToTop = { [weak self] in
-            guard let self, let componentView = self.node.hostView.componentView as? WalletWordsScreenComponent.View else {
-                return
-            }
-            componentView.scrollToTop()
-        }
+        self.statusBar.statusBarStyle = .Ignore
+        self.navigationPresentation = .flatModal
+        self.blocksBackgroundWhenInOverlay = true
         
         self.idleTimerExtensionDisposable.set(context.sharedContext.applicationBindings.pushIdleTimerExtension())
     }
@@ -533,5 +490,60 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     
     deinit {
         self.idleTimerExtensionDisposable.dispose()   
+    }
+
+    fileprivate func complete() {
+        guard !self.words.isEmpty, !self.isVerifying else {
+            return
+        }
+        if self.verify {
+            self.isVerifying = true
+            let wordsController: ViewController = self
+            let verificationController = self.context.sharedContext.makeWalletImportScreen(
+                context: self.context,
+                mode: .verify(words: self.words),
+                completion: { [weak self, weak wordsController] in
+                    guard let self, let wordsController else {
+                        return
+                    }
+                    let navigationController = wordsController.navigationController as? NavigationController
+                    let remainingViewControllers: [UIViewController]?
+                    if let navigationController,
+                       let wordsControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === wordsController }) {
+                        remainingViewControllers = Array(navigationController.viewControllers.prefix(upTo: wordsControllerIndex))
+                    } else {
+                        remainingViewControllers = nil
+                    }
+
+                    self.isVerifying = false
+                    self.completion?()
+
+                    guard let navigationController, let remainingViewControllers else {
+                        wordsController.dismiss()
+                        return
+                    }
+                    navigationController.setViewControllers(remainingViewControllers, animated: true)
+                }
+            )
+            if let verificationController = verificationController as? ViewControllerComponentContainer {
+                verificationController.wasDismissed = { [weak self] in
+                    self?.isVerifying = false
+                }
+            }
+            self.push(verificationController)
+        } else {
+            self.completion?()
+            self.dismissAnimated()
+        }
+    }
+
+    public func dismissAnimated() {
+        if let view = self.node.hostView.findTaggedView(
+            tag: ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
+        ) as? ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View {
+            view.dismissAnimated()
+        } else {
+            self.dismiss()
+        }
     }
 }
