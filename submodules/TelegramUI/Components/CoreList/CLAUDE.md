@@ -405,6 +405,13 @@ that pass's independently resolved anchor, including ghost-to-ghost handoff when
 ghost above the pass anchor therefore rides its `maxY` on the following boundary's `minY`, while a genuine
 same-pass or delayed replacement carries the ghost at matching `minY` edges.
 
+**A carousel pass attaches no boundary witness at all.** Its departed strip has no live neighbourhood
+left to attach to — the destination is a different region of the collection, which is what made the
+pass a carousel — and the shared additive viewport track already owns the travel for the outgoing
+strip exactly as much as for the incoming one. Blocks created there stay `.unresolved` and hold their
+remapped roots; this is the outgoing counterpart of the destination-only-survivor rule above. See the
+gotcha below for what a witness does there.
+
 Mutation anchors use the engine offset clamped to the currently known loaded edges. Rubber-band displacement
 is presentation-only: it is restored to the displayed engine offset after settled geometry is resolved and
 must not influence anchor identity, direction, or edge pinning. At the settled loaded top edge, an ordinary
@@ -624,6 +631,19 @@ Animation an authority.
   sampled member-local geometry; identity alone is insufficient because reinsertion may coexist with a
   fading departure. Contiguous members move only through their stable block wrapper, whose additive position
   owner rides a live/ghost boundary witness.
+- **A ghost block created in a carousel pass must take no witness, and the failure is destination-
+  dependent.** `initialGhostWitness` walks back for a surviving predecessor and, finding none — which
+  a full replace guarantees — falls through to proposing `newItems[0]` (or, at the far end,
+  `newItems.last`). That proposal *resolves* precisely when the destination window reaches a
+  collection edge, and the departed strip then gets a position track onto the head of the incoming
+  window and visibly walks over it while the viewport track carries both. Every mid-collection jump
+  stays rigid, because both edge rows are unloaded and the witness stays `.unresolved` — so the
+  suites that cover carousels could not see it: `ProgrammaticScrollAnimationTests` asserts strip
+  adjacency but keeps the same collection (old rows become viewport carries, not ghosts), and
+  `CarouselFadeSuppressionTests` does full replaces but only checks opacity, always at index 50. It
+  surfaced as a chat jumping from far in the past to the newest message: 348pt of overlap on a 400pt
+  strip at 75% of the travel. `FullReplaceCarouselStripSeparationTests` locks both collection edges,
+  the mid-collection control, and the mechanism (`witness == .unresolved`, no ghost position track).
 - Ghost witnesses migrate toward the current pass anchor, not a remembered direction. Pure scroll must not
   reconsider witnesses or replace block tracks; coordinate-only remaps must shift wrapper model positions and
   ledger roots by the same exact delta. Empty referenced blocks remain spatial nodes until dependents finish.

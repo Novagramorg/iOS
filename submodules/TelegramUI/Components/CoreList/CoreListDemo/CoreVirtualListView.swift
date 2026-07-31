@@ -1133,7 +1133,27 @@ public final class CoreVirtualListView: UIView {
         let anchorIdentity = resolvedAnchorIdentity
         let anchorY = anchorIdentity.flatMap { newState[$0]?.contentY }
         var moveAmbiguousNewBlockIDs: Set<GhostBlockID> = []
-        for id in newGhostBlockIDs {
+        // A carousel's departed strip has no live neighbourhood left to attach to: the destination is
+        // a different region of the collection (the two loaded windows are disjoint, which is what
+        // makes it a carousel), and the shared additive viewport track is ALREADY the exclusive owner
+        // of the travel — for the outgoing strip exactly as much as for the incoming one. A boundary
+        // witness here hands the outgoing strip a second vertical owner that walks it onto the
+        // incoming one, which renders as the two windows interpenetrating for the whole jump.
+        //
+        // This is the outgoing counterpart of the rule the incoming side already states: "for a
+        // non-overlapping carousel, the additive viewport track is the exclusive vertical-motion
+        // owner for destination-only survivors".
+        //
+        // It only ever bit when the destination window contained collection INDEX 0. A full replace
+        // leaves `initialGhostWitness` no surviving predecessor, so it falls to `ordinal == 0` and
+        // proposes `newItems[0]` — which resolves to a target only when that row is loaded. Any other
+        // far jump leaves index 0 outside the destination window, the witness stays `.unresolved`,
+        // and the travel is rigid; a chat jumping to the newest message loads it every time.
+        //
+        // Blocks are born `.unresolved` in `makeGhostBlock`, so declining to attach one IS the fix:
+        // `GhostBlockLedger.resolve` returns the block's own `settledRootY`, and the resulting
+        // equal-endpoint `transitionGhostBlock` is an exact no-op.
+        for id in newGhostBlockIDs where !isCarouselScroll {
             guard let render = ghostRenders[id],
                   let block = ghostLedger.snapshot(for: id) else { continue }
             let initialWitness = initialGhostWitness(

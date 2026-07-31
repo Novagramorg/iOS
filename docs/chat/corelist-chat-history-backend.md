@@ -414,9 +414,26 @@ there.
 index resolved through `CoreVirtualListView.loadedItemEntries` — a hosted node can never carry a
 `ListViewItemNode.index`.
 
+**Jumping to the newest message is the edge case of the edge case.** A jump renders as a carousel:
+two strips travelling rigidly, both carried by CoreList's one shared additive viewport track. A
+departing row also joins a ghost block, and a ghost block normally attaches to a live boundary
+witness so it stays glued to its neighbourhood — but a carousel's departed strip *has* no live
+neighbourhood, and attaching one gives it a second vertical owner that walks it across the incoming
+window. CoreList's `initialGhostWitness` proposes the head of the new collection when no predecessor
+survives, which a wholesale history replace guarantees; that proposal resolves only when collection
+index 0 is loaded, i.e. only when the destination is the newest message. Jump-to-reply and
+jump-to-date leave it unloaded and stayed rigid, which is why the six verified behaviors above did
+not catch it. Fixed CoreList-side (carousel passes attach no witness) and **runtime-verified
+2026-07-31**; locked by `FullReplaceCarouselStripSeparationTests`, which covers both collection edges
+(the far end had the same bug through `initialGhostWitness`'s `ordinal == newItems.count` branch), a
+mid-collection control, and the mechanism itself. Note the shape this bug shares with the two below:
+**a chat's jump differs from CoreList's synthetic fixtures precisely at the collection edges and at
+the constant-identity rows, and all three times that difference was invisible to a green suite.**
+
 **Verification status (2026-07-31): runtime-verified.** `CoreListDemoTests` covers resolver placement
-against a far unloaded target, the direction fallback, and carousel fade suppression from both sides
-(616 tests green). All six chat behaviors were then confirmed on screen: scroll-to-unread (including
+against a far unloaded target, the direction fallback, carousel fade suppression from both sides, and
+carousel strip separation at both collection edges (620 tests green). All six chat behaviors were
+then confirmed on screen: scroll-to-unread (including
 in a chat whose navigation bar changes height mid-open), long-jump travel direction and opacity,
 jump-to-reply centering, quote centering in an over-tall bubble, scroll-position restore on chat
 open, and reply-thread unread refocus.
@@ -429,6 +446,17 @@ item"). Both bugs had green CoreList tests over them the whole time — the synt
 disjoint identities, uniform row heights, and no constant-id rows, so they are systematically cleaner
 than what the chat produces. **Treat CoreList test coverage as necessary and not sufficient for
 anything in this backend; the on-screen check is the real gate.**
+
+**A third of the same class surfaced only in use**, after those six passed: jumping to the newest
+message dragged the outgoing window across the incoming one (see "Jumping to the newest message" in
+"Scroll to item"). It never reached a screen during the sweep because the six behaviors exercise
+jumps to *interior* targets, and the bug needs a destination window touching a collection edge. Two
+things generalize. Enumerate the **edges** of whatever a host actually asks for — first index, last
+index, empty, single-row — not just a representative interior case; the carousel suites all sat at
+index 50. And when a symptom is a wrong *animation*, measure it instead of watching it: sample
+`ListAnimationModel` for the two strips' screen bounds at several phases and assert the overlap, as
+`FullReplaceCarouselStripSeparationTests` does. That turned an eyeballed "heavy intersection" into a
+348pt number and a named owner (a ghost block's position track) in one 15ms run, with no app build.
 
 ## Item-node geometry
 

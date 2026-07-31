@@ -25,6 +25,26 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-07-31 — a carousel's ghost blocks take no boundary witness**: a full-replace carousel gives
+  every departing row a ghost block, and `initialGhostWitness` — finding no surviving predecessor,
+  which a full replace guarantees — fell through to proposing `newItems[0]` (or, at the far end,
+  `newItems.last`). That proposal *resolves* exactly when the destination window reaches a collection
+  edge, so the departed strip acquired a position track onto the head of the incoming window and
+  walked across it while the shared viewport track carried both. The rule it broke was already stated
+  for the incoming side — the additive viewport track is a carousel's exclusive vertical-motion owner
+  — and a carousel's departed strip has no live neighbourhood to attach to anyway: its destination is
+  a different region of the collection, which is what made the pass a carousel. Blocks are born
+  `.unresolved`, so declining to attach one is the whole fix; `resolve` then returns the block's own
+  `settledRootY` and the equal-endpoint `transitionGhostBlock` is an exact no-op. Found as a chat
+  jumping from far in the past to the newest message: 348pt of overlap on a 400pt strip at 75% of the
+  travel. Every mid-collection jump stayed rigid, which is why nothing caught it — the carousel suites
+  all sit at index 50, and `ProgrammaticScrollAnimationTests` asserts strip adjacency but keeps the
+  same collection, so its old rows become viewport carries rather than ghosts.
+  `FullReplaceCarouselStripSeparationTests` locks both collection edges, a mid-collection control, and
+  the mechanism (`witness == .unresolved`, no ghost position track). The debugging note worth keeping:
+  sampling `ListAnimationModel` for the two strips' screen bounds across the travel and asserting the
+  overlap turned an eyeballed "heavy intersection" into a number and a named owner in one 15ms run.
+
 - **2026-07-28 — inset compensation is suppressible while dragging**: `applyChanges` gained
   `compensatesInsetChange` (default `true`), and the seam gained `ScrollEngine.onDidEndDragging` →
   `CoreVirtualListView.didEndDragging` so a host can close a finger-down interval at all — only
