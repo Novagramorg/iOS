@@ -8,6 +8,7 @@ import TelegramCore
 import Postbox
 import MediaResources
 import RangeSet
+import FenixuzStoryUnlock
 
 private struct StoryKey: Hashable {
     var peerId: EnginePeer.Id
@@ -65,7 +66,7 @@ public final class StoryContentContextImpl: StoryContentContext {
             )
             |> map { setting, peer -> Bool in
                 let isPremium = peer?.isPremium ?? false
-                return setting && isPremium
+                return setting && (isPremium || FenixuzStoryUnlock.isEnabled)
             }
             |> distinctUntilChanged
             
@@ -1191,7 +1192,7 @@ public final class SingleStoryContentContextImpl: StoryContentContext {
         )
         |> map { setting, peer -> Bool in
             let isPremium = peer?.isPremium ?? false
-            return setting && isPremium
+            return setting && (isPremium || FenixuzStoryUnlock.isEnabled)
         }
         |> distinctUntilChanged
         
@@ -1518,7 +1519,7 @@ public final class PeerStoryListContentContextImpl: StoryContentContext {
         )
         |> map { setting, peer -> Bool in
             let isPremium = peer?.isPremium ?? false
-            return setting && isPremium
+            return setting && (isPremium || FenixuzStoryUnlock.isEnabled)
         }
         |> distinctUntilChanged
         
@@ -2013,7 +2014,7 @@ public func waitUntilStoryMediaPreloaded(context: AccountContext, peerId: Engine
     )
     |> map { setting, peer -> Bool in
         let isPremium = peer?.isPremium ?? false
-        return setting && isPremium
+        return setting && (isPremium || FenixuzStoryUnlock.isEnabled)
     }
     |> distinctUntilChanged
     
@@ -2378,7 +2379,7 @@ public final class RepostStoriesContentContextImpl: StoryContentContext {
             )
             |> map { setting, peer -> Bool in
                 let isPremium = peer?.isPremium ?? false
-                return setting && isPremium
+                return setting && (isPremium || FenixuzStoryUnlock.isEnabled)
             }
             |> distinctUntilChanged
             

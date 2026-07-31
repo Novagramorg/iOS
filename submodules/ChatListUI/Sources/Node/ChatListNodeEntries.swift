@@ -926,7 +926,10 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         }
 
         if !view.hasLater, case .chatList = mode {
-            for groupReference in groupItems {
+            // Fenixuz Secret Vault: the Hidden Chats screen carries none of the root list's
+            // chrome. The Archive row is the important one — it opens the real archive, which is
+            // not vault-filtered, so it was a door straight back to the chats this screen hides.
+            for groupReference in groupItems where !state.fenixVaultMode {
                 let messageIndex = EngineMessage.Index(id: EngineMessage.Id(peerId: EnginePeer.Id(0), namespace: 0, id: 0), timestamp: 1)
                 var mappedStoryState: ChatListNodeState.StoryState?
                 if let archiveStoryState = state.archiveStoryState {
@@ -959,7 +962,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 } else {
                     return false
                 }
-            }) {
+            }) && !state.fenixVaultMode {
                 result.append(.EmptyIntro(presentationData: state.presentationData))
             }
 

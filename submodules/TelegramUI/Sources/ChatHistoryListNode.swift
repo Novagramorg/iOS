@@ -38,6 +38,7 @@ import PhoneNumberFormat
 import Postbox
 import FenixuzProMessager
 import FenixNovagramAds
+import FenixuzStoryUnlock
 
 struct ChatTopVisibleMessageRange: Equatable {
     var lowerBound: MessageIndex
@@ -1879,7 +1880,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         )
         |> map { setting, peer -> Bool in
             let isPremium = peer?.isPremium ?? false
-            return setting && isPremium
+            return setting && (isPremium || FenixuzStoryUnlock.isEnabled)
         }
         |> distinctUntilChanged
 

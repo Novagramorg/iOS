@@ -19,6 +19,7 @@ import FenixuzUnreadReminder
 import FenixuzChatLock
 import FenixuzAutoProxy
 import FenixuzSecretVault
+import FenixuzStoryUnlock
 
 private enum FenixSection: Int32 {
     case accounts = 5
@@ -139,6 +140,9 @@ private enum FenixEntry: ItemListNodeEntry {
     case autoAcceptRequests(PresentationTheme, String, String, Bool, Bool)
     // Feature #40 (part b): share NovagramPro settings link action row — visible only when settingsLinksEnabled == true
     case shareNovagramProLink(PresentationTheme, String)
+    // Client-side unlock for two story-viewer actions upstream gates on isPremium with no
+    // server enforcement. See submodules/Fenixuz/StoryUnlock/.
+    case storyUnlockEnabled(PresentationTheme, String, String, Bool, Bool)
     case featuresFooter(PresentationTheme, String)
 
     // — Ads Section (hidden Easter-egg, revealed via 15-second long-press) —
@@ -176,7 +180,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.secretVault.rawValue
         case .reminderHeader, .reminderEnabled, .reminderTime, .reminderSound, .reminderFooter:
             return FenixSection.reminder.rawValue
-        case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .featuresFooter:
+        case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .featuresFooter:
             return FenixSection.features.rawValue
         case .adsHeader, .showAds, .adsAbout:
             return FenixSection.ads.rawValue
@@ -254,7 +258,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case .settingsLinks:             return 84
         case .autoAcceptRequests:        return 85
         case .shareNovagramProLink:      return 86
-        case .featuresFooter:            return 87
+        case .storyUnlockEnabled:        return 87
+        case .featuresFooter:            return 88
         // Ads section (hidden Easter-egg)
         case .adsHeader:                 return 90
         case .showAds:                   return 91
@@ -402,6 +407,9 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .autoAcceptRequests(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .shareNovagramProLink(lhsTheme, lhsTitle):
             if case let .shareNovagramProLink(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .storyUnlockEnabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .storyUnlockEnabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .featuresFooter(lhsTheme, lhsText):
             if case let .featuresFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -428,6 +436,81 @@ private enum FenixEntry: ItemListNodeEntry {
         return lhs.sortId < rhs.sortId
     }
 
+    // Feature #40 (part c): the row's deep-link identity plus the label the share menu shows.
+    // Section headers, footers and info paragraphs have none — they are not linkable.
+    // A slug is part of a shared URL forever: never repoint one at a different row.
+    var linkInfo: (feature: FenixSettingsFeature, title: String)? {
+        switch self {
+        case let .aboutRow(_, title):                       return (.about, title)
+        case let .accountsManager(_, title):                return (.accounts, title)
+        case let .novagramBots(_, title):                   return (.bots, title)
+
+        case let .hideFolders(_, title, _, _):              return (.hideFolders, title)
+        case let .showStories(_, title, _, _):              return (.stories, title)
+        case let .showMutualContactSymbol(_, title, _, _):  return (.mutualContacts, title)
+        case let .unlimitedPins(_, title, _, _, _):         return (.unlimitedPins, title)
+
+        case let .deletedMessages(_, title, _, _):          return (.deletedMessages, title)
+        case let .editedHistoryEnabled(_, title, _, _):     return (.editedHistory, title)
+        case let .showViewFirstMessage(_, title, _, _):     return (.firstMessage, title)
+        case let .showGhostMode(_, title, _, _):            return (.ghostMode, title)
+        case let .longPressCameraSelection(_, title, _, _): return (.cameraPicker, title)
+        case let .roundVideoFromGallery(_, title, _, _, _): return (.roundVideo, title)
+        case let .forwardHideNames(_, title, _, _, _):      return (.forwardHideNames, title)
+
+        case let .textStyle(_, title, _):                   return (.textStyle, title)
+        case let .autoText(_, title, _):                    return (.autoText, title)
+        case let .autoTranslate(_, title, _):               return (.autoTranslate, title)
+        case let .translateToggle(_, title, _, _):          return (.translateButton, title)
+        case let .translateMessages(_, title):              return (.translateLanguage, title)
+        case let .sendTranslateConfirm(_, title, _, _, _):  return (.translateOnSend, title)
+        case let .autoStickerEnabled(_, title, _, _):       return (.autoSticker, title)
+        case let .heartEffectEnabled(_, title, _, _):       return (.heartEffect, title)
+
+        case let .sttEnabled(_, title, _, _):               return (.voiceToText, title)
+        case let .sttLanguage(_, title, _):                 return (.voiceLanguage, title)
+        case let .voiceTranslate(_, title, _, _, _, _):     return (.voiceTranslate, title)
+
+        case let .blockForeignUsers(_, title, _, _):        return (.blockForeign, title)
+        case let .chatLockMasterEnabled(_, title, _, _, _): return (.chatLock, title)
+        case let .autoDownloadDisabled(_, title, _, _, _):  return (.autoDownload, title)
+        case let .sendConfirmEnabled(_, title, _, _, _):    return (.sendConfirm, title)
+        case let .enableNovagramProxy(_, title, _, _):      return (.proxy, title)
+
+        case let .whiteThemeAccent(_, title, _, _, _):      return (.whiteAccent, title)
+
+        case let .secretVaultEnabled(_, title, _, _, _):    return (.hiddenChats, title)
+        case let .secretVaultBiometric(_, title, _, _):     return (.hiddenChatsBiometrics, title)
+
+        case let .reminderEnabled(_, title, _, _):          return (.reminder, title)
+        case let .reminderTime(_, title, _):                return (.reminderTime, title)
+        case let .reminderSound(_, title, _):               return (.reminderSound, title)
+
+        case let .addRecommendedFolders(_, title, _, _):    return (.recommendedFolders, title)
+        case let .folderStyle(_, title, _, _):              return (.folderStyle, title)
+        case let .channelHistoryButton(_, title, _, _, _):  return (.channelHistory, title)
+        case let .settingsLinks(_, title, _, _, _):         return (.settingsLinks, title)
+        case let .autoAcceptRequests(_, title, _, _, _):    return (.autoAccept, title)
+        case let .shareNovagramProLink(_, title):           return (.shareLink, title)
+        case let .storyUnlockEnabled(_, title, _, _, _):    return (.storySaving, title)
+
+        case let .showAds(_, title, _, _, _):               return (.ads, title)
+
+        default:                                            return nil
+        }
+    }
+
+    var feature: FenixSettingsFeature? {
+        return self.linkInfo?.feature
+    }
+
+    var fenixTag: ItemListItemTag? {
+        guard let feature = self.feature else {
+            return nil
+        }
+        return FenixSettingsItemTag(feature: feature)
+    }
+
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! FenixSettingsArguments
         switch self {
@@ -437,15 +520,15 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .accountsManager(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openAccounts()
-            })
+            }, tag: self.fenixTag)
         case let .aboutRow(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "info.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openAbout()
-            })
+            }, tag: self.fenixTag)
         case let .novagramBots(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "bolt.circle.fill", color: .teal), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openNovagramBots()
-            })
+            }, tag: self.fenixTag)
 
         // ─── INTERFEYS ───
         case let .interfaceHeader(text):
@@ -453,15 +536,15 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .hideFolders(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "folder.badge.minus", color: .lightBlue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateHideFolders(val)
-            })
+            }, tag: self.fenixTag)
         case let .showStories(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "circle.dashed", color: .violet), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowStories(val)
-            })
+            }, tag: self.fenixTag)
         case let .showMutualContactSymbol(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.fill", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowMutualContactSymbol(val)
-            })
+            }, tag: self.fenixTag)
         case let .interfaceFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -476,41 +559,41 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .deletedMessages(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "trash.slash.fill", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowDeletedMessages(val)
-            })
+            }, tag: self.fenixTag)
         case let .showViewFirstMessage(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrow.up.to.line", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowViewFirstMessage(val)
-            })
+            }, tag: self.fenixTag)
         case let .showGhostMode(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "eye.slash.fill", color: .gray), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowGhostMode(val)
-            })
+            }, tag: self.fenixTag)
         case let .longPressCameraSelection(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "camera.rotate.fill", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateLongPressCameraSelection(val)
-            })
+            }, tag: self.fenixTag)
         case let .editedHistoryEnabled(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "clock.arrow.circlepath", color: .teal), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateEditedHistoryEnabled(val)
-            })
+            }, tag: self.fenixTag)
         case let .roundVideoFromGallery(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "video.circle.fill", color: .blue), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateRoundVideoFromGallery(val)
-            })
+            }, tag: self.fenixTag)
         case let .forwardHideNames(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrowshape.turn.up.right.circle.fill", color: .green), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateForwardHideNames(val)
-            })
+            }, tag: self.fenixTag)
         case let .unlimitedPins(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "pin.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateUnlimitedPins(val)
-            })
+            }, tag: self.fenixTag)
         case let .chatFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -520,27 +603,27 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .textStyle(_, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "textformat", color: .purple), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openTextStyleSettings()
-            })
+            }, tag: self.fenixTag)
         case let .autoText(theme, title, label):
             let l10n = FenixuzL10n(presentationData.strings)
             let labelStyle: ItemListDisclosureLabelStyle = (label == l10n.settings_state_enabled) ? .badge(theme.list.itemAccentColor) : .text
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "text.append", color: .teal), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 arguments.openAutoTextSettings()
-            })
+            }, tag: self.fenixTag)
         case let .autoTranslate(theme, title, label):
             let l10n = FenixuzL10n(presentationData.strings)
             let labelStyle: ItemListDisclosureLabelStyle = (label == l10n.settings_state_enabled) ? .badge(theme.list.itemAccentColor) : .text
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .pink), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 arguments.openAutoTranslateSettings()
-            })
+            }, tag: self.fenixTag)
         case let .translateToggle(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "character.bubble.fill", color: .pink), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateTranslateMessages(val)
-            })
+            }, tag: self.fenixTag)
         case let .translateMessages(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "character.book.closed.fill", color: .lightBlue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openTranslationSettings()
-            })
+            }, tag: self.fenixTag)
         case let .sendTranslateConfirm(_, title, text, value, isNew):
             // Feature #37: 2-tap send confirm toggle (isNew badge)
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -556,18 +639,19 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateSendTranslateConfirm(val)
-                }
+                },
+                tag: self.fenixTag
             )
         case let .autoStickerEnabled(_, title, text, value):
             // Feature #30: Sticker auto-add — sends the last saved sticker after each text message
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "face.smiling.inverse", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateAutoStickerEnabled(val)
-            })
+            }, tag: self.fenixTag)
         case let .heartEffectEnabled(_, title, text, value):
             // Feature #34: Heart effect — auto-attaches the ❤️ message effect to sent text messages
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "heart.fill", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateHeartEffectEnabled(val)
-            })
+            }, tag: self.fenixTag)
         case let .messagingFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -577,11 +661,11 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .sttEnabled(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "mic.fill", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSttEnabled(val)
-            })
+            }, tag: self.fenixTag)
         case let .sttLanguage(_, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openSttLanguageSettings()
-            })
+            }, tag: self.fenixTag)
         case let .voiceTranslate(_, title, text, value, isNew, enabled):
             // "character.bubble.fill" is iOS 13+ safe; "translate" is iOS 14+ only.
             // isNew: always true for now — flip to false in the call site when no longer new.
@@ -600,7 +684,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateVoiceTranslate(val)
-                }
+                },
+                tag: self.fenixTag
             )
 
         // ─── HIMOYA ───
@@ -609,24 +694,24 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .blockForeignUsers(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.crop.circle.badge.xmark", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateBlockForeignUsers(val)
-            })
+            }, tag: self.fenixTag)
         case let .enableNovagramProxy(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "lock.shield", color: .green), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateEnableNovagramProxy(val)
-            })
+            }, tag: self.fenixTag)
         case let .chatLockMasterEnabled(_, title, text, value, isNew):
             // Feature #46: Chat Lock master toggle — on turns the feature on and sets the master pincode
             let langCode = presentationData.strings.primaryComponent.languageCode
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "lock.shield.fill", color: .blue), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateChatLockMaster(val)
-            })
+            }, tag: self.fenixTag)
         case let .autoDownloadDisabled(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrow.down.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateAutoDownloadDisabled(val)
-            })
+            }, tag: self.fenixTag)
         case let .sendConfirmEnabled(_, title, text, value, isNew):
             // Feature #38: yuborishdan oldin tasdiq so'rovi (ovoz, stiker, sovg'a)
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -642,7 +727,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateSendConfirmEnabled(val)
-                }
+                },
+                tag: self.fenixTag
             )
         case let .protectionFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -665,7 +751,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateWhiteThemeAccent(val)
-                }
+                },
+                tag: self.fenixTag
             )
         case let .appearanceFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -698,11 +785,11 @@ private enum FenixEntry: ItemListNodeEntry {
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "eye.slash.fill", color: .purple), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSecretVault(val)
-            })
+            }, tag: self.fenixTag)
         case let .secretVaultBiometric(_, title, iconName, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: iconName, color: .purple), title: title, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSecretVaultBiometric(val)
-            })
+            }, tag: self.fenixTag)
         case let .secretVaultFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -726,15 +813,15 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .reminderEnabled(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "bell.badge.fill", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateReminderEnabled(val)
-            })
+            }, tag: self.fenixTag)
         case let .reminderTime(_, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "clock.fill", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openReminderTimeSettings()
-            })
+            }, tag: self.fenixTag)
         case let .reminderSound(_, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "speaker.wave.2.fill", color: .pink), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openReminderSoundSettings()
-            })
+            }, tag: self.fenixTag)
         case let .reminderFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -765,7 +852,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 action: {
                     arguments.addRecommendedFolders()
-                }
+                },
+                tag: self.fenixTag
             )
         case let .folderStyle(_, title, label, _):
             return ItemListDisclosureItem(
@@ -777,7 +865,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 action: {
                     arguments.openFolderStyle()
-                }
+                },
+                tag: self.fenixTag
             )
         case let .channelHistoryButton(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -793,7 +882,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateChannelHistory(val)
-                }
+                },
+                tag: self.fenixTag
             )
         case let .settingsLinks(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -809,7 +899,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateSettingsLinks(val)
-                }
+                },
+                tag: self.fenixTag
             )
         case let .autoAcceptRequests(_, title, text, value, isNew):
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -825,7 +916,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateAutoAccept(val)
-                }
+                },
+                tag: self.fenixTag
             )
         case let .shareNovagramProLink(_, title):
             // Feature #40 (part b): action row — tapping copies + shares tg://settings/novagrampro
@@ -838,7 +930,8 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 action: {
                     arguments.shareNovagramProLink()
-                }
+                },
+                tag: self.fenixTag
             )
         case let .featuresFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -874,7 +967,25 @@ private enum FenixEntry: ItemListNodeEntry {
                 style: .blocks,
                 updated: { val in
                     arguments.updateShowAds(val)
-                }
+                },
+                tag: self.fenixTag
+            )
+        case let .storyUnlockEnabled(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "arrow.down.circle.fill", color: .lightBlue),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateStoryUnlock(val)
+                },
+                tag: self.fenixTag
             )
         case let .adsAbout(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -927,6 +1038,8 @@ private struct FenixSettingsState: Equatable {
     var channelHistoryEnabled: Bool
     var settingsLinksEnabled: Bool
     var autoAcceptEnabled: Bool
+    // Mirrors FenixuzStoryUnlock.isEnabled; default false.
+    var storyUnlockEnabled: Bool
     // Ads section (Feature #6 — hidden Easter-egg)
     // Default true: sponsored messages shown (standard Telegram behavior)
     var showAds: Bool
@@ -940,16 +1053,16 @@ private struct FenixSettingsState: Equatable {
         self.showMutualContactSymbol = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_mutual_contact_symbol") as? Bool ?? true
         self.showGhostMode = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false
         self.showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
-        self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
+        self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? false
         self.editedHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "edited_history_enabled") as? Bool ?? true
-        self.roundVideoFromGallery = UserDefaults(suiteName: "pro_messager")?.object(forKey: "round_video_from_gallery") as? Bool ?? true
+        self.roundVideoFromGallery = UserDefaults(suiteName: "pro_messager")?.object(forKey: "round_video_from_gallery") as? Bool ?? false
         self.forwardHideNames = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "forward_hide_names") ?? false
         self.unlimitedPins = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "unlimited_pins") ?? false
-        self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
+        self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? false
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
         self.autoTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_translate_enabled") ?? false
-        self.sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+        self.sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? false
         self.sttLanguage = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "en-US"
         self.blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
         self.enableNovagramProxy = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "novagram_proxy_enabled") ?? false
@@ -980,6 +1093,7 @@ private struct FenixSettingsState: Equatable {
         self.channelHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_channel_history_button") ?? false
         self.settingsLinksEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_settings_links") ?? false
         self.autoAcceptEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_autoaccept_global") ?? false
+        self.storyUnlockEnabled = FenixuzStoryUnlock.isEnabled
         // Ads section — default true (show ads) and false (section hidden)
         self.showAds = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_show_ads") as? Bool ?? true
         self.adsSectionRevealed = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_ads_section_revealed") as? Bool ?? false
@@ -1092,6 +1206,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.autoAcceptEnabled != rhs.autoAcceptEnabled {
+            return false
+        }
+        if lhs.storyUnlockEnabled != rhs.storyUnlockEnabled {
             return false
         }
         if lhs.showAds != rhs.showAds {
@@ -1286,7 +1403,10 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     // Feature #40: always-visible "Share Novagram Settings link" button. The toggle was removed —
     // sharing a link needs no on/off switch, and deep-link handling (OpenResolvedUrl) is independent of it.
     entries.append(.shareNovagramProLink(presentationData.theme, FenixFeaturesStrings.shareNovagramProLinkTitle(langCode: langCode)))
-    entries.append(.featuresFooter(presentationData.theme, FenixFeaturesStrings.footer(langCode: langCode)))
+    entries.append(.storyUnlockEnabled(presentationData.theme, FenixStoryUnlockStrings.toggleTitle(langCode: langCode), FenixStoryUnlockStrings.toggleSubtitle(langCode: langCode), state.storyUnlockEnabled, true))
+    // The hint is what makes the per-row link long-press discoverable — it has no other affordance.
+    let featuresFooter = FenixFeaturesStrings.footer(langCode: langCode) + " " + FenixSettingsLinkStrings.longPressHint(langCode: langCode)
+    entries.append(.featuresFooter(presentationData.theme, featuresFooter))
 
     // ─── ADS (hidden Easter-egg, revealed by 15-second long-press) ───
     if state.adsSectionRevealed {
@@ -1347,8 +1467,9 @@ private final class FenixSettingsArguments {
     let updateAutoAccept: (Bool) -> Void
     // Ads section (Feature #6 — hidden Easter-egg)
     let updateShowAds: (Bool) -> Void
+    let updateStoryUnlock: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1393,10 +1514,14 @@ private final class FenixSettingsArguments {
         self.shareNovagramProLink = shareNovagramProLink
         self.updateAutoAccept = updateAutoAccept
         self.updateShowAds = updateShowAds
+        self.updateStoryUnlock = updateStoryUnlock
     }
 }
 
-public func fenixSettingsController(context: AccountContext) -> ViewController {
+/// `highlightFeature` is set only when the screen was opened from a per-feature deep link
+/// (`tg://settings/novagrampro/<slug>`). It scrolls that row into view and traces an outline
+/// around it. Opening Settings normally leaves it nil — no scrolling, no animation.
+public func fenixSettingsController(context: AccountContext, highlightFeature: FenixSettingsFeature? = nil) -> ViewController {
     let statePromise = ValuePromise(FenixSettingsState(), ignoreRepeated: true)
     let stateValue = Atomic(value: FenixSettingsState())
     let updateState: ((FenixSettingsState) -> FenixSettingsState) -> Void = { f in
@@ -1919,8 +2044,9 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             return state
         }
     }, shareNovagramProLink: {
-        // Feature #40 (part b): copy tg://settings/novagrampro to clipboard and present share sheet
-        let link = "tg://settings/novagrampro"
+        // Feature #40 (part b): copy tg://settings/novagrampro to clipboard and present share sheet.
+        // This row always shares the whole-screen link; per-row links come from a long press.
+        let link = FenixSettingsDeepLink.screenLink
         UIPasteboard.general.string = link
         let shareController = context.sharedContext.makeShareController(
             context: context,
@@ -1953,7 +2079,60 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             state.showAds = value
             return state
         }
+    }, updateStoryUnlock: { value in
+        // Turning ON asks first; turning OFF is immediate. FenixuzStoryUnlock.isEnabled is the
+        // single source of truth every hook site reads, so it is written only after confirmation —
+        // if the user cancels, the switch snaps back because state never changed.
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let langCode = presentationData.strings.primaryComponent.languageCode
+        if !value {
+            FenixuzStoryUnlock.isEnabled = false
+            updateState { state in
+                var state = state
+                state.storyUnlockEnabled = false
+                return state
+            }
+            return
+        }
+        // ItemListSwitchItem flips itself the moment it is tapped, so the switch is already
+        // visually ON while the alert is up. Move STATE to match, or the row and the switch
+        // disagree; then put both back if the user declines. Without this, Cancel left the
+        // switch green while nothing was ever written.
+        updateState { state in
+            var state = state
+            state.storyUnlockEnabled = true
+            return state
+        }
+        let revert: () -> Void = {
+            updateState { state in
+                var state = state
+                state.storyUnlockEnabled = false
+                return state
+            }
+        }
+        let alert = textAlertController(
+            context: context,
+            title: FenixStoryUnlockStrings.warningTitle(langCode: langCode),
+            text: FenixStoryUnlockStrings.warningText(langCode: langCode),
+            actions: [
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+                    revert()
+                }),
+                TextAlertAction(type: .defaultAction, title: FenixStoryUnlockStrings.warningConfirm(langCode: langCode), action: {
+                    FenixuzStoryUnlock.isEnabled = true
+                })
+            ],
+            // The two buttons are the only exits — an outside tap would otherwise dismiss without
+            // running either action and strand the switch ON with storage still OFF.
+            dismissOnOutsideTap: false
+        )
+        presentControllerImpl?(alert)
     })
+
+    // Feature #40 (part c): the long-press share menu names the row the user pressed, so it needs
+    // the titles of the rows currently on screen. They are only known once the entries are built.
+    let latestEntries = Atomic<[FenixEntry]>(value: [])
+    let highlightTag: ItemListItemTag? = highlightFeature.map { FenixSettingsItemTag(feature: $0) }
 
     let signal = combineLatest(
         context.sharedContext.presentationData,
@@ -1961,7 +2140,16 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: fenixSettingsEntries(presentationData: presentationData, state: state), style: .blocks)
+            let entries = fenixSettingsEntries(presentationData: presentationData, state: state)
+            _ = latestEntries.swap(entries)
+            // ensureVisibleItemTag only reaches rows whose nodes already exist, so a row far down
+            // the list also needs an index-based scroll. ItemListNodeState applies this on the
+            // first transition only, which is exactly the arrive-from-a-link moment.
+            var initialScrollToItem: ListViewScrollToItem?
+            if let highlightFeature, let index = entries.firstIndex(where: { $0.feature == highlightFeature }) {
+                initialScrollToItem = ListViewScrollToItem(index: index, position: .center(.bottom), animated: false, curve: .Default(duration: 0.0), directionHint: .Down)
+            }
+            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, ensureVisibleItemTag: highlightTag, initialScrollToItem: initialScrollToItem)
             return (controllerState, (listState, arguments))
         }
 
@@ -1993,6 +2181,20 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             refreshSecretVault()
         })
         guard firstTime else { return }
+
+        // Feature #40 (part c): press and hold any row to copy or share a link to that row.
+        // The title closure reads the entries built for the current language and state, so the
+        // sheet header always shows the row's own label.
+        FenixSettingsRowLinkMenu.attach(to: controller, context: context, title: { feature in
+            return latestEntries.with { $0 }.first(where: { $0.feature == feature })?.linkInfo?.title
+        })
+
+        // Only when the screen was opened from a per-feature link — a normal open stays still.
+        if let highlightFeature {
+            let accentColor = context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor
+            FenixSettingsHighlight.run(controller: controller, feature: highlightFeature, accentColor: accentColor)
+        }
+
         let gr = FenixAdsRevealGestureRecognizer(onReveal: { [weak controller] in
             guard let controller else { return }
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }

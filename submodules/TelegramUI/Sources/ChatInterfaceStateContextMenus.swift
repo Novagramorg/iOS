@@ -1480,11 +1480,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     showTranslateIfTopical = true
                 }
 
-                let showProTranslate = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
+                let showProTranslate = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? false
                 var (canTranslate, _) = canTranslateText(context: context, text: messageText, showTranslate: translationSettings.showTranslate || showProTranslate, showTranslateIfTopical: showTranslateIfTopical, ignoredLanguages: translationSettings.ignoredLanguages)
                 // Fenixuz: when the NovagramPro "translate messages" toggle is on, force Translate onto every
                 // non-empty text message, bypassing Apple language detection (which hides it for short text or
-                // your own languages). show_translate_messages defaults to true. Secret chats are still excluded below.
+                // your own languages). Opt-in — off unless the user turns it on. Secret chats are still excluded below.
                 if showProTranslate && !messageText.isEmpty {
                     canTranslate = true
                 }

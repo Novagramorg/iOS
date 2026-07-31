@@ -11,10 +11,11 @@ import OverlayStatusController
 import LocalizedPeerData
 import UndoUI
 import TooltipUI
+import FenixuzSecretVault
 
 func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, contactsController: ContactsController?, isStories: Bool) -> Signal<[ContextMenuItem], NoError> {
     let strings = context.sharedContext.currentPresentationData.with({ $0 }).strings
-    
+
     return context.engine.data.get(
         TelegramEngine.EngineData.Item.Peer.Peer(id: peerId),
         TelegramEngine.EngineData.Item.Peer.AreVoiceCallsAvailable(id: peerId),
@@ -27,15 +28,15 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
         guard let peer else {
             return []
         }
-        
+
         var items: [ContextMenuItem] = []
-        
+
         if isStories {
             items.append(.action(ContextMenuActionItem(text: strings.StoryFeed_ContextOpenProfile, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor)
             }, action: { c, _ in
                 c?.dismiss(completion: {
-                    let _ = (context.engine.data.get(
+                    _ = (context.engine.data.get(
                         TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                     )
                     |> deliverOnMainQueue).start(next: { peer in
@@ -46,16 +47,16 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                     })
                 })
             })))
-            
+
             let isMuted = resolvedAreStoriesMuted(globalSettings: globalSettings._asGlobalNotificationSettings(), peer: peer, peerSettings: notificationSettings._asNotificationSettings(), topSearchPeers: topSearchPeers)
-            
+
             items.append(.action(ContextMenuActionItem(text: isMuted ? strings.StoryFeed_ContextNotifyOn : strings.StoryFeed_ContextNotifyOff, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: isMuted ? "Chat/Context Menu/Unmute" : "Chat/Context Menu/Muted"), color: theme.contextMenu.primaryColor)
             }, action: { _, f in
                 f(.default)
-                
-                let _ = context.engine.peers.togglePeerStoriesMuted(peerId: peerId).start()
-                
+
+                _ = context.engine.peers.togglePeerStoriesMuted(peerId: peerId).start()
+
                 do {
                     let iconColor = UIColor.white
                     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -90,7 +91,7 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                     }
                 }
             })))
-            
+
             items.append(.action(ContextMenuActionItem(text: strings.StoryFeed_ContextUnarchive, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MoveToChats"), color: theme.contextMenu.primaryColor)
             }, action: { _, f in
@@ -98,12 +99,12 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
 
                 context.engine.peers.updatePeerStoriesHidden(id: peerId, isHidden: false)
             })))
-            
+
             return items
         }
-        
+
         items.append(.action(ContextMenuActionItem(text: strings.ContactList_Context_SendMessage, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Message"), color: theme.contextMenu.primaryColor) }, action: { _, f in
-            let _ = (context.engine.data.get(
+            _ = (context.engine.data.get(
                 TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
             )
             |> deliverOnMainQueue).start(next: { peer in
@@ -116,25 +117,25 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                 f(.default)
             })
         })))
-        
+
         var canStartSecretChat = true
         if case let .user(user) = peer, user.flags.contains(.isSupport) {
             canStartSecretChat = false
         }
-        
+
         if canStartSecretChat {
             items.append(.action(ContextMenuActionItem(text: strings.ContactList_Context_StartSecretChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.contextMenu.primaryColor) }, action: { _, f in
-                let _ = (context.engine.peers.mostRecentSecretChat(id: peerId)
+                _ = (context.engine.peers.mostRecentSecretChat(id: peerId)
                 |> deliverOnMainQueue).start(next: { [weak contactsController] currentPeerId in
                     if let currentPeerId = currentPeerId {
-                        let _ = (context.engine.data.get(
+                        _ = (context.engine.data.get(
                             TelegramEngine.EngineData.Item.Peer.Peer(id: currentPeerId)
                         )
                         |> deliverOnMainQueue).start(next: { peer in
                             guard let peer = peer else {
                                 return
                             }
-                            
+
                             if let contactsController = contactsController, let navigationController = (contactsController.navigationController as? NavigationController) {
                                 context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), peekData: nil))
                             }
@@ -142,14 +143,14 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                     } else {
                         var createSignal = context.engine.peers.createSecretChat(peerId: peerId)
                         var cancelImpl: (() -> Void)?
-                        let progressSignal = Signal<Never, NoError> { subscriber in
+                        let progressSignal = Signal<Never, NoError> { _ in
                             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                             let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
                                 cancelImpl?()
                             }))
                             contactsController?.present(controller, in: .window(.root))
                             return ActionDisposable { [weak controller] in
-                                Queue.mainQueue().async() {
+                                Queue.mainQueue().async {
                                     controller?.dismiss()
                                 }
                             }
@@ -157,7 +158,7 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                         |> runOn(Queue.mainQueue())
                         |> delay(0.15, queue: Queue.mainQueue())
                         let progressDisposable = progressSignal.start()
-                        
+
                         createSignal = createSignal
                         |> afterDisposed {
                             Queue.mainQueue().async {
@@ -168,17 +169,17 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                         cancelImpl = {
                             createSecretChatDisposable.set(nil)
                         }
-                        
+
                         createSecretChatDisposable.set((createSignal
                         |> deliverOnMainQueue).start(next: { peerId in
-                            let _ = (context.engine.data.get(
+                            _ = (context.engine.data.get(
                                 TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                             )
                             |> deliverOnMainQueue).start(next: { peer in
                                 guard let peer = peer else {
                                     return
                                 }
-                                
+
                                 if let navigationController = (contactsController?.navigationController as? NavigationController) {
                                     context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), peekData: nil))
                                 }
@@ -203,9 +204,9 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                 f(.default)
             })))
         }
-        
+
         var canCall = true
-        if case let .user(user) = peer, (user.flags.contains(.isSupport) || !areVoiceCallsAvailable) {
+        if case let .user(user) = peer, user.flags.contains(.isSupport) || !areVoiceCallsAvailable {
             canCall = false
         }
         var canVideoCall = false
@@ -214,7 +215,7 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                 canVideoCall = true
             }
         }
-        
+
         if canCall {
             items.append(.action(ContextMenuActionItem(text: strings.ContactList_Context_Call, icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Call"), color: theme.contextMenu.primaryColor)
@@ -230,7 +231,26 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                 f(.default)
             })))
         }
-        
+
+        // MARK: - Fenixuz Secret Vault: hide / unhide straight from the contact row.
+        // Mirrors the chat-list menu — hide mutes with Int32.max, unhide restores the global
+        // category default with nil (0 would write a permanent per-peer unmute exception).
+        if SecretVaultManager.shared.isEnabled {
+            let isVaulted = SecretVaultManager.shared.isVaulted(peerId)
+            items.append(.action(ContextMenuActionItem(text: isVaulted ? SecretVaultStrings.unhideMenu : SecretVaultStrings.hideAction, icon: { theme in
+                generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Unpin"), color: theme.contextMenu.primaryColor)
+            }, action: { _, f in
+                f(.default)
+                if isVaulted {
+                    SecretVaultManager.shared.removeFromVault([peerId])
+                    _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: nil).startStandalone()
+                } else {
+                    SecretVaultManager.shared.addToVault([peerId])
+                    _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: Int32.max).startStandalone()
+                }
+            })))
+        }
+
         items.append(.action(ContextMenuActionItem(text: strings.ContactList_Context_Delete, textColor: .destructive, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
         }, action: { [weak contactsController] _, f in
             if let contactsController {
@@ -238,9 +258,9 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
             }
             f(.dismissWithoutContent)
         })))
-        
+
         items.append(.separator)
-        
+
         items.append(.action(ContextMenuActionItem(text: strings.ContactList_Context_Select, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Select"), color: theme.contextMenu.primaryColor)
         }, action: { [weak contactsController] _, f in
             if let contactsController {
@@ -248,7 +268,7 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
             }
             f(.default)
         })))
-        
+
         return items
     }
 }

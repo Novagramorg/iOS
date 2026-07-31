@@ -69,6 +69,41 @@ public final class SecretVaultManager {
         return self.rawIds().contains(peerId.toInt64())
     }
 
+    /// Drops vaulted peers from any peer-keyed list.
+    ///
+    /// Surfaces that build their own feed never pass through the chat-list entry filter in
+    /// ChatListNodeEntries — the story bar is one of them, which is how a vaulted peer's story
+    /// still surfaced after the chat itself was hidden. Those call sites use this instead.
+    public func removingVaulted<T>(_ items: [T], peerId: (T) -> PeerId) -> [T] {
+        guard self.isEnabled else {
+            return items
+        }
+        let ids = self.rawIds()
+        guard !ids.isEmpty else {
+            return items
+        }
+        return items.filter { !ids.contains(peerId($0).toInt64()) }
+    }
+
+    /// Same as `removingVaulted(_:peerId:)` for lists whose items do not all carry a peerId —
+    /// the contacts list mixes Telegram peers with device-only contacts. Items that return nil
+    /// are always kept, since there is nothing to match them against.
+    public func removingVaulted<T>(_ items: [T], optionalPeerId: (T) -> PeerId?) -> [T] {
+        guard self.isEnabled else {
+            return items
+        }
+        let ids = self.rawIds()
+        guard !ids.isEmpty else {
+            return items
+        }
+        return items.filter { item in
+            guard let peerId = optionalPeerId(item) else {
+                return true
+            }
+            return !ids.contains(peerId.toInt64())
+        }
+    }
+
     public func vaultedPeerIds() -> Set<PeerId> {
         return Set(self.rawIds().map { PeerId($0) })
     }

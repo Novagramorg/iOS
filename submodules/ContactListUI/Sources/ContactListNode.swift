@@ -23,6 +23,7 @@ import ContextUI
 import PhoneNumberFormat
 import LocalizedPeerData
 import ContextUI
+import FenixuzSecretVault
 
 private let dropDownIcon = { () -> UIImage in
     UIGraphicsBeginImageContextWithOptions(CGSize(width: 12.0, height: 12.0), false, 0.0)
@@ -424,7 +425,8 @@ private enum ContactListNodeEntry: Comparable, Identifiable {
 private func contactListNodeEntries(
     listStyle: ItemListStyle = .plain,
     accountPeer: EnginePeer?,
-    peers: [ContactListPeer],
+    peers rawPeers: [ContactListPeer],
+    filterVaultedPeers: Bool,
     presences: [EnginePeer.Id: EnginePeer.Presence],
     presentation: ContactListPresentation,
     selectionState: ContactListNodeGroupSelectionState?,
@@ -446,6 +448,18 @@ private func contactListNodeEntries(
     isPeerEnabled: ((EnginePeer) -> Bool)?,
     interaction: ContactListNodeInteraction
 ) -> [ContactListNodeEntry] {
+    // Fenixuz Secret Vault: a hidden chat must not resurface in the Contacts list. Applied here
+    // rather than through `filters` because that array is captured once at init, while this
+    // function re-runs on every rebuild and so always reads the current vaulted set.
+    let peers = filterVaultedPeers
+        ? SecretVaultManager.shared.removingVaulted(rawPeers, optionalPeerId: { peer in
+            if case let .peer(peer, _, _) = peer {
+                return peer.id
+            }
+            return nil
+        })
+        : rawPeers
+
     var entries: [ContactListNodeEntry] = []
     
     var commonHeader: ListViewItemHeader?
@@ -1016,6 +1030,7 @@ public final class ContactListNode: ASDisplayNode {
     private let listStyle: ItemListStyle
     private var presentation: ContactListPresentation?
     private let filters: [ContactListFilter]
+    private let filterVaultedPeers: Bool
     private let onlyWriteable: Bool
     
     public let listNode: ListView
@@ -1209,6 +1224,7 @@ public final class ContactListNode: ASDisplayNode {
         listStyle: ItemListStyle = .plain,
         presentation: Signal<ContactListPresentation, NoError>,
         filters: [ContactListFilter] = [.excludeSelf],
+        filterVaultedPeers: Bool = false,
         onlyWriteable: Bool,
         isGroupInvitation: Bool,
         isPeerEnabled: ((EnginePeer) -> Bool)? = nil,
@@ -1223,6 +1239,7 @@ public final class ContactListNode: ASDisplayNode {
         self.context = context
         self.listStyle = listStyle
         self.filters = filters
+        self.filterVaultedPeers = filterVaultedPeers
         self.displayPermissionPlaceholder = displayPermissionPlaceholder
         self.contextAction = contextAction
         self.multipleSelection = multipleSelection
@@ -1756,6 +1773,7 @@ public final class ContactListNode: ASDisplayNode {
                                 listStyle: listStyle,
                                 accountPeer: nil,
                                 peers: peers,
+                                filterVaultedPeers: filterVaultedPeers,
                                 presences: localPeersAndStatuses.1,
                                 presentation: presentation,
                                 selectionState: selectionState,
@@ -1993,6 +2011,7 @@ public final class ContactListNode: ASDisplayNode {
                                 listStyle: listStyle,
                                 accountPeer: view.1,
                                 peers: peers,
+                                filterVaultedPeers: filterVaultedPeers,
                                 presences: presences,
                                 presentation: presentation,
                                 selectionState: selectionState,

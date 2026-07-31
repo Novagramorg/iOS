@@ -20,10 +20,11 @@ public final class FenixRoundVideoFromGallery {
     private static let defaultsSuite = "pro_messager"
     private static let enabledKey = "round_video_from_gallery"
 
-    // NovagramPro toggle — default ON, but only on iOS 14+ where PHPicker exists.
+    // NovagramPro toggle — opt-in, so a fresh install does not add the extra
+    // "Photos" entry to the video-message menu until the user asks for it.
     public static var isEnabled: Bool {
         if #available(iOS 14.0, *) {
-            return UserDefaults(suiteName: defaultsSuite)?.object(forKey: enabledKey) as? Bool ?? true
+            return UserDefaults(suiteName: defaultsSuite)?.object(forKey: enabledKey) as? Bool ?? false
         }
         return false
     }

@@ -4,6 +4,8 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 import TelegramPresentationData
+import AnimatedStickerNode
+import TelegramAnimatedStickerNode
 import AccountContext
 import PresentationDataUtils
 
@@ -113,7 +115,9 @@ final class FenixuzAnalyticsController: ViewController {
     private func updateBackButton() {
         let theme = self.presentationData.theme
         let circleColor = theme.overallDarkAppearance ? UIColor(rgb: 0x767680).withAlphaComponent(0.30) : UIColor(rgb: 0x767680).withAlphaComponent(0.16)
-        let chevronColor = theme.rootController.navigationBar.accentTextColor
+        // Match the rest of the app: every other back chevron is the primary label colour,
+        // not the accent. Analytics was the only blue one.
+        let chevronColor = theme.rootController.navigationBar.primaryTextColor
         let image = backButtonImage(circleColor: circleColor, chevronColor: chevronColor)
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(self.backPressed))
     }
@@ -292,7 +296,9 @@ private final class StatChipNode: ASDisplayNode {
 private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
     private var presentationData: PresentationData
 
-    private let duckNode: ASImageNode
+    // BroadcastGroup.tgs is the animated version of the FenixAnalyticsDuck artwork —
+    // same duck, same megaphone, same podium (layer `21_MEGAPHN`, assets `tumba`/`mega_circ`).
+    private let duckNode: AnimatedStickerNode
     private let subtitleNode: ImmediateTextNode
     private let usersChip: StatChipNode
     private let accountsChip: StatChipNode
@@ -305,10 +311,9 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
     init(presentationData: PresentationData) {
         self.presentationData = presentationData
 
-        self.duckNode = ASImageNode()
-        self.duckNode.displaysAsynchronously = false
-        self.duckNode.contentMode = .scaleAspectFit
-        self.duckNode.image = UIImage(bundleImageName: "FenixAnalyticsDuck")
+        self.duckNode = DefaultAnimatedStickerNodeImpl()
+        self.duckNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "BroadcastGroup"), width: 448, height: 448, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
+        self.duckNode.visibility = true
 
         self.subtitleNode = ImmediateTextNode()
         self.subtitleNode.maximumNumberOfLines = 1
@@ -385,6 +390,8 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
 
         var y = navigationBarHeight + topPadding
 
+        // An AnimatedStickerNode renders nothing from its frame alone — it needs updateLayout too.
+        self.duckNode.updateLayout(size: CGSize(width: duckSize, height: duckSize))
         transition.updateFrame(node: self.duckNode, frame: CGRect(x: floor((layout.size.width - duckSize) / 2.0), y: y, width: duckSize, height: duckSize))
         y += duckSize + afterDuck
 

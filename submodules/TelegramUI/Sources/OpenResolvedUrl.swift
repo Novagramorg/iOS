@@ -977,9 +977,8 @@ func openResolvedUrlImpl(
                         }
                         return
                     }
-                    // Fenixuz Feature #40: tg://settings/novagrampro → NovagramPro settings screen
-                    if path == "novagrampro" {
-                        navigationController.pushViewController(fenixSettingsController(context: context))
+                    // Fenixuz Feature #40: tg://settings/novagrampro[/<feature>] → NovagramPro settings screen
+                    if FenixSettingsDeepLink.open(settingsPath: path, context: context, navigationController: navigationController) {
                         return
                     }
                     handleSettingsPathUrl(context: context, path: path, navigationController: navigationController)

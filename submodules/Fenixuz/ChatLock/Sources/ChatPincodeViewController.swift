@@ -3,6 +3,8 @@ import UIKit
 import Display
 import TelegramPresentationData
 import LocalAuthentication
+import AnimatedStickerNode
+import TelegramAnimatedStickerNode
 
 // MARK: - Public mode enum
 
@@ -57,6 +59,9 @@ public final class ChatPincodeViewController: ViewController {
     private var failedAttempts = 0
 
     // -- UI --
+    // Passcode.tgs is Telegram's own safe animation (layer `_039_SAFE`) — the same motif on
+    // every screen of the lock flow, which is how Telegram itself does its passcode screens.
+    private var animationNode: AnimatedStickerNode!
     private var titleLabel: UILabel!
     private var subtitleLabel: UILabel!
 
@@ -148,6 +153,20 @@ public final class ChatPincodeViewController: ViewController {
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(closeButton)
 
+        // Lock animation
+        // 140pt reads as a proper hero on a normal phone. On a short screen (SE-class, 667pt)
+        // the title + subtitle + dots + number pad already fill the height, so drop back to 100.
+        let animationSize: CGFloat = UIScreen.main.bounds.height < 700.0 ? 100.0 : 140.0
+        let animationNode = DefaultAnimatedStickerNodeImpl()
+        // Render at 3x the largest display size so it never upscales on a Retina screen.
+        animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "Passcode"), width: 448, height: 448, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
+        animationNode.visibility = true
+        // Renders nothing from constraints alone — the sticker needs an explicit size.
+        animationNode.updateLayout(size: CGSize(width: animationSize, height: animationSize))
+        animationNode.view.translatesAutoresizingMaskIntoConstraints = false
+        self.animationNode = animationNode
+        view.addSubview(animationNode.view)
+
         // Title
         titleLabel = UILabel()
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
@@ -200,9 +219,15 @@ public final class ChatPincodeViewController: ViewController {
             closeButton.widthAnchor.constraint(equalToConstant: 34),
             closeButton.heightAnchor.constraint(equalToConstant: 34),
 
+            // Lock animation
+            animationNode.view.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            animationNode.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
+            animationNode.view.widthAnchor.constraint(equalToConstant: animationSize),
+            animationNode.view.heightAnchor.constraint(equalToConstant: animationSize),
+
             // Title
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60),
+            titleLabel.topAnchor.constraint(equalTo: animationNode.view.bottomAnchor, constant: 12),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
 
