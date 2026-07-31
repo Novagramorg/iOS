@@ -59,6 +59,12 @@ import ChatRecordingPreviewInputPanelNode
 import ChatInputContextPanelNode
 import RasterizedCompositionComponent
 import RichTextEditorUIKit
+import RichTextEditorCore
+
+/// The chat composer's inline custom-emoji view already exposes `dynamicColor` (forwarding to its backing
+/// `InlineStickerItemLayer`), so it satisfies the editor's emoji-view contract as-is. Declared here (the one
+/// module importing both) to keep `EmojiTextAttachmentView` free of a rich-text-editor dependency.
+extension EmojiTextAttachmentView: @retroactive RichTextEmojiView {}
 
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
 
@@ -302,6 +308,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private var accessoryItemButtons: [(ChatTextInputAccessoryItem, AccessoryItemIconButton)] = []
     
+    private var isUpdating: Bool = false
     private var validLayout: (CGFloat, CGFloat, CGFloat, CGFloat, UIEdgeInsets, CGFloat, CGFloat, LayoutMetrics, Bool, Bool, DeviceMetrics)?
     private var leftMenuInset: CGFloat = 0.0
     private var rightSlowModeInset: CGFloat = 0.0
@@ -310,9 +317,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var enableBounceAnimations: Bool = false
     // Rich-input configuration from the server flag `ios_rich_input_mode` (Double): 0 / absent (default) is the
     // dual-field switch — the composer defaults to the legacy field and latches to native only when content
-    // becomes legacy-non-representable; 1 is always-native; 2 (or the `forceLegacyTextInput` experimental flag) is
-    // legacy-only. `enableRichTextInput` = native is permitted at all (false only in legacy-only mode);
-    // `alwaysUseNativeInput` = native from the start (mode 1). See `desiredUseNative(for:)`.
+    // becomes legacy-non-representable; 1 is always-native; 2 is legacy-only. The `forceNewTextInput` experimental
+    // flag (Debug Settings ▸ "Force Text Field v2") forces always-native regardless of `ios_rich_input_mode`.
+    // `enableRichTextInput` = native is permitted at all (false only in legacy-only mode);
+    // `alwaysUseNativeInput` = native from the start (mode 1 or `forceNewTextInput`). See `desiredUseNative(for:)`.
     private var enableRichTextInput: Bool = false
     private var alwaysUseNativeInput: Bool = false
     
@@ -322,6 +330,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var updateHeight: (Bool) -> Void = { _ in }
     public var toggleExpandMediaInput: (() -> Void)?
     public var switchToTextInputIfNeeded: (() -> Void)?
+    /// Parses pasted plain text as markdown into a `ChatInputContent`, or nil when the text should paste
+    /// as-is. Injected by the panel's owner (only the monolith can reach the BrowserUI-backed parser).
+    /// Takes the context explicitly so the panel does not have to capture it.
+    public var pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?
     public var textInputAccessoryPanel: ((_ context: AccountContext, _ chatPresentationInterfaceState: ChatPresentationInterfaceState, _ chatControllerInteraction: ChatControllerInteraction?, _ interfaceInteraction: ChatPanelInterfaceInteraction?) -> AnyComponentWithIdentity<ChatInputAccessoryPanelEnvironment>?)?
     public var textInputContextPanel: ((_ context: AccountContext, _ chatPresentationInterfaceState: ChatPresentationInterfaceState, _ chatControllerInteraction: ChatControllerInteraction?, _ interfaceInteraction: ChatPanelInterfaceInteraction?, _ current: ChatInputContextPanelNode?) -> ChatInputContextPanelNode?)?
     
@@ -843,7 +855,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }*/
         
         // `ios_rich_input_mode` (Double): 0 / absent = dual-field switch (legacy default, latch to native on
-        // non-representable content); 1 = always native; 2 = legacy only. `forceLegacyTextInput` forces legacy.
+        // non-representable content); 1 = always native; 2 = legacy only. The `forceNewTextInput` experimental
+        // flag (Debug Settings ▸ "Force Text Field v2") forces always-native (enableRichTextInput + alwaysUseNativeInput).
         self.enableRichTextInput = true
         self.alwaysUseNativeInput = false
         if let data = self.context?.currentAppConfiguration.with({ $0 }).data, let mode = data["ios_rich_input_mode"] as? Double {
@@ -853,9 +866,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.enableRichTextInput = false
             }
         }
-        if context.sharedContext.immediateExperimentalUISettings.forceLegacyTextInput {
-            self.enableRichTextInput = false
-            self.alwaysUseNativeInput = false
+        if context.sharedContext.immediateExperimentalUISettings.forceNewTextInput {
+            self.enableRichTextInput = true
+            self.alwaysUseNativeInput = true
         }
         
         self.sendAsAvatarContainerNode.activated = { [weak self] gesture, _ in
@@ -1132,9 +1145,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
     /// Decide which backend the given content requires. One-way latch: once the native rich-text backend is
     /// active it stays active for the panel's lifetime (never switches back to legacy). Legacy-only mode
-    /// (`ios_rich_input_mode == 2` / `forceLegacyTextInput`) always uses legacy; always-native mode
-    /// (`ios_rich_input_mode == 1`) always uses native; otherwise (dual-field switch) native is used only once the
-    /// content is not representable in the legacy backend.
+    /// (`ios_rich_input_mode == 2`) always uses legacy; always-native mode (`ios_rich_input_mode == 1` or the
+    /// `forceNewTextInput` experimental flag) always uses native; otherwise (dual-field switch) native is used
+    /// only once the content is not representable in the legacy backend.
     private func desiredUseNative(for content: ChatInputContent) -> Bool {
         if self.richTextInputNode?.usesNativeRichTextEngine == true {
             return true
@@ -1182,7 +1195,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private func loadTextInputNode(useNative: Bool = false) {
         let richTextInputNode: ChatRichTextInputNode
         if useNative {
-            richTextInputNode = RichTextEditorChatInputNode()
+            richTextInputNode = RichTextEditorChatInputNode(strings: self.presentationInterfaceState?.strings ?? defaultPresentationStrings)
         } else {
             richTextInputNode = makeChatRichTextInputNode()
         }
@@ -1218,6 +1231,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         richTextInputNode.canPasteMedia = { [weak self] in self?.handlePastedMedia(perform: false) ?? false }
         richTextInputNode.onPasteMedia = { [weak self] in self?.handlePastedMedia(perform: true) ?? false }
+        richTextInputNode.pastedMarkdownFragmentParser = { [weak self] text in
+            guard let self, let context = self.context, let content = self.pastedMarkdownParser?(context, text) else {
+                return nil
+            }
+            return pasteFragmentDocument(fromChatInputContent: content)
+        }
         richTextInputNode.onRequestTableStructuralMenu = { [weak self] request in
             guard let self, let context = self.context else { return }
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -1253,6 +1272,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 break   // the "+" button is not built yet
             case .delete:
                 context.delete()
+            case .toggleLayout:
+                break   // mosaic↔slideshow toggle is article-editor only; the composer is mosaic-only
             }
         }
         // Report "typing…" chat activity on a genuine text edit. The legacy backend gets this from
@@ -1608,6 +1629,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func requestLayout(transition: ContainedViewLayoutTransition = .immediate) {
+        if self.isUpdating {
+            return
+        }
         guard let presentationInterfaceState = self.presentationInterfaceState, let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded, deviceMetrics) = self.validLayout else {
             return
         }
@@ -1629,6 +1653,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         deviceMetrics: DeviceMetrics,
         isMediaInputExpanded: Bool
     ) -> CGFloat {
+        self.isUpdating = true
+        defer {
+            self.isUpdating = false
+        }
+        
         let isFirstTime = self.validLayout == nil
         
         let previousAdditionalSideInsets = self.validLayout?.4
@@ -3531,7 +3560,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         // grows UPWARD into a pill (bottom edge stays at textInputFrame.maxY): + at the bottom slot, AI at the top.
         var isAIButtonVisible = false
         var attachmentPillHeight: CGFloat = 40.0
-        if self.isAIEnabled, let node = self.richTextInputNode {
+        let inputHasNonWhitespaceText = !(self.richTextInputNode?.inputContentIsEmptyWhitespaceTrimmed ?? true)
+        if self.isAIEnabled, inputHasNonWhitespaceText, let node = self.richTextInputNode {
             let threeLineHeight = self.threeLineFieldHeight(forWidth: baseWidth, node: node, metrics: metrics, bottomInset: bottomInset, textFieldInsets: textFieldInsets)
             if textInputHeight >= threeLineHeight - 0.5 {
                 isAIButtonVisible = true
@@ -3816,7 +3846,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             )
         }
         
-        let isExpandInputEnabled = self.enableRichTextInput
+        let isExpandInputEnabled = self.enableRichTextInput && self.isAIEnabled
 
         if isExpandInputEnabled {
             let expandButton: (button: HighlightTrackingButton, icon: UIImageView)
@@ -4775,6 +4805,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 if let richTextInputNode = self.richTextInputNode {
                     self.updateInputField(textInputFrame: richTextInputNode.textFieldFrame, transition: .immediate)
                 }
+                self.requestLayout(transition: .animated(duration: 0.4, curve: .spring))
             }
         }
     }
@@ -5469,16 +5500,32 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return false
         }
 
+        // External RTF carrying a TABLE or MEDIA (structure with no linear text form) latches the field to the
+        // native editor, which re-reads the pasteboard through its own structure-preserving importer. A LIST is
+        // deliberately NOT a latch trigger: it stays in the legacy field and renders bullet/number markers as
+        // literal text via `legacyChatInputAttributedString` in the RTF branch below. Headings/code/quotes
+        // likewise stay legacy (they flatten to text). Gated on `enableRichTextInput` (else no native backend).
+        if self.enableRichTextInput,
+           let rtfData = pasteboard.data(forPasteboardType: "public.rtf") ?? pasteboard.data(forPasteboardType: "com.apple.flat-rtfd"),
+           rtfRequiresNativeRichInput(rtfData) {
+            self.pasteRichFragmentFromPasteboard()
+            return false
+        }
+
         var attributedString: NSAttributedString?
         if let data = pasteboard.data(forPasteboardType: "private.telegramtext"), let value = chatInputStateStringFromAppSpecificString(data: data) {
             attributedString = value
         } else if let data = pasteboard.data(forPasteboardType: "public.rtf") {
-            attributedString = chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtf)
+            // A list-bearing RTF: iOS's NSAttributedString RTF import flattens lists (no NSTextList), so render
+            // the markers as literal text via the structure-preserving RTFImport path; otherwise keep the
+            // inline-preserving legacy conversion. (When rich input is enabled, the native-routing branch above
+            // has already claimed a list paste — this serves the legacy-only configuration.)
+            attributedString = legacyChatInputAttributedString(fromRTF: data) ?? chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtf)
         } else if let data = pasteboard.data(forPasteboardType: "com.apple.flat-rtfd") {
             if let _ = pasteboard.data(forPasteboardType: "com.apple.notes.richtext"), DeviceModel.current.isIpad, let htmlData = pasteboard.data(forPasteboardType: "public.html") {
                 attributedString = chatInputStateStringFromRTF(htmlData, type: NSAttributedString.DocumentType.html)
             } else {
-                attributedString = chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtfd)
+                attributedString = legacyChatInputAttributedString(fromRTF: data) ?? chatInputStateStringFromRTF(data, type: NSAttributedString.DocumentType.rtfd)
             }
         }
 
@@ -5493,6 +5540,19 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if reattached.string != plainText {
                 attributedString = reattached
             }
+        }
+
+        // Markdown-on-paste: plain clipboard text that parses as markdown with formatting/structure is
+        // inserted as rich content. ANY markdown (inline or structural) latches the field to the native
+        // editor, which re-reads the same pasteboard text through its own plainTextFragmentTransformer and
+        // performs a two-step paste (insert plain → replace with rich) so undo reverts rich→plain. Only
+        // taken when the parser actually classifies the text as rich; plain text falls through.
+        if attributedString == nil,
+           let plainText = pasteboard.string,
+           let context = self.context,
+           self.pastedMarkdownParser?(context, plainText) != nil {
+            self.pasteRichFragmentFromPasteboard()
+            return false
         }
 
         if let attributedString = attributedString {

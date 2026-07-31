@@ -9,8 +9,9 @@ import TelegramPresentationData
 // A paged carousel for an `InstantPageBlock.slideshow`. Ports V1's InstantPageSlideshowNode /
 // InstantPageSlideshowPagerNode (InstantPageSlideshowItemNode.swift), simplified to create all pages
 // eagerly (slideshows are short; this avoids V1's central±1 index bookkeeping and makes the gallery
-// transition source available for every page). Each image page hosts an `InstantPageImageNode` exactly
-// like the static media views; non-image medias render an empty page (matches V1).
+// transition source available for every page). Each photo/video page hosts an `InstantPageImageNode`
+// exactly like the static media views (a video renders as a poster + play badge, tap opens the gallery);
+// any other media kind renders an empty page.
 final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollViewDelegate {
     private(set) var item: InstantPageV2SlideshowItem
     var itemFrame: CGRect { return self.item.frame }
@@ -27,6 +28,10 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
     private var pageViews: [UIView] = []
     private var pageImageNodes: [InstantPageImageNode] = []
 
+    // The index (into `item.medias`) of the page currently centered in the scroll view. Only this page's
+    // media has an on-screen representation, so it is the only one the gallery may animate in/out to.
+    private var currentPageIndex: Int = 0
+
     init(item: InstantPageV2SlideshowItem, renderContext: InstantPageV2RenderContext, theme: InstantPageTheme) {
         self.item = item
         self.renderContext = renderContext
@@ -36,7 +41,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
 
         super.init(frame: item.frame)
 
-        self.backgroundColor = theme.panelSecondaryColor   // structural
+        self.backgroundColor = .black                      // structural — slideshow backdrop is black (gallery look), not the media placeholder color
         self.clipsToBounds = true                          // structural
 
         self.scrollView.disablesInteractiveTransitionGestureRecognizer = true
@@ -77,7 +82,15 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
         for media in self.item.medias {
             let pageView = UIView()
             pageView.clipsToBounds = true
-            if case .image = media.media {
+            pageView.backgroundColor = .black   // black letterbox behind each page, not the media placeholder color
+            // Both photos (`.image`) and videos (`.file`) get a page: `InstantPageImageNode` renders a
+            // video `.file` as a poster + play badge (tap opens the gallery), like a collage video cell.
+            let isRenderableMedia: Bool
+            switch media.media {
+            case .image, .file: isRenderableMedia = true
+            default: isRenderableMedia = false
+            }
+            if isRenderableMedia {
                 let node = makeMediaWrapper(
                     frame: CGRect(origin: .zero, size: self.item.frame.size),
                     media: media,
@@ -86,19 +99,22 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
                     renderContext: self.renderContext,
                     theme: self.theme,
                     openMedia: openMedia,
-                    longPressMedia: { _ in }
+                    longPressMedia: { _ in },
+                    emptyColor: .black,
+                    fit: true   // letterbox each page: one shared block frame (tallest media) would otherwise crop shorter items
                 )
                 pageView.addSubview(node.view)
                 self.pageImageNodes.append(node)
             }
-            // Non-image medias (none in practice — layoutSlideshow filters to images) get an empty page
-            // to keep page indices aligned with the page control.
+            // Any other media kind (none in practice — layoutSlideshow emits only image/video) gets an
+            // empty page to keep page indices aligned with the page control.
             self.scrollView.addSubview(pageView)
             self.pageViews.append(pageView)
         }
 
         self.pageControlNode.pagesCount = self.item.medias.count
         self.pageControlNode.setPage(0.0)
+        self.currentPageIndex = 0
         // Re-register media indices when rebuilding while already on-window (positional reuse with
         // changed content); no-ops before the view is attached, where didMoveToWindow handles it.
         self.registerMedias()
@@ -147,6 +163,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
         guard width > 0.0, !self.item.medias.isEmpty else { return }
         let page = Int((scrollView.contentOffset.x + width / 2.0) / width)
         let clamped = max(0, min(self.item.medias.count - 1, page))
+        self.currentPageIndex = clamped
         self.pageControlNode.setPage(CGFloat(clamped))
     }
 
@@ -154,7 +171,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
         let mediasChanged = self.item.medias.map { $0.index } != item.medias.map { $0.index }
         self.item = item
         self.theme = theme
-        self.backgroundColor = theme.panelSecondaryColor
+        self.backgroundColor = .black
         if mediasChanged {
             self.rebuildPages()
         } else {
@@ -169,6 +186,14 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
     // MARK: InstantPageItemView gallery hooks
 
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
+        // A slideshow registers under EVERY contained media index, so the gallery may ask about a media that
+        // sits on an off-screen page. Only the currently-displayed page has an on-screen representation;
+        // animating in/out to a scrolled-away page's node would fly to the wrong place. Return nil for any
+        // non-current media so the gallery falls back to a plain fade instead of using it to animate.
+        guard self.currentPageIndex >= 0, self.currentPageIndex < self.item.medias.count,
+              self.item.medias[self.currentPageIndex].index == media.index else {
+            return nil
+        }
         for node in self.pageImageNodes {
             if let transition = node.transitionNode(media: media) {
                 return transition

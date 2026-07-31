@@ -551,7 +551,7 @@ final class ThemePreviewControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 let itemNode = chatNodes[i]
                 items[i].updateNode(async: { $0() }, node: {
                     return itemNode
-                }, params: params, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], animation: .None, completion: { (layout, apply) in
+                }, params: params, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), animation: .None, completion: { (layout, apply) in
                     let nodeFrame = CGRect(origin: itemNode.frame.origin, size: CGSize(width: width, height: layout.size.height))
                     
                     itemNode.contentSize = layout.contentSize
@@ -566,7 +566,7 @@ final class ThemePreviewControllerNode: ASDisplayNode, ASScrollViewDelegate {
             var chatNodes: [ListViewItemNode] = []
             for i in 0 ..< items.count {
                 var itemNode: ListViewItemNode?
-                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
                     apply().1(ListViewItemApply(isOnScreen: true))
                 })
@@ -650,7 +650,7 @@ final class ThemePreviewControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 let itemNode = messageNodes[i]
                 items[i].updateNode(async: { $0() }, node: {
                     return itemNode
-                }, params: params, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], animation: .None, completion: { (layout, apply) in
+                }, params: params, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), animation: .None, completion: { (layout, apply) in
                     let nodeFrame = CGRect(origin: itemNode.frame.origin, size: CGSize(width: width, height: layout.size.height))
                     
                     itemNode.contentSize = layout.contentSize
@@ -665,7 +665,7 @@ final class ThemePreviewControllerNode: ASDisplayNode, ASScrollViewDelegate {
             var messageNodes: [ListViewItemNode] = []
             for i in 0 ..< items.count {
                 var itemNode: ListViewItemNode?
-                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, previousItem: i == 0 ? nil : items[i - 1], nextItem: i == (items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     itemNode = node
                     apply().1(ListViewItemApply(isOnScreen: true))
                 })

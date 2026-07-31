@@ -68,6 +68,7 @@ swift_library(
         "//submodules/PresentationDataUtils",
         "//submodules/LocalMediaResources",
         "//submodules/Camera",
+        "//submodules/Camera/CameraLegacy",
         "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/BlurredBackgroundComponent",
         "//submodules/Components/LottieAnimationComponent:LottieAnimationComponent",

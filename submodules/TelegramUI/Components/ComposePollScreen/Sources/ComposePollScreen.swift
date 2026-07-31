@@ -960,8 +960,8 @@ final class ComposePollScreenComponent: Component {
                         parentController.present(c, in: .window(.root))
                     }
                 },
-                completion: { [weak self] media in
-                guard let self else {
+                completion: { [weak self] mediaReferences in
+                guard let self, let media = mediaReferences.first else {
                     return
                 }
                 let attachedMedia = AttachedMedia(media: media)

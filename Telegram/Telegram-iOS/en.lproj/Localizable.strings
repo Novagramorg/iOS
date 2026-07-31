@@ -16584,9 +16584,16 @@ Error: %8$@";
 "RichText.Menu.List.Bullet" = "Bulleted List";
 "RichText.Menu.List.Numbered" = "Numbered List";
 "RichText.Menu.List.Checklist" = "Checklist";
+"RichText.Menu.List.Detail" = "Detail Block";
 "RichText.Menu.Table.Copy" = "Copy Table";
 "RichText.Menu.Table.ConvertToText" = "Convert to Text";
 "RichText.Menu.Table.Delete" = "Delete Table";
+"RichText.Menu.Table.HighlightOn" = "Highlight";
+"RichText.Menu.Table.HighlightOff" = "Remove Highlight";
+"RichText.PlaceholderBody" = "Type something...";
+"RichText.PlaceholderQuote" = "Type a quote here";
+"RichText.PlaceholderCode" = "Type code here";
+"RichText.PlaceholderDetailTitle" = "Title";
 
 "TextProcessing.TitleAICompose" = "Create with AI";
 "TextProcessing.ActionAddToPage" = "Add to Page";

@@ -15,6 +15,7 @@ swift_library(
         "//submodules/TelegramCore",
         "//submodules/InstantPageUI",
         "//submodules/InvisibleInkDustNode",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/ComponentFlow:ComponentFlow",
         "//submodules/Display:Display",

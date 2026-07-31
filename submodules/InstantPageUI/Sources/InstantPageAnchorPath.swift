@@ -151,5 +151,8 @@ private func richTextContainsAnchor(_ text: RichText, name: String) -> Bool {
         return richTextContainsAnchor(inner, name: name)
     case let .textDate(inner, _, _):
         return richTextContainsAnchor(inner, name: name)
+    case let .textButton(button):
+        // Descend into the label so an anchor inside a button's text still resolves.
+        return richTextContainsAnchor(button.text, name: name)
     }
 }

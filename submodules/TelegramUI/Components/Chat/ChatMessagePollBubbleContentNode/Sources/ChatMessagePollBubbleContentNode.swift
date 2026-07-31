@@ -2498,8 +2498,8 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
             present: { [weak item] controller, _ in
                 item?.controllerInteraction.navigationController()?.pushViewController(controller)
             },
-            completion: { [weak self] media in
-                guard let self else {
+            completion: { [weak self] mediaReferences in
+                guard let self, let media = mediaReferences.first else {
                     return
                 }
                 let attachedMedia = AttachedMedia(media: media)

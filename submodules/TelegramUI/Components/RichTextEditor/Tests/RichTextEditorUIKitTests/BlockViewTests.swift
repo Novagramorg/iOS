@@ -185,7 +185,7 @@ final class BlockViewTests: XCTestCase {
         // block's backing store), so the bleed is covered by THAT view, not the block backing view. The
         // block backing view is now caption-only (blockViewFrame == frame).
         let v = imageCanvas()
-        v.mediaViewProvider = { _, _, _ in StubMediaView() }
+        v.mediaViewProvider = { _, _, _, _ in StubMediaView() }
         v.setNeedsLayout(); v.layoutIfNeeded()
         let imgBox = v.boxes[1] as! MediaBlockBox
         let r = imgBox.mediaRect()

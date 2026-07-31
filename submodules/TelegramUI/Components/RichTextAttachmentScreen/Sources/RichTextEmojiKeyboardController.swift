@@ -138,9 +138,8 @@ final class RichTextEmojiKeyboardController {
 
     /// Builds a fresh live custom-emoji view for the editor's emoji-view-provider. Returns nil for ids
     /// that are not recorded custom-emoji fileIds (the screen falls back to its demo glyphs).
-    func customEmojiView(forId id: String, size: CGSize) -> UIView? {
+    func customEmojiView(forId id: String, size: CGSize) -> (UIView & RichTextEmojiView)? {
         guard let fileId = Int64(id), let file = self.emojiFiles[fileId] else { return nil }
-        let view = UIView(frame: CGRect(origin: .zero, size: size))
         let layer = InlineStickerItemLayer(
             context: self.context,
             userLocation: .other,
@@ -153,9 +152,7 @@ final class RichTextEmojiKeyboardController {
             pointSize: size
         )
         layer.isVisibleForAnimations = true
-        layer.frame = view.bounds
-        view.layer.addSublayer(layer)
-        return view
+        return RichTextInlineEmojiView(frame: CGRect(origin: .zero, size: size), contentLayer: layer)
     }
 
     /// Builds/positions the emoji panel inside `container`. Returns its height (0 when not in emoji mode).
@@ -257,5 +254,33 @@ final class RichTextEmojiKeyboardController {
         }
         transition.setFrame(view: node.view, frame: shownFrame)
         return panelHeight
+    }
+}
+
+/// A plain host view for one inline custom emoji, backed by an `InlineStickerItemLayer`. Conforms to the
+/// editor's `RichTextEmojiView` so the editor can keep `dynamicColor` (the template-emoji tint) synced to
+/// the current text color; the layer masks-and-tints itself for a custom template emoji.
+private final class RichTextInlineEmojiView: UIView, RichTextEmojiView {
+    private let contentLayer: InlineStickerItemLayer
+
+    var dynamicColor: UIColor? {
+        get { return self.contentLayer.dynamicColor }
+        set { self.contentLayer.dynamicColor = newValue }
+    }
+
+    init(frame: CGRect, contentLayer: InlineStickerItemLayer) {
+        self.contentLayer = contentLayer
+        super.init(frame: frame)
+        contentLayer.frame = self.bounds
+        self.layer.addSublayer(contentLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.contentLayer.frame = self.bounds
     }
 }

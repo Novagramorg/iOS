@@ -8,6 +8,16 @@ public protocol RichTextChecklistMarkerView: AnyObject {
     func setChecked(_ checked: Bool, animated: Bool)
 }
 
+/// A host-supplied inline custom-emoji view. The editor hosts/positions/culls it and keeps its
+/// `dynamicColor` synced to the current text color, so a "template" (single-color) custom emoji tints
+/// to match the surrounding text (mirrors how the legacy input tints template emoji). A host whose
+/// emoji is never a template can leave `dynamicColor` unused.
+public protocol RichTextEmojiView: AnyObject {
+    /// The tint the editor pushes for a custom *template* emoji — the current text color. `nil` means
+    /// untinted. Non-template (full-color) emoji ignore it; the editor assigns it regardless.
+    var dynamicColor: UIColor? { get set }
+}
+
 /// Shared factory: turns one `Block` into its `CanvasBlock` box. Used by the document root
 /// (`DocumentCanvasView.setBlocks`), table cells (`TableBlockBox.init`), and — once landed —
 /// `BlockQuoteBox` (Task 4), so all three build children through one recursive function.
@@ -35,6 +45,10 @@ func makeBox(for block: Block, mapper: AttributedStringMapper,
                                                       pullQuoteStyle: pullQuoteStyle,
                                                       expandImage: expandImage,
                                                       collapseImage: collapseImage, width: width)
+    case .details(let d):        return DetailsBox(details: d, mapper: mapper,
+                                                   quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                                                   expandImage: expandImage,
+                                                   collapseImage: collapseImage, width: width)
     }
 }
 
@@ -50,8 +64,9 @@ final class DocumentCanvasView: UIView {
     var layoutDirectionModel: DocumentLayoutDirection = .auto
     var imageProvider: (String) -> UIImage? = { _ in nil }
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
-    /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
-    var emojiViewProvider: (_ id: String, _ size: CGSize) -> UIView? = { _, _ in nil }
+    /// The canvas owns/positions/removes it and keeps its `dynamicColor` synced to the current text color
+    /// (template-emoji tinting); a host with only a CALayer wraps it in a conforming `UIView`.
+    var emojiViewProvider: (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)? = { _, _ in nil }
     /// Returns a FRESH checkbox view for a checklist marker (host-side `CheckNode`). `nil` when unset —
     /// the editor falls back to the Unicode glyph marker. The canvas hosts/positions/animates the view.
     var checklistMarkerViewProvider: ((_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?)?
@@ -85,7 +100,7 @@ final class DocumentCanvasView: UIView {
     /// `existing` is the currently-hosted view for this block on an items-change (nil otherwise); the host
     /// may update it IN PLACE and return the SAME instance (surviving cells reused, fetch preserved) or
     /// return a fresh instance (recreate fallback). Returns nil = "not ready" (keep any existing view).
-    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _ in nil }
+    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ displayMode: MediaDisplayMode, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _, _ in nil }
     /// Hosted media views, keyed by the OWNING block's `BlockID` (the occurrence) so edits/undo reuse —
     /// not recreate — them, and two blocks sharing one `mediaID` get two independent views.
     var mediaItemViews: [BlockID: HostedMediaItem] = [:]
@@ -187,6 +202,7 @@ final class DocumentCanvasView: UIView {
     /// editor pastes text (fragment/RTF/plain) itself.
     var canPasteMedia: (() -> Bool)?
     var onPasteMedia: (() -> Bool)?
+    var plainTextFragmentTransformer: ((String) -> Document?)?
 
     /// A HARDWARE-keyboard Return (plain or ⌘) routes here before the editor inserts a newline, so a host
     /// (the chat composer) can send-on-Enter / send-on-⌘-Enter. Mirrors the legacy `ChatInputTextViewImpl`'s
@@ -233,6 +249,10 @@ final class DocumentCanvasView: UIView {
     /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to
     /// `BlockQuoteBox`; the `expand` image likewise.
     var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons?
+
+    /// Host-injected fold chevron for detail blocks (the V2 `ExpandingItemVerticalRegularArrow`). Stamped onto
+    /// each top-level `DetailsBox` during layout; `nil` ⇒ a drawn-arrow fallback.
+    var detailsChevronImage: UIImage?
 
     /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
     /// Defaults to the editor's built-in hints; a compact host (chat composer) sets them to "" to suppress
@@ -394,6 +414,10 @@ final class DocumentCanvasView: UIView {
     // knob is drawn offset from the text line). Applied at every drag map via `selectionDragPosition(forTouch:)`.
     var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
+    // A `.cells` corner-knob drag (Phase 2c-T4) — set in `.began` when the touch hits a corner knob, either a
+    // committed `.cells` selection's or the focused-cell "fake" chrome's (no committed selection yet). The
+    // FIRST `extendCellSelection` call promotes the fake chrome to a real committed `.cells` selection.
+    var draggingTableCornerKnob: TableCellCorner?
     var selectionHandlePan: UIPanGestureRecognizer?
     // The loupe / move-cursor long-press. Held so `gestureRecognizerShouldBegin` can fail it on a touch that
     // lands on an active selection handle (letting the handle pan grab the knob instead) — see that method.
@@ -443,6 +467,48 @@ final class DocumentCanvasView: UIView {
     var compositionAnchorHead: (Int, Int)?
     /// Injectable pasteboard (defaults to the system pasteboard; tests inject a fake — see TextPasteboard).
     var pasteboard: TextPasteboard = UIPasteboard.general
+    // MARK: Spell checking (see DocumentCanvasView+SpellCheck, +NativeTextCheckingClient)
+    /// Native-checking underline style per flagged range.
+    enum SpellStyle: Equatable { case spelling, grammar, correction }
+    /// Per-region flagged ranges in REGION-LOCAL UTF-16, keyed by the owning block's id (from the region's
+    /// `ref`). `contentHash` is reserved for a future content-keyed cache (native checking self-invalidates
+    /// via the controller, so it is currently unused — 0).
+    /// Accepted limitation: this is a side table edits do NOT shift, so a flagged word positioned after a
+    /// mid-region edit renders at a stale offset until the caret next re-traverses it (self-healing). The old
+    /// debounced full-region rescan used to mask this by rebuilding every flag on each pass.
+    var spellResults: [BlockID: (contentHash: Int, ranges: [(range: NSRange, style: SpellStyle)])] = [:]
+    /// Delivered `.correction` candidate replacements ("alternatives"), region-local — mirrors `spellResults`.
+    /// Stashed from `nativeReplace` via KVC on the delivered `NSTextAlternatives` (see
+    /// `+NativeTextCheckingClient.stashSpellingAlternatives`); best-effort (corrections were not observed firing
+    /// in the test host). `.spelling`/`.grammar` flags never populate this — those go through the public
+    /// `UITextChecker` guesses lookup instead (`+SpellCheck.nativeSpellingGuesses`).
+    var spellingAlternatives: [BlockID: [(range: NSRange, candidates: [String], primary: String?)]] = [:]
+    /// The native checking driver (nil ⇒ private class unavailable ⇒ checking off; no fallback).
+    var nativeChecker: NativeTextChecker?
+    /// Global caret position at the last selection-driven native check. nil until the first post-focus
+    /// selection settles: native does NOT scan on focus — only words the caret traverses are checked.
+    var lastCheckedCaret: Int?
+    /// Set only for the duration of a driven `checkSpellingForWord`/`checkGrammarForSentence` call. The
+    /// controller calls back `removeAnnotation:forRange:` SYNCHRONOUSLY within that call whenever the
+    /// checked word/sentence turns out clean (verified live) — without knowing which check triggered it,
+    /// `nativeRemoveAnnotation` can't tell a stale `.spelling` flag from an unrelated `.grammar` flag that
+    /// merely overlaps the checked word, and would wipe both (the same style-isolation bug `.spelling`
+    /// clears in `nativeCheckOnSelectionChange` have). Bracketed by `driveNativeCheck(style:_:)`.
+    var inFlightCheckStyle: SpellStyle?
+    /// Host toggle (façade `isSpellCheckingEnabled`). When false: no checking, no underlines, no tap override.
+    var isSpellCheckingEnabled = true {
+        didSet {
+            guard oldValue != isSpellCheckingEnabled else { return }
+            if isSpellCheckingEnabled { installNativeCheckingIfNeeded(); nativeChecker?.preheat() }
+            else { nativeChecker?.invalidate(); nativeChecker = nil; spellResults = [:]; spellingAlternatives = [:]; pendingSpellingMenu = nil; setNeedsSpellUnderlineDisplay() }
+            reloadInputViews()   // let the keyboard re-read the trait
+        }
+    }
+    /// Set while the tap-to-fix guesses menu is up; `range` is GLOBAL (same axis as the selection).
+    /// `revertTo` is the pre-correction original word — non-nil only for a `.correction` flag with a stashed
+    /// `spellingAlternatives` entry (best-effort; see that field's doc) — and drives the "Revert to …" menu
+    /// action added in N5.
+    var pendingSpellingMenu: (range: NSRange, guesses: [String], revertTo: String?)?
     var undoManagerOverride: UndoManager?
     /// The editor's OWN undo manager, used in production. We deliberately do NOT fall back to the
     /// responder-chain `UIResponder.undoManager`: that manager is shared app-wide, so OTHER responders'
@@ -483,10 +549,18 @@ final class DocumentCanvasView: UIView {
     /// IME commit, document swap, resign-first-responder).
     func breakUndoCoalescing() { openUndoRun = nil }
 
+    /// When set, an `editing { }` block skips its trailing HOST notifications (`notifyContentSizeChanged`
+    /// and `onSelectionChange`) so the host does not re-lay-out / redraw for that edit. Used by the
+    /// markdown two-step paste to keep the intermediate raw-text state (step 1) off-screen — only step 2's
+    /// rich result triggers a host layout, so the paste shows no flash of the raw markdown. The canvas has
+    /// no `draw(_:)` and is parent-driven, so suppressing the host layout keeps the block views unchanged.
+    var suppressHostChangeNotification = false
+
     /// Token for the input-language-change observer (see init); removed in deinit.
     private var inputModeObserver: NSObjectProtocol?
     deinit {
         if let inputModeObserver { NotificationCenter.default.removeObserver(inputModeObserver) }
+        nativeChecker?.invalidate(); nativeChecker = nil   // tear down the native checking controller explicitly
     }
 
     init(mapper: AttributedStringMapper = AttributedStringMapper()) {
@@ -590,6 +664,7 @@ final class DocumentCanvasView: UIView {
         let became = super.becomeFirstResponder()
         if became { refreshEmptyBoxWritingDirections(); updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
         if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
+        if became { installNativeCheckingIfNeeded(); nativeChecker?.preheat(); lastCheckedCaret = head }   // install+preheat; no scan (native checks only traversed words)
         return became
     }
 
@@ -720,6 +795,8 @@ final class DocumentCanvasView: UIView {
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
     /// cells the canvas reaches via `leafRegions()`.
     func setBlocks(_ blocks: [Block], width: CGFloat) {
+        spellResults = [:]   // stale per-block results (keyed by BlockID) must not linger across a document swap
+        spellingAlternatives = [:]   // same staleness risk (keyed by BlockID) as spellResults above
         if width > 0 { lastLayoutWidth = width }
         breakUndoCoalescing()   // a full document swap — programmatic set OR an undo/redo restore (the registerUndo closure calls setBlocks) — ends any open typing/deleting run
         tableSelection = nil
@@ -739,6 +816,7 @@ final class DocumentCanvasView: UIView {
         recomputeDocumentHasSpoilers()   // a fresh document may load spoilers, or none (gates syncSpoilers)
         anchor = min(anchor, documentSize); head = min(head, documentSize)
         notifyContentSizeChanged(); setNeedsDisplay()
+        lastCheckedCaret = nil   // a fresh document: nothing checked until the caret traverses it
     }
 
     /// A full-document replacement that NOTIFIES the input system (so the keyboard's shadow document
@@ -825,11 +903,11 @@ final class DocumentCanvasView: UIView {
     @discardableResult
     func reconcileBlockViews(visibleRect: CGRect) -> Bool {
         var createdFreshTable = false
-        let window = blockWindow(forBand: overscanRect(for: visibleRect))
+        let band = overscanRect(for: visibleRect)
         var wantedIDs = Set<BlockID>()
-        for i in window {
-            let box = boxes[i]
-            guard box.rendersAsBlockView else { continue }
+
+        // Realize (create or rebind) one box's backing view.
+        func realize(_ box: CanvasBlock) {
             wantedIDs.insert(box.id)
             if let view = blockViews[box.id] {
                 bindRealizedView(view, to: box, fresh: false)          // stayed realized
@@ -848,6 +926,25 @@ final class DocumentCanvasView: UIView {
                 bindRealizedView(view, to: box, fresh: true)
             }
         }
+
+        // DFS in tree order. Realize a box when it renders-as-view AND its extent meets the band, then descend
+        // into a details / (expanded) block-quote body (NOT table cells — a `TableBackingView` self-hosts those,
+        // so a nested table gets its own view here and hosts its own cell views). Visiting a container BEFORE
+        // its children means a FRESH container chrome view is inserted below its fresh child views (children
+        // draw above the chrome). A container off-band ⇒ its children (within its frame) are off-band too.
+        func realizeTree(_ box: CanvasBlock) {
+            let inBand = box.blockViewFrame.intersects(band)
+            if box.rendersAsBlockView, inBand { realize(box) }
+            guard inBand else { return }
+            if let d = box as? DetailsBox {
+                for c in d.children.boxes { realizeTree(c) }
+            } else if let bq = box as? BlockQuoteBox, !bq.collapsed {
+                for c in bq.children.boxes { realizeTree(c) }
+            }
+        }
+
+        for i in blockWindow(forBand: band) { realizeTree(boxes[i]) }   // top-level binary-search; recurse visible containers
+
         for (id, view) in blockViews where !wantedIDs.contains(id) {
             view.removeFromSuperview()
             blockViews[id] = nil
@@ -911,6 +1008,8 @@ final class DocumentCanvasView: UIView {
 
     var realizedBlockViewCountForTesting: Int { blockViews.count }
     func isBlockViewRealizedForTesting(_ id: BlockID) -> Bool { blockViews[id] != nil }
+    func blockViewForTesting(_ id: BlockID) -> UIView? { blockViews[id] }
+    func checklistMarkerViewForTesting(_ id: BlockID) -> UIView? { checklistMarkerViews[id]?.view }
     var recycleQueueDepthForTesting: Int { recycleQueue.count }
 
     /// Called by a `TableBackingView` whenever its inner scroll view moves: keep the box's `contentOffsetX`
@@ -937,6 +1036,7 @@ final class DocumentCanvasView: UIView {
         documentSize = root.recompute(baseOffset: 0)
         for case let t as TableBlockBox in boxes { t.recompute() }
         for case let bq as BlockQuoteBox in boxes { bq.recompute() }
+        for case let d as DetailsBox in boxes { d.recompute() }
     }
 
     /// The box whose text contains `pos` (inclusive of the trailing caret slot), or nil at a
@@ -1005,6 +1105,7 @@ final class DocumentCanvasView: UIView {
                         width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
         for case let bq as BlockQuoteBox in boxes { bq.recompute() }   // child frames depend on the quote frame
+        for case let d as DetailsBox in boxes { d.recompute() }   // body child frames depend on the details frame
         stampListMarkers()
         syncBlockViews()
         blockquoteUnderlay.frame = bounds
@@ -1078,7 +1179,10 @@ final class DocumentCanvasView: UIView {
     /// layout. The editor convention: a view never `setNeedsLayout()`s itself for a content change — it
     /// notifies its parent, which drives layout explicitly. `intrinsicContentSize` is a pure computed
     /// property, so there is nothing to invalidate; this only fires the callback.
-    func notifyContentSizeChanged() { onContentSizeChange?() }
+    func notifyContentSizeChanged() {
+        if suppressHostChangeNotification { return }   // step 1 of a two-step paste stays off-screen (no flash)
+        onContentSizeChange?()
+    }
 
     /// Selection/caret changes call `setNeedsDisplay()` without a layout pass; propagate the repaint to
     /// the selection overlays and the chrome overlay — and to TABLE views only (their cell wash is
@@ -1180,7 +1284,18 @@ final class DocumentCanvasView: UIView {
     /// The `TableBlockBox` whose node span (incl. structural token slots) contains `pos`, if any — used to
     /// fold in horizontal scroll. Wider than `tableBox(containing:)` in Navigation (which matches cell text only).
     func tableBox(containingGlobal pos: Int) -> TableBlockBox? {
-        boxes.first { ($0 as? TableBlockBox).map { pos >= $0.nodeStart && pos < $0.nodeStart + $0.nodeSize } ?? false } as? TableBlockBox
+        // Recurses into details / (expanded) block-quote bodies so a nested table is found; does NOT descend
+        // into table cells (a nested table's own cells are found by that table).
+        func find(_ stack: [CanvasBlock]) -> TableBlockBox? {
+            for b in stack {
+                guard pos > b.nodeStart, pos < b.nodeStart + b.nodeSize else { continue }
+                if let t = b as? TableBlockBox { return t }
+                if let d = b as? DetailsBox, let hit = find(d.children.boxes) { return hit }
+                if let bq = b as? BlockQuoteBox, !bq.collapsed, let hit = find(bq.children.boxes) { return hit }
+            }
+            return nil
+        }
+        return find(boxes)
     }
 
     /// The horizontal scroll offset of the table containing `pos` (0 if none) — subtract it to turn an
@@ -1188,20 +1303,25 @@ final class DocumentCanvasView: UIView {
     func tableContentOffsetX(forGlobal pos: Int) -> CGFloat { tableBox(containingGlobal: pos)?.contentOffsetX ?? 0 }
 
     /// True if `pos` is the gap before a media atom box's `nodeStart` — a renderable caret slot.
+    /// Recurses into details / expanded block-quote bodies (via `allBoxesRecursive`) so a NESTED media
+    /// atom's gap is a gap position too.
     func isGapPosition(_ pos: Int) -> Bool {
-        boxes.contains { $0 is MediaBlockBox && $0.nodeStart == pos }
+        allBoxesRecursive().contains { $0 is MediaBlockBox && $0.nodeStart == pos }
     }
 
-    /// The media box whose gap-before-atom is at `pos`, if any.
+    /// The media box whose gap-before-atom is at `pos`, if any. Recurses into details / expanded block-quote
+    /// bodies — every image action (tap-select, edit-menu geometry, delete, spoiler) routes through this, so a
+    /// media block nested in a container must resolve here just like a top-level one.
     func mediaBox(atGap pos: Int) -> MediaBlockBox? {
-        boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
+        allBoxesRecursive().first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
     }
 
-    /// The COLLAPSED block-quote box whose leading gap is at `pos` (top-level), if any. The folded quote is a
+    /// The COLLAPSED block-quote box whose leading gap is at `pos`, if any. The folded quote is a
     /// caption-less atom holding no editable text, so a caret can focus its gap but typing there must open a
-    /// body paragraph before it — mirroring `mediaBox(atGap:)`.
+    /// body paragraph before it — mirroring `mediaBox(atGap:)`. Recurses (a collapsed quote can nest in a
+    /// details body); `allBoxesRecursive` lists a collapsed quote as a leaf atom (it walks no children).
     func collapsedBlockQuoteBox(atGap pos: Int) -> BlockQuoteBox? {
-        boxes.first { ($0 as? BlockQuoteBox).map { $0.collapsed && $0.nodeStart == pos } ?? false } as? BlockQuoteBox
+        allBoxesRecursive().first { ($0 as? BlockQuoteBox).map { $0.collapsed && $0.nodeStart == pos } ?? false } as? BlockQuoteBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.
@@ -1367,6 +1487,7 @@ final class DocumentCanvasView: UIView {
         coalescingSelectionNotifications = false
         textInputDelegate?.selectionWillChange(self)
         textInputDelegate?.selectionDidChange(self)
+        nativeCheckOnSelectionChange()   // run once at the final caret of a coalesced drag
     }
 
     func refreshSelectionUI() {
@@ -1375,6 +1496,7 @@ final class DocumentCanvasView: UIView {
         updateCaretView()
         updateSelectionHandleViews()
         syncSpoilers()
+        nativeCheckOnSelectionChange()   // selection-driven native spell/grammar check (native-parity)
     }
 
     /// Positions the two own-drawn selection-handle views at the ranged selection's endpoints — each hosted
@@ -1556,9 +1678,9 @@ final class DocumentCanvasView: UIView {
 /// One pooled emoji: the host view plus its last canvas-space frame (for offscreen culling).
 @available(iOS 13.0, *)
 final class HostedEmoji {
-    let view: UIView
+    let view: UIView & RichTextEmojiView
     var canvasFrame: CGRect
-    init(view: UIView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
+    init(view: UIView & RichTextEmojiView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
 }
 
 /// One pooled media view: the host view plus its last canvas-space frame (for offscreen culling).

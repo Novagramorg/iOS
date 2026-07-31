@@ -249,7 +249,7 @@ public final class LoadingOverlayNode: ASDisplayNode {
             
             var itemNodes: [ChatListItemNode] = []
             for i in 0 ..< items.count {
-                items[i].nodeConfiguredForParams(async: { f in f() }, params: ListViewItemLayoutParams(width: size.width, leftInset: 0.0, rightInset: 0.0, availableHeight: 100.0), synchronousLoads: false, previousItem: i == 0 ? nil : items[i - 1], nextItem: (i == items.count - 1) ? nil : items[i + 1], completion: { node, apply in
+                items[i].nodeConfiguredForParams(async: { f in f() }, params: ListViewItemLayoutParams(width: size.width, leftInset: 0.0, rightInset: 0.0, availableHeight: 100.0), synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: (i == items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                     if let itemNode = node as? ChatListItemNode {
                         itemNodes.append(itemNode)
                     }
@@ -631,8 +631,7 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
                     return current
                 },
                 params: params,
-                previousItem: nil,
-                nextItem: nil, animation: .None,
+                neighbors: .none, animation: .None,
                 completion: { layout, apply in
                     let nodeFrame = CGRect(origin: current.frame.origin, size: CGSize(width: layout.size.width, height: layout.size.height))
                     
@@ -648,8 +647,7 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
                 async: { f in f() },
                 params: params,
                 synchronousLoads: true,
-                previousItem: nil,
-                nextItem: nil,
+                neighbors: .none,
                 completion: { node, apply in
                     outItemNode = node
                     apply().1(ListViewItemApply(isOnScreen: true))

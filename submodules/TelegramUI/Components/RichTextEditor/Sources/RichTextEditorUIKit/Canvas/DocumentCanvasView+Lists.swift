@@ -11,32 +11,59 @@ extension DocumentCanvasView {
         // as a non-list paragraph (resets numbering). That is the intended behavior. The paragraph
         // `style` is forwarded so ListNumbering can treat a quote as its own numbering scope (a quoted
         // list and the surrounding list number independently); non-BlockBox blocks default to `.body`.
-        ListNumbering.labels(for: boxes.map { box in
-            let p = box as? BlockBox
-            return ParagraphBlock(id: box.id, style: p?.style ?? .body, list: p?.listMembership)
-        })
+        // Each container body (details / expanded block quote) is its own numbering SCOPE — numbered
+        // independently of the surrounding stack — so `ListNumbering.labels` runs per-stack and merges.
+        var result: [BlockID: String] = [:]
+        func labelStack(_ stack: [CanvasBlock]) {
+            let scoped = ListNumbering.labels(for: stack.map { box in
+                let p = box as? BlockBox
+                return ParagraphBlock(id: box.id, style: p?.style ?? .body, list: p?.listMembership)
+            })
+            result.merge(scoped) { _, new in new }
+            for b in stack {
+                if let d = b as? DetailsBox { labelStack(d.children.boxes) }
+                else if let bq = b as? BlockQuoteBox, !bq.collapsed { labelStack(bq.children.boxes) }
+            }
+        }
+        labelStack(boxes)
+        return result
     }
 
     struct ListMarkerDraw { let label: String; let origin: CGPoint; let font: UIFont; let id: BlockID }
 
     /// Stamps each top-level list box with its Core-computed marker label and flags each as
-    /// `isTopLevelBlock` (the top-level placeholder gate) and `isLastBlock` (the last-line gate for the
-    /// body placeholder). Called during layout so a box can draw its own marker. Table-cell boxes are
-    /// intentionally NOT stamped (parity: markers in cells aren't drawn today, and cell paragraphs draw
-    /// no placeholder).
+    /// `isTopLevelBlock` (the top-level placeholder gate) and `isOnlyBlock` (the sole-block gate for the
+    /// body placeholder — true only when the document has exactly one block). Called during layout so a box
+    /// can draw its own marker. Table-cell boxes are intentionally NOT stamped (parity: markers in cells
+    /// aren't drawn today, and cell paragraphs draw no placeholder).
     func stampListMarkers() {
         let labels = listMarkerLabels()
-        let last = boxes.last
-        for case let p as BlockBox in boxes {
-            p.isTopLevelBlock = true
-            p.isLastBlock = (p === last)
-            p.resolvedListMarker = labels[p.id]
-            p.placeholders = self.placeholders
-            p.hostsChecklistCheckbox = (self.checklistMarkerViewProvider != nil) && (p.listMembership?.marker == .checklist)
+        let isSoleBlock = (boxes.count == 1)
+        // Recurse into details + expanded block-quote bodies so NESTED list paragraphs get their marker label
+        // (`resolvedListMarker`) and checkbox-hosting flag too. `isTopLevelBlock`/`isOnlyBlock` (which gate the
+        // document placeholder) are true ONLY for the root stack; nested boxes are not top-level.
+        func stamp(_ stack: [CanvasBlock], topLevel: Bool) {
+            for b in stack {
+                if let p = b as? BlockBox {
+                    p.isTopLevelBlock = topLevel
+                    p.isOnlyBlock = topLevel && isSoleBlock
+                    p.resolvedListMarker = labels[p.id]
+                    p.placeholders = self.placeholders
+                    p.hostsChecklistCheckbox = (self.checklistMarkerViewProvider != nil) && (p.listMembership?.marker == .checklist)
+                } else if let pq = b as? PullQuoteBox {
+                    pq.placeholders = self.placeholders
+                } else if let cb = b as? CodeBlockBox {
+                    cb.placeholders = self.placeholders
+                } else if let bq = b as? BlockQuoteBox {
+                    bq.placeholders = self.placeholders
+                    if !bq.collapsed { stamp(bq.children.boxes, topLevel: false) }
+                } else if let d = b as? DetailsBox {
+                    d.placeholders = self.placeholders; d.chevronImage = self.detailsChevronImage
+                    stamp(d.children.boxes, topLevel: false)
+                }
+            }
         }
-        for case let pq as PullQuoteBox in boxes { pq.placeholders = self.placeholders }
-        for case let cb as CodeBlockBox in boxes { cb.placeholders = self.placeholders }
-        for case let bq as BlockQuoteBox in boxes { bq.placeholders = self.placeholders }
+        stamp(boxes, topLevel: true)
     }
 
     /// Test/geometry seam: the per-box marker draws keyed by `BlockID`. Production draws each marker in
@@ -53,10 +80,7 @@ extension DocumentCanvasView {
     func setList(_ marker: ListMarker?) {
         guard !boxes.isEmpty else { return }
         editing {
-            for box in boxes {
-                guard let p = box as? BlockBox else { continue }
-                let boxLo = p.textStart, boxHi = p.textStart + p.textLength
-                guard selFrom <= boxHi && selTo >= boxLo else { continue }
+            for p in selectedBlockBoxes() {   // top level AND inside a detail block's body
                 if let marker = marker {
                     // Seed `checked` only when the box becomes a checklist FRESH; when it is already a
                     // `.checklist`, preserve its current checked state so re-applying the checklist marker

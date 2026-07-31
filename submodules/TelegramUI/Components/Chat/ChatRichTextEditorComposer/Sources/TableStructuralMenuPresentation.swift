@@ -24,18 +24,31 @@ public func presentTableStructuralMenu(
     anchor.isUserInteractionEnabled = false
     anchorView.addSubview(anchor)
 
-    var items: [ContextMenuItem] = []
+    // The top "attributes" group (alignment + header) applies to the selected cells directly, as opposed
+    // to the Add/Delete structural actions below. Built up front so the separator logic stays coherent
+    // regardless of which of the two (if either) is present.
+    var attributeItems: [ContextMenuItem] = []
     if let alignment = request.alignment {
-        items.append(.custom(TableStructuralMenuAlignmentItem(
+        attributeItems.append(.custom(TableStructuralMenuAlignmentItem(
             initialHorizontal: alignment.horizontal.map(tableHAlign(fromCore:)),
             initialVertical: alignment.vertical.map(tableVAlign(fromCore:)),
             action: { h, v in
                 alignment.apply(h.map(coreHAlign(from:)), v.map(coreVAlign(from:)))
             }), false))
+    }
 
-        if !request.actions.isEmpty {
-            items.append(.separator)
-        }
+    var items: [ContextMenuItem] = attributeItems
+    if !attributeItems.isEmpty && (!request.actions.isEmpty || request.header != nil) {
+        items.append(.separator)
+    }
+    if let header = request.header {
+        items.append(.action(ContextMenuActionItem(
+            text: header.isHeader == true ? presentationData.strings.RichText_Menu_Table_HighlightOff : presentationData.strings.RichText_Menu_Table_HighlightOn,
+            icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: header.isHeader == true ? "Chat/Context Menu/CellHighlightRemove" : "Chat/Context Menu/CellHighlightAdd"), color: theme.contextMenu.primaryColor)
+            },
+            action: { _, f in f(.default); header.apply() }
+        )))
     }
     items.append(contentsOf: request.actions.map { action in
         let (title, icon) = tableStructuralMenuTitleAndIcon(action.kind)
@@ -67,6 +80,8 @@ private func tableStructuralMenuTitleAndIcon(_ kind: TableStructuralMenuRequest.
     case .addRowAbove: return ("Add Row Above", "Chat/Context Menu/CellAddTop")
     case .addRowBelow: return ("Add Row Below", "Chat/Context Menu/CellAddBottom")
     case .deleteRow: return ("Delete Row", "Chat/Context Menu/CellDelete")
+    case .mergeCells: return ("Merge Cells", "Chat/Context Menu/CellMergeH")
+    case .splitCell: return ("Split Cell", "Chat/Context Menu/CellSplitH")
     }
 }
 

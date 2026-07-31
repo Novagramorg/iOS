@@ -122,6 +122,10 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
         self.view.addSubview(buttonView)
         buttonView.highligthedChanged = { [weak self] highlighted in
             if let strongSelf = self {
+                if let button = strongSelf.button, case .disabled = button.action {
+                    // No press feedback for a disabled button — it must not read as tappable.
+                    return
+                }
                 if highlighted {
                     //strongSelf.backgroundBlurNode.layer.removeAnimation(forKey: "opacity")
                     //strongSelf.backgroundBlurNode.alpha = 0.55
@@ -155,6 +159,10 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     }
     
     @objc func buttonPressed() {
+        if let button = self.button, case .disabled = button.action {
+            // inlineButtonTypeDisabled: a forward stripped this button's behaviour. Inert.
+            return
+        }
         if let button = self.button, let pressed = self.pressed {
             let progressPromise = Promise<Bool>()
             pressed(button, progressPromise)
@@ -229,8 +237,12 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
             
             let messageTheme = incoming ? theme.theme.chat.message.incoming : theme.theme.chat.message.outgoing
             
-            let titleColor = bubbleVariableColor(variableColor: messageTheme.actionButtonsTextColor, wallpaper: theme.wallpaper)
-            
+            var titleColor = bubbleVariableColor(variableColor: messageTheme.actionButtonsTextColor, wallpaper: theme.wallpaper)
+            if case .disabled = button.action {
+                // inlineButtonTypeDisabled reads as present-but-unavailable, not absent.
+                titleColor = titleColor.withMultipliedAlpha(0.5)
+            }
+
             var isStarsPayment = false
             let iconImage: UIImage?
             var tintColor: UIColor?

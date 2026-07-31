@@ -237,7 +237,7 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
             itemNode = current
             peerItem.updateNode(async: { $0() }, node: {
                 return itemNode
-            }, params: params, previousItem: nil, nextItem: nil, animation: .None, completion: { (layout, apply) in
+            }, params: params, neighbors: .none, animation: .None, completion: { (layout, apply) in
                 let nodeFrame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: layout.size.height))
                 
                 itemNode.contentSize = layout.contentSize
@@ -248,7 +248,7 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
             })
         } else {
             var itemNodeValue: ListViewItemNode?
-            peerItem.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: synchronousLoads, previousItem: nil, nextItem: nil, completion: { node, apply in
+            peerItem.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: synchronousLoads, neighbors: .none, completion: { node, apply in
                 itemNodeValue = node
                 apply().1(ListViewItemApply(isOnScreen: true))
             })

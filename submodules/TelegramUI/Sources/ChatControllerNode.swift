@@ -999,6 +999,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.textInputPanelNode?.paste = { [weak self] data in
             self?.paste(data)
         }
+        self.textInputPanelNode?.pastedMarkdownParser = { context, text in
+            return chatInputContentFromPastedMarkdown(context: context, plainText: text)
+        }
         self.textInputPanelNode?.displayAttachmentMenu = { [weak self] in
             self?.displayAttachmentMenu()
         }
@@ -4597,66 +4600,122 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func openExpandedInput() {
-        guard let textInputPanelNode = self.textInputPanelNode else {
-            return
-        }
-        
-        // The composer's chat input STATE is the single source of truth for this handoff (both
-        // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
-        // state-observers all see one consistent value. OUT: convert the live composer content →
-        // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
-        // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
-        // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
-        // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
-        // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
-        let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
-        let editorScreen = RichTextAttachmentScreen(
-            context: self.context,
-            initialContents: seedDocument,
-            initialMedia: seedMedia,
-            initialEmojiFiles: seedEmojiFiles,
-            sendMessage: { [weak self] document, media, emojiFiles, sendWithoutFormatting in
-                guard let self else {
-                    return
-                }
-                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
-                self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
-                    return state.updatedInterfaceState { interfaceState in
-                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
-                    }
-                }, completion: { [weak self] _ in
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            
+            guard let textInputPanelNode = self.textInputPanelNode else {
+                return
+            }
+            
+            // The composer's chat input STATE is the single source of truth for this handoff (both
+            // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
+            // state-observers all see one consistent value. OUT: convert the live composer content →
+            // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
+            // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
+            // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
+            // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
+            // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
+            let (seedDocument, seedMedia, seedEmojiFiles) = await documentMediaAndEmojiAsync(engine: self.context.engine, fromChatInputContent: textInputPanelNode.inputTextState.content)
+            let editorScreen = RichTextAttachmentScreen(
+                context: self.context,
+                mode: .edit(initialDocument: seedDocument, media: seedMedia, emojiFiles: seedEmojiFiles),
+                sendMessage: { [weak self] document, media, emojiFiles, sendWithoutFormatting in
                     guard let self else {
                         return
                     }
-                    self.sendCurrentMessage(sendWithoutFormatting: sendWithoutFormatting)
-                })
-            },
-            syncContent: { [weak self] document, media, emojiFiles in
-                guard let self else {
-                    return
-                }
-                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
-                self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
-                    return state.updatedInterfaceState { interfaceState in
-                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                    let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                        return state.updatedInterfaceState { interfaceState in
+                            return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                        }
+                    }, completion: { [weak self] _ in
+                        guard let self else {
+                            return
+                        }
+                        self.sendCurrentMessage(sendWithoutFormatting: sendWithoutFormatting)
+                    })
+                },
+                syncContent: { [weak self] document, media, emojiFiles in
+                    guard let self else {
+                        return
                     }
-                })
-            },
-            presentAttachmentMenu: { [weak self] photoVideoOnly, completion in
-                guard let self else {
-                    return
+                    let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                        return state.updatedInterfaceState { interfaceState in
+                            return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                        }
+                    })
+                },
+                sendContextActions: (self.chatPresentationInterfaceState.interfaceState.editMessage == nil ? self.chatLocation.peerId.flatMap { peerId in
+                    return RichTextAttachmentScreenSendContextActions(
+                        peerId: peerId,
+                        send: { [weak self] document, media, emojiFiles, sendWithoutFormatting, mode, parameters in
+                            guard let self else {
+                                return
+                            }
+                            let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                            self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                                return state.updatedInterfaceState { interfaceState in
+                                    return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                                }
+                            }, completion: { [weak self] _ in
+                                guard let self else {
+                                    return
+                                }
+                                let messageEffect = parameters?.effect.flatMap(ChatSendMessageEffect.init)
+                                switch mode {
+                                case .generic:
+                                    self.sendCurrentMessage(messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting)
+                                case .silently:
+                                    self.sendCurrentMessage(silentPosting: true, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting)
+                                case .whenOnline:
+                                    self.sendCurrentMessage(scheduleTime: scheduleWhenOnlineTimestamp, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: { [weak self] in
+                                        guard let self, let controller = self.controller else {
+                                            return
+                                        }
+                                        controller.updateChatPresentationInterfaceState(animated: true, interactive: false, saveInterfaceState: controller.presentationInterfaceState.subject != .scheduledMessages, {
+                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil).withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil).withUpdatedComposeInputState(ChatTextInputState(inputText: NSAttributedString(string: ""))) }
+                                        })
+                                        controller.openScheduledMessages()
+                                    })
+                                }
+                            })
+                        },
+                        schedule: { [weak self] document, media, emojiFiles, _, parameters in
+                            guard let self else {
+                                return
+                            }
+                            let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                            self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                                return state.updatedInterfaceState { interfaceState in
+                                    return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                                }
+                            })
+                            self.controller?.controllerInteraction?.scheduleCurrentMessage(parameters)
+                        }
+                    )
+                } : nil),
+                presentAttachmentMenu: { [weak self] request, completion in
+                    guard let self else {
+                        return
+                    }
+                    self.controller?.presentRichTextAttachmentMenu(request: request, completion: completion)
+                },
+                presentFormulaEditor: { [weak self] initialValue, completion in
+                    guard let self else {
+                        return
+                    }
+                    self.controller?.presentFormulaEditor(initialValue: initialValue, completion: completion)
+                },
+                pastedMarkdownParser: { context, text in
+                    return chatInputContentFromPastedMarkdown(context: context, plainText: text)
                 }
-                self.controller?.presentRichTextAttachmentMenu(photoVideoOnly: photoVideoOnly, completion: completion)
-            },
-            presentFormulaEditor: { [weak self] initialValue, completion in
-                guard let self else {
-                    return
-                }
-                self.controller?.presentFormulaEditor(initialValue: initialValue, completion: completion)
-            }
-        )
-        editorScreen.navigationPresentation = .modal
-        self.controller?.push(editorScreen)
+            )
+            editorScreen.navigationPresentation = .modal
+            self.controller?.push(editorScreen)
+        }
     }
 
     func openAICompose() {
@@ -4874,7 +4933,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let requiresPremiumRichContent = isNewMessage
                 && !self.context.isPremium
                 && !composeContent.isEmpty
-                && !composeContent.isEntityExpressible(options: [.quotesRequireRichContent])
+                && !composeContent.isEntityExpressible(options: [])
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
 
             if requiresPremiumRichContent && !sendWithoutFormatting {

@@ -9,7 +9,7 @@ import RichTextEditorCore
 @available(iOS 13.0, *)
 extension DocumentCanvasView {
     var autocorrectionType: UITextAutocorrectionType { get { .yes } set { } }
-    var spellCheckingType: UITextSpellCheckingType { get { .yes } set { } }
+    var spellCheckingType: UITextSpellCheckingType { get { isSpellCheckingEnabled ? .yes : .no } set { } }
 }
 
 // `UITextInlinePredictionType` is iOS 17+; below it the trait simply isn't offered (no inline predictions).

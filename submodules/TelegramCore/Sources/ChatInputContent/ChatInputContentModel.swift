@@ -177,9 +177,10 @@ public struct ChatInputContent: Equatable {
                 } else {
                     result.append(bq.content.plainText)
                 }
-            case .media, .table:
+            case .media, .table, .details:
                 // Off the flat axis: no character AND no separator (see `blockFlatLength`). Matches
                 // `attributedString(from:)` (drops them) and the editor's `composerParagraphs()` (skips them).
+                // A detail block round-trips via the structured Codable + InstantPage path, not flat text.
                 break
             }
         }
@@ -217,6 +218,8 @@ public struct ChatInputContent: Equatable {
             return pq.text.isEmpty
         case .blockQuote:
             return false
+        case .details:
+            return false
         }
     }
 
@@ -234,7 +237,7 @@ public struct ChatInputContent: Equatable {
                 return code.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq):
                 return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote:
+            case .media, .table, .blockQuote, .details:
                 return false
             }
         }
@@ -296,6 +299,9 @@ public struct ChatInputContent: Equatable {
                     if case let .paragraph(p) = $0, case .body = p.style, p.list == nil { return true }
                     return false
                 }
+            case .details:
+                // A detail (folding) block carries structure the message-entity set can't express → rich path.
+                return false
             }
         }
     }
@@ -361,6 +367,37 @@ extension ChatInputBlockQuote: Codable {
     }
 }
 
+/// A structured detail (folding) block carrying an editable title (summary) + arbitrary nested content.
+/// Mirrors `InstantPage.details`; `expanded` maps 1:1 to the wire field (the inverse of a blockQuote's
+/// `collapsed`). Off the flat caret axis (like `.media`/`.table`) — it round-trips via this structured
+/// Codable + the InstantPage path, not via flat text.
+public struct ChatInputDetails: Equatable {
+    public var content: ChatInputContent
+    public var title: [ChatInputRun]
+    public var expanded: Bool
+    public init(content: ChatInputContent, title: [ChatInputRun] = [], expanded: Bool = true) {
+        self.content = content
+        self.title = title
+        self.expanded = expanded
+    }
+}
+
+extension ChatInputDetails: Codable {
+    private enum CodingKeys: String, CodingKey { case content, title, expanded }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.content = try c.decode(ChatInputContent.self, forKey: .content)
+        self.title = try c.decodeIfPresent([ChatInputRun].self, forKey: .title) ?? []
+        self.expanded = try c.decodeIfPresent(Bool.self, forKey: .expanded) ?? true
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(content, forKey: .content)
+        try c.encode(title, forKey: .title)
+        try c.encode(expanded, forKey: .expanded)
+    }
+}
+
 public enum ChatInputBlock: Equatable, Codable {
     case paragraph(ChatInputParagraph)
     case code(ChatInputCode)
@@ -376,6 +413,7 @@ public enum ChatInputBlock: Equatable, Codable {
     /// A structured blockquote block carrying arbitrary nested content. Mirrors `InstantPage.blockQuote`.
     /// Collapsed → 1 " " placeholder on the flat axis; expanded → inner content on the flat axis.
     case blockQuote(ChatInputBlockQuote)
+    case details(ChatInputDetails)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -385,6 +423,7 @@ public enum ChatInputBlock: Equatable, Codable {
         case table
         case pullQuote
         case blockQuote
+        case details
     }
 
     private enum Kind: Int32, Codable {
@@ -395,6 +434,7 @@ public enum ChatInputBlock: Equatable, Codable {
         case table      = 4
         case pullQuote  = 5
         case blockQuote = 6
+        case details    = 7
     }
 
     public init(from decoder: Decoder) throws {
@@ -420,6 +460,8 @@ public enum ChatInputBlock: Equatable, Codable {
             self = .pullQuote(try container.decode(ChatInputPullQuote.self, forKey: .pullQuote))
         case .blockQuote:
             self = .blockQuote(try container.decode(ChatInputBlockQuote.self, forKey: .blockQuote))
+        case .details:
+            self = .details(try container.decode(ChatInputDetails.self, forKey: .details))
         }
     }
 
@@ -444,6 +486,9 @@ public enum ChatInputBlock: Equatable, Codable {
         case let .blockQuote(bq):
             try container.encode(Kind.blockQuote.rawValue, forKey: .kind)
             try container.encode(bq, forKey: .blockQuote)
+        case let .details(d):
+            try container.encode(Kind.details.rawValue, forKey: .kind)
+            try container.encode(d, forKey: .details)
         }
     }
 }
@@ -782,6 +827,36 @@ extension ChatInputMediaItem: Codable {
     }
 }
 
+/// Mirrors the editor's `MediaDisplayMode` — how a multi-item container lays out (mosaic → `.collage`,
+/// slideshow → `.slideshow`). Meaningful only for `items.count >= 2`; default `.mosaic`.
+///
+/// Like the `Int32` raw enums above, this carries a CUSTOM keyed `Codable` that encodes its `String` `.rawValue`
+/// under a keyed container — never the synthesized `RawRepresentable` Codable, which uses a `singleValueContainer`
+/// the Postbox `AdaptedPostbox*coder` does not support (it crashes at runtime, e.g. when a draft's
+/// `ChatInputMedia` block is persisted).
+public enum ChatInputMediaDisplayMode: String, Equatable, Codable {
+    case mosaic
+    case slideshow
+
+    private enum CodingKeys: String, CodingKey {
+        case raw
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let value = try container.decode(String.self, forKey: .raw)
+        guard let v = ChatInputMediaDisplayMode(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(forKey: .raw, in: container, debugDescription: "Unknown ChatInputMediaDisplayMode \(value)")
+        }
+        self = v
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.rawValue, forKey: .raw)
+    }
+}
+
 /// An attached media container (one or more images/videos) with a single inline caption. Mirrors the editor
 /// `MediaBlock` — items carry concrete `Media` (resolved from the editor's opaque `mediaID` at conversion time).
 public struct ChatInputMedia: Equatable {
@@ -790,22 +865,27 @@ public struct ChatInputMedia: Equatable {
     public var displayWidth: Double?
     /// Honored only when `items.count == 1`.
     public var alignment: ChatInputMediaAlignment
+    /// Layout mode for a multi-item container; honored only when `items.count >= 2`. Default `.mosaic`.
+    public var displayMode: ChatInputMediaDisplayMode
     public var caption: [ChatInputRun]
 
     public init(items: [ChatInputMediaItem], displayWidth: Double? = nil,
-                alignment: ChatInputMediaAlignment = .center, caption: [ChatInputRun] = []) {
+                alignment: ChatInputMediaAlignment = .center, displayMode: ChatInputMediaDisplayMode = .mosaic,
+                caption: [ChatInputRun] = []) {
         self.items = items
         self.displayWidth = displayWidth
         self.alignment = alignment
+        self.displayMode = displayMode
         self.caption = caption
     }
 
     /// Convenience single-media initializer — reproduces the pre-container API.
     public init(media: Media, kind: ChatInputMediaKind, naturalSize: ChatInputSize,
                 displayWidth: Double? = nil, alignment: ChatInputMediaAlignment = .center,
+                displayMode: ChatInputMediaDisplayMode = .mosaic,
                 caption: [ChatInputRun] = []) {
         self.init(items: [ChatInputMediaItem(media: media, kind: kind, naturalSize: naturalSize)],
-                  displayWidth: displayWidth, alignment: alignment, caption: caption)
+                  displayWidth: displayWidth, alignment: alignment, displayMode: displayMode, caption: caption)
     }
 
     // Single-media convenience accessors (FIRST item).
@@ -817,13 +897,14 @@ public struct ChatInputMedia: Equatable {
         return lhs.items == rhs.items
             && lhs.displayWidth == rhs.displayWidth
             && lhs.alignment == rhs.alignment
+            && lhs.displayMode == rhs.displayMode
             && lhs.caption == rhs.caption
     }
 }
 
 extension ChatInputMedia: Codable {
     private enum CodingKeys: String, CodingKey {
-        case items, displayWidth, alignment, caption
+        case items, displayWidth, alignment, displayMode, caption
         // Legacy (pre-container) single-media keys:
         case media, mediaType, kind, naturalSize
     }
@@ -833,6 +914,7 @@ extension ChatInputMedia: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.displayWidth = try container.decodeIfPresent(Double.self, forKey: .displayWidth)
         self.alignment = try container.decode(ChatInputMediaAlignment.self, forKey: .alignment)
+        self.displayMode = try container.decodeIfPresent(ChatInputMediaDisplayMode.self, forKey: .displayMode) ?? .mosaic
         self.caption = try container.decode([ChatInputRun].self, forKey: .caption)
         if let items = try container.decodeIfPresent([ChatInputMediaItem].self, forKey: .items) {
             self.items = items
@@ -861,6 +943,7 @@ extension ChatInputMedia: Codable {
         try container.encode(self.items, forKey: .items)
         try container.encodeIfPresent(self.displayWidth, forKey: .displayWidth)
         try container.encode(self.alignment, forKey: .alignment)
+        try container.encode(self.displayMode, forKey: .displayMode)
         try container.encode(self.caption, forKey: .caption)
     }
 }
@@ -879,32 +962,78 @@ public struct ChatInputTableCell: Equatable, Codable {
     public var background: ChatInputColor?
     public var horizontalAlignment: ChatInputTextAlignment
     public var verticalAlignment: ChatInputTableVerticalAlignment
+    /// Per-cell header/highlight flag (replaces the old whole-row header).
+    public var isHeader: Bool
+    /// Number of grid columns this cell spans (default 1). Mirrors the editor `Cell.colspan`.
+    public var colspan: Int
+    /// Number of grid rows this cell spans (default 1). Mirrors the editor `Cell.rowspan`.
+    public var rowspan: Int
     public init(runs: [ChatInputRun] = [], background: ChatInputColor? = nil,
-                horizontalAlignment: ChatInputTextAlignment = .center, verticalAlignment: ChatInputTableVerticalAlignment = .top) {
+                horizontalAlignment: ChatInputTextAlignment = .center, verticalAlignment: ChatInputTableVerticalAlignment = .top,
+                isHeader: Bool = false, colspan: Int = 1, rowspan: Int = 1) {
         self.runs = runs
         self.background = background
         self.horizontalAlignment = horizontalAlignment
         self.verticalAlignment = verticalAlignment
+        self.isHeader = isHeader
+        self.colspan = colspan
+        self.rowspan = rowspan
     }
-    private enum CodingKeys: String, CodingKey { case runs, background, horizontalAlignment, verticalAlignment }
+    private enum CodingKeys: String, CodingKey { case runs, background, horizontalAlignment, verticalAlignment, isHeader, colspan, rowspan }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         runs = try c.decodeIfPresent([ChatInputRun].self, forKey: .runs) ?? []
         background = try c.decodeIfPresent(ChatInputColor.self, forKey: .background)
         horizontalAlignment = try c.decodeIfPresent(ChatInputTextAlignment.self, forKey: .horizontalAlignment) ?? .center
         verticalAlignment = try c.decodeIfPresent(ChatInputTableVerticalAlignment.self, forKey: .verticalAlignment) ?? .top
+        isHeader = try c.decodeIfPresent(Bool.self, forKey: .isHeader) ?? false
+        // Decoded (and encoded, below) as `Int32`, NOT `Int`: the Postbox `AdaptedPostbox*coder` has no
+        // `Int`-typed encode/decode overload (only Int32/Int64) — its keyed containers either assert (encode)
+        // or silently mismatch (decode) on a bare `Int`. `colspan`/`rowspan` stay `Int` in the public model
+        // (mirroring the editor `Cell.colspan`/`rowspan`); only the wire representation is `Int32`.
+        colspan = try c.decodeIfPresent(Int32.self, forKey: .colspan).map(Int.init) ?? 1
+        rowspan = try c.decodeIfPresent(Int32.self, forKey: .rowspan).map(Int.init) ?? 1
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(runs, forKey: .runs)
+        try c.encodeIfPresent(background, forKey: .background)
+        try c.encode(horizontalAlignment, forKey: .horizontalAlignment)
+        try c.encode(verticalAlignment, forKey: .verticalAlignment)
+        try c.encode(isHeader, forKey: .isHeader)
+        try c.encode(Int32(colspan), forKey: .colspan)
+        try c.encode(Int32(rowspan), forKey: .rowspan)
     }
 }
 
-/// A table row. Synthesized `Codable`.
-public struct ChatInputTableRow: Equatable, Codable {
+/// A table row. `isHeader` is derived from the cells (per-cell is the source of truth).
+public struct ChatInputTableRow: Equatable {
     public var height: Double?
-    public var isHeader: Bool
     public var cells: [ChatInputTableCell]
+    public var isHeader: Bool { !cells.isEmpty && cells.allSatisfy { $0.isHeader } }
+    /// `isHeader: true` seeds every cell as a header cell; `false` leaves each cell's own flag untouched.
     public init(height: Double? = nil, isHeader: Bool = false, cells: [ChatInputTableCell] = []) {
         self.height = height
-        self.isHeader = isHeader
-        self.cells = cells
+        self.cells = isHeader ? cells.map { var c = $0; c.isHeader = true; return c } : cells
+    }
+}
+
+extension ChatInputTableRow: Codable {
+    private enum CodingKeys: String, CodingKey { case height, cells; case legacyIsHeader = "isHeader" }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        height = try c.decodeIfPresent(Double.self, forKey: .height)
+        var decodedCells = try c.decodeIfPresent([ChatInputTableCell].self, forKey: .cells) ?? []
+        if (try c.decodeIfPresent(Bool.self, forKey: .legacyIsHeader)) == true {
+            decodedCells = decodedCells.map { var cell = $0; cell.isHeader = true; return cell }
+        }
+        cells = decodedCells
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(height, forKey: .height)
+        try c.encode(cells, forKey: .cells)
+        // Deliberately omits `isHeader` — derived from cells.
     }
 }
 
@@ -960,7 +1089,7 @@ public extension ChatInputContent {
         switch block {
         case .paragraph, .code, .pullQuote, .blockQuote:
             return true
-        case .media, .table:
+        case .media, .table, .details:
             return false
         }
     }
@@ -981,7 +1110,7 @@ public extension ChatInputContent {
             // Collapsed → 1 (the " " placeholder); expanded → the recursed interior flat length
             // (the inner ChatInputContent's plainText already applies the same inter-block accounting).
             return bq.collapsed ? 1 : (bq.content.plainText as NSString).length
-        case .media, .table:
+        case .media, .table, .details:
             return 0
         }
     }

@@ -54,11 +54,22 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     private let context: AccountContext
     private let webPage: TelegramMediaWebpage
     private var theme: InstantPageTheme
-    let media: InstantPageMedia
+    private(set) var media: InstantPageMedia
     let attributes: [InstantPageImageAttribute]
     private let interactive: Bool
     private let roundCorners: Bool
+    /// When true, the media is aspect-FITTED (letterboxed) within the node's bounds — with a blurred,
+    /// scaled-up copy of the media filling the letterbox/pillarbox gap (`resizeMode: .blurBackground`) —
+    /// instead of the default aspect-FILL (cover + crop). Mirrors the RichText editor's
+    /// `RichTextMediaContentComponent` (`usesAspectFit`), so a sent rich message matches its authoring
+    /// preview. Used by single media (whose frame height is capped at `min(1000, boundingWidth)`, so a
+    /// tall portrait shows whole + blurred rather than cropped) and by every slideshow page (whose shared
+    /// block frame is the tallest page). A landscape image that fills its slot shows no blur
+    /// (`aspectFitted == boundingSize`). Honored in `layout()` for image/file media.
     private let fit: Bool
+    /// When set, overrides the per-media-type placeholder/letterbox `emptyColor` (e.g. the slideshow uses
+    /// black instead of the panel/placeholder color). nil = keep the per-type default.
+    private let emptyColorOverride: UIColor?
     private let openMedia: (InstantPageMedia) -> Void
     private let longPressMedia: (InstantPageMedia) -> Void
     private let getPreloadedResource: (String) -> Data?
@@ -91,7 +102,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     // enclosing V2 media view drives the dust cover + reveal timing. Default off (no effect on web IV).
     private var contentBlurredSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>?
     
-    init(context: AccountContext, sourceLocation: InstantPageSourceLocation, theme: InstantPageTheme, webPage: TelegramMediaWebpage, media: InstantPageMedia, attributes: [InstantPageImageAttribute], interactive: Bool, roundCorners: Bool, fit: Bool, openMedia: @escaping (InstantPageMedia) -> Void, longPressMedia: @escaping (InstantPageMedia) -> Void, activatePinchPreview: ((PinchSourceContainerNode) -> Void)?, pinchPreviewFinished: ((InstantPageNode) -> Void)?, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)? = nil, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)? = nil, autoDownloadImage: ((TelegramMediaImage) -> Bool)? = nil, autoDownloadFile: ((TelegramMediaFile) -> Bool)? = nil, getPreloadedResource: @escaping (String) -> Data?) {
+    init(context: AccountContext, sourceLocation: InstantPageSourceLocation, theme: InstantPageTheme, webPage: TelegramMediaWebpage, media: InstantPageMedia, attributes: [InstantPageImageAttribute], interactive: Bool, roundCorners: Bool, fit: Bool, openMedia: @escaping (InstantPageMedia) -> Void, longPressMedia: @escaping (InstantPageMedia) -> Void, activatePinchPreview: ((PinchSourceContainerNode) -> Void)?, pinchPreviewFinished: ((InstantPageNode) -> Void)?, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)? = nil, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)? = nil, autoDownloadImage: ((TelegramMediaImage) -> Bool)? = nil, autoDownloadFile: ((TelegramMediaFile) -> Bool)? = nil, emptyColor: UIColor? = nil, getPreloadedResource: @escaping (String) -> Data?) {
         self.context = context
         self.theme = theme
         self.webPage = webPage
@@ -100,6 +111,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         self.interactive = interactive
         self.roundCorners = roundCorners
         self.fit = fit
+        self.emptyColorOverride = emptyColor
         self.openMedia = openMedia
         self.longPressMedia = longPressMedia
         self.getPreloadedResource = getPreloadedResource
@@ -267,6 +279,48 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
             self.setNeedsLayout()
         }
     }
+
+    /// Re-point interactive bindings — `self.media` identity, the fetch-status subscription, and
+    /// `fetchControls` — at a new media reference WITHOUT resetting the displayed image signal.
+    ///
+    /// Used when a rich message's media transitions Local→Cloud on send: `ApplyUpdateMessage` moved
+    /// the bytes onto the new (cloud) resource id, so the already-decoded pixels stay valid — no
+    /// reload, no blink. But the node's `media` (matched against the fresh gallery entries in
+    /// `openInstantPageMedia`'s `centralIndex` lookup, and by `transitionNode`) and its fetch-status
+    /// (which gates tap-to-open for images) still point at the stale local resource; without this
+    /// refresh, tap-to-open silently fails until the bubble is rebuilt on the next scroll-recycle.
+    /// The image signal is deliberately NOT re-set (that is what preserves the pixels / avoids the
+    /// flash); the poster stays the moved-bytes image, which is identical to the cloud image.
+    func updateInteractiveMediaBinding(sourceLocation: InstantPageSourceLocation, media: InstantPageMedia, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)?, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)?) {
+        self.media = media
+        guard self.interactive else {
+            return
+        }
+        let context = self.context
+        if case let .image(image) = media.media, let largest = largestImageRepresentation(image.representations) {
+            if largest.resource is InstantPageExternalMediaResource {
+                return
+            }
+            let imageReference = imageReferenceForMedia?(image) ?? ImageMediaReference.webPage(webPage: WebpageReference(self.webPage), media: image)
+            self.fetchControls = FetchControls(fetch: { [weak self] _ in
+                if let strongSelf = self {
+                    strongSelf.fetchedDisposable.set(chatMessagePhotoInteractiveFetched(context: context, userLocation: sourceLocation.userLocation, photoReference: imageReference, displayAtSize: nil, storeToDownloadsPeerId: nil).start())
+                }
+            }, cancel: {
+                chatMessagePhotoCancelInteractiveFetch(account: context.account, photoReference: imageReference)
+            })
+            self.statusDisposable.set((context.engine.resources.status(resource: EngineMediaResource(largest.resource)) |> deliverOnMainQueue).start(next: { [weak self] status in
+                displayLinkDispatcher.dispatch {
+                    if let strongSelf = self {
+                        strongSelf.fetchStatus = status
+                        strongSelf.updateFetchStatus()
+                    }
+                }
+            }))
+        }
+        // The file/video branch installs no status/fetchControls (video tap is ungated and uses
+        // `self.media`, refreshed above), so no further work is needed for it.
+    }
     
     private func loadExternalImage(resourceUrl: String) {
         self.externalImageLoadState = .loading
@@ -414,21 +468,23 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
             self.statusNode.frame = CGRect(x: floorToScreenPixels((size.width - radialStatusSize) / 2.0), y: floorToScreenPixels((size.height - radialStatusSize) / 2.0), width: radialStatusSize, height: radialStatusSize)
             
             if case .image = self.media.media, let dimensions = self.effectiveMediaDimensions() {
-                let imageSize = dimensions.cgSize.aspectFilled(size)
+                let imageSize = self.fit ? dimensions.cgSize.aspectFitted(size) : dimensions.cgSize.aspectFilled(size)
                 let boundingSize = size
+                let resizeMode: TransformImageResizeMode = self.fit ? .blurBackground : .fill(.black)
                 let radius: CGFloat = self.roundCorners ? floor(min(imageSize.width, imageSize.height) / 2.0) : 0.0
                 let makeLayout = self.imageNode.asyncLayout()
-                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: self.theme.panelBackgroundColor))
+                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), resizeMode: resizeMode, emptyColor: self.emptyColorOverride ?? self.theme.panelBackgroundColor))
                 apply()
-                
+
                 self.linkIconNode.frame = CGRect(x: size.width - 38.0, y: 14.0, width: 24.0, height: 24.0)
             } else if case let .file(file) = self.media.media, let dimensions = self.effectiveMediaDimensions() {
                 let emptyColor = file.mimeType.hasPrefix("image/") ? self.theme.imageTintColor : nil
-                
-                let imageSize = dimensions.cgSize.aspectFilled(size)
+
+                let imageSize = self.fit ? dimensions.cgSize.aspectFitted(size) : dimensions.cgSize.aspectFilled(size)
                 let boundingSize = size
+                let resizeMode: TransformImageResizeMode = self.fit ? .blurBackground : .fill(.black)
                 let makeLayout = self.imageNode.asyncLayout()
-                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: emptyColor))
+                let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), resizeMode: resizeMode, emptyColor: self.emptyColorOverride ?? emptyColor))
                 apply()
             } else if case .geo = self.media.media {
                 let presentationTheme = self.context.sharedContext.currentPresentationData.with { $0 }.theme

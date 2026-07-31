@@ -1093,6 +1093,9 @@ private func richTextIsEntityExpressible(_ text: RichText) -> Bool {
         return richTextIsEntityExpressible(inner)
     case .textDate:
         return false
+    case .textButton:
+        // No message entity can express a button, so its presence forces the rich path.
+        return false
     }
 }
 
@@ -2158,6 +2161,9 @@ private func markdownDroppingPrefixLength(_ length: Int, from text: RichText) ->
         return text
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         return text
+    case .textButton:
+        // An atom, like .image above: a prefix drop must not split a button's label.
+        return text
     }
 }
 
@@ -2191,6 +2197,9 @@ private func markdownHasDisplayableContent(_ richText: RichText) -> Bool {
         return true
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         return true
+    case .textButton:
+        // A button is always displayable content, even if its label is empty — the pill shows.
+        return true
     }
 }
 
@@ -2223,6 +2232,9 @@ private func markdownIsWhitespaceOnly(_ richText: RichText) -> Bool {
     case .textCustomEmoji:
         return false
     case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
+        return false
+    case .textButton:
+        // Never whitespace-only: a button is a visible element regardless of its label.
         return false
     }
 }

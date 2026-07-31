@@ -110,7 +110,7 @@ extension DocumentCanvasView {
         applySelection(from: from, to: to)
     }
 
-    private func applySelection(from: Int, to: Int) {
+    func applySelection(from: Int, to: Int) {
         finalizeMarkedText()     // Select-All / word / paragraph is a deliberate selection change: commit a
                                  // composition / dismiss a prediction first, else insertText would replace the
                                  // stale marked range instead of the new selection. clampGlobal below re-bounds.

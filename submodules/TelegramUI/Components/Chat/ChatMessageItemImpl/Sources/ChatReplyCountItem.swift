@@ -19,7 +19,11 @@ public class ChatReplyCountItem: ListViewItem {
     public let presentationData: ChatPresentationData
     public let header: ChatMessageDateHeader
     public let controllerInteraction: ChatControllerInteraction
-    
+
+    public var neighborDescriptor: AnyEquatable {
+        return AnyEquatable(ChatHistoryItemNeighbor.replyCount(dateHeaderId: self.header.id))
+    }
+
     public init(index: EngineMessage.Index, isComments: Bool, count: Int, presentationData: ChatPresentationData, context: AccountContext, controllerInteraction: ChatControllerInteraction) {
         self.index = index
         self.isComments = isComments
@@ -29,11 +33,11 @@ public class ChatReplyCountItem: ListViewItem {
         self.controllerInteraction = controllerInteraction
     }
     
-    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
             let node = ChatReplyCountItemNode()
             Queue.mainQueue().async {
-                node.layoutForParams(params, item: self, previousItem: previousItem, nextItem: nextItem)
+                node.layoutForParams(params, item: self, neighbors: neighbors)
                 completion(node, {
                     return (nil, { _ in })
                 })
@@ -41,13 +45,13 @@ public class ChatReplyCountItem: ListViewItem {
         }
     }
     
-    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             if let nodeValue = node() as? ChatReplyCountItemNode {
                 let nodeLayout = nodeValue.asyncLayout()
                 
                 async {
-                    let dateAtBottom = !chatItemsHaveCommonDateHeader(self, nextItem)
+                    let dateAtBottom = !chatItemsHaveCommonDateHeader(self.header.id, ChatHistoryItemNeighbors(neighbors).next)
                     
                     let (layout, apply) = nodeLayout(self, params, dateAtBottom)
                     Queue.mainQueue().async {
@@ -101,9 +105,9 @@ public class ChatReplyCountItemNode: ListViewItemNode {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
     }
     
-    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
             if let item = item as? ChatReplyCountItem {
-            let dateAtBottom = !chatItemsHaveCommonDateHeader(item, nextItem)
+            let dateAtBottom = !chatItemsHaveCommonDateHeader(item.header.id, ChatHistoryItemNeighbors(neighbors).next)
             let (layout, apply) = self.asyncLayout()(item, params, dateAtBottom)
             apply()
             self.contentSize = layout.contentSize

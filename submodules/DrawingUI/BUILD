@@ -103,6 +103,7 @@ swift_library(
         "//submodules/ReactionSelectionNode",
         "//submodules/TelegramUI/Components/EntityKeyboard",
         "//submodules/Camera",
+        "//submodules/Camera/CameraLegacy",
         "//submodules/TelegramUI/Components/DustEffect",
         "//submodules/TelegramUI/Components/DynamicCornerRadiusView",
         "//submodules/TelegramUI/Components/StickerPickerScreen",

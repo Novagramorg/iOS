@@ -144,7 +144,21 @@ public final class InstantPageTheme {
     public let secondaryControlColor: UIColor
     public let quoteAccentColor: UIColor
 
-    public init(type: InstantPageThemeType, pageBackgroundColor: UIColor, textCategories: InstantPageTextCategories, serif: Bool, codeBlockBackgroundColor: UIColor, linkColor: UIColor, textHighlightColor: UIColor, linkHighlightColor: UIColor, markerColor: UIColor, panelBackgroundColor: UIColor, panelHighlightedBackgroundColor: UIColor, panelPrimaryColor: UIColor, panelSecondaryColor: UIColor, panelAccentColor: UIColor, tableBorderColor: UIColor, tableHeaderColor: UIColor, controlColor: UIColor, imageTintColor: UIColor?, overlayPanelColor: UIColor, separatorColor: UIColor, secondaryControlColor: UIColor, quoteAccentColor: UIColor) {
+    /// Fills for `richButtonStyle` bg_danger / bg_success on InstantPage buttons. `InstantPageTheme`
+    /// has no destructive/success colour of its own; the chat bubble passes its PresentationTheme
+    /// equivalents (mirroring ChatMessageActionButtonsNode), and the standalone Instant View themes
+    /// fall back to these defaults.
+    public let buttonDangerColor: UIColor
+    public let buttonSuccessColor: UIColor
+
+    /// Task-list checkbox colours (`InstantPageListItem` checkboxes): `checkboxFill` is the box fill
+    /// when checked, `checkboxForeground` the checkmark drawn on it. Same arrangement as the button
+    /// colours above — the chat bubble passes theme-derived values, standalone Instant View themes take
+    /// these defaults.
+    public let checkboxFill: UIColor
+    public let checkboxForeground: UIColor
+
+    public init(type: InstantPageThemeType, pageBackgroundColor: UIColor, textCategories: InstantPageTextCategories, serif: Bool, codeBlockBackgroundColor: UIColor, linkColor: UIColor, textHighlightColor: UIColor, linkHighlightColor: UIColor, markerColor: UIColor, panelBackgroundColor: UIColor, panelHighlightedBackgroundColor: UIColor, panelPrimaryColor: UIColor, panelSecondaryColor: UIColor, panelAccentColor: UIColor, tableBorderColor: UIColor, tableHeaderColor: UIColor, controlColor: UIColor, imageTintColor: UIColor?, overlayPanelColor: UIColor, separatorColor: UIColor, secondaryControlColor: UIColor, quoteAccentColor: UIColor, buttonDangerColor: UIColor = UIColor(rgb: 0xff3b30), buttonSuccessColor: UIColor = UIColor(rgb: 0x34c759), checkboxFill: UIColor = UIColor(rgb: 0x007aff), checkboxForeground: UIColor = .white) {
         self.type = type
         self.pageBackgroundColor = pageBackgroundColor
         self.textCategories = textCategories
@@ -167,10 +181,18 @@ public final class InstantPageTheme {
         self.separatorColor = separatorColor
         self.secondaryControlColor = secondaryControlColor
         self.quoteAccentColor = quoteAccentColor
+        self.buttonDangerColor = buttonDangerColor
+        self.buttonSuccessColor = buttonSuccessColor
+        self.checkboxFill = checkboxFill
+        self.checkboxForeground = checkboxForeground
     }
-    
+
     public func withUpdatedFontStyles(sizeMultiplier: CGFloat, lineSpacingFactor: CGFloat, forceSerif: Bool) -> InstantPageTheme {
-        return InstantPageTheme(type: type, pageBackgroundColor: pageBackgroundColor, textCategories: self.textCategories.withUpdatedFontStyles(sizeMultiplier: sizeMultiplier, lineSpacingFactor: lineSpacingFactor, forceSerif: forceSerif), serif: forceSerif, codeBlockBackgroundColor: codeBlockBackgroundColor, linkColor: linkColor, textHighlightColor: textHighlightColor, linkHighlightColor: linkHighlightColor, markerColor: markerColor, panelBackgroundColor: panelBackgroundColor, panelHighlightedBackgroundColor: panelHighlightedBackgroundColor, panelPrimaryColor: panelPrimaryColor, panelSecondaryColor: panelSecondaryColor, panelAccentColor: panelAccentColor, tableBorderColor: tableBorderColor, tableHeaderColor: tableHeaderColor, controlColor: controlColor, imageTintColor: imageTintColor, overlayPanelColor: overlayPanelColor, separatorColor: separatorColor, secondaryControlColor: secondaryControlColor, quoteAccentColor: quoteAccentColor)
+        // NOTE: this reconstructs the whole struct field by field. Any field omitted here silently
+        // reverts to its `init` default — for buttonDangerColor/buttonSuccessColor that would reset a
+        // chat bubble's theme-derived button colours the moment the user changes Instant View font
+        // size or forces serif. Nothing warns; it compiles. Keep this list exhaustive.
+        return InstantPageTheme(type: type, pageBackgroundColor: pageBackgroundColor, textCategories: self.textCategories.withUpdatedFontStyles(sizeMultiplier: sizeMultiplier, lineSpacingFactor: lineSpacingFactor, forceSerif: forceSerif), serif: forceSerif, codeBlockBackgroundColor: codeBlockBackgroundColor, linkColor: linkColor, textHighlightColor: textHighlightColor, linkHighlightColor: linkHighlightColor, markerColor: markerColor, panelBackgroundColor: panelBackgroundColor, panelHighlightedBackgroundColor: panelHighlightedBackgroundColor, panelPrimaryColor: panelPrimaryColor, panelSecondaryColor: panelSecondaryColor, panelAccentColor: panelAccentColor, tableBorderColor: tableBorderColor, tableHeaderColor: tableHeaderColor, controlColor: controlColor, imageTintColor: imageTintColor, overlayPanelColor: overlayPanelColor, separatorColor: separatorColor, secondaryControlColor: secondaryControlColor, quoteAccentColor: quoteAccentColor, buttonDangerColor: buttonDangerColor, buttonSuccessColor: buttonSuccessColor, checkboxFill: checkboxFill, checkboxForeground: checkboxForeground)
     }
 
     func headingTextAttributes(level: Int32, link: Bool) -> InstantPageTextAttributes {

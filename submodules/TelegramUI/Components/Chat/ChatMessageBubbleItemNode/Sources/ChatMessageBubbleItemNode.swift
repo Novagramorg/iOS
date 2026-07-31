@@ -5080,6 +5080,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         
                         item.controllerInteraction.requestMessageUpdate(item.message.id, false, customTransition)
                     }
+                    contentNode.performRichTextButtonAction = { [weak strongSelf] button in
+                        guard let strongSelf else {
+                            return
+                        }
+
+                        strongSelf.performMessageButtonAction(button: button, progress: nil)
+                    }
                 }
             }
             

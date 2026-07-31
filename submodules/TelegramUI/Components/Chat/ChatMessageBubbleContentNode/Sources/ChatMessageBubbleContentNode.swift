@@ -229,6 +229,10 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
     public var updateIsTextSelectionActive: ((Bool) -> Void)?
     public var requestInlineUpdate: (() -> Void)?
     public var requestFullUpdate: ((ControlledTransition?) -> Void)?
+    /// Performs a message-button action on behalf of a content node. Wired by
+    /// `ChatMessageBubbleItemNode`, which owns `performMessageButtonAction` — a content node cannot
+    /// reach its item view directly, and the dispatch is not on `ControllerInteraction`.
+    public var performRichTextButtonAction: ((ReplyMarkupButton) -> Void)?
     
     open var disablesClipping: Bool {
         return false

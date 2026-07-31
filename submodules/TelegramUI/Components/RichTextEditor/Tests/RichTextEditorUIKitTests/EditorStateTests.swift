@@ -69,6 +69,57 @@ final class EditorStateTests: XCTestCase {
         XCTAssertFalse(e.currentState().isCodeBlock, "a body paragraph is not a code block")
     }
 
+    func test_currentState_selectionWithinParagraph_isTextOnly() {
+        let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        let lo = e.canvas.boxes[0].textStart, hi = lo + 3
+        e.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(lo), DocumentTextPosition(hi))
+        XCTAssertTrue(e.currentState().selectionIsTextOnly, "a selection over plain paragraph text is text-only")
+    }
+
+    func test_currentState_collapsedCaret_isNotTextOnly() {
+        let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        let pos = DocumentTextPosition(e.canvas.boxes[0].textStart + 1)
+        e.canvas.selectedTextRange = DocumentTextRange(pos, pos)
+        XCTAssertFalse(e.currentState().selectionIsTextOnly, "a collapsed caret has no selection, so it is not text-only")
+    }
+
+    func test_currentState_selectionAcrossParagraphs_isTextOnly() {
+        let e = editor([
+            .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "First")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Second")])),
+        ])
+        let lo = DocumentTextPosition(e.canvas.boxes[0].textStart)
+        let hi = DocumentTextPosition(e.canvas.boxes[1].textStart + 2)
+        e.canvas.selectedTextRange = DocumentTextRange(lo, hi)
+        XCTAssertTrue(e.currentState().selectionIsTextOnly, "a multi-paragraph text selection is text-only")
+    }
+
+    func test_currentState_selectionSpanningMedia_isNotTextOnly() {
+        let e = editor([
+            .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "First")])),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x",
+                              naturalSize: Size2D(width: 100, height: 60), caption: [])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Second")])),
+        ])
+        let lo = DocumentTextPosition(e.canvas.boxes[0].textStart)
+        let hi = DocumentTextPosition(e.canvas.boxes[2].textStart + 2)
+        e.canvas.selectedTextRange = DocumentTextRange(lo, hi)
+        XCTAssertFalse(e.currentState().selectionIsTextOnly,
+                       "a selection spanning a media block (both endpoints in paragraphs) is not text-only")
+    }
+
+    func test_currentState_selectionInsideTableCell_isNotTextOnly() {
+        let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [
+                Cell(id: BlockID("a"), blocks: [.paragraph(ParagraphBlock(id: BlockID("ap"), runs: [TextRun(text: "AB")]))]),
+                Cell(id: BlockID("b"), blocks: [.paragraph(ParagraphBlock(id: BlockID("bp"), runs: [TextRun(text: "CD")]))])])])
+        let e = editor([.table(table)])
+        let t = e.canvas.boxes[0] as! TableBlockBox
+        let cellStart = t.cellTextStart(row: 0, column: 0)!
+        e.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(cellStart), DocumentTextPosition(cellStart + 2))
+        XCTAssertFalse(e.currentState().selectionIsTextOnly, "a selection inside a table cell is not text-only")
+    }
+
     func test_currentState_boldOverSelection() {
         let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
         let lo = e.canvas.boxes[0].textStart, hi = lo + 5

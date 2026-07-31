@@ -35,7 +35,13 @@ public final class ChatBotInfoItem: ListViewItem {
     fileprivate let controllerInteraction: ChatControllerInteraction
     fileprivate let presentationData: ChatPresentationData
     fileprivate let context: AccountContext
-    
+
+    // Decodes to nil on the chat side, which is the same branch a missing neighbor takes — and
+    // being one shared constant, swapping one info item for another triggers no neighbor relayout.
+    public var neighborDescriptor: AnyEquatable {
+        return AnyEquatable.noNeighborInfluence
+    }
+
     public init(title: String, text: String, photo: TelegramMediaImage?, video: TelegramMediaFile?, peer: EnginePeer?, managedByBot: EnginePeer?, controllerInteraction: ChatControllerInteraction, presentationData: ChatPresentationData, context: AccountContext) {
         self.title = title
         self.text = text
@@ -48,7 +54,7 @@ public final class ChatBotInfoItem: ListViewItem {
         self.context = context
     }
     
-    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         let configure = {
             let node = ChatBotInfoItemNode()
             
@@ -73,7 +79,7 @@ public final class ChatBotInfoItem: ListViewItem {
         }
     }
     
-    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             if let nodeValue = node() as? ChatBotInfoItemNode {
                 let nodeLayout = nodeValue.asyncLayout()

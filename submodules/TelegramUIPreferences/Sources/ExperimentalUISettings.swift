@@ -72,8 +72,9 @@ public struct ExperimentalUISettings: Codable, Equatable {
     public var enablePWA: Bool
     public var forceClearGlass: Bool
     public var debugRipple: Bool
-    public var forceLegacyTextInput: Bool
-    
+    public var forceNewTextInput: Bool
+    public var coreListChatBackend: Bool
+
     public static var defaultSettings: ExperimentalUISettings {
         return ExperimentalUISettings(
             keepChatNavigationStack: false,
@@ -123,7 +124,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
             enablePWA: false,
             forceClearGlass: false,
             debugRipple: false,
-            forceLegacyTextInput: false
+            forceNewTextInput: false,
+            coreListChatBackend: false
         )
     }
     
@@ -175,7 +177,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         enablePWA: Bool,
         forceClearGlass: Bool,
         debugRipple: Bool,
-        forceLegacyTextInput: Bool
+        forceNewTextInput: Bool,
+        coreListChatBackend: Bool
     ) {
         self.keepChatNavigationStack = keepChatNavigationStack
         self.skipReadHistory = skipReadHistory
@@ -224,7 +227,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.enablePWA = enablePWA
         self.forceClearGlass = forceClearGlass
         self.debugRipple = debugRipple
-        self.forceLegacyTextInput = forceLegacyTextInput
+        self.forceNewTextInput = forceNewTextInput
+        self.coreListChatBackend = coreListChatBackend
     }
     
     public init(from decoder: Decoder) throws {
@@ -277,7 +281,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.enablePWA = try container.decodeIfPresent(Bool.self, forKey: "enablePWA") ?? false
         self.forceClearGlass = try container.decodeIfPresent(Bool.self, forKey: "forceClearGlass") ?? false
         self.debugRipple = try container.decodeIfPresent(Bool.self, forKey: "debugRipple") ?? false
-        self.forceLegacyTextInput = try container.decodeIfPresent(Bool.self, forKey: "forceLegacyTextInput") ?? false
+        self.forceNewTextInput = try container.decodeIfPresent(Bool.self, forKey: "forceNewTextInput") ?? false
+        self.coreListChatBackend = try container.decodeIfPresent(Bool.self, forKey: "coreListChatBackend") ?? false
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -330,7 +335,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         try container.encodeIfPresent(self.enablePWA, forKey: "enablePWA")
         try container.encodeIfPresent(self.forceClearGlass, forKey: "forceClearGlass")
         try container.encodeIfPresent(self.debugRipple, forKey: "debugRipple")
-        try container.encodeIfPresent(self.forceLegacyTextInput, forKey: "forceLegacyTextInput")
+        try container.encodeIfPresent(self.forceNewTextInput, forKey: "forceNewTextInput")
+        try container.encodeIfPresent(self.coreListChatBackend, forKey: "coreListChatBackend")
     }
 }
 

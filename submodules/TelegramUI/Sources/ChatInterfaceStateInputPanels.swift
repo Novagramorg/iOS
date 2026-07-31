@@ -512,6 +512,9 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 panel.chatControllerInteraction = chatControllerInteraction
                 panel.interfaceInteraction = interfaceInteraction
                 panel.context = context
+                panel.pastedMarkdownParser = { context, text in
+                    return chatInputContentFromPastedMarkdown(context: context, plainText: text)
+                }
                 return (panel, nil)
             }
         }

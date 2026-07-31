@@ -314,6 +314,14 @@ public struct Font {
         }
     }
     
+    public static func mediumItalic(_ size: CGFloat) -> UIFont {
+        if let descriptor = UIFont.systemFont(ofSize: size, weight: .medium).fontDescriptor.withSymbolicTraits([.traitItalic]) {
+            return UIFont(descriptor: descriptor, size: size)
+        } else {
+            return UIFont.italicSystemFont(ofSize: size)
+        }
+    }
+    
     public static func monospace(_ size: CGFloat) -> UIFont {
         return UIFont(name: "Menlo-Regular", size: size - 1.0) ?? UIFont.systemFont(ofSize: size)
     }

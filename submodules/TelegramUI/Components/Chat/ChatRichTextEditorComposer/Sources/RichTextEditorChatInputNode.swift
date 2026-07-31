@@ -10,6 +10,7 @@ import RichTextEditorCore
 import RichTextEditorUIKit
 import ChatInputTextNode
 import CheckNode
+import TelegramPresentationData
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -34,13 +35,11 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
     }
 }
 
-/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. The default composer on
-/// iOS 17+ (the `forceLegacyTextInput` flag opts back out to the legacy input — see
-/// `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
-/// display, layout, editing, and selection geometry; spoiler reveal, typing attributes, and the full
-/// delegate suite are safe stubs (Phase 2+).
+/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`.
 @available(iOS 13.0, *)
 public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInputNode {
+    private let strings: PresentationStrings
+    
     private let editorView = RichTextEditorView()
     private let baseFontSize: CGFloat = 17.0
 
@@ -107,10 +106,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     public var asNode: ASDisplayNode { self }
 
-    public override init() {
+    public init(strings: PresentationStrings) {
         #if DEBUG && false
         RichTextEditorView.debugShowLayoutOverlay = true
         #endif
+        
+        self.strings = strings
         
         super.init()
     }
@@ -146,7 +147,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         RichTextEditorChatInputNode.applyComposerLayoutMetrics(to: self.editorView)
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "Type a quote here", blockQuote: "Type a quote here", codeBlock: "Type code here")
+        
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, detailsTitle: self.strings.RichText_PlaceholderDetailTitle)
         // The composer sits over the input panel's own background — clear the editor's document "page"
         // background (`.systemBackground`, opaque white in light mode) so the panel shows through. `nil`
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
@@ -177,6 +179,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
            let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
             self.editorView.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
         }
+        // Detail-block fold chevron — the same vertical arrow the InstantPage V2 renderer uses.
+        self.editorView.detailsChevronImage = UIImage(bundleImageName: "Item List/ExpandingItemVerticalRegularArrow")?.withRenderingMode(.alwaysTemplate)
         // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-dismiss
         // gestures. Those Display flags can only be set host-side (the editor package can't import Display) and
         // are applied to the hit-testable handle views, so the effect is scoped to knob interaction — not the
@@ -258,7 +262,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             guard let self, let fileId = Int64(id), let provider = self.emojiViewProvider else { return nil }
             let attribute = self.customEmojiAttributes[fileId]
                 ?? ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil)
-            return provider(attribute)
+            guard let view = provider(attribute) else { return nil }
+            // The panel-supplied provider is typed `-> UIView?` (the `ChatRichTextInputNode` protocol seam),
+            // but it hands back an `EmojiTextAttachmentView` — a `RichTextEmojiView` (conformance declared in
+            // `ChatTextInputPanelNode`) — so the editor can keep its `dynamicColor` synced to the text color.
+            // A non-conforming fallback view resolves to nil (the editor retries on the next layout pass).
+            return view as? (UIView & RichTextEmojiView)
         }
 
         // Formula rendering is owned by the chat host; math-rendering dependencies live above this module.
@@ -272,7 +281,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // but never renders. Both `mediaItemViewFactory` and `mediaByID` are read LAZILY, so the panel may set
         // the factory after this registration. The returned `(UIView & RichTextMediaItemView)?` is assignable
         // to the provider's `RichTextMediaItemView?` return type.
-        self.editorView.registerMediaViewProvider { [weak self] items, _, existing in
+        self.editorView.registerMediaViewProvider { [weak self] items, _, _, existing in
             guard let self, let factory = self.mediaItemViewFactory else { return nil }
             let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
                 guard let media = self.mediaByID[item.mediaID] else { return nil }
@@ -364,7 +373,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case let .paragraph(p): return p.text.isEmpty
         case let .code(c): return c.text.isEmpty
         case let .pullQuote(pq): return pq.text.isEmpty
-        case .media, .table, .blockQuote: return false
+        case .media, .table, .blockQuote, .details: return false
         }
     }
     public var inputContentIsEmptyWhitespaceTrimmed: Bool {
@@ -373,7 +382,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             case let .paragraph(p): return p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .code(c): return c.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq): return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote: return false
+            case .media, .table, .blockQuote, .details: return false
             }
         }
     }
@@ -617,6 +626,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     public var canPasteMedia: (() -> Bool)? { didSet { self.editorView.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { self.editorView.onPasteMedia = onPasteMedia } }
+    public var pastedMarkdownFragmentParser: ((String) -> Document?)? { didSet { self.editorView.plainTextFragmentTransformer = self.pastedMarkdownFragmentParser } }
 
     public func performFormatAction(_ action: ChatRichTextFormatAction) {
         switch action {

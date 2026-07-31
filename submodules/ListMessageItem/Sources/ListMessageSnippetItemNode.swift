@@ -212,10 +212,10 @@ public final class ListMessageSnippetItemNode: ListMessageNode {
         self.item = item
     }
     
-    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
+    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         if let item = item as? ListMessageItem {
             let doLayout = self.asyncLayout()
-            let merged = (top: false, bottom: false, dateAtBottom: item.getDateAtBottom(top: previousItem, bottom: nextItem))
+            let merged = (top: false, bottom: false, dateAtBottom: item.getDateAtBottom(top: neighbors.previous))
             let (layout, apply) = doLayout(item, params, merged.top, merged.bottom, merged.dateAtBottom)
             self.contentSize = layout.contentSize
             self.insets = layout.insets

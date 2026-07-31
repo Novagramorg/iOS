@@ -51,6 +51,9 @@ extension DocumentCanvasView: UITextInput {
         guard let r = range as? DocumentTextRange else { return }
         let lo = min(r.from.offset, r.to.offset)
         let hi = max(r.from.offset, r.to.offset)
+        // A keyboard autocorrection arrives here as `replace(word, correction)` — capture the original BEFORE the
+        // edit so we can flag the corrected word (below) with a "Revert to …" affordance.
+        let autocorrectOriginal = detectAutocorrection(oldText: self.text(in: range), newText: text)
         // Route through the 3-way selection logic, not applyReplace directly: a system-initiated
         // replacement (autocorrect/dictation/marked-text) can span a table boundary, which the
         // same-stack-guarded applyReplace would silently drop.
@@ -58,6 +61,9 @@ extension DocumentCanvasView: UITextInput {
         // (its own undo step) — coalescing is scoped to insertText/deleteBackward typing/deleting, so a
         // dictation utterance is one undo step. Intentional, not an oversight.
         editing { applySelectionReplace(globalFrom: lo, globalTo: hi, text: text) }
+        if let original = autocorrectOriginal, isSpellCheckingEnabled {
+            applyCorrectionFlag(global: NSRange(location: lo, length: (text as NSString).length), original: original)
+        }
     }
 
     func typingAttributeDict(region: LeafTextRegion, atLocal location: Int) -> [NSAttributedString.Key: Any] {
@@ -391,6 +397,11 @@ extension DocumentCanvasView: UIKeyInput {
                 // Double-return at the BEGINNING → body paragraph BEFORE the quote (the leading blank line is
                 // dropped). Checked after the trailing exit so a wholly-empty quote takes the un-quote path.
                 _ = ()
+            } else if selFrom == selTo, isInsideDetails(head), detailsEmptyTrailingBodyExit() {
+                // Double-return on an empty trailing line of a detail block's BODY EXITS to a body paragraph
+                // AFTER the details block (the title, children[0], is never the escape target). A single empty
+                // body line adds a line on the first Return and escapes on the second (handled in the helper).
+                _ = ()
             } else if selFrom == selTo, let active = activeStack(at: head),
                       headerCellDoubleReturnExitsAbove(active) {
                 // Double-return on the START of a header cell's second block (empty first block) EXITS the
@@ -498,14 +509,28 @@ extension DocumentCanvasView: UIKeyInput {
         // KEEP the media. The setter stashes the just-cleared image into `imageObjectDeletePending`; honor it
         // here by replacing that media with an empty body paragraph in place.
         if let pendingId = imageObjectDeletePending,
-           let i = boxes.firstIndex(where: { $0.id == pendingId && $0 is MediaBlockBox }),
-           head == boxes[i].nodeStart || selFrom == boxes[i].nodeStart || selTo == boxes[i].nodeStart {
+           let (stack, i) = owningStack(ofBlockID: pendingId), let mb = stack.boxes[i] as? MediaBlockBox,
+           head == mb.nodeStart || selFrom == mb.nodeStart || selTo == mb.nodeStart {
             imageObjectDeletePending = nil
-            editing { replaceMediaWithEmptyParagraph(at: i) }
+            editing { replaceMediaWithEmptyParagraph(id: pendingId) }   // stack-aware: in place, even nested
             clearImageSelection()
             return
         }
         imageObjectDeletePending = nil
+        // iOS may deliver Backspace at a NON-tap-selected media block's leading gap as an object-
+        // replacement RANGE running from the previous block's text end to the gap ([prevEnd … gap]),
+        // NOT a collapsed caret. Left as a range it falls to the generic selection-replace below, which
+        // deletes only the structural break and strands the caret at the previous block's end without
+        // deleting anything (the reported "jumps to the end of the previous block, nothing happens"
+        // symptom). When the range only spans the structural slots before the gap (`selFrom >=
+        // prevTextPosition(before: selTo)`, which excludes a genuine text selection ending at the gap),
+        // COLLAPSE it to a caret at the gap so the gap branch below acts on the previous block. A
+        // tap-selected image is excluded (`imageSelection != img.id`) — it already returned above via
+        // `imageObjectDeletePending`.
+        if selFrom != selTo, let img = mediaBox(atGap: selTo), imageSelection != img.id,
+           selFrom >= prevTextPosition(before: selTo) {
+            anchor = selTo; head = selTo
+        }
         if tableSelection != nil {
             // A structural row/column selection is active → Backspace deletes those rows/columns (or the
             // whole table when every row/column is selected). The caret is parked in a cell, so the normal
@@ -560,8 +585,22 @@ extension DocumentCanvasView: UIKeyInput {
            posTo.local == 0, posTo.box.textLength == 0, posTo.index > 0,
            isNonParagraphAtom(boxes[posTo.index - 1]),
            selFrom >= prevTextPosition(before: selTo) {
+            if selectPrecedingTableOnBackspace(paragraphIndex: posTo.index) { return }   // table → select whole table
             editing { removeBlock(at: posTo.index, parkingCaretAt: prevTextPosition(before: selTo)) }
             return
+        }
+        // Object-replacement RANGE at the START of a NON-EMPTY paragraph whose previous block is a table
+        // (device-form parity with the empty-paragraph range above — iOS may deliver Backspace at this
+        // boundary as `[tableLastCellEnd … paragraphStart]`). Route it to the whole-table select helper.
+        // The `selFrom >= prevTextPosition(before: selTo)` gate admits ONLY the object-replacement range
+        // (its head anchors at the table's last-cell end), NOT a genuine selection that merely ends at the
+        // paragraph start (that must still delete-and-merge via the generic path below). `!isInsideBlockQuote`
+        // / `!isInsideTable` avoid the resolveBox degenerate-container misroute.
+        if selFrom != selTo, !isInsideBlockQuote(selTo), !isInsideTable(selTo), let posTo = resolveBox(at: selTo),
+           posTo.local == 0, posTo.box.textLength > 0, posTo.index > 0,
+           boxes[posTo.index - 1] is TableBlockBox,
+           selFrom >= prevTextPosition(before: selTo) {
+            if selectPrecedingTableOnBackspace(paragraphIndex: posTo.index) { return }
         }
         // iOS may deliver Backspace at the START (local 0) of a quote AUTHOR line as an object-replacement
         // RANGE anchored at the previous child's text end (the same offset geometry as an empty container /
@@ -602,15 +641,51 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        // Caret at a media block's leading gap → replace the media with an empty body paragraph in place.
-        if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
-            // The gap caret is where a tap / structural image selection lands. The OS clears `imageSelection`
-            // via the `selectedTextRange` setter (which calls `clearStructuralSelections()`) BEFORE this runs,
-            // so the deletion can't be gated on it — a collapsed gap caret IS the structural-selection signal.
-            // Backspace replaces the media with an empty body paragraph in place (caret there), rather than
-            // acting on the previous paragraph.
-            editing { replaceMediaWithEmptyParagraph(at: i) }
+        // (A) A TAP-SELECTED image (the tint highlight; `imageSelection` is still set because `selectImage`
+        // doesn't go through the `selectedTextRange` setter) → replace the media with an empty body paragraph
+        // in place, caret there. (The range-driven tap-select path returns earlier via `imageObjectDeletePending`.)
+        // Stack-aware (by id, not a top-level index) so a NESTED tap-selected media is replaced in place too,
+        // not removed — so this runs BEFORE the `boxIndex(of:)` gap branch, which resolves only at top level.
+        if let img = mediaBox(atGap: head), imageSelection == img.id {
+            editing { replaceMediaWithEmptyParagraph(id: img.id) }
             clearImageSelection()
+            return
+        }
+        // Caret at a media block's leading gap (the slot to the LEFT of the image).
+        if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
+            // (B) A plain, non-selected caret at the gap → Backspace acts on the PREVIOUS block (delete
+            // leftward, like a text caret sitting just before the image), NOT on the media.
+            if i == 0 {
+                return   // no previous block — no-op (Backspace at document start). Tap-select to delete a leading image.
+            }
+            if let prev = boxes[i - 1] as? BlockBox {
+                if prev.textLength == 0 {
+                    // Empty previous paragraph → delete it; the caret stays at the image's (now-shifted) gap.
+                    editing {
+                        var newBoxes = boxes
+                        newBoxes.remove(at: i - 1)
+                        boxes = newBoxes
+                        recomputeSpans()
+                        let gap = boxes[i - 1].nodeStart   // the image is now at i-1
+                        anchor = gap; head = gap
+                    }
+                } else {
+                    // Non-empty → delete its last grapheme; the caret moves INTO it so subsequent
+                    // Backspaces keep deleting there.
+                    let prevEnd = prev.textStart + prev.textLength
+                    let n = graphemeClusterLengthBeforeCaret(global: prevEnd)
+                    editing(coalescing: .deleting) { applyReplace(globalFrom: prevEnd - n, globalTo: prevEnd, text: "") }
+                }
+            } else {
+                // Previous block is a non-text atom. Step the caret onto it WITHOUT deleting, but only to
+                // a RENDERABLE position (a media block's caption slot / a code block's text end). A table or
+                // block quote reports a non-renderable structural boundary (its own `nodeStart`,
+                // since its `textLength` is 0) from `prevTextPosition`; moving the caret there would HIDE it
+                // (and a follow-up Backspace could structurally delete the container). In that case leave the
+                // caret at the gap — a safe, visible no-op.
+                let dest = prevTextPosition(before: head)
+                if dest != head, isRenderablePosition(dest) { setCaret(global: dest) }
+            }
             return
         }
         // Collapsed caret with text before it inside a block quote (a child's body OR the author line) →
@@ -690,6 +765,45 @@ extension DocumentCanvasView: UIKeyInput {
                 return
             }
         }
+        // Backspace inside a DETAILS body. `resolveBox` below mis-resolves a nested position (the details is a
+        // degenerate container — `textLength == 0` — so a position inside it falls through to the following /
+        // last top-level block), so resolve via `activeStack` here — mirrors the `isInsideTable` /
+        // `isInsideBlockQuote` collapsed branches above. Without this, a caret at the start of a nested empty
+        // paragraph whose previous sibling is an image cross-deletes into the image's caption instead of
+        // removing the paragraph. (A nested block quote / table inside the details is handled by their own
+        // branches above; this covers the details' own direct body paragraphs.)
+        if selFrom == selTo, isInsideDetails(head), let active = activeStack(at: head), let child = active.box as? BlockBox {
+            if active.local > 0 {
+                let n = graphemeClusterLengthBeforeCaret(global: head)
+                editing(coalescing: .deleting) { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
+                return
+            }
+            // local == 0 → start of a nested paragraph. (A details body paragraph is always index >= 1;
+            // `children[0]` is the title.)
+            if let list = child.listMembership {
+                if list.level > 0 { outdent() }
+                else { editing { child.listMembership = nil; child.style = .body; restyle(child); recomputeSpans() } }
+                return
+            }
+            if active.index > 0 {
+                let prev = active.stack.boxes[active.index - 1]
+                // The title (`index 0`) and a non-paragraph atom (image / table / code / quote) can't absorb a
+                // text merge: an EMPTY paragraph is removed (caret steps to the previous block's nearest text
+                // slot); a non-empty one is kept (caret steps back).
+                if active.index == 1 || isNonParagraphAtom(prev) {
+                    let dest = prevTextPosition(before: head)
+                    if child.textLength == 0 {
+                        editing { active.stack.boxes.remove(at: active.index); recomputeSpans(); anchor = dest; head = dest }
+                    } else if dest != head, isRenderablePosition(dest) {
+                        setCaret(global: dest)
+                    }
+                } else {
+                    // Previous sibling is a text body paragraph → merge into it within the details stack.
+                    editing { mergeParagraphs(in: active.stack, upperIndex: active.index - 1) }
+                }
+                return
+            }
+        }
         guard let pos = resolveBox(at: head) else { return }
         // Backspace at the START of a list item: cancel one indent level, or (at the top level) break the
         // list here — the item becomes a body paragraph keeping its contents, so items before it stay a
@@ -759,11 +873,14 @@ extension DocumentCanvasView: UIKeyInput {
             let n = graphemeClusterLengthBeforeCaret(global: head)
             editing(coalescing: .deleting) { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
         } else if pos.index > 0, isNonParagraphAtom(boxes[pos.index - 1]) {
-            // Start of a paragraph after a NON-TEXT block (image / table / code) that can't absorb a text
+            // A TABLE gets the select-then-delete treatment: first Backspace moves in + selects the whole
+            // table, a second deletes it (deleteTableStructuralSelection at the top of deleteBackward).
+            if selectPrecedingTableOnBackspace(paragraphIndex: pos.index) { return }
+            // Start of a paragraph after a NON-TEXT block (image / code) that can't absorb a text
             // merge. Backspace must NOT delete that block. An EMPTY paragraph is removed — so "deleting the
             // last paragraph" is always possible; a non-empty one is kept. Either way the caret steps back
-            // to that block's nearest text slot (an image's caption end, a table's last cell end, a code
-            // block's end) via prevTextPosition — never the block's degenerate node-start boundary.
+            // to that block's nearest text slot (an image's caption end, a code block's end) via
+            // prevTextPosition — never the block's degenerate node-start boundary.
             let prev = prevTextPosition(before: head)
             if pos.box.textLength == 0 {
                 editing { removeBlock(at: pos.index, parkingCaretAt: prev) }

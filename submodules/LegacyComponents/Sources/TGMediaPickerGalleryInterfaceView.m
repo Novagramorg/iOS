@@ -170,7 +170,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
 
 @synthesize safeAreaInset = _safeAreaInset;
 
-- (instancetype)initWithContext:(id<LegacyComponentsContext>)context focusItem:(id<TGModernGalleryItem>)focusItem selectionContext:(TGMediaSelectionContext *)selectionContext editingContext:(TGMediaEditingContext *)editingContext stickersContext:(id<TGPhotoPaintStickersContext>)stickersContext hasSelectionPanel:(bool)hasSelectionPanel hasCameraButton:(bool)hasCameraButton recipientName:(NSString *)recipientName isScheduledMessages:(bool)isScheduledMessages hasCoverButton:(bool)hasCoverButton
+- (instancetype)initWithContext:(id<LegacyComponentsContext>)context focusItem:(id<TGModernGalleryItem>)focusItem selectionContext:(TGMediaSelectionContext *)selectionContext editingContext:(TGMediaEditingContext *)editingContext stickersContext:(id<TGPhotoPaintStickersContext>)stickersContext hasSelectionPanel:(bool)hasSelectionPanel hasCameraButton:(bool)hasCameraButton recipientName:(NSString *)recipientName isScheduledMessages:(bool)isScheduledMessages isActionButtonDone:(bool)isActionButtonDone hasCoverButton:(bool)hasCoverButton
 {
     self = [super initWithFrame:CGRectZero];
     if (self != nil)
@@ -484,7 +484,8 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
             [_wrapperView addSubview:_cameraButton];
         }
         
-        TGPhotoEditorDoneButton doneButton = isScheduledMessages ? TGPhotoEditorDoneButtonSchedule : TGPhotoEditorDoneButtonSend;
+        TGPhotoEditorDoneButton doneButton = isScheduledMessages ? TGPhotoEditorDoneButtonSchedule : (isActionButtonDone ? TGPhotoEditorDoneButtonCheck : TGPhotoEditorDoneButtonSend);
+        
         
         _portraitToolbarView = TGMediaPickerCreatePhotoToolbarView(_context, TGPhotoEditorBackButtonBack, doneButton, false, stickersContext, editingContext.sendPaidMessageStars > 0);
         _portraitToolbarView.cancelPressed = toolbarCancelPressed;

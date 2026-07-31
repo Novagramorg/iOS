@@ -42,6 +42,26 @@ final class CanvasInsertTableTests: XCTestCase {
         XCTAssertTrue(v.isInsideTable(v.head), "caret lands inside the new table")
     }
 
+    func test_insertTable_whenUnfocused_doesNotStealFocus_butCaretIsInTable() {
+        // Inserting a table must NOT grab first responder / pop the keyboard when the editor was unfocused.
+        // The table is still inserted and the MODEL caret lands live in the new table (first cell), so a
+        // later tap/focus operates on it — but the editor stays unfocused.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
+        window.makeKeyAndVisible()
+        let v = canvas()
+        window.addSubview(v)
+        v.layoutIfNeeded()
+        caretAtEndOf(v, "p")
+        XCTAssertFalse(v.isFirstResponder, "precondition: not focused before the insert")
+        v.insertTable(rows: 2, columns: 2)
+        XCTAssertFalse(v.isFirstResponder, "inserting a table must NOT steal focus when the editor was unfocused")
+        XCTAssertNotNil(v.activeTable(), "the caret is live inside the new table")
+        // Hygiene: don't leak a key window into sibling tests.
+        v.removeFromSuperview()
+        window.isHidden = true
+        window.resignKey()
+    }
+
     func test_insertTable_midParagraph_splitsParagraph() {
         let v = canvas()
         let r = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("p")) }!

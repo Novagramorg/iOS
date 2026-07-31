@@ -27,6 +27,7 @@ swift_library(
         "//submodules/Markdown:Markdown",
         "//submodules/UndoUI:UndoUI",
         "//submodules/Camera:Camera",
+        "//submodules/Camera/CameraLegacy",
         "//submodules/LegacyUI:LegacyUI",
         "//submodules/LegacyComponents:LegacyComponents",
         "//submodules/LegacyMediaPickerUI:LegacyMediaPickerUI",

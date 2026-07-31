@@ -446,6 +446,10 @@ public final class ChatButtonKeyboardInputNode: ChatInputNode, UIScrollViewDeleg
                     }
                 case let .copyText(payload):
                     self.controllerInteraction.copyText(payload)
+                case .disabled:
+                    // A forward stripped this button's behaviour; tapping does nothing, and it
+                    // must not dismiss a once-keyboard either (dismissIfOnce stays false).
+                    break
             }
             if dismissIfOnce {
                 if let message = self.message {

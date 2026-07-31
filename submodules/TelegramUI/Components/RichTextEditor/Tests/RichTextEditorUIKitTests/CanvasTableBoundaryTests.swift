@@ -23,24 +23,17 @@ final class CanvasTableBoundaryTests: XCTestCase {
         v.currentBlocks().contains { if case .table = $0 { return true } else { return false } }
     }
 
-    // Backspace at the start of the block AFTER a table moves into the table's last cell (no delete),
-    // and a real, renderable caret — not parked on the table's degenerate boundary (which hid the caret
-    // and sent the next keystroke into the FIRST cell).
-    func test_backspaceAtStartOfBlockAfterTable_movesIntoLastCell() {
+    // Backspace at the start of the block AFTER a table now structurally selects the whole table
+    // (the caret moves in; a SECOND Backspace deletes it — covered in CanvasTableBackspaceSelectTests).
+    func test_backspaceAtStartOfBlockAfterTable_selectsWholeTable() {
         let v = canvas()   // [Top, table(Alpha|Beta), Bot]
         let bot = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("bot")) }!
-        let cellB = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("bp")) }!   // last cell "Beta"
         let sizeBefore = v.documentSizeValue
         v.selectedTextRange = DocumentTextRange(DocumentTextPosition(bot.globalStart), DocumentTextPosition(bot.globalStart))
         v.deleteBackward()
-        XCTAssertEqual(v.documentSizeValue, sizeBefore, "nothing deleted")
-        XCTAssertEqual(v.head, cellB.globalStart + cellB.length, "caret moved to the end of the table's last cell")
-        XCTAssertNotNil(v.leafRegion(containingGlobal: v.head), "caret is in a real region, not hidden at the table boundary")
-        // typing now appends to the LAST cell, not the first
-        v.insertText("X")
-        guard case .table(let model) = (v.boxes.first { $0 is TableBlockBox } as! TableBlockBox).currentBlock() else { return XCTFail() }
-        if case .paragraph(let last) = model.rows[0].cells[1].blocks[0] { XCTAssertEqual(last.text, "BetaX") } else { XCTFail() }
-        if case .paragraph(let first) = model.rows[0].cells[0].blocks[0] { XCTAssertEqual(first.text, "Alpha") } else { XCTFail() }
+        XCTAssertEqual(v.documentSizeValue, sizeBefore, "nothing deleted on the first press")
+        XCTAssertNotNil(v.tableSelection, "the whole table is structurally selected")
+        XCTAssertNotNil(v.activeTable(), "the caret is parked inside the table")
     }
 
     func test_dragSelectFromParagraphIntoCell_deleteDoesNotDestroyTable() {
