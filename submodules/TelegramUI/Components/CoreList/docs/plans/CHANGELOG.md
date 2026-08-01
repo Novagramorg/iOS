@@ -25,6 +25,20 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-08-02 — `settledFrame(of:)`, the other half of `presentedFrame(of:)`**: `presentedFrame(of:)`
+  landed as *the* host geometry accessor, on the reasoning that a host asking where a row is wants
+  where it is. That is right for every per-frame read and wrong for exactly one: a host reporting the
+  OUTCOME of a pass it just submitted, alongside that pass's transition. At that instant the pass has
+  been applied but its animation has moved nothing, so presented is the pre-animation position — and
+  because there is no per-frame hook outside user scrolling, nothing re-reports when the animation
+  lands. `settledFrame(of:)` is the sibling for that case: exactly `presentedFrame` without the
+  correction, i.e. what a bare `convert` returns, but named so the choice is deliberate rather than
+  the mistake `presentedFrame` exists to prevent. It changes nothing inside CoreList. The chat backend
+  is the first consumer and shows why it matters: reporting presented at its transaction point left
+  the scroll-to-bottom button on screen after a jump and made it appear when the keyboard opened at
+  the bottom of a chat — measured at ~270pt against a settled `-0.0`. See "Content offsets" in
+  `docs/chat/corelist-chat-history-backend.md`.
+
 - **2026-07-31 — a carousel's ghost blocks take no boundary witness**: a full-replace carousel gives
   every departing row a ghost block, and `initialGhostWitness` — finding no surviving predecessor,
   which a full replace guarantees — fell through to proposing `newItems[0]` (or, at the far end,

@@ -184,6 +184,18 @@ but yields `(index, view)` pairs, for hosts that need each row's collection inde
 pass (computing a visible range, say) without counting iterations — array position equals collection
 index only while the window still starts at 0.
 
+**Row geometry is a pair, and picking the wrong half is silent.** `presentedFrame(of:)` is where a row
+IS — the default, and what a host must use instead of `convert(_:from:)` (see the
+`contentHost.bounds.origin.y` gotcha below). `settledFrame(of:)` is where it WILL BE once the
+animations in flight finish; it is exactly `presentedFrame` without the correction. A host wants
+settled in one situation only: reporting the OUTCOME of a pass it just submitted, alongside that
+pass's transition, so a consumer animating on that transition arrives where the content will. At that
+moment presented is the *pre-animation* position and nothing re-reports when the animation lands —
+there is no per-frame hook outside user scrolling. Both are ancestor-path-agnostic, so a row carried
+by `crossingOverlay` converts correctly either way. Reporting presented at a transaction point is a
+real shipped bug, not a hypothetical: see "Content offsets" in
+`docs/chat/corelist-chat-history-backend.md`.
+
 `visibleRectUpdated(_:)` on `CoreListItemView` pushes each loaded row the part of itself inside the
 viewport, in the row's own coordinate space, or `nil` when it is not visible. It fires at the end of
 `render()` and at the end of `handleUserScroll` — the two points the window is maintained — using the

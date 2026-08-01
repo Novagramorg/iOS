@@ -2422,43 +2422,54 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     }
                 }
 
-                if let strongSelf = self, updatedScrollPosition == nil, case .InteractiveChanges = reason, case let .known(offset) = strongSelf.visibleContentOffset(), abs(offset) <= 0.9, let previous = previous {
-                    var fillsScreen = true
-                    switch strongSelf.listView.visibleBottomContentOffset() {
-                    case let .known(bottomOffset):
-                        if bottomOffset <= strongSelf.listView.visibleSize.height - strongSelf.insets.bottom {
-                            fillsScreen = false
-                        }
-                    default:
-                        break
-                    }
+                if let strongSelf = self, updatedScrollPosition == nil, case .InteractiveChanges = reason, let previous = previous {
+                    // ONE sample feeds both gates below. They are compared against each other to decide a
+                    // scroll position, and this runs while a transaction is being PREPARED — so the
+                    // question is what state the list is in, not where a pass in flight happens to have
+                    // the content at this instant. On ListViewImpl the settled and presented geometries
+                    // are the same thing; under a hosting backend, two separate reads would let "am I
+                    // pinned to the newest message" and "does the content fill the screen" describe
+                    // different moments of the same animation.
+                    let settledOffsets = strongSelf.listView.settledContentOffsets()
 
-                    var previousNumAds = 0
-                    for entry in previous.filteredEntries {
-                        if case let .MessageEntry(message, _, _, _, _, _) = entry {
-                            if message.adAttribute != nil {
-                                previousNumAds += 1
+                    if case let .known(offset) = settledOffsets.top, abs(offset) <= 0.9 {
+                        var fillsScreen = true
+                        switch settledOffsets.bottom {
+                        case let .known(bottomOffset):
+                            if bottomOffset <= strongSelf.listView.visibleSize.height - strongSelf.insets.bottom {
+                                fillsScreen = false
                             }
+                        default:
+                            break
                         }
-                    }
 
-                    var updatedNumAds = 0
-                    var firstNonAdIndex: MessageIndex?
-                    for entry in processedView.filteredEntries.reversed() {
-                        if case let .MessageEntry(message, _, _, _, _, _) = entry {
-                            if message.adAttribute != nil {
-                                updatedNumAds += 1
-                            } else {
-                                if firstNonAdIndex == nil {
-                                    firstNonAdIndex = message.index
+                        var previousNumAds = 0
+                        for entry in previous.filteredEntries {
+                            if case let .MessageEntry(message, _, _, _, _, _) = entry {
+                                if message.adAttribute != nil {
+                                    previousNumAds += 1
                                 }
                             }
                         }
-                    }
 
-                    if fillsScreen, let firstNonAdIndex = firstNonAdIndex, previousNumAds == 0, updatedNumAds != 0 {
-                        updatedScrollPosition = .index(subject: MessageHistoryScrollToSubject(index: .message(firstNonAdIndex), quote: nil), position: .top(0.0), directionHint: .Up, animated: false, highlight: false, displayLink: false, setupReply: false)
-                        disableAnimations = true
+                        var updatedNumAds = 0
+                        var firstNonAdIndex: MessageIndex?
+                        for entry in processedView.filteredEntries.reversed() {
+                            if case let .MessageEntry(message, _, _, _, _, _) = entry {
+                                if message.adAttribute != nil {
+                                    updatedNumAds += 1
+                                } else {
+                                    if firstNonAdIndex == nil {
+                                        firstNonAdIndex = message.index
+                                    }
+                                }
+                            }
+                        }
+
+                        if fillsScreen, let firstNonAdIndex = firstNonAdIndex, previousNumAds == 0, updatedNumAds != 0 {
+                            updatedScrollPosition = .index(subject: MessageHistoryScrollToSubject(index: .message(firstNonAdIndex), quote: nil), position: .top(0.0), directionHint: .Up, animated: false, highlight: false, displayLink: false, setupReply: false)
+                            disableAnimations = true
+                        }
                     }
                 }
                 

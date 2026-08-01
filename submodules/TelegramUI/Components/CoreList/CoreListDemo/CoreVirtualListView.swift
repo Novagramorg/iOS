@@ -579,6 +579,23 @@ public final class CoreVirtualListView: UIView {
             .offsetBy(dx: 0, dy: -modelToPresentedViewportDelta)
     }
 
+    /// A view's rect in this list's coordinate space, as SETTLED — where its model geometry says it will be
+    /// once the animations in flight finish. The counterpart of `presentedFrame(of:)`, and exactly that
+    /// value without the presented correction.
+    ///
+    /// This is NOT the default: a host asking "where is this row" wants `presentedFrame(of:)`, and reaching
+    /// for `convert(_:from:)` to get destination geometry is the specific mistake that method exists to
+    /// prevent. Use this only where the host is reporting the OUTCOME of a pass it just submitted, alongside
+    /// that pass's transition, so a consumer animating on that transition arrives where the content will.
+    /// At such a point the presented value is the pre-animation position, and nothing re-reports when the
+    /// animation lands — CoreList has no per-frame hook outside user scrolling.
+    ///
+    /// Ancestor-path-agnostic in the same way `presentedFrame(of:)` is: a row carried by `crossingOverlay`
+    /// during a structural transition converts correctly too.
+    public func settledFrame(of view: UIView) -> CGRect {
+        convert(view.bounds, from: view)
+    }
+
     /// How far the model viewport leads the presented one: `(engine.offset − contentHost model origin)` plus
     /// the additive viewport correction. Zero whenever nothing is animating the viewport.
     private var modelToPresentedViewportDelta: CGFloat {

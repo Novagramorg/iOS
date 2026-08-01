@@ -225,12 +225,35 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return self.coreList.presentedFrame(of: view)
     }
 
-    // The settled rect of the row at a collection index, or nil when that index is not loaded.
-    private func loadedFrame(atIndex index: Int) -> CGRect? {
+    // Which of CoreList's two geometries a content-offset read wants. They differ only while something
+    // is animating the viewport, and then they differ by the whole remaining travel.
+    //
+    // `.presented` — where content is on screen right now. What a question about the CURRENT position
+    // means, and what every per-frame scroll read wants.
+    //
+    // `.settled` — where content will be once the pass in flight finishes. What the transaction-end
+    // emission means: it reports the OUTCOME of the pass it just submitted, paired with that pass's
+    // transition. This is also what ListViewImpl reports at the same point, because there the two
+    // coincide — `replayOperations` writes final item-node frames immediately and animates the layers
+    // additively, so its model IS its presented geometry.
+    private enum OffsetGeometry {
+        case presented
+        case settled
+    }
+
+    // The rect of the row at a collection index in the requested geometry, or nil when that index is
+    // not loaded. `geometry` is deliberately NOT defaulted: which one a call site wants is the whole
+    // question, and a default would let a new caller pick one by accident.
+    private func loadedFrame(atIndex index: Int, _ geometry: OffsetGeometry) -> CGRect? {
         guard let view = self.coreList.loadedItemView(at: index) else {
             return nil
         }
-        return self.listFrame(of: view)
+        switch geometry {
+        case .presented:
+            return self.listFrame(of: view)
+        case .settled:
+            return self.coreList.settledFrame(of: view)
+        }
     }
 
     // The collection index of a loaded row, or nil when `node` is not currently loaded.
@@ -308,7 +331,10 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             // the row loaded. It is produced only by ensureItemNodeVisible — which always holds a
             // loaded node — and by the experimentalSnapScrollToItem path, which nothing in chat ever
             // enables. An unloaded target therefore falls back to center-with-top-overflow.
-            guard let frame = self.loadedFrame(atIndex: index) else {
+            //
+            // `.presented`: the question here is literally "is this row on screen right now", so the
+            // rendered position is the input, not where a pass in flight is taking it.
+            guard let frame = self.loadedFrame(atIndex: index, .presented) else {
                 return height <= contentAreaHeight + CGFloat.ulpOfOne
                     ? floor((contentAreaHeight - height) / 2.0)
                     : 0.0
@@ -353,7 +379,10 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             self.didMoveContentDuringDrag = true
             self.noteHeaderFlashingActivity()
             self.updateVisibleItemRange(force: false)
-            self.updateVisibleContentOffset(transition: .immediate)
+            // `.presented`: this fires per frame while content is moving under the finger or its
+            // momentum, so "where is it now" is both the question and the answer, and any single frame
+            // being slightly off is corrected by the next one.
+            self.updateVisibleContentOffset(transition: .immediate, geometry: .presented)
         }
         self.coreList.onLoadedEdgeReached = { [weak self] _ in
             guard let self else { return }
@@ -652,9 +681,22 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // The transition mirrors the animation applied above. ContainedViewLayoutTransitionCurve has no
         // .easeOut, so the standard ease-out bezier approximates CoreList's .easeOut(0.3); this is
         // cosmetic, since consumers use the transition only to co-animate their own chrome.
+        //
+        // `.settled` is load-bearing, and this is the ONLY emission point that is not per-frame. The
+        // pass has been submitted but its animation has not moved anything yet, so the presented value
+        // here is the PRE-animation position — and no per-frame hook exists to correct it, since
+        // `onVisibleWindowChanged` fires only on user scrolls. Reporting presented therefore leaves the
+        // consumer wrong until the user next drags: tapping scroll-to-bottom left the button on screen
+        // (the emission described where the jump started), and opening the keyboard at the bottom of a
+        // chat made it appear (mid-inset-animation the emission read ~98pt against a settled 0, past the
+        // 40pt `minOffsetForNavigation` threshold in ChatControllerLoadDisplayNode.swift:5393).
+        //
+        // Settled is also what ListViewImpl reports at its equivalent points, and it is self-correcting
+        // in the one case where the two disagree for a reason — a transaction landing mid-fling — because
+        // the next scroll frame re-reports presented.
         let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
-        self.updateVisibleContentOffset(transition: offsetTransition)
+        self.updateVisibleContentOffset(transition: offsetTransition, geometry: .settled)
         self.updateAvatarSelectionState()
         self.pushHeaderFlashingState(animated: false)
         completion(self.displayedItemRange)
@@ -701,10 +743,14 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     }
 
     // Fires visibleContentOffsetChanged. ListViewImpl's namesake also fires
-    // visibleBottomContentOffsetChanged, but ChatHistoryListViewBackend has no such member — chat
-    // calls visibleBottomContentOffset() directly.
-    private func updateVisibleContentOffset(transition: ContainedViewLayoutTransition) {
-        self.visibleContentOffsetChanged(self.visibleContentOffset(), transition)
+    // visibleBottomContentOffsetChanged, but ChatHistoryListViewBackend has no such member: the bottom
+    // offset has no per-frame consumer in chat at all, and its one caller pulls it through
+    // settledContentOffsets().
+    //
+    // `geometry` is `.settled` at the transaction point and `.presented` on the scroll path — see
+    // OffsetGeometry, and the call sites for why each is the one that consumers can act on.
+    private func updateVisibleContentOffset(transition: ContainedViewLayoutTransition, geometry: OffsetGeometry) {
+        self.visibleContentOffsetChanged(self.visibleContentOffset(geometry), transition)
     }
 
     func addAfterTransactionsCompleted(_ f: @escaping () -> Void) { f() }
@@ -722,23 +768,38 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // that has no analogue here, because CoreList departures live in the exitOverlay and never appear
     // in the loaded window.
     func visibleContentOffset() -> ListViewVisibleContentOffset {
+        return self.visibleContentOffset(.presented)
+    }
+
+    private func visibleContentOffset(_ geometry: OffsetGeometry) -> ListViewVisibleContentOffset {
         guard let range = self.coreList.loadedIndexRange else {
             return .none
         }
-        guard range.first == 0, let frame = self.loadedFrame(atIndex: 0) else {
+        guard range.first == 0, let frame = self.loadedFrame(atIndex: 0, geometry) else {
             return .unknown
         }
         return .known(-(frame.minY - self.currentInsets.top))
     }
 
+    // Both offsets in the settled geometry — see the protocol declaration for why they are one member.
+    // The two are read back-to-back with no pass in between, so they cannot straddle an animation
+    // boundary.
+    func settledContentOffsets() -> (top: ListViewVisibleContentOffset, bottom: ListViewVisibleContentOffset) {
+        return (self.visibleContentOffset(.settled), self.visibleBottomContentOffset(.settled))
+    }
+
     // Parity with ListViewImpl.visibleBottomContentOffset (ListView.swift:1412): `.known` only when the
     // list's BOTTOM edge is loaded (the window ends at the last entry). Note this one is NOT negated —
     // both offsets read as "how much content lies beyond that visible edge", positive = more hidden.
-    func visibleBottomContentOffset() -> ListViewVisibleContentOffset {
+    //
+    // Private, unlike its `visibleContentOffset()` sibling: nothing in the chat asks this question
+    // per-frame, so it is reached only through `settledContentOffsets()` and the raw member is off the
+    // backend contract entirely.
+    private func visibleBottomContentOffset(_ geometry: OffsetGeometry) -> ListViewVisibleContentOffset {
         guard let range = self.coreList.loadedIndexRange else {
             return .none
         }
-        guard range.last == self.entries.count - 1, let frame = self.loadedFrame(atIndex: range.last) else {
+        guard range.last == self.entries.count - 1, let frame = self.loadedFrame(atIndex: range.last, geometry) else {
             return .unknown
         }
         return .known(frame.maxY - (self.currentSize.height - self.currentInsets.bottom))

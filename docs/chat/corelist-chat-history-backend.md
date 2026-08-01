@@ -310,8 +310,9 @@ equivalent:
 
 ## Content offsets and displayed item range
 
-`visibleContentOffset()` / `visibleBottomContentOffset()` / `updateVisibleItemRange(force:)` follow
-`ListViewImpl` (`ListView.swift:1380`, `:1412`, `:4673`). They previously returned
+`visibleContentOffset()` / the bottom offset (reached through `settledContentOffsets()`) /
+`updateVisibleItemRange(force:)` follow `ListViewImpl` (`ListView.swift:1380`, `:1412`, `:4673`).
+They previously returned
 `.known(rawEngineOffset)`, a constant `.known(0.0)`, and nothing — which broke real behavior, since
 chat reads `abs(offset) <= 0.9` as "pinned to the newest message"
 (`ChatHistoryListNode.swift:2425`) and short-circuits `scrollToEndOfHistory` on `value <= ulpOfOne`
@@ -319,12 +320,22 @@ chat reads `abs(offset) <= 0.9` as "pinned to the newest message"
 
 - **`.known` is reserved for a loaded list edge.** `visibleContentOffset()` is `.known` only when the
   settled window starts at collection index 0, and its value is that row's distance from the top inset
-  edge, **negated** (`0` = flush against `insets.top`, positive = scrolled away).
-  `visibleBottomContentOffset()` is `.known` only when the window ends at the last entry, valued
-  `maxY - (height - insets.bottom)` and **not** negated. Both then read as "how much content lies
-  beyond that edge". An empty window is `.none`; a loaded window not reaching the edge is `.unknown`.
-  `ListViewImpl`'s fold over removed-but-animating nodes above the top item has no analogue — CoreList
-  departures live in the `exitOverlay`.
+  edge, **negated** (`0` = flush against `insets.top`, positive = scrolled away). The bottom offset is
+  `.known` only when the window ends at the last entry, valued `maxY - (height - insets.bottom)` and
+  **not** negated. Both then read as "how much content lies beyond that edge". An empty window is
+  `.none`; a loaded window not reaching the edge is `.unknown`. `ListViewImpl`'s fold over
+  removed-but-animating nodes above the top item has no analogue — CoreList departures live in the
+  `exitOverlay`.
+- **The bottom offset is not on the backend contract; `settledContentOffsets()` is.** Chat asks for it
+  in exactly one place — the ad-insertion check at `ChatHistoryListNode.swift:2425`, which tests "am I
+  pinned to the newest message" against `visibleContentOffset` and "does the content fill the screen"
+  against the bottom one. Two facts follow. It has **no per-frame consumer at all**, so unlike its
+  sibling there is no reading of it for which the mid-animation position is the question — settled is
+  simply right. And the caller **compares the two**, so exposing them as separate members let them
+  describe different moments of the same animation; one member returning both makes that
+  unrepresentable. The thresholds stay in the chat layer — this fixes only the instant. `ListViewImpl`
+  satisfies it by returning its own two values unchanged, so the default backend is bit-for-bit as
+  before.
 - **`updateVisibleItemRange(force:)` is the only writer of `displayedItemRange`,** and fires
   `displayedItemRangeChanged` only on an actual change, against a private optional
   `internalDisplayedItemRange` mirror (optional so the first computation always counts). The mirror is
@@ -346,11 +357,32 @@ chat reads `abs(offset) <= 0.9` as "pinned to the newest message"
   structured the same way, so no CoreList scroll seam was needed. The transaction passes a transition
   matching the applied animation; `ContainedViewLayoutTransitionCurve` has no `.easeOut`, so a standard
   ease-out bezier approximates CoreList's, which is cosmetic (consumers only co-animate chrome with it).
+- **The two emission points want two different geometries, and this is the one place `settledFrame(of:)`
+  is correct.** The scroll path reports `.presented` — it fires per frame while content moves, so "where
+  is it now" is both question and answer, and a frame that is slightly off is corrected by the next one.
+  The transaction point reports `.settled`, because it is reporting the *outcome* of the pass it just
+  submitted: the pass has been applied but its animation has moved nothing yet, so the presented value
+  there is the **pre-animation** position, and **no per-frame hook exists to correct it** —
+  `onVisibleWindowChanged` fires only on user scrolls. `OffsetGeometry` in the backend selects between
+  them; `visibleContentOffset()` (the protocol member, a question about now) stays `.presented`.
 
-**Known difference:** `ListViewImpl` also updates the content offset per-frame *during* animations
-(`ListView.swift:4908`). CoreList animates through analytic CA tracks with no per-frame host callback,
-so the backend reports the settled endpoint plus a matching transition and lets the consumer animate
-alongside.
+  Reporting presented at the transaction point is what made the scroll-to-bottom button misbehave under
+  this backend: tapping it left the button on screen until the next manual scroll (the emission described
+  where the jump *started*), and opening the keyboard or emoji panel at the bottom of a chat made the
+  button appear — mid-inset-animation the emission read ~98pt against a settled `-0.0`, past the 40pt
+  `minOffsetForNavigation` threshold in `ChatControllerLoadDisplayNode.swift:5393`. Both are single-shot
+  errors that persist until the user drags.
+
+  Settled is self-correcting in the one case where the two disagree for a reason — a transaction landing
+  mid-fling, where settled is the flight's destination — because the next scroll frame re-reports
+  presented, and the consumer's own alpha change is animated anyway.
+
+**Why `ListViewImpl` needs no such distinction:** its model *is* its presented geometry.
+`replayOperations` writes final item-node frames immediately and animates the layers additively, so the
+single value it reports at transaction end is already the endpoint. It additionally updates the offset
+per-frame during animations (`ListView.swift:4908`); CoreList animates through analytic CA tracks with no
+per-frame host callback, which is exactly why the transaction emission must carry the endpoint rather
+than a sample of the way there.
 
 ## Neighbor awareness
 
