@@ -48,10 +48,20 @@ public protocol CoreListItem: AnyObject {
     /// Reconfigures a reused survivor's content. `transition` is the enclosing pass's transition; a
     /// view that animates its own internals should use it, or hold it for its next layout.
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition)
+
+    /// Attachments this row publishes, keyed by attachment key. A key identifies a RUN: adjacent
+    /// items publishing the same key, and agreeing under `combines(with:)`, share one attachment
+    /// view. The same key may recur in disjoint runs of the loaded window, which is why runs carry a
+    /// serial rather than being identified by key alone.
+    var attachedItems: [AnyHashable: CoreListAttachedItem] { get }
 }
 
 public extension CoreListItem {
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {}
+
+    /// Unlike `isEqual`, an empty default is honest here — most rows publish no attachments — and it
+    /// keeps every existing conformance compiling.
+    var attachedItems: [AnyHashable: CoreListAttachedItem] { [:] }
 }
 
 public enum CoreListAnchorMode: Equatable {
@@ -115,15 +125,47 @@ public final class CoreVirtualListView: UIView {
             let index: Int
             let view: UIView & CoreListItemView
             var frame: CGRect
+            /// Space reserved ABOVE this row by `.reservesSpace` `.top` attachments whose run starts
+            /// here. A gap between rows, NOT part of this row's frame — which is why every existing
+            /// reader of `frame` keeps its meaning.
+            var reservedTop: CGFloat = 0
+            /// The mirror below this row, for `.bottom` attachments whose run ends here.
+            var reservedBottom: CGFloat = 0
+        }
+
+        /// A resolved attachment run in the settled window.
+        ///
+        /// Holds only OFFSET-INDEPENDENT state. The solved position is deliberately absent: item
+        /// frames are offset-independent, and a floating attachment's solved Y is not, so storing it
+        /// would destroy the property that makes this window a settled value. The solve happens at
+        /// render and scroll time, exactly as a row's screen position does.
+        struct Attachment {
+            let key: AnyHashable
+            let serial: UInt64
+            let view: UIView & CoreListAttachedItemView
+            var memberRange: Range<Int>
+            var measuredHeight: CGFloat
+            let placement: CoreListAttachmentPlacement
+            let edge: CoreListAttachmentEdge
+            let isFloating: Bool
+            let startsCollectionRun: Bool
+            let endsCollectionRun: Bool
+            /// Frame-space band, finalised after row stacking.
+            var bandTop: CGFloat
+            var bandBottom: CGFloat
         }
 
         var items: [Item] = []
+        /// Sorted by `(memberRange.lowerBound, key description)` — see `AttachmentRuns.pendingRuns`.
+        var attachments: [Attachment] = []
 
         var startIndex: Int { items.first?.index ?? 0 }
         var endIndex: Int { items.last?.index ?? -1 }
         var isEmpty: Bool { items.isEmpty }
-        var minY: CGFloat { items.first?.frame.minY ?? 0 }
-        var maxY: CGFloat { items.last?.frame.maxY ?? 0 }
+        // Extended to cover the reserved bands, so underfill alignment and `pinsLoadedTop` place the
+        // BAND on the inset edge rather than the row.
+        var minY: CGFloat { (items.first?.frame.minY ?? 0) - (items.first?.reservedTop ?? 0) }
+        var maxY: CGFloat { (items.last?.frame.maxY ?? 0) + (items.last?.reservedBottom ?? 0) }
         var height: CGFloat { maxY - minY }
 
         func contains(index: Int) -> Bool {
@@ -354,6 +396,13 @@ public final class CoreVirtualListView: UIView {
     }
     let engine: ScrollEngine
     let container = UIView()
+    /// Attachment views. A SIBLING of `container` inside `contentHost`, with its frame kept identical
+    /// to `container`'s, which buys: the additive viewport track and container rebases inherited
+    /// exactly as rows inherit them; and `render()`'s subview bookkeeping left untouched (it only
+    /// calls `addSubview` when a view's superview is wrong, so ordering by call sequence would not
+    /// have been reliable). It is the TOPMOST sibling — above the crossing and exit overlays too, not
+    /// merely above `container` — see the ordering comment in `init`.
+    let attachmentContainer = AttachmentContainerView()
     let crossingOverlay = UIView()
     let exitOverlay = UIView()
     let animationController: ListAnimationController
@@ -363,7 +412,9 @@ public final class CoreVirtualListView: UIView {
     var viewportGeometry: ListViewportGeometry {
         ListViewportGeometry(size: logicalSize, insets: viewportInsets)
     }
-    private var contentWidth: CGFloat { viewportGeometry.contentWidth }
+    // Internal rather than private: `CoreVirtualListView+Attachments.swift` is a different FILE, and
+    // Swift's `private` is file-scoped.
+    var contentWidth: CGFloat { viewportGeometry.contentWidth }
     private(set) var activeWindow = Window()
     private(set) var containerOriginY: CGFloat = 0
     private var viewportCarries: [ViewportCarry] = []
@@ -518,12 +569,41 @@ public final class CoreVirtualListView: UIView {
     /// Identities whose content was reconciled in the pass currently being applied. Window
     /// construction measures exactly these with the pass transition; everything else measures
     /// `.immediate`. Cleared at the end of each pass.
-    private var reconciledIdentities: Set<AnyHashable> = []
+    /// Monotonic serial for attachment runs. The only attachment state outside `activeWindow`.
+    var nextAttachmentSerial: UInt64 = 0
+    /// The representative descriptor last applied to each live serial, so the next pass can decide
+    /// whether to reconfigure. Keyed by serial because that is what identifies a run's view.
+    var appliedAttachmentDescriptors: [UInt64: CoreListAttachedItem] = [:]
+    /// Attachment analogue of `reconciledIdentities`; cleared with it at the end of each pass.
+    var reconciledAttachmentSerials: Set<UInt64> = []
+    /// Set by an attachment's `onContentDidChange`. A flag rather than a set: a pass re-measures
+    /// every loaded attachment anyway.
+    var attachmentsAreDirty = false
+    /// The item array the CURRENT `activeWindow` was built against. `resolveAttachments` maps a prior
+    /// run's collection indices back to identities through this, because `_items` has already been
+    /// replaced by the time a pass resolves attachments.
+    var priorItems: [CoreListItem] = []
+    /// Runs that no new run claimed in the most recent `resolveAttachments`, with the views they
+    /// owned. Recorded rather than acted on, because only the enclosing pass knows whether a run left
+    /// the loaded WINDOW (silent) or the COLLECTION (a genuine departure that fades). Every producer
+    /// must be drained by its caller; both call sites do.
+    var pendingAttachmentDepartures: [AttachmentDeparture] = []
+    /// Views fading out in the exit overlay after a genuine attachment departure. Held so
+    /// `assertOverlayInvariants` can recognise a THIRD legitimate kind of exit-overlay child, and so
+    /// a leak still trips the assertion rather than being waved through.
+    let fadingAttachmentViews = NSHashTable<UIView>.weakObjects()
+    /// The baked flight the render server is currently playing, or `nil` under main-thread-driven
+    /// motion. While non-nil, attachments park at its destination and ride a composed keyframe.
+    var activeScrollFlight: ScrollFlight?
+
+    // Internal: read by `fadingInAttachmentSerials` in CoreVirtualListView+Attachments.swift.
+    var reconciledIdentities: Set<AnyHashable> = []
     /// The transition of the pass currently being applied, paired with `reconciledIdentities`.
     /// Window construction is reached from the mutation pass AND from scroll-driven rebalancing;
     /// the latter leaves the set empty, so its rows correctly measure `.immediate` without any
     /// caller having to say so.
-    private var currentPassTransition: CoreListTransition = .immediate
+    // Internal for the same reason as `contentWidth` above.
+    var currentPassTransition: CoreListTransition = .immediate
     private var dirtyFlushScheduled = false
     private var isApplyingChanges = false
     var defaultDirtyDuration: TimeInterval = 0.3
@@ -570,6 +650,10 @@ public final class CoreVirtualListView: UIView {
         engine.onDidEndDragging = { [weak self] in
             self?.didEndDragging?()
         }
+        engine.onFlightChanged = { [weak self] flight in
+            self?.activeScrollFlight = flight
+            self?.renderAttachments()
+        }
         container.backgroundColor = .clear
         container.clipsToBounds = false
         crossingOverlay.backgroundColor = .clear
@@ -578,10 +662,19 @@ public final class CoreVirtualListView: UIView {
         exitOverlay.backgroundColor = .clear
         exitOverlay.clipsToBounds = false
         exitOverlay.isUserInteractionEnabled = false
+        attachmentContainer.backgroundColor = .clear
+        attachmentContainer.clipsToBounds = false
         addSubview(engine.contentHost)
         engine.contentHost.addSubview(container)
         engine.contentHost.addSubview(crossingOverlay)
         engine.contentHost.addSubview(exitOverlay)
+        // Attachments LAST — above every overlay, not just above `container`. A crossing carry and a
+        // ghost block are row content that happens to be leaving, and a floating header is above row
+        // content; that is what makes it a floating header. Ordered below `exitOverlay` instead, a
+        // departing row draws over a parked header for the whole exit fade, and because the row is
+        // opaque the header reads as fading in from nothing once the ghost clears. Reported from the
+        // demo as "Load +5, settle, Load -5 — the top header crossfades 0->1 in place".
+        engine.contentHost.addSubview(attachmentContainer)
         animationController.setReferenceLayer(container.layer)
         animationController.seedViewport(layer: engine.contentHost.layer)
     }
@@ -645,9 +738,10 @@ public final class CoreVirtualListView: UIView {
         let hasNewInsets = newInsets != nil
         let hasScrollTo = scrollTo != nil
         let hasDirty = !dirtyIndices.isEmpty
+        let hasDirtyAttachments = attachmentsAreDirty
         let hasAdditionalScrollDistance = additionalScrollDistance != 0.0
         guard hasItems || hasNewSize || hasNewInsets || hasScrollTo || hasDirty
-                || hasAdditionalScrollDistance else { return }
+                || hasDirtyAttachments || hasAdditionalScrollDistance else { return }
 
         if let newItems, let duplicate = Self.firstDuplicatePair(in: newItems) {
             preconditionFailure(
@@ -700,6 +794,9 @@ public final class CoreVirtualListView: UIView {
 
         let oldItems = _items
         let oldViewportInsets = viewportInsets
+        // Captured BEFORE `if let newSize { logicalSize = newSize }` below, so the old attachment
+        // snapshot solves against the geometry it actually had.
+        let oldLogicalSize = logicalSize
         let effectiveItems = newItems ?? oldItems
         let logicalSizeChanged = newSize.map { $0 != logicalSize } ?? false
         let insetsChanged = newInsets.map { $0 != viewportInsets } ?? false
@@ -756,6 +853,27 @@ public final class CoreVirtualListView: UIView {
                                     sourceItems: oldItems,
                                     containerOriginY: oldContainerOriginY,
                                     at: transactionTime)
+        let oldAttachmentState = settledAttachmentState(oldWindow,
+                                                        containerOriginY: oldContainerOriginY,
+                                                        insets: oldViewportInsets,
+                                                        logicalHeight: oldLogicalSize.height,
+                                                        // `oldBoundsOriginY`, NOT `oldSettledOffset`:
+                                                        // this snapshot says where the attachment WAS,
+                                                        // and `renderAttachments` placed it at the
+                                                        // PRESENTED offset — rubber-band residual and
+                                                        // all. Handing it the edge-clamped offset makes
+                                                        // the pass believe a parked attachment sat one
+                                                        // overscroll away from where it was drawn, so
+                                                        // the transition starts there: the attachment
+                                                        // jumps by the residual and eases back. Rows
+                                                        // are immune because their frames are
+                                                        // container-local and offset-independent; the
+                                                        // attachment solve consumes the offset.
+                                                        offset: oldBoundsOriginY,
+                                                        // The viewport displacement already applied
+                                                        // to the OLD rendered content.
+                                                        viewportCorrection: currentViewportCorrection,
+                                                        at: transactionTime)
         var oldRenderedState = oldState
         for (identity, state) in crossingCarryState(sourceItems: oldItems,
                                                     at: transactionTime) {
@@ -780,6 +898,10 @@ public final class CoreVirtualListView: UIView {
         let consumedDirty = dirtyIndices
         dirtyIndices.removeAll()
         dirtyAnimated = false
+        // Consumed HERE rather than in `flushDirtyItems`, so the flag stays set until a pass has
+        // actually run: a flush that early-outs for any other reason cannot silently drop a pending
+        // attachment re-measure.
+        attachmentsAreDirty = false
 
         let wasOverscrolledPrePass = abs(presentationOverscroll) > 0.5
 
@@ -974,6 +1096,15 @@ public final class CoreVirtualListView: UIView {
         }
 
         let exitingIdentities = Set(oldRenderedState.keys).subtracting(newIdentities)
+        // Classified here, before ghost blocks are formed, because a whole-run departure has to be
+        // handed to `makeGhostBlock` at construction — a block's local extent is fixed at
+        // `GhostBlockLedger.insert` and cannot be widened afterwards. `newIdentities` and
+        // `oldAttachmentState` are both already in scope at this point.
+        let attachmentDepartures = classifyAttachmentDepartures(newItems: effectiveItems)
+        pendingAttachmentDepartures.removeAll()
+        for departure in attachmentDepartures.silent {
+            dropAttachmentSilently(departure)
+        }
         var departingRuns: [[SettledLiveItem]] = []
         let departingStates = oldRenderedState.values
             .filter { !newIdentities.contains($0.identity) }
@@ -987,12 +1118,49 @@ public final class CoreVirtualListView: UIView {
                 departingRuns.append([state])
             }
         }
-        let newGhostBlockIDs = departingRuns.map {
-            makeGhostBlock(from: $0,
+        // A genuine departure joins a block when its whole old member range lies inside that block's
+        // departed range; otherwise it fades in place.
+        var attachmentsByRunIndex: [Int: [(departure: AttachmentDeparture,
+                                           state: SettledAttachment)]] = [:]
+        var fadingInPlace: [AttachmentDeparture] = []
+        for departure in attachmentDepartures.genuine {
+            guard let state = oldAttachmentState[departure.run.serial] else {
+                fadingInPlace.append(departure)
+                continue
+            }
+            let memberOldIndices = oldItems.indices.filter {
+                departure.run.memberIdentities.contains(oldItems[$0].identity)
+            }
+            let runIndex = departingRuns.firstIndex { run in
+                guard let first = run.first, let last = run.last else { return false }
+                let range = first.index..<(last.index + 1)
+                return !memberOldIndices.isEmpty
+                    && memberOldIndices.allSatisfy { range.contains($0) }
+            }
+            if let runIndex {
+                attachmentsByRunIndex[runIndex, default: []].append((departure, state))
+            } else {
+                fadingInPlace.append(departure)
+            }
+        }
+
+        let newGhostBlockIDs = departingRuns.enumerated().map { index, run in
+            makeGhostBlock(from: run,
+                           attachments: attachmentsByRunIndex[index] ?? [],
                            transition: transition,
                            transactionTime: transactionTime,
                            fadesOut: !isFullReplaceCarousel)
         }
+
+        // Whatever did not join a block fades where it stood — the merge-loser case. A carousel fades
+        // nothing at either end, outgoing included, which is the same predicate `makeGhostBlock`
+        // receives as `fadesOut:` for the departing rows.
+        fadeDepartingAttachments(fadingInPlace,
+                                 oldState: oldAttachmentState,
+                                 transition: transition,
+                                 transactionTime: transactionTime,
+                                 fadesOut: !isFullReplaceCarousel)
+
         var newGhostBlockByDepartedIdentity: [AnyHashable: GhostBlockID] = [:]
         for (run, blockID) in zip(departingRuns, newGhostBlockIDs) {
             for item in run {
@@ -1034,6 +1202,7 @@ public final class CoreVirtualListView: UIView {
         }
 
         activeWindow = newWindow
+        priorItems = effectiveItems
         render()
 
         let resolvedAnchorIdentity = resolvedAnchor.flatMap { anchor in
@@ -1076,6 +1245,11 @@ public final class CoreVirtualListView: UIView {
             ? newSettledOffset
             : newSettledOffset + presentationOverscroll
         setBoundsOriginY(newBoundsOriginY)
+        // Re-solve against the offset this pass just settled on. `render()` ran earlier, before the
+        // final offset existed — harmless for rows, whose frames are offset-INDEPENDENT, but the
+        // attachment solve consumes the offset, so a header parked against the pre-pass value lands
+        // a whole inset-change away from where it belongs.
+        renderAttachments()
 
         for item in newWindow.items {
             let identity = effectiveItems[item.index].identity
@@ -1166,7 +1340,11 @@ public final class CoreVirtualListView: UIView {
                 oldItems: oldItems,
                 newItems: effectiveItems,
                 newState: newState,
-                anchorY: anchorY
+                anchorY: anchorY,
+                vacatedTopY: oldItems.indices.contains(render.departedRange.lowerBound)
+                    ? oldState[oldItems[render.departedRange.lowerBound].identity]
+                        .map { $0.contentY + oldLiveEdgeCoordinateShift }
+                    : nil
             )
             _ = ghostLedger.setBoundaryLink(
                 attachmentEdge: initialWitness.attachmentEdge,
@@ -1354,6 +1532,41 @@ public final class CoreVirtualListView: UIView {
                 resetViewportCarries()
             }
         }
+
+        // Attachments transition HERE, after the shared viewport track has been installed — the same
+        // phase the row transitions run in, and for the same reason. Earlier in the pass
+        // `viewportOffset(at:)` still reads 0, so an attachment's own track would carry the whole
+        // programmatic-scroll displacement that the viewport track ALSO carries. The two cancel at
+        // t = 0 and every floating attachment sits at its destination while the content is still
+        // travelling — "tapping Top makes the floating items jump immediately".
+        let newAttachmentState = settledAttachmentState(activeWindow,
+                                                        containerOriginY: containerOriginY,
+                                                        insets: viewportInsets,
+                                                        logicalHeight: logicalSize.height,
+                                                        offset: engine.offset,
+                                                        viewportCorrection: animationController
+                                                            .viewportOffset(at: transactionTime),
+                                                        at: transactionTime)
+        let insertedAttachmentIdentities = Set(diff.inserts.compactMap { newIndex -> AnyHashable? in
+            effectiveItems.indices.contains(newIndex) ? effectiveItems[newIndex].identity : nil
+        })
+        // A full-replace carousel is a rigid travel between two strips: both ends ride the shared
+        // viewport track at full opacity. Under it EVERY incoming run is all-new, so the fade-in rule
+        // fires on all of them and headers would fade while the rows beside them do not. This is the
+        // same suppression the row path applies, on the same predicate — see the row `insert` block
+        // guarded by `!isFullReplaceCarousel`.
+        let fadingIn = isFullReplaceCarousel
+            ? []
+            : fadingInAttachmentSerials(
+                window: activeWindow,
+                existingSerials: Set(oldAttachmentState.keys),
+                insertedIdentities: insertedAttachmentIdentities,
+                reconciledIdentities: reconciledIdentities)
+        transitionAttachments(old: oldAttachmentState,
+                              new: newAttachmentState,
+                              transition: transition,
+                              transactionTime: transactionTime,
+                              fadesInSerials: fadingIn)
 
         if let track = viewportTrack, let viewportFrom = transitionViewportFrom {
             for index in viewportCarries.indices {
@@ -1655,6 +1868,7 @@ public final class CoreVirtualListView: UIView {
                                    resolveY: { _, _ in 0 },
                                    pinsLoadedTop: true,
                                    sourceWindow: nil)
+        priorItems = _items
         render()
         var initialOffset = containerOriginY - activeWindow.minY
         let edges = loadedEdgeRange(for: activeWindow, originY: containerOriginY)
@@ -1662,6 +1876,8 @@ public final class CoreVirtualListView: UIView {
         if let maximum = edges.max { initialOffset = min(initialOffset, maximum) }
         if activeWindow.startIndex == 0 { initialOffset = viewportGeometry.minimumOffset }
         setBoundsOriginY(initialOffset)
+        // As in `applyChanges`: the solve consumes the offset, so it must run after the final write.
+        renderAttachments()
         for item in activeWindow.items {
             animationController.seedLive(identity: _items[item.index].identity,
                                          layer: item.view.layer)
@@ -1798,9 +2014,23 @@ public final class CoreVirtualListView: UIView {
         }
     }
 
+    /// The attachment analogue of `markDirty`. No index to record: a pass re-measures every loaded
+    /// attachment, so the flag only has to trigger one.
+    func markAttachmentsDirty(animated: Bool) {
+        attachmentsAreDirty = true
+        dirtyAnimated = dirtyAnimated || animated
+        if !dirtyFlushScheduled {
+            dirtyFlushScheduled = true
+            scheduler.schedule { [weak self] in self?.flushDirtyItems() }
+        }
+    }
+
     private func flushDirtyItems() {
         dirtyFlushScheduled = false
-        guard !dirtyIndices.isEmpty else { return }
+        // `attachmentsAreDirty` is NOT cleared here — `applyChanges` consumes it, the same way it
+        // consumes `dirtyIndices`. Clearing it first would make the pass's own guard read false and
+        // the flush would do nothing.
+        guard !dirtyIndices.isEmpty || attachmentsAreDirty else { return }
         let animated = dirtyAnimated
         applyChanges(transition: animated ? .easeInOut(duration: defaultDirtyDuration) : .immediate)
     }
@@ -1814,6 +2044,11 @@ public final class CoreVirtualListView: UIView {
         previousOffset = engine.offset
         rebalanceActiveWindow()
         refreshReachedLoadedEdges()
+        // The floating clamp is viewport-dependent, and `rebalanceActiveWindow` runs `render()` only
+        // when the window actually changed — so a scroll that leaves the window untouched would
+        // otherwise never re-solve. The solve is a pure function of the settled window and the
+        // offset, so running it again after a rebalance that DID render is an exact no-op.
+        renderAttachments()
         // Before the host callback, so a host reacting to it already sees fresh row visibility. A
         // scroll that leaves the window untouched runs no render(), so this is the only path that
         // reports the new rects.
@@ -1879,7 +2114,14 @@ public final class CoreVirtualListView: UIView {
         for identity in promotedCrossingIdentities {
             crossingCarries.removeValue(forKey: identity)
         }
+        // Rebalancing mutates `window.items` directly and never calls `buildWindow`, so without this
+        // the attachment set goes stale the moment scrolling loads a row belonging to a run the
+        // window had not seen. `priorItems` is still `_items` here (the collection did not change),
+        // so the witness rule resolves against the very window being replaced.
+        resolveAttachments(in: &window, sourceWindow: activeWindow)
+        drainAttachmentDeparturesSilently()
         activeWindow = window
+        priorItems = _items
         let newOriginY = computeContainerOriginY(for: window)
         let newAbsoluteBase = newOriginY - window.minY
         if abs(newAbsoluteBase - absoluteBase) > 0.5 {
@@ -1987,10 +2229,13 @@ public final class CoreVirtualListView: UIView {
         // so it is resolved here rather than by the caller: this is the first moment the height
         // exists.
         let anchorY = resolveY(height, view)
+        let anchorReserve = reservedHeights(atIndex: index, width: width, sourceWindow: sourceWindow)
         var window = Window(items: [
             Window.Item(index: index,
                         view: view,
-                        frame: CGRect(x: itemX, y: anchorY, width: width, height: height))
+                        frame: CGRect(x: itemX, y: anchorY, width: width, height: height),
+                        reservedTop: anchorReserve.top,
+                        reservedBottom: anchorReserve.bottom)
         ])
 
         let band = projectedLoadBand
@@ -2058,6 +2303,7 @@ public final class CoreVirtualListView: UIView {
             }
         }
 
+        resolveAttachments(in: &window, sourceWindow: sourceWindow)
         return window
     }
 
@@ -2074,13 +2320,17 @@ public final class CoreVirtualListView: UIView {
                                moveReuseNewToOld: moveReuseNewToOld)
         let height = view.update(width: width,
                                  transition: measureTransition(forItemAt: index))
+        let reserve = reservedHeights(atIndex: index, width: width, sourceWindow: sourceWindow)
         window.items.insert(
             Window.Item(index: index,
                         view: view,
                         frame: CGRect(x: viewportInsets.left,
-                                      y: first.frame.minY - height,
+                                      y: first.frame.minY - first.reservedTop
+                                          - reserve.bottom - height,
                                       width: width,
-                                      height: height)),
+                                      height: height),
+                        reservedTop: reserve.top,
+                        reservedBottom: reserve.bottom),
             at: 0
         )
     }
@@ -2098,13 +2348,19 @@ public final class CoreVirtualListView: UIView {
                                moveReuseNewToOld: moveReuseNewToOld)
         let height = view.update(width: width,
                                  transition: measureTransition(forItemAt: index))
+        let reserve = reservedHeights(atIndex: index, width: width, sourceWindow: sourceWindow)
+        let previous = window.items.last
         window.items.append(
             Window.Item(index: index,
                         view: view,
                         frame: CGRect(x: viewportInsets.left,
-                                      y: window.items.last?.frame.maxY ?? 0,
+                                      y: (previous?.frame.maxY ?? 0)
+                                          + (previous?.reservedBottom ?? 0)
+                                          + reserve.top,
                                       width: width,
-                                      height: height))
+                                      height: height),
+                        reservedTop: reserve.top,
+                        reservedBottom: reserve.bottom)
         )
     }
 
@@ -2219,7 +2475,8 @@ public final class CoreVirtualListView: UIView {
         engine.setEdges(min: edges.min, max: edges.max)
         shiftExitOverlayChildren(by: engine.offset - offsetBeforeEdges)
         containerOriginY = newOriginY
-        // After the assignment above: the notifier projects against it.
+        // After the assignment above: both the attachment solve and the notifier project against it.
+        renderAttachments()
         notifyVisibleRects()
     }
 
@@ -2506,21 +2763,30 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func makeGhostBlock(from items: [SettledLiveItem],
+                                attachments: [(departure: AttachmentDeparture,
+                                               state: SettledAttachment)] = [],
                                 transition: CoreListTransition,
                                 transactionTime: TimeInterval,
                                 fadesOut: Bool) -> GhostBlockID {
         precondition(!items.isEmpty)
         let rootY = items[0].contentY + items[0].positionOffset
         let localYs = items.map { $0.contentY + $0.positionOffset - rootY }
-        let localMinY = localYs.min() ?? 0
-        let localMaxY = zip(items, localYs).map { item, localY in
+        // Attachment locals are computed on the same terms and participate in the block's extent: a
+        // `.top` header sits ABOVE its first row, so it can push localMinY negative.
+        let attachmentLocalYs = attachments.map {
+            $0.state.contentY + $0.state.positionOffset - rootY
+        }
+        let localMinY = (localYs + attachmentLocalYs).min() ?? 0
+        let localMaxY = (zip(items, localYs).map { item, localY in
             localY + item.visualHeight
-        }.max() ?? 0
+        } + zip(attachments, attachmentLocalYs).map { attachment, localY in
+            localY + attachment.state.size.height
+        }).max() ?? 0
         let id = ghostLedger.insert(rootY: rootY,
                                     localMinY: localMinY,
                                     localMaxY: localMaxY,
                                     witness: .unresolved,
-                                    visibleMemberCount: items.count)
+                                    visibleMemberCount: items.count + attachments.count)
         let owner = ListAnimationOwner.ghostBlock(id.rawValue)
         let wrapper = UIView()
         wrapper.backgroundColor = .clear
@@ -2548,13 +2814,27 @@ public final class CoreVirtualListView: UIView {
         animationController.seedGhostBlock(owner: owner,
                                            layer: wrapper.layer,
                                            settledRootY: rootY)
-        let placeholderMembers = Dictionary(uniqueKeysWithValues: items.map { item in
+        // Placeholders for EVERY member — rows and attachments alike — before any `makeExit` runs.
+        // An immediate transition completes its exit synchronously, so `finishGhostMember` can fire
+        // inside the loops below; without a placeholder already present it would decrement the
+        // ledger's member count for an entry that was then inserted afterwards, and
+        // `assertGhostInvariants` would see `members.count > visibleMemberCount`.
+        var placeholderMembers = Dictionary(uniqueKeysWithValues: items.map { item in
             let member = GhostMember(owner: .live(item.identity),
                                      view: item.view,
                                      settledX: item.contentX + item.positionOffsetX,
                                      settledWidth: item.visualWidth)
             return (ObjectIdentifier(item.view), member)
         })
+        for attachment in attachments {
+            let view = attachment.departure.view
+            placeholderMembers[ObjectIdentifier(view)] = GhostMember(
+                owner: .attachment(attachment.departure.run.serial),
+                view: view,
+                settledX: attachment.state.contentX,
+                settledWidth: attachment.state.size.width
+            )
+        }
         ghostRenders[id] = GhostBlockRender(
             owner: owner,
             wrapper: wrapper,
@@ -2576,6 +2856,39 @@ public final class CoreVirtualListView: UIView {
                     view: item.view,
                     settledX: item.contentX + item.positionOffsetX,
                     settledWidth: item.visualWidth
+                )
+                ghostRenders[id] = render
+            }
+        }
+        for (attachment, localY) in zip(attachments, attachmentLocalYs) {
+            let view = attachment.departure.view
+            view.onContentDidChange = nil
+            view.layer.anchorPoint = CGPoint(x: 0, y: 0)
+            wrapper.addSubview(view)
+            view.frame = CGRect(x: attachment.state.contentX,
+                                y: localY,
+                                width: attachment.state.size.width,
+                                height: attachment.state.size.height)
+            let memberOwner = animationController.makeExit(
+                owner: .attachment(attachment.departure.run.serial),
+                layer: view.layer,
+                contentY: localY,
+                transition: transition,
+                transactionTime: transactionTime,
+                fadesOut: fadesOut
+            ) { [weak self, weak view] in
+                guard let view else { return }
+                self?.finishGhostMember(blockID: id, view: view)
+            }
+            // Replace the placeholder only if it is still there: an immediate exit may already have
+            // finished this member and removed it, exactly as the row loop above guards.
+            let key = ObjectIdentifier(view)
+            if var render = ghostRenders[id], render.members[key] != nil {
+                render.members[key] = GhostMember(
+                    owner: memberOwner,
+                    view: view,
+                    settledX: attachment.state.contentX,
+                    settledWidth: attachment.state.size.width
                 )
                 ghostRenders[id] = render
             }
@@ -2864,7 +3177,11 @@ public final class CoreVirtualListView: UIView {
         oldItems: [CoreListItem],
         newItems: [CoreListItem],
         newState: [AnyHashable: SettledLiveItem],
-        anchorY: CGFloat?
+        anchorY: CGFloat?,
+        /// The departed run's OLD SETTLED top, translated into this pass's post-rebase coordinate
+        /// space. NOT `block.settledRootY`, which is the sampled in-flight root — see the edge
+        /// decision below. `nil` when the run's leading row has no old settled geometry.
+        vacatedTopY: CGFloat?
     ) -> (attachmentEdge: GhostBlockEdge,
           witness: GhostBoundaryWitness,
           isMoveAmbiguous: Bool) {
@@ -2884,9 +3201,33 @@ public final class CoreVirtualListView: UIView {
             let witness: GhostBoundaryWitness = newState[identity] == nil
                 ? .unresolved
                 : .liveMinY(identity)
-            let attachmentEdge: GhostBlockEdge = insertedIdentities.contains(identity)
+            // Which edge welds the block to this witness is GEOMETRY, not anchor direction.
+            //
+            // `.minY` says "the block's top and its successor's top are the same point". That is true
+            // in the ordinary mid-collection deletion, where the successor slides UP into the space the
+            // block just vacated, and it is what holds the block still while the live rows collapse
+            // past it. It is also true of a REPLACEMENT, where an inserted row lands on the block root.
+            //
+            // It is NOT true when the successor goes somewhere else. Deleting the head of the
+            // collection re-pins the survivors to the loaded top edge instead of sliding them into the
+            // gap, so the two tops are unrelated and equating them drops the block by its own height —
+            // it slides down the screen while it fades.
+            //
+            // So ask whether the successor actually arrived at the top the run vacated. Both sides are
+            // SETTLED values in one post-rebase space: `vacatedTopY` is the run's old settled top, not
+            // the block's sampled root, which for a row that departs mid-animation is nowhere near it.
+            // `anchorFacingEdge` remains the answer for the `.unresolved` returns below, where it is a
+            // migration hint rather than resolved geometry.
+            let successorCollapsedIntoGap: Bool = {
+                guard let vacatedTopY, let successorTop = newState[identity]?.contentY else {
+                    return false
+                }
+                return abs(successorTop - vacatedTopY) < 1e-6
+            }()
+            let attachmentEdge: GhostBlockEdge =
+                insertedIdentities.contains(identity) || successorCollapsedIntoGap
                 ? .minY
-                : anchorFacingEdge
+                : .maxY
             return (attachmentEdge, witness, false)
         }
         if ordinal == newItems.count,
@@ -3067,12 +3408,15 @@ public final class CoreVirtualListView: UIView {
         let carriedViews = Set(viewportCarries.map { ObjectIdentifier($0.view) })
         let crossingViews = Set(crossingCarries.values.map { ObjectIdentifier($0.view) })
         let ghostWrappers = Set(ghostRenders.values.map { ObjectIdentifier($0.wrapper) })
+        let fadingAttachments = Set(fadingAttachmentViews.allObjects.map { ObjectIdentifier($0) })
 
         for view in exitOverlay.subviews {
             let key = ObjectIdentifier(view)
-            if carriedViews.contains(key) || ghostWrappers.contains(key) { continue }
-            assertionFailure("exitOverlay holds a view owned by no viewport carry or ghost block — "
-                + "it will never be removed and will render above live rows")
+            if carriedViews.contains(key)
+                || ghostWrappers.contains(key)
+                || fadingAttachments.contains(key) { continue }
+            assertionFailure("exitOverlay holds a view owned by no viewport carry, ghost block or "
+                + "fading attachment — it will never be removed and will render above live rows")
         }
         for view in crossingOverlay.subviews {
             if crossingViews.contains(ObjectIdentifier(view)) { continue }

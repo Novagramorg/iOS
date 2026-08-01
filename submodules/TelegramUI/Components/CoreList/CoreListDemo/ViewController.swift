@@ -29,6 +29,9 @@ final class ViewController: UIViewController {
     private let mixedHorizontalReplaceButton = UIButton(type: .system)
     private let mixedSizeSwapButton = UIButton(type: .system)
     private let mixedHorizontalSizeFiveButton = UIButton(type: .system)
+    private let groupsButton = UIButton(type: .system)
+    /// Run length for the demo's attachment groups; cycled by `cycleGroupSize`.
+    private var groupSize = 6
     private let listOuterBoundsOverlay: UIView = {
         let view = UIView()
         view.accessibilityIdentifier = "ListOuterBoundsOverlay"
@@ -138,6 +141,9 @@ final class ViewController: UIViewController {
         insetButton.setTitle("Inset +300", for: .normal)
         insetButton.addTarget(self, action: #selector(toggleTopInset), for: .touchUpInside)
 
+        groupsButton.setTitle("Groups", for: .normal)
+        groupsButton.addTarget(self, action: #selector(cycleGroupSize), for: .touchUpInside)
+
         // Replacement affordances: "Del/Add" swaps identities in one transaction; the delayed
         // variant starts the insertion while the departure fade and survivor motion are active.
         let delAddButton = UIButton(type: .system)
@@ -236,7 +242,7 @@ final class ViewController: UIViewController {
         let mixedSpacer2 = UIView()
         mixedSpacer2.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let mixedRow2 = UIStackView(arrangedSubviews: [
-            mixedSizeSwapButton, mixedHorizontalSizeFiveButton, mixedSpacer2,
+            mixedSizeSwapButton, mixedHorizontalSizeFiveButton, groupsButton, mixedSpacer2,
         ])
         mixedRow2.axis = .horizontal
         mixedRow2.spacing = 12
@@ -323,6 +329,22 @@ final class ViewController: UIViewController {
         view.setNeedsLayout()
     }
 
+    /// Cycles the run length 6 → 3 → 12 → 6. Halving SPLITS every run — each piece keeps or loses the
+    /// header per the witness rule. Doubling MERGES pairs — one serial survives, the other departs.
+    @objc private func cycleGroupSize() {
+        groupSize = groupSize == 6 ? 3 : (groupSize == 3 ? 12 : 6)
+        let regrouped = listView.items.enumerated().compactMap { index, item -> DemoListItem? in
+            guard let demo = item as? DemoListItem else { return nil }
+            return DemoListItem(id: demo.id,
+                                title: demo.title,
+                                detail: demo.detail,
+                                accentColor: demo.accentColor,
+                                minHeight: demo.minHeight,
+                                groupIndex: index / max(1, groupSize))
+        }
+        listView.applyChanges(items: regrouped, transition: .easeInOut(duration: 0.35))
+    }
+
     @objc private func toggleTopInset() {
         testInsets.top = testInsets.top == 0 ? 300 : 0
         let insets = effectiveInsets
@@ -354,7 +376,8 @@ final class ViewController: UIViewController {
     @objc private func delAdd() {
         var items = listView.items
         guard !items.isEmpty else { return }
-        items[min(5, items.count - 1)] = makeInsertedItem()
+        let slot = min(5, items.count - 1)
+        items[slot] = makeInsertedItem(groupIndex: groupIndex(at: slot, in: items))
         listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
@@ -370,7 +393,7 @@ final class ViewController: UIViewController {
     /// Insert one fresh item at the FIRST position to exercise top-edge insertion geometry.
     @objc private func insertTop() {
         var items = listView.items
-        items.insert(makeInsertedItem(), at: 0)
+        items.insert(makeInsertedItem(groupIndex: groupIndex(at: 0, in: items)), at: 0)
         listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
         refreshMixedControlTitles()
     }
@@ -396,7 +419,8 @@ final class ViewController: UIViewController {
 
     @objc private func loadFiveAtTop() {
         var items = listView.items
-        let loaded = (0..<5).map { _ in makeInsertedItem() }
+        let topGroup = groupIndex(at: 0, in: items)
+        let loaded = (0..<5).map { _ in makeInsertedItem(groupIndex: topGroup) }
         items.insert(contentsOf: loaded, at: 0)
         listView.applyChanges(
             items: items,
@@ -478,10 +502,12 @@ final class ViewController: UIViewController {
 
         var items = listView.items
         if edges.contains(.top) {
-            items.insert(contentsOf: (0..<5).map { _ in makeInsertedItem() }, at: 0)
+            let g = groupIndex(at: 0, in: items)
+            items.insert(contentsOf: (0..<5).map { _ in makeInsertedItem(groupIndex: g) }, at: 0)
         }
         if edges.contains(.bottom) {
-            items.append(contentsOf: (0..<5).map { _ in makeInsertedItem() })
+            let g = groupIndex(at: items.count - 1, in: items)
+            items.append(contentsOf: (0..<5).map { _ in makeInsertedItem(groupIndex: g) })
         }
         listView.applyChanges(
             items: items,
@@ -495,16 +521,32 @@ final class ViewController: UIViewController {
         var items = listView.items
         let position = min(5, items.count)
         for i in 0..<count {
-            items.insert(makeInsertedItem(), at: position + i)
+            items.insert(makeInsertedItem(groupIndex: groupIndex(at: position + i, in: items)),
+                         at: position + i)
         }
         listView.applyChanges(items: items, transition: .easeInOut(duration: 0.3))
     }
 
     /// Fresh identity + visibly distinct content for both ordinary inserts and same-slot replacements.
-    private func makeInsertedItem() -> DemoListItem {
+    ///
+    /// `groupIndex` matters: the demo derives attachment KEYS from it, so a row that defaults to
+    /// group 0 while landing in the middle of another group's run SPLITS that run and drops a stray
+    /// one-row run between the halves. The non-witness half then gets a fresh serial and a fresh
+    /// view, which is exactly what "the header snapped" looks like. Callers pass the group of the
+    /// row the insertion lands next to, so the new row JOINS that run instead of breaking it.
+    private func makeInsertedItem(groupIndex: Int) -> DemoListItem {
         let number = Int.random(in: 1...9999)
         return DemoListItem(id: UUID(), title: "Inserted \(number)",
-                            detail: "Created via applyChanges.", accentColor: .systemPink)
+                            detail: "Created via applyChanges.", accentColor: .systemPink,
+                            groupIndex: groupIndex)
+    }
+
+    /// The group of the row currently at `position`, clamped — the group an insertion there should
+    /// join.
+    private func groupIndex(at position: Int, in items: [CoreListItem]) -> Int {
+        guard !items.isEmpty else { return 0 }
+        let clamped = min(max(position, 0), items.count - 1)
+        return (items[clamped] as? DemoListItem)?.groupIndex ?? 0
     }
 
     private func delete(count: Int) {
@@ -530,7 +572,10 @@ final class ViewController: UIViewController {
     /// Rebuild a `DemoListItem` with the same identity/content but a new `minHeight` floor.
     private func demoItem(_ item: CoreListItem, minHeight: CGFloat) -> CoreListItem {
         guard let d = item as? DemoListItem else { return item }
-        return DemoListItem(id: d.id, title: d.title, detail: d.detail, accentColor: d.accentColor, minHeight: minHeight)
+        // Preserve groupIndex: rebuilding without it silently re-keys the row to group 0, which
+        // splits whatever run it belonged to.
+        return DemoListItem(id: d.id, title: d.title, detail: d.detail, accentColor: d.accentColor,
+                            minHeight: minHeight, groupIndex: d.groupIndex)
     }
 
     private func applyMixedChanges(
@@ -596,7 +641,8 @@ final class ViewController: UIViewController {
     @objc private func mixedHorizontalInsetDelAdd() {
         var items = listView.items
         guard !items.isEmpty else { return }
-        items[min(5, items.count - 1)] = makeInsertedItem()
+        let slot = min(5, items.count - 1)
+        items[slot] = makeInsertedItem(groupIndex: groupIndex(at: slot, in: items))
         var insets = testInsets
         if insets.left == 0 && insets.right == 0 {
             insets.left = 40
@@ -627,7 +673,8 @@ final class ViewController: UIViewController {
             mixedFiveIdentities.removeAll()
             guard !items.isEmpty else { return }
             items[0] = demoItem(items[0], minHeight: 200)
-            let inserted = (0..<5).map { _ in makeInsertedItem() }
+            let insertGroup = groupIndex(at: 0, in: items)
+            let inserted = (0..<5).map { _ in makeInsertedItem(groupIndex: insertGroup) }
             mixedFiveIdentities = Set(inserted.map(\.identity))
             items.insert(contentsOf: inserted, at: min(5, items.count))
             insets.left = 40
@@ -730,7 +777,9 @@ final class ViewController: UIViewController {
             let item = DemoListItem(id: UUID(),
                                     title: "Chaos \(Int.random(in: 1000...9999))",
                                     detail: "Inserted by chaos.",
-                                    accentColor: accents.randomElement()!)
+                                    accentColor: accents.randomElement()!,
+                                    // Join the run it lands in; a defaulted group 0 would split it.
+                                    groupIndex: groupIndex(at: position, in: items))
             items.insert(item, at: position)
         } else {
             // Delete a row in [windowStart, windowEnd]. Don't delete if the loaded window has

@@ -8,6 +8,9 @@ enum ListAnimationOwner: Hashable {
     case exit(UInt64)
     case transient(UInt64)
     case ghostBlock(UInt64)
+    /// A live attachment run, keyed by its serial. Distinct from `.live` because a run is not a row:
+    /// its key is a serial the list mints, not a collection identity.
+    case attachment(UInt64)
 
     var isLive: Bool {
         if case .live = self { return true }
@@ -17,6 +20,22 @@ enum ListAnimationOwner: Hashable {
     var isGhostBlock: Bool {
         if case .ghostBlock = self { return true }
         return false
+    }
+
+    var isAttachment: Bool {
+        if case .attachment = self { return true }
+        return false
+    }
+
+    /// Owners presenting a live on-screen element with the FULL property set — a row or an attachment
+    /// run. `.viewport`, `.ghostBlock`, `.exit` and `.transient` each own a narrower set, which is
+    /// what the model's live-element entry points are guarding against. Written as an exhaustive
+    /// switch so a future case has to state which side it is on.
+    var ownsLiveElement: Bool {
+        switch self {
+        case .live, .attachment: return true
+        case .viewport, .exit, .transient, .ghostBlock: return false
+        }
     }
 }
 
@@ -145,7 +164,7 @@ final class ListAnimationModel {
                   opacity: CGFloat,
                   width: CGFloat,
                   height: CGFloat) {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         states[owner] = OwnerState(viewportOffset: 0,
                                    positionOffsetX: positionOffsetX,
                                    positionOffsetY: positionOffsetY,
@@ -190,7 +209,7 @@ final class ListAnimationModel {
                             newSettledY: CGFloat,
                             at time: TimeInterval,
                             transition: CoreListTransition) -> ListAnimationMutation {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         ensureLive(owner)
         return transitionPositionOffset(owner: owner,
                                         oldSettledY: oldSettledY,
@@ -251,7 +270,7 @@ final class ListAnimationModel {
                           newSettledHeight: CGFloat,
                           at time: TimeInterval,
                           transition: CoreListTransition) -> ListAnimationMutation {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         ensureLive(owner, height: oldSettledHeight)
         guard abs(newSettledHeight - oldSettledHeight) > positionEpsilon else {
             return .unchanged
@@ -299,7 +318,7 @@ final class ListAnimationModel {
                         height: CGFloat,
                         at time: TimeInterval,
                         transition: CoreListTransition) -> ListAnimationMutation {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         seedLive(owner: owner,
                  positionOffsetX: 0,
                  positionOffsetY: 0,
@@ -310,11 +329,14 @@ final class ListAnimationModel {
                        at: time, transition: transition)
     }
 
+    /// `ownsLiveElement`: an attachment run departs on exactly the same terms as a row.
+    /// `beginTransient` deliberately keeps `isLive` — transients are a crossing-carry mechanism
+    /// attachments do not participate in.
     func beginExit(from owner: ListAnimationOwner,
                    at time: TimeInterval,
                    transition: CoreListTransition,
                    fadesOut: Bool = true) -> ListAnimationExit {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         ensureLive(owner)
 
         let positionX = value(for: owner, property: .positionX, at: time) ?? 0

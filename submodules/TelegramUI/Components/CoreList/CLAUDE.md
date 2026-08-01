@@ -389,9 +389,12 @@ durations (0.5, and 0.3832 on iOS 26). It then adds the model-path properties th
 set: `beginTime = track.startTime`, `fillMode = .both`, `isRemovedOnCompletion = false`, and the
 generation metadata. Position is additive on `position.x`/`position.y`, width/height absolute on
 `bounds.size.width`/`bounds.size.height`, opacity absolute, all on the track's own curve, start time,
-and already-scaled duration. **No `CAKeyframeAnimation` is emitted outside the physics deceleration
-flights** (`KeyframeFlight`, `Trajectory+Keyframe`, the two physics engines), which play baked
-trajectories rather than curves.
+and already-scaled duration. **`CAKeyframeAnimation` is emitted in exactly two places, and both play a
+baked trajectory rather than a curve:** the physics deceleration flights (`KeyframeFlight`,
+`Trajectory+Keyframe`, the two physics engines), and attachment flight tracks
+(`CoreVirtualListView+Attachments.installAttachmentFlightTracks`), which compose the same trajectory
+with an attachment's own solve so a floating header stays glued to the content the render server is
+moving. Nothing else may emit one.
 Interruption never reads layer presentation state back into the model. Production uses no display-link list
 renderer and no `UIViewPropertyAnimator`.
 
@@ -596,10 +599,17 @@ Animation an authority.
 - `CoreVirtualListAnimationTests` cover insert, remove, replacement, move, mixed passes, view reuse,
   overlay teardown, unchanged-track preservation, full viewport-geometry retargeting, and scrolling while active.
 - `MixedPassStressTests` run a bounded fixed-seed grammar over structural, row-geometry,
-  viewport-geometry, and programmatic-scroll changes. They verify transaction-boundary C0
-  continuity, exact unchanged-track preservation, installed CA/model metadata parity for observed
-  owners, settled window integrity, and carry/ghost teardown. Failures report the seed, pass, and
+  viewport-geometry, programmatic-scroll, and attachment-run changes. They verify transaction-boundary
+  C0 continuity, exact unchanged-track preservation, installed CA/model metadata parity for observed
+  owners, settled window integrity — including reservation gaps and the attachment invariants (unique
+  serials, member ranges inside the loaded range, one space-reserving attachment per edge per
+  boundary, deterministic sort order) — and carry/ghost teardown. Failures report the seed, pass, and
   full action prefix; minimize any production failure into the owning focused suite before fixing it.
+  **Attachments are opt-in** (`MixedPassScenario(…, includesAttachments: true)`) and draw from a
+  SEPARATE RNG: the scenario is a shared seeded generator and some focused suites replay its exact
+  sequence, so putting attachment draws in the main `rng` silently hands every one of them a different
+  scenario. `testTheGrammarActuallyExercisesAttachments` is the non-vacuity guard — every other
+  assertion here is conditional on what the grammar happens to produce.
 - Core-window, content, engine, and physics suites retain non-animation behavior coverage.
 
 ## Non-obvious gotchas
@@ -735,6 +745,15 @@ Animation an authority.
   respond to it here. The argument is `float` on some builds and `double` on others, which is why the
   lookup inspects the encoding. If the selector disappears, both the model and the emitter fall back
   to the adjusted bezier, degrading together rather than disagreeing.
+- **A ghost block's `settledRootY` is its SAMPLED root, not its settled top.** Block formation freezes
+  members at their analytic in-flight arrangement deliberately, so a row that departs mid-animation has
+  a root nowhere near its settled position (measured 148.639 vs 50.0). It is the right value to render
+  from and the wrong one to make decisions with: `initialGhostWitness` compares the run's OLD SETTLED
+  top — from `oldState`, translated by `oldLiveEdgeCoordinateShift` into the pass's post-rebase space —
+  against the successor's new settled `minY`, to decide whether the successor collapsed into the gap
+  (share the top edge, block holds still) or went elsewhere (hang the block's bottom on it). Deciding
+  that from the anchor's position instead is a proxy that fails exactly when the anchor is itself one of
+  the departing rows, which is what made a head deletion slide the block down by its own height.
 - **`PhysicsScrollEngine`'s `shouldBeRequiredToFailBy` must stay gated on content motion**
   (`flight != nil || core.isDecelerating`). Declaring it unconditionally breaks every
   press-and-hold recognizer hosted in the list, because such a recognizer must recognize *while the

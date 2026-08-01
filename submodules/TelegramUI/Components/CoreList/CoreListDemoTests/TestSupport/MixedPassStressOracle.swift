@@ -248,12 +248,119 @@ final class MixedPassStressOracle {
             )
         }
         for pair in zip(windowItems, windowItems.dropFirst()) {
+            // A reserving run boundary puts a DELIBERATE gap between consecutive rows —
+            // `reservedBottom` of the upper row plus `reservedTop` of the lower one. Both are 0 for a
+            // collection with no space-reserving attachments, so this reduces to the original
+            // touch-exactly assertion.
+            let expectedGap = pair.0.reservedBottom + pair.1.reservedTop
             XCTAssertEqual(
-                pair.0.frame.maxY,
-                pair.1.frame.minY,
+                pair.1.frame.minY - pair.0.frame.maxY,
+                expectedGap,
                 accuracy: 1e-5,
                 "\(context)\nsettled frames are not contiguous between "
-                    + "\(pair.0.index) and \(pair.1.index)",
+                    + "\(pair.0.index) and \(pair.1.index) "
+                    + "(expected gap \(expectedGap) for reserved attachments)",
+                file: file,
+                line: line
+            )
+        }
+
+        assertAttachments(fixture: fixture, context: context, file: file, line: line)
+    }
+
+    /// Attachment-specific window invariants, split out to keep `assertWindow` readable.
+    private func assertAttachments(
+        fixture: VirtualListFixture,
+        context: String,
+        file: StaticString,
+        line: UInt
+    ) {
+        let window = fixture.activeWindow
+        let windowItems = window.items
+        let attachments = window.attachments
+        let loadedRange = windowItems.isEmpty
+            ? 0..<0
+            : window.startIndex..<(window.endIndex + 1)
+
+        XCTAssertEqual(
+            Set(attachments.map(\.serial)).count,
+            attachments.count,
+            "\(context)\nattachment serials are not unique",
+            file: file,
+            line: line
+        )
+
+        for attachment in attachments {
+            XCTAssertFalse(
+                attachment.memberRange.isEmpty,
+                "\(context)\nattachment \(attachment.serial) has an empty member range",
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                loadedRange.contains(attachment.memberRange.lowerBound)
+                    && loadedRange.contains(attachment.memberRange.upperBound - 1),
+                "\(context)\nattachment \(attachment.serial) member range "
+                    + "\(attachment.memberRange) escapes the loaded range \(loadedRange)",
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                attachment.measuredHeight.isFinite && attachment.measuredHeight >= 0,
+                "\(context)\nattachment \(attachment.serial) has a bad measured height "
+                    + "\(attachment.measuredHeight)",
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                attachment.bandTop.isFinite && attachment.bandBottom.isFinite,
+                "\(context)\nattachment \(attachment.serial) has a non-finite band",
+                file: file,
+                line: line
+            )
+        }
+
+        // Sorted by `(memberRange.lowerBound, key description)` — the deterministic order
+        // `AttachmentRuns.pendingRuns` guarantees, which the z-order of overlapping attachments and
+        // the stress harness's own reproducibility both depend on.
+        let order = attachments.map { ($0.memberRange.lowerBound, String(describing: $0.key)) }
+        XCTAssertEqual(
+            order.map(\.0),
+            order.map(\.0).sorted(),
+            "\(context)\nattachments are not sorted by run start index",
+            file: file,
+            line: line
+        )
+        for pair in zip(order, order.dropFirst()) where pair.0.0 == pair.1.0 {
+            XCTAssertLessThanOrEqual(
+                pair.0.1,
+                pair.1.1,
+                "\(context)\nattachments sharing a run start are not sorted by key",
+                file: file,
+                line: line
+            )
+        }
+
+        // At most one space-reserving attachment per edge per boundary: two would need a stacking
+        // order and `AnyHashable` supplies none.
+        for item in windowItems {
+            let reservingTop = attachments.filter {
+                $0.placement == .reservesSpace && $0.edge == .top
+                    && $0.startsCollectionRun && $0.memberRange.lowerBound == item.index
+            }
+            let reservingBottom = attachments.filter {
+                $0.placement == .reservesSpace && $0.edge == .bottom
+                    && $0.endsCollectionRun && $0.memberRange.upperBound - 1 == item.index
+            }
+            XCTAssertLessThanOrEqual(
+                reservingTop.count, 1,
+                "\(context)\nrow \(item.index) reserves space for more than one .top attachment",
+                file: file,
+                line: line
+            )
+            XCTAssertLessThanOrEqual(
+                reservingBottom.count, 1,
+                "\(context)\nrow \(item.index) reserves space for more than one .bottom attachment",
                 file: file,
                 line: line
             )

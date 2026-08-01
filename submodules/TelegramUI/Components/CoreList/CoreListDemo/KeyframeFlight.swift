@@ -22,7 +22,9 @@ final class KeyframeFlight {
     /// already-playing additive animation rides along. (Re-emitting the animation on every shift — which
     /// happens every frame at scroll speed — was the residual scroll jank.) Only an edge/shape change
     /// rebakes; the splice then folds this into the new trajectory's coordinate and resets it to 0.
-    private var coordinateShift: CGFloat = 0
+    /// Internal so an engine can publish it: a consumer composing against `trajectory` needs the
+    /// base its offsets are in. See `ScrollFlight.coordinateShift`.
+    private(set) var coordinateShift: CGFloat = 0
     /// A real edge change invalidates the baked future until a rebake consumes it. This is deliberately
     /// not tick-local: `applyChanges` can call `setEdges` between sampling ticks, and the next
     /// `beginTick` must preserve that notification while it reseeds the live state.

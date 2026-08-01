@@ -12,8 +12,56 @@ final class MixedPassStressTests: XCTestCase {
         }
     }
 
+    /// Non-vacuity guard. Every assertion in the run above is conditional on the state the grammar
+    /// happens to produce, so a grammar that stopped emitting attachments — or a resolver that
+    /// stopped resolving them — would leave the suite green while covering nothing. This asserts the
+    /// seeds actually reach the shapes attachments exist for.
+    func testTheGrammarActuallyExercisesAttachments() {
+        var sawReserving = false
+        var sawOverlay = false
+        var sawRegroup = false
+        var sawDrop = false
+        var maxAttachments = 0
+
+        for seed in seeds {
+            var scenario = MixedPassScenario(seed: seed, itemCount: 120, includesAttachments: true)
+            let fixture = VirtualListFixture(
+                viewport: CGSize(width: 390, height: 800),
+                items: scenario.makeInitialItems(),
+                preloadMargin: 160
+            )
+            for _ in 0..<32 {
+                let step = scenario.nextStep()
+                for action in step.actions {
+                    if case .regroup = action { sawRegroup = true }
+                    if case .dropAttachments = action { sawDrop = true }
+                }
+                fixture.listView.frame.size = step.size
+                fixture.listView.applyChanges(
+                    items: step.items.map { $0 as CoreListItem },
+                    newSize: step.size,
+                    newInsets: step.insets,
+                    scrollTo: step.scrollTo,
+                    transition: step.transition
+                )
+                fixture.flushScheduler()
+
+                let attachments = fixture.activeWindow.attachments
+                maxAttachments = max(maxAttachments, attachments.count)
+                sawReserving = sawReserving || attachments.contains { $0.placement == .reservesSpace }
+                sawOverlay = sawOverlay || attachments.contains { $0.placement == .overlay }
+            }
+        }
+
+        XCTAssertGreaterThan(maxAttachments, 0, "the grammar never produced a resolved attachment")
+        XCTAssertTrue(sawReserving, "no seed produced a space-reserving attachment")
+        XCTAssertTrue(sawOverlay, "no seed produced an overlay attachment")
+        XCTAssertTrue(sawRegroup, "no seed regrouped, so runs never split or merged")
+        XCTAssertTrue(sawDrop, "no seed dropped attachments, so runs never gained a gap")
+    }
+
     private func run(seed: UInt64, passCount: Int) {
-        var scenario = MixedPassScenario(seed: seed, itemCount: 120)
+        var scenario = MixedPassScenario(seed: seed, itemCount: 120, includesAttachments: true)
         let fixture = VirtualListFixture(
             viewport: CGSize(width: 390, height: 800),
             items: scenario.makeInitialItems(),

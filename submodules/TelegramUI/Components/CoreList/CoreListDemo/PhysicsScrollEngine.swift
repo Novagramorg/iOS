@@ -68,6 +68,9 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         get { core.onScroll }
         set { core.onScroll = newValue }
     }
+
+    /// Published only in `.keyframe` mode, where the render server plays the trajectory.
+    var onFlightChanged: ((ScrollFlight?) -> Void)?
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
     /// The physics scroll position, advanced once per frame by whichever driver is running — NEVER a sample of
@@ -119,6 +122,13 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             host.bounds.origin.y += dy
             core.applyShiftPhysicsOnly(dy)
             flight?.noteShift(dy)
+            // Republish: a consumer composing against the trajectory must learn the new base, or it
+            // keeps positioning against where the flight WOULD have landed before the re-base.
+            if let f = flight {
+                onFlightChanged?(ScrollFlight(trajectory: f.trajectory,
+                                              beginTime: f.startTime,
+                                              coordinateShift: f.coordinateShift))
+            }
             if changesShape {
                 noteFlightEdgesChanged()
             }
@@ -250,6 +260,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             // isDecelerating doesn't stay stale (matches .stepped's settle + TestScrollEngine).
             core.setOffset(f.trajectory.finalOffset)
             core.cancelDeceleration()
+            onFlightChanged?(nil)
             onScroll?(f.trajectory.finalOffset)
             return
         }
@@ -267,6 +278,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             self.finalizeFlight()
         }
         host.layer.add(flightAnim, forKey: Self.flightKey)
+        onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: now))
         startSamplingLink()
     }
 
@@ -309,6 +321,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             self.finalizeFlight()
         }
         host.layer.add(flightAnim, forKey: Self.flightKey)
+        onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: f.startTime))
     }
 
     /// Catch an in-flight `.keyframe` deceleration: read the live offset, snap the model (physics + host
@@ -329,6 +342,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         flight = nil
         flightGeneration &+= 1
         host.layer.removeAnimation(forKey: Self.flightKey)
+        onFlightChanged?(nil)
     }
 
     /// Catch an in-flight deceleration when fingers REST on the list. Trackpad delivers no touch-down,
@@ -354,6 +368,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         core.setOffset(f.settledOffset)            // settle at the LIST-coord rest (finalOffset + accrued shift)
         core.cancelDeceleration()                  // idle the core (phase → .idle) — matches TestScrollEngine
         flight = nil
+        onFlightChanged?(nil)                      // BEFORE onScroll: a consumer re-entering must see no flight
         onScroll?(core.offset)
     }
 

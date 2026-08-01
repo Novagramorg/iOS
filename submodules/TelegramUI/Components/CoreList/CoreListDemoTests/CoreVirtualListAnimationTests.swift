@@ -654,6 +654,8 @@ final class CoreVirtualListAnimationTests: XCTestCase {
     private final class ClampingScrollEngine: ScrollEngine {
         let contentHost = UIView()
         var onScroll: ((CGFloat) -> Void)?
+        /// Never fires: this stub writes offsets directly, with no baked trajectory to compose against.
+        var onFlightChanged: ((ScrollFlight?) -> Void)?
         var onWillBeginDragging: (() -> Void)?
         var onDidEndDragging: (() -> Void)?
         private(set) var offset: CGFloat = 0

@@ -10,13 +10,31 @@ final class DemoListItem: CoreListItem {
     /// `minHeight` parameter optional, so the existing `DemoListItem(id:title:detail:accentColor:)`
     /// call sites still compile.
     let minHeight: CGFloat
+    /// Which attachment run this row belongs to. Rows sharing a groupIndex form one run.
+    let groupIndex: Int
 
-    init(id: UUID, title: String, detail: String, accentColor: UIColor, minHeight: CGFloat = 0) {
+    init(id: UUID,
+         title: String,
+         detail: String,
+         accentColor: UIColor,
+         minHeight: CGFloat = 0,
+         groupIndex: Int = 0) {
         self.id = id
         self.title = title
         self.detail = detail
         self.accentColor = accentColor
         self.minHeight = minHeight
+        self.groupIndex = groupIndex
+    }
+
+    /// The group index is part of the KEY, not merely the content: a run is identified by key, so two
+    /// adjacent groups must publish different keys to be different runs. (`ChatMessageDateHeader`
+    /// does the same, folding its rounded timestamp into its id.)
+    var attachedItems: [AnyHashable: CoreListAttachedItem] {
+        [
+            "date\(groupIndex)": DemoDateHeader(title: "Group \(groupIndex)"),
+            "avatar\(groupIndex)": DemoAvatar(color: accentColor, initial: "\(groupIndex % 10)"),
+        ]
     }
 
     func view() -> (UIView & CoreListItemView) {
@@ -29,13 +47,19 @@ final class DemoListItem: CoreListItem {
     // changed is NOT equal, so it reconciles + animates its height.
     func isEqual(to other: CoreListItem) -> Bool {
         guard let o = other as? DemoListItem else { return false }
-        return o.id == id && o.minHeight == minHeight   // title/detail/accentColor are fixed per id in the demo
+        // title/detail/accentColor are fixed per id in the demo; groupIndex is not — the Groups
+        // control changes it, which is what makes runs split and merge.
+        return o.id == id && o.minHeight == minHeight && o.groupIndex == groupIndex
     }
 
     // Hand the reused/recycled view this item's new external state (minHeight; title/detail/accent are
     // fixed per id). This view's mechanics happen to leave its internal state (isExpanded/extraHeight)
     // alone on a minHeight change — a VIEW choice, not an engine contract.
-    func apply(to view: UIView & CoreListItemView) {
+    /// NOTE the `transition:` parameter. Without it this does NOT satisfy
+    /// `CoreListItem.apply(to:transition:)` — Swift silently binds the protocol extension's no-op
+    /// default and this method becomes dead code, so content reconciliation never reaches the view
+    /// and every size-changing demo action does nothing.
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
         (view as? DemoListItemView)?.applyMinHeight(minHeight)
     }
 }
@@ -146,8 +170,108 @@ final class DemoListItemView: UIView, CoreListItemView {
     }
 }
 
+/// Space-reserving floating date-style header: the classic sticky section header.
+final class DemoDateHeader: CoreListAttachedItem {
+    let title: String
+
+    init(title: String) { self.title = title }
+
+    var placement: CoreListAttachmentPlacement { .reservesSpace }
+    var edge: CoreListAttachmentEdge { .top }
+    var isFloating: Bool { true }
+
+    func view() -> UIView & CoreListAttachedItemView { DemoDateHeaderView(title: title) }
+
+    func isEqual(to other: CoreListAttachedItem) -> Bool {
+        (other as? DemoDateHeader)?.title == title
+    }
+
+    func apply(to view: UIView & CoreListAttachedItemView, transition: CoreListTransition) {
+        (view as? DemoDateHeaderView)?.setTitle(title)
+    }
+}
+
+final class DemoDateHeaderView: UIView, CoreListAttachedItemView {
+    private let pill = UILabel()
+    var onContentDidChange: ((Bool) -> Void)?
+
+    init(title: String) {
+        super.init(frame: .zero)
+        pill.font = .systemFont(ofSize: 13, weight: .semibold)
+        pill.textAlignment = .center
+        pill.textColor = .white
+        pill.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        pill.layer.cornerRadius = 11
+        pill.layer.cornerCurve = .continuous
+        pill.clipsToBounds = true
+        pill.text = title
+        addSubview(pill)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setTitle(_ title: String) { pill.text = title }
+
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
+        let size = pill.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        let pillWidth = min(width - 32, size.width + 24)
+        transition.setFrame(view: pill,
+                            frame: CGRect(x: (width - pillWidth) / 2, y: 6,
+                                          width: pillWidth, height: 22))
+        return 34
+    }
+}
+
+/// In-run overlay floating avatar: sits at the run's last row and rides the display bottom.
+final class DemoAvatar: CoreListAttachedItem {
+    let color: UIColor
+    let initial: String
+
+    init(color: UIColor, initial: String) {
+        self.color = color
+        self.initial = initial
+    }
+
+    var placement: CoreListAttachmentPlacement { .overlay }
+    var edge: CoreListAttachmentEdge { .bottom }
+    var isFloating: Bool { true }
+
+    func view() -> UIView & CoreListAttachedItemView {
+        DemoAvatarView(color: color, initial: initial)
+    }
+
+    func isEqual(to other: CoreListAttachedItem) -> Bool {
+        guard let other = other as? DemoAvatar else { return false }
+        return other.initial == initial && other.color == color
+    }
+}
+
+final class DemoAvatarView: UIView, CoreListAttachedItemView {
+    private let bubble = UILabel()
+    var onContentDidChange: ((Bool) -> Void)?
+
+    init(color: UIColor, initial: String) {
+        super.init(frame: .zero)
+        bubble.backgroundColor = color
+        bubble.textColor = .white
+        bubble.textAlignment = .center
+        bubble.font = .systemFont(ofSize: 15, weight: .bold)
+        bubble.text = initial
+        bubble.layer.cornerRadius = 16
+        bubble.clipsToBounds = true
+        addSubview(bubble)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
+        transition.setFrame(view: bubble, frame: CGRect(x: 6, y: 0, width: 32, height: 32))
+        return 32
+    }
+}
+
 extension DemoListItem {
-    static func makeItems(count: Int = 180) -> [DemoListItem] {
+    static func makeItems(count: Int = 180, groupSize: Int = 6) -> [DemoListItem] {
         let accents: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemRed, .systemTeal, .systemIndigo]
 
         return (0..<count).map { index in
@@ -163,7 +287,8 @@ extension DemoListItem {
                 id: UUID(),
                 title: "Row \(index)",
                 detail: detail,
-                accentColor: accents[index % accents.count]
+                accentColor: accents[index % accents.count],
+                groupIndex: index / max(1, groupSize)
             )
         }
     }

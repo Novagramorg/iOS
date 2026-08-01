@@ -103,4 +103,45 @@ final class MixedPassStressOracleTests: XCTestCase {
         XCTAssertTrue(fixture.ghostBlocks.isEmpty)
         XCTAssertTrue(fixture.crossingCarryIdentities.isEmpty)
     }
+
+    /// A reserving run boundary puts a deliberate gap between consecutive rows. The oracle's
+    /// contiguity assertion must account for it, or every stress seed that produces one fails for a
+    /// reason that is not a defect.
+    func testOracleAcceptsAReservationGap() {
+        let items: [CoreListItem] = (0..<20).map { index in
+            let group = index / 5
+            return AttachedItem(id: index, height: 50,
+                                attachedItems: ["date\(group)": FixedHeightAttachment(
+                                    label: "g\(group)", height: 30,
+                                    placement: .reservesSpace, edge: .top, isFloating: true)])
+        }
+        let fixture = VirtualListFixture(viewport: CGSize(width: 390, height: 800), items: items)
+        // Precondition: the collection really does reserve, so this is not vacuous.
+        XCTAssertTrue(fixture.activeWindow.items.contains { $0.reservedTop > 0 })
+
+        let oracle = MixedPassStressOracle()
+        oracle.assertWindow(fixture: fixture, context: "reservation gap")
+    }
+
+    func testOracleAssertsAttachmentInvariants() {
+        let items: [CoreListItem] = (0..<20).map { index in
+            let group = index / 5
+            return AttachedItem(id: index, height: 50,
+                                attachedItems: ["date\(group)": FixedHeightAttachment(
+                                    label: "g\(group)", height: 30,
+                                    placement: .overlay, edge: .top, isFloating: true)])
+        }
+        let fixture = VirtualListFixture(viewport: CGSize(width: 390, height: 800), items: items)
+        let window = fixture.activeWindow
+        XCTAssertFalse(window.attachments.isEmpty, "precondition: there must be attachments to check")
+        XCTAssertEqual(Set(window.attachments.map(\.serial)).count, window.attachments.count)
+        let loaded = window.startIndex..<(window.endIndex + 1)
+        for attachment in window.attachments {
+            XCTAssertTrue(loaded.contains(attachment.memberRange.lowerBound))
+            XCTAssertTrue(loaded.contains(attachment.memberRange.upperBound - 1))
+        }
+
+        let oracle = MixedPassStressOracle()
+        oracle.assertWindow(fixture: fixture, context: "attachment invariants")
+    }
 }
