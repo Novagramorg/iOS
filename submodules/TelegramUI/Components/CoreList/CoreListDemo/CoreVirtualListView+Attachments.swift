@@ -1,15 +1,34 @@
 import UIKit
 
-/// Hosts attachment views. Overrides `point(inside:with:)` because a solved attachment can sit
-/// slightly outside the window extent in the degenerate case where a run is shorter than its
-/// attachment: `clipsToBounds = false` still RENDERS it, but UIKit hit-testing clips to bounds and
-/// would silently swallow its taps.
+/// Hosts attachment views. It spans the whole content area (`frame = container.frame`) and is the
+/// TOPMOST sibling in `contentHost`, so its hit-test rule decides whether anything below it can be
+/// touched at all.
+///
+/// `point(inside:with:)` is therefore a strict PASSTHROUGH: the container claims a point only when one
+/// of its own attachments would take it, and never merely because the point is within its bounds. It
+/// does not call `super`, and that omission is the entire contract — `super` is true across the full
+/// content area, so keeping it made `hitTest` return the container for every point not on an
+/// attachment, and the chat's message bubbles received no touches at all. (Scrolling still worked,
+/// which is what makes this easy to miss: the pan recognizer lives on an ancestor, and ancestors see
+/// touches regardless of which view hit-testing settles on.)
+///
+/// Scanning subviews rather than deferring to bounds also serves the reason this override exists in
+/// the first place: a solved attachment can sit slightly outside the window extent when a run is
+/// shorter than its attachment. `clipsToBounds = false` still RENDERS it, but UIKit hit-testing clips
+/// to bounds and would silently swallow its taps. A subview scan covers points inside AND outside the
+/// container's bounds, so it subsumes what `super` was doing for the only case that wanted it.
+///
+/// The three subview tests mirror UIKit's own hit-testing criteria (`isHidden`,
+/// `isUserInteractionEnabled`, effectively-invisible `alpha`). They must stay in sync with it: a point
+/// this method claims but `hitTest` then declines to route into any subview resolves to the container
+/// itself — the same swallowed touch, in a narrower case. That is why `alpha` is checked here even
+/// though nothing currently fades an interactive attachment.
 final class AttachmentContainerView: UIView {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        if super.point(inside: point, with: event) { return true }
         return subviews.contains { subview in
             !subview.isHidden
                 && subview.isUserInteractionEnabled
+                && subview.alpha > 0.01
                 && subview.point(inside: convert(point, to: subview), with: event)
         }
     }

@@ -776,6 +776,19 @@ Animation an authority.
   it surfaced as chat bubbles' `ContextGesture` long-press-for-context-menu dying under the CoreList
   chat backend. Absorbing the stopping tap is the rule's only purpose and can only arise while
   content moves, so the gate costs nothing.
+- **Every view in the attachment chain must be a passthrough, and each level fails independently.**
+  `AttachmentContainerView` spans the whole content area and is the topmost sibling in `contentHost`,
+  and an attachment host typically spans the full content width — so any point one of them claims and
+  does not use is a touch the rows never see. Both must answer `point(inside:)` from "would my content
+  take this", never from "is this within my bounds": the container asks each subview, and a host asks
+  its hosted content's `hitTest` (NOT its `point(inside:)` — a full-width hosted view says yes
+  everywhere, which is the same bug one level down). Shipped as both halves at once. The container's
+  `if super.point(inside:) { return true }` fast path made the chat's message bubbles receive no
+  touches at all; fixing only that left the full-width gutter-avatar hosts blanking every bubble
+  beside them. **Scrolling keeps working either way** — the pan recognizer lives on an ancestor, and
+  ancestors see touches regardless of where hit-testing settles — so the list looks entirely healthy
+  while nothing in it can be tapped. `AttachmentContainerHitTestTests` locks the container half;
+  the host half lives in TelegramUI, which has no test target.
 
 ## Project conventions
 

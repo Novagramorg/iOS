@@ -126,6 +126,29 @@ final class CoreListHeaderHostView: UIView, CoreListAttachedItemView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    // A strict PASSTHROUGH, for the same reason `AttachmentContainerView` is one: this host spans the
+    // full content width (`update` frames the node at `width` × `header.height`) and floats above the
+    // rows, so anything it claims and does not use is a touch a message bubble never sees.
+    //
+    // Delegating to the node's `hitTest` — not its `point(inside:)` — is the load-bearing part. The
+    // node's view is full-width too, so its `point(inside:)` is true across the whole band; only
+    // `hitTest` knows where the interactive content actually is, and both chat header nodes implement
+    // exactly that. `ChatMessageDateHeaderNode` returns its view only inside the date/peer pill's
+    // `backgroundNode.frame` and `nil` everywhere else, and `ChatMessageAvatarHeaderNode` forwards to
+    // its `containerNode`, so a tap beside the pill or beside a gutter avatar belongs to the bubble
+    // underneath. Testing `point(inside:)` one level down would reproduce the bug one level down.
+    //
+    // Overriding `point(inside:)` rather than `hitTest` is deliberate: `AttachmentContainerView`
+    // decides whether to claim a point by asking each attachment's `point(inside:)`, so that is the
+    // question this view has to answer correctly. `hitTest` then composes for free — UIKit's default
+    // implementation recurses into the node view, whose own `hitTest` returns the right target.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard let nodeView = self.headerNode?.view else {
+            return false
+        }
+        return nodeView.hitTest(self.convert(point, to: nodeView), with: event) != nil
+    }
+
     func setHeader(_ header: ListViewItemHeader) {
         self.header = header
     }
