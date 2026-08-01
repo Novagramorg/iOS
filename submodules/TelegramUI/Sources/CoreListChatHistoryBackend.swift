@@ -5,6 +5,7 @@ import Display
 import CoreList
 import ComponentFlow
 import ComponentDisplayAdapters
+import ChatMessageItem
 import ChatMessageItemImpl
 
 // CoreList cannot depend on ComponentFlow — its Bazel target has no `deps` and its demo builds
@@ -60,7 +61,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // here renders the whole chat 180°-rotated. Stored for the makeListView contract; no transform.
     var rotated: Bool = false
 
-    private let coreList: CoreVirtualListView
+    // Internal rather than private: the header adapter in CoreListChatHistoryHeaders.swift
+    // enumerates attachments through it. Still invisible outside TelegramUI.
+    let coreList: CoreVirtualListView
 
     // Ordered entry array: the source of truth for what CoreVirtualListView displays. Mirrors the
     // ListView transaction model (delete/insert/update over indices) with a stable serial per entry
@@ -137,6 +140,16 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // compensation is the only thing moving it, in the same direction and by the same amount the finger
     // would have. The handover is continuous rather than a step.
     private var isTracking = false
+
+    // Mirror for updateAvatarSelectionState (CoreListChatHistoryHeaders.swift). Optional so the
+    // first push can be un-animated.
+    var appliedSelectionStateIsActive: Bool?
+
+    // Backing state for the header flashing driver in CoreListChatHistoryHeaders.swift.
+    // `SwiftSignalKit.Timer` explicitly: `Timer` alone is ambiguous here, since Foundation's is in
+    // scope too.
+    var headerFlashTimer: SwiftSignalKit.Timer?
+    var isFlashingHeaders = false
 
     // MARK: - Callbacks the controller installs
     var displayedItemRangeChanged: (ListViewDisplayedItemRange, Any?) -> Void = { _, _ in }
@@ -338,6 +351,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             // false by then). Harmless: momentum only follows a drag that already moved content, so the
             // flag is set either way.
             self.didMoveContentDuringDrag = true
+            self.noteHeaderFlashingActivity()
             self.updateVisibleItemRange(force: false)
             self.updateVisibleContentOffset(transition: .immediate)
         }
@@ -363,6 +377,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
             self.didMoveContentDuringDrag = false
             self.isTracking = true
+            self.noteHeaderFlashingActivity()
 
             func cancelContextGestures(view: UIView) {
                 if let gestureRecognizers = view.gestureRecognizers {
@@ -380,7 +395,8 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             for itemNode in self.itemNodes {
                 cancelContextGestures(view: itemNode.view)
             }
-            
+            self.cancelAttachmentContextGestures()
+
             self.beganInteractiveDragging(.zero)
         }
         // Close the tracking interval. Fires on `.ended` AND `.cancelled`, so a drag torn down by a
@@ -393,6 +409,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             guard let self else { return }
             self.isTracking = false
         }
+    }
+
+    deinit {
+        // The timer holds `self` weakly, so this is not a cycle — but a fired timer on a dead
+        // backend is still wasted work on the main run loop.
+        self.headerFlashTimer?.invalidate()
     }
 
     override func layout() {
@@ -483,7 +505,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             for insert in insertIndicesAndItems.sorted(by: { $0.index < $1.index }) {
                 let stableVersion = self.nextStableVersion
                 self.nextStableVersion += 1
-                let entry = CoreListEntryItem(stableId: insert.stableId, stableVersion: stableVersion, listItem: insert.item)
+                let entry = CoreListEntryItem(stableId: insert.stableId, stableVersion: stableVersion, listItem: insert.item, backend: self)
                 let clamped = min(max(insert.index, 0), updated.count)
                 updated.insert(entry, at: clamped)
             }
@@ -492,7 +514,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
                 if update.index >= 0 && update.index < updated.count {
                     let stableVersion = self.nextStableVersion
                     self.nextStableVersion += 1
-                    updated[update.index] = CoreListEntryItem(stableId: update.stableId, stableVersion: stableVersion, listItem: update.item)
+                    updated[update.index] = CoreListEntryItem(stableId: update.stableId, stableVersion: stableVersion, listItem: update.item, backend: self)
                 }
             }
             // Neighbors are a function of final adjacency, so they are computed once the array has
@@ -633,6 +655,8 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
         self.updateVisibleContentOffset(transition: offsetTransition)
+        self.updateAvatarSelectionState()
+        self.pushHeaderFlashingState(animated: false)
         completion(self.displayedItemRange)
     }
 
@@ -766,7 +790,14 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
         }
     }
-    func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {}
+    // Its two chat consumers are the live theme/presentation update
+    // (ChatHistoryListNode.swift:2649) and the chat-loading fade-in (:4418). Backed by CoreList's
+    // own live attachment set — see itemHeaderNodes in CoreListChatHistoryHeaders.swift.
+    func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {
+        for node in self.itemHeaderNodes {
+            f(node)
+        }
+    }
 
     // ListViewImpl's own body (Display/Source/ListView.swift:5159-5199) with four substitutions: the
     // index comes from loadedIndex(of:) because a hosted node carries no ListView index; the node's
@@ -897,13 +928,39 @@ private final class CoreListEntryItem: CoreListItem {
     // when a neighbor changed, and passed into layout so merge/date decisions are correct.
     var neighbors: ListViewItemNeighbors
 
+    // Built once here rather than computed on demand: CoreList consults `attachedItems` repeatedly
+    // within a pass — `AttachmentRuns.pendingRuns` runs per row during stacking as well as once per
+    // window build. It depends only on the item's headers, never on geometry, so a pass that changes
+    // only size or insets cannot invalidate it.
+    let attachedItems: [AnyHashable: CoreListAttachedItem]
+
     var identity: AnyHashable { AnyHashable(self.stableId) }
-    
-    init(stableId: UInt64, stableVersion: Int, listItem: ListViewItem, neighbors: ListViewItemNeighbors = .none) {
+
+    init(stableId: UInt64,
+         stableVersion: Int,
+         listItem: ListViewItem,
+         backend: CoreListChatHistoryBackend?,
+         neighbors: ListViewItemNeighbors = .none) {
         self.stableId = stableId
         self.stableVersion = stableVersion
         self.listItem = listItem
         self.neighbors = neighbors
+
+        var attachedItems: [AnyHashable: CoreListAttachedItem] = [:]
+        if let headerItem = listItem as? ChatHistoryItemWithHeaders {
+            for header in headerItem.headers {
+                // Topic headers — a date header carrying a separableThreadId — are deferred.
+                // ListViewImpl resolves their overlap against the plain date header with a two-pass
+                // nudge loop (Display/Source/ListView.swift:4036-4086), and a single attachment key
+                // cannot express that stacking.
+                if header.stackingId != nil {
+                    continue
+                }
+                attachedItems[AnyHashable(header.id)] = CoreListHeaderAttachedItem(header: header,
+                                                                                  backend: backend)
+            }
+        }
+        self.attachedItems = attachedItems
     }
 
     func view() -> UIView & CoreListItemView {

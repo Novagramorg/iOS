@@ -299,7 +299,8 @@ extension CoreVirtualListView {
 
         let offset = attachmentSolveOffset
         for attachment in window.attachments {
-            let y = attachmentMap(attachment, window: window).y(atOffset: offset)
+            let map = attachmentMap(attachment, window: window)
+            let y = map.y(atOffset: offset)
             attachment.view.frame = CGRect(x: viewportInsets.left,
                                            y: y - window.minY,
                                            width: contentWidth,
@@ -307,6 +308,16 @@ extension CoreVirtualListView {
             if attachment.view.superview !== attachmentContainer {
                 attachmentContainer.addSubview(attachment.view)
             }
+            // The frame solves at `attachmentSolveOffset` — the flight's DESTINATION while one is
+            // playing, because an additive CAKeyframeAnimation supplies the displacement and moving
+            // the model base under it would double the travel. The stick distance must solve at the
+            // LIVE offset instead: nothing on the render server carries it, so the value has to
+            // describe where the attachment IS. The two agree by construction — the baked track is
+            // this same `y(atOffset:)` sampled along the trajectory — and there are frames to
+            // deliver on, because the flight sampler calls `onScroll` per frame
+            // (PhysicsScrollEngine.swift:297) and `handleUserScroll` calls this method
+            // unconditionally.
+            attachment.view.stickDistanceUpdated(map.stickDistance(atOffset: engine.offset))
             // Seed HERE rather than in the animation transaction, because attachments are also
             // created by `rebuildFromScratch` and `rebalanceActiveWindow`, neither of which runs that
             // transaction. Seeding only there left the model with no width/height for those owners,

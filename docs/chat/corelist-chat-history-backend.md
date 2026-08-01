@@ -20,7 +20,9 @@ crash. Real geometry/range values are populated only for the members the display
 (`forEachItemNode` / `forEachVisibleItemNode` / `enumerateItemNodes` — see below) and
 `didInteractivelyDragFromTopOrigin`, which is outside that scope but was implemented because its stub
 silently disabled a user-visible behavior (see "Interactive drag start"). `ListViewScrollToItem` is
-supported in full, and `ensureItemNodeVisible` with it (see "Scroll to item").
+supported in full, and `ensureItemNodeVisible` with it (see "Scroll to item"). Floating date headers
+and gutter avatars are implemented on top of CoreList's attachment feature (see "Floating headers and
+avatars"), which makes `forEachItemHeaderNode` real.
 
 ## Architecture
 
@@ -369,6 +371,69 @@ descriptor-diff invalidation.
 
 See the "Neighbor descriptors" section of the root `CLAUDE.md` for the load-bearing invariant: a
 descriptor must encode everything a neighbor reads, or the omitted fact goes stale on screen.
+
+## Floating headers and avatars
+
+Date separators and group avatars are `ListViewItemHeader`s adapted onto CoreList's
+`CoreListAttachedItem` feature by `CoreListChatHistoryHeaders.swift`. The mapping is near-exact —
+key = `header.id`, `combines(with:)` = `combinesWith(other:)`, `edge` = `stickDirection`,
+`isFloating` = `isSticky` — because CoreList's attachment solve is `updateItemHeaders`' math, down
+to the clamp order and its degenerate-band comment citing `ListView.swift:4019`/`:4032`.
+
+Four things are load-bearing:
+
+- **`.overlay`, never `.reservesSpace`.** Chat rows already carry the header's 34pt in their own
+  `layoutInsets.top` (`layoutConstants.timestampHeaderHeight`), so reserving it again would double
+  the gap. CoreList's reservation path is unused by chat.
+- **The edge mapping is direct, not flipped.** `ListViewImpl(rotated: true)` and CoreList both lay
+  index 0 at their own top and let the wrapper's π put it at the screen bottom, and the chat headers
+  already resolve `stickDirection` against `chatIsRotated`. The header node carries its own π exactly
+  as item nodes do, so it counter-rotates inside its host.
+- **The stick factor and `updateFlashingOnScrolling` are one feature.** The date pill's alpha is
+  `flashingOnScrolling || stickDistanceFactor < 0.5`, so reporting the factor without driving the
+  flashing hides the pill for exactly as long as it is parked at the display edge — strictly worse
+  than reporting neither. Flashing needs no CoreList seam: `onVisibleWindowChanged` is the
+  `engine.onScroll` sink and ticks through momentum, so "no content movement for 0.3s" is the
+  predicate `ListViewImpl`'s timer expresses (`ListView.swift:859`).
+- **`attachedItems` is built once per entry**, not computed per access: `AttachmentRuns.pendingRuns`
+  consults it per row during stacking as well as once per window build. It depends only on the item's
+  headers, so a geometry-only pass cannot invalidate it.
+
+The header host passes `leftInset: 0` because CoreList already frames an attachment at
+`viewportInsets.left` with `contentWidth`, where `ListViewImpl` hands header nodes the full width plus
+the real insets. The avatar lands identically; the date pill centres in the content width rather than
+the full width — a deliberate divergence, visible only under a landscape safe-area inset.
+
+Headers reach the backend from the **item**, via `ChatHistoryItemWithHeaders` in the `ChatMessageItem`
+module, because CoreList computes runs before any row view exists. `ChatUnreadItem` and
+`ChatReplyCountItem` conform for a specific reason: an item between messages that publishes no key
+breaks the run, so an unread separator mid-day would float two pills for one date.
+
+Two CoreList additions serve this: `loadedAttachmentViews` (the attachment sibling of
+`loadedItemViews`, and the live set — departed runs are in the fade-out path) and
+`AttachmentOffsetMap.stickDistance(atOffset:)`. See the CoreList `CLAUDE.md` gotcha for why the
+attachment's frame and its stick distance deliberately solve at different offsets.
+
+### Deferred
+
+- **Topic headers** (`ChatMessageDateHeader` with a `separableThreadId`: space 3 carrying a
+  `stackingId` in space 2). `updateItemHeaders` resolves these with a two-pass loop that nudges the
+  stacked header off whichever header it most intersects (`ListView.swift:4036-4086`); CoreList has no
+  stacking notion and one attachment key cannot express it. The adapter skips any header with a
+  non-nil `stackingId`, so monoforum/thread separators do not render under this backend.
+- **`ListViewItemNode.attachedHeaderNodes`** — the frame-intersection walk binding a header node to
+  the row it most overlaps (`ListView.swift:4203-4242`). Its live consequence is
+  `updateAttachedAvatarNodeIsHidden`, so the avatar stays visible while a sent message flies in the
+  message-transition animation. `updateAttachedDateHeader(hasDate:hasPeer:)` needs nothing —
+  `ChatMessageDateHeaderNodeImpl.updateItem` has an empty body. The avatar's selection-mode offset,
+  which ListViewImpl also routes this way, is driven directly instead: the node reads
+  `controllerInteraction.selectionState` itself, so the backend only has to say when to re-read.
+- **Band trim for `stickOverInsets: false`.** `updateItemHeaders` shortens a non-`stickOverInsets`
+  run's far bound by the last row's top inset (`ListView.swift:4278`); CoreList's band is the raw
+  member frames, so the avatar rides roughly 34pt further before being pushed out.
+- `.topEdge` stick direction (no chat header declares it; the adapter maps it to `.top`),
+  `itemHeaderNodesAlpha` (chat never sets it), and `contributesToEdgeEffect` (nothing in the repo sets
+  it — the one assignment is commented out).
 
 ## Scroll to item
 

@@ -526,6 +526,30 @@ public final class CoreVirtualListView: UIView {
         }
     }
     public var loadedItemEntries: LoadedItemEntries { LoadedItemEntries(activeWindow.items) }
+
+    /// Non-copying, in-order iteration over the LIVE attachment views — the floating headers,
+    /// footers and gutter views of the settled window's runs. Same in-place COW-snapshot walk as
+    /// `loadedItemViews`, so mutating the list mid-iteration is safe.
+    ///
+    /// This IS the live set: a run that has departed is carried by the fade-out path and is absent
+    /// from `activeWindow.attachments`, so a host needs no liveness guard of its own — the same
+    /// argument `loadedItemViews` makes about exit-overlay ghosts.
+    ///
+    /// Views only. A run's key, serial and member range are engine identity, and a host that needs to
+    /// correlate an attachment with its rows should get a purpose-built accessor rather than these.
+    public struct LoadedAttachmentViews: Sequence, IteratorProtocol {
+        private let attachments: [Window.Attachment]
+        private var position = 0
+        fileprivate init(_ attachments: [Window.Attachment]) { self.attachments = attachments }
+        public mutating func next() -> (UIView & CoreListAttachedItemView)? {
+            guard position < attachments.count else { return nil }
+            defer { position += 1 }
+            return attachments[position].view
+        }
+    }
+    public var loadedAttachmentViews: LoadedAttachmentViews {
+        LoadedAttachmentViews(activeWindow.attachments)
+    }
     // The current settled scroll offset reported by the scroll engine.
     public var currentScrollOffset: CGFloat { engine.offset }
 

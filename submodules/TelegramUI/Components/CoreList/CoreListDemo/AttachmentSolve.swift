@@ -104,4 +104,25 @@ struct AttachmentOffsetMap {
             keyTimes: trajectory.samples.map { $0.t / duration }
         )
     }
+
+    /// Points this attachment currently sits from its run's natural, content-riding edge: 0 while it
+    /// rides the run, growing as it parks against the display edge, and negative in the degenerate
+    /// case where the band is shorter than the attachment.
+    ///
+    /// `ListViewImpl` computes the same quantity per header, and both of its expressions reduce to
+    /// this one: `.top` is `headerFrame.minY - upperBound` (Display/Source/ListView.swift:4023) =
+    /// `y - lo`, and `.bottom` is `lowerBound - headerFrame.maxY` (:4033) =
+    /// `(hi + height) - (y + height)` = `hi - y`.
+    ///
+    /// It lives HERE, on the type that is the single definition of the sticky math, for the same
+    /// reason `composedKeyframe` does: a second derivation of "how far is it stuck" would be free to
+    /// disagree with the position the list actually renders.
+    ///
+    /// Deliberately unclamped. The normalised 0…1 factor ListViewImpl hands to header nodes is
+    /// `max(0.0, min(1.0, distance / height))` (:4024) — the clamp belongs to the consumer, which
+    /// knows its own height, and the raw value is what a caller animating a real offset needs.
+    func stickDistance(atOffset offset: CGFloat) -> CGFloat {
+        let y = self.y(atOffset: offset)
+        return edge == .top ? y - lo : hi - y
+    }
 }

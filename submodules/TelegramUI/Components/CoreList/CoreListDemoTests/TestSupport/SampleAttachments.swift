@@ -10,6 +10,7 @@ final class FixedHeightAttachmentView: UIView, CoreListAttachedItemView {
     private(set) var fixedHeight: CGFloat
     private(set) var lastMeasuredWidth: CGFloat?
     private(set) var measureCount = 0
+    private(set) var lastStickDistance: CGFloat?
     var onContentDidChange: ((Bool) -> Void)?
 
     init(height: CGFloat) {
@@ -27,6 +28,10 @@ final class FixedHeightAttachmentView: UIView, CoreListAttachedItemView {
         lastMeasuredWidth = width
         measureCount += 1
         return fixedHeight
+    }
+
+    func stickDistanceUpdated(_ distance: CGFloat) {
+        lastStickDistance = distance
     }
 }
 

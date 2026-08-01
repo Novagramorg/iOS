@@ -112,6 +112,39 @@ final class AttachmentKeyframeParityTests: XCTestCase {
                        "with no flight it returns to solving at the live offset")
     }
 
+    /// `renderAttachments` parks the FRAME at the flight's destination and delivers the DISTANCE at
+    /// the live offset. Both are needed: the frame must not move under the additive animation, and
+    /// the distance must track what the user sees, since nothing animates it on the render server.
+    func testRenderAttachmentsDeliversTheDistanceAtTheLiveOffset() {
+        let fixture = VirtualListFixture(viewport: CGSize(width: 390, height: 800),
+                                         items: groupedItems())
+        let window = fixture.activeWindow
+        let live = fixture.listView.engine.offset
+        let settled = live + 2_000
+        fixture.listView.activeScrollFlight = ScrollFlight(
+            trajectory: rampTrajectory(from: live, to: settled), beginTime: 0)
+        fixture.listView.renderAttachments()
+
+        XCTAssertFalse(window.attachments.isEmpty,
+                       "precondition: the fixture must produce attachment runs")
+        var sawADifference = false
+        for attachment in window.attachments {
+            let map = fixture.listView.attachmentMap(attachment, window: window)
+            let view = attachment.view as! FixedHeightAttachmentView
+            XCTAssertEqual(view.lastStickDistance ?? .nan,
+                           map.stickDistance(atOffset: live),
+                           accuracy: 0.001,
+                           "delivered distance must solve at the live offset")
+            if abs(map.stickDistance(atOffset: live) - map.stickDistance(atOffset: settled)) > 1.0 {
+                sawADifference = true
+            }
+        }
+        // Non-vacuity: if every run reported the same distance at both offsets, the assertion above
+        // would hold no matter which offset the implementation used.
+        XCTAssertTrue(sawADifference,
+                      "the flight must move at least one run between regimes for this to prove anything")
+    }
+
     private func map(edge: CoreListAttachmentEdge = .top,
                      bandTop: CGFloat = 100, bandBottom: CGFloat = 400,
                      height: CGFloat = 30, anchor: CGFloat = 0,
@@ -136,6 +169,27 @@ final class AttachmentKeyframeParityTests: XCTestCase {
         for (index, sample) in trajectory.samples.enumerated() {
             XCTAssertEqual(composed.values[index],
                            m.y(atOffset: sample.offset) - settled,
+                           accuracy: 1e-9,
+                           "vertex \(index) at offset \(sample.offset)")
+        }
+    }
+
+    /// The distance is solved at the LIVE offset while the frame is parked at the flight's
+    /// destination. That is only sound because the two describe the same rendered position: the
+    /// baked track is `y(atOffset:)` sampled along the trajectory, so evaluating the same map at the
+    /// same offset reproduces what CA draws. If either path is ever re-derived, this fails.
+    func testStickDistanceDescribesTheRenderedPositionAtEveryVertex() {
+        let m = map()
+        let trajectory = rampTrajectory(from: 0, to: 500)
+        let composed = m.composedKeyframe(trajectory: trajectory)
+        let settledY = m.y(atOffset: trajectory.finalOffset)
+
+        for (index, sample) in trajectory.samples.enumerated() {
+            // What the render server actually shows at this vertex: the parked model frame plus the
+            // additive value.
+            let renderedY = settledY + composed.values[index]
+            XCTAssertEqual(m.stickDistance(atOffset: sample.offset),
+                           renderedY - m.lo,
                            accuracy: 1e-9,
                            "vertex \(index) at offset \(sample.offset)")
         }

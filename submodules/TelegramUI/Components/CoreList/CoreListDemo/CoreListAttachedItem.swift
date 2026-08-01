@@ -60,4 +60,17 @@ public protocol CoreListAttachedItemView: AnyObject {
     /// Self-update. Marks this attachment dirty and schedules one coalesced flush, exactly as
     /// `CoreListItemView.onContentDidChange` does for a row.
     var onContentDidChange: ((_ animated: Bool) -> Void)? { get set }
+
+    /// Points this attachment currently sits from its run's natural, content-riding edge: 0 while it
+    /// rides the run, growing as it parks against the display edge. A sticky header derives its
+    /// "am I detached" appearance from this.
+    ///
+    /// Delivered on every solve — which includes every frame of a drag AND every frame of a baked
+    /// deceleration flight, because the flight sampler drives the same per-frame path. Default:
+    /// no-op.
+    func stickDistanceUpdated(_ distance: CGFloat)
+}
+
+public extension CoreListAttachedItemView {
+    func stickDistanceUpdated(_ distance: CGFloat) {}
 }

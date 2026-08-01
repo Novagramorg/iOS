@@ -773,6 +773,15 @@ Animation an authority.
   tree may contain unrelated WIP.
 - Use only the dedicated **iPhone 17 Pro K2** simulator. If it is unavailable, stop and ask.
 - Every `xcodebuild ... test` command must include `-parallel-testing-enabled NO`.
+- **An attachment's frame and its stick distance solve at DIFFERENT offsets, deliberately.**
+  `renderAttachments` writes the frame at `attachmentSolveOffset` — the flight's destination while one
+  plays, because the additive `CAKeyframeAnimation` supplies the displacement — and delivers
+  `stickDistanceUpdated` at the live `engine.offset`, because nothing on the render server carries
+  that value and a consumer deriving an appearance from it needs where the attachment IS. Solving the
+  distance at the settled offset freezes it for the whole fling; solving the frame at the live offset
+  doubles the travel. They agree because both go through `AttachmentOffsetMap.y(atOffset:)`, which is
+  also what `composedKeyframe` bakes — asserted vertex-by-vertex in
+  `AttachmentKeyframeParityTests.testStickDistanceDescribesTheRenderedPositionAtEveryVertex`.
 
 ## Documentation authority
 

@@ -83,4 +83,52 @@ final class AttachmentSolveTests: XCTestCase {
                            "bottom must resolve to lo at offset \(offset)")
         }
     }
+
+    // MARK: - Stick distance
+
+    func testATopAttachmentRidingTheContentIsZeroDistance() {
+        let m = map(edge: .top)
+        // Anchor above the band: clamped to `lo`, riding the run's own edge.
+        XCTAssertEqual(m.y(atOffset: 50), 100, accuracy: 1e-9)
+        XCTAssertEqual(m.stickDistance(atOffset: 50), 0, accuracy: 1e-9)
+    }
+
+    func testATopAttachmentParkedReportsItsTravelFromTheBandTop() {
+        let m = map(edge: .top)
+        // Anchor inside the band: parked at the display edge, 30pt from `lo`.
+        XCTAssertEqual(m.stickDistance(atOffset: 130), 30, accuracy: 1e-9)
+        // Pushed out at the far end: the full band slack, `hi - lo`.
+        XCTAssertEqual(m.stickDistance(atOffset: 500), 70, accuracy: 1e-9)
+    }
+
+    func testABottomAttachmentRidingTheContentIsZeroDistance() {
+        let m = map(edge: .bottom)
+        // A `.bottom` attachment's natural edge is `hi`, reached from ABOVE.
+        XCTAssertEqual(m.y(atOffset: 250), 170, accuracy: 1e-9)
+        XCTAssertEqual(m.stickDistance(atOffset: 250), 0, accuracy: 1e-9)
+    }
+
+    func testABottomAttachmentParkedReportsItsTravelFromTheBandBottom() {
+        let m = map(edge: .bottom)
+        XCTAssertEqual(m.stickDistance(atOffset: 140), 30, accuracy: 1e-9)
+        XCTAssertEqual(m.stickDistance(atOffset: 0), 70, accuracy: 1e-9)
+    }
+
+    func testARigidAttachmentIsNeverStuck() {
+        // A non-floating attachment sits at its natural edge by definition, at every offset.
+        XCTAssertEqual(map(edge: .top, isFloating: false).stickDistance(atOffset: 500), 0,
+                       accuracy: 1e-9)
+        XCTAssertEqual(map(edge: .bottom, isFloating: false).stickDistance(atOffset: 0), 0,
+                       accuracy: 1e-9)
+    }
+
+    func testADegenerateBandReportsANegativeDistance() {
+        // Band shorter than the attachment (hi < lo): the solve resolves to the FAR edge, so the
+        // distance is negative. Deliberately unclamped — ListViewImpl keeps the raw value too
+        // (`internalStickLocationDistance`) and clamps only when forming the factor
+        // (`max(0.0, min(1.0, distance / height))`, Display/Source/ListView.swift:4024).
+        let m = map(edge: .top, bandBottom: 120)
+        XCTAssertEqual(m.y(atOffset: 500), 90, accuracy: 1e-9)
+        XCTAssertEqual(m.stickDistance(atOffset: 500), -10, accuracy: 1e-9)
+    }
 }
