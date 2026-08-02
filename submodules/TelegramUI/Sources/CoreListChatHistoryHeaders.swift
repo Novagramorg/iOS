@@ -264,36 +264,35 @@ extension CoreListChatHistoryBackend {
         }
     }
 
-    // Entering selection mode shifts bubbles right by 42pt and the avatars must follow.
+    // Entering selection mode shifts bubbles right by 42pt and the gutter avatars must follow. The
+    // backend contributes NOTHING to that beyond the set above, which its `forEachItemHeaderNode`
+    // exposes:
     //
-    // ListViewImpl routes this through ListViewItemNode.attachedHeaderNodes, which is deferred here
-    // — and does not need to be reproduced for this: ChatMessageAvatarHeaderNodeImpl reads
-    // `controllerInteraction.selectionState` itself, so the backend only has to say WHEN to re-read.
-    // Mirrored as one Bool so an unchanged pass animates nothing, and left un-animated on the very
-    // first push (nil mirror) so a chat that opens already in selection mode does not slide its
-    // avatars in.
+    // - Live nodes are pushed by the app. `ChatController.updateItemNodesSelectionStates`
+    //   (ChatController.swift:8382) walks `historyNode.forEachItemHeaderNode` and calls
+    //   `updateSelectionState(animated:)` itself, backend-agnostically.
+    // - A node built later seeds itself: `ChatMessageAvatarHeaderNodeImpl.init` ends with
+    //   `updateSelectionState(animated: false)`, and the node reads
+    //   `controllerInteraction.selectionState` directly.
     //
-    // A freshly built node needs nothing: ChatMessageAvatarHeaderNodeImpl.init ends with
-    // `updateSelectionState(animated: false)`.
-    func updateAvatarSelectionState() {
-        var isActive: Bool?
-        for view in self.coreList.loadedAttachmentViews {
-            guard let hostView = view as? CoreListHeaderHostView,
-                  let header = hostView.header as? ChatMessageAvatarHeader else {
-                continue
-            }
-            isActive = header.controllerInteraction?.selectionState != nil
-            break
-        }
-        guard let isActive, self.appliedSelectionStateIsActive != isActive else {
-            return
-        }
-        let animated = self.appliedSelectionStateIsActive != nil
-        self.appliedSelectionStateIsActive = isActive
-        for node in self.itemHeaderNodes {
-            (node as? ChatMessageAvatarHeaderNode)?.updateSelectionState(animated: animated)
-        }
-    }
+    // ListViewImpl's `attachedHeaderNodes` route (deferred here) is NOT the animated toggle: its
+    // `attachedHeaderNodesUpdated` push is `animated: false` (ChatMessageItemView.swift:924), i.e.
+    // the same seeding job `init` already does.
+    //
+    // What that leaves out, and the one thing to know before adding a caller: an ALREADY-BUILT node
+    // is corrected only by the app's push. ListViewImpl's walk re-fires as rows scroll, so it would
+    // eventually re-seed a node a missed push had left stale; nothing here does. That is safe only
+    // because `controllerInteraction.selectionState` is assigned in exactly one place
+    // (UpdateChatPresentationInterfaceState.swift:585), which pushes on the next line. A second
+    // assignment site must push too — it cannot rely on the list to notice.
+    //
+    // A backend-side re-push is therefore not merely redundant, it is destructive, and this is the
+    // one place that records why. `updateSelectionState` animates the `"sublayerTransform"` keyPath,
+    // and `CALayer.animate` keys the animation BY its keyPath (CAAnimationUtils.swift:248), so a
+    // second call lands on `add(_:forKey:)` with the first still in flight and replaces it. The
+    // second caller computes `from == to` — the offset is already applied — so what replaces the
+    // 0→42 glide is a degenerate 42→42 animation, and the avatar snaps. That was a real regression
+    // here, in both directions, while the bubbles beside it animated correctly.
 
     // The avatar's long-press context menu is a ContextControllerSourceNode inside the header node,
     // so starting a scroll must cancel it exactly as it does for a bubble's. Nothing more is needed:

@@ -560,8 +560,14 @@ attachment's frame and its stick distance deliberately solve at different offset
   `updateAttachedAvatarNodeIsHidden`, so the avatar stays visible while a sent message flies in the
   message-transition animation. `updateAttachedDateHeader(hasDate:hasPeer:)` needs nothing —
   `ChatMessageDateHeaderNodeImpl.updateItem` has an empty body. The avatar's selection-mode offset,
-  which ListViewImpl also routes this way, is driven directly instead: the node reads
-  `controllerInteraction.selectionState` itself, so the backend only has to say when to re-read.
+  which ListViewImpl also routes this way, needs nothing either — and must not be given anything.
+  The app pushes it to every live header node itself, through `forEachItemHeaderNode`
+  (`ChatController.updateItemNodesSelectionStates`), and a node built later seeds itself in `init`
+  from `controllerInteraction.selectionState`; ListViewImpl's `attachedHeaderNodesUpdated` push is
+  `animated: false`, i.e. that same seeding rather than the animated toggle. A backend-side re-push
+  replaces the app's in-flight `sublayerTransform` animation with a degenerate `from == to` one and
+  makes the avatars snap — see the selection-mode note under `itemHeaderNodes` in
+  `CoreListChatHistoryHeaders.swift`.
 - **Band trim for `stickOverInsets: false`.** `updateItemHeaders` shortens a non-`stickOverInsets`
   run's far bound by the last row's top inset (`ListView.swift:4278`); CoreList's band is the raw
   member frames, so the avatar rides roughly 34pt further before being pushed out.

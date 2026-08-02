@@ -141,10 +141,6 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // would have. The handover is continuous rather than a step.
     private var isTracking = false
 
-    // Mirror for updateAvatarSelectionState (CoreListChatHistoryHeaders.swift). Optional so the
-    // first push can be un-animated.
-    var appliedSelectionStateIsActive: Bool?
-
     // Backing state for the header flashing driver in CoreListChatHistoryHeaders.swift.
     // `SwiftSignalKit.Timer` explicitly: `Timer` alone is ambiguous here, since Foundation's is in
     // scope too.
@@ -751,7 +747,6 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
         self.updateVisibleContentOffset(transition: offsetTransition, geometry: .settled)
-        self.updateAvatarSelectionState()
         self.pushHeaderFlashingState(animated: false)
         completion(self.displayedItemRange)
     }
@@ -905,9 +900,17 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
         }
     }
-    // Its two chat consumers are the live theme/presentation update
-    // (ChatHistoryListNode.swift:2649) and the chat-loading fade-in (:4418). Backed by CoreList's
-    // own live attachment set — see itemHeaderNodes in CoreListChatHistoryHeaders.swift.
+    // Backed by CoreList's own live attachment set — see itemHeaderNodes in
+    // CoreListChatHistoryHeaders.swift.
+    //
+    // THREE chat consumers, and the third does not name this file: the live theme/presentation
+    // update (ChatHistoryListNode.swift:2649), the chat-loading fade-in (:4418), and
+    // `ChatController.updateItemNodesSelectionStates` (ChatController.swift:8382), which reaches
+    // this through the wrapper's forwarder (`historyNode.forEachItemHeaderNode`) and is what
+    // animates the gutter avatars into and out of selection mode. Grepping for `listView
+    // .forEachItemHeaderNode` finds the first two and misses the third — which is how this backend
+    // briefly grew a duplicate driver for that same push. See the selection-mode note under
+    // `itemHeaderNodes` in CoreListChatHistoryHeaders.swift for what that cost.
     func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {
         for node in self.itemHeaderNodes {
             f(node)
