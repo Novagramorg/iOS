@@ -791,8 +791,17 @@ option:
    has been migrated off it (see "Item-node geometry" above), so nothing in the chat currently reads
    it. A hosted node's view remains a subview of its `CoreListNodeHostView` at
    `(0, 0, width, height)`, so any **new** caller reaching for `ListViewItemNode.frame` will silently
-   read the wrong space. Use `ChatHistoryListViewBackend.itemNodeFrame(_:)`. Item **header** nodes have
-   no equivalent — `forEachItemHeaderNode` is real (it walks `loadedAttachmentViews`), but a header
-   node's own frame is host-local for the same reason, and one caller reads it:
-   `ChatHistoryListNode.swift:4429` stages the chat-loading fade-in by `itemNode.frame.minY`, which is
-   always `0` here, so every header pill fades in on the same beat instead of cascading.
+   read the wrong space. Use `itemNodeFrame(_:)`, and `itemHeaderNodeFrame(_:)` for header nodes —
+   a header node's view is a subview of its attachment host, so its frame is host-local for exactly
+   the same reason, and `forEachItemHeaderNode` handing out real nodes is what makes that reachable.
+   **The enumerator being right does not make the geometry right.**
+
+   Both now sit on the public `ChatHistoryListNode` protocol as well as the backend, because the live
+   consumer is outside this module: `ChatLoadingNode` stages its placeholder-to-content fade by
+   `frame.minY / heightNorm` at three sites (`:264`, `:329`, `:369`), all of which were reading zero
+   under this backend and collapsing the cascade onto one beat. (`:249` reads `frame.height`, which is
+   correct host-local — the host frames the node at `(0, 0, w, h)` — so it is left alone.)
+
+   Watch out for `ChatHistoryListNode.swift:4429`, which looks like a fourth consumer and is not: its
+   whole block is guarded by `(transition.animateIn || animateIn) && !"".isEmpty`, and `!"".isEmpty` is
+   constant `false`. That cascade is dead on **both** backends.

@@ -1049,6 +1049,17 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return self.loadedFrame(of: node)
     }
 
+    func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect? {
+        // The attachment-side `loadedFrame(of:)`. `loadedAttachmentViews` is the live set, so absence
+        // from it IS the liveness guard — same argument `itemHeaderNodes` makes.
+        for view in self.coreList.loadedAttachmentViews {
+            if let hostView = view as? CoreListHeaderHostView, hostView.headerNode === node {
+                return self.listFrame(of: hostView)
+            }
+        }
+        return nil
+    }
+
     // Same predicate as forEachVisibleItemNode's filter, via the shared band.
     func itemNodeVisibleInsideInsets(_ node: ListViewItemNode) -> Bool {
         guard let frame = self.loadedFrame(of: node) else {

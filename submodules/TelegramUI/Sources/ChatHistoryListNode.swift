@@ -5363,6 +5363,12 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     public func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {
         self.listView.forEachItemHeaderNode(f)
     }
+    public func itemNodeFrame(_ node: ListViewItemNode) -> CGRect? {
+        return self.listView.itemNodeFrame(node)
+    }
+    public func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect? {
+        return self.listView.itemHeaderNodeFrame(node)
+    }
     public func enumerateItemNodes(_ f: (ASDisplayNode) -> Bool) {
         self.listView.enumerateItemNodes(f)
     }

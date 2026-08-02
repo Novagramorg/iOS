@@ -90,6 +90,12 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     // absence from the loaded window.
     func itemNodeFrame(_ node: ListViewItemNode) -> CGRect?
 
+    // The header-node twin, and it exists for exactly the same reason: a header node's view is a
+    // subview of its attachment host under a hosting backend, so its own frame is `(0, 0, w, h)` and
+    // any position read off it is silently zero. `forEachItemHeaderNode` handing out real nodes is
+    // what makes this reachable — the enumerator being right does not make the geometry right.
+    func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect?
+
     func addAfterTransactionsCompleted(_ f: @escaping () -> Void)
     func visibleContentOffset() -> ListViewVisibleContentOffset
 
@@ -187,6 +193,13 @@ extension ListViewImpl: ChatHistoryListViewBackend {
         guard node.index != nil else {
             return nil
         }
+        return node.frame
+    }
+
+    public func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect? {
+        // Header nodes are direct subviews of the list here, so their frame is already list space.
+        // There is no `index`-style liveness flag on a header node; `forEachItemHeaderNode` only ever
+        // hands out live ones, and a caller holding a stale node past that is out of contract.
         return node.frame
     }
 
