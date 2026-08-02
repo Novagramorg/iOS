@@ -116,8 +116,12 @@ inside its 34pt band — which is a chat visual fact, not an engine concept.
 
 ### 5. Z-order
 
-`insertItemBelowOtherHeaders` (`ListView.swift:4037`) falls out for free: an attachment that yields
-sorts below its target group in the attachment order. No new API.
+`insertItemBelowOtherHeaders` (`ListView.swift:4037`) needs no new API, but it is not free either:
+it is a change to the attachment sort, which is currently `(memberRange.lowerBound, key description)`
+(`AttachmentRuns.pendingRuns`). A yielding attachment must sort below its target group, so the yield
+declaration becomes an input to that ordering. Derived from the declaration rather than a new field —
+but it is a real change to a rule other behavior already depends on, and the ordering is worth an
+assertion of its own rather than being assumed to follow.
 
 ## Rejected alternatives
 
