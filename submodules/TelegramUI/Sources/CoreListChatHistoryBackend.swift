@@ -1240,6 +1240,28 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         self.contentDirty = true
     }
 
+    /// The most recent binding from CoreList, held for the same reason `visibleRect` is: the solve can
+    /// name this row's attachments before `update(width:)` has built the node they belong on.
+    private var attachedItems: [UIView & CoreListAttachedItemView] = []
+
+    // CoreList answers "which attachments hang off this row"; the only translation left is attachment
+    // host → header node. `setAttachedHeaderNodes` compares before notifying, which is what makes it
+    // safe to receive this every solve — including the frames where nothing moved, and the frame after
+    // a recycled view is handed a set for a different row.
+    func attachedItemsUpdated(_ attachments: [UIView & CoreListAttachedItemView]) {
+        self.attachedItems = attachments
+        self.applyAttachedItems()
+    }
+
+    private func applyAttachedItems() {
+        guard let itemNode = self.itemNode else {
+            return
+        }
+        itemNode.setAttachedHeaderNodes(self.attachedItems.compactMap {
+            ($0 as? CoreListHeaderHostView)?.headerNode
+        })
+    }
+
     /// The most recent rect from CoreList, held so a node built after the notification still gets it.
     private var visibleRect: CGRect?
 
@@ -1419,5 +1441,8 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         // A rect may have arrived before this node existed, and a relayout can change the insets the
         // fraction divides by, so re-derive visibility from the rect we hold.
         self.applyVisibility()
+        // Same argument, and it also covers the node being REPLACED: the binding CoreList last named
+        // is still correct for this row, but the new node's own array is empty.
+        self.applyAttachedItems()
     }
 }

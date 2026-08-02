@@ -555,12 +555,22 @@ attachment's frame and its stick distance deliberately solve at different offset
   stacked header off whichever header it most intersects (`ListView.swift:4036-4086`); CoreList has no
   stacking notion and one attachment key cannot express it. The adapter skips any header with a
   non-nil `stackingId`, so monoforum/thread separators do not render under this backend.
-- **`ListViewItemNode.attachedHeaderNodes`** — the frame-intersection walk binding a header node to
-  the row it most overlaps (`ListView.swift:4203-4242`). It has exactly two live consequences, both
-  pushed by `ChatMessageBubbleItemNode`'s apply step (`:4018-4021`) and both therefore dead here:
-  `updateAttachedAvatarNodeOffset`, which slides the gutter avatar 100pt out of the way while a round
-  video plays unexpanded (the offset originates in `ChatMessageInstantVideoBubbleContentNode.swift:279`),
-  and `updateAttachedAvatarNodeIsHidden(isHidden: isSidePanelOpen)`, which hides it behind the floating
+- ~~**`ListViewItemNode.attachedHeaderNodes`**~~ Done, and as an ENGINE feature rather than a chat
+  one. `CoreListItemView.attachedItemsUpdated(_:)` hands each row the attachments hanging off it, and
+  `CoreVirtualListView` resolves it inside the attachment solve — the same max-intersection-within-the-
+  run question as `ListView.swift:4203-4221`, including the guard that a zero-height intersection binds
+  nothing. It belongs there because the answer is a function of the attachment's *solved* position,
+  which moves as a run scrolls and its floating attachment parks against the display edge: it changes
+  with no item and no run changing, and the intersection is a subtraction in window space rather than a
+  view-tree conversion from outside. The chat host's whole job is then attachment host → header node.
+  Delivered every solve, unconditionally, like `stickDistanceUpdated`; `setAttachedHeaderNodes` (the
+  one `Display` addition, since the array's setter is `internal`) compares before notifying, which is
+  what keeps a per-frame push from re-applying transform state mid-animation.
+
+  It unblocks the two consequences that were dead, both pushed by `ChatMessageBubbleItemNode`'s apply
+  step (`:4018-4021`): `updateAttachedAvatarNodeOffset`, which slides the gutter avatar 100pt aside
+  while a round video plays unexpanded (`ChatMessageInstantVideoBubbleContentNode.swift:279`), and
+  `updateAttachedAvatarNodeIsHidden(isHidden: isSidePanelOpen)`, which hides it behind the floating
   topics side panel. `updateAttachedDateHeader(hasDate:hasPeer:)` needs nothing —
   `ChatMessageDateHeaderNodeImpl.updateItem` has an empty body. The avatar's selection-mode offset,
   which ListViewImpl also routes this way, needs nothing either — and must not be given anything.

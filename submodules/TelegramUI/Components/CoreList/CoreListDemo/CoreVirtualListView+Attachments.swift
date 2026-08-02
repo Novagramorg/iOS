@@ -340,9 +340,16 @@ extension CoreVirtualListView {
         guard !window.items.isEmpty else { return }
 
         let offset = attachmentSolveOffset
+        // Row → the attachments hanging off it this frame. Accumulated during the solve because `y`
+        // below is the attachment's position in WINDOW space, the same space `item.frame` is in, so the
+        // intersection is a subtraction rather than a view-tree conversion.
+        var boundAttachments: [ObjectIdentifier: [UIView & CoreListAttachedItemView]] = [:]
         for attachment in window.attachments {
             let map = attachmentMap(attachment, window: window)
             let y = map.y(atOffset: offset)
+            if let owner = attachmentOwner(attachment, solvedY: y, window: window) {
+                boundAttachments[ObjectIdentifier(owner), default: []].append(attachment.view)
+            }
             attachment.view.frame = CGRect(x: viewportInsets.left,
                                            y: y - window.minY,
                                            width: contentWidth,
@@ -369,7 +376,35 @@ extension CoreVirtualListView {
                                                layer: attachment.view.layer)
         }
 
+        // Every loaded row, not just the bound ones: a row that just LOST its attachment has to hear
+        // that, and it is the empty case that says so.
+        for item in window.items {
+            item.view.attachedItemsUpdated(boundAttachments[ObjectIdentifier(item.view)] ?? [])
+        }
+
         installAttachmentFlightTracks(window: window)
+    }
+
+    /// The member row an attachment currently hangs off: the one it overlaps most, and nil when it
+    /// overlaps none. `Display/Source/ListView.swift:4203-4221` verbatim, including the guard that a
+    /// zero-height intersection binds nothing.
+    ///
+    /// Restricted to the run's members, which is what makes the search well-posed rather than merely
+    /// cheaper: a floating attachment parked at its band edge sits flush against the NEXT run, so
+    /// "the row I overlap most" over ALL rows could name a row this attachment does not belong to.
+    private func attachmentOwner(_ attachment: Window.Attachment,
+                                 solvedY: CGFloat,
+                                 window: Window) -> (UIView & CoreListItemView)? {
+        let rect = CGRect(x: 0.0, y: solvedY, width: contentWidth, height: attachment.measuredHeight)
+        var best: (intersection: CGFloat, view: UIView & CoreListItemView)?
+        for item in window.items where attachment.memberRange.contains(item.index) {
+            let intersection = item.frame.intersection(rect).height
+            if best == nil || intersection > best!.intersection {
+                best = (intersection, item.view)
+            }
+        }
+        guard let best, best.intersection > 0.0 else { return nil }
+        return best.view
     }
 
     /// Geometry is passed in rather than read from `self` because the pass needs to solve the OLD

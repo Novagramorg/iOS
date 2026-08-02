@@ -34,10 +34,35 @@ public protocol CoreListItemView: AnyObject {
     /// correct neutral for a row that reserves nothing; it is read ONLY for such an attachment's
     /// outermost member, so a row with no attachments never pays for it.
     var attachmentBandTrim: CGFloat { get }
+
+    /// The attachments currently bound to this row: those whose run counts this row as a member AND
+    /// which overlap it more than any other member of that run. A row is the OWNER of an attachment in
+    /// the sense a row needs — "the avatar hanging off me right now" — which is a different question
+    /// from "the run I belong to", because one run has many members and one attachment.
+    ///
+    /// This exists because the binding is only answerable HERE. It is a function of the attachment's
+    /// SOLVED position, which moves independently of the rows as the run scrolls and its floating
+    /// attachment parks against the display edge, so it changes without any item or run changing. The
+    /// row cannot compute it (it does not know the solve) and neither can the host (it would have to
+    /// re-derive attachment frames, member ranges and row frames from outside, in view space rather
+    /// than the window space they are solved in).
+    ///
+    /// Delivered on every solve, unconditionally and including no-change frames — the same cadence as
+    /// `stickDistanceUpdated`, and for the same reason: this is per-frame geometry, not an event.
+    /// Receivers that do real work on it must compare and no-op, which they must do anyway, since a
+    /// recycled view can be handed the same set for a different row. Default: no-op.
+    ///
+    /// The analogue of `ListViewItemNode.attachedHeaderNodes` and its `attachedHeaderNodesUpdated`
+    /// notification (`Display/Source/ListView.swift:4203-4242`), which resolves the same
+    /// max-intersection-within-the-run question — including its "and only if it actually intersects"
+    /// guard, so a run scrolled far enough that its attachment has parked clear of every member binds
+    /// to nothing.
+    func attachedItemsUpdated(_ attachments: [UIView & CoreListAttachedItemView])
 }
 
 public extension CoreListItemView {
     var attachmentBandTrim: CGFloat { 0.0 }
+    func attachedItemsUpdated(_ attachments: [UIView & CoreListAttachedItemView]) {}
     func visibleRectUpdated(_ visibleRect: CGRect?) {}
 }
 
@@ -590,6 +615,7 @@ public final class CoreVirtualListView: UIView {
     public var loadedAttachmentViews: LoadedAttachmentViews {
         LoadedAttachmentViews(activeWindow.attachments)
     }
+
     // The current settled scroll offset reported by the scroll engine.
     public var currentScrollOffset: CGFloat { engine.offset }
 
