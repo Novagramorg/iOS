@@ -720,6 +720,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             case .hashTagSearch:
                 break
+            case .welcomeMessages:
+                break
             }
         }
         
@@ -798,6 +800,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if case let .customChatContents(customChatContents) = strongSelf.presentationInterfaceState.subject {
                 switch customChatContents.kind {
                 case .hashTagSearch:
+                    return true
+                case .welcomeMessages:
                     return true
                 case let .quickReplyMessageInput(_, shortcutType):
                     if let historyView = strongSelf.chatDisplayNode.historyNode.originalHistoryView, historyView.entries.isEmpty {
@@ -3727,8 +3731,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         return .none
                     }
                 }
-                if case let .customChatContents(customChatContents) = strongSelf.presentationInterfaceState.subject, case .quickReplyMessageInput = customChatContents.kind {
-                    return .none
+                if case let .customChatContents(customChatContents) = strongSelf.presentationInterfaceState.subject {
+                    switch customChatContents.kind {
+                    case .quickReplyMessageInput, .welcomeMessages:
+                        return .none
+                    case .businessLinkSetup, .hashTagSearch:
+                        break
+                    }
                 }
                 
                 if !canSendMessagesToChat(strongSelf.presentationInterfaceState) && (strongSelf.presentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()) {
@@ -3767,7 +3776,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return
             }
-            if id.namespace == Namespaces.Message.EphemeralLocal {
+            if id.namespace == Namespaces.Message.EphemeralLocal || id.namespace == Namespaces.Message.WelcomeMessageLocal {
                 let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: id))
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] message in
                     guard let strongSelf = self, let message else {
@@ -9259,7 +9268,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         let alertController = textAlertController(
                             context: strongSelf.context,
                             title: nil,
-                            text: strongSelf.presentationData.strings.Chat_QuickReplyMediaMessageLimitReachedText(Int32(messageLimit)),
+                            text: customChatContents.kind == .welcomeMessages ? strongSelf.presentationData.strings.WelcomeMessages_MessageLimitReachedText(Int32(messageLimit)) : strongSelf.presentationData.strings.Chat_QuickReplyMediaMessageLimitReachedText(Int32(messageLimit)),
                             actions: [
                                 TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {})
                             ]

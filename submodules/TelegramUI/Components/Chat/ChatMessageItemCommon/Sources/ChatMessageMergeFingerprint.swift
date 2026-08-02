@@ -44,6 +44,7 @@ public struct ChatMessageSourceAuthorKey: Equatable {
 /// resolution has to happen pairwise in `chatMessageMerge(upper:lower:)`.
 public struct ChatMessageMergeFingerprint: Equatable {
     let peerId: EnginePeer.Id
+    let isEphemeral: Bool
     let rawAuthorId: EnginePeer.Id?
     let overriddenAuthorId: EnginePeer.Id?
     let hasBroadcastProfiles: Bool
@@ -64,6 +65,7 @@ public struct ChatMessageMergeFingerprint: Equatable {
 
     public init(message: EngineRawMessage, accountPeerId: EnginePeer.Id) {
         self.peerId = message.id.peerId
+        self.isEphemeral = Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)
         self.rawAuthorId = message.author?.id
         self.timestamp = message.timestamp
         self.isEffectivelyIncoming = message.effectivelyIncoming(accountPeerId)
@@ -157,6 +159,10 @@ private func anonymousSignature(_ fingerprint: ChatMessageMergeFingerprint,
 /// by `lower`. Exact replacement for the former `messagesShouldBeMerged(accountPeerId:_:_:)`.
 public func chatMessageMerge(upper: ChatMessageMergeFingerprint,
                              lower: ChatMessageMergeFingerprint) -> ChatMessageMerge {
+    if upper.isEphemeral != lower.isEphemeral {
+        return .none
+    }
+
     // Read from the upper message only, as the original reads it from lhs.
     let useRawAuthors = upper.hasBroadcastProfiles
     var upperEffectiveAuthorId = useRawAuthors ? upper.rawAuthorId : upper.overriddenAuthorId

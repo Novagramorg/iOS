@@ -394,7 +394,9 @@ func apiEphemeralMessagePeerIds(_ message: Api.EphemeralMessage) -> [PeerId] {
 
         appendUnique(peerId.peerId)
         appendUnique(fromId.peerId)
-        appendUnique(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(receiverId)))
+        if receiverId != 0 {
+            appendUnique(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(receiverId)))
+        }
         if let replyTo {
             switch replyTo {
             case let .messageReplyHeader(messageReplyHeaderData):
@@ -485,12 +487,13 @@ extension StoreMessage {
     convenience init(apiEphemeralMessage: Api.EphemeralMessage) {
         switch apiEphemeralMessage {
         case let .ephemeralMessage(messageData):
-            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo)
+            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo, richMessage) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo, messageData.richMessage)
             let peerId = apiPeerId.peerId
             let authorId = fromId.peerId
+            let isWelcomeTemplate = (flags & (1 << 5)) != 0
 
             var attributes: [MessageAttribute] = [
-                EphemeralMessageAttribute(receiverId: receiverId)
+                EphemeralMessageAttribute(receiverId: receiverId, isWelcomeTemplate: isWelcomeTemplate)
             ]
             var medias: [Media] = []
 
@@ -559,6 +562,12 @@ extension StoreMessage {
             if let replyMarkup {
                 attributes.append(ReplyMarkupMessageAttribute(apiMarkup: replyMarkup))
             }
+            if let richMessage {
+                attributes.append(RichTextMessageAttribute(apiRichMessage: richMessage))
+            }
+            if (flags & (1 << 7)) != 0 {
+                attributes.append(InvertMediaMessageAttribute())
+            }
 
             var date = messageData.date
             var storeFlags = StoreMessageFlags()
@@ -568,7 +577,7 @@ extension StoreMessage {
             }
 
             self.init(
-                id: MessageId(peerId: peerId, namespace: Namespaces.Message.EphemeralLocal, id: id),
+                id: MessageId(peerId: peerId, namespace: isWelcomeTemplate ? Namespaces.Message.WelcomeMessageCloud : Namespaces.Message.EphemeralLocal, id: id),
                 customStableId: nil,
                 globallyUniqueId: nil,
                 groupingKey: nil,
