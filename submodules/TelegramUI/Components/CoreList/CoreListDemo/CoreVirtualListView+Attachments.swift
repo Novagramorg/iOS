@@ -199,7 +199,14 @@ extension CoreVirtualListView {
 
             let members = window.items.filter { run.memberRange.contains($0.index) }
             let bandTop = members.map(\.frame.minY).min() ?? 0
-            let bandBottom = members.map(\.frame.maxY).max() ?? 0
+            // `updateItemHeaders`' per-item `itemMaxY` (Display/Source/ListView.swift:4274-4279),
+            // which trims the run's far bound by the member's own inset unless the header sticks over
+            // insets. Taken as a max over trimmed member bounds rather than ListViewImpl's "whatever
+            // the last member computed": the two agree whenever a trim is smaller than the row it
+            // trims (always, since the trim IS part of that row), and the max cannot invert the band.
+            let bandBottom = run.representative.spansMemberInsets
+                ? (members.map(\.frame.maxY).max() ?? 0)
+                : (members.map { $0.frame.maxY - $0.view.attachmentBandTrim }.max() ?? 0)
 
             resolved.append(Window.Attachment(key: run.key,
                                               serial: run.serial,

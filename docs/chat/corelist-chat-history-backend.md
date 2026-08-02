@@ -556,9 +556,12 @@ attachment's frame and its stick distance deliberately solve at different offset
   stacking notion and one attachment key cannot express it. The adapter skips any header with a
   non-nil `stackingId`, so monoforum/thread separators do not render under this backend.
 - **`ListViewItemNode.attachedHeaderNodes`** — the frame-intersection walk binding a header node to
-  the row it most overlaps (`ListView.swift:4203-4242`). Its live consequence is
-  `updateAttachedAvatarNodeIsHidden`, so the avatar stays visible while a sent message flies in the
-  message-transition animation. `updateAttachedDateHeader(hasDate:hasPeer:)` needs nothing —
+  the row it most overlaps (`ListView.swift:4203-4242`). It has exactly two live consequences, both
+  pushed by `ChatMessageBubbleItemNode`'s apply step (`:4018-4021`) and both therefore dead here:
+  `updateAttachedAvatarNodeOffset`, which slides the gutter avatar 100pt out of the way while a round
+  video plays unexpanded (the offset originates in `ChatMessageInstantVideoBubbleContentNode.swift:279`),
+  and `updateAttachedAvatarNodeIsHidden(isHidden: isSidePanelOpen)`, which hides it behind the floating
+  topics side panel. `updateAttachedDateHeader(hasDate:hasPeer:)` needs nothing —
   `ChatMessageDateHeaderNodeImpl.updateItem` has an empty body. The avatar's selection-mode offset,
   which ListViewImpl also routes this way, needs nothing either — and must not be given anything.
   The app pushes it to every live header node itself, through `forEachItemHeaderNode`
@@ -568,9 +571,15 @@ attachment's frame and its stick distance deliberately solve at different offset
   replaces the app's in-flight `sublayerTransform` animation with a degenerate `from == to` one and
   makes the avatars snap — see the selection-mode note under `itemHeaderNodes` in
   `CoreListChatHistoryHeaders.swift`.
-- **Band trim for `stickOverInsets: false`.** `updateItemHeaders` shortens a non-`stickOverInsets`
-  run's far bound by the last row's top inset (`ListView.swift:4278`); CoreList's band is the raw
-  member frames, so the avatar rides roughly 34pt further before being pushed out.
+- ~~**Band trim for `stickOverInsets: false`.**~~ Done. `CoreListAttachedItem.spansMemberInsets`
+  (default `true`) and `CoreListItemView.attachmentBandTrim` (default `0`) carry
+  `ListView.swift:4274-4279` into the engine: the run's far bound is now a max over
+  `frame.maxY - attachmentBandTrim` rather than over raw `frame.maxY`. The header side answers
+  `stickOverInsets`, so only the gutter avatar trims; the host answers
+  `rotated ? insets.top : insets.bottom`, so a rotated chat trims by the node's TOP inset — which is
+  where the row folded `timestampHeaderHeight`, even though it renders at the visual bottom. CoreList
+  takes the max over trimmed member bounds where ListViewImpl takes whatever its last member computed;
+  the two agree whenever a trim is smaller than the row it trims, which it always is.
 - `.topEdge` stick direction (no chat header declares it; the adapter maps it to `.top`),
   `itemHeaderNodesAlpha` (chat never sets it), and `contributesToEdgeEffect` (nothing in the repo sets
   it — the one assignment is commented out).
@@ -750,14 +759,27 @@ option:
    storage with no behavior; only the display-path values are real. (`didInteractivelyDragFromTopOrigin`
    used to be two of these and is now real — see "Interactive drag start". It is worth reading that
    entry as a warning about the rest: a stub that returns a plausible constant reports *no* problem,
-   and this one disabled a user-visible behavior for as long as it existed.) Several installed callbacks
-   are likewise never fired: `endedInteractiveDragging` (overscroll-to-open-next-channel),
-   `didEndScrolling`, `didEndScrollingWithOverscroll`. `endedInteractiveDragging` now *could* be — the
-   seam gained `didEndDragging` for the tracking flag — but wiring it would switch on the next-channel
-   behavior, so it stays a deliberate follow-up rather than a side effect.
+   and this one disabled a user-visible behavior for as long as it existed.) The three scroll callbacks
+   that used to sit here — `endedInteractiveDragging`, `didEndScrolling`,
+   `didEndScrollingWithOverscroll` — are now wired, and `didEndScrolling` was the same class of bug as
+   `didInteractivelyDragFromTopOrigin`: nothing ever cleared `isInteractivelyScrollingValue`, so after
+   the first drag the chat believed it was being scrolled forever and the video-unmute tip
+   (`ChatControllerNode.swift:5688`) could never appear again.
+
+   CoreList gained `didEndScrolling` (flight → nil), `isScrollFlightActive` and `overscrollDistance`
+   for them, and the backend reproduces `scrollViewDidEndDragging`'s body in its order. The
+   `willDecelerate` split UIKit hands ListViewImpl is read off `isScrollFlightActive`, which is only
+   meaningful because the engine fires `didEndDragging` *after* launching deceleration; and the
+   `!isTracking` guard on the momentum half works for the same reason in reverse —
+   `onWillBeginDragging` precedes `catchFlight`, so a flight caught by a new touch is already flagged
+   as tracking. `overscrollDistance` is sampled at drag end, where `core.offset` still holds the
+   release position (`launchFlight` parks only the layer at the settled offset).
 4. **`itemNode.frame` is still host-local** — the *fact* is unchanged, but every chat-layer consumer
    has been migrated off it (see "Item-node geometry" above), so nothing in the chat currently reads
    it. A hosted node's view remains a subview of its `CoreListNodeHostView` at
    `(0, 0, width, height)`, so any **new** caller reaching for `ListViewItemNode.frame` will silently
-   read the wrong space. Use `ChatHistoryListViewBackend.itemNodeFrame(_:)`. Item **header** nodes
-   have no equivalent yet (`forEachItemHeaderNode` is still a stub).
+   read the wrong space. Use `ChatHistoryListViewBackend.itemNodeFrame(_:)`. Item **header** nodes have
+   no equivalent — `forEachItemHeaderNode` is real (it walks `loadedAttachmentViews`), but a header
+   node's own frame is host-local for the same reason, and one caller reads it:
+   `ChatHistoryListNode.swift:4429` stages the chat-loading fade-in by `itemNode.frame.minY`, which is
+   always `0` here, so every header pill fades in on the same beat instead of cascading.

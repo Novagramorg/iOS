@@ -44,11 +44,21 @@ public protocol CoreListAttachedItem: AnyObject {
     /// timestamp bucket into its id and STILL needs "break the run if these two are ≥10 minutes
     /// apart", which is a delta between neighbours rather than a bucket.
     func combines(with other: CoreListAttachedItem) -> Bool
+
+    /// Whether this attachment's band spans its member rows' full frames, inset space included.
+    /// Default `true`, which is the band CoreList computes anyway.
+    ///
+    /// When false, the band's far edge pulls in by the far member's `attachmentBandTrim`, so the
+    /// attachment is pushed out of the display area that much sooner. This exists for an attachment
+    /// whose run already RESERVED space for it inside the member's own layout: it would otherwise
+    /// ride over the reservation belonging to the NEXT run.
+    var spansMemberInsets: Bool { get }
 }
 
 public extension CoreListAttachedItem {
     func apply(to view: UIView & CoreListAttachedItemView, transition: CoreListTransition) {}
     func combines(with other: CoreListAttachedItem) -> Bool { true }
+    var spansMemberInsets: Bool { true }
 }
 
 public protocol CoreListAttachedItemView: AnyObject {

@@ -466,12 +466,37 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // Close the tracking interval. Fires on `.ended` AND `.cancelled`, so a drag torn down by a
         // competing recognizer cannot leave the flag stuck on and permanently suppress inset compensation.
         //
-        // Deliberately does NOT call `self.endedInteractiveDragging`: that callback drives the
-        // overscroll-to-open-next-channel behavior, which is a separate unimplemented item rather than
-        // something to switch on as a side effect of this hook becoming available.
+        // This is also ListViewImpl's `scrollViewDidEndDragging` (Display/Source/ListView.swift:903-930),
+        // and the three callbacks it fires there are reproduced in its order. The `willDecelerate`
+        // distinction it gets from UIKit is read here from `isScrollFlightActive`, which is meaningful
+        // because the engine emits this hook AFTER launching deceleration.
         self.coreList.didEndDragging = { [weak self] in
             guard let self else { return }
             self.isTracking = false
+
+            let isDecelerating = self.coreList.isScrollFlightActive
+            // `contentOffset.y < -48.0` (ListView.swift:913) against the near edge. Its only consumer is
+            // the overlay audio player's pull-to-dismiss, and that list is built `rotated: false`
+            // (the default on ChatHistoryListNodeImpl.init, which OverlayAudioPlayerControllerNode does
+            // not override), so "past the min edge" is the plain pull-down the gesture means.
+            if isDecelerating && self.coreList.overscrollDistance < -48.0 {
+                self.didEndScrollingWithOverscroll?()
+            }
+            // The point is `ListViewImpl.touchesPosition`; both consumers take it as `_`
+            // (ChatHistoryListNode.swift:1268, OverlayAudioPlayerControllerNode.swift:363), so `.zero`
+            // matches what `beganInteractiveDragging` already passes above rather than inventing a
+            // coordinate space for a value nothing reads.
+            self.endedInteractiveDragging(.zero)
+            if !isDecelerating {
+                self.didEndScrolling?(false)
+            }
+        }
+        // The momentum half: `scrollViewDidEndDecelerating` (ListView.swift:932-941), including its
+        // `!isTracking` guard, which is what keeps a flight *caught* by a new touch from reporting a
+        // stop. See the seam's own comment for why the flag is already true by then.
+        self.coreList.didEndScrolling = { [weak self] in
+            guard let self, !self.isTracking else { return }
+            self.didEndScrolling?(true)
         }
     }
 
@@ -1113,7 +1138,8 @@ private final class CoreListEntryItem: CoreListItem {
         return CoreListNodeHostView(listItem: self.listItem,
                                     neighbors: self.neighbors,
                                     leftInset: self.leftInset,
-                                    rightInset: self.rightInset)
+                                    rightInset: self.rightInset,
+                                    rotated: self.backend?.rotated ?? true)
     }
 
     // Content equality: the engine matches rows by `identity` (= stableId); this additionally compares
@@ -1175,12 +1201,28 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
     private var leftInset: CGFloat
     private var rightInset: CGFloat
 
-    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors, leftInset: CGFloat, rightInset: CGFloat) {
+    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors, leftInset: CGFloat, rightInset: CGFloat, rotated: Bool) {
         self.listItem = listItem
         self.neighbors = neighbors
         self.leftInset = leftInset
         self.rightInset = rightInset
+        self.rotated = rotated
         super.init(frame: .zero)
+    }
+
+    // Construction-only, like `rotated` on the backend itself: which end of the node's box is the
+    // reserved space a non-`spansMemberInsets` attachment must not ride over. Verbatim
+    // `self.rotated ? itemNode.insets.top : itemNode.insets.bottom`
+    // (Display/Source/ListView.swift:4278) — the chat's rows fold `timestampHeaderHeight` into
+    // `layoutInsets.top` and the node carries its own π, so under a rotated chat the header's
+    // reservation is the node's TOP inset even though it renders at the visual bottom.
+    private let rotated: Bool
+
+    var attachmentBandTrim: CGFloat {
+        guard let itemNode = self.itemNode else {
+            return 0.0
+        }
+        return self.rotated ? itemNode.insets.top : itemNode.insets.bottom
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

@@ -62,6 +62,14 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
         return self.header.isSticky
     }
 
+    // `ChatMessageDateHeader` is `true` (ChatMessageDateHeader.swift:96) and `ChatMessageAvatarHeader`
+    // is `false` (:928) — so only the gutter avatar trims, which is right: the avatar's run has
+    // already reserved its own 34pt inside each member row's `layoutInsets.top`, and without the trim
+    // it rides that far into the NEXT sender's run before being pushed out.
+    var spansMemberInsets: Bool {
+        return self.header.stickOverInsets
+    }
+
     // The flashing state must be seeded HERE, from the backend's live value.
     //
     // `setHeadersFlashing` pushes only on a CHANGE, so a view created while the flag is already true

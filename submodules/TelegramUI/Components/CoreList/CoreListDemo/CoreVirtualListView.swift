@@ -28,9 +28,16 @@ public protocol CoreListItemView: AnyObject {
     /// A row leaving the live window — unloaded by rebalancing, or transferred to the exit overlay as
     /// a departure — receives `nil`.
     func visibleRectUpdated(_ visibleRect: CGRect?)
+
+    /// How far the far edge of a `spansMemberInsets == false` attachment band pulls in from this row's
+    /// frame — the part of the row that is reserved space rather than content. Default `0`, the
+    /// correct neutral for a row that reserves nothing; it is read ONLY for such an attachment's
+    /// outermost member, so a row with no attachments never pays for it.
+    var attachmentBandTrim: CGFloat { get }
 }
 
 public extension CoreListItemView {
+    var attachmentBandTrim: CGFloat { 0.0 }
     func visibleRectUpdated(_ visibleRect: CGRect?) {}
 }
 
@@ -474,6 +481,39 @@ public final class CoreVirtualListView: UIView {
     // momentum phase after it. Analogous to ListViewImpl's `endedInteractiveDragging`, and the signal a
     // host needs to maintain its own `ListViewImpl.isTracking` equivalent.
     public var didEndDragging: (() -> Void)?
+    // Fired when a momentum flight stops carrying the content: both the authoritative settle
+    // (`finalizeFlight`) and the interruption (`catchFlight`, when a new touch grabs the list
+    // mid-flight) reach it, because both are the engine reporting `onFlightChanged(nil)`.
+    //
+    // That is deliberately the same conflation `scrollViewDidEndDecelerating` has — UIKit fires it on
+    // an interrupted deceleration too, and ListViewImpl separates the cases with its own
+    // `!scrollView.isTracking` guard (Display/Source/ListView.swift:940). A host wanting "settled, and
+    // the user is not already dragging again" applies the same guard; it can, because
+    // `onWillBeginDragging` is emitted BEFORE the catch (PhysicsScrollEngine.swift:163-167), so its
+    // tracking flag is already true by the time this arrives.
+    //
+    // A drag released with no momentum produces NO flight and therefore never reaches here. That case
+    // is the host's to read off `didEndDragging` + `isScrollFlightActive`, mirroring how ListViewImpl
+    // splits the same two cases across `willDecelerate`.
+    public var didEndScrolling: (() -> Void)?
+    // True while the render server is carrying a momentum flight. Read at `didEndDragging` to learn
+    // whether momentum followed the release: the engine emits that callback AFTER launching
+    // deceleration, precisely so an observer sees the post-release truth
+    // (PhysicsScrollEngine.swift:194-197).
+    public var isScrollFlightActive: Bool { activeScrollFlight != nil }
+    // Signed distance the engine offset sits beyond its declared edges — negative past `min`, positive
+    // past `max`, zero within. The analogue of reading `scrollView.contentOffset.y` against its content
+    // bounds, and correct to sample at `didEndDragging`: `launchFlight` parks the LAYER at the settled
+    // offset but leaves `core.offset` at the release position, so this still describes where the finger
+    // let go rather than where the spring is headed.
+    public var overscrollDistance: CGFloat {
+        let offset = engine.offset
+        if let minimum = declaredEdges.min, offset < minimum { return offset - minimum }
+        if let maximum = declaredEdges.max, offset > maximum { return offset - maximum }
+        return 0.0
+    }
+    // Mirrors the last `engine.setEdges` — the engine takes them but does not hand them back.
+    private var declaredEdges: (min: CGFloat?, max: CGFloat?) = (nil, nil)
     // The contiguous loaded item-index span of the settled window, or nil when empty.
     public var loadedIndexRange: (first: Int, last: Int)? {
         activeWindow.isEmpty ? nil : (activeWindow.startIndex, activeWindow.endIndex)
@@ -701,8 +741,15 @@ public final class CoreVirtualListView: UIView {
             self?.didEndDragging?()
         }
         engine.onFlightChanged = { [weak self] flight in
-            self?.activeScrollFlight = flight
-            self?.renderAttachments()
+            guard let self else { return }
+            let wasFlying = self.activeScrollFlight != nil
+            self.activeScrollFlight = flight
+            self.renderAttachments()
+            // After renderAttachments, so a host reading geometry from this callback sees the solve for
+            // the state it is being told about rather than the one it replaced.
+            if wasFlying && flight == nil {
+                self.didEndScrolling?()
+            }
         }
         container.backgroundColor = .clear
         container.clipsToBounds = false
@@ -1918,6 +1965,7 @@ public final class CoreVirtualListView: UIView {
         engine.contentHost.frame = bounds
         layoutExitOverlay()
         engine.setEdges(min: 0, max: 0)
+        declaredEdges = (0, 0)
         containerOriginY = 0
         animationController.seedViewport(layer: engine.contentHost.layer)
         assertGhostInvariants()
@@ -2554,6 +2602,7 @@ public final class CoreVirtualListView: UIView {
         let edges = loadedEdgeRange(for: window, originY: newOriginY)
         let offsetBeforeEdges = engine.offset
         engine.setEdges(min: edges.min, max: edges.max)
+        declaredEdges = (edges.min, edges.max)
         shiftExitOverlayChildren(by: engine.offset - offsetBeforeEdges)
         containerOriginY = newOriginY
         // After the assignment above: both the attachment solve and the notifier project against it.
