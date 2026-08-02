@@ -12,9 +12,10 @@ private struct PreparedEphemeralMessageSend {
     let inputUser: Api.InputUser
     let replyTo: Api.InputReplyTo?
     let message: Message
+    let isWelcomeTemplate: Bool
 }
 
-func generateEphemeralLocalMessageId(peerId: PeerId, transaction: Transaction) -> MessageId {
+func generateEphemeralLocalMessageId(peerId: PeerId, transaction: Transaction, namespace: MessageId.Namespace = Namespaces.Message.EphemeralLocal) -> MessageId {
     while true {
         var value: Int32 = 0
         arc4random_buf(&value, 4)
@@ -27,7 +28,7 @@ func generateEphemeralLocalMessageId(peerId: PeerId, transaction: Transaction) -
         } else {
             id = -abs(value)
         }
-        let messageId = MessageId(peerId: peerId, namespace: Namespaces.Message.EphemeralLocal, id: id)
+        let messageId = MessageId(peerId: peerId, namespace: namespace, id: id)
         if transaction.getMessage(messageId) == nil {
             return messageId
         }
@@ -204,8 +205,17 @@ private func enqueueEphemeralTextMessage(account: Account, peerId: PeerId, botPe
 
 private func preparedEphemeralMessageSend(account: Account, messageId: MessageId, setSending: Bool) -> Signal<PreparedEphemeralMessageSend?, NoError> {
     return account.postbox.transaction { transaction -> PreparedEphemeralMessageSend? in
-        guard messageId.namespace == Namespaces.Message.EphemeralLocal, let currentMessage = transaction.getMessage(messageId), let outgoingAttribute = currentMessage.attributes.first(where: { $0 is EphemeralOutgoingMessageAttribute }) as? EphemeralOutgoingMessageAttribute, outgoingAttribute.randomId != 0, let peer = transaction.getPeer(messageId.peerId), let botPeer = transaction.getPeer(outgoingAttribute.botPeerId), let inputPeer = apiInputPeer(peer), let inputUser = apiInputUser(botPeer) else {
+        guard (messageId.namespace == Namespaces.Message.EphemeralLocal || messageId.namespace == Namespaces.Message.WelcomeMessageLocal), let currentMessage = transaction.getMessage(messageId), let outgoingAttribute = currentMessage.attributes.first(where: { $0 is EphemeralOutgoingMessageAttribute }) as? EphemeralOutgoingMessageAttribute, outgoingAttribute.randomId != 0, let peer = transaction.getPeer(messageId.peerId), let inputPeer = apiInputPeer(peer) else {
             return nil
+        }
+        let inputUser: Api.InputUser
+        if outgoingAttribute.isWelcomeTemplate {
+            inputUser = .inputUserEmpty
+        } else {
+            guard let botPeer = transaction.getPeer(outgoingAttribute.botPeerId), let value = apiInputUser(botPeer) else {
+                return nil
+            }
+            inputUser = value
         }
 
         let replySubject: EngineMessageReplySubject?
@@ -222,7 +232,7 @@ private func preparedEphemeralMessageSend(account: Account, messageId: MessageId
             })
         }
 
-        return PreparedEphemeralMessageSend(peerId: messageId.peerId, localId: messageId, botPeerId: outgoingAttribute.botPeerId, randomId: outgoingAttribute.randomId, inputPeer: inputPeer, inputUser: inputUser, replyTo: reply?.apiReplyTo, message: currentMessage)
+        return PreparedEphemeralMessageSend(peerId: messageId.peerId, localId: messageId, botPeerId: outgoingAttribute.botPeerId, randomId: outgoingAttribute.randomId, inputPeer: inputPeer, inputUser: inputUser, replyTo: reply?.apiReplyTo, message: currentMessage, isWelcomeTemplate: outgoingAttribute.isWelcomeTemplate)
     }
 }
 
@@ -242,8 +252,14 @@ private func outgoingEphemeralMessage(from updates: Api.Updates, prepared: Prepa
         case let .updateNewEphemeralMessage(updateNewEphemeralMessageData):
             let message = updateNewEphemeralMessageData.message
             if case let .ephemeralMessage(messageData) = message {
-                if (messageData.flags & (1 << 0)) != 0 && messageData.peerId.peerId == prepared.peerId && messageData.fromId.peerId == accountPeerId && PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId)) == prepared.botPeerId {
-                    return message
+                if prepared.isWelcomeTemplate {
+                    if (messageData.flags & (1 << 5)) != 0 && messageData.peerId.peerId == prepared.peerId {
+                        return message
+                    }
+                } else {
+                    if (messageData.flags & (1 << 0)) != 0 && messageData.peerId.peerId == prepared.peerId && messageData.fromId.peerId == accountPeerId && PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId)) == prepared.botPeerId {
+                        return message
+                    }
                 }
             }
         default:
@@ -253,22 +269,51 @@ private func outgoingEphemeralMessage(from updates: Api.Updates, prepared: Prepa
     return nil
 }
 
+private func updatesWithoutWelcomeMessage(_ updates: Api.Updates, messageId: MessageId) -> Api.Updates? {
+    let filterUpdates: ([Api.Update]) -> [Api.Update] = { updates in
+        return updates.filter { update in
+            if case let .updateNewEphemeralMessage(data) = update {
+                return data.message.id != messageId
+            } else {
+                return true
+            }
+        }
+    }
+
+    switch updates {
+    case let .updates(data):
+        return .updates(Api.Updates.Cons_updates(updates: filterUpdates(data.updates), users: data.users, chats: data.chats, date: data.date, seq: data.seq))
+    case let .updatesCombined(data):
+        return .updatesCombined(Api.Updates.Cons_updatesCombined(updates: filterUpdates(data.updates), users: data.users, chats: data.chats, date: data.date, seqStart: data.seqStart, seq: data.seq))
+    case let .updateShort(data):
+        if case let .updateNewEphemeralMessage(updateData) = data.update, updateData.message.id == messageId {
+            return nil
+        } else {
+            return updates
+        }
+    default:
+        return updates
+    }
+}
+
 func _internal_failStaleEphemeralOutgoingMessages(postbox: Postbox) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
         var messageIds: [MessageId] = []
         for peerId in Set(transaction.chatListGetAllPeerIds()) {
-            transaction.scanMessageAttributes(peerId: peerId, namespace: Namespaces.Message.EphemeralLocal, limit: Int.max, { id, attributes in
-                if attributes.contains(where: { attribute in
-                    if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
-                        return attribute.state == .sending
-                    } else {
-                        return false
+            for namespace in [Namespaces.Message.EphemeralLocal, Namespaces.Message.WelcomeMessageLocal] {
+                transaction.scanMessageAttributes(peerId: peerId, namespace: namespace, limit: Int.max, { id, attributes in
+                    if attributes.contains(where: { attribute in
+                        if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
+                            return attribute.state == .sending
+                        } else {
+                            return false
+                        }
+                    }) {
+                        messageIds.append(id)
                     }
-                }) {
-                    messageIds.append(id)
-                }
-                return true
-            })
+                    return true
+                })
+            }
         }
 
         for messageId in messageIds {
@@ -302,6 +347,10 @@ private func completePendingEphemeralMessage(account: Account, prepared: Prepare
             })
         } else {
             let _ = transaction.addMessages([message], location: .Random)
+        }
+
+        if prepared.isWelcomeTemplate {
+            updateCachedWelcomeMessagesFlag(transaction: transaction, peerId: prepared.peerId, hasWelcomeMessages: true)
         }
 
         return serverId
@@ -351,6 +400,12 @@ private func performPreparedEphemeralMessageSend(account: Account, prepared: Pre
     if prepared.replyTo != nil {
         flags |= (1 << 5)
     }
+    if prepared.message.invertMedia {
+        flags |= (1 << 6)
+    }
+    if prepared.isWelcomeTemplate {
+        flags |= (1 << 7)
+    }
 
     return uploadedContentForPreparedEphemeralMessage(account: account, prepared: prepared)
     |> mapToSignal { content -> Signal<MessageId?, NoError> in
@@ -359,20 +414,28 @@ private func performPreparedEphemeralMessageSend(account: Account, prepared: Pre
         }
 
         let media: Api.InputMedia?
+        let richMessage: Api.InputRichMessage?
         let messageText: String
         switch content.content {
         case let .text(text):
             media = nil
+            richMessage = nil
             messageText = text
         case let .media(inputMedia, text):
             media = inputMedia
+            richMessage = nil
             messageText = text
             flags |= (1 << 2)
+        case let .richMessage(inputRichMessage):
+            media = nil
+            richMessage = inputRichMessage
+            messageText = prepared.message.text
+            flags |= (1 << 4)
         default:
             return failPendingEphemeralMessage(account: account, peerId: prepared.peerId, localId: prepared.localId, randomId: prepared.randomId)
         }
 
-        return account.network.request(Api.functions.ephemeral.sendMessage(flags: flags, peer: prepared.inputPeer, receiverId: prepared.inputUser, queryId: nil, message: messageText, entities: apiEntities.isEmpty ? nil : apiEntities, media: media, replyMarkup: nil, richMessage: nil, randomId: prepared.randomId, replyTo: prepared.replyTo))
+        return account.network.request(Api.functions.ephemeral.sendMessage(flags: flags, peer: prepared.inputPeer, receiverId: prepared.inputUser, queryId: nil, message: messageText, entities: apiEntities.isEmpty ? nil : apiEntities, media: media, replyMarkup: nil, richMessage: richMessage, randomId: prepared.randomId, replyTo: prepared.replyTo))
         |> map { result -> Api.Updates? in
             return result
         }
@@ -381,10 +444,21 @@ private func performPreparedEphemeralMessageSend(account: Account, prepared: Pre
         }
         |> mapToSignal { result -> Signal<MessageId?, NoError> in
             if let result {
-                account.stateManager.addUpdates(result)
                 if let message = outgoingEphemeralMessage(from: result, prepared: prepared, accountPeerId: account.peerId) {
-                    return completePendingEphemeralMessage(account: account, prepared: prepared, apiMessage: message)
+                    if prepared.isWelcomeTemplate {
+                        let remainingUpdates = updatesWithoutWelcomeMessage(result, messageId: message.id)
+                        return completePendingEphemeralMessage(account: account, prepared: prepared, apiMessage: message)
+                        |> afterNext { _ in
+                            if let remainingUpdates {
+                                account.stateManager.addUpdates(remainingUpdates)
+                            }
+                        }
+                    } else {
+                        account.stateManager.addUpdates(result)
+                        return completePendingEphemeralMessage(account: account, prepared: prepared, apiMessage: message)
+                    }
                 } else {
+                    account.stateManager.addUpdates(result)
                     return failPendingEphemeralMessage(account: account, peerId: prepared.peerId, localId: prepared.localId, randomId: prepared.randomId)
                 }
             } else {
@@ -411,5 +485,111 @@ func _internal_retryEphemeralOutgoingMessage(account: Account, messageId: Messag
             return .single(nil)
         }
         return performPreparedEphemeralMessageSend(account: account, prepared: prepared)
+    }
+}
+
+private func updateCachedWelcomeMessagesFlag(transaction: Transaction, peerId: PeerId, hasWelcomeMessages: Bool) {
+    transaction.updatePeerCachedData(peerIds: [peerId], update: { _, current in
+        if let current = current as? CachedChannelData {
+            var flags = current.flags
+            if hasWelcomeMessages {
+                flags.insert(.hasWelcomeMessages)
+            } else {
+                flags.remove(.hasWelcomeMessages)
+            }
+            return current.withUpdatedFlags(flags)
+        } else if let current = current as? CachedGroupData {
+            var flags = current.flags
+            if hasWelcomeMessages {
+                flags.insert(.hasWelcomeMessages)
+            } else {
+                flags.remove(.hasWelcomeMessages)
+            }
+            return current.withUpdatedFlags(flags)
+        } else {
+            return current
+        }
+    })
+}
+
+func _internal_refreshWelcomeMessages(account: Account, peerId: PeerId) -> Signal<Void, NoError> {
+    return account.postbox.transaction { transaction -> Api.InputPeer? in
+        return transaction.getPeer(peerId).flatMap(apiInputPeer)
+    }
+    |> mapToSignal { inputPeer -> Signal<Api.ephemeral.WelcomeMessages?, NoError> in
+        guard let inputPeer else {
+            return .single(nil)
+        }
+        return account.network.request(Api.functions.ephemeral.getWelcomeMessages(peer: inputPeer, hash: 0))
+        |> map(Optional.init)
+        |> `catch` { _ -> Signal<Api.ephemeral.WelcomeMessages?, NoError> in
+            return .single(nil)
+        }
+    }
+    |> mapToSignal { result -> Signal<Void, NoError> in
+        guard let result else {
+            return .complete()
+        }
+        return account.postbox.transaction { transaction -> Void in
+            switch result {
+            case let .welcomeMessages(data):
+                var currentIds: [MessageId] = []
+                transaction.scanMessageAttributes(peerId: peerId, namespace: Namespaces.Message.WelcomeMessageCloud, limit: Int.max, { id, _ in
+                    currentIds.append(id)
+                    return true
+                })
+                if !currentIds.isEmpty {
+                    transaction.deleteMessages(currentIds, forEachMedia: nil)
+                }
+
+                let messages = data.messages.map(StoreMessage.init(apiEphemeralMessage:))
+                if !messages.isEmpty {
+                    let _ = transaction.addMessages(messages, location: .Random)
+                }
+                updateCachedWelcomeMessagesFlag(transaction: transaction, peerId: peerId, hasWelcomeMessages: !messages.isEmpty)
+            case .welcomeMessagesNotModified:
+                break
+            }
+        }
+    }
+}
+
+func _internal_deleteAllWelcomeMessages(account: Account, peerId: PeerId) -> Signal<Void, NoError> {
+    return account.postbox.transaction { transaction -> Api.InputPeer? in
+        return transaction.getPeer(peerId).flatMap(apiInputPeer)
+    }
+    |> mapToSignal { inputPeer -> Signal<Bool, NoError> in
+        guard let inputPeer else {
+            return .single(false)
+        }
+        return account.network.request(Api.functions.ephemeral.deleteAllWelcomeMessages(peer: inputPeer))
+        |> map { result -> Bool in
+            if case .boolTrue = result {
+                return true
+            } else {
+                return false
+            }
+        }
+        |> `catch` { _ -> Signal<Bool, NoError> in
+            return .single(false)
+        }
+    }
+    |> mapToSignal { success -> Signal<Void, NoError> in
+        guard success else {
+            return .complete()
+        }
+        return account.postbox.transaction { transaction -> Void in
+            var messageIds: [MessageId] = []
+            for namespace in Namespaces.Message.allWelcomeMessages {
+                transaction.scanMessageAttributes(peerId: peerId, namespace: namespace, limit: Int.max, { id, _ in
+                    messageIds.append(id)
+                    return true
+                })
+            }
+            if !messageIds.isEmpty {
+                transaction.deleteMessages(messageIds, forEachMedia: nil)
+            }
+            updateCachedWelcomeMessagesFlag(transaction: transaction, peerId: peerId, hasWelcomeMessages: false)
+        }
     }
 }

@@ -209,7 +209,8 @@ extension Api.EphemeralMessage {
     var id: MessageId {
         switch self {
         case let .ephemeralMessage(messageData):
-            return MessageId(peerId: messageData.peerId.peerId, namespace: Namespaces.Message.EphemeralLocal, id: messageData.id)
+            let namespace = (messageData.flags & (1 << 5)) != 0 ? Namespaces.Message.WelcomeMessageCloud : Namespaces.Message.EphemeralLocal
+            return MessageId(peerId: messageData.peerId.peerId, namespace: namespace, id: messageData.id)
         }
     }
 

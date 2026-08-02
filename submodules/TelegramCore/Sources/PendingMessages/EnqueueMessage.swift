@@ -311,6 +311,8 @@ private func filterMessageAttributesForEphemeralOutgoingMessage(_ attributes: [M
         switch attribute {
         case _ as TextEntitiesMessageAttribute:
             return true
+        case _ as RichTextMessageAttribute:
+            return true
         case _ as EmbeddedMediaStickersMessageAttribute:
             return true
         case _ as EmojiSearchQueryMessageAttribute:
@@ -422,11 +424,14 @@ private func generateEphemeralOutgoingRandomId() -> Int64 {
     }
 }
 
-private func enqueueEphemeralOutgoingMessage(transaction: Transaction, account: Account, peerId: PeerId, transformedMedia: Bool, message: EnqueueMessage, botPeerId: PeerId) -> MessageId? {
+private func enqueueEphemeralOutgoingMessage(transaction: Transaction, account: Account, peerId: PeerId, transformedMedia: Bool, message: EnqueueMessage, botPeerId: PeerId, isWelcomeTemplate: Bool = false) -> MessageId? {
     guard case let .message(text, requestedAttributes, inlineStickers, mediaReference, threadId, replyToMessageId, _, _, correlationId, bubbleUpEmojiOrStickersets) = message else {
         return nil
     }
-    guard transaction.getPeer(peerId).flatMap(apiInputPeer) != nil, transaction.getPeer(botPeerId).flatMap(apiInputUser) != nil else {
+    guard transaction.getPeer(peerId).flatMap(apiInputPeer) != nil else {
+        return nil
+    }
+    if !isWelcomeTemplate && transaction.getPeer(botPeerId).flatMap(apiInputUser) == nil {
         return nil
     }
 
@@ -436,6 +441,9 @@ private func enqueueEphemeralOutgoingMessage(transaction: Transaction, account: 
 
     var flags = StoreMessageFlags()
     flags.insert(.Sending)
+    if isWelcomeTemplate {
+        flags.insert(.Incoming)
+    }
 
     let randomId = generateEphemeralOutgoingRandomId()
     var infoFlags = OutgoingMessageInfoFlags()
@@ -450,7 +458,7 @@ private func enqueueEphemeralOutgoingMessage(transaction: Transaction, account: 
 
     var attributes: [MessageAttribute] = filterMessageAttributesForEphemeralOutgoingMessage(requestedAttributes)
     attributes.append(OutgoingMessageInfoAttribute(uniqueId: randomId, flags: infoFlags, acknowledged: false, correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets, partialReference: partialReference))
-    attributes.append(EphemeralOutgoingMessageAttribute(botPeerId: botPeerId, randomId: randomId, state: .sending))
+    attributes.append(EphemeralOutgoingMessageAttribute(botPeerId: botPeerId, randomId: randomId, state: .sending, isWelcomeTemplate: isWelcomeTemplate))
 
     if let replyAttribute = replyMessageAttributeForEphemeralOutgoingMessage(transaction: transaction, peerId: peerId, replySubject: replyToMessageId) {
         attributes.append(replyAttribute)
@@ -467,9 +475,12 @@ private func enqueueEphemeralOutgoingMessage(transaction: Transaction, account: 
         }
     }
 
-    let localId = generateEphemeralLocalMessageId(peerId: peerId, transaction: transaction)
-    let timestamp = Int32(account.network.context.globalTime())
-    let storeMessage = StoreMessage(id: localId, customStableId: nil, globallyUniqueId: randomId, groupingKey: nil, threadId: threadId, timestamp: timestamp, flags: flags, tags: [], globalTags: [], localTags: [], forwardInfo: nil, authorId: account.peerId, text: text, attributes: attributes, media: mediaList)
+    let localId = generateEphemeralLocalMessageId(peerId: peerId, transaction: transaction, namespace: isWelcomeTemplate ? Namespaces.Message.WelcomeMessageLocal : Namespaces.Message.EphemeralLocal)
+    var timestamp = Int32(account.network.context.globalTime())
+    if isWelcomeTemplate {
+        timestamp += 1
+    }
+    let storeMessage = StoreMessage(id: localId, customStableId: nil, globallyUniqueId: randomId, groupingKey: nil, threadId: threadId, timestamp: timestamp, flags: flags, tags: [], globalTags: [], localTags: [], forwardInfo: nil, authorId: isWelcomeTemplate ? peerId : account.peerId, text: text, attributes: attributes, media: mediaList)
     let _ = transaction.addMessages([storeMessage], location: .Random)
 
     return localId
@@ -608,6 +619,36 @@ public func enqueueMessages(account: Account, peerId: PeerId, messages: [Enqueue
         }
         |> map { resultIds, ephemeralMessageIds -> [MessageId?] in
             for messageId in ephemeralMessageIds {
+                let _ = _internal_sendEphemeralOutgoingMessage(account: account, messageId: messageId).startStandalone()
+            }
+            return resultIds
+        }
+    }
+}
+
+public func enqueueWelcomeMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
+    let signal: Signal<[(Bool, EnqueueMessage)], NoError>
+    if let transformOutgoingMessageMedia = account.transformOutgoingMessageMedia {
+        signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: messages, userInteractive: true)
+    } else {
+        signal = .single(messages.map { (false, $0) })
+    }
+    return signal
+    |> mapToSignal { messages -> Signal<[MessageId?], NoError> in
+        return account.postbox.transaction { transaction -> ([MessageId?], [MessageId]) in
+            var resultIds = Array<MessageId?>(repeating: nil, count: messages.count)
+            var pendingMessageIds: [MessageId] = []
+            for i in 0 ..< messages.count {
+                let (transformedMedia, message) = messages[i]
+                if let messageId = enqueueEphemeralOutgoingMessage(transaction: transaction, account: account, peerId: peerId, transformedMedia: transformedMedia, message: message, botPeerId: peerId, isWelcomeTemplate: true) {
+                    resultIds[i] = messageId
+                    pendingMessageIds.append(messageId)
+                }
+            }
+            return (resultIds, pendingMessageIds)
+        }
+        |> map { resultIds, pendingMessageIds -> [MessageId?] in
+            for messageId in pendingMessageIds {
                 let _ = _internal_sendEphemeralOutgoingMessage(account: account, messageId: messageId).startStandalone()
             }
             return resultIds

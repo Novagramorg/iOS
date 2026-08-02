@@ -2395,7 +2395,7 @@ func resolveNotificationSettings(list: [TelegramPeerNotificationSettings], defau
 }
 
 public func messagesForNotification(transaction: Transaction, id: MessageId, alwaysReturnMessage: Bool) -> (messages: [Message], notify: Bool, sound: PeerMessageSound, displayContents: Bool, threadData: MessageHistoryThreadData?) {
-    if id.namespace == Namespaces.Message.EphemeralLocal {
+    if id.namespace == Namespaces.Message.EphemeralLocal || Namespaces.Message.allWelcomeMessages.contains(id.namespace) {
         return ([], false, defaultCloudPeerNotificationSound, false, nil)
     }
 

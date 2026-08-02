@@ -63,6 +63,8 @@ func inputContextQueriesForChatPresentationIntefaceState(_ chatPresentationInter
             return []
         case .quickReplyMessageInput:
             break
+        case .welcomeMessages:
+            break
         case .businessLinkSetup:
             return []
         }
@@ -249,6 +251,8 @@ func inputTextPanelStateForChatPresentationInterfaceState(_ chatPresentationInte
                     case .hashTagSearch:
                         break
                     case .quickReplyMessageInput:
+                        break
+                    case .welcomeMessages:
                         break
                     case .businessLinkSetup:
                         stickersEnabled = false
