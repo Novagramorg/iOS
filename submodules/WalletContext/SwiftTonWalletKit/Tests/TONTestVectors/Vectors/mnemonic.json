@@ -1,0 +1,69 @@
+{
+  "source": "@ton/walletkit@1.1.0-beta.0",
+  "vectors": [
+    {
+      "scheme": "ton",
+      "wordCount": 24,
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+      "publicKey": "abbd2a1c784a6086850c172bcc7d56208e4dea0a51b9389ba21d174ff864c17a",
+      "secretKey": "88965e4e6f686bad4be63761f4d8fa1cc682bccf11f8382bd281304d07b76edcabbd2a1c784a6086850c172bcc7d56208e4dea0a51b9389ba21d174ff864c17a"
+    },
+    {
+      "scheme": "ton",
+      "wordCount": 24,
+      "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "publicKey": "56ae159db937d1c5ff584e016b1f64a168240adff502b3281f7edaf692fd81dd",
+      "secretKey": "802971fb00bfcaa283734ba1fff1843988d1d600f8f3832daf282a700688ee2956ae159db937d1c5ff584e016b1f64a168240adff502b3281f7edaf692fd81dd"
+    },
+    {
+      "scheme": "ton",
+      "wordCount": 24,
+      "mnemonic": "letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic bless",
+      "publicKey": "02251b01966d59182413b4c4f3d468ab48cd1b6a17bcf1b259a6395b2b66b6ed",
+      "secretKey": "9519154c7b4a92a6666fc026ba43a989d8be881ce6aca6b63ef45c9940ef4acb02251b01966d59182413b4c4f3d468ab48cd1b6a17bcf1b259a6395b2b66b6ed"
+    },
+    {
+      "scheme": "ton",
+      "wordCount": 24,
+      "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote",
+      "publicKey": "8a88c3b80885be05618c7fb01d354ea8ce7d2770a227464c5b7515dd14c0b9f1",
+      "secretKey": "1fb708f493f0cd36625fae4248897476387ae3f3e4326a971bb65b61909fe4eb8a88c3b80885be05618c7fb01d354ea8ce7d2770a227464c5b7515dd14c0b9f1"
+    },
+    {
+      "scheme": "bip39",
+      "wordCount": 12,
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "derivationPath": [
+        44,
+        607,
+        0
+      ],
+      "publicKey": "7952e94118f34607c75e23258dd9220d66ccac5a3ee074125c25068e8107bfbf",
+      "secretKey": "b477ef5ed17fb8a2b8faddd7a9835a227243a82c70b190c7af4896155aa7df9f7952e94118f34607c75e23258dd9220d66ccac5a3ee074125c25068e8107bfbf"
+    },
+    {
+      "scheme": "bip39",
+      "wordCount": 12,
+      "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+      "derivationPath": [
+        44,
+        607,
+        0
+      ],
+      "publicKey": "434908c4c092113fcced4eec061b09c02b7b8934a9ca555e2032505aab7558ea",
+      "secretKey": "930b30bc355699d639e8b9561c5e650edfc696294f9917cc19a453dcd526cf84434908c4c092113fcced4eec061b09c02b7b8934a9ca555e2032505aab7558ea"
+    },
+    {
+      "scheme": "bip39",
+      "wordCount": 18,
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon agent",
+      "derivationPath": [
+        44,
+        607,
+        0
+      ],
+      "publicKey": "2fefdbc0d08ea83fb45165ffe8bf15a62f9292e4fb03bfc0c0b55d0da4d22a91",
+      "secretKey": "77d9a6940b6eaa492b361d0e740cee3d7a319231c2ab132897dc0f67740c44102fefdbc0d08ea83fb45165ffe8bf15a62f9292e4fb03bfc0c0b55d0da4d22a91"
+    }
+  ]
+}

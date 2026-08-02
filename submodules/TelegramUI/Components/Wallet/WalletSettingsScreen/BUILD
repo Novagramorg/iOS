@@ -20,7 +20,7 @@ swift_library(
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/ListActionItemComponent",
         "//submodules/TelegramUI/Components/ListSectionComponent",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
     ],
     visibility = [
         "//visibility:public",

@@ -1,0 +1,64 @@
+{
+  "source": "@ton/walletkit@1.1.0-beta.0",
+  "vectors": [
+    {
+      "label": "no-extensions",
+      "signatureAllowed": true,
+      "seqno": 0,
+      "entries": [],
+      "dataBoc": "te6cckEBAQEAKwAAUYAAAAA///+InbUT3mdbUhaxUdRoFTeGubKZCruO8SHTHWAkUMWs7RSggnHNUw==",
+      "dataHash": "514861e2e3ba77f3631e0ebff9f0ceb9e65ce1d6a8e15393996ff0fe015bb76e"
+    },
+    {
+      "label": "one-extension",
+      "signatureAllowed": true,
+      "seqno": 0,
+      "entries": [
+        {
+          "key": "7719472615821079694904732333912527190217998977709370935963838933860875309329",
+          "value": "-1"
+        }
+      ],
+      "dataBoc": "te6cckEBAgEAUAABUYAAAAA///+InbUT3mdbUhaxUdRoFTeGubKZCruO8SHTHWAkUMWs7RTgAQBDoAIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiONmDeW8=",
+      "dataHash": "1441f11275e248e0da17e1e54c329216daeb50e89b5f6d86ecc387d70e77f069"
+    },
+    {
+      "label": "two-extensions",
+      "signatureAllowed": true,
+      "seqno": 0,
+      "entries": [
+        {
+          "key": "7719472615821079694904732333912527190217998977709370935963838933860875309329",
+          "value": "-1"
+        },
+        {
+          "key": "15438945231642159389809464667825054380435997955418741871927677867721750618658",
+          "value": "-1"
+        }
+      ],
+      "dataBoc": "te6cckEBBAEAdwABUYAAAAA///+InbUT3mdbUhaxUdRoFTeGubKZCruO8SHTHWAkUMWs7RTgAQIBYgIDAEK/YiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiMAQr9ERERERERERERERERERERERERERERERERERERERERERUjUbBo=",
+      "dataHash": "a2c310bbf2bc8bbdf33e07eb614604b6b87cce36757a8c34adc40dbb9ba20683"
+    },
+    {
+      "label": "signature-disabled",
+      "signatureAllowed": false,
+      "seqno": 0,
+      "entries": [
+        {
+          "key": "7719472615821079694904732333912527190217998977709370935963838933860875309329",
+          "value": "-1"
+        }
+      ],
+      "dataBoc": "te6cckEBAgEAUAABUQAAAAA///+InbUT3mdbUhaxUdRoFTeGubKZCruO8SHTHWAkUMWs7RTgAQBDoAIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiOHlPUjI=",
+      "dataHash": "14ab26bd698bd2eda799038ab6440eaeffabca721c0839732bf418b5acd360b4"
+    },
+    {
+      "label": "nonzero-seqno",
+      "signatureAllowed": true,
+      "seqno": 12345,
+      "entries": [],
+      "dataBoc": "te6cckEBAQEAKwAAUYAAGBy///+InbUT3mdbUhaxUdRoFTeGubKZCruO8SHTHWAkUMWs7RSgCGgzfw==",
+      "dataHash": "204b60a642905e24e1a02d08c7d9940865e2cdb07f5184284e7f58157fc7af75"
+    }
+  ]
+}

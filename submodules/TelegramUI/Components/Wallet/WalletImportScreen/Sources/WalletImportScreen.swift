@@ -226,6 +226,7 @@ private final class WalletImportScreenComponent: Component {
         private let body = ComponentView<Empty>()
         private let wordCountControl = ComponentView<Empty>()
         private var wordFields: [WordFieldView] = []
+        private var wordSuggestionView: ComponentHostView<Empty>?
         private let button = ComponentView<Empty>()
 
         private let playAnimation = ActionSlot<Void>()
@@ -239,12 +240,11 @@ private final class WalletImportScreenComponent: Component {
         private var isImporting = false
         private var didCompleteVerification = false
         private var words = Array(repeating: "", count: 12)
-        private var wordValidationDisposables = DisposableDict<Int>()
-        private let pastedMnemonicValidationDisposable = MetaDisposable()
-        private var validWordIndices = Set<Int>()
+        private var isImportPhraseValid = false
         private var invalidWordIndices = Set<Int>()
-        private var invalidPastedMnemonic: [String]?
         private var activeWordIndex: Int?
+        private var wordSuggestions: [String] = []
+        private var wordSuggestionFrame: CGRect?
 
         override init(frame: CGRect) {
             self.scrollView.showsVerticalScrollIndicator = true
@@ -278,17 +278,15 @@ private final class WalletImportScreenComponent: Component {
                 field.removeFromSuperview()
             }
             self.wordFields.removeAll()
-            self.wordValidationDisposables.dispose()
-            self.wordValidationDisposables = DisposableDict()
-            self.pastedMnemonicValidationDisposable.set(nil)
             self.words = Array(repeating: "", count: count)
             for index in 0 ..< min(existingWords.count, count) {
                 self.words[index] = existingWords[index]
             }
-            self.validWordIndices.removeAll()
+            self.updateImportPhraseValidity()
             self.invalidWordIndices.removeAll()
-            self.invalidPastedMnemonic = nil
             self.activeWordIndex = nil
+            self.wordSuggestions = []
+            self.wordSuggestionFrame = nil
 
             for index in 0 ..< count {
                 let field = WordFieldView(
@@ -303,7 +301,7 @@ private final class WalletImportScreenComponent: Component {
                     self?.wordEditingChanged(index: index, isEditing: isEditing)
                 }
                 field.returnPressed = { [weak self] index in
-                    self?.advanceFocus(from: index)
+                    self?.handleReturn(from: index)
                 }
                 field.pasteWords = { [weak self] index, words in
                     return self?.insertWords(words, from: index) ?? false
@@ -339,8 +337,6 @@ private final class WalletImportScreenComponent: Component {
         deinit {
             self.titleTransformContainer.removeFromSuperview()
             self.operationDisposable.dispose()
-            self.wordValidationDisposables.dispose()
-            self.pastedMnemonicValidationDisposable.dispose()
         }
 
         func scrollToTop() {
@@ -354,18 +350,14 @@ private final class WalletImportScreenComponent: Component {
             self.updateScrolling(transition: .immediate)
         }
 
-        private var isPhraseValid: Bool {
+        private var isActionEnabled: Bool {
             guard let component = self.component else {
                 return false
             }
             switch component.mode {
             case .importWallet:
-                if let invalidPastedMnemonic = self.invalidPastedMnemonic,
-                   invalidPastedMnemonic == self.words {
-                    return false
-                }
-                return self.words.indices.allSatisfy { index in
-                    return !self.words[index].isEmpty && self.validWordIndices.contains(index)
+                return self.words.allSatisfy { word in
+                    return !word.isEmpty && component.walletContext.isMnemonicWord(word)
                 }
             case .verify:
                 return self.words.allSatisfy { !$0.isEmpty }
@@ -383,35 +375,48 @@ private final class WalletImportScreenComponent: Component {
             }
         }
 
-        private func validatePastedMnemonic(_ words: [String]) {
-            guard !self.isVerificationMode, let component = self.component else {
+        private func updateImportPhraseValidity() {
+            guard let component = self.component else {
+                self.isImportPhraseValid = false
                 return
             }
-            self.invalidPastedMnemonic = nil
-            self.pastedMnemonicValidationDisposable.set((component.walletContext.validateMnemonic(words: words)
-            |> deliverOnMainQueue).start(next: { [weak self] isValid in
-                guard let self, self.words == words else {
-                    return
-                }
-                if isValid {
-                    self.validWordIndices = Set(self.words.indices)
-                    self.invalidWordIndices.removeAll()
-                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                } else {
-                    self.invalidPastedMnemonic = words
-                    for index in self.words.indices {
-                        self.validateWord(at: index)
-                    }
-                    self.presentInvalidMnemonic()
-                }
-            }, error: { [weak self] _ in
-                guard let self, self.words == words else {
-                    return
-                }
-                for index in self.words.indices {
-                    self.validateWord(at: index)
-                }
-            }))
+            self.isImportPhraseValid = component.walletContext.isMnemonicValid(words: self.words)
+        }
+
+        private func updateWordSuggestions() {
+            guard !self.isVerificationMode,
+                  let component = self.component,
+                  let activeWordIndex,
+                  self.words.indices.contains(activeWordIndex),
+                  !self.words[activeWordIndex].isEmpty else {
+                self.wordSuggestions = []
+                return
+            }
+            let suggestions = component.walletContext.mnemonicWordSuggestions(
+                for: self.words[activeWordIndex],
+                limit: 3
+            )
+            if suggestions.count == 1, suggestions[0] == self.words[activeWordIndex] {
+                self.wordSuggestions = []
+            } else {
+                self.wordSuggestions = suggestions
+            }
+        }
+
+        private func selectSuggestedWord(_ word: String, at index: Int) {
+            guard self.activeWordIndex == index,
+                  self.words.indices.contains(index),
+                  self.wordFields.indices.contains(index) else {
+                return
+            }
+            let word = self.normalizeWord(word)
+            self.words[index] = word
+            self.wordFields[index].setText(word)
+            self.invalidWordIndices.remove(index)
+            self.wordSuggestions = []
+            self.updateImportPhraseValidity()
+            self.componentState?.updated(transition: .immediate)
+            self.advanceFocus(from: index)
         }
 
         private func validateWord(at index: Int) {
@@ -421,37 +426,12 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
             let word = self.words[index]
-            guard !word.isEmpty else {
-                self.validWordIndices.remove(index)
+            if word.isEmpty || component.walletContext.isMnemonicWord(word) {
                 self.invalidWordIndices.remove(index)
-                self.wordValidationDisposables.set(nil, forKey: index)
-                return
+            } else {
+                self.invalidWordIndices.insert(index)
             }
-
-            self.validWordIndices.remove(index)
-            self.invalidWordIndices.remove(index)
-            self.componentState?.updated(transition: .immediate)
-            self.wordValidationDisposables.set((component.walletContext.containsMnemonicWord(word)
-            |> deliverOnMainQueue).start(next: { [weak self] isValid in
-                guard let self, self.words.indices.contains(index), self.words[index] == word else {
-                    return
-                }
-                if isValid {
-                    self.validWordIndices.insert(index)
-                    self.invalidWordIndices.remove(index)
-                } else {
-                    self.validWordIndices.remove(index)
-                    self.invalidWordIndices.insert(index)
-                }
-                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            }, error: { [weak self] _ in
-                guard let self, self.words.indices.contains(index), self.words[index] == word else {
-                    return
-                }
-                self.validWordIndices.remove(index)
-                self.invalidWordIndices.remove(index)
-                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            }), forKey: index)
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
         }
 
         private func wordTextChanged(index: Int, text: String) {
@@ -459,11 +439,9 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
             self.words[index] = self.normalizeWord(text)
-            self.pastedMnemonicValidationDisposable.set(nil)
-            self.invalidPastedMnemonic = nil
-            self.wordValidationDisposables.set(nil, forKey: index)
-            self.validWordIndices.remove(index)
+            self.updateImportPhraseValidity()
             self.invalidWordIndices.remove(index)
+            self.updateWordSuggestions()
             self.componentState?.updated(transition: .immediate)
         }
 
@@ -475,6 +453,7 @@ private final class WalletImportScreenComponent: Component {
             if isEditing {
                 self.activeWordIndex = index
                 self.invalidWordIndices.remove(index)
+                self.updateWordSuggestions()
             } else {
                 if self.activeWordIndex == index {
                     self.activeWordIndex = nil
@@ -482,9 +461,19 @@ private final class WalletImportScreenComponent: Component {
                 let normalizedWord = self.normalizeWord(self.wordFields[index].textField.text ?? "")
                 self.words[index] = normalizedWord
                 self.wordFields[index].setText(normalizedWord)
+                self.updateImportPhraseValidity()
+                self.updateWordSuggestions()
                 self.validateWord(at: index)
             }
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+        }
+
+        private func handleReturn(from index: Int) {
+            if self.activeWordIndex == index, let firstSuggestion = self.wordSuggestions.first {
+                self.selectSuggestedWord(firstSuggestion, at: index)
+            } else {
+                self.advanceFocus(from: index)
+            }
         }
 
         private func advanceFocus(from index: Int) {
@@ -566,21 +555,25 @@ private final class WalletImportScreenComponent: Component {
             guard self.words.indices.contains(startIndex), normalizedWords.count <= self.words.count - startIndex else {
                 return false
             }
-            self.invalidPastedMnemonic = nil
-
             for offset in normalizedWords.indices {
                 let targetIndex = startIndex + offset
                 let word = normalizedWords[offset]
                 self.words[targetIndex] = word
                 self.wordFields[targetIndex].setText(word)
-                self.wordValidationDisposables.set(nil, forKey: targetIndex)
-                self.validWordIndices.remove(targetIndex)
                 self.invalidWordIndices.remove(targetIndex)
             }
 
+            self.wordSuggestions = []
+            self.updateImportPhraseValidity()
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             if normalizedWords.count > 1 {
-                self.validatePastedMnemonic(normalizedWords)
+                if self.isImportPhraseValid {
+                    self.invalidWordIndices.removeAll()
+                } else {
+                    for index in self.words.indices {
+                        self.validateWord(at: index)
+                    }
+                }
             } else {
                 self.validateWord(at: startIndex)
             }
@@ -712,6 +705,10 @@ private final class WalletImportScreenComponent: Component {
             guard !self.isImporting else {
                 return
             }
+            guard self.isImportPhraseValid else {
+                self.presentInvalidMnemonic()
+                return
+            }
             self.performImport(words: self.words)
         }
 
@@ -792,6 +789,26 @@ private final class WalletImportScreenComponent: Component {
             }
         }
 
+        private func removeWordSuggestionView() {
+            guard let wordSuggestionView = self.wordSuggestionView else {
+                self.wordSuggestionFrame = nil
+                return
+            }
+            self.wordSuggestionView = nil
+            self.wordSuggestionFrame = nil
+            wordSuggestionView.isUserInteractionEnabled = false
+            wordSuggestionView.alpha = 0.0
+            wordSuggestionView.layer.animateAlpha(
+                from: 1.0,
+                to: 0.0,
+                duration: 0.25,
+                removeOnCompletion: false,
+                completion: { [weak wordSuggestionView] _ in
+                    wordSuggestionView?.removeFromSuperview()
+                }
+            )
+        }
+
         private func ensureActiveFieldVisible(
             availableSize: CGSize,
             navigationHeight: CGFloat,
@@ -806,6 +823,9 @@ private final class WalletImportScreenComponent: Component {
             var targetFrame = self.wordFields[activeWordIndex].frame
             if activeWordIndex >= max(0, self.wordFields.count - 3), let buttonView = self.button.view {
                 targetFrame = targetFrame.union(buttonView.frame)
+            }
+            if let wordSuggestionFrame = self.wordSuggestionFrame {
+                targetFrame = targetFrame.union(wordSuggestionFrame)
             }
             targetFrame = targetFrame.insetBy(dx: 0.0, dy: -12.0)
 
@@ -1164,7 +1184,7 @@ private final class WalletImportScreenComponent: Component {
             }
             contentHeight += 24.0
 
-            let isButtonEnabled = self.isPhraseValid
+            let isButtonEnabled = self.isActionEnabled
             self.button.parentState = state
             let buttonSize = self.button.update(
                 transition: transition,
@@ -1187,7 +1207,7 @@ private final class WalletImportScreenComponent: Component {
                     isEnabled: isButtonEnabled,
                     displaysProgress: !isVerificationMode && self.isImporting,
                     action: { [weak self] in
-                        guard let self, self.isPhraseValid else {
+                        guard let self, self.isActionEnabled else {
                             return
                         }
                         if self.isVerificationMode {
@@ -1215,6 +1235,63 @@ private final class WalletImportScreenComponent: Component {
                 )
             }
             contentHeight += buttonSize.height + environment.safeInsets.bottom + 24.0
+
+            if !isVerificationMode,
+               !self.wordSuggestions.isEmpty,
+               let activeWordIndex = self.activeWordIndex,
+               self.wordFields.indices.contains(activeWordIndex) {
+                let wordSuggestionView: ComponentHostView<Empty>
+                let animateIn: Bool
+                if let current = self.wordSuggestionView {
+                    wordSuggestionView = current
+                    animateIn = false
+                } else {
+                    wordSuggestionView = ComponentHostView<Empty>()
+                    self.wordSuggestionView = wordSuggestionView
+                    self.scrollView.addSubview(wordSuggestionView)
+                    animateIn = true
+                }
+
+                let suggestionIndex = activeWordIndex
+                let suggestionSize = wordSuggestionView.update(
+                    transition: .immediate,
+                    component: AnyComponent(WalletWordSuggestionsComponent(
+                        fieldIndex: activeWordIndex,
+                        query: self.words[activeWordIndex],
+                        words: self.wordSuggestions,
+                        action: { [weak self] word in
+                            self?.selectSuggestedWord(word, at: suggestionIndex)
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(
+                        width: fieldWidth,
+                        height: WalletWordSuggestionsComponent.height
+                    )
+                )
+                let fieldFrame = self.wordFields[activeWordIndex].frame
+                let suggestionX = floor(min(
+                    fieldFrame.maxX - suggestionSize.width,
+                    max(fieldFrame.minX, fieldFrame.midX - suggestionSize.width / 2.0)
+                ))
+                let suggestionFrame = CGRect(
+                    x: suggestionX,
+                    y: fieldFrame.maxY - WalletWordSuggestionsComponent.notchHeight,
+                    width: suggestionSize.width,
+                    height: suggestionSize.height
+                )
+                wordSuggestionView.frame = suggestionFrame
+                self.wordSuggestionFrame = suggestionFrame
+                self.scrollView.bringSubviewToFront(wordSuggestionView)
+                if let componentView = wordSuggestionView.componentView as? WalletWordSuggestionsComponent.View {
+                    componentView.adjustBackground(relativePositionX: fieldFrame.midX - suggestionFrame.minX)
+                }
+                if animateIn {
+                    wordSuggestionView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+                }
+            } else {
+                self.removeWordSuggestionView()
+            }
 
             let contentSize = CGSize(
                 width: availableSize.width,

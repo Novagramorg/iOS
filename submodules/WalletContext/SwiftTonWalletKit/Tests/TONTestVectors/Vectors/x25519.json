@@ -1,0 +1,25 @@
+{
+  "source": "@ton/walletkit@1.1.0-beta.0",
+  "vectors": [
+    {
+      "secretKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "publicKey": "c306fb0ef2bf8b7f93bad98155fa37daec74db0c4cbeda6c6f1dba9d36558252"
+    },
+    {
+      "secretKey": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "publicKey": "db48257e1237976a74ad8cfedca00213408fe89ac6251f1b930245f242b5c31a"
+    },
+    {
+      "secretKey": "0000000000000000000000000000000000000000000000000000000000000000",
+      "publicKey": "2fe57da347cd62431528daac5fbb290730fff684afc4cfc2ed90995f58cb3b74"
+    },
+    {
+      "secretKey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "publicKey": "847c0d2c375234f365e660955187a3735a0f7613d1609d3a6a4d8c53aeaa5a22"
+    },
+    {
+      "secretKey": "0101010101010101010101010101010101010101010101010101010101010101",
+      "publicKey": "a4e09292b651c278b9772c569f5fa9bb13d906b46ab68c9df9dc2b4409f8a209"
+    }
+  ]
+}

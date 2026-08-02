@@ -31,6 +31,46 @@ private func walletTransactionModeId(_ mode: WalletTransactionScreenMode) -> Str
     }
 }
 
+private func walletTransactionCollectible(
+    _ collectible: WalletContext.Collectible
+) -> WalletContext.Transaction.CollectibleTransfer {
+    let kind: WalletContext.Transaction.CollectibleTransfer.Kind
+    switch collectible.kind {
+    case .gift:
+        kind = .gift
+    case .username:
+        kind = .username
+    case .anonymousNumber:
+        kind = .anonymousNumber
+    case .other:
+        kind = .other
+    }
+    return WalletContext.Transaction.CollectibleTransfer(
+        address: collectible.address,
+        name: collectible.name,
+        imageUrl: collectible.imageUrl,
+        lottieUrl: collectible.lottieUrl,
+        collectionName: collectible.collectionName,
+        collectionUrl: collectible.collectionUrl,
+        kind: kind
+    )
+}
+
+private func walletTransactionAddressesEqual(_ lhs: String, _ rhs: String) -> Bool {
+    guard let lhs = WalletContext.transferAddress(from: lhs),
+          let rhs = WalletContext.transferAddress(from: rhs) else {
+        return false
+    }
+    return lhs == rhs
+}
+
+private func walletTransactionHashesEqual(_ lhs: String?, _ rhs: String?) -> Bool {
+    guard let lhs, let rhs else {
+        return false
+    }
+    return lhs.lowercased() == rhs.lowercased()
+}
+
 private final class WalletTransactionContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -231,7 +271,8 @@ private final class WalletTransactionContentComponent: Component {
                 amount: preparedTransfer.amount,
                 fee: preparedTransfer.fee,
                 counterparty: preparedTransfer.recipient,
-                comment: walletTransactionComment(self.inputExternalState.text.string) ?? preparedTransfer.comment
+                comment: walletTransactionComment(self.inputExternalState.text.string) ?? preparedTransfer.comment,
+                collectible: preparedTransfer.collectible.map(walletTransactionCollectible)
             )
         }
 
@@ -319,11 +360,21 @@ private final class WalletTransactionContentComponent: Component {
             self.previewOperation = .preparing
             self.preparingForSend = authorizeAfterPreparation
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.transferDisposable.set((walletContext.prepareTransfer(
-                address: preparedTransfer.recipient,
-                amount: preparedTransfer.amount,
-                comment: comment
-            )
+            let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
+            if let collectible = preparedTransfer.collectible {
+                preparation = walletContext.prepareCollectibleTransfer(
+                    address: preparedTransfer.recipient,
+                    collectible: collectible,
+                    comment: comment
+                )
+            } else {
+                preparation = walletContext.prepareTransfer(
+                    address: preparedTransfer.recipient,
+                    amount: preparedTransfer.amount,
+                    comment: comment
+                )
+            }
+            self.transferDisposable.set((preparation
             |> deliverOnMainQueue).start(next: { [weak self] updatedTransfer in
                 guard let self else {
                     return
@@ -403,6 +454,9 @@ private final class WalletTransactionContentComponent: Component {
                 self.submittedTransfer = submittedTransfer
                 self.preparedTransferNeedsRefresh = false
                 self.previewOperation = .pending
+                if preparedTransfer.collectible != nil {
+                    self.dismissSendScreenIfNeeded()
+                }
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 self.checkForConfirmation()
             }, error: { [weak self] _ in
@@ -426,17 +480,39 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             let pendingTransfer = submittedTransfer.pendingTransfer
-            guard let transaction = state.transactions.items.first(where: { transaction in
+            let transaction = state.transactions.items.first(where: { transaction in
                 guard !self.baselineTransactionIds.contains("\(transaction.id):\(transaction.logicalTime)"),
+                      transaction.status == .completed,
                       transaction.direction == .outgoing,
-                      transaction.amount == pendingTransfer.amount,
-                      transaction.counterparty == pendingTransfer.recipient,
-                      walletTransactionComment(transaction.comment) == walletTransactionComment(pendingTransfer.comment),
-                      transaction.timestamp >= pendingTransfer.createdAt - 60 else {
+                      let counterparty = transaction.counterparty,
+                      walletTransactionAddressesEqual(counterparty, pendingTransfer.recipient) else {
                     return false
                 }
-                return true
-            }) else {
+                if let normalizedHash = pendingTransfer.normalizedHash {
+                    guard walletTransactionHashesEqual(transaction.externalMessageHash, normalizedHash) else {
+                        return false
+                    }
+                } else {
+                    guard walletTransactionComment(transaction.comment) == walletTransactionComment(pendingTransfer.comment),
+                          transaction.timestamp >= pendingTransfer.createdAt - 60 else {
+                        return false
+                    }
+                }
+                if let collectibleAddress = pendingTransfer.collectibleAddress {
+                    guard let transactionCollectibleAddress = transaction.collectible?.address else {
+                        return false
+                    }
+                    return walletTransactionAddressesEqual(transactionCollectibleAddress, collectibleAddress)
+                } else {
+                    return transaction.collectible == nil && transaction.amount == pendingTransfer.amount
+                }
+            })
+            guard let transaction else {
+                self.submittedTransfer = nil
+                self.preparedTransferNeedsRefresh = true
+                self.previewOperation = .ready
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                self.presentTransferError()
                 return
             }
 
@@ -444,10 +520,13 @@ private final class WalletTransactionContentComponent: Component {
             self.previewOperation = .confirmed
             self.dismissSendScreenIfNeeded()
             self.componentState?.updated(transition: .easeInOut(duration: 0.25))
-            self.showSuccessIfNeeded(address: pendingTransfer.recipient)
+            self.showSuccessIfNeeded(
+                address: pendingTransfer.recipient,
+                isCollectible: pendingTransfer.collectibleAddress != nil
+            )
         }
 
-        private func showSuccessIfNeeded(address: String) {
+        private func showSuccessIfNeeded(address: String, isCollectible: Bool) {
             guard !self.didShowSuccess,
                   let component = self.component,
                   let controller = self.environment?.controller() else {
@@ -455,7 +534,7 @@ private final class WalletTransactionContentComponent: Component {
             }
             self.didShowSuccess = true
             //TODO:localize
-            let successPrefix = "Grams have been sent to "
+            let successPrefix = isCollectible ? "NFT has been sent to " : "Grams have been sent to "
             //TODO:localize
             let successSuffix = "."
             let text = successPrefix + walletTransactionShortAddress(address) + successSuffix
@@ -1058,7 +1137,7 @@ private final class WalletTransactionContentComponent: Component {
 
             let displaysInput = self.isPreview && !self.isConfirmedPreview
             if displaysInput {
-                contentHeight += 16.0
+                contentHeight += 12.0
                 let inputWidth = max(0.0, tableSize.width - 24.0)
                 //TODO:localize
                 let optionalMessage = "Optional message"
@@ -1069,7 +1148,7 @@ private final class WalletTransactionContentComponent: Component {
                         theme: theme,
                         strings: environment.strings,
                         externalState: self.inputExternalState,
-                        fontSize: 15.0,
+                        fontSize: 17.0,
                         textColor: theme.actionSheet.inputTextColor,
                         accentColor: theme.actionSheet.controlAccentColor,
                         insets: UIEdgeInsets(top: 10.0, left: 16.0, bottom: 10.0, right: 16.0),
@@ -1077,7 +1156,7 @@ private final class WalletTransactionContentComponent: Component {
                         customInputView: nil,
                         placeholder: NSAttributedString(
                             string: optionalMessage,
-                            font: Font.regular(15.0),
+                            font: Font.regular(17.0),
                             textColor: theme.actionSheet.inputPlaceholderColor
                         ),
                         resetText: nil,
@@ -1140,7 +1219,9 @@ private final class WalletTransactionContentComponent: Component {
                         || (self.previewOperation == .preparing && !self.preparingForSend)
                 }
                 contentHeight += inputSize.height
+                contentHeight += 24.0
             } else {
+                contentHeight += 30.0
                 if let backgroundView = self.inputBackground.view {
                     transition.setAlpha(view: backgroundView, alpha: 0.0)
                 }
@@ -1149,18 +1230,22 @@ private final class WalletTransactionContentComponent: Component {
                 }
             }
 
-            contentHeight += 30.0
             let actionTitle: String
             if self.isPreview && !self.isConfirmedPreview {
-                //TODO:localize
-                let sendPrefix = "Send "
-                //TODO:localize
-                let gramsSuffix = " Grams"
-                actionTitle = sendPrefix + formatTonAmountText(
-                    transaction.amount,
-                    dateTimeFormat: environment.dateTimeFormat,
-                    maxDecimalPositions: 9
-                ) + gramsSuffix
+                if transaction.collectible != nil {
+                    //TODO:localize
+                    actionTitle = "Send Collectible"
+                } else {
+                    //TODO:localize
+                    let sendPrefix = "Send "
+                    //TODO:localize
+                    let gramsSuffix = " Grams"
+                    actionTitle = sendPrefix + formatTonAmountText(
+                        transaction.amount,
+                        dateTimeFormat: environment.dateTimeFormat,
+                        maxDecimalPositions: 9
+                    ) + gramsSuffix
+                }
             } else {
                 //TODO:localize
                 actionTitle = "OK"

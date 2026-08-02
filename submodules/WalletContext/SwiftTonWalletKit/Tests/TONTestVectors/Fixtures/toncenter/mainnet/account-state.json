@@ -1,0 +1,107 @@
+{
+  "source": "toncenter-v3",
+  "network": "mainnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "active",
+      "method": "getAccountState",
+      "args": {
+        "address": "0:852443F8599FE6A5DA34FE43049AC4E0BEB3071BB2BFB56635EA9421287C283A"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/addressInformation?include_boc=true&address=0%3A852443F8599FE6A5DA34FE43049AC4E0BEB3071BB2BFB56635EA9421287C283A",
+          "status": 200,
+          "body": {
+            "balance": "3547783143301275",
+            "code": "te6ccgECEAEAAigAART/APSkE/S88sgLAQIBIAIDAgFIBAUB9vLUgwjXGNEh+QDtRNDT/9Mf9AT0BNM/0xXR+CMhoVIguY4SM234IySqAKESuZJtMt5Y+CMB3lQWdfkQ8qEG0NMf1NMH0wzTCdM/0xXRUWi68qJRWrrypvgjKqFSULzyowT4I7vyo1MEgA30D2+hmdAk1yHXCgDyZJEw4g4AeNAg10vAAQHAYLCRW+EB0NMDAXGwkVvg+kAw+CjHBbORMODTHwGCEK5C5aS6nYBA1yHXTPgqAe1V+wTgMAIBIAYHAgJzCAkCASAMDQARrc52omhrhf/AAgEgCgsAGqu27UTQgQEi1yHXCz8AGKo77UTQgwfXIdcLHwAbuabu1E0IEBYtch1wsVgA5bi/Ltou37IasJAoQJsO1E0IEBINch9AT0BNM/0xXRBY4b+CMloVIQuZ8ybfgjBaoAFaESuZIwbd6SMDPikjAz4lIwgA30D2+hntAh1yHXCgCVXwN/2zHgkTDiWYAN9A9voZzQAdch1woAk3/bMeCRW+JwgB/lMJgA30D2+hjhPQUATXGNIAAfJkyFjPFs+DAc8WjhAwyCTPQM+DhAlQBaGlFM9A4vgAyUA5gA30FwTIy/8Tyx/0ABL0ABLLPxLLFcntVPgPIdDTAAHyZdMCAXGwkl8D4PpAAdcLAcAA8qX6QDH6ADH0AfoAMfoAMYBg1yHTAAEPACDyZdIAAZPUMdGRMOJysfsA",
+            "data": "te6ccgEBAwEAugABXrUI40LFkfTjyt3zJd++OUCr0BOcoBHnj0gh1ruVyt1eAAAAAUAAAAAamwMLQAEsAQEFtZUwAgD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=",
+            "last_transaction_lt": "93662919000071",
+            "last_transaction_hash": "yiElQE0vArje2rmGzu5b9XDDAoPjsMJhNqIBo1CvrVc=",
+            "frozen_hash": null,
+            "status": "active"
+          }
+        }
+      ],
+      "mapped": {
+        "address": "EQCFJEP4WZ_mpdo0_kMEmsTgvrMHG7K_tWY16pQhKHwoOoy2",
+        "status": "active",
+        "rawBalance": "3547783143301275",
+        "balance": "3547783.143301275",
+        "extraCurrencies": {},
+        "code": "te6ccgECEAEAAigAART/APSkE/S88sgLAQIBIAIDAgFIBAUB9vLUgwjXGNEh+QDtRNDT/9Mf9AT0BNM/0xXR+CMhoVIguY4SM234IySqAKESuZJtMt5Y+CMB3lQWdfkQ8qEG0NMf1NMH0wzTCdM/0xXRUWi68qJRWrrypvgjKqFSULzyowT4I7vyo1MEgA30D2+hmdAk1yHXCgDyZJEw4g4AeNAg10vAAQHAYLCRW+EB0NMDAXGwkVvg+kAw+CjHBbORMODTHwGCEK5C5aS6nYBA1yHXTPgqAe1V+wTgMAIBIAYHAgJzCAkCASAMDQARrc52omhrhf/AAgEgCgsAGqu27UTQgQEi1yHXCz8AGKo77UTQgwfXIdcLHwAbuabu1E0IEBYtch1wsVgA5bi/Ltou37IasJAoQJsO1E0IEBINch9AT0BNM/0xXRBY4b+CMloVIQuZ8ybfgjBaoAFaESuZIwbd6SMDPikjAz4lIwgA30D2+hntAh1yHXCgCVXwN/2zHgkTDiWYAN9A9voZzQAdch1woAk3/bMeCRW+JwgB/lMJgA30D2+hjhPQUATXGNIAAfJkyFjPFs+DAc8WjhAwyCTPQM+DhAlQBaGlFM9A4vgAyUA5gA30FwTIy/8Tyx/0ABL0ABLLPxLLFcntVPgPIdDTAAHyZdMCAXGwkl8D4PpAAdcLAcAA8qX6QDH6ADH0AfoAMfoAMYBg1yHTAAEPACDyZdIAAZPUMdGRMOJysfsA",
+        "data": "te6ccgEBAwEAugABXrUI40LFkfTjyt3zJd++OUCr0BOcoBHnj0gh1ruVyt1eAAAAAUAAAAAamwMLQAEsAQEFtZUwAgD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=",
+        "lastTransaction": {
+          "lt": "93662919000071",
+          "hash": "0xca2125404d2f02b8dedab986ceee5bf570c30283e3b0c26136a201a350afad57"
+        }
+      }
+    },
+    {
+      "label": "non-existing",
+      "method": "getAccountState",
+      "args": {
+        "address": "0:dededededededededededededededededededededededededededededededede"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/addressInformation?include_boc=true&address=0%3Adededededededededededededededededededededededededededededededede",
+          "status": 200,
+          "body": {
+            "balance": "0",
+            "code": null,
+            "data": null,
+            "last_transaction_lt": "0",
+            "last_transaction_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "frozen_hash": null,
+            "status": "uninit"
+          }
+        }
+      ],
+      "mapped": {
+        "address": "EQDe3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3h63",
+        "status": "uninit",
+        "rawBalance": "0",
+        "balance": "0",
+        "extraCurrencies": {}
+      }
+    },
+    {
+      "label": "uninit",
+      "method": "getAccountState",
+      "args": {
+        "address": "0:36AA4189A33EE497B634A4FF345E0B213555733E0B2B989E221E17AFEE14F091"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/addressInformation?include_boc=true&address=0%3A36AA4189A33EE497B634A4FF345E0B213555733E0B2B989E221E17AFEE14F091",
+          "status": 200,
+          "body": {
+            "balance": "55836602",
+            "code": null,
+            "data": null,
+            "last_transaction_lt": "93662917000003",
+            "last_transaction_hash": "X2eGmteQOILs8kdVcvlQPxQEa1q1KbJdQP7T+cN8af0=",
+            "frozen_hash": null,
+            "status": "uninit"
+          }
+        }
+      ],
+      "mapped": {
+        "address": "EQA2qkGJoz7kl7Y0pP80XgshNVVzPgsrmJ4iHhev7hTwkQKf",
+        "status": "uninit",
+        "rawBalance": "55836602",
+        "balance": "0.055836602",
+        "extraCurrencies": {},
+        "lastTransaction": {
+          "lt": "93662917000003",
+          "hash": "0x5f67869ad7903882ecf2475572f9503f14046b5ab529b25d40fed3f9c37c69fd"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "source": "toncenter-v3",
+  "network": "testnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "masterchainInfo",
+      "method": "getMasterchainInfo",
+      "args": {},
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/masterchainInfo",
+          "status": 200,
+          "body": {
+            "last": {
+              "workchain": -1,
+              "shard": "8000000000000000",
+              "seqno": 75010506,
+              "root_hash": "Wfq5K0v/c5aAkE0fo1qSd/ZP/BalRGW7i8Hsage55DQ=",
+              "file_hash": "kuhFIYiRKqmHsHpuykV2sSw0KZ5OPd5bdeKEo3OzRU0=",
+              "global_id": -3,
+              "version": 0,
+              "after_merge": false,
+              "before_split": false,
+              "after_split": false,
+              "want_merge": true,
+              "want_split": false,
+              "key_block": false,
+              "vert_seqno_incr": false,
+              "flags": 1,
+              "gen_utime": "1785478553",
+              "start_lt": "86701753000000",
+              "end_lt": "86701753000004",
+              "validator_list_hash_short": -1669482279,
+              "gen_catchain_seqno": 563591,
+              "min_ref_mc_seqno": 75010504,
+              "prev_key_block_seqno": 75007127,
+              "vert_seqno": 0,
+              "master_ref_seqno": 0,
+              "rand_seed": "adeHkJ6kQTO8p/QcvhQSVV3E01IiyTo5B2QfyCq6WgI=",
+              "created_by": "XXp6l8js2DFxEL38GzSorWiL7ntN+voxykJokM6AORk=",
+              "tx_count": 3,
+              "masterchain_block_ref": {
+                "workchain": -1,
+                "shard": "8000000000000000",
+                "seqno": 75010506
+              },
+              "prev_blocks": [
+                {
+                  "workchain": -1,
+                  "shard": "8000000000000000",
+                  "seqno": 75010505
+                }
+              ]
+            },
+            "first": {
+              "workchain": -1,
+              "shard": "8000000000000000",
+              "seqno": 1,
+              "root_hash": "HBZqdwFA3MSjq0O8ntk6gX1Sibnw7cbWwEjKZt3JJpQ=",
+              "file_hash": "eocxdO1VHjKnalajy5t+bM/X7A+rdMMX3Lj2VRRNtFs=",
+              "global_id": -3,
+              "version": 0,
+              "after_merge": false,
+              "before_split": false,
+              "after_split": false,
+              "want_merge": false,
+              "want_split": false,
+              "key_block": false,
+              "vert_seqno_incr": false,
+              "flags": 1,
+              "gen_utime": "1653238842",
+              "start_lt": "1000000",
+              "end_lt": "1000004",
+              "validator_list_hash_short": 1253667756,
+              "gen_catchain_seqno": 0,
+              "min_ref_mc_seqno": 1,
+              "prev_key_block_seqno": 0,
+              "vert_seqno": 0,
+              "master_ref_seqno": 0,
+              "rand_seed": "GIh5skmgJOzbtyK9v3fgWB+Xr6bEJXhOO9Fa1eWM3Ok=",
+              "created_by": "Bu4LLZ5LqTqQFFgS1P0DR4Fay0jcqNu1N34tZ9TFjMo=",
+              "tx_count": 4,
+              "masterchain_block_ref": {
+                "workchain": -1,
+                "shard": "8000000000000000",
+                "seqno": 1
+              },
+              "prev_blocks": [
+                {
+                  "workchain": -1,
+                  "shard": "8000000000000000",
+                  "seqno": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "mapped": {
+        "workchain": -1,
+        "seqno": 75010506,
+        "shard": "8000000000000000",
+        "fileHash": "0x92e8452188912aa987b07a6eca4576b12c34299e4e3dde5b75e284a373b3454d",
+        "rootHash": "0x59fab92b4bff739680904d1fa35a9277f64ffc16a54465bb8bc1ec6a07b9e434"
+      }
+    }
+  ]
+}

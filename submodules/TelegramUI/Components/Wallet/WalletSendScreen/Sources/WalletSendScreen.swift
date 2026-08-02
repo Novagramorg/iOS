@@ -145,6 +145,13 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
     private let fiatIcon = ComponentView<Empty>()
     private let textField = UITextField()
     private let suffix = ComponentView<Empty>()
+    private let integralFont = Font.with(
+        size: 48.0,
+        design: .round,
+        weight: .semibold,
+        traits: .monospacedNumbers
+    )
+    private let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
 
     private var gramIconSize: CGSize = .zero
     private var fiatIconSize: CGSize = .zero
@@ -186,8 +193,26 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    @objc private func activateInput() {
+    @objc func activateInput() {
         self.textField.becomeFirstResponder()
+    }
+
+    private func amountAttributedText(_ text: String) -> NSAttributedString {
+        let textColor = self.textField.textColor ?? UIColor.black
+        guard let dateTimeFormat = self.dateTimeFormat else {
+            return NSAttributedString(
+                string: text,
+                font: self.integralFont,
+                textColor: textColor
+            )
+        }
+        return tonAmountAttributedString(
+            text,
+            integralFont: self.integralFont,
+            fractionalFont: self.fractionalFont,
+            color: textColor,
+            decimalSeparator: dateTimeFormat.decimalSeparator
+        )
     }
 
     @objc private func textChanged() {
@@ -218,26 +243,21 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         let modeChanged = self.mode != mode
         let amountChanged = self.amount != amount
         let rateChanged = self.rate != rate
+        let decimalSeparatorChanged = self.dateTimeFormat?.decimalSeparator != dateTimeFormat.decimalSeparator
+        let textColorChanged = self.textField.textColor?.isEqual(theme.list.itemPrimaryTextColor) != true
         self.mode = mode
         self.amount = amount
         self.rate = rate
         self.dateTimeFormat = dateTimeFormat
 
-        let mainFont = Font.with(
-            size: 48.0,
-            design: .round,
-            weight: .semibold,
-            traits: .monospacedNumbers
-        )
-        let suffixFont = Font.with(size: 32.0, design: .round, weight: .semibold)
-        self.textField.font = mainFont
+        self.textField.font = self.integralFont
         self.textField.textColor = theme.list.itemPrimaryTextColor
         self.textField.tintColor = theme.list.itemAccentColor
         //TODO:localize
         let zeroPlaceholder = "0"
         self.textField.attributedPlaceholder = NSAttributedString(
             string: zeroPlaceholder,
-            font: mainFont,
+            font: self.integralFont,
             textColor: theme.list.itemSecondaryTextColor
         )
 
@@ -293,7 +313,7 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
             component: AnyComponent(MultilineTextComponent(
                 text: .plain(NSAttributedString(
                     string: suffixText,
-                    font: suffixFont,
+                    font: self.fractionalFont,
                     textColor: theme.list.itemSecondaryTextColor
                 )),
                 maximumNumberOfLines: 1
@@ -305,16 +325,19 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
             self.addSubview(suffixView)
         }
 
-        if modeChanged || ((amountChanged || rateChanged) && !self.textField.isFirstResponder) {
+        if modeChanged || ((amountChanged || rateChanged || decimalSeparatorChanged) && !self.textField.isFirstResponder) {
             self.isApplyingText = true
-            self.textField.text = walletSendInputText(
+            let inputText = walletSendInputText(
                 amount: amount,
                 mode: mode,
                 rate: rate,
                 dateTimeFormat: dateTimeFormat
             )
+            self.textField.attributedText = self.amountAttributedText(inputText)
             self.isApplyingText = false
             self.textField.reloadInputViews()
+        } else if textColorChanged {
+            self.textField.attributedText = self.amountAttributedText(self.textField.text ?? "")
         }
         self.setNeedsLayout()
     }
@@ -326,8 +349,13 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         let iconSpacing: CGFloat = 11.0
         let suffixSpacing: CGFloat = 2.0
         let displayText = (self.textField.text ?? "").isEmpty ? "0" : (self.textField.text ?? "")
+        let displayTextBounds = self.amountAttributedText(displayText).boundingRect(
+            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: self.bounds.height),
+            options: [],
+            context: nil
+        )
         let textWidth = min(
-            max(31.0, ceil((displayText as NSString).size(withAttributes: [.font: self.textField.font as Any]).width) + 5.0),
+            max(31.0, ceil(displayTextBounds.width) + 5.0),
             max(31.0, self.bounds.width - 190.0)
         )
         let totalWidth = iconLayoutSize.width + iconSpacing + textWidth + suffixSpacing + self.suffixSize.width
@@ -420,7 +448,7 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         }
 
         self.isApplyingText = true
-        textField.text = updatedText
+        textField.attributedText = self.amountAttributedText(updatedText)
         self.isApplyingText = false
         self.textChanged()
         return false
@@ -820,10 +848,12 @@ private final class WalletSendScreenComponent: Component {
             self.environment = environment
             self.componentState = state
 
+            var shouldFocusAmountField = false
             if self.initialAddress != component.initialAddress {
                 self.initialAddress = component.initialAddress
                 if let initialAddress = component.initialAddress, !initialAddress.isEmpty {
                     self.applyRecipient(initialAddress)
+                    shouldFocusAmountField = true
                 }
             }
 
@@ -1047,6 +1077,9 @@ private final class WalletSendScreenComponent: Component {
                 theme: theme,
                 transition: transition
             )
+            if shouldFocusAmountField {
+                self.amountField.activateInput()
+            }
 
             //TODO:localize
             let emptyHint = "Tap to set amount"

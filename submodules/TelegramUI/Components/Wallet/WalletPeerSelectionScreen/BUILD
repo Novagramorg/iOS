@@ -1,0 +1,34 @@
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "WalletPeerSelectionScreen",
+    module_name = "WalletPeerSelectionScreen",
+    srcs = glob([
+        "Sources/**/*.swift",
+    ]),
+    copts = [
+        "-warnings-as-errors",
+    ],
+    deps = [
+        "//submodules/AccountContext",
+        "//submodules/AppBundle",
+        "//submodules/AsyncDisplayKit",
+        "//submodules/ComponentFlow",
+        "//submodules/Components/MultilineTextComponent",
+        "//submodules/Components/ViewControllerComponent",
+        "//submodules/Display",
+        "//submodules/QrCodeUI",
+        "//submodules/SearchBarNode",
+        "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/TelegramCore",
+        "//submodules/TelegramPresentationData",
+        "//submodules/PresentationDataUtils",
+        "//submodules/TelegramUI/Components/ButtonComponent",
+        "//submodules/TelegramUI/Components/ChatListHeaderComponent",
+        "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
+        "//submodules/WalletContext",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)

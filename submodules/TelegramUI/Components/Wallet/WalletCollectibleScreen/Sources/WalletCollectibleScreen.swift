@@ -22,6 +22,7 @@ import TooltipUI
 import UndoUI
 import WalletContext
 import WalletCollectibleHeaderComponent
+import WalletPeerSelectionScreen
 
 private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity?) -> String {
     guard let rarity else {
@@ -333,17 +334,20 @@ private final class WalletCollectibleContentComponent: Component {
     let context: AccountContext
     let collectible: WalletContext.Collectible
     let openExternalUrl: (String) -> Void
+    let openTransfer: () -> Void
     let animateOut: ActionSlot<Action<Void>>
 
     init(
         context: AccountContext,
         collectible: WalletContext.Collectible,
         openExternalUrl: @escaping (String) -> Void,
+        openTransfer: @escaping () -> Void,
         animateOut: ActionSlot<Action<Void>>
     ) {
         self.context = context
         self.collectible = collectible
         self.openExternalUrl = openExternalUrl
+        self.openTransfer = openTransfer
         self.animateOut = animateOut
     }
 
@@ -728,6 +732,7 @@ private final class WalletCollectibleContentComponent: Component {
                     title: "transfer",
                     iconName: "Premium/Collectible/Transfer",
                     action: {
+                        component.openTransfer()
                     }
                 )),
                 environment: {},
@@ -887,6 +892,7 @@ private final class WalletCollectiblePagerComponent: Component {
     let initialIndex: Int
     let itemSpacing: CGFloat
     let openExternalUrl: (String) -> Void
+    let openTransfer: (WalletContext.Collectible) -> Void
     let indexUpdated: (Int) -> Void
     let draggingBegan: (Int) -> Void
 
@@ -896,6 +902,7 @@ private final class WalletCollectiblePagerComponent: Component {
         initialIndex: Int,
         itemSpacing: CGFloat,
         openExternalUrl: @escaping (String) -> Void,
+        openTransfer: @escaping (WalletContext.Collectible) -> Void,
         indexUpdated: @escaping (Int) -> Void,
         draggingBegan: @escaping (Int) -> Void
     ) {
@@ -904,6 +911,7 @@ private final class WalletCollectiblePagerComponent: Component {
         self.initialIndex = initialIndex
         self.itemSpacing = itemSpacing
         self.openExternalUrl = openExternalUrl
+        self.openTransfer = openTransfer
         self.indexUpdated = indexUpdated
         self.draggingBegan = draggingBegan
     }
@@ -1121,7 +1129,10 @@ private final class WalletCollectiblePagerComponent: Component {
                     component: AnyComponent(WalletCollectibleSheetComponent(
                         context: component.context,
                         collectible: collectible,
-                        openExternalUrl: component.openExternalUrl
+                        openExternalUrl: component.openExternalUrl,
+                        openTransfer: {
+                            component.openTransfer(collectible)
+                        }
                     )),
                     environment: { environment[EnvironmentType.self] },
                     containerSize: availableSize
@@ -1175,15 +1186,18 @@ private final class WalletCollectibleSheetComponent: CombinedComponent {
     let context: AccountContext
     let collectible: WalletContext.Collectible
     let openExternalUrl: (String) -> Void
+    let openTransfer: () -> Void
 
     init(
         context: AccountContext,
         collectible: WalletContext.Collectible,
-        openExternalUrl: @escaping (String) -> Void
+        openExternalUrl: @escaping (String) -> Void,
+        openTransfer: @escaping () -> Void
     ) {
         self.context = context
         self.collectible = collectible
         self.openExternalUrl = openExternalUrl
+        self.openTransfer = openTransfer
     }
 
     static func ==(lhs: WalletCollectibleSheetComponent, rhs: WalletCollectibleSheetComponent) -> Bool {
@@ -1204,6 +1218,7 @@ private final class WalletCollectibleSheetComponent: CombinedComponent {
                         context: context.component.context,
                         collectible: context.component.collectible,
                         openExternalUrl: context.component.openExternalUrl,
+                        openTransfer: context.component.openTransfer,
                         animateOut: animateOut
                     )),
                     style: .glass,
@@ -1336,6 +1351,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
         var indexUpdatedImpl: ((Int) -> Void)?
         var draggingBeganImpl: ((Int) -> Void)?
+        var openTransferImpl: ((WalletContext.Collectible) -> Void)?
         super.init(
             context: context,
             component: WalletCollectiblePagerComponent(
@@ -1344,6 +1360,9 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
                 initialIndex: initialIndex,
                 itemSpacing: 10.0,
                 openExternalUrl: openExternalUrl,
+                openTransfer: { collectible in
+                    openTransferImpl?(collectible)
+                },
                 indexUpdated: { index in
                     indexUpdatedImpl?(index)
                 },
@@ -1360,6 +1379,9 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
         }
         draggingBeganImpl = { [weak self] index in
             self?.draggingBegan(index)
+        }
+        openTransferImpl = { [weak self] collectible in
+            self?.openTransfer(collectible)
         }
 
         self.navigationPresentation = .flatModal
@@ -1443,6 +1465,9 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
                 initialIndex: initialIndex,
                 itemSpacing: 10.0,
                 openExternalUrl: self.openExternalUrl,
+                openTransfer: { [weak self] collectible in
+                    self?.openTransfer(collectible)
+                },
                 indexUpdated: { [weak self] index in
                     self?.currentIndexUpdated(index)
                 },
@@ -1452,6 +1477,28 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
             )),
             transition: .immediate
         )
+    }
+
+    private func openTransfer(_ collectible: WalletContext.Collectible) {
+        let peerSelectionScreen = WalletPeerSelectionScreen(
+            context: self.accountContext,
+            walletContext: self.walletContext,
+            mode: .collectible(collectible),
+            dismissSourceScreen: { [weak self] in
+                guard let self else {
+                    return
+                }
+                if let navigationController = self.navigationController as? NavigationController {
+                    var viewControllers = navigationController.viewControllers
+                    viewControllers.removeAll(where: { $0 === self })
+                    navigationController.setViewControllers(viewControllers, animated: false)
+                } else {
+                    self.dismiss(animated: false)
+                }
+            }
+        )
+        peerSelectionScreen.navigationPresentation = .modal
+        self.push(peerSelectionScreen)
     }
 
     private func currentIndexUpdated(_ index: Int) {

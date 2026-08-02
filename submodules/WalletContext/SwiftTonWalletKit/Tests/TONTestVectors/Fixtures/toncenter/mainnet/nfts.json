@@ -1,0 +1,593 @@
+{
+  "source": "toncenter-v3",
+  "network": "mainnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "by-owner",
+      "method": "nftItemsByOwner",
+      "args": {
+        "ownerAddress": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/nft/items?owner_address=0%3ABFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013&limit=5&offset=0",
+          "status": 200,
+          "body": {
+            "nft_items": [
+              {
+                "address": "0:A88E410012925A786DA2FE1FFE05EA896565345A4A3B016AF73846D811E365D2",
+                "init": true,
+                "index": "14",
+                "collection_address": "0:03ECFC0C916B85BA08204E492E60B54CE54CAF559C51BD6163F58FD540EB1A79",
+                "owner_address": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013",
+                "content": {
+                  "uri": "https://aquabreezewave.com/2nft/a170bfc8ec1a8f60a38b598dc404b3039b6a51452837db30aba5c09c5eea7ed79013/nft6.json"
+                },
+                "last_transaction_lt": "46521917000001",
+                "code_hash": "Bn/BKm/wQyuuG8RfXTYvb+AegQqlOYtL2Er3eSUWWrI=",
+                "data_hash": "AT3bvoErUNmyl2wYHym/EoYbs/w/FZrVrhEfHOTKvIs=",
+                "collection": {
+                  "address": "0:03ECFC0C916B85BA08204E492E60B54CE54CAF559C51BD6163F58FD540EB1A79",
+                  "owner_address": "0:8BE7F69D48E1A8662E71133A3E6D636F597D742AA83B777E264D96546DCAEBC0",
+                  "last_transaction_lt": "46521914000001",
+                  "next_item_index": "59",
+                  "collection_content": {
+                    "uri": "https://aquabreezewave.com/collect6.json"
+                  },
+                  "data_hash": "6BPK+59gJE+YUBXM9h5zG2UShVGYA1f8dJiQAQ08rfY=",
+                  "code_hash": "C4RJfM7+KX0AvuuwilRMxu9iMOq3YmksoFP6mBE5mDY="
+                },
+                "on_sale": false,
+                "real_owner": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013"
+              },
+              {
+                "address": "0:E420E683D7E7BC02998175CE340113B835787D965DE48705FE33EC5A1F361566",
+                "init": true,
+                "index": "177",
+                "collection_address": "0:07DE4781D23E612CF845DACA49CF6D7701754DA6497EADDCFA4D84A24D5AF3AA",
+                "owner_address": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013",
+                "content": {
+                  "uri": "https://nftstorage.link/ipfs/bafybeieqxxpa27cs2lbtlzt6jyhjypo64zjidno27udldwaiy5mvj7adpm/177.json"
+                },
+                "last_transaction_lt": "44504389000038",
+                "code_hash": "uk2XXStmIxwfCgzMpuj/j3ugYQxLdjlYS46YMD3DEow=",
+                "data_hash": "6KC2c5YUSzhTvYy+QUw+HHzWoPb/H/a69zE4Jw5RSKo=",
+                "collection": {
+                  "address": "0:07DE4781D23E612CF845DACA49CF6D7701754DA6497EADDCFA4D84A24D5AF3AA",
+                  "owner_address": "0:15C5014BCE2B2E716202095F6572E569BFBEE9A1A57FAF7A83B7403DD53B467C",
+                  "last_transaction_lt": "44639839000005",
+                  "next_item_index": "715",
+                  "collection_content": {
+                    "uri": "https://nftstorage.link/ipfs/bafybeieqxxpa27cs2lbtlzt6jyhjypo64zjidno27udldwaiy5mvj7adpm/collection.json"
+                  },
+                  "data_hash": "W2qpOGoz8MwkgKoiKNIpSg3+HhbWbEe4iaScNY8au9I=",
+                  "code_hash": "ZLstRmG18twag79cu+CekqwLRgobh5pVGThvykw0i8o="
+                },
+                "on_sale": false,
+                "real_owner": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013"
+              },
+              {
+                "address": "0:0F3C793CE35FB2AD966F8319C91406932CE85E708927E9789FD2F3464C131B78",
+                "init": true,
+                "index": "11001",
+                "collection_address": "0:0BCA63E6D5BEE97899BCC5633BBCA722D6AF73C45B2A4CFCDE640422C55D05A7",
+                "owner_address": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013",
+                "content": {
+                  "uri": "https://notc.app/json/item189.json"
+                },
+                "last_transaction_lt": "46605189000009",
+                "code_hash": "C3Uhz+S3YZdz/IKDMqiFpMKWPYqPDKoQw9VB5LnJkQU=",
+                "data_hash": "k+tIB5CtGupLRjt22g8S/i1lX23eobAAbg0UtIC4Q+4=",
+                "collection": {
+                  "address": "0:0BCA63E6D5BEE97899BCC5633BBCA722D6AF73C45B2A4CFCDE640422C55D05A7",
+                  "owner_address": "0:C0552DDB12A31F8E2FC854B33F5F8852035AF5490B0966A9AAD3C38116DFAF54",
+                  "last_transaction_lt": "46672010000001",
+                  "next_item_index": "26928",
+                  "collection_content": {
+                    "uri": "https://notc.app/json/collection.json"
+                  },
+                  "data_hash": "QAsW2ZoJCpLqUssDZgkq2lr/gk/aWqvIVoGIeO+6XVM=",
+                  "code_hash": "7g+hn2n1JIeJmc4oauO/ST8ptNDvfimEF260KI1iI94="
+                },
+                "on_sale": false,
+                "real_owner": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013"
+              },
+              {
+                "address": "0:5A737740F1FD7127745FC916CB5D197E268472FBFB00431FCBCE74F248A682A5",
+                "init": true,
+                "index": "1813",
+                "collection_address": "0:0F7B000B04454ABE203B66FC37BBDC427148C23C975A697585E958B02DF550A0",
+                "owner_address": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013",
+                "content": {
+                  "uri": "https://stondrop.com/json/item1813.json"
+                },
+                "last_transaction_lt": "46441226000017",
+                "code_hash": "C3Uhz+S3YZdz/IKDMqiFpMKWPYqPDKoQw9VB5LnJkQU=",
+                "data_hash": "Z6fAmQNljvexdj1IIdoUWJQDyDYNEuVhiHniww0PNkg=",
+                "collection": {
+                  "address": "0:0F7B000B04454ABE203B66FC37BBDC427148C23C975A697585E958B02DF550A0",
+                  "owner_address": "0:2F32F344604EAA0D63E158E2B6D9B3AFE29D5A356CE640714A71F279DAAB9B10",
+                  "last_transaction_lt": "46441316000003",
+                  "next_item_index": "2001",
+                  "collection_content": {
+                    "uri": "https://stondrop.com/json/collection.json"
+                  },
+                  "data_hash": "Qvd2LQH1G33q4QmOs7fJpzS9HYXbi9SAVFfkCDky5Dw=",
+                  "code_hash": "xpXxTKoh3pZ/Yz2ou662c6JO2JCSAYP4jZr8ZBjGKKQ="
+                },
+                "on_sale": false,
+                "real_owner": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013"
+              },
+              {
+                "address": "0:C87C5C60CF563A5CAA8D146ABA6C896B58E44E6D5CA97DD9B5F962BFC7934181",
+                "init": true,
+                "index": "5800",
+                "collection_address": "0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53",
+                "owner_address": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013",
+                "content": {
+                  "uri": "https://meta.ston.fi/meta/stake/v1/0:C87C5C60CF563A5CAA8D146ABA6C896B58E44E6D5CA97DD9B5F962BFC7934181.json"
+                },
+                "last_transaction_lt": "46362514000003",
+                "code_hash": "bhOSu8RVsfOCTyuWBske8jZiaUuIqsVSl0PVTZENZyM=",
+                "data_hash": "HVNyBK7yG9zmAJKB/97iX6c8KtKVn0L48qzcPN0qm9I=",
+                "collection": {
+                  "address": "0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53",
+                  "owner_address": "0:499BBC12FB933D4A6277C4B3028FC3A5F8928B8A41838FE19F0F02F5FFA6FB70",
+                  "last_transaction_lt": "93660176000005",
+                  "next_item_index": "21702",
+                  "collection_content": {
+                    "uri": "https://meta.ston.fi/meta/stake-collection/v1/0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53.json"
+                  },
+                  "data_hash": "kfXUKR55IHxuaiIAshXqF5nDZXEga2IUCxF4BPW2kXE=",
+                  "code_hash": "kQ8cuoieri7tFTXxRXtAy9V8G1PevZz2pPGrr/SvU84="
+                },
+                "on_sale": false,
+                "real_owner": "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013"
+              }
+            ],
+            "address_book": {
+              "0:03ECFC0C916B85BA08204E492E60B54CE54CAF559C51BD6163F58FD540EB1A79": {
+                "user_friendly": "EQAD7PwMkWuFugggTkkuYLVM5UyvVZxRvWFj9Y_VQOsaefKN",
+                "domain": null,
+                "interfaces": [
+                  "nft_collection"
+                ]
+              },
+              "0:07DE4781D23E612CF845DACA49CF6D7701754DA6497EADDCFA4D84A24D5AF3AA": {
+                "user_friendly": "EQAH3keB0j5hLPhF2spJz213AXVNpkl-rdz6TYSiTVrzqk7l",
+                "domain": null,
+                "interfaces": [
+                  "nft_collection"
+                ]
+              },
+              "0:0BCA63E6D5BEE97899BCC5633BBCA722D6AF73C45B2A4CFCDE640422C55D05A7": {
+                "user_friendly": "EQALymPm1b7peJm8xWM7vKci1q9zxFsqTPzeZAQixV0Fp9WU",
+                "domain": null,
+                "interfaces": [
+                  "nft_collection"
+                ]
+              },
+              "0:0F3C793CE35FB2AD966F8319C91406932CE85E708927E9789FD2F3464C131B78": {
+                "user_friendly": "EQAPPHk841-yrZZvgxnJFAaTLOhecIkn6Xif0vNGTBMbeNMo",
+                "domain": null,
+                "interfaces": [
+                  "nft_item"
+                ]
+              },
+              "0:0F7B000B04454ABE203B66FC37BBDC427148C23C975A697585E958B02DF550A0": {
+                "user_friendly": "EQAPewALBEVKviA7Zvw3u9xCcUjCPJdaaXWF6ViwLfVQoDWD",
+                "domain": null,
+                "interfaces": [
+                  "nft_collection"
+                ]
+              },
+              "0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53": {
+                "user_friendly": "EQATQPeCwtMzQ9u54nTjUNcK4n_0VRSxPOOROLf_IE0OU3XK",
+                "domain": "amocucinare--ruger.ton",
+                "interfaces": [
+                  "nft_collection"
+                ]
+              },
+              "0:5A737740F1FD7127745FC916CB5D197E268472FBFB00431FCBCE74F248A682A5": {
+                "user_friendly": "EQBac3dA8f1xJ3RfyRbLXRl-JoRy-_sAQx_LznTySKaCpZbP",
+                "domain": null,
+                "interfaces": [
+                  "nft_item"
+                ]
+              },
+              "0:A88E410012925A786DA2FE1FFE05EA896565345A4A3B016AF73846D811E365D2": {
+                "user_friendly": "EQCojkEAEpJaeG2i_h_-BeqJZWU0Wko7AWr3OEbYEeNl0tkM",
+                "domain": null,
+                "interfaces": [
+                  "nft_item"
+                ]
+              },
+              "0:BFC8EC1A8F60A38B598DC404B3039B6A51452837DB30ABA5C09C5EEA7ED79013": {
+                "user_friendly": "UQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE4j7",
+                "domain": null,
+                "interfaces": [
+                  "wallet_v4r2"
+                ]
+              },
+              "0:C87C5C60CF563A5CAA8D146ABA6C896B58E44E6D5CA97DD9B5F962BFC7934181": {
+                "user_friendly": "EQDIfFxgz1Y6XKqNFGq6bIlrWORObVypfdm1-WK_x5NBgc7C",
+                "domain": null,
+                "interfaces": [
+                  "nft_item",
+                  "sbt"
+                ]
+              },
+              "0:E420E683D7E7BC02998175CE340113B835787D965DE48705FE33EC5A1F361566": {
+                "user_friendly": "EQDkIOaD1-e8ApmBdc40ARO4NXh9ll3khwX-M-xaHzYVZk6i",
+                "domain": null,
+                "interfaces": [
+                  "nft_item"
+                ]
+              }
+            },
+            "metadata": {
+              "0:03ECFC0C916B85BA08204E492E60B54CE54CAF559C51BD6163F58FD540EB1A79": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": false,
+                    "type": "nft_collections"
+                  }
+                ]
+              },
+              "0:07DE4781D23E612CF845DACA49CF6D7701754DA6497EADDCFA4D84A24D5AF3AA": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": true,
+                    "type": "nft_collections",
+                    "name": "TON Teddies",
+                    "description": "TON Teddies is an exclusive NFT collection living on the fast, secure, and scalable TON blockchain. Our collection features an array of lovingly crafted digital teddy bears, each imbued with its own unique personality and charm. The Teddies are not just a digital asset; they’re your companions in the expansive universe of TON.\n\nWhile initially, the TON Teddies will be collectible NFTs, the vision doesn’t stop there. We are diligently crafting an immersive Play-to-Earn (P2E) game where your Teddies will come to life. Imagine a world where you can interact, compete, and grow with your Teddies, earning rewards and strengthening the bond with your NFT.",
+                    "image": "https://nftstorage.link/ipfs/bafybeidkxmwnkctg5kqw32vvbgukjgo6fig5rkg7x7suzd6t7a5sjuenxq/logo.png",
+                    "is_nsfw": false,
+                    "is_scam": false,
+                    "extra": {
+                      "_image_big": "https://imgproxy.toncenter.com/dFaIyQJ0rGIGDfT3_djSmaBxB6u9v_9iE8YJdYCu1JE/pr:big/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                      "_image_medium": "https://imgproxy.toncenter.com/EjKw0-2Ca3h-NTOzM28op5dTPlqJhZ7MojTooWX6h1k/pr:medium/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                      "_image_small": "https://imgproxy.toncenter.com/Pt5wWMTp879mhLywP_b1h6_FugD_RIN7Z9qyo9EKHkQ/pr:small/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                      "social_links": [
+                        "https://teddies.wtf",
+                        "https://twitter.com/TonTeddies",
+                        "https://t.me/tonteddiestg"
+                      ],
+                      "uri": "https://nftstorage.link/ipfs/bafybeieqxxpa27cs2lbtlzt6jyhjypo64zjidno27udldwaiy5mvj7adpm/collection.json"
+                    }
+                  }
+                ]
+              },
+              "0:0BCA63E6D5BEE97899BCC5633BBCA722D6AF73C45B2A4CFCDE640422C55D05A7": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": false,
+                    "type": "nft_collections"
+                  }
+                ]
+              },
+              "0:0F3C793CE35FB2AD966F8319C91406932CE85E708927E9789FD2F3464C131B78": {
+                "is_indexed": false,
+                "token_info": [
+                  {
+                    "type": "nft_items",
+                    "nft_index": "11001"
+                  }
+                ]
+              },
+              "0:0F7B000B04454ABE203B66FC37BBDC427148C23C975A697585E958B02DF550A0": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": false,
+                    "type": "nft_collections"
+                  }
+                ]
+              },
+              "0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": true,
+                    "type": "nft_collections",
+                    "name": "ARKENSTON NFT",
+                    "description": "STON STON.fi Stake",
+                    "image": "https://static.ston.fi/stake-nft/i1.jpg",
+                    "is_nsfw": false,
+                    "is_scam": false,
+                    "extra": {
+                      "_image_big": "https://proxy.toncenter.com/2PEzN0kHtb_PmTPViMV1zKqpL3iv1f6ZUsH_IEiveQg/pr:big/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                      "_image_medium": "https://proxy.toncenter.com/PRWavzxv0yC3xZKnyxSCj2V4aD6ygAtgOA1arFVYr18/pr:medium/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                      "_image_small": "https://proxy.toncenter.com/f0YGzYTqyXA7O-t8jXGe8wUu1XsUDYx11V-KIPpA4-0/pr:small/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                      "social_links": [
+                        "https://app.ston.fi/staking"
+                      ],
+                      "uri": "https://meta.ston.fi/meta/stake-collection/v1/0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53.json"
+                    }
+                  }
+                ]
+              },
+              "0:5A737740F1FD7127745FC916CB5D197E268472FBFB00431FCBCE74F248A682A5": {
+                "is_indexed": false,
+                "token_info": [
+                  {
+                    "type": "nft_items",
+                    "nft_index": "1813"
+                  }
+                ]
+              },
+              "0:A88E410012925A786DA2FE1FFE05EA896565345A4A3B016AF73846D811E365D2": {
+                "is_indexed": false,
+                "token_info": [
+                  {
+                    "type": "nft_items",
+                    "nft_index": "14"
+                  }
+                ]
+              },
+              "0:C87C5C60CF563A5CAA8D146ABA6C896B58E44E6D5CA97DD9B5F962BFC7934181": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": true,
+                    "type": "nft_items",
+                    "name": "ARKENSTON NFT",
+                    "description": "Unstaked 55.000000000 STON on STON.fi",
+                    "image": "https://static.ston.fi/stake-nft/i1.jpg",
+                    "nft_index": "5800",
+                    "is_nsfw": false,
+                    "is_scam": false,
+                    "extra": {
+                      "_image_big": "https://proxy.toncenter.com/US5kJH8F7ZulL-j9E3rBudFPqvFSC4SSFSXpvfilmvQ/pr:big/bG9jYWw6Ly8vc2hhMjU2LzVjYTQxMmVhYTIwMWQ2ODAzZDFlNjE2MzhiOWY1MjhlZjZlNzgwNTc3YTQ5MzI3NTJkMmI1NzJjOWE4ZWI4NTU",
+                      "_image_medium": "https://proxy.toncenter.com/fLqcc1ZriidYWVdlpLEqXDawQID5a-TX0Z2z9JpPsBM/pr:medium/bG9jYWw6Ly8vc2hhMjU2LzVjYTQxMmVhYTIwMWQ2ODAzZDFlNjE2MzhiOWY1MjhlZjZlNzgwNTc3YTQ5MzI3NTJkMmI1NzJjOWE4ZWI4NTU",
+                      "_image_small": "https://proxy.toncenter.com/ciymXHDy5GNKbW5JMNgxgiIzWXVjPHG7rpcj0dfESq4/pr:small/bG9jYWw6Ly8vc2hhMjU2LzVjYTQxMmVhYTIwMWQ2ODAzZDFlNjE2MzhiOWY1MjhlZjZlNzgwNTc3YTQ5MzI3NTJkMmI1NzJjOWE4ZWI4NTU",
+                      "uri": "https://meta.ston.fi/meta/stake/v1/0:C87C5C60CF563A5CAA8D146ABA6C896B58E44E6D5CA97DD9B5F962BFC7934181.json"
+                    }
+                  }
+                ]
+              },
+              "0:E420E683D7E7BC02998175CE340113B835787D965DE48705FE33EC5A1F361566": {
+                "is_indexed": false,
+                "token_info": [
+                  {
+                    "type": "nft_items",
+                    "nft_index": "177"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "mapped": {
+        "addressBook": {
+          "EQAD7PwMkWuFugggTkkuYLVM5UyvVZxRvWFj9Y_VQOsaefKN": {
+            "address": "EQAD7PwMkWuFugggTkkuYLVM5UyvVZxRvWFj9Y_VQOsaefKN",
+            "interfaces": [
+              "nft_collection"
+            ]
+          },
+          "EQAH3keB0j5hLPhF2spJz213AXVNpkl-rdz6TYSiTVrzqk7l": {
+            "address": "EQAH3keB0j5hLPhF2spJz213AXVNpkl-rdz6TYSiTVrzqk7l",
+            "interfaces": [
+              "nft_collection"
+            ]
+          },
+          "EQALymPm1b7peJm8xWM7vKci1q9zxFsqTPzeZAQixV0Fp9WU": {
+            "address": "EQALymPm1b7peJm8xWM7vKci1q9zxFsqTPzeZAQixV0Fp9WU",
+            "interfaces": [
+              "nft_collection"
+            ]
+          },
+          "EQAPPHk841-yrZZvgxnJFAaTLOhecIkn6Xif0vNGTBMbeNMo": {
+            "address": "EQAPPHk841-yrZZvgxnJFAaTLOhecIkn6Xif0vNGTBMbeNMo",
+            "interfaces": [
+              "nft_item"
+            ]
+          },
+          "EQAPewALBEVKviA7Zvw3u9xCcUjCPJdaaXWF6ViwLfVQoDWD": {
+            "address": "EQAPewALBEVKviA7Zvw3u9xCcUjCPJdaaXWF6ViwLfVQoDWD",
+            "interfaces": [
+              "nft_collection"
+            ]
+          },
+          "EQATQPeCwtMzQ9u54nTjUNcK4n_0VRSxPOOROLf_IE0OU3XK": {
+            "address": "EQATQPeCwtMzQ9u54nTjUNcK4n_0VRSxPOOROLf_IE0OU3XK",
+            "domain": "amocucinare--ruger.ton",
+            "interfaces": [
+              "nft_collection"
+            ]
+          },
+          "EQBac3dA8f1xJ3RfyRbLXRl-JoRy-_sAQx_LznTySKaCpZbP": {
+            "address": "EQBac3dA8f1xJ3RfyRbLXRl-JoRy-_sAQx_LznTySKaCpZbP",
+            "interfaces": [
+              "nft_item"
+            ]
+          },
+          "EQCojkEAEpJaeG2i_h_-BeqJZWU0Wko7AWr3OEbYEeNl0tkM": {
+            "address": "EQCojkEAEpJaeG2i_h_-BeqJZWU0Wko7AWr3OEbYEeNl0tkM",
+            "interfaces": [
+              "nft_item"
+            ]
+          },
+          "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-": {
+            "address": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "interfaces": [
+              "wallet_v4r2"
+            ]
+          },
+          "EQDIfFxgz1Y6XKqNFGq6bIlrWORObVypfdm1-WK_x5NBgc7C": {
+            "address": "EQDIfFxgz1Y6XKqNFGq6bIlrWORObVypfdm1-WK_x5NBgc7C",
+            "interfaces": [
+              "nft_item",
+              "sbt"
+            ]
+          },
+          "EQDkIOaD1-e8ApmBdc40ARO4NXh9ll3khwX-M-xaHzYVZk6i": {
+            "address": "EQDkIOaD1-e8ApmBdc40ARO4NXh9ll3khwX-M-xaHzYVZk6i",
+            "interfaces": [
+              "nft_item"
+            ]
+          }
+        },
+        "nfts": [
+          {
+            "address": "EQCojkEAEpJaeG2i_h_-BeqJZWU0Wko7AWr3OEbYEeNl0tkM",
+            "index": "14",
+            "collection": {
+              "address": "EQAD7PwMkWuFugggTkkuYLVM5UyvVZxRvWFj9Y_VQOsaefKN",
+              "codeHash": "0x0b84497ccefe297d00beebb08a544cc6ef6230eab762692ca053fa9811399836",
+              "dataHash": "0xe813cafb9f60244f985015ccf61e731b65128551980357fc749890010d3cadf6",
+              "nextItemIndex": "59",
+              "ownerAddress": "EQCL5_adSOGoZi5xEzo-bWNvWX10Kqg7d34mTZZUbcrrwHG2",
+              "image": {}
+            },
+            "ownerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "realOwnerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "codeHash": "0x067fc12a6ff0432bae1bc45f5d362f6fe01e810aa5398b4bd84af77925165ab2",
+            "dataHash": "0x013ddbbe812b50d9b2976c181f29bf12861bb3fc3f159ad5ae111f1ce4cabc8b",
+            "isInited": true,
+            "isOnSale": false,
+            "extra": {
+              "uri": "https://aquabreezewave.com/2nft/a170bfc8ec1a8f60a38b598dc404b3039b6a51452837db30aba5c09c5eea7ed79013/nft6.json"
+            }
+          },
+          {
+            "address": "EQDkIOaD1-e8ApmBdc40ARO4NXh9ll3khwX-M-xaHzYVZk6i",
+            "index": "177",
+            "collection": {
+              "address": "EQAH3keB0j5hLPhF2spJz213AXVNpkl-rdz6TYSiTVrzqk7l",
+              "codeHash": "0x64bb2d4661b5f2dc1a83bf5cbbe09e92ac0b460a1b879a5519386fca4c348bca",
+              "dataHash": "0x5b6aa9386a33f0cc2480aa2228d2294a0dfe1e16d66c47b889a49c358f1abbd2",
+              "nextItemIndex": "715",
+              "ownerAddress": "EQAVxQFLzisucWICCV9lcuVpv77poaV_r3qDt0A91TtGfKpB",
+              "extra": {
+                "_image_big": "https://imgproxy.toncenter.com/dFaIyQJ0rGIGDfT3_djSmaBxB6u9v_9iE8YJdYCu1JE/pr:big/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                "_image_medium": "https://imgproxy.toncenter.com/EjKw0-2Ca3h-NTOzM28op5dTPlqJhZ7MojTooWX6h1k/pr:medium/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                "_image_small": "https://imgproxy.toncenter.com/Pt5wWMTp879mhLywP_b1h6_FugD_RIN7Z9qyo9EKHkQ/pr:small/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                "social_links": [
+                  "https://teddies.wtf",
+                  "https://twitter.com/TonTeddies",
+                  "https://t.me/tonteddiestg"
+                ],
+                "uri": "https://nftstorage.link/ipfs/bafybeieqxxpa27cs2lbtlzt6jyhjypo64zjidno27udldwaiy5mvj7adpm/collection.json"
+              },
+              "name": "TON Teddies",
+              "description": "TON Teddies is an exclusive NFT collection living on the fast, secure, and scalable TON blockchain. Our collection features an array of lovingly crafted digital teddy bears, each imbued with its own unique personality and charm. The Teddies are not just a digital asset; they’re your companions in the expansive universe of TON.\n\nWhile initially, the TON Teddies will be collectible NFTs, the vision doesn’t stop there. We are diligently crafting an immersive Play-to-Earn (P2E) game where your Teddies will come to life. Imagine a world where you can interact, compete, and grow with your Teddies, earning rewards and strengthening the bond with your NFT.",
+              "image": {
+                "url": "https://nftstorage.link/ipfs/bafybeidkxmwnkctg5kqw32vvbgukjgo6fig5rkg7x7suzd6t7a5sjuenxq/logo.png",
+                "smallUrl": "https://imgproxy.toncenter.com/Pt5wWMTp879mhLywP_b1h6_FugD_RIN7Z9qyo9EKHkQ/pr:small/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                "mediumUrl": "https://imgproxy.toncenter.com/EjKw0-2Ca3h-NTOzM28op5dTPlqJhZ7MojTooWX6h1k/pr:medium/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw",
+                "largeUrl": "https://imgproxy.toncenter.com/dFaIyQJ0rGIGDfT3_djSmaBxB6u9v_9iE8YJdYCu1JE/pr:big/aHR0cHM6Ly9uZnRzdG9yYWdlLmxpbmsvaXBmcy9iYWZ5YmVpZGt4bXdua2N0ZzVrcXczMnZ2Ymd1a2pnbzZmaWc1cmtnN3g3c3V6ZDZ0N2E1c2p1ZW54cS9sb2dvLnBuZw"
+              }
+            },
+            "ownerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "realOwnerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "codeHash": "0xba4d975d2b66231c1f0a0ccca6e8ff8f7ba0610c4b7639584b8e98303dc3128c",
+            "dataHash": "0xe8a0b67396144b3853bd8cbe414c3e1c7cd6a0f6ff1ff6baf73138270e5148aa",
+            "isInited": true,
+            "isOnSale": false,
+            "extra": {
+              "uri": "https://nftstorage.link/ipfs/bafybeieqxxpa27cs2lbtlzt6jyhjypo64zjidno27udldwaiy5mvj7adpm/177.json"
+            }
+          },
+          {
+            "address": "EQAPPHk841-yrZZvgxnJFAaTLOhecIkn6Xif0vNGTBMbeNMo",
+            "index": "11001",
+            "collection": {
+              "address": "EQALymPm1b7peJm8xWM7vKci1q9zxFsqTPzeZAQixV0Fp9WU",
+              "codeHash": "0xee0fa19f69f524878999ce286ae3bf493f29b4d0ef7e2984176eb4288d6223de",
+              "dataHash": "0x400b16d99a090a92ea52cb0366092ada5aff824fda5aabc856818878efba5d53",
+              "nextItemIndex": "26928",
+              "ownerAddress": "EQDAVS3bEqMfji_IVLM_X4hSA1r1SQsJZqmq08OBFt-vVJKA",
+              "image": {}
+            },
+            "ownerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "realOwnerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "codeHash": "0x0b7521cfe4b7619773fc828332a885a4c2963d8a8f0caa10c3d541e4b9c99105",
+            "dataHash": "0x93eb480790ad1aea4b463b76da0f12fe2d655f6ddea1b0006e0d14b480b843ee",
+            "isInited": true,
+            "isOnSale": false,
+            "extra": {
+              "uri": "https://notc.app/json/item189.json"
+            }
+          },
+          {
+            "address": "EQBac3dA8f1xJ3RfyRbLXRl-JoRy-_sAQx_LznTySKaCpZbP",
+            "index": "1813",
+            "collection": {
+              "address": "EQAPewALBEVKviA7Zvw3u9xCcUjCPJdaaXWF6ViwLfVQoDWD",
+              "codeHash": "0xc695f14caa21de967f633da8bbaeb673a24ed890920183f88d9afc6418c628a4",
+              "dataHash": "0x42f7762d01f51b7deae1098eb3b7c9a734bd1d85db8bd4805457e4083932e43c",
+              "nextItemIndex": "2001",
+              "ownerAddress": "EQAvMvNEYE6qDWPhWOK22bOv4p1aNWzmQHFKcfJ52qubEO82",
+              "image": {}
+            },
+            "ownerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "realOwnerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "codeHash": "0x0b7521cfe4b7619773fc828332a885a4c2963d8a8f0caa10c3d541e4b9c99105",
+            "dataHash": "0x67a7c09903658ef7b1763d4821da14589403c8360d12e5618879e2c30d0f3648",
+            "isInited": true,
+            "isOnSale": false,
+            "extra": {
+              "uri": "https://stondrop.com/json/item1813.json"
+            }
+          },
+          {
+            "address": "EQDIfFxgz1Y6XKqNFGq6bIlrWORObVypfdm1-WK_x5NBgc7C",
+            "index": "5800",
+            "collection": {
+              "address": "EQATQPeCwtMzQ9u54nTjUNcK4n_0VRSxPOOROLf_IE0OU3XK",
+              "codeHash": "0x910f1cba889eae2eed1535f1457b40cbd57c1b53debd9cf6a4f1abaff4af53ce",
+              "dataHash": "0x91f5d4291e79207c6e6a2200b215ea1799c36571206b62140b117804f5b69171",
+              "nextItemIndex": "21702",
+              "ownerAddress": "EQBJm7wS-5M9SmJ3xLMCj8Ol-JKLikGDj-GfDwL1_6b7cENC",
+              "extra": {
+                "_image_big": "https://proxy.toncenter.com/2PEzN0kHtb_PmTPViMV1zKqpL3iv1f6ZUsH_IEiveQg/pr:big/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                "_image_medium": "https://proxy.toncenter.com/PRWavzxv0yC3xZKnyxSCj2V4aD6ygAtgOA1arFVYr18/pr:medium/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                "_image_small": "https://proxy.toncenter.com/f0YGzYTqyXA7O-t8jXGe8wUu1XsUDYx11V-KIPpA4-0/pr:small/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                "social_links": [
+                  "https://app.ston.fi/staking"
+                ],
+                "uri": "https://meta.ston.fi/meta/stake-collection/v1/0:1340F782C2D33343DBB9E274E350D70AE27FF45514B13CE39138B7FF204D0E53.json"
+              },
+              "name": "ARKENSTON NFT",
+              "description": "STON STON.fi Stake",
+              "image": {
+                "url": "https://static.ston.fi/stake-nft/i1.jpg",
+                "smallUrl": "https://proxy.toncenter.com/f0YGzYTqyXA7O-t8jXGe8wUu1XsUDYx11V-KIPpA4-0/pr:small/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                "mediumUrl": "https://proxy.toncenter.com/PRWavzxv0yC3xZKnyxSCj2V4aD6ygAtgOA1arFVYr18/pr:medium/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ",
+                "largeUrl": "https://proxy.toncenter.com/2PEzN0kHtb_PmTPViMV1zKqpL3iv1f6ZUsH_IEiveQg/pr:big/bG9jYWw6Ly8vNWMvYTQvNWNhNDEyZWFhMjAxZDY4MDNkMWU2MTYzOGI5ZjUyOGVmNmU3ODA1NzdhNDkzMjc1MmQyYjU3MmM5YThlYjg1NQ"
+              }
+            },
+            "ownerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "realOwnerAddress": "EQC_yOwaj2Cji1mNxASzA5tqUUUoN9swq6XAnF7qfteQE9U-",
+            "codeHash": "0x6e1392bbc455b1f3824f2b9606c91ef23662694b88aac5529743d54d910d6723",
+            "dataHash": "0x1d537204aef21bdce6009281ffdee25fa73c2ad2959f42f8f2acdc3cdd2a9bd2",
+            "isInited": true,
+            "isOnSale": false,
+            "extra": {
+              "uri": "https://meta.ston.fi/meta/stake/v1/0:C87C5C60CF563A5CAA8D146ABA6C896B58E44E6D5CA97DD9B5F962BFC7934181.json"
+            },
+            "info": {
+              "name": "ARKENSTON NFT",
+              "description": "Unstaked 55.000000000 STON on STON.fi",
+              "image": {
+                "url": "https://static.ston.fi/stake-nft/i1.jpg",
+                "smallUrl": "https://proxy.toncenter.com/ciymXHDy5GNKbW5JMNgxgiIzWXVjPHG7rpcj0dfESq4/pr:small/bG9jYWw6Ly8vc2hhMjU2LzVjYTQxMmVhYTIwMWQ2ODAzZDFlNjE2MzhiOWY1MjhlZjZlNzgwNTc3YTQ5MzI3NTJkMmI1NzJjOWE4ZWI4NTU",
+                "mediumUrl": "https://proxy.toncenter.com/fLqcc1ZriidYWVdlpLEqXDawQID5a-TX0Z2z9JpPsBM/pr:medium/bG9jYWw6Ly8vc2hhMjU2LzVjYTQxMmVhYTIwMWQ2ODAzZDFlNjE2MzhiOWY1MjhlZjZlNzgwNTc3YTQ5MzI3NTJkMmI1NzJjOWE4ZWI4NTU",
+                "largeUrl": "https://proxy.toncenter.com/US5kJH8F7ZulL-j9E3rBudFPqvFSC4SSFSXpvfilmvQ/pr:big/bG9jYWw6Ly8vc2hhMjU2LzVjYTQxMmVhYTIwMWQ2ODAzZDFlNjE2MzhiOWY1MjhlZjZlNzgwNTc3YTQ5MzI3NTJkMmI1NzJjOWE4ZWI4NTU"
+              },
+              "animation": {}
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

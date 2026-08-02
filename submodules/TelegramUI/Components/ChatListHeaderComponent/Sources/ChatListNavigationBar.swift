@@ -33,9 +33,15 @@ public final class ChatListNavigationBar: Component {
 
     public struct Search: Equatable {
         public var isEnabled: Bool
+        public var placeholder: String?
+        public var displayGlassBackgroundWhenInactive: Bool
+        public var alignPlaceholderToLeftWhenInactive: Bool
 
-        public init(isEnabled: Bool) {
+        public init(isEnabled: Bool, placeholder: String? = nil, displayGlassBackgroundWhenInactive: Bool = false, alignPlaceholderToLeftWhenInactive: Bool = false) {
             self.isEnabled = isEnabled
+            self.placeholder = placeholder
+            self.displayGlassBackgroundWhenInactive = displayGlassBackgroundWhenInactive
+            self.alignPlaceholderToLeftWhenInactive = alignPlaceholderToLeftWhenInactive
         }
     }
     
@@ -200,9 +206,9 @@ public final class ChatListNavigationBar: Component {
         
         private var component: ChatListNavigationBar?
         private weak var state: EmptyComponentState?
-        
         private var scrollTheme: PresentationTheme?
         private var scrollStrings: PresentationStrings?
+        private var scrollSearch: Search?
         
         private var currentLayout: CurrentLayout?
         private var rawScrollOffset: CGFloat?
@@ -290,11 +296,13 @@ public final class ChatListNavigationBar: Component {
             guard let component = self.component, let currentLayout = self.currentLayout else {
                 return
             }
-            
-            let themeUpdated = component.theme !== self.scrollTheme || component.strings !== self.scrollStrings
-            
+
+            let searchPresentationUpdated = component.theme !== self.scrollTheme
+                || component.strings !== self.scrollStrings
+                || component.search != self.scrollSearch
             self.scrollTheme = component.theme
             self.scrollStrings = component.strings
+            self.scrollSearch = component.search
             
             let searchOffsetDistance: CGFloat = ChatListNavigationBar.searchScrollHeight
             
@@ -306,7 +314,11 @@ public final class ChatListNavigationBar: Component {
             }
             
             let clippedScrollOffset = min(minContentOffset, offset)
-            if self.clippedScrollOffset == clippedScrollOffset && !self.hasDeferredScrollOffset && !forceUpdate && !allowAvatarsExpansionUpdated {
+            if self.clippedScrollOffset == clippedScrollOffset
+                && !self.hasDeferredScrollOffset
+                && !forceUpdate
+                && !allowAvatarsExpansionUpdated
+                && !searchPresentationUpdated {
                 return
             }
             self.hasDeferredScrollOffset = false
@@ -324,27 +336,25 @@ public final class ChatListNavigationBar: Component {
                 let searchContentNode: NavigationBarSearchContentNode
                 if let current = self.searchContentNode {
                     searchContentNode = current
-                    
-                    if themeUpdated {
-                        let placeholder: String
-                        let compactPlaceholder: String
-                        
-                        placeholder = component.strings.Common_Search
-                        compactPlaceholder = component.strings.Common_Search
-                        
-                        searchContentNode.updateThemeAndPlaceholder(theme: component.theme, placeholder: placeholder, compactPlaceholder: compactPlaceholder)
+                    if searchPresentationUpdated {
+                        let placeholder = search.placeholder ?? component.strings.Common_Search
+                        searchContentNode.updateThemeAndPlaceholder(
+                            theme: component.theme,
+                            placeholder: placeholder,
+                            compactPlaceholder: placeholder,
+                            displayGlassBackgroundWhenInactive: search.displayGlassBackgroundWhenInactive,
+                            alignPlaceholderToLeftWhenInactive: search.alignPlaceholderToLeftWhenInactive
+                        )
                     }
                 } else {
-                    let placeholder: String
-                    let compactPlaceholder: String
-                    
-                    placeholder = component.strings.Common_Search
-                    compactPlaceholder = component.strings.Common_Search
+                    let placeholder = search.placeholder ?? component.strings.Common_Search
                     
                     searchContentNode = NavigationBarSearchContentNode(
                         theme: component.theme,
                         placeholder: placeholder,
-                        compactPlaceholder: compactPlaceholder,
+                        compactPlaceholder: placeholder,
+                        displayGlassBackgroundWhenInactive: search.displayGlassBackgroundWhenInactive,
+                        alignPlaceholderToLeftWhenInactive: search.alignPlaceholderToLeftWhenInactive,
                         activate: { [weak self] in
                             guard let self, let component = self.component, let searchContentNode = self.searchContentNode else {
                                 return

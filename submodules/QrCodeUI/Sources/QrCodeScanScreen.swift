@@ -221,7 +221,6 @@ public final class QrCodeScanScreen: ViewController {
             }
             self.codeResolved = true
             self.completion(code)
-            self.dismissAnimated()
             return true
         default:
             return false

@@ -263,7 +263,7 @@ public final class WalletTransactionItemComponent: Component {
             let amountText: String
             let amountIconName: String
             if component.transaction.collectible != nil {
-                amountText = formattedAmountValue > 0 ? "+1 item" : "-1 item"
+                amountText = component.transaction.direction == .incoming ? "+1 item" : "-1 item"
                 amountIconName = "Wallet/TransactionCollectible"
             } else if component.transaction.currency == .ton {
                 amountText = formatTonAmountText(
@@ -436,6 +436,8 @@ public final class WalletTransactionItemComponent: Component {
                 case .anonymousNumber:
                     //TODO:localize
                     collectibleTypeText = "Anonymous Number"
+                case .other:
+                    collectibleTypeText = "Collectible"
                 }
                 let collectibleSubtitleSize = self.collectibleSubtitle.update(
                     transition: transition,

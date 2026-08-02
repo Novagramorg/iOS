@@ -1,0 +1,71 @@
+{
+  "source": "@ton/walletkit@1.1.0-beta.0",
+  "vectors": [
+    {
+      "label": "{\"id\":\"1\",\"method\":\"send…",
+      "plaintext": "{\"id\":\"1\",\"method\":\"sendTransaction\",\"params\":[\"{}\"]}",
+      "senderPublicKey": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+      "senderSecretKey": "2222222222222222222222222222222222222222222222222222222222222222",
+      "receiverPublicKey": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+      "receiverSecretKey": "1111111111111111111111111111111111111111111111111111111111111111",
+      "envelope": "QMGQ/Rke3PFmwXaahc4MVDr14H6v1D+g4bpF5g6YOEguA17LABeDzbmSaq0MnDT2a/uscVq2B7Zes/JBomcxHhKBKBmyLsQQojV5tTi5kTsxP1E6mN4GSl1u4dCW",
+      "nonceLength": 24,
+      "roundTripped": true
+    },
+    {
+      "label": "<empty>",
+      "plaintext": "",
+      "senderPublicKey": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+      "senderSecretKey": "2222222222222222222222222222222222222222222222222222222222222222",
+      "receiverPublicKey": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+      "receiverSecretKey": "1111111111111111111111111111111111111111111111111111111111111111",
+      "envelope": "J4+vXfZw2x0PDfpIhgvgbjdllAeRuXKfp2GdhoQLCMgxMxxGvtBQBg==",
+      "nonceLength": 24,
+      "roundTripped": true
+    },
+    {
+      "label": "plain text",
+      "plaintext": "plain text",
+      "senderPublicKey": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+      "senderSecretKey": "2222222222222222222222222222222222222222222222222222222222222222",
+      "receiverPublicKey": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+      "receiverSecretKey": "1111111111111111111111111111111111111111111111111111111111111111",
+      "envelope": "T0ntCTJyGKHLmrH2/2Voj4S/pNqtKUUB7myBbXd0NotEk+5vG+YoVncagJ8X2MG3DuQ=",
+      "nonceLength": 24,
+      "roundTripped": true
+    },
+    {
+      "label": "{\"event\":\"connect\",\"payl…",
+      "plaintext": "{\"event\":\"connect\",\"payload\":{\"items\":[],\"device\":{}}}",
+      "senderPublicKey": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+      "senderSecretKey": "2222222222222222222222222222222222222222222222222222222222222222",
+      "receiverPublicKey": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+      "receiverSecretKey": "1111111111111111111111111111111111111111111111111111111111111111",
+      "envelope": "nsWo5C4NUOvX0NU/h8d/J3FoFubOwxrRIPc2lrnCtoediqDnGwmqPcBQHQOrGbAAnXwCz/Qkz9Un+qsJUwbsrb4rEjrNmB2dC/P9+0I4pNbTClQhhH8KltI16OaI9Q==",
+      "nonceLength": 24,
+      "roundTripped": true
+    },
+    {
+      "label": "unicode ✅ Привет 🌍",
+      "plaintext": "unicode ✅ Привет 🌍",
+      "senderPublicKey": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+      "senderSecretKey": "2222222222222222222222222222222222222222222222222222222222222222",
+      "receiverPublicKey": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+      "receiverSecretKey": "1111111111111111111111111111111111111111111111111111111111111111",
+      "envelope": "uNmrBS8+B5EII+1rMEwl3Md5No1ZJoS0EiVkOidvEi2V1C6MkHytFoLmMKM3hPf8tCUF1pTT9oj2xb6StJ5ozV/Uo6pG",
+      "nonceLength": 24,
+      "roundTripped": true
+    },
+    {
+      "label": "xxxxxxxxxxxxxxxxxxxxxxxx…",
+      "plaintext": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "senderPublicKey": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+      "senderSecretKey": "2222222222222222222222222222222222222222222222222222222222222222",
+      "receiverPublicKey": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+      "receiverSecretKey": "1111111111111111111111111111111111111111111111111111111111111111",
+      "envelope": "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",
+      "nonceLength": 24,
+      "roundTripped": true
+    }
+  ]
+}

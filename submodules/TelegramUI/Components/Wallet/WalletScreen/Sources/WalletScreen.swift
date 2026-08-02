@@ -23,6 +23,8 @@ import MultilineTextComponent
 import HorizontalTabsComponent
 import GlassBackgroundComponent
 import WalletSendScreen
+import WalletPeerSelectionScreen
+import TooltipUI
 
 private let walletSectionOverscan: CGFloat = 100.0
 private let walletTransactionItemHeight: CGFloat = 79.0
@@ -348,6 +350,8 @@ private final class WalletScreenComponent: Component {
         private var accountPeerDisposable: Disposable?
         private var isUpdating = false
         private var didRequestSetup = false
+        private var isGramTooltipPresentationPending = false
+        private var didPresentGramTooltip = false
         private var selectedSection: SelectedSection = .transactions
 
         override init(frame: CGRect) {
@@ -446,6 +450,52 @@ private final class WalletScreenComponent: Component {
                 return info
             }
             return nil
+        }
+
+        private func maybePresentGramTooltip(cardView: WalletCardComponent.View) {
+            guard !self.isGramTooltipPresentationPending,
+                  !self.didPresentGramTooltip,
+                  self.environment?.isVisible == true,
+                  self.walletInfo != nil,
+                  !cardView.gramIconFrame.isEmpty else {
+                return
+            }
+
+            self.isGramTooltipPresentationPending = true
+            Queue.mainQueue().after(0.0) { [weak self, weak cardView] in
+                guard let self else {
+                    return
+                }
+                self.isGramTooltipPresentationPending = false
+
+                guard !self.didPresentGramTooltip,
+                      self.environment?.isVisible == true,
+                      self.walletInfo != nil,
+                      let component = self.component,
+                      let cardView,
+                      cardView.window != nil,
+                      !cardView.gramIconFrame.isEmpty,
+                      let controller = self.environment?.controller() else {
+                    return
+                }
+
+                self.didPresentGramTooltip = true
+                let sourceFrame = cardView.convert(cardView.gramIconFrame, to: nil).offsetBy(dx: 0.0, dy: -4.0)
+                let tooltipScreen = TooltipScreen(
+                    account: component.context.account,
+                    sharedContext: component.context.sharedContext,
+                    text: .attributedString(text: NSAttributedString(string: "Gram — Digital currency for Telegram", font: Font.medium(11.0), textColor: .white)),
+                    style: .gradient(UIColor(rgb: 0x47bafe), UIColor(rgb: 0x44b5ff), -2.0),
+                    arrowStyle: .small,
+                    location: .point(sourceFrame, .bottom),
+                    displayDuration: .default,
+                    inset: 26.0,
+                    shouldDismissOnTouch: { _, _ in
+                        return .dismiss(consume: false)
+                    }
+                )
+                controller.present(tooltipScreen, in: .current)
+            }
         }
 
         private func routeToSetupIfNeeded() {
@@ -630,24 +680,23 @@ private final class WalletScreenComponent: Component {
                 info: scannerInfo,
                 validate: { value in
                     return WalletContext.isTonConnectUrl(value)
-                        || QrCodeScanScreen.normalizedCryptoAddress(value) != nil
+                        || WalletContext.transferAddress(from: value) != nil
                 }
             ))
-            scanner.completion = { [weak self] value in
-                guard let value else {
+            scanner.completion = { [weak self, weak scanner] value in
+                guard let self, let value else {
                     return
                 }
                 if WalletContext.isTonConnectUrl(value) {
-                    Queue.mainQueue().after(0.25) {
+                    Queue.mainQueue().after(0.15) {
+                        scanner?.dismiss()
                         component.walletContext.processTonConnectUrl(value)
                     }
-                    return
-                }
-                guard let value = QrCodeScanScreen.normalizedCryptoAddress(value) else {
-                    return
-                }
-                Queue.mainQueue().after(0.25) { [weak self] in
-                    self?.openSend(address: value)
+                } else if let address = WalletContext.transferAddress(from: value) {
+                    Queue.mainQueue().after(0.15) {
+                        scanner?.dismiss()
+                        self.openSend(address: address)
+                    }
                 }
             }
             controller.push(scanner)
@@ -672,9 +721,18 @@ private final class WalletScreenComponent: Component {
                   self.walletInfo != nil else {
                 return
             }
-            let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address)
-            sendScreen.navigationPresentation = .modal
-            controller.push(sendScreen)
+            if let address {
+                let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address)
+                sendScreen.navigationPresentation = .modal
+                controller.push(sendScreen)
+            } else {
+                let peerSelectionScreen = WalletPeerSelectionScreen(
+                    context: component.context,
+                    walletContext: component.walletContext
+                )
+                peerSelectionScreen.navigationPresentation = .modal
+                controller.push(peerSelectionScreen)
+            }
         }
 
         private func openWalletInfo() {
@@ -1034,6 +1092,9 @@ private final class WalletScreenComponent: Component {
                         size: cardSize
                     )
                 )
+                if let cardView = cardView as? WalletCardComponent.View {
+                    self.maybePresentGramTooltip(cardView: cardView)
+                }
             }
 
             //TODO:localize
@@ -1097,11 +1158,7 @@ private final class WalletScreenComponent: Component {
                         ))
                     ),
                     action: { [weak self] in
-                        #if DEBUG
-                        self?.openSend(address: "")
-                        #else
                         self?.openSend()
-                        #endif
                     }
                 )),
                 environment: {},

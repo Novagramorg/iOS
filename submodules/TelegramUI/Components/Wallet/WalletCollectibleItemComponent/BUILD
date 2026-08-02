@@ -15,7 +15,7 @@ swift_library(
         "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramPresentationData",
         "//submodules/AccountContext",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletCollectibleImageComponent",
     ],
     visibility = [

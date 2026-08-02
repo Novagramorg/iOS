@@ -1,0 +1,61 @@
+{
+  "source": "toncenter-v3",
+  "network": "testnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "resolve-known",
+      "method": "resolveDnsWallet",
+      "args": {
+        "domain": "ton.ton"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/dns/records?domain=ton.ton&limit=1&offset=0",
+          "status": 200,
+          "body": {
+            "records": [],
+            "address_book": {}
+          }
+        }
+      ]
+    },
+    {
+      "label": "resolve-missing",
+      "method": "resolveDnsWallet",
+      "args": {
+        "domain": "zzz-nope-zzz.ton"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/dns/records?domain=zzz-nope-zzz.ton&limit=1&offset=0",
+          "status": 200,
+          "body": {
+            "records": [],
+            "address_book": {}
+          }
+        }
+      ]
+    },
+    {
+      "label": "back-resolve",
+      "method": "backResolveDnsWallet",
+      "args": {
+        "address": "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573"
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/dns/records?wallet=0%3A82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573&limit=1&offset=0",
+          "status": 200,
+          "body": {
+            "records": [],
+            "address_book": {}
+          }
+        }
+      ]
+    }
+  ]
+}
