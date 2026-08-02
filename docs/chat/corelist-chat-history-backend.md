@@ -571,7 +571,10 @@ attachment's frame and its stick distance deliberately solve at different offset
   step (`:4018-4021`): `updateAttachedAvatarNodeOffset`, which slides the gutter avatar 100pt aside
   while a round video plays unexpanded (`ChatMessageInstantVideoBubbleContentNode.swift:279`), and
   `updateAttachedAvatarNodeIsHidden(isHidden: isSidePanelOpen)`, which hides it behind the floating
-  topics side panel. `updateAttachedDateHeader(hasDate:hasPeer:)` needs nothing —
+  topics side panel. **Both runtime-verified on screen (2026-08-03)**, which is the only check that
+  means anything here — the suite cannot see a binding that is never consulted, and the failure mode
+  of the old state was silence rather than breakage. `updateAttachedDateHeader(hasDate:hasPeer:)`
+  needs nothing —
   `ChatMessageDateHeaderNodeImpl.updateItem` has an empty body. The avatar's selection-mode offset,
   which ListViewImpl also routes this way, needs nothing either — and must not be given anything.
   The app pushes it to every live header node itself, through `forEachItemHeaderNode`
