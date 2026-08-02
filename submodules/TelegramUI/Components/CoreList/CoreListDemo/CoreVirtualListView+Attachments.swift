@@ -175,6 +175,7 @@ extension CoreVirtualListView {
 
         for run in assigned {
             let view: UIView & CoreListAttachedItemView
+            var isFreshView = false
             if let reused = viewBySerial[run.serial] {
                 view = reused
                 // Content equality is compared against the RUN REPRESENTATIVE, independently of the
@@ -187,12 +188,14 @@ extension CoreVirtualListView {
                 }
             } else {
                 view = run.representative.view()
+                isFreshView = true
             }
             appliedAttachmentDescriptors[run.serial] = run.representative
             bindAttachmentSelfUpdate(view: view, serial: run.serial)
 
             let height = view.update(width: contentWidth,
-                                     transition: attachmentMeasureTransition(serial: run.serial))
+                                     transition: attachmentMeasureTransition(serial: run.serial,
+                                                                             isFreshView: isFreshView))
 
             let members = window.items.filter { run.memberRange.contains($0.index) }
             let bandTop = members.map(\.frame.minY).min() ?? 0
@@ -231,10 +234,23 @@ extension CoreVirtualListView {
         window.attachments = resolved
     }
 
-    /// A row measures with the pass transition only when its own content was reconciled. Attachments
-    /// need the same gate or they animate their internals on passes where nothing about them changed.
-    private func attachmentMeasureTransition(serial: UInt64) -> CoreListTransition {
-        reconciledAttachmentSerials.contains(serial) ? currentPassTransition : .immediate
+    /// The transition an attachment is measured with — the same two cases a row gets from
+    /// `measureTransition(forItemAt:view:)`: non-immediate when the attachment has to RE-LAY-OUT and
+    /// has a prior layout to animate from, meaning its own content was reconciled OR the pass changed
+    /// `contentWidth` and it is being re-measured at a new width.
+    ///
+    /// The width case is if anything more visible here than for rows: a chat date pill CENTRES itself
+    /// in `contentWidth`, so a side inset moves it across the screen. Measuring `.immediate` there
+    /// snapped the pill while every row animated.
+    ///
+    /// `isFreshView` outranks the width case — a view created in this pass has no prior layout to
+    /// animate from. It is passed in rather than tracked in a set (as rows do with
+    /// `freshViewsThisPass`) because an attachment's only creation site sits a few lines above its
+    /// only measure.
+    private func attachmentMeasureTransition(serial: UInt64, isFreshView: Bool) -> CoreListTransition {
+        if isFreshView { return .immediate }
+        if contentWidthChangedInPass { return currentPassTransition }
+        return reconciledAttachmentSerials.contains(serial) ? currentPassTransition : .immediate
     }
 
     /// Routes an attachment's self-update into the same coalesced dirty flush rows use. Every pass
@@ -393,8 +409,7 @@ extension CoreVirtualListView {
     /// no window and no global scan are needed — which is what makes this callable from the middle of
     /// row stacking, where the reserve changes the very frames being computed.
     func reservedHeights(atIndex index: Int,
-                         width: CGFloat,
-                         sourceWindow: Window?) -> (top: CGFloat, bottom: CGFloat) {
+                         width: CGFloat) -> (top: CGFloat, bottom: CGFloat) {
         guard items.indices.contains(index) else { return (0, 0) }
         var top: CGFloat = 0
         var bottom: CGFloat = 0
@@ -409,7 +424,7 @@ extension CoreVirtualListView {
             let endsHere = run.edge == .bottom && run.endsCollectionRun
             guard startsHere || endsHere else { continue }
 
-            let height = measuredAttachmentHeight(for: run, width: width, sourceWindow: sourceWindow)
+            let height = measuredAttachmentHeight(for: run, width: width)
             if startsHere {
                 top += height
                 reservingTopKeys += 1
@@ -425,17 +440,31 @@ extension CoreVirtualListView {
         return (top, bottom)
     }
 
-    /// Measures a reserving run during stacking, reusing the previous window's view for the same key
-    /// and member head so the height matches what `resolveAttachments` will settle on.
+    /// Measures a reserving run during stacking, to learn how much space to reserve for it.
+    ///
+    /// Measures a THROWAWAY view, never the live one. This used to reuse the previous window's view
+    /// for the same key — the stated reason being that the height would then match what
+    /// `resolveAttachments` settles on — and that reuse was the bug: `update(width:transition:)` both
+    /// measures AND lays out, so probing a live view laid it out at the target with `.immediate`. The
+    /// real measure that followed then found every setter already at its target and, because
+    /// transition setters early-out on an equal target, animated nothing. Reserving attachments could
+    /// not animate their internals at all, for a width change or a content change.
+    ///
+    /// A throwaway restores the invariant that a live view is laid out exactly ONCE per pass, and it
+    /// does not cost accuracy — it arguably gains some. The height is a pure function of the current
+    /// descriptor, and a throwaway is built from `run.representative`, i.e. exactly the descriptor
+    /// `resolveAttachments` is about to `apply(to:)` the live view. The old reuse measured the live
+    /// view BEFORE that apply, so a run whose content changed reserved space for its previous
+    /// content. This is also the path the no-existing-view case already took, so it is one trusted
+    /// path replacing two rather than a new one.
+    ///
+    /// Cost is one view construction per reserving run per pass — zero for a list with no
+    /// `.reservesSpace` attachments, which includes the chat backend (`.overlay` throughout). The
+    /// throwaway is never parented, never bound via `bindAttachmentSelfUpdate`, and is released
+    /// immediately.
     private func measuredAttachmentHeight(for run: AttachmentRuns.PendingRun,
-                                          width: CGFloat,
-                                          sourceWindow: Window?) -> CGFloat {
-        if let existing = sourceWindow?.attachments.first(where: {
-            $0.key == run.key && $0.memberRange.contains(run.memberRange.lowerBound)
-        }) {
-            return existing.view.update(width: width, transition: .immediate)
-        }
-        return run.representative.view().update(width: width, transition: .immediate)
+                                          width: CGFloat) -> CGFloat {
+        run.representative.view().update(width: width, transition: .immediate)
     }
 
     /// One attachment's settled presentation at a moment in a pass. `contentY` uses the same

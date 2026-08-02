@@ -9,6 +9,7 @@ import UIKit
 final class FixedHeightAttachmentView: UIView, CoreListAttachedItemView {
     private(set) var fixedHeight: CGFloat
     private(set) var lastMeasuredWidth: CGFloat?
+    private(set) var lastMeasureTransition: CoreListTransition?
     private(set) var measureCount = 0
     private(set) var lastStickDistance: CGFloat?
     var onContentDidChange: ((Bool) -> Void)?
@@ -26,6 +27,7 @@ final class FixedHeightAttachmentView: UIView, CoreListAttachedItemView {
 
     func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
         lastMeasuredWidth = width
+        lastMeasureTransition = transition
         measureCount += 1
         return fixedHeight
     }

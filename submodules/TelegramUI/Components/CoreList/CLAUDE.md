@@ -540,14 +540,60 @@ identity field(s). `apply(to:transition:)` updates a reused view in place (defau
 `update(width:transition:)` lays out the row and returns its measured height.
 
 Both receive the enclosing pass's `CoreListTransition`, so a row can animate its own internals on the
-same curve and duration as its outer geometry. It is non-immediate **only** when that row's content
-changed in the pass — a reconciled survivor, or an animated self-update flush. Fresh views, scroll-in
-loads, unchanged survivors, and off-screen remeasures receive `.immediate`: there is nothing to
-animate from, or the change is purely outer geometry, which `ListAnimationModel` owns. `update` must
-return the settled height either way, and may be called twice in one pass (dirty remeasure, then
-window construction) — the transition's setters early-out on an equal target, so the second call is a
-no-op. The mechanism is a per-pass `reconciledIdentities` set paired with `currentPassTransition`;
-scroll-driven rebalancing leaves the set empty, which is what makes its rows `.immediate` for free.
+same curve and duration as its outer geometry. It is non-immediate in exactly two cases, both meaning
+"this row has to RE-LAY-OUT and has a prior layout to animate from": its **content was reconciled** in
+the pass — a reconciled survivor, or an animated self-update flush (`reconciledIdentities`) — or the
+pass **changed `contentWidth`**, so `buildWindow` re-measures every loaded row at a new width
+(`contentWidthChangedInPass`).
+
+The second is not a special case of the first, and omitting it was a real bug: a horizontal inset or a
+viewport-width change reconciles nothing, yet every row reflows — a bubble rewraps its text, its
+subviews move. `ListAnimationModel` owns the row's OUTER frame and animates that, but it knows nothing
+about where a label sits inside a bubble, so row internals snapped while the frame animated. Note the
+asymmetry that explains: the older "purely outer geometry" reasoning is correct for a **vertical**
+inset change, which leaves `contentWidth` alone so nothing re-measures, and wrong for a horizontal one.
+
+Everything else receives `.immediate`: a view **created in this pass** (`freshViewsThisPass` — nothing
+to animate from, and this exclusion outranks the width case), and, while the width is unchanged,
+scroll-in loads, unchanged survivors and off-screen remeasures, none of which relayout. Scroll-driven
+rebalancing changes neither content nor width, so its rows stay `.immediate` for free.
+
+`contentWidthChangedInPass` compares `contentWidth` across the pass's geometry assignment
+using the same `0.5` epsilon `CoreListNodeHostView.update(width:transition:)` uses to decide whether to
+relayout at all. **The two must agree** — drift either way gives a row that animates without
+relayouting, or relayouts without animating.
+
+**The inference is per-PASS, which constrains callers.** A host that installs a geometry change in one
+pass and animates the relayout in the next leaves the animated pass with no delta to infer from, and
+nothing in `measureTransition` can recover it — by then the layout is already correct. `ListViewImpl`
+has no such constraint because its equivalent, `ListViewUpdateSizeAndInsets.customAnimationTransition`,
+is an instruction rather than an inference (`Display/Source/ListView.swift:1791`). Submit the geometry
+change and its animation in the same pass; the chat does.
+
+`update` must return the settled height either way, and may be called twice in one pass (dirty
+remeasure, then window construction) — the transition's setters early-out on an equal target, so the
+second call is a no-op.
+
+**Attachments follow the same rule**, through `attachmentMeasureTransition(serial:isFreshView:)`:
+reconciled content (`reconciledAttachmentSerials`) or a changed `contentWidth`, with a freshly created
+view outranking both. The width case matters at least as much here — a chat date pill CENTRES itself
+in the width it is given, so any viewport resize (rotation, Split View) moves it across the screen.
+Both per-pass sets are cleared together
+at the pass boundary; `reconciledAttachmentSerials` was for a long time never cleared at all despite a
+comment saying otherwise, which left any attachment that reconciled once measuring with the pass
+transition on every later animated pass.
+
+**A live attachment view is laid out exactly once per pass, and `measuredAttachmentHeight` must keep it
+that way.** A `.reservesSpace` run is measured twice — once during stacking to size its reserve, once by
+`resolveAttachments` for real. The probe used to reuse the live view, and since
+`update(width:transition:)` both measures AND lays out, that laid the view out at the target with
+`.immediate`; the real measure then found every setter already at its target and, because transition
+setters early-out on an equal target, animated nothing. Reserving attachments could not animate their
+internals at all — width change or content change. The probe now measures a THROWAWAY built from
+`run.representative`, which also fixes a staleness: the old reuse measured the live view BEFORE
+`apply(to:)` reconciled it, so a run whose content changed reserved space for its previous content.
+Cost is one view construction per reserving run per pass, and zero for a list with no reserving
+attachments (the chat backend is `.overlay` throughout).
 
 📖 **Read before changing:** `DemoRow.swift` and
 `docs/plans/2026-05-31-item-content-reconcile-design.md`.

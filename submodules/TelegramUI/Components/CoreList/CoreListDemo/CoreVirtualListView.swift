@@ -639,6 +639,15 @@ public final class CoreVirtualListView: UIView {
 
     // Internal: read by `fadingInAttachmentSerials` in CoreVirtualListView+Attachments.swift.
     var reconciledIdentities: Set<AnyHashable> = []
+    /// True when this pass changes `contentWidth`, which makes every loaded row and attachment
+    /// re-measure at a new width rather than merely move. Paired with `reconciledIdentities` and
+    /// cleared with it.
+    var contentWidthChangedInPass = false
+    /// Views CREATED during the pass currently being applied, by object identity. A fresh view has no
+    /// prior layout to animate its internals from, so it measures `.immediate` even when the pass is
+    /// animated — the exclusion the item contract has always promised. Recorded in `viewForItem`, the
+    /// single funnel through which a row's view is obtained, and cleared with `reconciledIdentities`.
+    var freshViewsThisPass: Set<ObjectIdentifier> = []
     /// The transition of the pass currently being applied, paired with `reconciledIdentities`.
     /// Window construction is reached from the mutation pass AND from scroll-driven rebalancing;
     /// the latter leaves the set empty, so its rows correctly measure `.immediate` without any
@@ -769,6 +778,10 @@ public final class CoreVirtualListView: UIView {
         defer {
             isApplyingChanges = false
             reconciledIdentities.removeAll()
+        reconciledAttachmentSerials.removeAll()
+            reconciledAttachmentSerials.removeAll()
+                freshViewsThisPass.removeAll()
+            contentWidthChangedInPass = false
             currentPassTransition = .immediate
             refreshReachedLoadedEdges()
             assertOverlayInvariants()
@@ -930,8 +943,15 @@ public final class CoreVirtualListView: UIView {
         }.map { oldItems[$0.index].identity }
             ?? oldWindow.items.last.map { oldItems[$0.index].identity }
 
+        // Captured across the geometry assignment below, because a pass that changes `contentWidth`
+        // re-measures every loaded row at the new width — see `measureTransition(forItemAt:view:)`.
+        // The 0.5 epsilon is the one `CoreListNodeHostView.update(width:transition:)` uses to decide
+        // whether to relayout at all; the two must agree, or a row either animates without
+        // relayouting or relayouts without animating.
+        let widthBeforePass = contentWidth
         if let newSize { logicalSize = newSize }
         if let newInsets { viewportInsets = newInsets }
+        contentWidthChangedInPass = abs(contentWidth - widthBeforePass) > 0.5
         if !oldItems.isEmpty, effectiveItems.isEmpty {
             engine.haltMotionInPlace()
         }
@@ -952,6 +972,7 @@ public final class CoreVirtualListView: UIView {
         }
 
         reconciledIdentities.removeAll()
+        freshViewsThisPass.removeAll()
         currentPassTransition = transition
         if hasItems {
             func reconcileContent(newIndex: Int, oldIndex: Int) {
@@ -2241,14 +2262,31 @@ public final class CoreVirtualListView: UIView {
         }
     }
 
-    /// A row measures with the pass transition only if its content was reconciled in this pass.
-    /// Everything else — fresh views, scroll-in loads, unchanged survivors, off-screen remeasures —
-    /// measures `.immediate`: there is nothing to animate from, or the change is purely outer
-    /// geometry, which `ListAnimationModel` owns.
-    private func measureTransition(forItemAt index: Int) -> CoreListTransition {
-        guard _items.indices.contains(index),
-              reconciledIdentities.contains(_items[index].identity)
-        else { return .immediate }
+    /// The transition a row is measured with. Non-immediate when the row has to RE-LAY-OUT and has a
+    /// prior layout to animate from — either because its content was reconciled in this pass, or
+    /// because the pass changed `contentWidth` and it is being measured at a new width.
+    ///
+    /// The width case is not a special case of the content one: a horizontal inset or a viewport-width
+    /// change reconciles nothing, yet `buildWindow` re-measures every loaded row at the new
+    /// `contentWidth`, and the row reflows internally — a bubble rewraps its text, its subviews move.
+    /// `ListAnimationModel` owns the row's OUTER frame and animates that, but it knows nothing about
+    /// where a label sits inside a bubble; only the row can animate that, and only if it is handed a
+    /// transition. Measuring `.immediate` there snapped every row's internals while its frame
+    /// animated. (This is why the old "the change is purely outer geometry" reasoning held for a
+    /// VERTICAL inset change — which leaves `contentWidth` alone, so nothing re-measures — and not for
+    /// a horizontal one.)
+    ///
+    /// Still `.immediate` for: a view created in this pass (nothing to animate from), a row whose
+    /// identity is out of range, and — when the width is unchanged — scroll-in loads, unchanged
+    /// survivors and off-screen remeasures, none of which relayout.
+    private func measureTransition(forItemAt index: Int,
+                                   view: UIView & CoreListItemView) -> CoreListTransition {
+        guard _items.indices.contains(index) else { return .immediate }
+        guard !freshViewsThisPass.contains(ObjectIdentifier(view)) else { return .immediate }
+        if contentWidthChangedInPass {
+            return currentPassTransition
+        }
+        guard reconciledIdentities.contains(_items[index].identity) else { return .immediate }
         return currentPassTransition
     }
 
@@ -2265,12 +2303,12 @@ public final class CoreVirtualListView: UIView {
                                survivorMapNewToOld: survivorMapNewToOld,
                                moveReuseNewToOld: moveReuseNewToOld)
         let height = view.update(width: width,
-                                 transition: measureTransition(forItemAt: index))
+                                 transition: measureTransition(forItemAt: index, view: view))
         // The anchor's placement may depend on its own height (bottom-align, center, make-visible),
         // so it is resolved here rather than by the caller: this is the first moment the height
         // exists.
         let anchorY = resolveY(height, view)
-        let anchorReserve = reservedHeights(atIndex: index, width: width, sourceWindow: sourceWindow)
+        let anchorReserve = reservedHeights(atIndex: index, width: width)
         var window = Window(items: [
             Window.Item(index: index,
                         view: view,
@@ -2360,8 +2398,8 @@ public final class CoreVirtualListView: UIView {
                                survivorMapNewToOld: survivorMapNewToOld,
                                moveReuseNewToOld: moveReuseNewToOld)
         let height = view.update(width: width,
-                                 transition: measureTransition(forItemAt: index))
-        let reserve = reservedHeights(atIndex: index, width: width, sourceWindow: sourceWindow)
+                                 transition: measureTransition(forItemAt: index, view: view))
+        let reserve = reservedHeights(atIndex: index, width: width)
         window.items.insert(
             Window.Item(index: index,
                         view: view,
@@ -2388,8 +2426,8 @@ public final class CoreVirtualListView: UIView {
                                survivorMapNewToOld: survivorMapNewToOld,
                                moveReuseNewToOld: moveReuseNewToOld)
         let height = view.update(width: width,
-                                 transition: measureTransition(forItemAt: index))
-        let reserve = reservedHeights(atIndex: index, width: width, sourceWindow: sourceWindow)
+                                 transition: measureTransition(forItemAt: index, view: view))
+        let reserve = reservedHeights(atIndex: index, width: width)
         let previous = window.items.last
         window.items.append(
             Window.Item(index: index,
@@ -2421,7 +2459,9 @@ public final class CoreVirtualListView: UIView {
         if let carry = crossingCarries[identity] {
             return carry.view
         }
-        return _items[index].view()
+        let fresh = _items[index].view()
+        freshViewsThisPass.insert(ObjectIdentifier(fresh))
+        return fresh
     }
 
     private func loadedEdgeRange(for window: Window,
