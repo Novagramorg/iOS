@@ -24,9 +24,16 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
     // was built. Only the backend knows whether headers are flashing RIGHT NOW.
     private weak var backend: CoreListChatHistoryBackend?
 
-    init(header: ListViewItemHeader, backend: CoreListChatHistoryBackend?) {
+    // The chat's horizontal insets, laid out against by the header node rather than applied by framing
+    // the attachment — the attachment-side half of the same decision, see `coreListInsets`.
+    let leftInset: CGFloat
+    let rightInset: CGFloat
+
+    init(header: ListViewItemHeader, backend: CoreListChatHistoryBackend?, leftInset: CGFloat, rightInset: CGFloat) {
         self.header = header
         self.backend = backend
+        self.leftInset = leftInset
+        self.rightInset = rightInset
     }
 
     // Chat rows already reserve the header's height in their own layout insets
@@ -65,7 +72,9 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
     // reappears only on the next flag flip, i.e. the user's next drag.
     func view() -> UIView & CoreListAttachedItemView {
         return CoreListHeaderHostView(header: self.header,
-                                      isFlashingOnScrolling: self.backend?.isFlashingHeaders ?? false)
+                                      isFlashingOnScrolling: self.backend?.isFlashingHeaders ?? false,
+                                      leftInset: self.leftInset,
+                                      rightInset: self.rightInset)
     }
 
     // Content equality, NOT instance equality. Chat rebuilds its header instances on every
@@ -77,6 +86,11 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
             return false
         }
         if other.header.id != self.header.id {
+            return false
+        }
+        // The node lays itself out against these, so a change is a content change. Checked before the
+        // per-type comparisons below, each of which returns.
+        if other.leftInset != self.leftInset || other.rightInset != self.rightInset {
             return false
         }
         if let lhs = self.header as? ChatMessageDateHeader,
@@ -94,7 +108,9 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
     }
 
     func apply(to view: UIView & CoreListAttachedItemView, transition: CoreListTransition) {
-        (view as? CoreListHeaderHostView)?.setHeader(self.header)
+        (view as? CoreListHeaderHostView)?.setHeader(self.header,
+                                                     leftInset: self.leftInset,
+                                                     rightInset: self.rightInset)
     }
 
     // The reason CoreListAttachedItem has this at all: ChatMessageAvatarHeader folds its day bucket
@@ -115,12 +131,16 @@ final class CoreListHeaderHostView: UIView, CoreListAttachedItemView {
     private(set) var headerNode: ListViewItemHeaderNode?
     private var appliedStickDistance: CGFloat?
     private var isFlashingOnScrolling = false
+    private var leftInset: CGFloat
+    private var rightInset: CGFloat
 
     var onContentDidChange: ((_ animated: Bool) -> Void)? = nil
 
-    init(header: ListViewItemHeader, isFlashingOnScrolling: Bool) {
+    init(header: ListViewItemHeader, isFlashingOnScrolling: Bool, leftInset: CGFloat, rightInset: CGFloat) {
         self.header = header
         self.isFlashingOnScrolling = isFlashingOnScrolling
+        self.leftInset = leftInset
+        self.rightInset = rightInset
         super.init(frame: .zero)
     }
 
@@ -149,8 +169,10 @@ final class CoreListHeaderHostView: UIView, CoreListAttachedItemView {
         return nodeView.hitTest(self.convert(point, to: nodeView), with: event) != nil
     }
 
-    func setHeader(_ header: ListViewItemHeader) {
+    func setHeader(_ header: ListViewItemHeader, leftInset: CGFloat, rightInset: CGFloat) {
         self.header = header
+        self.leftInset = leftInset
+        self.rightInset = rightInset
     }
 
     func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
@@ -182,15 +204,15 @@ final class CoreListHeaderHostView: UIView, CoreListAttachedItemView {
         let size = CGSize(width: width, height: self.header.height)
         headerNode.frame = CGRect(origin: CGPoint(), size: size)
 
-        // Zero insets because CoreList already frames this view at `viewportInsets.left` with
-        // `contentWidth`, whereas ListViewImpl hands header nodes the full list width plus the real
-        // insets. The avatar's `leftInset + 7.0` therefore lands in the same place either way. One
-        // deliberate divergence: the date pill centres in the content width rather than the full
-        // width, so a landscape safe-area inset centres it in the visible content.
+        // Full width plus the real insets, as ListViewImpl hands header nodes
+        // (Display/Source/ListView.swift:4098) — the attachment-side half of `coreListInsets`. The
+        // avatar's `leftInset + 7.0` then lands on the screen side the chat named, because the inset is
+        // applied inside a node carrying its own π; and the date pill centres in the same band
+        // ListViewImpl centres it in.
         headerNode.updateLayoutInternal(
             size: size,
-            leftInset: 0.0,
-            rightInset: 0.0,
+            leftInset: self.leftInset,
+            rightInset: self.rightInset,
             transition: ComponentTransition(transition).containedViewLayoutTransition
         )
         return size.height

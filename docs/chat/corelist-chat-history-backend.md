@@ -52,9 +52,10 @@ avatars"), which makes `forEachItemHeaderNode` real.
 in ascending index order, **then updates**), maps size/insets, then re-renders the full settled set
 via `CoreVirtualListView.applyChanges`:
 
-- `items:` — the rebuilt `entries` on a structural change, else `nil`.
-- `newSize:` / `newInsets:` — the current size/insets (an unchanged inset is an exact no-op in
-  CoreList, so passing it on every pass is safe and correctly propagates `setTopContentInset` deltas).
+- `items:` — the rebuilt `entries` on a structural change **or a horizontal-inset change**, else `nil`.
+- `newSize:` / `newInsets:` — the current size and the **vertical** insets (an unchanged inset is an
+  exact no-op in CoreList, so passing it on every pass is safe and correctly propagates
+  `setTopContentInset` deltas). Horizontal insets are deliberately *not* passed — see below.
 - `scrollTo:` — a `CoreListScrollTarget` mapped from `ListViewScrollToItem` (see "Scroll to item").
 - `additionalScrollDistance:` — passed straight through. Both backends fold it into the same addend as
   the inset compensation, so a pass can re-inset and scroll by a caller-chosen delta as one movement;
@@ -74,6 +75,39 @@ via `CoreVirtualListView.applyChanges`:
 
 `applyChanges` fires when *any* of structural / size / scroll / displacement changed.
 
+### Horizontal insets go to the item, not the viewport
+
+A side inset (the topics sidebar) reaches the hosted node as
+`ListViewItemLayoutParams.leftInset`/`rightInset` — rows are always laid out at the **full viewport
+width**. `coreListInsets` therefore zeroes `.left`/`.right` before `applyChanges`, and
+`CoreListEntryItem` / `CoreListHeaderAttachedItem` carry the values instead.
+
+This is `ListViewImpl`'s arrangement, not a workaround for it: there is no `x: insets.left` anywhere in
+`ListView.swift`, its rows are full width, and the inset is a layout param (`ListView.swift:2384`,
+`:4098` for headers). Letting CoreList's viewport insets frame the row instead — its natural mode,
+`contentWidth = width - left - right` (`CoreVirtualListView.swift:2262`) — breaks in two independent
+ways:
+
+- **Orientation.** Item nodes carry their *own* π (`ChatMessageItemView.init(rotated:)`, which flips x
+  as well as y). Item π + wrapper π = identity, so an inset applied **inside** the item lands on the
+  screen side the chat named; framing the row takes only the wrapper's π, so `insets.left` came out on
+  the screen *right*. Measured: the sidebar's 92pt shrank the bubbles by 92pt on the right and moved
+  nothing away from the left, so the sidebar overlapped the content it was making room for. Swapping
+  left/right at the boundary fixes this symptom alone, and was the first attempt.
+- **Animation.** Framing the row cannot animate the move, swapped or not. Subviews do not follow their
+  superview's `bounds.size.width`, so the content only moves when the hosted node is re-laid out — at
+  the destination width, immediately, mirrored about a centre that had itself jumped by half the inset.
+  The visible result was items animating correctly while sitting 46pt (half of 92) off from the first
+  frame. As a layout param it is an ordinary item relayout, animated on the pass transition.
+
+The trigger is content equality, not a special case: `isEqual(to:)` on both the entry item and the
+header attachment compares the insets, so a sidebar opening makes every row a **survivor whose content
+changed** — the same path an edited message takes — and each host is reached with the pass transition.
+`withSideInsets(left:right:)` re-pins the entries while preserving `stableId`/`stableVersion` so they
+reconcile as survivors rather than replacements. Vertical insets need none of this: both backends let
+the list place a row vertically, one π either way, which `ChatControllerNode.swift:2500` already
+accounts for.
+
 ## Node hosting
 
 `CoreListNodeHostView` (a `UIView & CoreListItemView`) hosts one `ListViewItemNode`. `update(width:)`
@@ -89,7 +123,35 @@ rebuilds when the node is missing, content is dirty, or the width changed, then 
 Both paths drive the item **synchronously** (`async: { f in f() }`); this is sound because
 `ChatMessageItemImpl.updateNode`/`nodeConfiguredForParams` wrap work in `Queue.mainQueue().async`,
 which runs inline when already on the main queue (the transaction path is main-thread). CoreList owns
-the actual insert/move/height animations; the item update passes `ListViewItemUpdateAnimation.None`.
+the insert/move/height animations of the **row**; the pass transition is handed to the item as its own
+`ListViewItemUpdateAnimation` so it can animate its **internals** (mapped through
+`ComponentTransition` → `ContainedViewLayoutTransition`, with the immediate case mapped to `.None` —
+`ListViewItemUpdateAnimation.isAnimated` is true for *any* `.System` regardless of duration, and
+`ChatMessageBubbleItemNode` branches on it in ~20 places to run its own hard-coded animations).
+
+### Height changes need the node's content compensated
+
+`update(width:transition:)` frames the node at the **settled** height and never animates that write —
+the engine animates the row. But the node carries its own π and anchors at its centre, so its content
+reads `screenY = height - localY`: a height change displaces the content by the full delta, instantly,
+while the row's height and position animate underneath it. That is a vertical snap of the whole item,
+and it is what remained after the horizontal fix above (bubbles genuinely rewrap taller/shorter at a
+new width, so the height change is real and unavoidable).
+
+The host compensates with `layer.animateBoundsOriginYAdditive(from: previousHeight - newHeight, to: 0)`
+on the node. This is `ListViewImpl`'s own compensation, taken from the one branch of it that ports:
+`ListViewImpl` has two, and the display-link branch seeds `node.transitionOffset` (with an explicit
+`node.rotated` formula, `ListView.swift:2515`/`:2554`/`:2581`) and relies on `updateAnimations()` to
+walk it back to zero — **nothing drives that here**, so seeding it would displace the content
+permanently. The CA-driven branch, taken when `customAnimationTransition` is set, instead calls
+`animateOffsetAdditive(node:offset:)` with `previousApparentHeight - updatedApparentHeight`
+(`ListView.swift:3035`) and needs no driver. Being additive, the model value stays the settled one and
+only the presentation starts displaced, so it composes with the engine's own tracks and there is
+nothing to unwind. Skipped for a fresh view, which has no previous height to travel from.
+
+Each row is measured **once per pass** (the `buildWindow` anchor plus the two extension paths, and the
+pre-build `consumedDirty` sweep which already carries the animated pass transition), so the delta
+cannot be consumed by an earlier immediate call in the same pass.
 
 Both paths also stamp `contentSize` / `insets` / `apparentHeight` on the node, as `ListViewImpl` does
 on every node it lays out. This is not bookkeeping for its own sake — see "Item visibility" below for
@@ -307,6 +369,46 @@ equivalent:
   needed**. Both sides are live: the restore path resolves `.top(offset)` through the scroll resolver.
 
 `loadedFrame(of:)` is also what backs `itemNodeFrame(_:)` — see "Item-node geometry" below.
+
+### Horizontal insets are mirrored on the way to CoreList
+
+`coreListInsets` swaps `left` and `right` before handing the pass's insets to
+`CoreVirtualListView.applyChanges(newInsets:)`. Vertical passes through untouched. This is not
+symmetry for its own sake — the two backends apply a horizontal inset at **different levels**, so the
+chat's single mirrored value (`ChatControllerNode.swift:2500` mirrors all four) takes a different
+number of π flips in each:
+
+- **`ListViewImpl`** keeps rows FULL WIDTH — there is no `x: insets.left` anywhere in `ListView.swift`
+  — and hands the inset to the **item** as `ListViewItemLayoutParams.leftInset`/`rightInset`. The item
+  applies it inside a node carrying its own π (`ChatMessageItemView.init(rotated:)` →
+  `CATransform3DMakeRotation(π, 0, 0, 1)`, which flips **x as well as y**). Item π + wrapper π =
+  identity, so `insets.left` lands on the screen **left**.
+- **CoreList** frames the row itself at `x = viewportInsets.left` with
+  `contentWidth = width - left - right` (`CoreVirtualListView.swift:2262`), and the backend passes
+  `leftInset: 0, rightInset: 0` to the hosted item because that framing already happened. Only the
+  wrapper's π applies, so without the swap `insets.left` lands on the screen **right**.
+
+Vertical needs no such correction because both backends let the *list* decide a row's vertical
+position — one π either way, which the chat's pre-mirror already accounts for.
+
+**It is invisible until the two sides differ**, which is why it survived: portrait phone has
+`left == right == 0`, and the `.regular`/`.regular` case adds 6.0 to both. It shows up with the
+topics sidebar (`floatingTopicsPanelInsets.left`, added to `.left` only) and with landscape safe
+areas. Measured before the fix: forcing the sidebar's 92pt onto `listInsets.left` shrank the bubbles
+by exactly 92pt **on the right** and moved nothing away from the left, so the sidebar overlapped the
+content it was meant to make room for. After: the 92pt band is on the left and the avatars sit
+against it.
+
+Swapping in the backend rather than the chat is deliberate: this is CoreList's framing convention,
+not a chat-layer fact, and `currentInsets` stays exactly what the chat submitted, so every other
+reader (`visibleBand`, both content offsets, the scroll resolver — all vertical) is unaffected.
+`applyChanges` is the only place CoreList receives insets and nothing else in the backend reads
+`.left`/`.right`, so `coreListInsets` is the single point of truth. The attachment hosts are framed
+at `viewportInsets.left` too, so they are corrected by the same swap.
+
+**No test covers this** — it is a TelegramUI-level fact and TelegramUI has no test target. CoreList's
+half (that it *does* offset rows by `insets.left` and shrink `contentWidth`) is locked by
+`CoreVirtualListAnimationTests.testImmediateInsetsSetTopOffsetAndHorizontalFrames`.
 
 ## Content offsets and displayed item range
 
@@ -629,6 +731,15 @@ option:
    `stationaryItemRange` is mapped only by its nil-ness (to `anchorMode`): the range's actual bounds
    are discarded, so a transaction asking to hold a *specific* index range stationary gets CoreList's
    general visible-content preservation instead.
+
+   Not honoring `customAnimationTransition` is believed to be harmless, and the reasoning is worth
+   keeping: the chat sets it in exactly one place — a floating topics **side panel** change
+   (`ChatControllerNode.swift:2610-2615`) — and that same `containerLayoutUpdated` also puts the
+   panel's width onto `listInsets.left` (`:2527`). `contentBounds` is independent of the panel
+   (`:2049`, derived from `wrappingInsets`, which is only the iPad centring margin), so
+   `contentWidth` genuinely changes in that pass and CoreList's own `contentWidthChangedInPass`
+   already makes every row and attachment measure with the pass transition. `ListViewImpl` needs the
+   explicit flag only because it never infers anything from geometry.
 3. **Config/geometry stubs.** The `// Config flags` and `// Geometry / range` members are plain
    storage with no behavior; only the display-path values are real. (`didInteractivelyDragFromTopOrigin`
    used to be two of these and is now real — see "Interactive drag start". It is worth reading that
