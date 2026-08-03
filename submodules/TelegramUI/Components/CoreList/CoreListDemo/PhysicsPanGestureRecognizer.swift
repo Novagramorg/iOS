@@ -24,9 +24,10 @@ final class PhysicsPanGestureRecognizer: UIPanGestureRecognizer {
     /// When this returns `true`, the recognizer recognizes immediately on touch-down (no ~10px
     /// hysteresis) — the scroll view/engine sets it while content is MOVING, so a finger landing on
     /// moving content grabs the scroll at once (UIScrollView's no-deadzone behaviour). The forced
-    /// `.began` is also what lets a stopping tap be absorbed: a begun pan never fails, and the engine
-    /// makes content recognizers require this pan to fail, so they are prevented. A `nil`/`false`
-    /// closure leaves the normal pan hysteresis intact, so taps with the content at rest pass through.
+    /// `.began` is also what lets a stopping tap be absorbed: the engine grants no gesture
+    /// simultaneity, so UIKit's plain exclusion fails the content recognizer the moment this pan
+    /// begins. A `nil`/`false` closure leaves the normal pan hysteresis intact, so taps with the
+    /// content at rest pass through.
     var shouldBeginImmediately: (() -> Bool)?
 
     override init(target: Any?, action: Selector?) {

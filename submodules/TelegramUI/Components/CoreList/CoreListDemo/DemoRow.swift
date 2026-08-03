@@ -12,19 +12,25 @@ final class DemoListItem: CoreListItem {
     let minHeight: CGFloat
     /// Which attachment run this row belongs to. Rows sharing a groupIndex form one run.
     let groupIndex: Int
+    /// Whether this row renders a nested horizontally scrolling strip. The demo's stand-in for chat's
+    /// in-bubble scrollers (the joined-channel carousel, a rich-message table) — the shape that
+    /// exposed the scroll-pan arbitration bug. Off by default so existing fixtures are unchanged.
+    let hasNestedScroller: Bool
 
     init(id: UUID,
          title: String,
          detail: String,
          accentColor: UIColor,
          minHeight: CGFloat = 0,
-         groupIndex: Int = 0) {
+         groupIndex: Int = 0,
+         hasNestedScroller: Bool = false) {
         self.id = id
         self.title = title
         self.detail = detail
         self.accentColor = accentColor
         self.minHeight = minHeight
         self.groupIndex = groupIndex
+        self.hasNestedScroller = hasNestedScroller
     }
 
     /// The group index is part of the KEY, not merely the content: a run is identified by key, so two
@@ -38,7 +44,8 @@ final class DemoListItem: CoreListItem {
     }
 
     func view() -> (UIView & CoreListItemView) {
-        DemoListItemView(title: title, detail: detail, accentColor: accentColor, minHeight: minHeight)
+        DemoListItemView(title: title, detail: detail, accentColor: accentColor,
+                         minHeight: minHeight, hasNestedScroller: hasNestedScroller)
     }
 
     // Content equality (design 2026-05-31 §4). The engine matches rows by `identity` (= id); this
@@ -50,6 +57,7 @@ final class DemoListItem: CoreListItem {
         // title/detail/accentColor are fixed per id in the demo; groupIndex is not — the Groups
         // control changes it, which is what makes runs split and merge.
         return o.id == id && o.minHeight == minHeight && o.groupIndex == groupIndex
+            && o.hasNestedScroller == hasNestedScroller
     }
 
     // Hand the reused/recycled view this item's new external state (minHeight; title/detail/accent are
@@ -82,13 +90,20 @@ final class DemoListItemView: UIView, CoreListItemView {
     /// Orthogonal to the view-only `isExpanded`/`extraHeight`; the natural/expanded/grown height still
     /// wins when larger.
     private var minHeight: CGFloat
+    /// The nested horizontally scrolling strip, or nil. Deliberately a plain `UIScrollView` with a
+    /// default delegate: the point is that its own `shouldRecognizeSimultaneouslyWith` denies
+    /// simultaneity (the UIKit default), exactly like chat's in-bubble scrollers.
+    private let nestedScroller: UIScrollView?
+    private static let nestedScrollerHeight: CGFloat = 44
     var onContentDidChange: ((Bool) -> Void)?
 
-    init(title: String, detail: String, accentColor: UIColor, minHeight: CGFloat = 0) {
+    init(title: String, detail: String, accentColor: UIColor, minHeight: CGFloat = 0,
+         hasNestedScroller: Bool = false) {
         self.titleText = title
         self.detailText = detail
         self.accentColor = accentColor
         self.minHeight = minHeight
+        self.nestedScroller = hasNestedScroller ? UIScrollView() : nil
         super.init(frame: .zero)
 
         layer.cornerRadius = 18
@@ -117,6 +132,31 @@ final class DemoListItemView: UIView, CoreListItemView {
         addSubview(pillView)
         addSubview(titleLabel)
         addSubview(detailLabel)
+
+        if let nestedScroller {
+            nestedScroller.alwaysBounceHorizontal = true
+            nestedScroller.alwaysBounceVertical = false
+            nestedScroller.showsHorizontalScrollIndicator = false
+            nestedScroller.showsVerticalScrollIndicator = false
+            nestedScroller.contentInsetAdjustmentBehavior = .never
+            nestedScroller.clipsToBounds = true
+            nestedScroller.layer.cornerRadius = 10
+            nestedScroller.layer.cornerCurve = .continuous
+            for chipIndex in 0..<12 {
+                let chip = UILabel(frame: CGRect(x: CGFloat(chipIndex) * 84 + 8, y: 6,
+                                                 width: 76, height: 32))
+                chip.text = "Chip \(chipIndex)"
+                chip.textAlignment = .center
+                chip.textColor = .white
+                chip.font = .systemFont(ofSize: 13, weight: .semibold)
+                chip.backgroundColor = accentColor.withAlphaComponent(0.85)
+                chip.layer.cornerRadius = 8
+                chip.clipsToBounds = true
+                nestedScroller.addSubview(chip)
+            }
+            nestedScroller.contentSize = CGSize(width: 12 * 84 + 16, height: Self.nestedScrollerHeight)
+            addSubview(nestedScroller)
+        }
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(toggleExpanded))
         addGestureRecognizer(tap)
@@ -160,9 +200,18 @@ final class DemoListItemView: UIView, CoreListItemView {
         transition.setFrame(view: titleLabel, frame: CGRect(x: contentInsets.left, y: contentInsets.top + pillSize.height + 10, width: labelWidth, height: titleHeight))
 
         var totalHeight = contentInsets.top + pillSize.height + 10 + titleHeight + contentInsets.bottom
+        if let nestedScroller {
+            transition.setFrame(view: nestedScroller,
+                                frame: CGRect(x: contentInsets.left,
+                                              y: titleLabel.frame.maxY + 8,
+                                              width: labelWidth,
+                                              height: Self.nestedScrollerHeight))
+            totalHeight += 8 + Self.nestedScrollerHeight
+        }
         if isExpanded {
             let detailHeight = detailLabel.sizeThatFits(CGSize(width: labelWidth, height: .greatestFiniteMagnitude)).height
-            transition.setFrame(view: detailLabel, frame: CGRect(x: contentInsets.left, y: titleLabel.frame.maxY + 8, width: labelWidth, height: detailHeight))
+            let detailY = (nestedScroller?.frame.maxY ?? titleLabel.frame.maxY) + 8
+            transition.setFrame(view: detailLabel, frame: CGRect(x: contentInsets.left, y: detailY, width: labelWidth, height: detailHeight))
             totalHeight += 8 + detailHeight
         }
 
@@ -271,7 +320,7 @@ final class DemoAvatarView: UIView, CoreListAttachedItemView {
 }
 
 extension DemoListItem {
-    static func makeItems(count: Int = 180, groupSize: Int = 6) -> [DemoListItem] {
+    static func makeItems(count: Int = 180, groupSize: Int = 6, nestedScrollerEvery: Int = 0) -> [DemoListItem] {
         let accents: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemRed, .systemTeal, .systemIndigo]
 
         return (0..<count).map { index in
@@ -288,7 +337,8 @@ extension DemoListItem {
                 title: "Row \(index)",
                 detail: detail,
                 accentColor: accents[index % accents.count],
-                groupIndex: index / max(1, groupSize)
+                groupIndex: index / max(1, groupSize),
+                hasNestedScroller: nestedScrollerEvery > 0 && index % nestedScrollerEvery == 0
             )
         }
     }

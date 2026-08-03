@@ -257,7 +257,7 @@ final class ViewController: UIViewController {
 
         listView.preloadMargin = 200
         bindAutoLoading(to: listView)
-        listView.items = DemoListItem.makeItems()
+        listView.items = DemoListItem.makeItems(nestedScrollerEvery: 5)
         refreshMixedControlTitles()
 
         topBar.translatesAutoresizingMaskIntoConstraints = false
@@ -318,7 +318,7 @@ final class ViewController: UIViewController {
         newList.applyChanges(newSize: view.bounds.size,
                              newInsets: effectiveInsets,
                              transition: .easeInOut(duration: 0))
-        newList.items = DemoListItem.makeItems()
+        newList.items = DemoListItem.makeItems(nestedScrollerEvery: 5)
         if autoLoadEnabled {
             enqueueAutoLoad(edges: newList.reachedLoadedEdges)
         }

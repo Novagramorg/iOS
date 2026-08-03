@@ -82,10 +82,10 @@ interval only**: neither fires for momentum, bounce or programmatic writes, so a
   `UIScrollView`. It owns the private 10,000,000-point virtual canvas and prevents programmatic
   offset writes from re-entering the user-scroll callback.
 - `PhysicsScrollEngine` is an additive selectable backend with `.stepped` and `.keyframe`
-  deceleration. A finger on moving content grabs the scroll and absorbs the stopping tap. The
-  stopping-tap absorption works by declaring, via `shouldBeRequiredToFailBy`, that content
-  recognizers under `host` must wait for the pan to fail — and that declaration is **gated on content
-  actually moving**; see the gotcha below before touching it.
+  deceleration. A finger on moving content grabs the scroll and absorbs the stopping tap. Absorption
+  is plain UIKit gesture exclusion: the engine grants NO simultaneity to any recognizer, so a pan
+  force-begun on moving content fails the content recognizer at touch-down. There is deliberately no
+  `shouldBeRequiredToFailBy` counterpart; see the gotcha below before adding either.
 - Both physics modes use `PhysicsScrollCore`. The keyframe mode renders deceleration through
   `KeyframeFlight`; coordinate-only rebases update its persistent shift without restarting the
   flight, while a true edge or trajectory-shape change rebakes with a seamless splice. A real edge
@@ -831,16 +831,25 @@ Animation an authority.
   (share the top edge, block holds still) or went elsewhere (hang the block's bottom on it). Deciding
   that from the anchor's position instead is a proxy that fails exactly when the anchor is itself one of
   the departing rows, which is what made a head deletion slide the block down by its own height.
-- **`PhysicsScrollEngine`'s `shouldBeRequiredToFailBy` must stay gated on content motion**
-  (`flight != nil || core.isDecelerating`). Declaring it unconditionally breaks every
-  press-and-hold recognizer hosted in the list, because such a recognizer must recognize *while the
-  finger is still down* while the pan only fails on lift — UIKit can never release the dependency and
-  silently tears the recognizer down (`Gestures` → `_resetGestureRecognizer`): no activation, no
-  cancellation callback, just a half-run press animation springing back. Taps are immune (they
-  recognize on lift, the same instant the pan fails), so the demo's tap-only rows cannot catch this;
-  it surfaced as chat bubbles' `ContextGesture` long-press-for-context-menu dying under the CoreList
-  chat backend. Absorbing the stopping tap is the rule's only purpose and can only arise while
-  content moves, so the gate costs nothing.
+- **Never grant gesture simultaneity from the list's pan, and never declare a failure dependency on
+  it.** These are one rule with two halves, and shipping either half cost a bug. UIKit resolves
+  simultaneity as *either delegate says yes*, so a grant here overrides a refusal written somewhere
+  this file never mentions: a nested scroll view's UIKit default, or `ContextGesture`'s explicit
+  `other is UIPanGestureRecognizer -> false` (`Display/Source/ContextGesture.swift:66`). The list's
+  pan IS a pan, so everything refusing pans is refusing it — and none of that is visible from the
+  content side, which is what makes a grant unfindable. It shipped twice: an in-bubble carousel and
+  the chat history both scrolling on one diagonal drag, then a bubble's long-press running its press
+  animation and never activating. The second was the *repair* for the first: a grant needs
+  `shouldBeRequiredToFailBy` to claw back what it handed out, and a dependency HOLDS a recognizer in
+  `.possible` rather than failing it. A pan force-begun on moving content never fails until lift, so
+  the held recognizer waits — while `ContextGesture` drives its press animation from its own
+  `delayTimer` + `DisplayLinkAnimator`, which know nothing about arbitration and run on schedule.
+  Animation without activation, ending in an early `reset()` or hanging until the finger lifts.
+  `ListViewImpl` has neither construct: `ListViewScroller` denies everything but
+  `ListViewTapGestureRecognizer` (`Display/Source/ListViewScroller.swift:15`) and declares no
+  dependency anywhere, letting plain exclusion both absorb the stopping tap and cancel a pending
+  press. Taps are nearly immune to the dependency form (they recognize on lift, the same instant the
+  pan fails), so the demo's tap-only rows cannot catch a regression here.
 - **Every view in the attachment chain must be a passthrough, and each level fails independently.**
   `AttachmentContainerView` spans the whole content area and is the topmost sibling in `contentHost`,
   and an attachment host typically spans the full content width — so any point one of them claims and

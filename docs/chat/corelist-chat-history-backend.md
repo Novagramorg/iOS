@@ -356,18 +356,43 @@ automated coverage; it was **manually verified working** (2026-07-28) on the Cor
 the only kind of evidence available for it. Before the fix the history visibly moved by roughly twice the
 finger's travel as the keyboard was dragged away.
 
-### Long-press / context menu (gesture arbitration)
+### Gesture arbitration
 
-Bubbles' long-press-for-context-menu (`ContextGesture`) depends on a **load-bearing gate inside
-CoreList**: `PhysicsScrollEngine.gestureRecognizer(_:shouldBeRequiredToFailBy:)` declares that content
-recognizers under the list must wait for the scroll pan to fail, and that declaration is applied
-**only while content is moving**. Removing the gate silently kills every long-press in the chat — a
-press-and-hold has to recognize while the finger is still down, but the pan does not fail until lift,
-so UIKit tears the recognizer down instead of activating it. The failure is easy to misread: no
-`activated`, no `cancel()`, no `touchesCancelled` — just a half-run press animation that springs back,
-and a `Gestures`-internal `_resetGestureRecognizer` in the stack. Taps are unaffected, so the CoreList
-demo (tap-only rows) cannot catch a regression here. See the matching gotcha in the CoreList
-`CLAUDE.md`.
+**`PhysicsScrollEngine` grants no gesture simultaneity to anything, and declares no failure
+dependency.** Whoever recognizes first owns the touch, which is plain UIKit exclusion and the whole
+of `ListViewImpl`'s mechanism (`ListViewScroller` denies everything but
+`ListViewTapGestureRecognizer`, `Display/Source/ListViewScroller.swift:15`).
+
+That single rule covers three behaviours that used to be separate machinery:
+
+- **A content pan owns its drag.** An in-bubble scroll view — `ChatMessageJoinedChannelBubbleContentNode`'s
+  recommendation carousel, `InstantPageScrollableNode` for rich-message tables and wide code — or
+  `ChatSwipeToReplyRecognizer` competes for the same drag, and exactly one of the two may have it.
+- **The stopping tap is absorbed.** A pan force-begun on moving content (`shouldBeginImmediately`)
+  fails the content recognizer at touch-down.
+- **A press-and-hold on a coasting list is cancelled cleanly.** `ContextGesture` is failed before its
+  0.12s `beginDelay` elapses, so no press animation appears at all.
+
+Granting simultaneity instead is invisible from the content side, because UIKit takes *either*
+delegate's yes and the refusals live elsewhere: a nested scroll view's UIKit default, and
+`ContextGesture`'s explicit `other is UIPanGestureRecognizer -> false`
+(`Display/Source/ContextGesture.swift:66`). Both were overridden in turn, and the second bug was the
+repair for the first — see the gotcha in the CoreList `CLAUDE.md` for the full mechanism.
+
+One consequence worth naming: starting a drag now cancels a pending long-press, where previously the
+press could still activate mid-drag. That is `ListViewImpl`'s behaviour — a drag past the threshold
+owns the touch.
+
+`PhysicsScrollEngine` also implements `gestureRecognizerShouldBegin`, ported verbatim from
+`ListViewScroller` (`:22-38`): the scroll pan defers to a two-touch pan on the same view, and to a
+`UIControl` that is already tracking. The second is live here — `ChatMessageActionButtonsNode` puts
+real `UIButton`s inside the list for inline bot keyboards.
+
+`ListViewScroller`'s one exception (`ListViewTapGestureRecognizer` keeps simultaneity) is **not**
+reproduced. Under `ListViewImpl` it defeats the stopping-tap absorption so the date-header pill and
+gutter avatars (`ChatMessageDateHeader.swift:676,1220`) stay tappable while the list coasts; under
+this backend they are absorbed like any other tap. That has never worked here, so it is not a
+regression — it needs a host-supplied predicate seam, deferred deliberately. Not runtime-confirmed.
 
 ## Item-node enumeration
 
