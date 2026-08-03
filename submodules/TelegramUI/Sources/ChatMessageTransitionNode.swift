@@ -549,8 +549,6 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                 })
                 self.containerNode.layer.animatePosition(from: CGPoint(x: sourceAbsoluteRect.minX - targetAbsoluteRect.minX, y: 0.0), to: CGPoint(), duration: horizontalDuration, delay: delay, mediaTimingFunction: horizontalCurve.mediaTimingFunction, additive: true)
                 
-                self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: sourceAbsoluteRect.minX - targetAbsoluteRect.minX, y: 0.0), horizontalCurve, horizontalDuration)
-                self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: 0.0, y: sourceAbsoluteRect.maxY - targetAbsoluteRect.maxY), verticalCurve, verticalDuration)
 
                 if let itemNode = self.itemNode as? ChatMessageBubbleItemNode {
                     itemNode.animateContentFromTextInputField(
@@ -736,8 +734,6 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                     }
                     strongSelf.endAnimation()
                 })
-                self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: sourceAbsoluteRect.midX - targetAbsoluteRect.midX, y: 0.0), ChatMessageTransitionNodeImpl.horizontalAnimationCurve, horizontalDuration)
-                self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: 0.0, y: sourceAbsoluteRect.midY - targetAbsoluteRect.midY), ChatMessageTransitionNodeImpl.verticalAnimationCurve, verticalDuration)
                 self.containerNode.layer.animatePosition(from: CGPoint(x: sourceAbsoluteRect.midX - targetAbsoluteRect.midX, y: 0.0), to: CGPoint(), duration: horizontalDuration, delay: delay, mediaTimingFunction: ChatMessageTransitionNodeImpl.horizontalAnimationCurve.mediaTimingFunction, additive: true)
 
                 switch stickerMediaInput {
@@ -860,8 +856,6 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                                 snapshotView?.removeFromSuperview()
                             })
 
-                            self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: sourceAbsoluteRect.minX - targetAbsoluteRect.minX, y: 0.0), ChatMessageTransitionNodeImpl.horizontalAnimationCurve, horizontalDuration)
-                            self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: 0.0, y: sourceAbsoluteRect.maxY - targetAbsoluteRect.maxY), ChatMessageTransitionNodeImpl.verticalAnimationCurve, verticalDuration)
                         }
                     }
                 } else {
@@ -949,8 +943,6 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                             index += 1
                         }
                         
-                        self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: sourceAbsoluteRect.minX - targetAbsoluteRect.minX, y: 0.0), ChatMessageTransitionNodeImpl.horizontalAnimationCurve, horizontalDuration)
-                        self.contextSourceNode.applyAbsoluteOffset?(CGPoint(x: 0.0, y: sourceAbsoluteRect.maxY - targetAbsoluteRect.maxY), ChatMessageTransitionNodeImpl.verticalAnimationCurve, verticalDuration)
                     }
                 }
             }

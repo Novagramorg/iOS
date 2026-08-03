@@ -637,13 +637,6 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
     open func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
     }
     
-    open func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let extractedBackgroundNode = self.extractedBackgroundNode {
-            let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: animationCurve)
-            transition.animatePositionAdditive(node: extractedBackgroundNode, offset: CGPoint(x: -value.x, y: -value.y))
-        }
-    }
-    
     open func snapshotForReordering() -> UIView? {
         return self.view.snapshotContentTree(keepTransform: true)
     }

@@ -505,7 +505,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
     public var maskView: UIImageView?
     private var fixedMaskMode: Bool?
 
-    private var absolutePosition: (CGRect, CGSize)?
     
     public var overrideMask: Bool = false {
         didSet {
@@ -527,12 +526,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
             }
             if let backgroundContent = self.backgroundContent {
                 backgroundContent.frame = self.bounds
-                if let (rect, containerSize) = self.absolutePosition {
-                    var backgroundFrame = backgroundContent.frame
-                    backgroundFrame.origin.x += rect.minX
-                    backgroundFrame.origin.y += rect.minY
-                    backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                }
             }
         }
     }
@@ -583,12 +576,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
 
             if let backgroundContent = self.backgroundContent {
                 backgroundContent.frame = self.bounds
-                if let (rect, containerSize) = self.absolutePosition {
-                    var backgroundFrame = backgroundContent.frame
-                    backgroundFrame.origin.x += rect.minX
-                    backgroundFrame.origin.y += rect.minY
-                    backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                }
             }
 
             if typeUpdated {
@@ -603,24 +590,12 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
                 case .incoming:
                     if let backgroundContent = backgroundNode?.makeBubbleBackground(for: .incoming) {
                         backgroundContent.frame = self.bounds
-                        if let (rect, containerSize) = self.absolutePosition {
-                            var backgroundFrame = backgroundContent.frame
-                            backgroundFrame.origin.x += rect.minX
-                            backgroundFrame.origin.y += rect.minY
-                            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                        }
                         self.backgroundContent = backgroundContent
                         self.insertSubnode(backgroundContent, at: 0)
                     }
                 case .outgoing:
                     if let backgroundContent = backgroundNode?.makeBubbleBackground(for: .outgoing) {
                         backgroundContent.frame = self.bounds
-                        if let (rect, containerSize) = self.absolutePosition {
-                            var backgroundFrame = backgroundContent.frame
-                            backgroundFrame.origin.x += rect.minX
-                            backgroundFrame.origin.y += rect.minY
-                            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                        }
                         self.backgroundContent = backgroundContent
                         self.insertSubnode(backgroundContent, at: 0)
                     }
@@ -633,23 +608,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
         }
     }
         
-    public func update(rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition = .immediate) {
-        self.absolutePosition = (rect, containerSize)
-        if let backgroundContent = self.backgroundContent {
-            var backgroundFrame = backgroundContent.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += rect.minY
-            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: transition)
-        }
-    }
-    
-    public func offset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        self.backgroundContent?.offset(value: value, animationCurve: animationCurve, duration: duration)
-    }
-    
-    public func offsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-        self.backgroundContent?.offsetSpring(value: value, duration: duration, damping: damping)
-    }
     
     public func updateFrame(_ value: CGRect, animator: ControlledTransitionAnimator, completion: @escaping () -> Void = {}) {
         if let maskView = self.maskView {
@@ -657,12 +615,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
         }
         if let backgroundContent = self.backgroundContent {
             animator.updateFrame(layer: backgroundContent.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)), completion: nil)
-            if let (rect, containerSize) = self.absolutePosition {
-                var backgroundFrame = backgroundContent.frame
-                backgroundFrame.origin.x += rect.minX
-                backgroundFrame.origin.y += rect.minY
-                backgroundContent.update(rect: backgroundFrame, within: containerSize, animator: animator)
-            }
         }
         animator.updateFrame(layer: self.layer, frame: value, completion: { _ in
             completion()
@@ -675,12 +627,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
         }
         if let backgroundContent = self.backgroundContent {
             transition.updateFrame(layer: backgroundContent.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)))
-            if let (rect, containerSize) = self.absolutePosition {
-                var backgroundFrame = backgroundContent.frame
-                backgroundFrame.origin.x += rect.minX
-                backgroundFrame.origin.y += rect.minY
-                backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: transition)
-            }
         }
         transition.updateFrame(node: self, frame: value, completion: { _ in
             completion()
@@ -693,12 +639,6 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
         }
         if let backgroundContent = self.backgroundContent {
             transition.updateFrame(layer: backgroundContent.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)))
-            if let (rect, containerSize) = self.absolutePosition {
-                var backgroundFrame = backgroundContent.frame
-                backgroundFrame.origin.x += rect.minX
-                backgroundFrame.origin.y += rect.minY
-                backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: transition)
-            }
         }
         transition.updateFrame(layer: self.layer, frame: value, completion: { _ in
             completion()

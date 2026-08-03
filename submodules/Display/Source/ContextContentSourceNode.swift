@@ -15,8 +15,6 @@ public final class ContextExtractedContentContainingNode: ASDisplayNode {
     public var willUpdateIsExtractedToContextPreview: ((Bool, ContainedViewLayoutTransition) -> Void)?
     public var isExtractedToContextPreviewUpdated: ((Bool) -> Void)?
     public var updateAbsoluteRect: ((CGRect, CGSize) -> Void)?
-    public var applyAbsoluteOffset: ((CGPoint, ContainedViewLayoutTransitionCurve, Double) -> Void)?
-    public var applyAbsoluteOffsetSpring: ((CGFloat, Double, CGFloat) -> Void)?
     public var layoutUpdated: ((CGSize, ListViewItemUpdateAnimation) -> Void)?
     public var updateDistractionFreeMode: ((Bool) -> Void)?
     public var requestDismiss: (() -> Void)?
@@ -82,8 +80,6 @@ public final class ContextExtractedContentContainingView: UIView {
     public var willUpdateIsExtractedToContextPreview: ((Bool, ContainedViewLayoutTransition) -> Void)?
     public var isExtractedToContextPreviewUpdated: ((Bool) -> Void)?
     public var updateAbsoluteRect: ((CGRect, CGSize) -> Void)?
-    public var applyAbsoluteOffset: ((CGPoint, ContainedViewLayoutTransitionCurve, Double) -> Void)?
-    public var applyAbsoluteOffsetSpring: ((CGFloat, Double, CGFloat) -> Void)?
     public var layoutUpdated: ((CGSize, ListViewItemUpdateAnimation) -> Void)?
     public var updateDistractionFreeMode: ((Bool) -> Void)?
     public var requestDismiss: (() -> Void)?

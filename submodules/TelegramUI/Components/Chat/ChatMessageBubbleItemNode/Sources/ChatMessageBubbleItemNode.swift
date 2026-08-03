@@ -560,28 +560,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         fileprivate var absoluteRect: (CGRect, CGSize)?
         fileprivate func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
             self.absoluteRect = (rect, containerSize)
-            guard let backgroundWallpaperNode = self.backgroundWallpaperNode else {
-                return
-            }
-            guard !self.sourceNode.isExtractedToContextPreview else {
-                return
-            }
-            let mappedRect = CGRect(origin: CGPoint(x: rect.minX + backgroundWallpaperNode.frame.minX, y: rect.minY + backgroundWallpaperNode.frame.minY), size: rect.size)
-            backgroundWallpaperNode.update(rect: mappedRect, within: containerSize)
-        }
-        
-        fileprivate func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-            guard let backgroundWallpaperNode = self.backgroundWallpaperNode else {
-                return
-            }
-            backgroundWallpaperNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        
-        fileprivate func applyAbsoluteOffsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-            guard let backgroundWallpaperNode = self.backgroundWallpaperNode else {
-                return
-            }
-            backgroundWallpaperNode.offsetSpring(value: value, duration: duration, damping: damping)
         }
         
         fileprivate func willUpdateIsExtractedToContextPreview(isExtractedToContextPreview: Bool, transition: ContainedViewLayoutTransition) {
@@ -624,11 +602,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     self.backgroundNode?.updateLayout(size: backgroundFrame.size, transition: .immediate)
                     self.backgroundNode?.frame = backgroundFrame
                     self.backgroundWallpaperNode?.frame = backgroundFrame
-                    
-                    if let (rect, containerSize) = self.absoluteRect {
-                        let mappedRect = CGRect(origin: CGPoint(x: rect.minX + backgroundFrame.minX, y: rect.minY + backgroundFrame.minY), size: rect.size)
-                        self.backgroundWallpaperNode?.update(rect: mappedRect, within: containerSize)
-                    }
                 }
             } else {
                 if let backgroundNode = self.backgroundNode {
@@ -995,18 +968,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 return
             }
             strongSelf.updateAbsoluteRectInternal(rect, within: size)
-        }
-        self.mainContextSourceNode.applyAbsoluteOffset = { [weak self] value, animationCurve, duration in
-            guard let strongSelf = self, strongSelf.mainContextSourceNode.isExtractedToContextPreview else {
-                return
-            }
-            strongSelf.applyAbsoluteOffsetInternal(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        self.mainContextSourceNode.applyAbsoluteOffsetSpring = { [weak self] value, duration, damping in
-            guard let strongSelf = self, strongSelf.mainContextSourceNode.isExtractedToContextPreview else {
-                return
-            }
-            strongSelf.applyAbsoluteOffsetSpringInternal(value: value, duration: duration, damping: damping)
         }
     }
         
@@ -4978,18 +4939,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     }
                     container?.updateAbsoluteRect(relativeFrame.offsetBy(dx: rect.minX, dy: rect.minY), within: size)
                 }
-                contextSourceNode.applyAbsoluteOffset = { [weak strongSelf, weak container, weak contextSourceNode] value, animationCurve, duration in
-                    guard let _ = strongSelf, let strongContextSourceNode = contextSourceNode, strongContextSourceNode.isExtractedToContextPreview else {
-                        return
-                    }
-                    container?.applyAbsoluteOffset(value: value, animationCurve: animationCurve, duration: duration)
-                }
-                contextSourceNode.applyAbsoluteOffsetSpring = { [weak strongSelf, weak container, weak contextSourceNode] value, duration, damping in
-                    guard let _ = strongSelf, let strongContextSourceNode = contextSourceNode, strongContextSourceNode.isExtractedToContextPreview else {
-                        return
-                    }
-                    container?.applyAbsoluteOffsetSpring(value: value, duration: duration, damping: damping)
-                }
                 
                 strongSelf.contentContainers.append(container)
                 contentContainer = container
@@ -7287,10 +7236,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private func updateAbsoluteRectInternal(_ rect: CGRect, within containerSize: CGSize) {
-        var backgroundWallpaperFrame = self.backgroundWallpaperNode.frame
-        backgroundWallpaperFrame.origin.x += rect.minX
-        backgroundWallpaperFrame.origin.y += rect.minY
-        self.backgroundWallpaperNode.update(rect: backgroundWallpaperFrame, within: containerSize)
         for contentNode in self.contentNodes {
             contentNode.updateAbsoluteRect(CGRect(origin: CGPoint(x: rect.minX + contentNode.frame.minX, y: rect.minY + contentNode.frame.minY), size: rect.size), within: containerSize)
         }
@@ -7332,36 +7277,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             reactionButtonsNodeFrame.origin.y += rect.minY
             
             reactionButtonsNode.update(rect: rect, within: containerSize, transition: .immediate)
-        }
-    }
-    
-    override public func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if !self.mainContextSourceNode.isExtractedToContextPreview {
-            self.applyAbsoluteOffsetInternal(value: CGPoint(x: -value.x, y: -value.y), animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
-    private func applyAbsoluteOffsetInternal(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        self.backgroundWallpaperNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-
-        for contentNode in self.contentNodes {
-            contentNode.applyAbsoluteOffset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        
-        if let reactionButtonsNode = self.reactionButtonsNode {
-            reactionButtonsNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
-    private func applyAbsoluteOffsetSpringInternal(value: CGFloat, duration: Double, damping: CGFloat) {
-        self.backgroundWallpaperNode.offsetSpring(value: value, duration: duration, damping: damping)
-
-        for contentNode in self.contentNodes {
-            contentNode.applyAbsoluteOffsetSpring(value: value, duration: duration, damping: damping)
-        }
-        
-        if let reactionButtonsNode = self.reactionButtonsNode {
-            reactionButtonsNode.offsetSpring(value: value, duration: duration, damping: damping)
         }
     }
     

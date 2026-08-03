@@ -308,12 +308,6 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
     open func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
     }
 
-    open func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-    }
-
-    open func applyAbsoluteOffsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-    }
-    
     open func unreadMessageRangeUpdated() {
     }
     

@@ -594,7 +594,6 @@ private class MessageBackgroundNode: ASDisplayNode {
         var backgroundWallpaperFrame = self.backgroundWallpaperNode.frame
         backgroundWallpaperFrame.origin.x += rect.minX
         backgroundWallpaperFrame.origin.y += rect.minY
-        self.backgroundWallpaperNode.update(rect: backgroundWallpaperFrame, within: containerSize)
     }
 }
 

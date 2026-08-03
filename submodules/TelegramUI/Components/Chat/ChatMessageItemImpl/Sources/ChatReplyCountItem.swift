@@ -209,21 +209,8 @@ public class ChatReplyCountItemNode: ListViewItemNode {
         
         self.absoluteRect = (rect, containerSize)
 
-        if let backgroundNode = self.backgroundNode {
-            var backgroundFrame = backgroundNode.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += rect.minY
-            
-            backgroundNode.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-        }
     }
 
-    override public func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.offset(value: CGPoint(x: value.x, y: -value.y), animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
     override public func headers() -> [ListViewItemHeader]? {
         if let item = self.item {
             return [item.header]
