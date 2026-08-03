@@ -1825,6 +1825,18 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 if let contentNode = itemContentNode, contentNode.presentationScale != 1.0 {
                     animationInContentYDistance += contentNode.containingItem.contentRect.height * (1.0 - contentNode.presentationScale)
                 }
+                // The travel origin above is a MODEL value (`contentRect` -> `contentFrame`), and a
+                // `.none` relayout issued microseconds earlier may still be in flight: adding a reaction
+                // from the open menu makes the item re-lay out, `layoutUpdated` requests an animated
+                // update, and the dismissal then runs in the same runloop. At that moment the model
+                // already holds that animation's destination while the content is still rendered at its
+                // start, so the dismissal would begin from where the bubble is GOING rather than where it
+                // IS — an instant jump of the full relayout delta (the reaction row's height), then a
+                // correct animation to the chat. Fold the outstanding model-vs-presentation delta back in
+                // so the travel starts from the rendered position. Zero whenever nothing is in flight.
+                if let contentNode = itemContentNode, let presentation = contentNode.layer.presentation() {
+                    animationInContentYDistance += presentation.frame.origin.y - contentNode.frame.origin.y
+                }
             case .dismissWithoutContent:
                 animationInContentYDistance = 0.0
                 if let contentNode = itemContentNode {
