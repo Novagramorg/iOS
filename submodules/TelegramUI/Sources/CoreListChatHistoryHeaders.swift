@@ -70,6 +70,27 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
         return self.header.stickOverInsets
     }
 
+    // `7.0 + 20.0` from Display/Source/ListView.swift:4047 — the gap plus the date pill's visual
+    // height inside its 34pt band. A chat visual fact, so it stays on this side; CoreList never
+    // learns it.
+    private static let stackingGap: CGFloat = 27.0
+
+    // The header's own space IS the group. In a monoforum two spaces coexist: the date pill is
+    // space 2, keyed on a rounded timestamp, and the topic header is space 3, keyed on the
+    // separableThreadId with the timestamp zeroed (ChatMessageDateHeader.swift:80-88). A tag rather
+    // than a type — see CoreListAttachedItem.
+    var stackingGroup: AnyHashable? {
+        return AnyHashable(self.header.id.space)
+    }
+
+    // `stackingId` means "I coexist with the header for this space and must not overlap it".
+    var stackingYield: (group: AnyHashable, gap: CGFloat)? {
+        guard let stackingId = self.header.stackingId else {
+            return nil
+        }
+        return (group: AnyHashable(stackingId.space), gap: Self.stackingGap)
+    }
+
     // The flashing state must be seeded HERE, from the backend's live value.
     //
     // `setHeadersFlashing` pushes only on a CHANGE, so a view created while the flag is already true

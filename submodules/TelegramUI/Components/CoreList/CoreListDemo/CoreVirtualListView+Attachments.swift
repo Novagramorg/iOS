@@ -218,6 +218,8 @@ extension CoreVirtualListView {
                                               isFloating: run.representative.isFloating,
                                               startsCollectionRun: run.pending.startsCollectionRun,
                                               endsCollectionRun: run.pending.endsCollectionRun,
+                                              stackingGroup: run.representative.stackingGroup,
+                                              stackingYield: run.representative.stackingYield,
                                               bandTop: bandTop,
                                               bandBottom: bandBottom))
         }
@@ -344,7 +346,7 @@ extension CoreVirtualListView {
         // below is the attachment's position in WINDOW space, the same space `item.frame` is in, so the
         // intersection is a subtraction rather than a view-tree conversion.
         var boundAttachments: [ObjectIdentifier: [UIView & CoreListAttachedItemView]] = [:]
-        for attachment in window.attachments {
+        for (index, attachment) in window.attachments.enumerated() {
             let map = attachmentMap(attachment, window: window)
             let y = map.y(atOffset: offset)
             if let owner = attachmentOwner(attachment, solvedY: y, window: window) {
@@ -354,8 +356,16 @@ extension CoreVirtualListView {
                                            y: y - window.minY,
                                            width: contentWidth,
                                            height: attachment.measuredHeight)
-            if attachment.view.superview !== attachmentContainer {
-                attachmentContainer.addSubview(attachment.view)
+            // Sibling order IS z-order, and it must follow the attachment sort rather than the order
+            // views happened to be created in. Appending only the new ones would leave a yielding
+            // attachment ABOVE the group it defers to whenever the two runs enter the loaded window
+            // in different passes, which is the common case — `pendingRuns` sinks the yielder, but a
+            // view that outlives the pass that created it never revisits its position.
+            //
+            // Every subview here is a live attachment view: the loop above removed the rest.
+            let siblings = attachmentContainer.subviews
+            if index >= siblings.count || siblings[index] !== attachment.view {
+                attachmentContainer.insertSubview(attachment.view, at: index)
             }
             // The frame solves at `attachmentSolveOffset` — the flight's DESTINATION while one is
             // playing, because an additive CAKeyframeAnimation supplies the displacement and moving
@@ -427,13 +437,32 @@ extension CoreVirtualListView {
         let anchor = attachment.edge == .top
             ? insets.top
             : logicalHeight - insets.bottom - attachment.measuredHeight
+        var yield: (partners: [AttachmentOffsetMap], gap: CGFloat)?
+        if let declared = attachment.stackingYield {
+            // The partners are the OTHER attachments tagged into the named group. Built here rather
+            // than cached because a map is a value derived from THIS pass's band geometry.
+            //
+            // The recursion terminates on the one-level rule: a partner is a group member, and a
+            // group member does not itself yield (asserted in `AttachmentOffsetMap.y(atOffset:)`).
+            let partners = window.attachments
+                .filter { $0.stackingGroup == declared.group && $0.serial != attachment.serial }
+                .map { attachmentMap($0,
+                                     window: window,
+                                     containerOriginY: containerOriginY,
+                                     insets: insets,
+                                     logicalHeight: logicalHeight) }
+            if !partners.isEmpty {
+                yield = (partners: partners, gap: declared.gap)
+            }
+        }
         return AttachmentOffsetMap(bandTop: attachment.bandTop - reserveTop,
                                    bandBottom: attachment.bandBottom + reserveBottom,
                                    height: attachment.measuredHeight,
                                    anchor: anchor,
                                    contentBase: containerOriginY - window.minY,
                                    edge: attachment.edge,
-                                   isFloating: attachment.isFloating)
+                                   isFloating: attachment.isFloating,
+                                   yield: yield)
     }
 
     /// Current-geometry convenience for the render and query paths.

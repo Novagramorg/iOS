@@ -550,11 +550,45 @@ attachment's frame and its stick distance deliberately solve at different offset
 
 ### Deferred
 
-- **Topic headers** (`ChatMessageDateHeader` with a `separableThreadId`: space 3 carrying a
-  `stackingId` in space 2). `updateItemHeaders` resolves these with a two-pass loop that nudges the
-  stacked header off whichever header it most intersects (`ListView.swift:4036-4086`); CoreList has no
-  stacking notion and one attachment key cannot express it. The adapter skips any header with a
-  non-nil `stackingId`, so monoforum/thread separators do not render under this backend.
+- ~~**Topic headers**~~ Done, and as an ENGINE feature: `CoreListAttachedItem.stackingGroup` tags an
+  attachment into a group, `stackingYield` names the group it defers to plus a minimum gap. The chat
+  maps a header's own `id.space` onto the group and its `stackingId.space` onto the yield, at the
+  27pt (`7 + 20`) gap `ListView.swift:4047` uses; the engine never learns what a date pill is. The
+  skip is gone, so a monoforum's thread separators reach `attachedItems` like any other header.
+
+  **The resolution lives INSIDE `AttachmentOffsetMap.y(atOffset:)`, and that is the whole design.**
+  `composedKeyframe` *samples* that function to bake the additive `CAKeyframeAnimation` a momentum
+  flight rides, and nothing on the render server can consult another attachment — so the obvious
+  implementation, a post-solve fix-up over view frames, would be absent from the baked track: the
+  header would ride un-nudged for the entire deceleration and snap into place when the flight ended.
+  It can live there because a partner's position is `y(atOffset:)` too, equally pure, and sampling
+  bakes a piecewise conditional function exactly as well as a linear one.
+  `testComposedKeyframeCarriesTheNudge` is the guard, and it was confirmed to fail when the yield is
+  moved out.
+
+  Two deliberate divergences from `ListViewImpl`, both confined to inputs where its own answer is
+  arbitrary. It picks ONE partner by a comparison that never consults the `intersectionHeight` it
+  computes (`ListView.swift:4064-4070`) while iterating a `Dictionary`; we take the `min` over every
+  overlapping partner, so there is nothing to tie-break. And its `for _ in 0 ..< 2` becomes iteration
+  to a fixed point — the second pass exists because pushing clear of one partner can create a new
+  overlap, which is the same idea without the magic count. `ListViewImpl` is not modified.
+
+  Two things that are NOT free and each earn their own test. The stick distance measures against the
+  adjusted bound (`naturalOverlapLowerBound`, `:4039-4052` and `:4084`), which for a partner sharing
+  this run's boundary reduces to exactly one gap off the raw distance — without it a header riding
+  its run reports a full gap of stick and fades as though parked. And z-order: `pendingRuns` sinks a
+  yielder below its target group via a leading rank (a pairwise comparator clause would not be a
+  strict weak ordering), but the sort alone would not have produced the z-order it exists for —
+  `renderAttachments` only ever APPENDED a view it had not seen, so sibling order followed the order
+  runs first entered the loaded window, and a topic header and its date pill rarely arrive in the
+  same pass. The render now re-asserts the order every frame.
+
+  **Not runtime-verified.** It needs a monoforum whose topics span a day boundary, which cannot be
+  synthesized on the simulator, and the check must include a momentum **fling** rather than only a
+  slow drag — a nudge that works while dragging but not while flinging means the yield is not
+  reaching the baked track. Note the precedent recorded below: of six chat behaviors verified during
+  the scroll-to-item work, two failed on first contact and neither failure was visible to a green
+  suite.
 - ~~**`ListViewItemNode.attachedHeaderNodes`**~~ Done, and as an ENGINE feature rather than a chat
   one. `CoreListItemView.attachedItemsUpdated(_:)` hands each row the attachments hanging off it, and
   `CoreVirtualListView` resolves it inside the attachment solve — the same max-intersection-within-the-

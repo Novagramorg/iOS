@@ -1117,13 +1117,9 @@ private final class CoreListEntryItem: CoreListItem {
         var attachedItems: [AnyHashable: CoreListAttachedItem] = [:]
         if let headerItem = listItem as? ChatHistoryItemWithHeaders {
             for header in headerItem.headers {
-                // Topic headers — a date header carrying a separableThreadId — are deferred.
-                // ListViewImpl resolves their overlap against the plain date header with a two-pass
-                // nudge loop (Display/Source/ListView.swift:4036-4086), and a single attachment key
-                // cannot express that stacking.
-                if header.stackingId != nil {
-                    continue
-                }
+                // A topic header — a date header carrying a separableThreadId — comes through here
+                // like any other, keyed by its own id, and declares the stacking that keeps it clear
+                // of that day's plain date header. See `CoreListHeaderAttachedItem.stackingYield`.
                 attachedItems[AnyHashable(header.id)] = CoreListHeaderAttachedItem(header: header,
                                                                                   backend: backend,
                                                                                   leftInset: leftInset,

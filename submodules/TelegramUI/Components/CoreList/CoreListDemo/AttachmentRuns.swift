@@ -86,7 +86,26 @@ enum AttachmentRuns {
             }
         }
 
+        // A run that defers to a group present in this set renders BELOW it — ListViewImpl's
+        // `insertItemBelowOtherHeaders` (Display/Source/ListView.swift:4167-4180), which likewise
+        // sinks a stacked header below EVERY other header rather than only its own group's.
+        //
+        // Expressed as a leading rank rather than a pairwise clause in the comparator, because "A
+        // before B if A yields to B's group" is not a strict weak ordering and `sorted` may produce
+        // anything at all when given one. With no yield declared every rank is equal and the existing
+        // order stands untouched.
+        let groups = Set(runs.compactMap { $0.representative.stackingGroup })
+        func layer(_ run: PendingRun) -> Int {
+            guard let yield = run.representative.stackingYield, groups.contains(yield.group) else {
+                return 1
+            }
+            return 0
+        }
+
         return runs.sorted { lhs, rhs in
+            if layer(lhs) != layer(rhs) {
+                return layer(lhs) < layer(rhs)
+            }
             if lhs.memberRange.lowerBound != rhs.memberRange.lowerBound {
                 return lhs.memberRange.lowerBound < rhs.memberRange.lowerBound
             }

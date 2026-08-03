@@ -53,12 +53,25 @@ public protocol CoreListAttachedItem: AnyObject {
     /// whose run already RESERVED space for it inside the member's own layout: it would otherwise
     /// ride over the reservation belonging to the NEXT run.
     var spansMemberInsets: Bool { get }
+
+    /// The group this attachment belongs to for stacking purposes. Default `nil` — participates in
+    /// none. A tag rather than a type, so the engine never learns what the members are.
+    var stackingGroup: AnyHashable? { get }
+
+    /// The group this attachment defers to, and the minimum gap it keeps from any member of it.
+    /// Default `nil`.
+    ///
+    /// ONE LEVEL ONLY: an attachment that yields must not itself be named as a `stackingGroup`
+    /// target, or the solve would need cycle detection. Asserted in `AttachmentOffsetMap`.
+    var stackingYield: (group: AnyHashable, gap: CGFloat)? { get }
 }
 
 public extension CoreListAttachedItem {
     func apply(to view: UIView & CoreListAttachedItemView, transition: CoreListTransition) {}
     func combines(with other: CoreListAttachedItem) -> Bool { true }
     var spansMemberInsets: Bool { true }
+    var stackingGroup: AnyHashable? { nil }
+    var stackingYield: (group: AnyHashable, gap: CGFloat)? { nil }
 }
 
 public protocol CoreListAttachedItemView: AnyObject {

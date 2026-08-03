@@ -24,6 +24,19 @@ struct AttachmentOffsetMap {
     let contentBase: CGFloat
     let edge: CoreListAttachmentEdge
     let isFloating: Bool
+    /// The attachment's measured height. Stored, not just folded into `hi`, because the yield
+    /// composition needs the rect this attachment occupies to test overlap against a partner's.
+    let height: CGFloat
+
+    /// Partner maps this attachment defers to, and the minimum gap it keeps from any of them. `nil`
+    /// for the common case.
+    ///
+    /// The partners are MAPS, not solved values, because the resolution has to be a pure function of
+    /// offset: `composedKeyframe` SAMPLES `y(atOffset:)` along the trajectory to bake the CA track a
+    /// momentum flight rides, and nothing on the render server can consult another attachment. A
+    /// post-solve fix-up would simply not exist during a flight — the attachment would ride
+    /// un-nudged for the whole deceleration and snap into place at the end.
+    private let yield: (partners: [AttachmentOffsetMap], gap: CGFloat)?
 
     init(bandTop: CGFloat,
          bandBottom: CGFloat,
@@ -31,13 +44,16 @@ struct AttachmentOffsetMap {
          anchor: CGFloat,
          contentBase: CGFloat,
          edge: CoreListAttachmentEdge,
-         isFloating: Bool) {
+         isFloating: Bool,
+         yield: (partners: [AttachmentOffsetMap], gap: CGFloat)? = nil) {
         self.lo = bandTop
         self.hi = bandBottom - height
         self.anchor = anchor
         self.contentBase = contentBase
         self.edge = edge
         self.isFloating = isFloating
+        self.height = height
+        self.yield = yield
     }
 
     /// The display anchor expressed in frame space at a given engine offset.
@@ -46,6 +62,40 @@ struct AttachmentOffsetMap {
     }
 
     func y(atOffset offset: CGFloat) -> CGFloat {
+        let own = ownY(atOffset: offset)
+        guard let yield, !yield.partners.isEmpty else {
+            return own
+        }
+        var result = own
+        // Fixed point rather than ListViewImpl's `for _ in 0 ..< 2` (Display/Source/ListView.swift:4054):
+        // pushing clear of one partner can bring this attachment into overlap with one it was clear
+        // of before, which is exactly what that second pass catches. Bounded by partner count — an
+        // iteration that changes anything descends past at least one more partner — plus one pass to
+        // confirm stability.
+        for _ in 0 ... yield.partners.count {
+            var next = result
+            for partner in yield.partners {
+                assert(partner.yield == nil, "stacking yield must be one level only")
+                let partnerY = partner.y(atOffset: offset)
+                // The overlap test is load-bearing: without it a partner far above wins the min
+                // unconditionally and drags this attachment up with it.
+                guard partnerY < next + height, partnerY + partner.height > next else {
+                    continue
+                }
+                // Min over EVERY overlapping partner, so there is nothing to tie-break and the
+                // result cannot depend on partner order.
+                next = min(next, partnerY - yield.gap)
+            }
+            next = max(lo, next)
+            if next == result {
+                break
+            }
+            result = next
+        }
+        return result
+    }
+
+    private func ownY(atOffset offset: CGFloat) -> CGFloat {
         guard isFloating else {
             return edge == .top ? lo : hi
         }
@@ -123,6 +173,30 @@ struct AttachmentOffsetMap {
     /// knows its own height, and the raw value is what a caller animating a real offset needs.
     func stickDistance(atOffset offset: CGFloat) -> CGFloat {
         let y = self.y(atOffset: offset)
-        return edge == .top ? y - lo : hi - y
+        let raw = edge == .top ? y - lo : hi - y
+        guard let yield, yield.partners.contains(where: { $0.sharesNaturalOrigin(with: self) }) else {
+            return raw
+        }
+        // A yielding attachment measures against `naturalOverlapLowerBound` — the partner's own
+        // natural origin less the gap (Display/Source/ListView.swift:4039-4052, :4084) — rather than
+        // its own band edge. Sharing that origin, the two expressions differ by exactly one gap:
+        // `(partnerOrigin - gap) - (y + height)` against `(hi + height) - (y + height)`.
+        //
+        // Without it, a header riding its run reports a full gap of stick and fades out as though
+        // parked — because the yield has already displaced it by that gap.
+        return raw - yield.gap
+    }
+
+    /// The band's far edge: where this attachment sits when it rides its run rather than parking.
+    /// ListViewImpl records the same value per header node as `naturalOriginY`
+    /// (Display/Source/ListView.swift:4202) and matches partners on it.
+    var naturalOrigin: CGFloat { hi + height }
+
+    /// Whether `other` ends at the same content boundary this attachment does — ListViewImpl's
+    /// `otherNaturalOriginY == naturalY` (Display/Source/ListView.swift:4046), which is what makes a
+    /// partner the one this attachment shares a run boundary with rather than merely a group member
+    /// that happens to be nearby. Band geometry, so it does not depend on the offset.
+    private func sharesNaturalOrigin(with other: AttachmentOffsetMap) -> Bool {
+        abs(naturalOrigin - other.naturalOrigin) < 1e-6
     }
 }

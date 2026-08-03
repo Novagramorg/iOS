@@ -182,6 +182,10 @@ public final class CoreVirtualListView: UIView {
             let isFloating: Bool
             let startsCollectionRun: Bool
             let endsCollectionRun: Bool
+            /// Copied from the run representative, as `placement`/`edge`/`isFloating` are: the solve
+            /// needs both declarations without reaching back for a descriptor.
+            let stackingGroup: AnyHashable?
+            let stackingYield: (group: AnyHashable, gap: CGFloat)?
             /// Frame-space band, finalised after row stacking.
             var bandTop: CGFloat
             var bandBottom: CGFloat

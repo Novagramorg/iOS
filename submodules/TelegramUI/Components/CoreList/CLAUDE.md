@@ -844,6 +844,20 @@ Animation an authority.
   tree may contain unrelated WIP.
 - Use only the dedicated **iPhone 17 Pro K2** simulator. If it is unavailable, stop and ask.
 - Every `xcodebuild ... test` command must include `-parallel-testing-enabled NO`.
+- **Attachment stacking resolves INSIDE the solve, and it cannot live anywhere else.**
+  `CoreListAttachedItem.stackingGroup` tags an attachment into a group; `stackingYield` names a group
+  it defers to plus a minimum gap, and `AttachmentOffsetMap.y(atOffset:)` composes the partners'
+  positions into its own — `min` over every OVERLAPPING partner (the overlap test is load-bearing:
+  without it a partner far above wins the min unconditionally), iterated to a fixed point, clamped at
+  the band top. The obvious implementation, a post-solve fix-up over view frames, is wrong for one
+  reason: `composedKeyframe` SAMPLES `y(atOffset:)` to bake the CA track a momentum flight rides, so
+  a nudge resolved anywhere else would be absent from that track and the attachment would ride
+  un-nudged for the whole deceleration and snap at the end. **One level only** — a map that yields
+  must not itself be a yield target — asserted, not merely documented. Two consequences that look
+  free and are not: a yielding attachment's `stickDistance` measures against the adjusted bound (else
+  one riding its run reports a full gap of stick and fades as though parked), and sibling z-order is
+  re-asserted by `renderAttachments` on every render, because appending only unseen views left the
+  order to whichever run entered the loaded window first.
 - **An attachment's frame and its stick distance solve at DIFFERENT offsets, deliberately.**
   `renderAttachments` writes the frame at `attachmentSolveOffset` — the flight's destination while one
   plays, because the additive `CAKeyframeAnimation` supplies the displacement — and delivers

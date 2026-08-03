@@ -48,13 +48,19 @@ final class FixedHeightAttachment: CoreListAttachedItem {
     /// When false, `combines(with:)` returns false even against an identical key — the fixture's
     /// stand-in for ChatMessageAvatarHeader's 10-minute rule.
     let combinesWithNeighbours: Bool
+    let stackingGroup: AnyHashable?
+    let stackingYield: (group: AnyHashable, gap: CGFloat)?
 
     init(label: String,
          height: CGFloat = 30,
          placement: CoreListAttachmentPlacement = .overlay,
          edge: CoreListAttachmentEdge = .top,
          isFloating: Bool = true,
-         combinesWithNeighbours: Bool = true) {
+         combinesWithNeighbours: Bool = true,
+         stackingGroup: AnyHashable? = nil,
+         stackingYield: (group: AnyHashable, gap: CGFloat)? = nil) {
+        self.stackingGroup = stackingGroup
+        self.stackingYield = stackingYield
         self.label = label
         self.height = height
         self.placement = placement
