@@ -96,6 +96,18 @@ struct ListAnimationTrack: Equatable {
     func isComplete(at time: TimeInterval) -> Bool {
         duration <= 0 || time >= startTime + duration
     }
+
+    /// True when the animation compiled from this track cannot produce an `animationDidStop`.
+    ///
+    /// Core Animation does not run an animation whose `fromValue` equals its `toValue`: it changes
+    /// nothing, so the render server has nothing to schedule and never reports a stop. The track is
+    /// still a real analytic track with a real deadline — several of them exist ONLY to own that
+    /// deadline (see `beginExit(fadesOut: false)`) — so the controller drives their completion from
+    /// the model instead. Same epsilon as `ListAnimationModel.positionEpsilon`, and deliberately not
+    /// read from it: this is a property of the EMITTED animation, not of the model's no-op policy.
+    var deliversNoCoreAnimationCompletion: Bool {
+        abs(to - from) <= 1e-6
+    }
 }
 
 enum ListAnimationMutation: Equatable {

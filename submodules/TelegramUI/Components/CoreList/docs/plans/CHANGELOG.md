@@ -25,6 +25,33 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-08-03 — a completion Core Animation never sends**: the exit overlay's teardown hangs on a
+  CA completion, and **Core Animation does not run an animation whose `fromValue` equals its
+  `toValue`** — it changes nothing, the render server has nothing to schedule, and
+  `animationDidStop` is never sent (with `isRemovedOnCompletion = false` the animation just sits on
+  the layer). Two tenants ride equal-endpoint tracks BY DESIGN: a non-fading exit
+  (`beginExit(fadesOut: false)` — every departing row of a full-replace carousel) installs
+  `opacity: o -> o` purely to own a teardown deadline, and a viewport re-target onto the
+  displacement already in flight yields `viewportOffset: 0 -> 0`, whose completion runs
+  `finishViewportGeneration`. Both stranded their content in `exitOverlay`, which sits above
+  `container` and takes no touches — stale rows drawn over live ones, permanently. It presented in
+  the chat as the outgoing strip of a scroll-to-bottom sticking over the conversation.
+  `ListAnimationController.install` now drives such a track's completion from the ANALYTIC deadline
+  (`ListAnimationTrack.deliversNoCoreAnimationCompletion`), which is the rule the architecture
+  already states: the model is the presentation authority, the compiler is an output renderer, and a
+  model-owned completion must not depend on whether Core Animation found the animation worth
+  running. Only equal-endpoint tracks arm a timer — a moving track still rides its callback, so a
+  pass does not pay dozens of timers — and `finalize` removes the pending record first, so the two
+  paths cannot double-fire. Note the model-level no-op guard was NOT enough and had already been
+  deliberately bypassed: `beginExit` routes around the equal-target early-out precisely so the track
+  exists, with a comment explaining that returning `.unchanged` would leak every member — the
+  emitted animation then leaked them anyway. Three defences all missed it: `assertOverlayInvariants`
+  passes because the view IS owned (by an owner that can never be reaped), the test harness runs
+  `emitsAnimations: false` so it never exercised completion delivery at all, and `DEBUG` is not
+  defined for Swift in the app's Bazel build, so the assertions are compiled out of the app.
+  `NoOpAnimationCompletionTests` locks both cases plus a non-vacuity guard that a moving track arms
+  no timer.
+
 - **2026-08-02 — `settledFrame(of:)`, the other half of `presentedFrame(of:)`**: `presentedFrame(of:)`
   landed as *the* host geometry accessor, on the reasoning that a host asking where a row is wants
   where it is. That is right for every per-frame read and wrong for exactly one: a host reporting the

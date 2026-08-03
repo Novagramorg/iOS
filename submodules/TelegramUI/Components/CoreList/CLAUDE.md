@@ -755,6 +755,25 @@ Animation an authority.
   window stay behind, because they follow the viewport track and nothing else. It caught
   `additionalScrollDistance` during implementation: the shift was correct, exact, and animating on the
   right curve, through the wrong owner.
+- **Core Animation never RUNS a `from == to` animation, so it never reports one stopping.** It
+  changes nothing, the render server has nothing to schedule, and `animationDidStop` is never sent —
+  with `isRemovedOnCompletion = false` the animation just sits on the layer forever. That is fatal
+  here because a completion is not bookkeeping: it is the teardown trigger for every tenant of
+  `exitOverlay`, and two of them ride equal-endpoint tracks BY DESIGN. A non-fading exit
+  (`beginExit(fadesOut: false)` — every departing row of a full-replace carousel, i.e. the chat's
+  scroll-to-bottom) installs `opacity: o -> o` purely to own a deadline; and a viewport re-target
+  onto the displacement already in flight yields `viewportOffset: 0 -> 0`, whose completion is what
+  runs `finishViewportGeneration`. Both stranded their content on top of the live rows, invisibly to
+  every existing guard: `assertOverlayInvariants` passes because the view IS owned — by an owner
+  whose reaping can never happen. `ListAnimationController.install` therefore drives such a track's
+  completion from the ANALYTIC deadline (`ListAnimationTrack.deliversNoCoreAnimationCompletion`),
+  which is also the rule the architecture already states — the model is the presentation authority
+  and the compiler is an output renderer, so a model-owned completion must not depend on whether
+  Core Animation found the animation worth running. Note the model-level guard is NOT enough and was
+  already deliberately bypassed: `beginExit` routes around the equal-target early-out precisely so
+  the track exists, and the comment there explains that returning `.unchanged` would leak every
+  member — the emitted animation then leaked them anyway. `NoOpAnimationCompletionTests` locks both
+  cases plus the "a moving track arms no timer" non-vacuity guard.
 - **A zero duration is immediate, which is the opposite of ComponentFlow.** `ComponentTransition`
   treats only `.none` as immediate and animates `.curve(duration: 0, …)`. CoreList settles a
   zero-duration property immediately, and roughly half the test suite says "no animation" as

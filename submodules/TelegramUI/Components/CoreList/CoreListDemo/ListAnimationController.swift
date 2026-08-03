@@ -713,6 +713,42 @@ final class ListAnimationController {
             compiler.install(track, property: property, on: layer,
                              completion: completion)
         }
+        if track.deliversNoCoreAnimationCompletion {
+            scheduleAnalyticCompletion(serial: serial,
+                                       deadline: track.startTime + track.duration)
+        }
+    }
+
+    /// Drive `finalize` from the analytic deadline for a track Core Animation will never call back
+    /// for. **An animation whose `fromValue` equals its `toValue` produces no visual change, so the
+    /// render server never runs it and `animationDidStop` is never sent** — the animation just sits
+    /// on the layer (`isRemovedOnCompletion = false`) forever.
+    ///
+    /// That matters because a completion here is not only bookkeeping: it is the teardown trigger for
+    /// every tenant of the exit overlay. Three of them ride equal-endpoint tracks by design, and all
+    /// three stranded stale rows on top of live content:
+    ///
+    /// - a **non-fading exit** (`beginExit(fadesOut: false)`, i.e. every departing row of a
+    ///   full-replace carousel) installs `opacity: o -> o` purely to own a teardown deadline, so the
+    ///   whole outgoing strip stayed parked in `exitOverlay`;
+    /// - a **viewport re-target onto the displacement already in flight** yields
+    ///   `viewportOffset: 0 -> 0`, and `finishViewportGeneration` never ran — stranding its viewport
+    ///   carries and every crossing carry that had migrated onto that generation.
+    ///
+    /// The model is the presentation authority and the compiler is an output renderer, so a
+    /// model-owned completion must not depend on whether Core Animation found the animation worth
+    /// running. Scheduled only for the tracks that need it — arming a timer per animated property
+    /// would cost dozens of timers per pass for no gain, since a track that moves does get its
+    /// callback. `finalize` removes the pending record first, so a later CA callback for the same
+    /// serial is an exact no-op and the two paths cannot double-fire.
+    private func scheduleAnalyticCompletion(serial: UInt64, deadline: TimeInterval) {
+        // One shot: `scheduleAfter` never fires early, so `now()` inside the block is at or past the
+        // deadline and `track.isComplete(at:)` therefore holds — the re-arm loop that
+        // `scheduleUnboundTrackReap` needs (it races an unbind, not a deadline) has no analogue here.
+        scheduleAfter(max(0, deadline - now())) { [weak self] in
+            guard let self, self.pendingCompletions[serial] != nil else { return }
+            self.finalize(serial, at: self.now())
+        }
     }
 
     private func finalize(_ serial: UInt64, at time: TimeInterval) {
