@@ -138,8 +138,10 @@ while the row's height and position animate underneath it. That is a vertical sn
 and it is what remained after the horizontal fix above (bubbles genuinely rewrap taller/shorter at a
 new width, so the height change is real and unavoidable).
 
-The host compensates with `layer.animateBoundsOriginYAdditive(from: previousHeight - newHeight, to: 0)`
-on the node. This is `ListViewImpl`'s own compensation, taken from the one branch of it that ports:
+The host compensates with an additive `bounds.origin.y` animation on the node, decaying that
+displacement to zero across the pass. Its exact form is load-bearing and is **not** a plain
+`animateBoundsOriginYAdditive` — see "Item height is replaced from scratch each pass" below.
+Conceptually this is `ListViewImpl`'s own compensation, taken from the one branch of it that ports:
 `ListViewImpl` has two, and the display-link branch seeds `node.transitionOffset` (with an explicit
 `node.rotated` formula, `ListView.swift:2515`/`:2554`/`:2581`) and relies on `updateAnimations()` to
 walk it back to zero — **nothing drives that here**, so seeding it would displace the content
@@ -157,6 +159,54 @@ Both paths also stamp `contentSize` / `insets` / `apparentHeight` on the node, a
 on every node it lays out. This is not bookkeeping for its own sake — see "Item visibility" below for
 what reads it. Note `ChatMessageItemImpl` assigns `contentSize`/`insets` itself on the
 `nodeConfiguredForParams` path but **not** on `updateNode`, which is why the host must.
+
+### Item height is replaced from scratch each pass, never amended
+
+**This applies to the item's height compensation and to nothing else.** Every other animated property —
+row position, opacity, x/width, the shared viewport offset, and the item's own internal animations — is
+retargeted and re-timed in the ordinary way, and must be: CoreList replaces a changed property from its
+analytic current value on the pass clock, and an unchanged endpoint stays an exact no-op preserving its
+phase, curve, generation and deadline. Those are values with real targets that legitimately move between
+passes.
+
+Height compensation is not one of them. It is a transient displacement whose target is always exactly
+zero, so there is no endpoint to re-aim: each pass introduces a fresh displacement that must be composed
+with whatever the previous pass still owes and then decayed **once**, on that pass's curve and duration,
+from that pass's start. So it is written as a replacement under a stable key
+(`coreListHeightCompensationKey`) whose `from` is the **full remaining displacement** — the residual read
+off the presentation layer, plus this pass's delta — not the delta alone. With nothing in flight the
+residual is zero and the expression reduces to the historical `previousHeight - newHeight`.
+
+Getting this wrong is silent, and it shipped. `animateBoundsOriginYAdditive` forwards no key, and
+`CAAnimationUtils.animate` maps a keyless additive animation to `add(_:forKey: nil)`
+(`CAAnimationUtils.swift:248`), so Core Animation assigns a fresh key and every pass **stacks** another
+animation onto the ones still in flight. The stacked sum is exactly correct at the instant of the pass —
+the displacement the in-flight tracks still owe, plus this pass's delta, *is* `presented - newSettled` —
+so one pass looks right and no single-shot test can see it. But each copy then decays from its own start
+on its own timeline, so the content follows a sum of N phase-shifted curves while the row's height track
+is one curve replaced at the pass clock. Item content and its own row diverge in **shape**, only under
+repeated passes, compounding with every re-issue.
+
+Two consequences worth keeping:
+
+- **A zero-displacement pass must remove the key, not install the animation.** Core Animation never runs
+  a `from == to` animation, so it would neither move anything nor ever report stopping, while leaving the
+  previous animation installed would keep displacing the content. This is the same rule CoreList states
+  for its own no-op tracks.
+- **The emitted begin time is irrelevant here**, which is why this is not a phase problem in disguise. An
+  animation that starts from where the content presently *is* and ends at the settled value is
+  self-correcting whether Core Animation begins it at the pass clock or at commit. Phase matters only for
+  a track whose `from` is a remembered value rather than a sampled one.
+
+The trap generalizes past this one call. `ListView.swift:3035` is keyless too and is **correct there**,
+because it is `ListViewImpl`'s `customAnimationTransition` branch — one-shot, never twice in flight.
+`ListViewImpl`'s *repeated* path does not use it at all: `addApparentHeightAnimation` /
+`addTransitionOffsetAnimation` go through `setAnimationForKey`, which removes the same-key animation
+first (`ListViewItemNode.swift:430-442`), and it additionally no-ops a re-issue toward an unchanged
+target (`ListView.swift:3044-3051`, the deliberately-empty branch). **Before porting any `ListViewImpl`
+mechanism, establish which of its two paths it came from**: this backend routes every pass through the
+CA-driven one, so a mechanism that is safe there only because it fires once becomes a mechanism that
+fires on every re-issue.
 
 ### The apply runs between those writes, and the order is load-bearing
 

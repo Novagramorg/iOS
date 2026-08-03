@@ -3962,10 +3962,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             animation = .System(duration: 0.25, transition: ControlledTransition(duration: 0.25, curve: .easeInOut, interactive: false))
         }
         
-        var legacyTransition: ContainedViewLayoutTransition = .immediate
-        if case let .System(duration, _) = animation {
-            legacyTransition = .animated(duration: duration, curve: .spring)
-        }
+        // The pass's own curve, rather than a locally reconstructed `.spring`. `ListViewItemUpdateAnimation`
+        // already carries it (`transition.legacyAnimator.transition`), and it is `.immediate` for
+        // `.None`/`.Crossfade` — what this defaulted to. Rebuilding `.spring` here was correct only by
+        // accident: `ListViewImpl` hard-codes `curve: .spring` for every item update
+        // (Display/Source/ListView.swift:1805), so the two always agreed. The CoreList chat backend routes
+        // real pass curves through the same channel — `.easeInOut` and `.custom(...)`
+        // (CoreListChatHistoryBackend.swift:689, :692) — and this then ran the bubble on a spring while
+        // its row ran the pass curve. It also silently overrode the `.easeInOut` that the
+        // extracted-to-context-preview branch just above explicitly asks for.
+        var legacyTransition: ContainedViewLayoutTransition = animation.transition
         
         var forceBackgroundSide = false
         if actionButtonsSizeAndApply != nil {
@@ -4734,7 +4740,20 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
             
-        let timingFunction = kCAMediaTimingFunctionSpring        
+        // Same reason as `legacyTransition` above — take the pass's curve instead of assuming a spring.
+        // Drives the forwardInfo / threadInfo / replyInfo / content-node frame animations below, each of
+        // which already takes its duration from the pass. Exactly equivalent under `ListViewImpl`, whose
+        // curve is always `.spring` and whose `.spring.timingFunction` IS `kCAMediaTimingFunctionSpring`.
+        // `mediaTimingFunction` travels with it: for `.custom` the name is only `easeInEaseOut` and the
+        // real bezier lives in the media timing function, so taking the name alone would degrade a
+        // custom pass curve rather than fix it. It is nil for `.spring` and `.easeInOut`, so this is
+        // still a no-op wherever those apply.
+        var timingFunction = kCAMediaTimingFunctionSpring
+        var mediaTimingFunction: CAMediaTimingFunction? = nil
+        if case let .animated(_, curve) = animation.transition {
+            timingFunction = curve.timingFunction
+            mediaTimingFunction = curve.mediaTimingFunction
+        }
         if let forwardInfoNode = forwardInfoSizeApply.1(bubbleContentWidth) {
             strongSelf.forwardInfoNode = forwardInfoNode
             var animateFrame = true
@@ -4757,7 +4776,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if case let .System(duration, _) = animation {
                 if animateFrame {
                     forwardInfoNode.frame = forwardInfoFrame
-                    forwardInfoNode.layer.animateFrame(from: previousForwardInfoNodeFrame, to: forwardInfoFrame, duration: duration, timingFunction: timingFunction)
+                    forwardInfoNode.layer.animateFrame(from: previousForwardInfoNodeFrame, to: forwardInfoFrame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 } else {
                     forwardInfoNode.frame = forwardInfoFrame
                 }
@@ -4795,7 +4814,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             threadInfoNode.frame = CGRect(origin: CGPoint(x: contentOrigin.x + layoutConstants.text.bubbleInsets.left, y: layoutConstants.bubble.contentInsets.top + threadInfoOriginY), size: threadInfoSizeApply.0)
             if case let .System(duration, _) = animation {
                 if animateFrame {
-                    threadInfoNode.layer.animateFrame(from: previousThreadInfoNodeFrame, to: threadInfoNode.frame, duration: duration, timingFunction: timingFunction)
+                    threadInfoNode.layer.animateFrame(from: previousThreadInfoNodeFrame, to: threadInfoNode.frame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 }
             }
         } else {
@@ -4830,7 +4849,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             replyInfoNode.frame = replyInfoFrame
             if case let .System(duration, _) = animation {
                 if animateFrame {
-                    replyInfoNode.layer.animateFrame(from: previousReplyInfoNodeFrame, to: replyInfoNode.frame, duration: duration, timingFunction: timingFunction)
+                    replyInfoNode.layer.animateFrame(from: previousReplyInfoNodeFrame, to: replyInfoNode.frame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 }
             }
         } else {
@@ -5241,7 +5260,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     contentNode.animateInsertionIntoBubble(duration)
                     var previousAlignedContentNodeFrame = contentNodeFrame
                     previousAlignedContentNodeFrame.origin.x += backgroundFrame.size.width - strongSelf.backgroundNode.frame.size.width
-                    contentNode.layer.animateFrame(from: previousAlignedContentNodeFrame, to: contentNodeFrame, duration: duration, timingFunction: timingFunction)
+                    contentNode.layer.animateFrame(from: previousAlignedContentNodeFrame, to: contentNodeFrame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 } else {
                     contentNode.frame = contentNodeFrame
                 }
@@ -5646,32 +5665,23 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 animation.animator.updateScale(layer: shareButtonNode.layer, scale: (isCurrentlyPlayingMedia || isSidePanelOpen) ? 0.001 : 1.0, completion: nil)
             }
             
-            if case .System = animation, strongSelf.mainContextSourceNode.isExtractedToContextPreview {
-                legacyTransition.updateFrame(node: strongSelf.backgroundNode, frame: backgroundFrame)
-                if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
-                    legacyTransition.updateFrame(node: backgroundHighlightNode, frame: backgroundFrame, completion: nil)
-                    backgroundHighlightNode.updateLayout(size: backgroundFrame.size, transition: legacyTransition)
-                }
-
-                legacyTransition.updateFrame(node: strongSelf.clippingNode, frame: backgroundFrame)
-                legacyTransition.updateBounds(node: strongSelf.clippingNode, bounds: CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: backgroundFrame.size))
-
-                strongSelf.backgroundNode.updateLayout(size: backgroundFrame.size, transition: legacyTransition)
-                strongSelf.backgroundWallpaperNode.updateFrame(backgroundFrame, transition: legacyTransition)
-                strongSelf.shadowNode.updateLayout(backgroundFrame: backgroundFrame, transition: legacyTransition)
-            } else {
-                strongSelf.backgroundNode.frame = backgroundFrame
-                if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
-                    backgroundHighlightNode.frame = backgroundFrame
-                    backgroundHighlightNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
-                }
-                
-                strongSelf.clippingNode.frame = backgroundFrame
-                strongSelf.clippingNode.bounds = CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: backgroundFrame.size)
-                strongSelf.backgroundNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
-                strongSelf.backgroundWallpaperNode.frame = backgroundFrame
-                strongSelf.shadowNode.updateLayout(backgroundFrame: backgroundFrame, transition: .immediate)
+            // The non-animated path. The enclosing `else` already establishes that `animation` is not
+            // `.System`, so every write here is immediate. This used to branch first on `.System` +
+            // `isExtractedToContextPreview` and animate through `legacyTransition`; that branch became
+            // unreachable when the `!isExtractedToContextPreview` clause was commented out of the outer
+            // test above, which routes the extracted case into the animated branch instead. Deleted
+            // rather than left in place, because it read as a live second spelling of this same layout.
+            strongSelf.backgroundNode.frame = backgroundFrame
+            if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
+                backgroundHighlightNode.frame = backgroundFrame
+                backgroundHighlightNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
             }
+            
+            strongSelf.clippingNode.frame = backgroundFrame
+            strongSelf.clippingNode.bounds = CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: backgroundFrame.size)
+            strongSelf.backgroundNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
+            strongSelf.backgroundWallpaperNode.frame = backgroundFrame
+            strongSelf.shadowNode.updateLayout(backgroundFrame: backgroundFrame, transition: .immediate)
             if let (rect, size) = strongSelf.absoluteRect {
                 strongSelf.updateAbsoluteRect(rect, within: size)
             }

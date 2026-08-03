@@ -1181,6 +1181,10 @@ private final class CoreListEntryItem: CoreListItem {
     }
 }
 
+/// Stable key for the hosted node's height compensation, so a re-issued pass REPLACES the animation
+/// in flight rather than stacking another one on it. See `update(width:transition:)`.
+private let coreListHeightCompensationKey = "coreListHeightCompensation"
+
 // Hosts a ListViewItemNode's view inside CoreVirtualListView
 private final class CoreListNodeHostView: UIView, CoreListItemView {
     private var listItem: ListViewItem
@@ -1332,13 +1336,55 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
             // here, so seeding it would displace the content permanently.
             //
             // Skipped for a fresh view, which has no previous height to travel from.
+            //
+            // **It REPLACES; it must never accumulate.** `animateBoundsOriginYAdditive` forwards no
+            // key, and `CAAnimationUtils.animate` maps an additive animation with no key to
+            // `add(_:forKey: nil)` (CAAnimationUtils.swift:248), so Core Animation assigns a fresh key
+            // and each pass STACKS another animation on the ones still in flight. That sum is exactly
+            // right at the instant of the pass — the displacement the in-flight tracks still owe, plus
+            // this pass's delta, is `presented - newSettled` — which is why one pass looks correct and
+            // why this survived review. But each copy then decays from its own start on its own
+            // timeline, so the content follows a sum of N phase-shifted curves while the ROW's height
+            // track is a single curve replaced from its analytic value at the pass clock. The item's
+            // content and its own row diverge in shape, compounding with every re-issue.
+            //
+            // CoreList's contract is that a changed property is replaced from its current presentation
+            // on the pass curve and duration, never amended, so this does the same: a stable key
+            // replaces whatever is in flight, and `from` is the FULL remaining displacement rather than
+            // this pass's delta alone. Reading the residual off the presentation layer is what makes
+            // the two equivalent — with nothing in flight it is zero and this is the old expression
+            // exactly. It is also why the emitted begin time does not matter here: an animation that
+            // starts where the content presently IS and ends at the settled value is self-correcting
+            // whether Core Animation begins it at the pass clock or at commit.
+            //
+            // The ported original (ListView.swift:3035) is keyless too, and is correct there because it
+            // is ListViewImpl's `customAnimationTransition` branch — one-shot, never twice in flight.
+            // ListViewImpl's *repeated* path does not use it at all: `addApparentHeightAnimation` /
+            // `addTransitionOffsetAnimation` go through `setAnimationForKey`, which removes the
+            // same-key animation first (ListViewItemNode.swift:430-442), and it additionally no-ops a
+            // re-issue toward an unchanged target (ListView.swift:3044-3051). Porting the one-shot
+            // form onto the path where re-issue is the norm is what broke it.
             if hadNode, abs(self.lastHeight - previousHeight) > CGFloat.ulpOfOne,
                case let .animated(duration, curve) = ComponentTransition(transition).containedViewLayoutTransition {
-                itemNode.layer.animateBoundsOriginYAdditive(from: previousHeight - self.lastHeight,
-                                                            to: 0.0,
-                                                            duration: duration,
-                                                            timingFunction: curve.timingFunction,
-                                                            mediaTimingFunction: curve.mediaTimingFunction)
+                let settledOriginY = itemNode.layer.bounds.origin.y
+                let presentedOriginY = itemNode.layer.presentation()?.bounds.origin.y ?? settledOriginY
+                let displacement = (presentedOriginY - settledOriginY) + previousHeight - self.lastHeight
+                if abs(displacement) <= CGFloat.ulpOfOne {
+                    // The content is already where it belongs, so there is nothing to travel. Leaving
+                    // the replaced animation installed would keep displacing it, and installing a
+                    // `from == to` animation is not an alternative: Core Animation never runs one, so
+                    // it would neither move anything nor ever report completion.
+                    itemNode.layer.removeAnimation(forKey: coreListHeightCompensationKey)
+                } else {
+                    itemNode.layer.animate(from: displacement as NSNumber,
+                                           to: 0.0 as NSNumber,
+                                           keyPath: "bounds.origin.y",
+                                           timingFunction: curve.timingFunction,
+                                           duration: duration,
+                                           mediaTimingFunction: curve.mediaTimingFunction,
+                                           additive: true,
+                                           key: coreListHeightCompensationKey)
+                }
             }
         }
         return self.lastHeight
