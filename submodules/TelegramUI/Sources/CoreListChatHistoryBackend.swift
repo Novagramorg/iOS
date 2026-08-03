@@ -1404,14 +1404,29 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
             })
             if let (nodeLayout, nodeApply) = layoutAndApply {
                 let height = nodeLayout.contentSize.height + nodeLayout.insets.top + nodeLayout.insets.bottom
-                nodeApply(ListViewItemApply())
                 // Same fields, same order ListViewImpl stamps in updateNodeAtIndex. Load-bearing:
                 // `insets` is the content-box term the visibility fraction divides by, and the flip
                 // term inside ChatMessageBubbleItemNode.mapVisibility. ChatMessageItemImpl assigns
                 // these on its nodeConfiguredForParams path only, so without this they go stale
                 // whenever a relayout changes them — a date header appearing, say.
+                //
+                // contentSize/insets are written BEFORE the apply, matching ListView.swift:3008-3015.
+                // The order is load-bearing and compiler-invisible: `apply` runs caller code
+                // synchronously (ChatMessageBubbleItemNode's `awaitingAppliedReaction`, which dismisses
+                // an open context menu), and that code samples the row's on-screen geometry with a bare
+                // `UIView.convert` off the item node. Both setters rewrite the node's `frame` with its
+                // origin pinned (ListViewItemNode.swift:209-224), and under the chat's π the node's own
+                // height is what maps its content to screen — so with the old height still installed the
+                // sample lands a full height-delta too low. Writing them first makes the convert chain
+                // report the settled position even though CoreList has not rendered the row's new frame
+                // yet: the row's container origin is the sum of the LOWER indices' heights, which this
+                // row's own growth cannot change.
+                //
+                // `apparentHeight` stays after the apply, also matching ListViewImpl, which assigns it
+                // only in the post-apply branches (ListView.swift:3021/3053/3083).
                 itemNode.contentSize = nodeLayout.contentSize
                 itemNode.insets = nodeLayout.insets
+                nodeApply(ListViewItemApply())
                 itemNode.apparentHeight = height
                 self.lastHeight = height
             } else {

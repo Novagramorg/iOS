@@ -158,6 +158,32 @@ on every node it lays out. This is not bookkeeping for its own sake — see "Ite
 what reads it. Note `ChatMessageItemImpl` assigns `contentSize`/`insets` itself on the
 `nodeConfiguredForParams` path but **not** on `updateNode`, which is why the host must.
 
+### The apply runs between those writes, and the order is load-bearing
+
+`rebuild` stamps `contentSize` and `insets` **before** `nodeApply(...)` and `apparentHeight` **after** —
+the order `ListViewImpl` uses in `.UpdateLayout` (`ListView.swift:3008-3015`; `apparentHeight` is
+assigned only in its post-apply branches, `:3021`/`:3053`/`:3083`). Neither setter is a plain store:
+both rewrite the node's `frame` with its origin pinned (`ListViewItemNode.swift:209-224`), so once they
+have run the node is at its new height while CoreList has not yet rendered the row's new frame.
+
+That matters because **`apply` runs caller code synchronously, and that code measures the screen.**
+`ChatMessageBubbleItemNode`'s `awaitingAppliedReaction` fires at the end of its apply closure
+(`ChatMessageBubbleItemNode.swift:5717`); adding a reaction from an open context menu routes through
+it to `ContextController.dismissWithReaction`, and `ContextControllerExtractedPresentationNode` then
+fixes — in the same runloop — where the extracted bubble travels back to, sampling it with a bare
+`UIView.convert` off the item node. Under the chat's π the node's **own** height is what maps its
+content to screen, so applying first meant sampling through a node still at the old height: the bubble
+landed a full height-delta low (34pt for a reaction row), visibly sliding down and snapping back when
+the animation finished. Writing the geometry first makes that convert chain report the settled
+position despite the unrendered row, because the row's container origin is the sum of the **lower**
+indices' heights, which this row's own growth cannot change.
+
+Nothing in the build catches a regression here: both orders compile, and the symptom is a silently
+mispositioned overlay in one interaction. Note the double-tap quick reaction
+(`ChatMessageBubbleItemNode.swift:5794`) makes the identical height change with nothing extracted, so
+it looks correct under either order — it is a useful **bisector** (it isolates the extract/put-back
+path from the row animation) but **not** a regression test for this.
+
 ## Item visibility
 
 `CoreVirtualListView` pushes each loaded row its visible rect through
