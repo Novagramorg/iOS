@@ -836,6 +836,7 @@ public final class CoreVirtualListView: UIView {
                       additionalScrollDistance: CGFloat = 0.0,
                       anchorMode: CoreListAnchorMode = .automatic,
                       compensatesInsetChange: Bool = true,
+                      animatesInsertions: Bool = true,
                       transition: CoreListTransition) {
         let animationDuration = transition.duration
         if isApplyingChanges {
@@ -847,6 +848,7 @@ public final class CoreVirtualListView: UIView {
                                    additionalScrollDistance: additionalScrollDistance,
                                    anchorMode: anchorMode,
                                    compensatesInsetChange: compensatesInsetChange,
+                                   animatesInsertions: animatesInsertions,
                                    transition: transition)
             }
             return
@@ -1946,9 +1948,14 @@ public final class CoreVirtualListView: UIView {
         // or a carousel within a surviving collection, carrying a genuinely new row must still fade
         // that row in; see `isFullReplaceCarousel`.
         //
+        // `animatesInsertions` is the host's version of the same statement: the row's arrival is
+        // real, but something outside the list is already staging it, so a fade here would be a
+        // second, uncoordinated animation of one arrival. The chat's send morph is the caller — it
+        // carries the bubble out of the input field itself.
+        //
         // Nothing else is needed for the incoming side — render() already stamps `layer.opacity = 1`
         // on every window item, and it runs earlier in this pass.
-        if !isFullReplaceCarousel {
+        if !isFullReplaceCarousel && animatesInsertions {
             let insertedIDs = Set(diff.inserts.compactMap { newIndex in
                 effectiveItems.indices.contains(newIndex)
                     ? effectiveItems[newIndex].identity

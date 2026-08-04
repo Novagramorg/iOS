@@ -881,6 +881,69 @@ and for the same reason: the value must be the one that held when the transactio
   `experimentalSnapScrollToItem = true` (the only assignments, `ChatHistoryListNode.swift:1023` and
   `ChatController.swift:7674`, are both `false`).
 
+## Send animation
+
+The outgoing-message morph (`ChatMessageTransitionNodeImpl`) parents its animating content **under the
+item node**, so the bubble rides the list's scroll for free and only its *starting* offset has to be
+calibrated. That calibration converts the input field's window rect down the layer chain into the item
+node's space — and the conversion has to describe where the input field renders **when the morph
+starts**, not where the geometry is headed.
+
+`CALayer.convert` cannot answer that: both backends schedule the pass's scroll as an animation and
+leave the MODEL at the destination, so a plain convert returns end-of-scroll geometry and the bubble
+starts a whole scroll's worth away from the input field. `convertAnimatingSourceRectFromWindow`
+therefore corrects each parent→child step by that step's pending rendered-minus-model translation. It
+reads the mechanism off the layers rather than asking the list, because the two backends move content
+in different ways and a row can be moving under its own track while the viewport moves too:
+
+| | carries the travel in | model holds |
+|---|---|---|
+| `ListViewImpl` | additive `sublayerTransform` on its own layer (`ListView.swift:3775`) | the destination |
+| CoreList | additive `bounds.origin.y` on `contentHost`, additive `position` per row (`CoreAnimationCompiler.keyPath(for:)`) | the destination |
+
+Only the first of those was handled, so under this backend the morph started ~37pt below the input
+field on a one-line message. That reads as a *fixed* offset however tall the message is, which is what
+makes it look like a constant rather than a scroll: the pass's travel is `newItemHeight −
+inputPanelShrink`, and every extra line of text grows both terms by the same amount.
+
+Two CoreList specifics the correction has to respect, both learned the hard way:
+
+- **`presentation()` is not the answer.** CoreList rebases its container with a model write and no
+  animation in the same turn; that write renders immediately, so its presentation layer is stale by
+  exactly the rebase. Only a property that is *actually animating* may be read as displaced — which
+  is why the scan is keyed on the animation rather than on a model-vs-presented difference.
+- **A CoreList track is already partway through when a transaction completion runs.** Every track in a
+  pass is stamped with the time that pass BEGAN (`ListAnimationController.now()`), which is
+  milliseconds in the past by then, so it renders past its start value on its very first frame.
+  The correction therefore evaluates each animation's curve at the current time instead of taking its
+  `fromValue`; a `ListViewImpl` animation has `beginTime == 0` and evaluates to exactly its start
+  value, so that path is unchanged to the last bit.
+
+**Also suppressed: the entering row's fade.** CoreList gives every new row an opacity track on its
+**host view** (`ListAnimationController.insert`), which would cross-fade the bubble a second time
+while the morph is already carrying it. The chat's own suppression cannot reach it —
+`ChatMessageItemView.cancelInsertionAnimations()` walks the item node's *subnodes*, and the host is a
+superview — and removing the CA animation behind the controller's back would leave `ListAnimationModel`
+still believing it owns a fade. So the backend states it up front instead, passing
+`animatesInsertions: false` whenever the pass carries `.RequestItemInsertionAnimations`. That is the
+option `ListViewImpl` reads as "hand the insertion animation to the node", which the morph then
+cancels; CoreList has no node-animation step, so the same statement lands as "do not fade".
+
+The flag sits next to `isFullReplaceCarousel` on the same call and says the same kind of thing: the
+arrival is real, but something outside the list is already staging it. It is **pass-level**, and it
+must be forwarded through `applyChanges`'s re-entrancy deferral — a send pass landing inside another
+pass is re-dispatched through the scheduler with its arguments listed explicitly, and would otherwise
+regain its fade intermittently, only under load. `InsertionFadeSuppressionTests` pins all three
+cases, the deferral included.
+
+Under reduce-motion or with an ad in view the flag is still set but no morph runs
+(`ChatControllerNode.swift:5464`), so the row simply appears rather than animating in — accepted, see
+`docs/superpowers/specs/2026-08-04-corelist-insertion-fade-design.md`.
+
+Related: `isStrictlyScrolledToPinToEdgeItem()` returning `false` (see "Scroll to item") is what routes
+every send here down the `scrollToItem` path in the first place — `ListViewImpl` at the bottom of a
+chat takes the pin-to-edge path instead and never scrolls.
+
 ## Deferred items / known limitations
 
 These are accepted for the PoC and are the follow-ups before the CoreList backend could be a real

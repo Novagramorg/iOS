@@ -732,6 +732,21 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // `pinsLoadedTop`, so the newest message would stop tracking the inset edge — the one case that
         // must keep working.
         let compensatesInsetChange = !self.isTracking
+
+        // `.RequestItemInsertionAnimations` means the LIST must not animate these arrivals: on
+        // ListViewImpl it hands the insertion animation to the node
+        // (Display/Source/ListView.swift:2867-2870 → `forceAnimateInsertion`), and the chat's send
+        // morph then cancels that node animation. CoreList has no node-animation step — its arrival
+        // animation is the entering row's own opacity track, on the host view — so the same
+        // statement lands as "do not fade". Without it the bubble is cross-faded twice: once by the
+        // morph carrying it out of the input field, once by the list underneath.
+        //
+        // The chat sets this flag on exactly one path, the fast send
+        // (Chat/ChatControllerLoadDisplayNode.swift:938), and drops it under `disableAnimations`
+        // (ChatHistoryListNode.swift:2090, :2539) — where the pass is immediate and fades nothing
+        // anyway, so the default is the right answer there.
+        let animatesInsertions = !options.contains(.RequestItemInsertionAnimations)
+
         if structurallyChanged || sizeChanged || scrollTo != nil || additionalScrollDistance != 0.0 {
             self.coreList.applyChanges(
                 items: (structurallyChanged || sideInsetsChanged) ? self.entries : nil,
@@ -742,6 +757,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
                 additionalScrollDistance: additionalScrollDistance,
                 anchorMode: stationaryItemRange == nil ? .automatic : .preserveVisibleContent,
                 compensatesInsetChange: compensatesInsetChange,
+                animatesInsertions: animatesInsertions,
                 transition: transition
             )
         }
