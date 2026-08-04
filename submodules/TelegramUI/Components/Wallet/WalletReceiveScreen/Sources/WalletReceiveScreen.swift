@@ -646,7 +646,7 @@ private final class WalletReceiveAddressGridComponent: Component {
     }
 }
 
-private final class WalletReceiveSheetContent: CombinedComponent {
+private final class WalletReceiveSheetContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
@@ -682,28 +682,42 @@ private final class WalletReceiveSheetContent: CombinedComponent {
         return true
     }
 
-    final class State: ComponentState {
-        private let animateOut: ActionSlot<Action<Void>>
-        private let getController: () -> ViewController?
+    final class View: UIView {
+        private let background = ComponentView<Empty>()
+        private let closeButton = ComponentView<Empty>()
+        private let addressRing = ComponentView<Empty>()
+        private let cardView = UIView()
+        private let cardBackground = ComponentView<Empty>()
+        private let qrCode = ComponentView<Empty>()
+        private let addressGrid = ComponentView<Empty>()
+        private let copiedStatus = ComponentView<Empty>()
+        private let copyButton = ComponentView<Empty>()
+        private let explanation = ComponentView<Empty>()
+        private let buyButton = ComponentView<Empty>()
+
+        private var component: WalletReceiveSheetContent?
+        private weak var state: EmptyComponentState?
         private let hapticFeedback = HapticFeedback()
-        fileprivate var displaysAddress = false
+        private var displaysAddress = false
+        private var appliedDisplaysAddress: Bool?
 
-        init(
-            animateOut: ActionSlot<Action<Void>>,
-            getController: @escaping () -> ViewController?
-        ) {
-            self.animateOut = animateOut
-            self.getController = getController
+        override init(frame: CGRect) {
+            super.init(frame: frame)
 
-            super.init()
+            self.cardView.clipsToBounds = true
         }
 
-        func dismiss(animated: Bool) {
-            guard let controller = self.getController() as? WalletReceiveScreen else {
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func dismiss(animated: Bool) {
+            guard let component = self.component,
+                  let controller = component.getController() as? WalletReceiveScreen else {
                 return
             }
             if animated {
-                self.animateOut.invoke(Action { [weak controller] _ in
+                component.animateOut.invoke(Action { [weak controller] _ in
                     controller?.dismiss(completion: nil)
                 })
             } else {
@@ -711,46 +725,39 @@ private final class WalletReceiveSheetContent: CombinedComponent {
             }
         }
 
-        func copyAddress(_ address: String) {
-            UIPasteboard.general.string = address
+        private func copyAddress() {
+            guard let component = self.component else {
+                return
+            }
+            UIPasteboard.general.string = component.address
             self.hapticFeedback.tap()
             if !self.displaysAddress {
                 self.displaysAddress = true
-                self.updated(transition: ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)))
+                self.state?.updated(transition: .immediate)
             }
         }
 
-        func showQrCode() {
+        private func showQrCode() {
             guard self.displaysAddress else {
                 return
             }
             self.displaysAddress = false
-            self.updated(transition: ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut)))
+            self.state?.updated(transition: .immediate)
         }
-    }
 
-    func makeState() -> State {
-        return State(animateOut: self.animateOut, getController: self.getController)
-    }
+        func update(
+            component: WalletReceiveSheetContent,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            self.component = component
+            self.state = state
 
-    static var body: Body {
-        let background = Child(RoundedRectangle.self)
-        let closeButton = Child(GlassBarButtonComponent.self)
-        let addressRing = Child(WalletReceiveAddressRingComponent.self)
-        let qrCardBackground = Child(RoundedRectangle.self)
-        let qrCode = Child(WalletReceiveQrComponent.self)
-        let addressGrid = Child(WalletReceiveAddressGridComponent.self)
-        let copiedStatus = Child(HStack<Empty>.self)
-        let copyButton = Child(ButtonComponent.self)
-        let explanation = Child(BalancedTextComponent.self)
-        let buyButton = Child(ButtonComponent.self)
+            let environment = environment[EnvironmentType.self].value
 
-        return { context in
-            let component = context.component
-            let state = context.state
-            let environment = context.environment[EnvironmentType.self].value
-
-            let availableWidth = context.availableSize.width
+            let availableWidth = availableSize.width
             let horizontalInset: CGFloat = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             let widthLimitedCardWidth = max(1.0, availableWidth - 104.0)
             let heightLimitedCardWidth = max(1.0, component.containerHeight - 338.0)
@@ -784,31 +791,33 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                 height: ringSize.height
             )
 
-            let addressRing = addressRing.update(
-                component: WalletReceiveAddressRingComponent(
+            let addressRingSize = self.addressRing.update(
+                transition: transition,
+                component: AnyComponent(WalletReceiveAddressRingComponent(
                     address: component.address,
                     color: UIColor(rgb: 0x0052b3).withAlphaComponent(0.48),
                     cardSize: cardFrame.size,
                     cardCornerRadius: cardCornerRadius,
                     pathOffset: ringPathOffset
-                ),
-                availableSize: ringSize,
-                transition: context.transition
+                )),
+                environment: {},
+                containerSize: ringSize
             )
 
-            let qrCardBackground = qrCardBackground.update(
-                component: RoundedRectangle(
+            let cardBackgroundSize = self.cardBackground.update(
+                transition: transition,
+                component: AnyComponent(RoundedRectangle(
                     color: .white,
                     cornerRadius: cardCornerRadius,
                     size: cardFrame.size
-                ),
-                availableSize: cardFrame.size,
-                transition: context.transition
+                )),
+                environment: {},
+                containerSize: cardFrame.size
             )
 
             let copyButtonContent: AnyComponentWithIdentity<Empty>
             let copyButtonAction: () -> Void
-            if state.displaysAddress {
+            if self.displaysAddress {
                 //TODO:localize
                 let showQrTitle = "Show my QR"
                 copyButtonContent = AnyComponentWithIdentity(
@@ -819,8 +828,8 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                         color: UIColor(rgb: 0x087cff)
                     ))
                 )
-                copyButtonAction = { [weak state] in
-                    state?.showQrCode()
+                copyButtonAction = { [weak self] in
+                    self?.showQrCode()
                 }
             } else {
                 //TODO:localize
@@ -845,32 +854,14 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                         )
                     ], spacing: 7.0))
                 )
-                copyButtonAction = { [weak state] in
-                    state?.copyAddress(component.address)
+                copyButtonAction = { [weak self] in
+                    self?.copyAddress()
                 }
             }
-            let copyButton = copyButton.update(
-                component: ButtonComponent(
-                    background: ButtonComponent.Background(
-                        style: .glass,
-                        color: UIColor(rgb: 0x087cff, alpha: 0.1),
-                        foreground: UIColor(rgb: 0x087cff),
-                        pressedColor: UIColor(rgb: 0xc8e4ff),
-                        cornerRadius: copyButtonHeight / 2.0
-                    ),
-                    content: copyButtonContent,
-                    contentInsets: UIEdgeInsets(top: 0.0, left: 14.0, bottom: 0.0, right: 14.0),
-                    fitToContentWidth: true,
-                    isEnabled: true,
-                    displaysProgress: false,
-                    action: copyButtonAction
-                ),
-                availableSize: CGSize(width: max(1.0, cardWidth - 32.0), height: copyButtonHeight),
-                transition: context.transition
-            )
 
-            let closeButton = closeButton.update(
-                component: GlassBarButtonComponent(
+            let closeButtonSize = self.closeButton.update(
+                transition: .immediate,
+                component: AnyComponent(GlassBarButtonComponent(
                     size: CGSize(width: 44.0, height: 44.0),
                     backgroundColor: UIColor(rgb: 0x1883fc),
                     isDark: false,
@@ -881,18 +872,19 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                             tintColor: .white
                         )
                     )),
-                    action: { [weak state] _ in
-                        state?.dismiss(animated: true)
+                    action: { [weak self] _ in
+                        self?.dismiss(animated: true)
                     }
-                ),
-                availableSize: CGSize(width: 44.0, height: 44.0),
-                transition: .immediate
+                )),
+                environment: {},
+                containerSize: CGSize(width: 44.0, height: 44.0)
             )
 
             //TODO:localize
             let explanationText = "Use to receive GRAM on\nThe Open Network (TON) only."
-            let explanation = explanation.update(
-                component: BalancedTextComponent(
+            let explanationSize = self.explanation.update(
+                transition: .immediate,
+                component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
                         string: explanationText,
                         font: Font.regular(15.0),
@@ -901,12 +893,12 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 2,
                     lineSpacing: 0.2
-                ),
-                availableSize: CGSize(
+                )),
+                environment: {},
+                containerSize: CGSize(
                     width: max(1.0, availableWidth - horizontalInset * 2.0),
                     height: 100.0
-                ),
-                transition: .immediate
+                )
             )
             let explanationTop = ringFrame.maxY + (cardWidth < 230.0 ? 12.0 : 20.0)
 
@@ -926,8 +918,9 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                     ))
                 )
             ], spacing: 10.0)
-            let buyButton = buyButton.update(
-                component: ButtonComponent(
+            let buyButtonSize = self.buyButton.update(
+                transition: .immediate,
+                component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
                         style: .legacy,
                         color: .white,
@@ -940,15 +933,16 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                     displaysProgress: false,
                     action: {
                     }
-                ),
-                availableSize: CGSize(width: max(1.0, availableWidth - horizontalInset * 2.0), height: 52.0),
-                transition: .immediate
+                )),
+                environment: {},
+                containerSize: CGSize(width: max(1.0, availableWidth - horizontalInset * 2.0), height: 52.0)
             )
-            let buyButtonTop = explanationTop + explanation.size.height + (cardWidth < 230.0 ? 18.0 : 30.0)
+            let buyButtonTop = explanationTop + explanationSize.height + (cardWidth < 230.0 ? 18.0 : 30.0)
 
-            let contentHeight = buyButtonTop + buyButton.size.height + max(22.0, environment.safeInsets.bottom + 12.0)
-            let background = background.update(
-                component: RoundedRectangle(
+            let contentHeight = buyButtonTop + buyButtonSize.height + max(22.0, environment.safeInsets.bottom + 12.0)
+            let backgroundSize = self.background.update(
+                transition: transition,
+                component: AnyComponent(RoundedRectangle(
                     colors: [
                         UIColor(rgb: 0x0079ff),
                         UIColor(rgb: 0x46b2ff),
@@ -958,96 +952,251 @@ private final class WalletReceiveSheetContent: CombinedComponent {
                     cornerRadius: 0.0,
                     gradientDirection: .vertical,
                     size: CGSize(width: availableWidth, height: contentHeight)
-                ),
-                availableSize: CGSize(width: availableWidth, height: contentHeight),
-                transition: context.transition
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableWidth, height: contentHeight)
             )
-            context.add(background.position(CGPoint(x: availableWidth / 2.0, y: contentHeight / 2.0)))
-            context.add(addressRing.position(ringFrame.center))
-            context.add(qrCardBackground.position(cardFrame.center))
-            if state.displaysAddress {
-                let addressGrid = addressGrid.update(
-                    component: WalletReceiveAddressGridComponent(address: component.address),
-                    availableSize: CGSize(width: max(1.0, cardWidth - 52.0), height: cardHeight),
-                    transition: context.transition
-                )
-                let addressGridTop = cardFrame.minY + (cardWidth < 230.0 ? 34.0 : 54.0)
-                context.add(addressGrid
-                    .position(CGPoint(
-                        x: cardFrame.midX,
-                        y: addressGridTop + addressGrid.size.height / 2.0
-                    ))
-                    .appear(.default(scale: false, alpha: true))
-                    .disappear(.default(scale: false, alpha: true))
-                )
+            if let backgroundView = self.background.view {
+                if backgroundView.superview !== self {
+                    backgroundView.removeFromSuperview()
+                    self.addSubview(backgroundView)
+                }
+                transition.setFrame(view: backgroundView, frame: CGRect(origin: .zero, size: backgroundSize))
+            }
+            if let addressRingView = self.addressRing.view {
+                if addressRingView.superview !== self {
+                    addressRingView.removeFromSuperview()
+                    self.addSubview(addressRingView)
+                }
+                transition.setFrame(view: addressRingView, frame: CGRect(origin: ringFrame.origin, size: addressRingSize))
+            }
 
-                //TODO:localize
-                let copiedTitle = "Address copied"
-                let copiedStatus = copiedStatus.update(
-                    component: HStack<Empty>([
-                        AnyComponentWithIdentity(
-                            id: "check",
-                            component: AnyComponent(Text(
-                                text: "✓",
-                                font: Font.semibold(14.0),
-                                color: UIColor(rgb: 0x087cff)
-                            ))
-                        ),
-                        AnyComponentWithIdentity(
-                            id: "title",
-                            component: AnyComponent(Text(
-                                text: copiedTitle,
-                                font: Font.semibold(14.0),
-                                color: UIColor(rgb: 0x087cff)
-                            ))
+            if self.cardView.superview !== self {
+                self.cardView.removeFromSuperview()
+                self.addSubview(self.cardView)
+            }
+            self.cardView.layer.cornerRadius = cardCornerRadius
+            transition.setFrame(view: self.cardView, frame: cardFrame)
+            if let cardBackgroundView = self.cardBackground.view {
+                if cardBackgroundView.superview == nil {
+                    self.cardView.addSubview(cardBackgroundView)
+                }
+                transition.setFrame(view: cardBackgroundView, frame: CGRect(origin: .zero, size: cardBackgroundSize))
+            }
+
+            let shouldAnimateCardFlip = self.appliedDisplaysAddress != nil
+                && self.appliedDisplaysAddress != self.displaysAddress
+            let cardContentTransition: ComponentTransition = shouldAnimateCardFlip ? .immediate : transition
+            let updateCardContents = {
+                if self.displaysAddress {
+                    let addressGridSize = self.addressGrid.update(
+                        transition: cardContentTransition,
+                        component: AnyComponent(WalletReceiveAddressGridComponent(address: component.address)),
+                        environment: {},
+                        containerSize: CGSize(width: max(1.0, cardWidth - 52.0), height: cardHeight)
+                    )
+                    let addressGridTop = cardWidth < 230.0 ? 34.0 : 54.0
+                    if let addressGridView = self.addressGrid.view {
+                        if addressGridView.superview == nil {
+                            self.cardView.addSubview(addressGridView)
+                        }
+                        cardContentTransition.setFrame(
+                            view: addressGridView,
+                            frame: CGRect(
+                                x: (cardWidth - addressGridSize.width) / 2.0,
+                                y: addressGridTop,
+                                width: addressGridSize.width,
+                                height: addressGridSize.height
+                            )
                         )
-                    ], spacing: 6.0),
-                    availableSize: CGSize(width: max(1.0, cardWidth - 40.0), height: 28.0),
-                    transition: context.transition
+                    }
+
+                    //TODO:localize
+                    let copiedTitle = "Address copied"
+                    let copiedStatusSize = self.copiedStatus.update(
+                        transition: .immediate,
+                        component: AnyComponent(HStack<Empty>([
+                            AnyComponentWithIdentity(
+                                id: "check",
+                                component: AnyComponent(Text(
+                                    text: "✓",
+                                    font: Font.semibold(14.0),
+                                    color: UIColor(rgb: 0x087cff)
+                                ))
+                            ),
+                            AnyComponentWithIdentity(
+                                id: "title",
+                                component: AnyComponent(Text(
+                                    text: copiedTitle,
+                                    font: Font.semibold(14.0),
+                                    color: UIColor(rgb: 0x087cff)
+                                ))
+                            )
+                        ], spacing: 6.0)),
+                        environment: {},
+                        containerSize: CGSize(width: max(1.0, cardWidth - 40.0), height: 28.0)
+                    )
+                    let copiedStatusTop = addressGridTop + addressGridSize.height + (cardWidth < 230.0 ? 8.0 : 16.0)
+                    if let copiedStatusView = self.copiedStatus.view {
+                        if copiedStatusView.superview == nil {
+                            self.cardView.addSubview(copiedStatusView)
+                        }
+                        cardContentTransition.setFrame(
+                            view: copiedStatusView,
+                            frame: CGRect(
+                                x: (cardWidth - copiedStatusSize.width) / 2.0,
+                                y: copiedStatusTop,
+                                width: copiedStatusSize.width,
+                                height: copiedStatusSize.height
+                            )
+                        )
+                    }
+                    self.qrCode.view?.removeFromSuperview()
+                } else {
+                    let qrCodeSize = self.qrCode.update(
+                        transition: cardContentTransition,
+                        component: AnyComponent(WalletReceiveQrComponent(address: component.address)),
+                        environment: {},
+                        containerSize: CGSize(width: qrSize, height: qrSize)
+                    )
+                    if let qrCodeView = self.qrCode.view {
+                        if qrCodeView.superview == nil {
+                            qrCodeView.removeFromSuperview()
+                            self.cardView.addSubview(qrCodeView)
+                        }
+                        cardContentTransition.setFrame(
+                            view: qrCodeView,
+                            frame: CGRect(
+                                x: (cardWidth - qrCodeSize.width) / 2.0,
+                                y: 10.0,
+                                width: qrCodeSize.width,
+                                height: qrCodeSize.height
+                            )
+                        )
+                    }
+                    self.addressGrid.view?.removeFromSuperview()
+                    self.copiedStatus.view?.removeFromSuperview()
+                }
+
+                let copyButtonSize = self.copyButton.update(
+                    transition: .immediate,
+                    component: AnyComponent(ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: UIColor(rgb: 0x087cff, alpha: 0.1),
+                            foreground: UIColor(rgb: 0x087cff),
+                            pressedColor: UIColor(rgb: 0xc8e4ff),
+                            cornerRadius: copyButtonHeight / 2.0
+                        ),
+                        content: copyButtonContent,
+                        restrictContentAnimations: true,
+                        contentInsets: UIEdgeInsets(top: 0.0, left: 14.0, bottom: 0.0, right: 14.0),
+                        fitToContentWidth: true,
+                        isEnabled: true,
+                        displaysProgress: false,
+                        action: copyButtonAction
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: max(1.0, cardWidth - 32.0), height: copyButtonHeight)
                 )
-                let copiedStatusTop = addressGridTop + addressGrid.size.height + (cardWidth < 230.0 ? 8.0 : 16.0)
-                context.add(copiedStatus
-                    .position(CGPoint(
-                        x: cardFrame.midX,
-                        y: copiedStatusTop + copiedStatus.size.height / 2.0
-                    ))
-                    .appear(.default(scale: false, alpha: true))
-                    .disappear(.default(scale: false, alpha: true))
+                if let copyButtonView = self.copyButton.view {
+                    if copyButtonView.superview == nil {
+                        copyButtonView.removeFromSuperview()
+                        self.cardView.addSubview(copyButtonView)
+                    }
+                    cardContentTransition.setFrame(
+                        view: copyButtonView,
+                        frame: CGRect(
+                            x: (cardWidth - copyButtonSize.width) / 2.0,
+                            y: cardHeight - 16.0 - copyButtonSize.height,
+                            width: copyButtonSize.width,
+                            height: copyButtonSize.height
+                        )
+                    )
+                    self.cardView.bringSubviewToFront(copyButtonView)
+                }
+            }
+
+            if shouldAnimateCardFlip {
+                UIView.transition(
+                    with: self.cardView,
+                    duration: 0.4,
+                    options: [.transitionFlipFromLeft, .curveEaseOut],
+                    animations: updateCardContents
                 )
             } else {
-                let qrCode = qrCode.update(
-                    component: WalletReceiveQrComponent(address: component.address),
-                    availableSize: CGSize(width: qrSize, height: qrSize),
-                    transition: context.transition
-                )
-                context.add(qrCode
-                    .position(CGPoint(
-                        x: cardFrame.midX,
-                        y: cardFrame.minY + 10.0 + qrCode.size.height / 2.0
-                    ))
-                    .appear(.default(scale: false, alpha: true))
-                    .disappear(.default(scale: false, alpha: true))
+                updateCardContents()
+            }
+            self.appliedDisplaysAddress = self.displaysAddress
+
+            if let explanationView = self.explanation.view {
+                if explanationView.superview !== self {
+                    explanationView.removeFromSuperview()
+                    self.addSubview(explanationView)
+                }
+                transition.setFrame(
+                    view: explanationView,
+                    frame: CGRect(
+                        x: (availableWidth - explanationSize.width) / 2.0,
+                        y: explanationTop,
+                        width: explanationSize.width,
+                        height: explanationSize.height
+                    )
                 )
             }
-            context.add(copyButton.position(CGPoint(
-                x: cardFrame.midX,
-                y: cardFrame.maxY - 16.0 - copyButton.size.height / 2.0
-            )))
-            context.add(explanation.position(CGPoint(
-                x: availableWidth / 2.0,
-                y: explanationTop + explanation.size.height / 2.0
-            )))
-            context.add(buyButton.position(CGPoint(
-                x: availableWidth / 2.0,
-                y: buyButtonTop + buyButton.size.height / 2.0
-            )))
-            context.add(closeButton.position(CGPoint(
-                x: 16.0 + closeButton.size.width / 2.0,
-                y: 16.0 + closeButton.size.height / 2.0
-            )))
+            if let buyButtonView = self.buyButton.view {
+                if buyButtonView.superview !== self {
+                    buyButtonView.removeFromSuperview()
+                    self.addSubview(buyButtonView)
+                }
+                transition.setFrame(
+                    view: buyButtonView,
+                    frame: CGRect(
+                        x: (availableWidth - buyButtonSize.width) / 2.0,
+                        y: buyButtonTop,
+                        width: buyButtonSize.width,
+                        height: buyButtonSize.height
+                    )
+                )
+            }
+            if let closeButtonView = self.closeButton.view {
+                if closeButtonView.superview !== self {
+                    closeButtonView.removeFromSuperview()
+                    self.addSubview(closeButtonView)
+                }
+                transition.setFrame(
+                    view: closeButtonView,
+                    frame: CGRect(
+                        x: 16.0,
+                        y: 16.0,
+                        width: closeButtonSize.width,
+                        height: closeButtonSize.height
+                    )
+                )
+            }
 
             return CGSize(width: availableWidth, height: contentHeight)
         }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<EnvironmentType>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            state: state,
+            environment: environment,
+            transition: transition
+        )
     }
 }
 

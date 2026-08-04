@@ -1,0 +1,112 @@
+{
+  "source": "toncenter-v3",
+  "network": "testnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "seqno",
+      "method": "runGetMethod",
+      "args": {
+        "address": "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573",
+        "method": "seqno"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "url": "/api/v3/runGetMethod",
+          "status": 200,
+          "body": {
+            "gas_used": 769,
+            "exit_code": 0,
+            "stack": [
+              {
+                "type": "num",
+                "value": "0x1db1"
+              }
+            ]
+          }
+        }
+      ],
+      "mapped": {
+        "gasUsed": 769,
+        "stack": [
+          {
+            "type": "num",
+            "value": "0x1db1"
+          }
+        ],
+        "exitCode": 0
+      }
+    },
+    {
+      "label": "get-public-key",
+      "method": "runGetMethod",
+      "args": {
+        "address": "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573",
+        "method": "get_public_key"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "url": "/api/v3/runGetMethod",
+          "status": 200,
+          "body": {
+            "gas_used": 1021,
+            "exit_code": 0,
+            "stack": [
+              {
+                "type": "num",
+                "value": "0xa81d6ece0ff73c73c65a5445578e02912e1492672aa1ff45216661a2d636939b"
+              }
+            ]
+          }
+        }
+      ],
+      "mapped": {
+        "gasUsed": 1021,
+        "stack": [
+          {
+            "type": "num",
+            "value": "0xa81d6ece0ff73c73c65a5445578e02912e1492672aa1ff45216661a2d636939b"
+          }
+        ],
+        "exitCode": 0
+      }
+    },
+    {
+      "label": "nonexistent-method",
+      "method": "runGetMethod",
+      "args": {
+        "address": "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573",
+        "method": "definitely_not_a_method"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "url": "/api/v3/runGetMethod",
+          "status": 200,
+          "body": {
+            "gas_used": 670,
+            "exit_code": 11,
+            "stack": [
+              {
+                "type": "num",
+                "value": "0x11247"
+              }
+            ]
+          }
+        }
+      ],
+      "mapped": {
+        "gasUsed": 670,
+        "stack": [
+          {
+            "type": "num",
+            "value": "0x11247"
+          }
+        ],
+        "exitCode": 11
+      }
+    }
+  ]
+}

@@ -19,6 +19,7 @@ swift_library(
         "//submodules/ContextUI",
         "//submodules/Display",
         "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramStringFormatting",
         "//submodules/TextFormat",
@@ -27,7 +28,9 @@ swift_library(
         "//submodules/TelegramUI/Components/Gifts/TableComponent",
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/ShimmeringMask",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
+        "//submodules/TelegramUI/Components/Wallet/WalletCollectibleHeaderComponent",
+        "//submodules/TooltipUI",
         "//submodules/UndoUI",
     ],
     visibility = [

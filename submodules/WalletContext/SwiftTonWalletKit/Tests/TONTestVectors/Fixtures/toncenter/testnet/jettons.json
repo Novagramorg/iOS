@@ -1,0 +1,251 @@
+{
+  "source": "toncenter-v3",
+  "network": "testnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "by-owner",
+      "method": "jettonsByOwnerAddress",
+      "args": {
+        "ownerAddress": "0:07CB92CC48939C2B257052341FDA2574085F952DAE424BC8C9E1BACFEC182B3B",
+        "limit": 5
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/jetton/wallets?owner_address=0%3A07CB92CC48939C2B257052341FDA2574085F952DAE424BC8C9E1BACFEC182B3B&offset=0&limit=5",
+          "status": 200,
+          "body": {
+            "jetton_wallets": [
+              {
+                "address": "0:0000018DF410923C4A46BB31F7D66F99C099B806D44943F57C57BBE3E83600CF",
+                "balance": "101",
+                "owner": "0:07CB92CC48939C2B257052341FDA2574085F952DAE424BC8C9E1BACFEC182B3B",
+                "jetton": "0:4408958692A3C22D3BA0A881503CAFECE8D53E9DFCE42C6D26C5D8AEDA1742C7",
+                "last_transaction_lt": "71183738000001",
+                "code_hash": "WvubBfVKfUbxWQ9Dtk37irjmyoQ0dat6no1yEuB2Afs=",
+                "data_hash": "5WbWbJ5HcaEHRExgQJmmYKGCWiEmrt+JdFzhLGdJ9SI="
+              }
+            ],
+            "address_book": {
+              "0:0000018DF410923C4A46BB31F7D66F99C099B806D44943F57C57BBE3E83600CF": {
+                "user_friendly": "kQAAAAGN9BCSPEpGuzH31m-ZwJm4BtRJQ_V8V7vj6DYAz3G1",
+                "domain": null,
+                "interfaces": [
+                  "jetton_wallet"
+                ]
+              },
+              "0:07CB92CC48939C2B257052341FDA2574085F952DAE424BC8C9E1BACFEC182B3B": {
+                "user_friendly": "0QAHy5LMSJOcKyVwUjQf2iV0CF-VLa5CS8jJ4brP7BgrO6Jk",
+                "domain": null,
+                "interfaces": []
+              },
+              "0:4408958692A3C22D3BA0A881503CAFECE8D53E9DFCE42C6D26C5D8AEDA1742C7": {
+                "user_friendly": "kQBECJWGkqPCLTugqIFQPK_s6NU-nfzkLG0mxdiu2hdCx7z6",
+                "domain": null,
+                "interfaces": [
+                  "jetton_master"
+                ]
+              }
+            },
+            "metadata": {
+              "0:0000018DF410923C4A46BB31F7D66F99C099B806D44943F57C57BBE3E83600CF": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": true,
+                    "type": "jetton_wallets",
+                    "extra": {
+                      "balance": "101",
+                      "jetton": "0:4408958692A3C22D3BA0A881503CAFECE8D53E9DFCE42C6D26C5D8AEDA1742C7",
+                      "owner": "0:07CB92CC48939C2B257052341FDA2574085F952DAE424BC8C9E1BACFEC182B3B"
+                    }
+                  }
+                ]
+              },
+              "0:4408958692A3C22D3BA0A881503CAFECE8D53E9DFCE42C6D26C5D8AEDA1742C7": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": true,
+                    "type": "jetton_masters",
+                    "name": "Public Jetton With Split Depffff yellow edition",
+                    "symbol": "PUB4",
+                    "description": "Everyone has 100 PUB4 from start!",
+                    "image": "https://pngimg.com/uploads/dollar_sign/dollar_sign_PNG28.png",
+                    "is_nsfw": false,
+                    "is_scam": false,
+                    "extra": {
+                      "_image_big": "https://proxy-testnet.toncenter.com/-sAmxKX_qxOP_2DgsuPT_RnnC7Xj_SGCG6UL8iUe-3I/pr:big/bG9jYWw6Ly8vN2UvNGYvN2U0Zjk4OGViMzNkY2Y3YzgwMmQ1YTkwYjU4ZDAwN2E5ZmQ2MmE4ODZmOGYxMGFjYzFkODE4YjkxYzJmZjQyOA",
+                      "_image_medium": "https://proxy-testnet.toncenter.com/g2ga9BTAvpr8TXnHDGF7ayUos9JcC3qWLwDsIebxd9I/pr:medium/bG9jYWw6Ly8vN2UvNGYvN2U0Zjk4OGViMzNkY2Y3YzgwMmQ1YTkwYjU4ZDAwN2E5ZmQ2MmE4ODZmOGYxMGFjYzFkODE4YjkxYzJmZjQyOA",
+                      "_image_small": "https://proxy-testnet.toncenter.com/gDlMAwvkAkpkrxUDWWubh30jhwCVLOnFmFcMbY1wjfw/pr:small/bG9jYWw6Ly8vN2UvNGYvN2U0Zjk4OGViMzNkY2Y3YzgwMmQ1YTkwYjU4ZDAwN2E5ZmQ2MmE4ODZmOGYxMGFjYzFkODE4YjkxYzJmZjQyOA",
+                      "decimals": 0,
+                      "uri": "https://gist.githubusercontent.com/1IxI1/a49277da081f6e27811b6d5593730286/raw/12b434408399a1500f2f81a668f95a484b4b2f1b/pub4.json"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "mapped": {
+        "jettons": [
+          {
+            "address": "EQBECJWGkqPCLTugqIFQPK_s6NU-nfzkLG0mxdiu2hdCxwdw",
+            "walletAddress": "EQAAAAGN9BCSPEpGuzH31m-ZwJm4BtRJQ_V8V7vj6DYAz8o_",
+            "balance": "101",
+            "info": {
+              "name": "Public Jetton With Split Depffff yellow edition",
+              "description": "Everyone has 100 PUB4 from start!",
+              "image": {
+                "url": "https://pngimg.com/uploads/dollar_sign/dollar_sign_PNG28.png"
+              },
+              "symbol": "PUB4"
+            },
+            "decimalsNumber": 0,
+            "prices": [
+              {
+                "value": "0",
+                "currency": "USD"
+              }
+            ],
+            "isVerified": false
+          }
+        ],
+        "addressBook": {}
+      }
+    },
+    {
+      "label": "masters-by-address",
+      "method": "jettonsByAddress",
+      "args": {
+        "address": "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE",
+        "limit": 5
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/jetton/masters?address=0%3A00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE&limit=5",
+          "status": 200,
+          "body": {
+            "jetton_masters": [
+              {
+                "address": "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE",
+                "total_supply": "1000000000000000",
+                "mintable": true,
+                "admin_address": "0:FEFAB8344BE7EAAD46D849865161E56726C45B0BB08D71559843B31D3956122E",
+                "jetton_content": {
+                  "decimals": "6",
+                  "description": "Mock Tether Token",
+                  "image": "https://tether.to/images/logoCircle.png",
+                  "name": "Mock USDT",
+                  "symbol": "USDT"
+                },
+                "jetton_wallet_code_hash": "LDEF3boSJOGKwHsr9Edm8hpdTVhLR+k2DCosawJCCiI=",
+                "code_hash": "uaOXnaQcalsNIUTEdyEDnLANEZSLcbQP9UTKptUvabU=",
+                "data_hash": "yWq2un7IEdRg19Ek//iF0/f3EW+nuhp283axUiek0ok=",
+                "last_transaction_lt": "43494940000001"
+              }
+            ],
+            "address_book": {
+              "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE": {
+                "user_friendly": "kQAAAFyXzWPFnbqcy4S92Yywd_E30BAYriHBGe2t0SI9_hoJ",
+                "domain": null,
+                "interfaces": []
+              },
+              "0:FEFAB8344BE7EAAD46D849865161E56726C45B0BB08D71559843B31D3956122E": {
+                "user_friendly": "0QD--rg0S-fqrUbYSYZRYeVnJsRbC7CNcVWYQ7MdOVYSLiz8",
+                "domain": null,
+                "interfaces": [
+                  "wallet_v5r1"
+                ]
+              }
+            },
+            "metadata": {
+              "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE": {
+                "is_indexed": true,
+                "token_info": [
+                  {
+                    "valid": true,
+                    "type": "jetton_masters",
+                    "name": "Mock USDT",
+                    "symbol": "USDT",
+                    "description": "Mock Tether Token",
+                    "image": "https://tether.to/images/logoCircle.png",
+                    "is_nsfw": false,
+                    "is_scam": false,
+                    "extra": {
+                      "_image_big": "https://proxy-testnet.toncenter.com/G4d3al_8vkuGmD-shRtLFrwB-QzbSis6M6pE1W2MtX8/pr:big/bG9jYWw6Ly8vMTEvZjIvMTFmMjE1ZTc0YWQxMGZkYTI5MmVlMGQwMDhlNzhjZGY0MTViYWVlODBhMDg5ZjUxZjdmYWFmZTliZTBmMjI4NA",
+                      "_image_medium": "https://proxy-testnet.toncenter.com/M3ZBExPr_p0WnJcaTZfmrOfapQYh2gSDo2R0ApaGjCg/pr:medium/bG9jYWw6Ly8vMTEvZjIvMTFmMjE1ZTc0YWQxMGZkYTI5MmVlMGQwMDhlNzhjZGY0MTViYWVlODBhMDg5ZjUxZjdmYWFmZTliZTBmMjI4NA",
+                      "_image_small": "https://proxy-testnet.toncenter.com/Yi4VK9pVyc0PUOP2EJSmryXDrC8f_JxXZGEIIf3PLXs/pr:small/bG9jYWw6Ly8vMTEvZjIvMTFmMjE1ZTc0YWQxMGZkYTI5MmVlMGQwMDhlNzhjZGY0MTViYWVlODBhMDg5ZjUxZjdmYWFmZTliZTBmMjI4NA",
+                      "decimals": "6"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "mapped": {
+        "jetton_masters": [
+          {
+            "address": "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE",
+            "total_supply": "1000000000000000",
+            "mintable": true,
+            "admin_address": "0:FEFAB8344BE7EAAD46D849865161E56726C45B0BB08D71559843B31D3956122E",
+            "jetton_content": {
+              "decimals": "6",
+              "description": "Mock Tether Token",
+              "image": "https://tether.to/images/logoCircle.png",
+              "name": "Mock USDT",
+              "symbol": "USDT"
+            },
+            "jetton_wallet_code_hash": "LDEF3boSJOGKwHsr9Edm8hpdTVhLR+k2DCosawJCCiI=",
+            "code_hash": "uaOXnaQcalsNIUTEdyEDnLANEZSLcbQP9UTKptUvabU=",
+            "data_hash": "yWq2un7IEdRg19Ek//iF0/f3EW+nuhp283axUiek0ok=",
+            "last_transaction_lt": "43494940000001"
+          }
+        ],
+        "address_book": {
+          "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE": {
+            "user_friendly": "kQAAAFyXzWPFnbqcy4S92Yywd_E30BAYriHBGe2t0SI9_hoJ",
+            "domain": null,
+            "interfaces": []
+          },
+          "0:FEFAB8344BE7EAAD46D849865161E56726C45B0BB08D71559843B31D3956122E": {
+            "user_friendly": "0QD--rg0S-fqrUbYSYZRYeVnJsRbC7CNcVWYQ7MdOVYSLiz8",
+            "domain": null,
+            "interfaces": [
+              "wallet_v5r1"
+            ]
+          }
+        },
+        "metadata": {
+          "0:00005C97CD63C59DBA9CCB84BDD98CB077F137D01018AE21C119EDADD1223DFE": {
+            "is_indexed": true,
+            "token_info": [
+              {
+                "valid": true,
+                "type": "jetton_masters",
+                "name": "Mock USDT",
+                "symbol": "USDT",
+                "description": "Mock Tether Token",
+                "image": "https://tether.to/images/logoCircle.png",
+                "is_nsfw": false,
+                "is_scam": false,
+                "extra": {
+                  "_image_big": "https://proxy-testnet.toncenter.com/G4d3al_8vkuGmD-shRtLFrwB-QzbSis6M6pE1W2MtX8/pr:big/bG9jYWw6Ly8vMTEvZjIvMTFmMjE1ZTc0YWQxMGZkYTI5MmVlMGQwMDhlNzhjZGY0MTViYWVlODBhMDg5ZjUxZjdmYWFmZTliZTBmMjI4NA",
+                  "_image_medium": "https://proxy-testnet.toncenter.com/M3ZBExPr_p0WnJcaTZfmrOfapQYh2gSDo2R0ApaGjCg/pr:medium/bG9jYWw6Ly8vMTEvZjIvMTFmMjE1ZTc0YWQxMGZkYTI5MmVlMGQwMDhlNzhjZGY0MTViYWVlODBhMDg5ZjUxZjdmYWFmZTliZTBmMjI4NA",
+                  "_image_small": "https://proxy-testnet.toncenter.com/Yi4VK9pVyc0PUOP2EJSmryXDrC8f_JxXZGEIIf3PLXs/pr:small/bG9jYWw6Ly8vMTEvZjIvMTFmMjE1ZTc0YWQxMGZkYTI5MmVlMGQwMDhlNzhjZGY0MTViYWVlODBhMDg5ZjUxZjdmYWFmZTliZTBmMjI4NA",
+                  "decimals": "6"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

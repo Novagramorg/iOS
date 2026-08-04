@@ -23,8 +23,274 @@ import MultilineTextComponent
 import HorizontalTabsComponent
 import GlassBackgroundComponent
 import WalletSendScreen
+import WalletPeerSelectionScreen
+import TooltipUI
 
-private let walletIncomingDustThreshold: Int64 = 10_000_000
+private let walletSectionOverscan: CGFloat = 100.0
+private let walletTransactionItemHeight: CGFloat = 79.0
+private let walletCollectibleTransactionItemHeight: CGFloat = 132.0
+private let walletCollectibleItemHeight: CGFloat = 58.0
+
+private struct WalletItemsLayout {
+    let itemOffsets: [CGFloat]
+
+    var itemCount: Int {
+        return self.itemOffsets.count - 1
+    }
+
+    var contentHeight: CGFloat {
+        return self.itemOffsets.last ?? 0.0
+    }
+
+    init(itemHeights: [CGFloat]) {
+        var itemOffsets: [CGFloat] = [0.0]
+        itemOffsets.reserveCapacity(itemHeights.count + 1)
+        for itemHeight in itemHeights {
+            itemOffsets.append(itemOffsets[itemOffsets.count - 1] + itemHeight)
+        }
+        self.itemOffsets = itemOffsets
+    }
+
+    func itemOffset(at index: Int) -> CGFloat {
+        return self.itemOffsets[index]
+    }
+
+    func visibleItems(for rect: CGRect) -> Range<Int>? {
+        guard self.itemCount != 0, rect.maxY > 0.0, rect.minY < self.contentHeight else {
+            return nil
+        }
+
+        let minY = max(0.0, rect.minY)
+        let maxY = min(self.contentHeight, rect.maxY)
+
+        var lowerBound = 0
+        var upperBound = self.itemCount
+        while lowerBound < upperBound {
+            let index = (lowerBound + upperBound) / 2
+            if self.itemOffsets[index + 1] <= minY {
+                lowerBound = index + 1
+            } else {
+                upperBound = index
+            }
+        }
+        let minIndex = lowerBound
+
+        lowerBound = minIndex
+        upperBound = self.itemCount
+        while lowerBound < upperBound {
+            let index = (lowerBound + upperBound) / 2
+            if self.itemOffsets[index] < maxY {
+                lowerBound = index + 1
+            } else {
+                upperBound = index
+            }
+        }
+        let maxIndex = lowerBound
+
+        if minIndex < maxIndex {
+            return minIndex ..< maxIndex
+        } else {
+            return nil
+        }
+    }
+}
+
+private final class LazySectionView: UIView {
+    struct Item {
+        let id: AnyHashable
+        let height: CGFloat
+        let component: () -> AnyComponent<Empty>
+    }
+
+    private enum PlaceholderId: Hashable {
+        case top
+        case bottom
+    }
+
+    private let contentView: ListSectionContentView
+    private let topPlaceholderView: ListSectionContentView.ItemView
+    private let bottomPlaceholderView: ListSectionContentView.ItemView
+    private var footer: ComponentView<Empty>?
+
+    private var items: [Item] = []
+    private var itemLayout = WalletItemsLayout(itemHeights: [])
+    private var configuration: ListSectionContentView.Configuration?
+    private weak var state: EmptyComponentState?
+    private var width: CGFloat = 0.0
+    private var currentVisibleRange: Range<Int>?
+
+    override init(frame: CGRect) {
+        self.contentView = ListSectionContentView(frame: CGRect())
+        self.topPlaceholderView = ListSectionContentView.ItemView()
+        self.bottomPlaceholderView = ListSectionContentView.ItemView()
+
+        super.init(frame: frame)
+
+        self.addSubview(self.contentView.externalContentBackgroundView)
+        self.addSubview(self.contentView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(
+        theme: PresentationTheme,
+        state: EmptyComponentState,
+        items: [Item],
+        footer footerComponent: AnyComponent<Empty>?,
+        width: CGFloat,
+        visibleBounds: CGRect,
+        transition: ComponentTransition
+    ) -> CGSize {
+        self.items = items
+        self.itemLayout = WalletItemsLayout(itemHeights: items.map(\.height))
+        self.configuration = ListSectionContentView.Configuration(
+            theme: theme,
+            style: .glass,
+            displaySeparators: true,
+            extendsItemHighlightToSection: false,
+            background: .all
+        )
+        self.state = state
+        self.width = width
+
+        self.updateVisibleBounds(visibleBounds, force: true, transition: transition)
+
+        var contentHeight = self.itemLayout.contentHeight
+        if let footerComponent {
+            let footer: ComponentView<Empty>
+            var footerTransition = transition
+            if let current = self.footer {
+                footer = current
+            } else {
+                footer = ComponentView()
+                self.footer = footer
+                footerTransition = footerTransition.withAnimation(.none)
+            }
+            footer.parentState = state
+            let footerSize = footer.update(
+                transition: footerTransition,
+                component: footerComponent,
+                environment: {},
+                containerSize: CGSize(width: max(0.0, width - 32.0), height: 1000.0)
+            )
+            if contentHeight != 0.0 {
+                contentHeight += 8.0 - UIScreenPixel
+            }
+            if let footerView = footer.view {
+                if footerView.superview == nil {
+                    self.addSubview(footerView)
+                }
+                footerTransition.setFrame(
+                    view: footerView,
+                    frame: CGRect(
+                        origin: CGPoint(x: 16.0, y: contentHeight),
+                        size: footerSize
+                    )
+                )
+            }
+            contentHeight += footerSize.height
+        } else if let footer = self.footer {
+            self.footer = nil
+            footer.view?.removeFromSuperview()
+        }
+
+        return CGSize(width: width, height: contentHeight)
+    }
+
+    func updateVisibleBounds(_ visibleBounds: CGRect, force: Bool = false, transition: ComponentTransition) {
+        guard let configuration = self.configuration, let state = self.state else {
+            return
+        }
+
+        let visibleRange = self.itemLayout.visibleItems(for: visibleBounds)
+        if !force && self.currentVisibleRange == visibleRange {
+            return
+        }
+        self.currentVisibleRange = visibleRange
+        var readyItems: [ListSectionContentView.ReadyItem] = []
+        if let visibleRange {
+            let topHeight = self.itemLayout.itemOffset(at: visibleRange.lowerBound)
+            if topHeight != 0.0 {
+                readyItems.append(ListSectionContentView.ReadyItem(
+                    id: AnyHashable(PlaceholderId.top),
+                    itemView: self.topPlaceholderView,
+                    size: CGSize(width: self.width, height: topHeight),
+                    transition: .immediate
+                ))
+            }
+
+            for index in visibleRange {
+                let item = self.items[index]
+                let itemView: ListSectionContentView.ItemView
+                var itemTransition = transition
+                if let current = self.contentView.itemViews[item.id] {
+                    itemView = current
+                } else {
+                    itemView = ListSectionContentView.ItemView()
+                    self.contentView.itemViews[item.id] = itemView
+                    itemView.contents.parentState = state
+                    itemTransition = .immediate
+                }
+
+                let itemSize = itemView.contents.update(
+                    transition: itemTransition,
+                    component: item.component(),
+                    environment: {},
+                    containerSize: CGSize(width: self.width, height: item.height)
+                )
+                assert(
+                    abs(itemSize.height - item.height) <= UIScreenPixel,
+                    "Unexpected wallet item height: expected \(item.height), got \(itemSize.height)"
+                )
+                readyItems.append(ListSectionContentView.ReadyItem(
+                    id: item.id,
+                    itemView: itemView,
+                    size: CGSize(width: self.width, height: item.height),
+                    transition: itemTransition
+                ))
+            }
+
+            let bottomHeight = self.itemLayout.contentHeight - self.itemLayout.itemOffset(at: visibleRange.upperBound)
+            if bottomHeight != 0.0 {
+                readyItems.append(ListSectionContentView.ReadyItem(
+                    id: AnyHashable(PlaceholderId.bottom),
+                    itemView: self.bottomPlaceholderView,
+                    size: CGSize(width: self.width, height: bottomHeight),
+                    transition: .immediate
+                ))
+            }
+        } else if self.itemLayout.contentHeight != 0.0 {
+            readyItems.append(ListSectionContentView.ReadyItem(
+                id: AnyHashable(PlaceholderId.top),
+                itemView: self.topPlaceholderView,
+                size: CGSize(width: self.width, height: self.itemLayout.contentHeight),
+                transition: .immediate
+            ))
+        }
+
+        let updateResult = self.contentView.update(
+            configuration: configuration,
+            width: self.width,
+            leftInset: 0.0,
+            readyItems: readyItems,
+            transition: transition
+        )
+        transition.setFrame(
+            view: self.contentView,
+            frame: CGRect(origin: CGPoint(), size: updateResult.size)
+        )
+    }
+
+    func clearVisibleItems() {
+        self.updateVisibleBounds(
+            CGRect(x: 0.0, y: self.itemLayout.contentHeight, width: self.width, height: 0.0),
+            force: true,
+            transition: .immediate
+        )
+    }
+}
 
 private final class WalletScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -67,8 +333,8 @@ private final class WalletScreenComponent: Component {
         private let sendButton = ComponentView<Empty>()
         private let transactionTabsBackgroundView = GlassBackgroundView()
         private let transactionTabs = ComponentView<Empty>()
-        private let transactionsSection = ComponentView<Empty>()
-        private let collectiblesSection = ComponentView<Empty>()
+        private let transactionsSection = LazySectionView()
+        private let collectiblesSection = LazySectionView()
         private let emptyTransactionsInfo = ComponentView<Empty>()
 
         private var component: WalletScreenComponent?
@@ -84,6 +350,8 @@ private final class WalletScreenComponent: Component {
         private var accountPeerDisposable: Disposable?
         private var isUpdating = false
         private var didRequestSetup = false
+        private var isGramTooltipPresentationPending = false
+        private var didPresentGramTooltip = false
         private var selectedSection: SelectedSection = .transactions
 
         override init(frame: CGRect) {
@@ -129,9 +397,49 @@ private final class WalletScreenComponent: Component {
                 return
             }
             self.updateScrolling(transition: .immediate)
+            self.updateVisibleSections(transition: .immediate)
             if scrollView.contentOffset.y + scrollView.bounds.height > scrollView.contentSize.height - 240.0 {
                 self.loadMoreItemsIfNeeded()
             }
+        }
+
+        private func visibleBounds(for sectionFrame: CGRect, viewportSize: CGSize) -> CGRect {
+            return CGRect(origin: self.scrollView.contentOffset, size: viewportSize)
+                .insetBy(dx: 0.0, dy: -walletSectionOverscan)
+                .offsetBy(dx: -sectionFrame.minX, dy: -sectionFrame.minY)
+        }
+
+        private func updateVisibleSections(transition: ComponentTransition) {
+            switch self.selectedSection {
+            case .transactions:
+                if self.transactionsSection.superview != nil {
+                    self.transactionsSection.updateVisibleBounds(
+                        self.visibleBounds(for: self.transactionsSection.frame, viewportSize: self.scrollView.bounds.size),
+                        transition: transition
+                    )
+                }
+            case .collectibles:
+                if self.collectiblesSection.superview != nil {
+                    self.collectiblesSection.updateVisibleBounds(
+                        self.visibleBounds(for: self.collectiblesSection.frame, viewportSize: self.scrollView.bounds.size),
+                        transition: transition
+                    )
+                }
+            }
+        }
+
+        private func hideSection(_ section: LazySectionView, transition: ComponentTransition) {
+            guard section.superview != nil else {
+                section.clearVisibleItems()
+                return
+            }
+            transition.setAlpha(view: section, alpha: 0.0, completion: { [weak section] _ in
+                guard let section, section.alpha == 0.0 else {
+                    return
+                }
+                section.removeFromSuperview()
+                section.clearVisibleItems()
+            })
         }
 
         private var walletInfo: WalletContext.WalletInfo? {
@@ -142,6 +450,52 @@ private final class WalletScreenComponent: Component {
                 return info
             }
             return nil
+        }
+
+        private func maybePresentGramTooltip(cardView: WalletCardComponent.View) {
+            guard !self.isGramTooltipPresentationPending,
+                  !self.didPresentGramTooltip,
+                  self.environment?.isVisible == true,
+                  self.walletInfo != nil,
+                  !cardView.gramIconFrame.isEmpty else {
+                return
+            }
+
+            self.isGramTooltipPresentationPending = true
+            Queue.mainQueue().after(0.0) { [weak self, weak cardView] in
+                guard let self else {
+                    return
+                }
+                self.isGramTooltipPresentationPending = false
+
+                guard !self.didPresentGramTooltip,
+                      self.environment?.isVisible == true,
+                      self.walletInfo != nil,
+                      let component = self.component,
+                      let cardView,
+                      cardView.window != nil,
+                      !cardView.gramIconFrame.isEmpty,
+                      let controller = self.environment?.controller() else {
+                    return
+                }
+
+                self.didPresentGramTooltip = true
+                let sourceFrame = cardView.convert(cardView.gramIconFrame, to: nil).offsetBy(dx: 0.0, dy: -4.0)
+                let tooltipScreen = TooltipScreen(
+                    account: component.context.account,
+                    sharedContext: component.context.sharedContext,
+                    text: .attributedString(text: NSAttributedString(string: "Gram — Digital currency for Telegram", font: Font.medium(11.0), textColor: .white)),
+                    style: .gradient(UIColor(rgb: 0x47bafe), UIColor(rgb: 0x44b5ff), -2.0),
+                    arrowStyle: .small,
+                    location: .point(sourceFrame, .bottom),
+                    displayDuration: .default,
+                    inset: 26.0,
+                    shouldDismissOnTouch: { _, _ in
+                        return .dismiss(consume: false)
+                    }
+                )
+                controller.present(tooltipScreen, in: .current)
+            }
         }
 
         private func routeToSetupIfNeeded() {
@@ -320,13 +674,29 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let scanner = QrCodeScanScreen(context: component.context, subject: .cryptoAddress)
-            scanner.completion = { [weak self] value in
-                guard let value else {
+            //TODO:localize
+            let scannerInfo = "Find QR that contains a wallet address\nor connect an app"
+            let scanner = QrCodeScanScreen(context: component.context, subject: .customValidated(
+                info: scannerInfo,
+                validate: { value in
+                    return WalletContext.isTonConnectUrl(value)
+                        || WalletContext.transferAddress(from: value) != nil
+                }
+            ))
+            scanner.completion = { [weak self, weak scanner] value in
+                guard let self, let value else {
                     return
                 }
-                Queue.mainQueue().after(0.25) { [weak self] in
-                    self?.openSend(address: value)
+                if WalletContext.isTonConnectUrl(value) {
+                    Queue.mainQueue().after(0.15) {
+                        scanner?.dismiss()
+                        component.walletContext.processTonConnectUrl(value)
+                    }
+                } else if let address = WalletContext.transferAddress(from: value) {
+                    Queue.mainQueue().after(0.15) {
+                        scanner?.dismiss()
+                        self.openSend(address: address)
+                    }
                 }
             }
             controller.push(scanner)
@@ -351,9 +721,18 @@ private final class WalletScreenComponent: Component {
                   self.walletInfo != nil else {
                 return
             }
-            let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address)
-            sendScreen.navigationPresentation = .modal
-            controller.push(sendScreen)
+            if let address {
+                let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address)
+                sendScreen.navigationPresentation = .modal
+                controller.push(sendScreen)
+            } else {
+                let peerSelectionScreen = WalletPeerSelectionScreen(
+                    context: component.context,
+                    walletContext: component.walletContext
+                )
+                peerSelectionScreen.navigationPresentation = .modal
+                controller.push(peerSelectionScreen)
+            }
         }
 
         private func openWalletInfo() {
@@ -380,7 +759,19 @@ private final class WalletScreenComponent: Component {
             }
             controller.push(component.context.sharedContext.makeWalletTransactionScreen(
                 context: component.context,
+                walletContext: component.walletContext,
                 mode: .transaction(transaction)
+            ))
+        }
+
+        private func openCollectible(_ collectible: WalletContext.Collectible) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.push(component.context.sharedContext.makeWalletCollectibleScreen(
+                context: component.context,
+                walletContext: component.walletContext,
+                collectible: collectible
             ))
         }
 
@@ -701,6 +1092,9 @@ private final class WalletScreenComponent: Component {
                         size: cardSize
                     )
                 )
+                if let cardView = cardView as? WalletCardComponent.View {
+                    self.maybePresentGramTooltip(cardView: cardView)
+                }
             }
 
             //TODO:localize
@@ -764,11 +1158,7 @@ private final class WalletScreenComponent: Component {
                         ))
                     ),
                     action: { [weak self] in
-                        #if DEBUG
-                        self?.openSend(address: "")
-                        #else
                         self?.openSend()
-                        #endif
                     }
                 )),
                 environment: {},
@@ -793,21 +1183,7 @@ private final class WalletScreenComponent: Component {
             let buttonsHeight = max(addFundsButtonSize.height, sendButtonSize.height)
             var contentHeight = buttonsOriginY + buttonsHeight
 
-            let transactions = (self.walletState?.transactions.items ?? []).filter { transaction in
-                switch transaction.direction {
-                case .incoming:
-                    switch transaction.currency {
-                    case .ton:
-                        return transaction.amount >= walletIncomingDustThreshold
-                    case .usdt:
-                        return true
-                    }
-                case .outgoing:
-                    return true
-                case .unknown:
-                    return false
-                }
-            }
+            let transactions = (self.walletState?.transactions.items ?? []).filter(\.isVisibleInWalletHistory)
             let collectibles = self.walletState?.collectibles.items ?? []
             if collectibles.isEmpty && self.selectedSection == .collectibles {
                 self.selectedSection = .transactions
@@ -829,85 +1205,79 @@ private final class WalletScreenComponent: Component {
             }
 
             if self.selectedSection == .transactions && !transactions.isEmpty {
-                if let collectiblesSectionView = self.collectiblesSection.view {
-                    collectiblesSectionView.removeFromSuperview()
-                }
-                var items: [AnyComponentWithIdentity<Empty>] = []
-                items.reserveCapacity(transactions.count)
-                for transaction in transactions {
-                    items.append(AnyComponentWithIdentity(
-                        id: transaction.id,
-                        component: AnyComponent(ListActionItemComponent(
-                            theme: environment.theme,
-                            style: .glass,
-                            title: AnyComponent(WalletTransactionItemComponent(
-                                context: component.context,
-                                theme: environment.theme,
-                                strings: environment.strings,
-                                dateTimeFormat: environment.dateTimeFormat,
-                                transaction: transaction
-                            )),
-                            contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),
-                            separatorInset: 62.0,
-                            icon: nil,
-                            accessory: nil,
-                            action: { [weak self] _ in
-                                self?.openTransaction(transaction)
-                            },
-                            highlighting: .default
-                        ))
-                    ))
-                }
-                
-                var wasVisible = true
-                if self.transactionsSection.view?.superview == nil {
-                    wasVisible = false
+                self.hideSection(self.collectiblesSection, transition: transition)
+
+                let itemContext = component.context
+                let itemTheme = environment.theme
+                let itemStrings = environment.strings
+                let itemDateTimeFormat = environment.dateTimeFormat
+                let items: [LazySectionView.Item] = transactions.map { transaction in
+                    return LazySectionView.Item(
+                        id: AnyHashable(transaction.id),
+                        height: transaction.collectible == nil ? walletTransactionItemHeight : walletCollectibleTransactionItemHeight,
+                        component: { [weak self] in
+                            return AnyComponent(ListActionItemComponent(
+                                theme: itemTheme,
+                                style: .glass,
+                                title: AnyComponent(WalletTransactionItemComponent(
+                                    context: itemContext,
+                                    theme: itemTheme,
+                                    strings: itemStrings,
+                                    dateTimeFormat: itemDateTimeFormat,
+                                    transaction: transaction
+                                )),
+                                contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),
+                                separatorInset: 62.0,
+                                icon: nil,
+                                accessory: nil,
+                                action: { [weak self] _ in
+                                    self?.openTransaction(transaction)
+                                },
+                                highlighting: .default
+                            ))
+                        }
+                    )
                 }
 
                 let transactionsOriginY = contentHeight + 12.0
-                self.transactionsSection.parentState = state
-                let transactionsSectionSize = self.transactionsSection.update(
-                    transition: wasVisible ? transition : .immediate,
-                    component: AnyComponent(ListSectionComponent(
-                        theme: environment.theme,
-                        style: .glass,
-                        header: nil,
-                        footer: AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(
-                                string: "Tap on a transaction to view details.",
-                                font: Font.regular(13.0),
-                                textColor: environment.theme.list.freeTextColor
-                            )),
-                            maximumNumberOfLines: 0
-                        )),
-                        items: items
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: cardWidth, height: 10000.0)
+                let transactionsFrame = CGRect(
+                    origin: CGPoint(x: environment.safeInsets.left + sideInset, y: transactionsOriginY),
+                    size: CGSize(width: cardWidth, height: 0.0)
                 )
-                if let transactionsSectionView = self.transactionsSection.view {
-                    if transactionsSectionView.superview == nil {
-                        self.scrollView.addSubview(transactionsSectionView)
-                    }
-                    if !wasVisible && !transition.animation.isImmediate {
-                        transactionsSectionView.layer.allowsGroupOpacity = true
-                        transition.animateAlpha(view: transactionsSectionView, from: 0.0, to: 1.0, completion: { _ in
-                            transactionsSectionView.layer.allowsGroupOpacity = false
-                        })
-                    }
-
-                    var transition = transition
-                    if !wasVisible {
-                        transition = .immediate
-                    }
-                    transition.setFrame(
-                        view: transactionsSectionView,
-                        frame: CGRect(
-                            origin: CGPoint(x: environment.safeInsets.left + sideInset, y: transactionsOriginY),
-                            size: transactionsSectionSize
-                        )
-                    )
+                let wasVisible = self.transactionsSection.superview != nil
+                let transactionsSectionSize = self.transactionsSection.update(
+                    theme: environment.theme,
+                    state: state,
+                    items: items,
+                    footer: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: "Tap on a transaction to view details.",
+                            font: Font.regular(13.0),
+                            textColor: environment.theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    width: cardWidth,
+                    visibleBounds: self.visibleBounds(for: transactionsFrame, viewportSize: availableSize),
+                    transition: wasVisible ? transition : .immediate
+                )
+                if !wasVisible {
+                    self.transactionsSection.alpha = 1.0
+                    self.scrollView.addSubview(self.transactionsSection)
                 }
+                if !wasVisible && !transition.animation.isImmediate {
+                    self.transactionsSection.layer.allowsGroupOpacity = true
+                    transition.animateAlpha(view: self.transactionsSection, from: 0.0, to: 1.0, completion: { [weak transactionsSection = self.transactionsSection] _ in
+                        transactionsSection?.layer.allowsGroupOpacity = false
+                    })
+                } else {
+                    transition.setAlpha(view: self.transactionsSection, alpha: 1.0)
+                }
+                let transactionsLayoutTransition: ComponentTransition = wasVisible ? transition : .immediate
+                transactionsLayoutTransition.setFrame(
+                    view: self.transactionsSection,
+                    frame: CGRect(origin: transactionsFrame.origin, size: transactionsSectionSize)
+                )
                 contentHeight = transactionsOriginY + transactionsSectionSize.height
                 if let emptyTransactionsInfoView = self.emptyTransactionsInfo.view, emptyTransactionsInfoView.superview != nil {
                     transition.setAlpha(view: emptyTransactionsInfoView, alpha: 0.0, completion: { [weak emptyTransactionsInfoView] _ in
@@ -917,78 +1287,71 @@ private final class WalletScreenComponent: Component {
                 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.blocksBackgroundColor)
             } else if self.selectedSection == .collectibles {
-                if let transactionsSectionView = self.transactionsSection.view {
-                    transactionsSectionView.removeFromSuperview()
-                }
+                self.hideSection(self.transactionsSection, transition: transition)
                 if let emptyTransactionsInfoView = self.emptyTransactionsInfo.view {
                     emptyTransactionsInfoView.removeFromSuperview()
                 }
 
-                var items: [AnyComponentWithIdentity<Empty>] = []
-                items.reserveCapacity(collectibles.count)
-                for collectible in collectibles {
-                    items.append(AnyComponentWithIdentity(
-                        id: collectible.address,
-                        component: AnyComponent(ListActionItemComponent(
-                            theme: environment.theme,
-                            style: .glass,
-                            title: AnyComponent(WalletCollectibleItemComponent(
-                                context: component.context,
-                                theme: environment.theme,
-                                strings: environment.strings,
-                                dateTimeFormat: environment.dateTimeFormat,
-                                collectible: collectible
-                            )),
-                            contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 9.0, right: 0.0),
-                            separatorInset: 60.0,
-                            icon: nil,
-                            accessory: nil,
-                            action: nil,
-                            highlighting: .disabled
-                        ))
-                    ))
-                }
-
-                var wasVisible = true
-                if self.collectiblesSection.view?.superview == nil {
-                    wasVisible = false
-                }
-                let collectiblesOriginY = contentHeight + 12.0
-                self.collectiblesSection.parentState = state
-                let collectiblesSectionSize = self.collectiblesSection.update(
-                    transition: wasVisible ? transition : .immediate,
-                    component: AnyComponent(ListSectionComponent(
-                        theme: environment.theme,
-                        style: .glass,
-                        header: nil,
-                        footer: nil,
-                        items: items
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: cardWidth, height: 10000.0)
-                )
-                if let collectiblesSectionView = self.collectiblesSection.view {
-                    if collectiblesSectionView.superview == nil {
-                        self.scrollView.addSubview(collectiblesSectionView)
-                    }
-                    if !wasVisible && !transition.animation.isImmediate {
-                        collectiblesSectionView.layer.allowsGroupOpacity = true
-                        transition.animateAlpha(view: collectiblesSectionView, from: 0.0, to: 1.0, completion: { _ in
-                            collectiblesSectionView.layer.allowsGroupOpacity = false
-                        })
-                    }
-                    var layoutTransition = transition
-                    if !wasVisible {
-                        layoutTransition = .immediate
-                    }
-                    layoutTransition.setFrame(
-                        view: collectiblesSectionView,
-                        frame: CGRect(
-                            origin: CGPoint(x: environment.safeInsets.left + sideInset, y: collectiblesOriginY),
-                            size: collectiblesSectionSize
-                        )
+                let itemContext = component.context
+                let itemTheme = environment.theme
+                let items: [LazySectionView.Item] = collectibles.map { collectible in
+                    return LazySectionView.Item(
+                        id: AnyHashable(collectible.address),
+                        height: walletCollectibleItemHeight,
+                        component: { [weak self] in
+                            return AnyComponent(ListActionItemComponent(
+                                theme: itemTheme,
+                                style: .glass,
+                                title: AnyComponent(WalletCollectibleItemComponent(
+                                    context: itemContext,
+                                    theme: itemTheme,
+                                    collectible: collectible
+                                )),
+                                contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 9.0, right: 0.0),
+                                separatorInset: 60.0,
+                                icon: nil,
+                                accessory: nil,
+                                action: { [weak self] _ in
+                                    self?.openCollectible(collectible)
+                                },
+                                highlighting: .default
+                            ))
+                        }
                     )
                 }
+
+                let collectiblesOriginY = contentHeight + 12.0
+                let collectiblesFrame = CGRect(
+                    origin: CGPoint(x: environment.safeInsets.left + sideInset, y: collectiblesOriginY),
+                    size: CGSize(width: cardWidth, height: 0.0)
+                )
+                let wasVisible = self.collectiblesSection.superview != nil
+                let collectiblesSectionSize = self.collectiblesSection.update(
+                    theme: environment.theme,
+                    state: state,
+                    items: items,
+                    footer: nil,
+                    width: cardWidth,
+                    visibleBounds: self.visibleBounds(for: collectiblesFrame, viewportSize: availableSize),
+                    transition: wasVisible ? transition : .immediate
+                )
+                if !wasVisible {
+                    self.collectiblesSection.alpha = 1.0
+                    self.scrollView.addSubview(self.collectiblesSection)
+                }
+                if !wasVisible && !transition.animation.isImmediate {
+                    self.collectiblesSection.layer.allowsGroupOpacity = true
+                    transition.animateAlpha(view: self.collectiblesSection, from: 0.0, to: 1.0, completion: { [weak collectiblesSection = self.collectiblesSection] _ in
+                        collectiblesSection?.layer.allowsGroupOpacity = false
+                    })
+                } else {
+                    transition.setAlpha(view: self.collectiblesSection, alpha: 1.0)
+                }
+                let collectiblesLayoutTransition: ComponentTransition = wasVisible ? transition : .immediate
+                collectiblesLayoutTransition.setFrame(
+                    view: self.collectiblesSection,
+                    frame: CGRect(origin: collectiblesFrame.origin, size: collectiblesSectionSize)
+                )
                 contentHeight = collectiblesOriginY + collectiblesSectionSize.height
 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.blocksBackgroundColor)
@@ -996,14 +1359,9 @@ private final class WalletScreenComponent: Component {
                 if collectibles.isEmpty && self.transactionTabsBackgroundView.superview != nil {
                     self.transactionTabsBackgroundView.removeFromSuperview()
                 }
-                if let collectiblesSectionView = self.collectiblesSection.view {
-                    collectiblesSectionView.removeFromSuperview()
-                }
-                if let transactionsSectionView = self.transactionsSection.view, transactionsSectionView.superview != nil {
-                    transition.setAlpha(view: transactionsSectionView, alpha: 0.0, completion: { [weak transactionsSectionView] _ in
-                        transactionsSectionView?.removeFromSuperview()
-                    })
-                }
+                self.collectiblesSection.removeFromSuperview()
+                self.collectiblesSection.clearVisibleItems()
+                self.hideSection(self.transactionsSection, transition: transition)
 
                 //TODO:localize
                 let instantTransfersTitle = "Send Money Instantly"
@@ -1120,6 +1478,7 @@ private final class WalletScreenComponent: Component {
             }
 
             self.updateScrolling(transition: transition)
+            self.updateVisibleSections(transition: .immediate)
 
             return availableSize
         }
@@ -1165,6 +1524,8 @@ public final class WalletScreen: ViewControllerComponentContainer {
         )
 
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
+        
+        self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
 
         self.scrollToTop = { [weak self] in
             guard let self, let componentView = self.node.hostView.componentView as? WalletScreenComponent.View else {

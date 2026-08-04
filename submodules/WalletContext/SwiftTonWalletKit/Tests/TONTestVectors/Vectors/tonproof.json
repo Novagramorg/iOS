@@ -1,0 +1,66 @@
+{
+  "source": "@ton/walletkit@1.1.0-beta.0",
+  "vectors": [
+    {
+      "label": "basic",
+      "workchain": 0,
+      "addressHash": "0x83dfd552e63729b472fcbcc8c45ebcc6691702558b68ec7527e1ba403a0f31a8",
+      "domain": {
+        "lengthBytes": 11,
+        "value": "example.com"
+      },
+      "payload": "test-payload",
+      "timestamp": 1700000000,
+      "messageHash": "4cc114cb52d4edfb2a886fa75358d745055b69078c058e4ecf325de52794199c",
+      "signature": "0xc2df3fc24a58ef696cf89ea11e8030b4dc974b9de0c09d501ce0b4636314d4baf11cce06c62131df7fc8abc8106d60357c57b62160f70010b634565a4d72e20e",
+      "derivedFrom": "reference-and-spec-agree",
+      "referenceThrows": false
+    },
+    {
+      "label": "masterchain",
+      "workchain": -1,
+      "addressHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "domain": {
+        "lengthBytes": 9,
+        "value": "ton.local"
+      },
+      "payload": "",
+      "timestamp": 0,
+      "messageHash": "ab82efd3bb5fd8132380e3b95ad71b61c241a9bf69a9f85bbd79c6d6bb307728",
+      "signature": "0x968279f1f37862041545734453a5b01c93a3afac51efdaedb0550a8476b83f640ae88eb4cda151d588103dabd6deca1efa0513ae8dd3d9bca913fb1239a3e20e",
+      "derivedFrom": "spec-only",
+      "referenceThrows": true,
+      "referenceError": "The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -1"
+    },
+    {
+      "label": "unicode-domain",
+      "workchain": 0,
+      "addressHash": "0x2f956143c461769579baef2e32cc2d7bc18283f40d20bb03e432cd603ac33ffc",
+      "domain": {
+        "lengthBytes": 17,
+        "value": "пример.рф"
+      },
+      "payload": "ünïcödé-payload-🚀",
+      "timestamp": 1893456000,
+      "messageHash": "b2dbfaaafacf222c5554b5c7f840a1082f06dc4a5eba6dc5358f4ddacbfd4f23",
+      "signature": "0x5cc91d67fa2bc44a90a6ec454194b63ef8e374f4c658d7596e60128e303a08502753a49f1fcc4bcfa6f9e08216b5c4aeb40135c7a5f07e8e4290c89e07f24a0e",
+      "derivedFrom": "reference-and-spec-agree",
+      "referenceThrows": false
+    },
+    {
+      "label": "long-payload",
+      "workchain": 0,
+      "addressHash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "domain": {
+        "lengthBytes": 3,
+        "value": "a.b"
+      },
+      "payload": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "timestamp": 2147483647,
+      "messageHash": "3b85a69cb9e2b586e5eb6a57ecbea08e9ca2ecacc4480369f92ac5e4986d4a0b",
+      "signature": "0x4a9e9e2310d2fdc36dbf46c6bc49ffe3c26d148306b7d0fef2fd216c919b0f4786a2be0883d38bcd9a2039142031d18a75610e93e3ff1114adf55b73d8bdc701",
+      "derivedFrom": "reference-and-spec-agree",
+      "referenceThrows": false
+    }
+  ]
+}

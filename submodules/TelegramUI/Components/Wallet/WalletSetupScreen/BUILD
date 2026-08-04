@@ -17,7 +17,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
     ],
     visibility = [
         "//visibility:public",

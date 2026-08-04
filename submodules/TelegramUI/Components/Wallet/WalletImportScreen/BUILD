@@ -19,10 +19,11 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Components/MultilineTextComponent",
+        "//submodules/Components/BalancedTextComponent",
         "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/SegmentControlComponent",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
     ],
     visibility = [
         "//visibility:public",

@@ -59,6 +59,8 @@ public final class WalletCardComponent: Component {
     public final class View: UIView {
         private let backgroundView = WalletCardBackgroundView()
 
+        public private(set) var gramIconFrame: CGRect = .zero
+
         private let integralBalance = ComponentView<Empty>()
         private let fractionalBalance = ComponentView<Empty>()
         private let currency = ComponentView<Empty>()
@@ -209,6 +211,14 @@ public final class WalletCardComponent: Component {
             let integralOriginY = floor(mainCenterY - integralSize.height * 0.5)
             let integralBottomY = integralOriginY + integralSize.height
             var mainOriginX = 20.0
+            if let gramIconSize = UIImage(bundleImageName: "Wallet/CardGram")?.size {
+                self.gramIconFrame = CGRect(
+                    origin: CGPoint(x: mainOriginX, y: integralOriginY - 1.0),
+                    size: gramIconSize
+                )
+            } else {
+                self.gramIconFrame = .zero
+            }
             if let integralView = self.integralBalance.view {
                 if integralView.superview == nil {
                     self.addSubview(integralView)
@@ -303,7 +313,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: nameView,
                     frame: CGRect(
-                        origin: CGPoint(x: 24.0, y: size.height - 32.0),
+                        origin: CGPoint(x: 24.0, y: size.height - 35.0),
                         size: nameSize
                     )
                 )
@@ -361,7 +371,7 @@ public final class WalletCardComponent: Component {
                     text: .plain(NSAttributedString(
                         string: addressText.uppercased(),
                         font: Font.monospace(11.0),
-                        textColor: UIColor(rgb: 0x005dda)
+                        textColor: UIColor(rgb: 0x0064da)
                     )),
                     maximumNumberOfLines: 2,
                     lineSpacing: 0.1

@@ -2186,7 +2186,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                             placeholder = interfaceState.strings.Chat_Placeholder_AwayMessage
                         }
                     case .welcomeMessages:
-                        placeholder = interfaceState.strings.Chat_Placeholder_GreetingMessage
+                        placeholder = interfaceState.strings.Chat_Placeholder_WelcomeMessage
                     case .businessLinkSetup:
                         placeholder = interfaceState.strings.Chat_Placeholder_BusinessLinkPreset
                     }

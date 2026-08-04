@@ -1,0 +1,213 @@
+{
+  "source": "@ton/walletkit@1.1.0-beta.0",
+  "vectors": [
+    {
+      "label": "empty",
+      "input": [],
+      "parsed": []
+    },
+    {
+      "label": "single-num-positive",
+      "input": [
+        {
+          "type": "num",
+          "value": "42"
+        }
+      ],
+      "parsed": [
+        {
+          "type": "int",
+          "value": "42"
+        }
+      ]
+    },
+    {
+      "label": "single-num-hex",
+      "input": [
+        {
+          "type": "num",
+          "value": "0x2a"
+        }
+      ],
+      "parsed": [
+        {
+          "type": "int",
+          "value": "42"
+        }
+      ]
+    },
+    {
+      "label": "single-num-negative",
+      "input": [
+        {
+          "type": "num",
+          "value": "-42"
+        }
+      ],
+      "parsed": [
+        {
+          "type": "int",
+          "value": "-42"
+        }
+      ]
+    },
+    {
+      "label": "single-num-zero",
+      "input": [
+        {
+          "type": "num",
+          "value": "0"
+        }
+      ],
+      "parsed": [
+        {
+          "type": "int",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "label": "num-256-bit",
+      "input": [
+        {
+          "type": "num",
+          "value": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "parsed": [
+        {
+          "type": "int",
+          "value": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        }
+      ]
+    },
+    {
+      "label": "null",
+      "input": [
+        {
+          "type": "null"
+        }
+      ],
+      "parsed": [
+        {
+          "type": "null"
+        }
+      ]
+    },
+    {
+      "label": "cell",
+      "input": [
+        {
+          "type": "cell",
+          "value": "te6cckEBAQEABAAABMr+KojUJA=="
+        }
+      ],
+      "parsed": [
+        {
+          "type": "cell",
+          "hash": "9ff1d0ea1549e85126da6256cc7dfbcaec101f5cbea748cde5cd316525b1a2c0"
+        }
+      ]
+    },
+    {
+      "label": "tuple-nested",
+      "input": [
+        {
+          "type": "tuple",
+          "value": [
+            {
+              "type": "num",
+              "value": "1"
+            },
+            {
+              "type": "tuple",
+              "value": [
+                {
+                  "type": "num",
+                  "value": "2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "parsed": [
+        {
+          "type": "tuple",
+          "items": [
+            {
+              "type": "int",
+              "value": "1"
+            },
+            {
+              "type": "tuple",
+              "items": [
+                {
+                  "type": "int",
+                  "value": "2"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "tuple-empty-becomes-null",
+      "input": [
+        {
+          "type": "tuple",
+          "value": []
+        }
+      ],
+      "parsed": [
+        {
+          "type": "null"
+        }
+      ]
+    },
+    {
+      "label": "list-empty-becomes-null",
+      "input": [
+        {
+          "type": "list",
+          "value": []
+        }
+      ],
+      "parsed": [
+        {
+          "type": "null"
+        }
+      ]
+    },
+    {
+      "label": "mixed-stack",
+      "input": [
+        {
+          "type": "num",
+          "value": "7"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "cell",
+          "value": "te6cckEBAQEABAAABMr+KojUJA=="
+        }
+      ],
+      "parsed": [
+        {
+          "type": "int",
+          "value": "7"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "cell",
+          "hash": "9ff1d0ea1549e85126da6256cc7dfbcaec101f5cbea748cde5cd316525b1a2c0"
+        }
+      ]
+    }
+  ]
+}

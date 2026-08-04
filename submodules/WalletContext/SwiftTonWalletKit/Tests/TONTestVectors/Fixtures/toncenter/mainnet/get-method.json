@@ -1,0 +1,112 @@
+{
+  "source": "toncenter-v3",
+  "network": "mainnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "seqno",
+      "method": "runGetMethod",
+      "args": {
+        "address": "0:C53B668922D84BBC378685E436F49F04158D30118B7E25FA8E095787FD1F877A",
+        "method": "seqno"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "url": "/api/v3/runGetMethod",
+          "status": 200,
+          "body": {
+            "gas_used": 358,
+            "exit_code": 0,
+            "stack": [
+              {
+                "type": "num",
+                "value": "0x8f"
+              }
+            ]
+          }
+        }
+      ],
+      "mapped": {
+        "gasUsed": 358,
+        "stack": [
+          {
+            "type": "num",
+            "value": "0x8f"
+          }
+        ],
+        "exitCode": 0
+      }
+    },
+    {
+      "label": "get-public-key",
+      "method": "runGetMethod",
+      "args": {
+        "address": "0:C53B668922D84BBC378685E436F49F04158D30118B7E25FA8E095787FD1F877A",
+        "method": "get_public_key"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "url": "/api/v3/runGetMethod",
+          "status": 200,
+          "body": {
+            "gas_used": 251,
+            "exit_code": 32,
+            "stack": [
+              {
+                "type": "num",
+                "value": "0x0"
+              }
+            ]
+          }
+        }
+      ],
+      "mapped": {
+        "gasUsed": 251,
+        "stack": [
+          {
+            "type": "num",
+            "value": "0x0"
+          }
+        ],
+        "exitCode": 32
+      }
+    },
+    {
+      "label": "nonexistent-method",
+      "method": "runGetMethod",
+      "args": {
+        "address": "0:C53B668922D84BBC378685E436F49F04158D30118B7E25FA8E095787FD1F877A",
+        "method": "definitely_not_a_method"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "url": "/api/v3/runGetMethod",
+          "status": 200,
+          "body": {
+            "gas_used": 251,
+            "exit_code": 32,
+            "stack": [
+              {
+                "type": "num",
+                "value": "0x0"
+              }
+            ]
+          }
+        }
+      ],
+      "mapped": {
+        "gasUsed": 251,
+        "stack": [
+          {
+            "type": "num",
+            "value": "0x0"
+          }
+        ],
+        "exitCode": 32
+      }
+    }
+  ]
+}

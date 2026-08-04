@@ -30,7 +30,7 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/QrCodeUI",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
     ],
     visibility = [
         "//visibility:public",

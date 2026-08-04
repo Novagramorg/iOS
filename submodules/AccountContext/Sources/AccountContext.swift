@@ -1382,28 +1382,6 @@ public enum WalletTransactionScreenMode {
     )
 }
 
-public struct WalletConnectApplication: Equatable {
-    public let name: String
-    public let domain: String
-    public let iconName: String
-    public let iconBackgroundColor: UIColor
-    public let isVerified: Bool
-
-    public init(
-        name: String,
-        domain: String,
-        iconName: String,
-        iconBackgroundColor: UIColor,
-        isVerified: Bool
-    ) {
-        self.name = name
-        self.domain = domain
-        self.iconName = iconName
-        self.iconBackgroundColor = iconBackgroundColor
-        self.isVerified = isVerified
-    }
-}
-
 public protocol SharedAccountContext: AnyObject {
     var sharedContainerPath: String { get }
     var basePath: String { get }
@@ -1604,8 +1582,11 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletSettingsScreen(context: AccountContext) -> ViewController
     func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController
     func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
-    func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, application: WalletConnectApplication, cancelled: @escaping () -> Void, connected: @escaping () -> Void) -> ViewController
+    func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
+    func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectTransferRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController
+    func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, mode: WalletTransactionScreenMode) -> ViewController
+    func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible) -> ViewController
     func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void)
     func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController

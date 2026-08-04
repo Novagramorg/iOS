@@ -1,0 +1,85 @@
+{
+  "source": "toncenter-v3",
+  "network": "testnet",
+  "recordedAt": null,
+  "fixtures": [
+    {
+      "label": "batch-mixed",
+      "method": "getAccountStates",
+      "args": {
+        "addresses": [
+          "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573",
+          "0:dededededededededededededededededededededededededededededededede"
+        ]
+      },
+      "requests": [
+        {
+          "method": "GET",
+          "url": "/api/v3/accountStates?address=EQCC4FvUj_cx2wJt_1B3EOipDjdstczA7TqwAqTekOBFc_R9&address=EQDe3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3h63&include_boc=true",
+          "status": 200,
+          "body": {
+            "accounts": [
+              {
+                "address": "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573",
+                "account_state_hash": "Ec5IWP88GNC1sEtYR+6sxmo25VVfhDU3bf/HeUrEEKA=",
+                "balance": "1181604331",
+                "extra_currencies": {},
+                "status": "active",
+                "last_transaction_hash": "OpgNXx2eWSxXHZhnDuI+JhCOV/iUTe+fNGBt2nzwjEg=",
+                "last_transaction_lt": "86701736000005",
+                "data_hash": "sbzXew5VABrs26FXjfU2y10lo4ybwfvffglAuDtosZ0=",
+                "code_hash": "/rX/aCDi/w2Ug+fg1iyBfYRniftK5YDIeIZtlZ2r1cA=",
+                "data_boc": "te6ccgEBAQEAKwAAUQAAHbApqaMXqB1uzg/3PHPGWlRFV44CkS4Ukmcqof9FIWZhotY2k5tA",
+                "code_boc": "te6ccgECFAEAAtQAART/APSkE/S88sgLAQIBIAIDAgFIBAUE+PKDCNcYINMf0x/THwL4I7vyZO1E0NMf0x/T//QE0VFDuvKhUVG68qIF+QFUEGT5EPKj+AAkpMjLH1JAyx9SMMv/UhD0AMntVPgPAdMHIcAAn2xRkyDXSpbTB9QC+wDoMOAhwAHjACHAAuMAAcADkTDjDQOkyMsfEssfy/8QERITAubQAdDTAyFxsJJfBOAi10nBIJJfBOAC0x8hghBwbHVnvSKCEGRzdHK9sJJfBeAD+kAwIPpEAcjKB8v/ydDtRNCBAUDXIfQEMFyBAQj0Cm+hMbOSXwfgBdM/yCWCEHBsdWe6kjgw4w0DghBkc3RyupJfBuMNBgcCASAICQB4AfoA9AQw+CdvIjBQCqEhvvLgUIIQcGx1Z4MesXCAGFAEywUmzxZY+gIZ9ADLaRfLH1Jgyz8gyYBA+wAGAIpQBIEBCPRZMO1E0IEBQNcgyAHPFvQAye1UAXKwjiOCEGRzdHKDHrFwgBhQBcsFUAPPFiP6AhPLassfyz/JgED7AJJfA+ICASAKCwBZvSQrb2omhAgKBrkPoCGEcNQICEekk30pkQzmkD6f+YN4EoAbeBAUiYcVnzGEAgFYDA0AEbjJftRNDXCx+AA9sp37UTQgQFA1yH0BDACyMoHy//J0AGBAQj0Cm+hMYAIBIA4PABmtznaiaEAga5Drhf/AABmvHfaiaEAQa5DrhY/AAG7SB/oA1NQi+QAFyMoHFcv/ydB3dIAYyMsFywIizxZQBfoCFMtrEszMyXP7AMhAFIEBCPRR8qcCAHCBAQjXGPoA0z/IVCBHgQEI9FHyp4IQbm90ZXB0gBjIywXLAlAGzxZQBPoCFMtqEssfyz/Jc/sAAgBsgQEI1xj6ANM/MFIkgQEI9Fnyp4IQZHN0cnB0gBjIywXLAlAFzxZQA/oCE8tqyx8Syz/Jc/sAAAr0AMntVA==",
+                "contract_methods": [
+                  0,
+                  76407,
+                  78748,
+                  81467,
+                  85143,
+                  107653,
+                  524287
+                ],
+                "interfaces": [
+                  "wallet_v4r2"
+                ]
+              }
+            ],
+            "address_book": {
+              "0:82E05BD48FF731DB026DFF507710E8A90E376CB5CCC0ED3AB002A4DE90E04573": {
+                "user_friendly": "0QCC4FvUj_cx2wJt_1B3EOipDjdstczA7TqwAqTekOBFcxIy",
+                "domain": null,
+                "interfaces": [
+                  "wallet_v4r2"
+                ]
+              }
+            },
+            "metadata": {}
+          }
+        }
+      ],
+      "mapped": {
+        "EQCC4FvUj_cx2wJt_1B3EOipDjdstczA7TqwAqTekOBFc_R9": {
+          "address": "EQCC4FvUj_cx2wJt_1B3EOipDjdstczA7TqwAqTekOBFc_R9",
+          "status": "active",
+          "rawBalance": "1181604331",
+          "balance": "1.181604331",
+          "extraCurrencies": {},
+          "code": "te6ccgECFAEAAtQAART/APSkE/S88sgLAQIBIAIDAgFIBAUE+PKDCNcYINMf0x/THwL4I7vyZO1E0NMf0x/T//QE0VFDuvKhUVG68qIF+QFUEGT5EPKj+AAkpMjLH1JAyx9SMMv/UhD0AMntVPgPAdMHIcAAn2xRkyDXSpbTB9QC+wDoMOAhwAHjACHAAuMAAcADkTDjDQOkyMsfEssfy/8QERITAubQAdDTAyFxsJJfBOAi10nBIJJfBOAC0x8hghBwbHVnvSKCEGRzdHK9sJJfBeAD+kAwIPpEAcjKB8v/ydDtRNCBAUDXIfQEMFyBAQj0Cm+hMbOSXwfgBdM/yCWCEHBsdWe6kjgw4w0DghBkc3RyupJfBuMNBgcCASAICQB4AfoA9AQw+CdvIjBQCqEhvvLgUIIQcGx1Z4MesXCAGFAEywUmzxZY+gIZ9ADLaRfLH1Jgyz8gyYBA+wAGAIpQBIEBCPRZMO1E0IEBQNcgyAHPFvQAye1UAXKwjiOCEGRzdHKDHrFwgBhQBcsFUAPPFiP6AhPLassfyz/JgED7AJJfA+ICASAKCwBZvSQrb2omhAgKBrkPoCGEcNQICEekk30pkQzmkD6f+YN4EoAbeBAUiYcVnzGEAgFYDA0AEbjJftRNDXCx+AA9sp37UTQgQFA1yH0BDACyMoHy//J0AGBAQj0Cm+hMYAIBIA4PABmtznaiaEAga5Drhf/AABmvHfaiaEAQa5DrhY/AAG7SB/oA1NQi+QAFyMoHFcv/ydB3dIAYyMsFywIizxZQBfoCFMtrEszMyXP7AMhAFIEBCPRR8qcCAHCBAQjXGPoA0z/IVCBHgQEI9FHyp4IQbm90ZXB0gBjIywXLAlAGzxZQBPoCFMtqEssfyz/Jc/sAAgBsgQEI1xj6ANM/MFIkgQEI9Fnyp4IQZHN0cnB0gBjIywXLAlAFzxZQA/oCE8tqyx8Syz/Jc/sAAAr0AMntVA==",
+          "data": "te6ccgEBAQEAKwAAUQAAHbApqaMXqB1uzg/3PHPGWlRFV44CkS4Ukmcqof9FIWZhotY2k5tA",
+          "lastTransaction": {
+            "lt": "86701736000005",
+            "hash": "0x3a980d5f1d9e592c571d98670ee23e26108e57f8944def9f34606dda7cf08c48"
+          }
+        },
+        "EQDe3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3h63": {
+          "address": "EQDe3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3h63",
+          "status": "non-existing",
+          "rawBalance": "0",
+          "balance": "0",
+          "extraCurrencies": {}
+        }
+      }
+    }
+  ]
+}

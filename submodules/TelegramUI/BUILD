@@ -472,9 +472,9 @@ swift_library(
         "//submodules/TelegramUI/Components/Wallet/WalletWordsScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletInfoScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletConnectScreen",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletTransactionScreen",
+        "//submodules/TelegramUI/Components/Wallet/WalletCollectibleScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftOptionsScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftStoreScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftSetupScreen",
@@ -550,6 +550,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/TelegramUI/Components/RichTextEditorMediaView",
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
+        "//submodules/WalletContext",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

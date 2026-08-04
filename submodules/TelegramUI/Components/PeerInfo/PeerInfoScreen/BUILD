@@ -90,6 +90,7 @@ swift_library(
         "//submodules/Postbox",
         "//submodules/PremiumUI",
         "//submodules/PresentationDataUtils",
+        "//submodules/QrCode",
         "//submodules/QrCodeUI",
         "//submodules/RadialStatusNode",
         "//submodules/SaveToCameraRoll",

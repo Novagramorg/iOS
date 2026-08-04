@@ -86,6 +86,7 @@ import WalletInfoScreen
 import WalletConnectScreen
 import WalletContext
 import WalletTransactionScreen
+import WalletCollectibleScreen
 import ContentReportScreen
 import AffiliateProgramSetupScreen
 import GalleryUI
@@ -4227,12 +4228,24 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletInfoScreen(context: context, mode: mode, completion: completion)
     }
 
-    public func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, application: WalletConnectApplication, cancelled: @escaping () -> Void, connected: @escaping () -> Void) -> ViewController {
-        return WalletConnectScreen(context: context, walletContext: walletContext, application: application, cancelled: cancelled, connected: connected)
+    public func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
+        return WalletConnectScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, connect: connect)
+    }
+
+    public func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectTransferRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
+        return WalletTransferScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
     }
 
     public func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController {
         return WalletTransactionScreen(context: context, mode: mode)
+    }
+
+    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, mode: WalletTransactionScreenMode) -> ViewController {
+        return WalletTransactionScreen(context: context, walletContext: walletContext, mode: mode)
+    }
+
+    public func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible) -> ViewController {
+        return WalletCollectibleScreen(context: context, walletContext: walletContext, collectible: collectible)
     }
 
     public func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void) {

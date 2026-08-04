@@ -1,0 +1,48 @@
+{
+  "source": "testnet.toncenter.com, deployed wallets discovered by code hash",
+  "network": "testnet",
+  "globalId": -3,
+  "note": "Real deployed wallets read off-chain via runGetMethod. Re-deriving each address from its public key and walletId is the strongest available check on state-init layout, the embedded code cell, and address derivation: it compares against what the live chain actually holds rather than against our own vectors.",
+  "wallets": [
+    {
+      "version": "v5r1",
+      "rawAddress": "0:3FBE3196192975FEC073469FB35EC3C8D32FD38FE022F4B93E2D016DC584A4BA",
+      "balance": "2564592448",
+      "publicKey": "0x9c00c91d1b306befb09feb0788a0bf1e1b40c4598d5687760fcc307109b38456",
+      "walletId": "0x7ffffffd",
+      "seqno": "0x63d"
+    },
+    {
+      "version": "v5r1",
+      "rawAddress": "0:7A5C6CE93BBAE09612B5B51F40E25D9042EEB269813A00B529D6F00E1CC68601",
+      "balance": "127949758175",
+      "publicKey": "0x38656b0925fddc6c933f170b80dce036648e7e20e5f18421da9282d48098e40a",
+      "walletId": "0x7ffffffd",
+      "seqno": "0x719"
+    },
+    {
+      "version": "v5r1",
+      "rawAddress": "0:F05B5DEE78B983AC983C6E4CA52A7E6BF8E6E81405BD934922594A2154469C1F",
+      "balance": "3851625130",
+      "publicKey": "0x3445435998054fdd5fb8e63f18f1d2477816b4a9b31551528375c7b642c9c9a3",
+      "walletId": "0x7ffffffd",
+      "seqno": "0x259"
+    },
+    {
+      "version": "v5r1",
+      "rawAddress": "0:FA6BEBB28E2017F20466B4F8B6CED75E044962C3A1AB05AE9D40178CF309507C",
+      "balance": "163202373931",
+      "publicKey": "0xfa6a21a09873e58b99ee8d9a77662822140875fa77904768c59673a8804bc47",
+      "walletId": "0x7ffffffd",
+      "seqno": "0x7"
+    },
+    {
+      "version": "v4r2",
+      "rawAddress": "0:4060C5F021F509A0BA6137ABCD44E5B9B36A646BA8B9A730E3B8552AF143928A",
+      "balance": "5349781413892",
+      "publicKey": "0xe9f486285907b21503df91e68220ec86deef59bfa0e09ea09c53429fd54ec0e9",
+      "walletId": "0x29a9a317",
+      "seqno": "0x11fa60"
+    }
+  ]
+}

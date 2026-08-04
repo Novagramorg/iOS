@@ -16603,8 +16603,11 @@ Error: %8$@";
 
 "GroupInfo.WelcomeMessages" = "Welcome Message";
 "WelcomeMessages.Title" = "Welcome Message";
-"WelcomeMessages.EmptyTitle" = "Create a Welcome Messages";
+"WelcomeMessages.EmptyTitle" = "Create a Welcome Message";
 "WelcomeMessages.EmptyText" = "Automatically greet new members when they join.";
+"WelcomeMessages.Off" = "Off";
+"WelcomeMessages.ServiceHeader1" = "New members will see this message when they join";
+"WelcomeMessages.ServiceHeader2" = "Touch and hold it to delete it";
 "WelcomeMessages.MessageLimitReachedText_1" = "Limit of %@ message reached";
 "WelcomeMessages.MessageLimitReachedText_aby" = "Limit of %@ messages reached";
 "Chat.Placeholder.WelcomeMessage" = "Add a message...";

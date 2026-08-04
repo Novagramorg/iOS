@@ -11,10 +11,13 @@ swift_library(
     ],
     deps = [
         "//submodules/Display",
+        "//submodules/AlertUI",
         "//submodules/AccountContext",
         "//submodules/TelegramCore",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramPresentationData",
+        "//submodules/PresentationDataUtils",
+        "//submodules/TelegramStringFormatting",
         "//submodules/ComponentFlow",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Components/SheetComponent",
@@ -22,7 +25,7 @@ swift_library(
         "//submodules/Components/BundleIconComponent",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
-        "//submodules/TelegramUI/Components/Wallet/WalletContext",
+        "//submodules/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletCardComponent",
     ],
     visibility = [

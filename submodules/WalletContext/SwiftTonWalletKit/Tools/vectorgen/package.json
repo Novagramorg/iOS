@@ -1,0 +1,22 @@
+{
+  "name": "walletkit-vectorgen",
+  "private": true,
+  "type": "module",
+  "description": "Generates golden test vectors for the native Swift WalletKit from the reference TypeScript implementation.",
+  "scripts": {
+    "dump": "tsx dump.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@scure/bip39": "^2.2.0",
+    "@ton/core": "^0.63.1",
+    "@ton/crypto": "^3.3.0",
+    "@tonconnect/protocol": "^3.0.0",
+    "lru-cache": "^11.5.1",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "5.9.3"
+  }
+}
