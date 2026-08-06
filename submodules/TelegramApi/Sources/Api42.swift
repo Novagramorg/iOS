@@ -5220,13 +5220,16 @@ public extension Api.functions.ephemeral {
     }
 }
 public extension Api.functions.ephemeral {
-    static func deleteMessage(peer: Api.InputPeer, receiverId: Api.InputUser, id: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func deleteMessage(flags: Int32, peer: Api.InputPeer?, receiverId: Api.InputUser, id: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1547643631)
-        peer.serialize(buffer, true)
+        buffer.appendInt32(-1829312617)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            peer!.serialize(buffer, true)
+        }
         receiverId.serialize(buffer, true)
         serializeInt32(id, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "ephemeral.deleteMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+        return (FunctionDescription(name: "ephemeral.deleteMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
             let reader = BufferReader(buffer)
             var result: Api.Bool?
             if let signature = reader.readInt32() {
@@ -5253,11 +5256,13 @@ public extension Api.functions.ephemeral {
     }
 }
 public extension Api.functions.ephemeral {
-    static func editMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, id: Int32, message: String?, media: Api.InputMedia?, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+    static func editMessage(flags: Int32, peer: Api.InputPeer?, receiverId: Api.InputUser, id: Int32, message: String?, media: Api.InputMedia?, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
-        buffer.appendInt32(-360046135)
+        buffer.appendInt32(-811830693)
         serializeInt32(flags, buffer: buffer, boxed: false)
-        peer.serialize(buffer, true)
+        if Int(flags) & Int(1 << 7) != 0 {
+            peer!.serialize(buffer, true)
+        }
         receiverId.serialize(buffer, true)
         serializeInt32(id, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
@@ -5344,11 +5349,13 @@ public extension Api.functions.ephemeral {
     }
 }
 public extension Api.functions.ephemeral {
-    static func sendMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, queryId: Int64?, message: String, entities: [Api.MessageEntity]?, media: Api.InputMedia?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?, randomId: Int64, replyTo: Api.InputReplyTo?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+    static func sendMessage(flags: Int32, peer: Api.InputPeer?, receiverId: Api.InputUser, queryId: Int64?, message: String, entities: [Api.MessageEntity]?, media: Api.InputMedia?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?, randomId: Int64, replyTo: Api.InputReplyTo?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
-        buffer.appendInt32(1758187679)
+        buffer.appendInt32(-1165140171)
         serializeInt32(flags, buffer: buffer, boxed: false)
-        peer.serialize(buffer, true)
+        if Int(flags) & Int(1 << 8) != 0 {
+            peer!.serialize(buffer, true)
+        }
         receiverId.serialize(buffer, true)
         if Int(flags) & Int(1 << 0) != 0 {
             serializeInt64(queryId!, buffer: buffer, boxed: false)
@@ -14245,28 +14252,6 @@ public extension Api.functions.stories {
             var result: Api.StoryAlbum?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.StoryAlbum
-            }
-            return result
-        })
-    }
-}
-public extension Api.functions.toncenter {
-    static func performApiRequest(flags: Int32, endpoint: String, query: String?, payload: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.toncenter.ApiResponse>) {
-        let buffer = Buffer()
-        buffer.appendInt32(-1921262239)
-        serializeInt32(flags, buffer: buffer, boxed: false)
-        serializeString(endpoint, buffer: buffer, boxed: false)
-        if Int(flags) & Int(1 << 1) != 0 {
-            serializeString(query!, buffer: buffer, boxed: false)
-        }
-        if Int(flags) & Int(1 << 2) != 0 {
-            serializeString(payload!, buffer: buffer, boxed: false)
-        }
-        return (FunctionDescription(name: "toncenter.performApiRequest", parameters: [("flags", ConstructorParameterDescription(flags)), ("endpoint", ConstructorParameterDescription(endpoint)), ("query", ConstructorParameterDescription(query)), ("payload", ConstructorParameterDescription(payload))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.toncenter.ApiResponse? in
-            let reader = BufferReader(buffer)
-            var result: Api.toncenter.ApiResponse?
-            if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.toncenter.ApiResponse
             }
             return result
         })

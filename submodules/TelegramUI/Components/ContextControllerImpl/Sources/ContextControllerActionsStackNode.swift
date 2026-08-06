@@ -236,7 +236,13 @@ public final class ContextControllerActionsListActionItemNode: HighlightTracking
         }
         
         let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0)
-        let subtitleColor = presentationData.theme.contextMenu.secondaryColor
+        var subtitleColor: UIColor
+        switch self.item.textColor {
+        case .destructive:
+            subtitleColor = presentationData.theme.contextMenu.destructiveColor
+        default:
+            subtitleColor = presentationData.theme.contextMenu.secondaryColor
+        }
         
         if let context = self.context {
             self.titleLabelNode.arguments = TextNodeWithEntities.Arguments(
@@ -264,6 +270,7 @@ public final class ContextControllerActionsListActionItemNode: HighlightTracking
             )
         case let .secondLineWithAttributedValue(subtitleValue):
             self.titleLabelNode.maximumNumberOfLines = 1
+            self.subtitleNode.maximumNumberOfLines = 3
             let mutableString = subtitleValue.mutableCopy() as! NSMutableAttributedString
             mutableString.addAttribute(.foregroundColor, value: subtitleColor, range: NSRange(location: 0, length: mutableString.length))
             mutableString.addAttribute(.font, value: subtitleFont, range: NSRange(location: 0, length: mutableString.length))
@@ -596,10 +603,16 @@ public final class ContextControllerActionsListActionItemNode: HighlightTracking
             }
             
             if let iconSize {
+                let iconY: CGFloat
+                if case .secondLineWithAttributedValue = self.item.textLayout {
+                    iconY = titleFrame.minY + floor((titleFrame.height - iconSize.height) / 2.0)
+                } else {
+                    iconY = floor((size.height - iconSize.height) / 2.0)
+                }
                 let iconFrame = CGRect(
                     origin: CGPoint(
                         x: iconSideInset + floor((standardIconWidth - iconSize.width) * 0.5),
-                        y: floor((size.height - iconSize.height) / 2.0)
+                        y: iconY
                     ),
                     size: iconSize
                 )

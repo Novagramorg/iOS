@@ -227,6 +227,10 @@ public extension TelegramEngine {
             return _internal_retryEphemeralOutgoingMessage(account: self.account, messageId: messageId)
         }
 
+        public func revertAnchoredEphemeralMessage(messageId: MessageId) -> Signal<Never, NoError> {
+            return _internal_revertAnchoredEphemeralMessage(account: self.account, messageId: messageId)
+        }
+
         public func refreshWelcomeMessages(peerId: PeerId) -> Signal<Void, NoError> {
             return _internal_refreshWelcomeMessages(account: self.account, peerId: peerId)
         }

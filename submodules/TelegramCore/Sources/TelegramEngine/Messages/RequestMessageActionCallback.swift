@@ -24,7 +24,7 @@ public enum MessageActionCallbackError {
 }
 
 func _internal_requestMessageActionCallbackPasswordCheck(account: Account, messageId: MessageId, isGame: Bool, data: MemoryBuffer?) -> Signal<Never, MessageActionCallbackError> {
-    if messageId.namespace == Namespaces.Message.EphemeralLocal {
+    if Namespaces.Message.allEphemeral.contains(messageId.namespace) {
         return .fail(.generic)
     }
 
@@ -76,7 +76,7 @@ func _internal_requestMessageActionCallbackPasswordCheck(account: Account, messa
 }
 
 func _internal_requestMessageActionCallback(account: Account, messageId: MessageId, isGame :Bool, password: String?, data: MemoryBuffer?) -> Signal<MessageActionCallbackResult, MessageActionCallbackError> {
-    if messageId.namespace == Namespaces.Message.EphemeralLocal {
+    if Namespaces.Message.allEphemeral.contains(messageId.namespace) {
         if isGame || password != nil {
             return .fail(.generic)
         }
