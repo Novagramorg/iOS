@@ -36,6 +36,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     }
     
     private let containerNode: ContainerNode
+    /// Clips `containerNode` to the bubble's four (possibly unequal, when merged) corner radii —
+    /// see `applyContainerCorners`. Created on first layout, since an unloaded node has no layer.
+    private var containerCornerMaskLayer: CAShapeLayer?
     public var statusNode: ChatMessageDateAndStatusNode?
     // `init()` may run off the main thread; UIView construction must happen on the main thread.
     // The page view is built lazily inside the apply closure (always main-thread) via ensurePageView().
@@ -133,6 +136,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     required public init() {
         self.containerNode = ContainerNode()
         self.containerNode.clipsToBounds = true
+        self.containerNode.layer.cornerCurve = .circular
 
         super.init()
 
@@ -390,11 +394,29 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 // Built alongside pageLayout so the apply closure can hand it to ensurePageView.
                 var pageWebpage: TelegramMediaWebpage?
 
-                // Horizontal text inset baked into the InstantPage layout. The pageView sits at
-                // self-x 0 (containerNode at 1, pageView at -1 inside it), so the page's text
-                // left edge in the status node's coordinate space is exactly this value. Used as
-                // the status node's left edge + side inset, mirroring TextBubble's bubbleInsets.
+                // The page's text left edge in THIS node's coordinate space — the status node's left
+                // edge + side inset, mirroring TextBubble's bubbleInsets. The page itself is inset by
+                // `pageContentInset` (below), so the value handed to the layout is smaller by that
+                // much; these two must not be conflated, or the status and date drift off the text.
                 let pageHorizontalInset: CGFloat = 11.0
+
+                // The whole page is inset by this much on all four sides, so full-width media sits
+                // INSIDE the bubble background (corners clipped by the rounded container) instead of
+                // running under it — matching how a regular media bubble insets its image. The page
+                // gives the same amount back out of its own insets (`horizontalInset` here,
+                // `edgeSpacingReduction` vertically), so every block keeps its absolute position and
+                // the bubble keeps its size.
+                //
+                // It is 2, not 1, because THIS NODE'S BOUNDS ARE 1pt LARGER THAN THE BACKGROUND on
+                // each side: the first point only reaches the background edge (which is why the old
+                // container sat at x = 1 and read as flush), and the second is the visible inset.
+                // Measure any change to this against the background, not against these bounds.
+                let pageContentInset: CGFloat = 2.0
+
+                // The text inset INSIDE the page — what the layout is given, and the origin that
+                // page-space frames are measured from. Smaller than `pageHorizontalInset` by the
+                // inset, so that text still lands at `pageHorizontalInset` in this node's space.
+                let pageLayoutHorizontalInset: CGFloat = pageHorizontalInset - pageContentInset
 
                 let isDark = item.presentationData.theme.theme.overallDarkAppearance
                 let isIncoming = item.message.effectivelyIncoming(item.context.account.peerId)
@@ -579,14 +601,15 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             instantPage: instantPage,
                             userLocation: .other,
                             boundingWidth: suggestedBoundingWidth - 2.0,
-                            horizontalInset: pageHorizontalInset,
+                            horizontalInset: pageLayoutHorizontalInset,
                             theme: pageTheme,
                             strings: item.presentationData.strings,
                             dateTimeFormat: item.presentationData.dateTimeFormat,
                             cachedMessageSyntaxHighlight: nil,
                             expandedDetails: currentExpandedDetails,
                             fitToWidth: true,
-                            computeRevealCharacterRects: hasDraft || hadDraft
+                            computeRevealCharacterRects: hasDraft || hadDraft,
+                            edgeSpacingReduction: pageContentInset
                         )
                     }
                 }
@@ -603,8 +626,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     } else {
                         effectiveSize = pageLayout.contentSize
                     }
-                    boundingSize.width = effectiveSize.width
-                    boundingSize.height = effectiveSize.height
+                    // The page is inset on every side, so the bubble is its content plus the two
+                    // rims. Both axes cancel the trims above (`horizontalInset` is 1pt smaller and
+                    // `layoutTextItem` reserves the right margin as `maxX + horizontalInset`;
+                    // `edgeSpacingReduction` takes 1pt off each vertical edge), so the bubble ends up
+                    // exactly the size it was before the inset.
+                    boundingSize.width = effectiveSize.width + pageContentInset * 2.0
+                    boundingSize.height = effectiveSize.height + pageContentInset * 2.0
                 }
 
                 // Authoritative detector: the bottom-most laid-out item is full-width visual media,
@@ -755,7 +783,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     let constrainedWidth = max(1.0, boundingSize.width - pageHorizontalInset * 2.0)
                     let layout = showMoreTextLayout(TextNodeLayoutArguments(attributedString: attributedTitle, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth, height: 100.0)))
                     let showMoreTopSpacing: CGFloat = 2.0
-                    let frame = CGRect(origin: CGPoint(x: pageHorizontalInset, y: pageLayout.contentSize.height + showMoreTopSpacing), size: layout.0.size)
+                    // Page-space, matching the other frames assigned to `lastTextLineFrame` below —
+                    // the node itself is still placed at `pageHorizontalInset` in self-space.
+                    let frame = CGRect(origin: CGPoint(x: pageLayoutHorizontalInset, y: pageLayout.contentSize.height + showMoreTopSpacing), size: layout.0.size)
                     showMoreLayoutResult = layout
                     showMoreFramePageLocal = frame
                     // Date trails the link line (or wraps below it if it doesn't fit) — reuse the
@@ -780,8 +810,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     // the right text inset (lineFrame.maxX == text.frame.minX + textItem.width).
                     // Feeding the status node just `lineWidth` would let the trail/wrap decision
                     // place the date inline with the line — on top of it. `pageHorizontalInset`
-                    // is the offset between page-coords and status-node-local coords (the status
-                    // node sits at x=pageHorizontalInset in self, and pageView sits at self-x 0).
+                    // is where the text lands in self-coords; `pageLayoutHorizontalInset` is the same
+                    // edge in page-coords (the status node sits at x=pageHorizontalInset in self, and
+                    // the pageView sits at self-x `pageContentInset` inside containerNode).
                     let dateLayoutInput: ChatMessageDateAndStatusNode.LayoutInput
                     if mediaStatusFrame != nil {
                         // Overlaid pill: reactions live outside the bubble. Inline reactions, if any,
@@ -789,7 +820,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         let inlineReactionSettings = shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) ? ChatMessageDateAndStatusNode.StandaloneReactionSettings() : nil
                         dateLayoutInput = .standalone(reactionSettings: item.presentationData.isPreview ? nil : inlineReactionSettings)
                     } else {
-                        let trailingWidthToMeasure: CGFloat = lastTextLineFrame.map { $0.maxX - pageHorizontalInset } ?? 10000.0
+                        let trailingWidthToMeasure: CGFloat = lastTextLineFrame.map { $0.maxX - pageLayoutHorizontalInset } ?? 10000.0
                         dateLayoutInput = .trailingContent(contentWidth: trailingWidthToMeasure, reactionSettings: ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false))
                     }
 
@@ -892,8 +923,29 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         }
                         self.appliedShowMoreExpanded = showMoreExpanded
 
-                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: 1.0, y: 0.0), size: CGSize(width: boundingWidth - 2.0, height: boundingSize.height)), completion: nil)
-                        self.containerNode.cornerRadius = layoutConstants.image.defaultCornerRadius
+                        // Inset on all four sides — `boundingWidth` is the FINAL bubble width handed
+                        // back by the bubble layout (it can exceed the width this node proposed), so
+                        // the width term is relative to the bubble, not to the page.
+                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: pageContentInset, y: pageContentInset), size: CGSize(width: boundingWidth - pageContentInset * 2.0, height: boundingSize.height - pageContentInset * 2.0)), completion: nil)
+                        // Four independent radii, because a merged bubble does not have one: a message
+                        // grouped with the one above gets small top corners and full-size bottom ones.
+                        // `chatMessageBubbleImageContentCorners` is the same helper the media bubble
+                        // uses, so rich bubbles round exactly like a photo in the same merge position.
+                        // `position` is already handed to this layout closure — the merge geometry
+                        // needed no new plumbing from the bubble.
+                        //
+                        // A single `cornerRadius` cannot express this, so the container is masked by a
+                        // path instead. Each radius is reduced by the inset to stay concentric with the
+                        // bubble's own curve.
+                        let imageCorners = chatMessageBubbleImageContentCorners(
+                            relativeContentPosition: position,
+                            normalRadius: layoutConstants.image.defaultCornerRadius,
+                            mergedRadius: layoutConstants.image.mergedCornerRadius,
+                            mergedWithAnotherContentRadius: layoutConstants.image.contentMergedCornerRadius,
+                            layoutConstants: layoutConstants,
+                            chatPresentationData: item.presentationData
+                        )
+                        self.applyContainerCorners(imageCorners, inset: pageContentInset, animation: animation)
 
                         if let statusSizeAndApply {
                             // Match TextBubble: anchor the status node's x at the fixed text-block
@@ -1014,8 +1066,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 self.openRichTextDocument?(file)
                             }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
+                            // Flush inside `containerNode`, which supplies the inset on every side.
+                            // This used to be -1, cancelling the container's horizontal inset so the
+                            // page ran under the clip and lost its leading 1pt rather than sitting in.
                             pageView.frame = CGRect(
-                                origin: CGPoint(x: -1.0, y: streamingHeaderOffset),
+                                origin: CGPoint(x: 0.0, y: streamingHeaderOffset),
                                 size: pageLayout.contentSize
                             )
                             self.updatePageViewVisibilityRect()
@@ -1225,6 +1280,94 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     }
                 }
             }
+        }
+    }
+
+    /// Tightens the rich content's corners beyond what the inset alone requires.
+    ///
+    /// Distinct from the inset compensation it sits next to: subtracting the inset is what keeps the
+    /// curve CONCENTRIC with the bubble's, and is not a matter of taste — this is the visual tuning
+    /// on top. Keep them separate so changing the inset does not silently change the look, and
+    /// vice versa.
+    private static let richBubbleExtraCornerRadiusReduction: CGFloat = 2.0
+
+    /// Clips `containerNode` to the bubble's four corner radii.
+    ///
+    /// `CALayer.cornerRadius` carries a single value, which is enough only for an unmerged bubble;
+    /// a merged one has different radii top and bottom, so the clip is a mask path instead. Each
+    /// radius is reduced by `inset` so the curve stays concentric with the bubble's own — an inset
+    /// box that keeps the outer radius reads as a differently-rounded rectangle sitting inside it.
+    ///
+    /// Called from the apply closure right after the container frame is set, so it reads the frame
+    /// that was just applied rather than the presented one.
+    private func applyContainerCorners(_ corners: ImageCorners, inset: CGFloat, animation: ListViewItemUpdateAnimation) {
+        let size = self.containerNode.frame.size
+        guard size.width > 0.0, size.height > 0.0 else {
+            return
+        }
+
+        let cornersTransition: ContainedViewLayoutTransition
+        if case let .System(duration, _) = animation {
+            cornersTransition = .animated(duration: duration, curve: .easeInOut)
+        } else {
+            cornersTransition = .immediate
+        }
+        // A radius can never exceed half the box, or opposite corners' arcs cross and the path
+        // inverts — reachable for a short bubble whose height is under twice the corner radius.
+        let limit = min(size.width, size.height) / 2.0
+        let radius: (ImageCorner) -> CGFloat = { corner in
+            return max(0.0, min(limit, corner.radius - inset - ChatMessageRichDataBubbleContentNode.richBubbleExtraCornerRadiusReduction + 5.0))
+        }
+        let topLeft = radius(corners.topLeft)
+        let topRight = radius(corners.topRight)
+        let bottomLeft = radius(corners.bottomLeft)
+        let bottomRight = radius(corners.bottomRight)
+        let radii = CornerRadii(topLeft: topLeft, topRight: topRight, bottomLeft: bottomLeft, bottomRight: bottomRight)
+
+        // Preferred path: the layer's own per-corner radii. It composites with the layer, so there is
+        // no offscreen mask pass, and it animates as a layer property.
+        if CALayer.cornerRadiiSupported {
+            if let maskLayer = self.containerCornerMaskLayer {
+                // Left over from an earlier layout on a build without the property.
+                self.containerNode.layer.mask = nil
+                self.containerCornerMaskLayer = nil
+                maskLayer.removeAllAnimations()
+            }
+            cornersTransition.updateCornerRadii(layer: self.containerNode.layer, cornerRadii: radii)
+            return
+        }
+
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: topLeft, y: 0.0))
+        path.addLine(to: CGPoint(x: size.width - topRight, y: 0.0))
+        path.addArc(tangent1End: CGPoint(x: size.width, y: 0.0), tangent2End: CGPoint(x: size.width, y: topRight), radius: topRight)
+        path.addLine(to: CGPoint(x: size.width, y: size.height - bottomRight))
+        path.addArc(tangent1End: CGPoint(x: size.width, y: size.height), tangent2End: CGPoint(x: size.width - bottomRight, y: size.height), radius: bottomRight)
+        path.addLine(to: CGPoint(x: bottomLeft, y: size.height))
+        path.addArc(tangent1End: CGPoint(x: 0.0, y: size.height), tangent2End: CGPoint(x: 0.0, y: size.height - bottomLeft), radius: bottomLeft)
+        path.addLine(to: CGPoint(x: 0.0, y: topLeft))
+        path.addArc(tangent1End: CGPoint(x: 0.0, y: 0.0), tangent2End: CGPoint(x: topLeft, y: 0.0), radius: topLeft)
+        path.closeSubpath()
+
+        let maskLayer: CAShapeLayer
+        let isNewMask: Bool
+        if let existing = self.containerCornerMaskLayer {
+            maskLayer = existing
+            isNewMask = false
+        } else {
+            maskLayer = CAShapeLayer()
+            self.containerCornerMaskLayer = maskLayer
+            self.containerNode.layer.mask = maskLayer
+            isNewMask = true
+        }
+        let previousPath = maskLayer.path
+        maskLayer.frame = CGRect(origin: CGPoint(), size: size)
+        maskLayer.path = path
+        // The mask does not follow the layer's frame animation on its own, so a growing bubble would
+        // clip to its old shape for the whole animation and snap at the end. Animate the path
+        // alongside. Skipped on the first application, where there is no previous shape to grow from.
+        if case let .animated(duration, curve) = cornersTransition, !isNewMask, let previousPath, previousPath != path {
+            maskLayer.animate(from: previousPath, to: path, keyPath: "path", timingFunction: curve.timingFunction, duration: duration, mediaTimingFunction: curve.mediaTimingFunction)
         }
     }
 
@@ -1615,7 +1758,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             return
         }
 
-        // pageView sits at (-1, 0) inside containerNode; the adapter is placed at
+        // pageView sits flush at (0, 0) inside containerNode; the adapter is placed at
         // containerNode.bounds, so shift each item's page-space origin into
         // containerNode-local coords for the adapter to operate in.
         let pageOrigin = pageView.frame.origin

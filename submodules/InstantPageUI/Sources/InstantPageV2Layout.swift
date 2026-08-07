@@ -472,7 +472,14 @@ public func layoutInstantPageV2(
     cachedMessageSyntaxHighlight: CachedMessageSyntaxHighlight?,
     expandedDetails: [Int: Bool],
     fitToWidth: Bool,
-    computeRevealCharacterRects: Bool = false
+    computeRevealCharacterRects: Bool = false,
+    /// Points trimmed from the TOP-LEVEL sequence's leading and trailing spacing (clamped at 0).
+    ///
+    /// For a host that insets the whole page — the chat bubble insets it 1pt so media sits inside
+    /// the rounded container rather than being clipped by it — this gives that inset back out of the
+    /// page's own outer padding, so the blocks keep their absolute positions and the host keeps its
+    /// size. Default 0: the other V2 surfaces place the page flush and must not lose padding.
+    edgeSpacingReduction: CGFloat = 0.0
 ) -> InstantPageV2Layout {
     guard case let .Loaded(loadedContent) = webpage.content else {
         return InstantPageV2Layout(contentSize: .zero, items: [], detailsIndices: [])
@@ -511,6 +518,7 @@ public func layoutInstantPageV2(
         fitToWidth: fitToWidth,
         computeRevealCharacterRects: computeRevealCharacterRects,
         pageHorizontalInset: horizontalInset,
+        edgeSpacingReduction: edgeSpacingReduction,
         mediaIndexCounter: 0,
         detailsIndexCounter: 0,
         expandedDetails: expandedDetails
@@ -662,6 +670,7 @@ private struct LayoutContext {
     let fitToWidth: Bool
     let computeRevealCharacterRects: Bool
     let pageHorizontalInset: CGFloat
+    let edgeSpacingReduction: CGFloat
 
     var mediaIndexCounter: Int = 0
     var detailsIndexCounter: Int = 0
@@ -685,7 +694,12 @@ private func layoutBlockSequence(
     var previousBlock: InstantPageBlock?
 
     for (i, block) in blocks.enumerated() {
-        let spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, kind: kind)
+        var spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, kind: kind)
+        // Leading page edge: give back the inset the host applied around the whole page. Clamped at
+        // 0 — a flush first block (cover, anchor) has no padding here to give.
+        if previousBlock == nil && kind == .topLevel {
+            spacing = max(0.0, spacing - context.edgeSpacingReduction)
+        }
         let localItems = layoutBlock(
             block,
             boundingWidth: boundingWidth,
@@ -719,7 +733,11 @@ private func layoutBlockSequence(
         }
     }
 
-    let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: kind)
+    var closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: kind)
+    // Trailing page edge — the mirror of the leading trim above.
+    if kind == .topLevel {
+        closingSpacing = max(0.0, closingSpacing - context.edgeSpacingReduction)
+    }
     contentHeight += closingSpacing
 
     var contentSize = CGSize(width: boundingWidth, height: contentHeight)
