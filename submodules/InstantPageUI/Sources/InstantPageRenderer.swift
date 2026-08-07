@@ -2133,7 +2133,7 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
         if let language = item.language, !language.isEmpty {
             self.languageLabel.isHidden = false
             self.languageLabel.attributedText = NSAttributedString(string: language, attributes: [
-                .font: UIFont(name: "Menlo", size: 11.0) ?? Font.regular(11.0),
+                .font: UIFont(name: "Menlo", size: item.languageFontSize) ?? Font.regular(item.languageFontSize),
                 .foregroundColor: item.languageLabelColor
             ])
             self.languageLabel.sizeToFit()

@@ -20,9 +20,15 @@ enum BlockSequenceKind {
 /// are flush below but not above. `.anchor` is the one block that sets both, being an invisible
 /// zero-height marker.
 struct InstantPageBlockSpacing {
-    var verticalPadding: CGFloat = 4.0
+    var verticalPadding: CGFloat
     var flushAbove: Bool = false
     var flushBelow: Bool = false
+
+    init(verticalPadding: CGFloat, flushAbove: Bool = false, flushBelow: Bool = false) {
+        self.verticalPadding = verticalPadding
+        self.flushAbove = flushAbove
+        self.flushBelow = flushBelow
+    }
 }
 
 /// The gap between any two adjacent blocks, before either block's padding is added.
@@ -35,7 +41,11 @@ extension InstantPageBlock {
     /// Deliberately NOT exhaustive: every unnamed case takes the defaults, which are a genuine
     /// correct value rather than a silently-wrong one. Naming all thirty-odd cases to return the
     /// same literal would bury the four that carry meaning.
-    var spacing: InstantPageBlockSpacing {
+    /// `metrics` supplies the padding values, already scaled for the content this block sits in —
+    /// page scale outside a quote, quote scale within one. The padding is therefore never a
+    /// literal here: `InstantPageBlockSpacing.verticalPadding` deliberately lost its `= 4.0`
+    /// default, because a defaulted padding is a literal that silently ignores the scale.
+    func spacing(metrics: InstantPageMetrics) -> InstantPageBlockSpacing {
         switch self {
         case .anchor:
             // A zero-height invisible marker: transparent to spacing on both sides. The padding is
@@ -46,22 +56,22 @@ extension InstantPageBlock {
         case .cover, .channelBanner:
             // Page-header elements: they butt against the top of the page, while their successor
             // (the title) takes a normal gap.
-            return InstantPageBlockSpacing(flushAbove: true)
+            return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true)
         case .relatedArticles:
             // A full-bleed footer section: flush against whatever follows it.
-            return InstantPageBlockSpacing(flushBelow: true)
+            return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushBelow: true)
         case .heading:
-            return InstantPageBlockSpacing(verticalPadding: 8.0)
+            return InstantPageBlockSpacing(verticalPadding: metrics.headingVerticalPadding)
         case .divider:
-            return InstantPageBlockSpacing(verticalPadding: 4.0)
+            return InstantPageBlockSpacing(verticalPadding: metrics.dividerVerticalPadding)
         case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption), let .slideshow(_, caption), let .collage(_, caption), let .map(_, _, _, _, caption):
             if caption.credit != .empty && caption.credit != .plain("") {
-                return InstantPageBlockSpacing(flushAbove: true, flushBelow: false)
+                return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true, flushBelow: false)
             } else {
-                return InstantPageBlockSpacing(flushAbove: true, flushBelow: true)
+                return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true, flushBelow: true)
             }
         default:
-            return InstantPageBlockSpacing()
+            return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding)
         }
     }
 }
@@ -76,10 +86,14 @@ extension InstantPageBlock {
 /// `kind` is currently unread. It is kept because container-specific spacing (denser table cells,
 /// tighter list sub-blocks) is expected to return; do not delete it as dead, and do not read its
 /// absence from the body as a bug.
-func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, kind: BlockSequenceKind) -> CGFloat {
+///
+/// `metrics` is REQUIRED rather than defaulted to `.unscaled`. A default would let a new V2 call
+/// site silently get page-scale spacing inside a quote — the failure mode this whole scale design
+/// is built to prevent — and it costs only the six V1 call sites, which always pass `.unscaled`.
+func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, kind: BlockSequenceKind, metrics: InstantPageMetrics) -> CGFloat {
     if let upper, let lower {
-        var upperSpacing = upper.spacing
-        let lowerSpacing = lower.spacing
+        var upperSpacing = upper.spacing(metrics: metrics)
+        let lowerSpacing = lower.spacing(metrics: metrics)
         
         var upperIsRawMedia = false
         switch upper {
@@ -143,8 +157,11 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
             case .paragraph:
                 switch lower {
                 case .heading:
-                    return upperSpacing.verticalPadding + instantPageBaseBlockSpacing + lowerSpacing.verticalPadding
+                    return upperSpacing.verticalPadding + metrics.baseBlockSpacing + lowerSpacing.verticalPadding
                 case .paragraph:
+                    // A minimum separation, not a body-font-derived size: two paragraphs are held
+                    // apart by their own line boxes. Left unscaled deliberately —
+                    // floorToScreenPixels(1.0 * 15/17) is 0.67pt.
                     return 1.0
                 default:
                     if lowerIsRawMedia {
@@ -167,11 +184,11 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
             if case .details = lower {
                 return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
             }
-            return upperSpacing.verticalPadding + 4.0 + lowerSpacing.verticalPadding
+            return upperSpacing.verticalPadding + metrics.detailsAdjacentSpacing + lowerSpacing.verticalPadding
         }
-        return upperSpacing.verticalPadding + instantPageBaseBlockSpacing + lowerSpacing.verticalPadding
+        return upperSpacing.verticalPadding + metrics.baseBlockSpacing + lowerSpacing.verticalPadding
     } else if let lower {
-        let lowerSpacing = lower.spacing
+        let lowerSpacing = lower.spacing(metrics: metrics)
         switch lower {
         case .paragraph, .thinking:
             return lowerSpacing.verticalPadding + 2.0
@@ -180,7 +197,7 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         }
         return lowerSpacing.flushAbove ? 0.0 : lowerSpacing.verticalPadding
     } else if let upper {
-        let upperSpacing = upper.spacing
+        let upperSpacing = upper.spacing(metrics: metrics)
         switch upper {
         case .paragraph, .thinking:
             return upperSpacing.verticalPadding + 2.0

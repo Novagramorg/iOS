@@ -57,7 +57,8 @@ func instantPageV2LayoutButtonRow(
     alignment: InstantPageButtonRowAlignment,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
-    rtl: Bool
+    rtl: Bool,
+    metrics: InstantPageMetrics
 ) -> (entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)], totalHeight: CGFloat) {
     let availableWidth = boundingWidth - horizontalInset * 2.0
     guard !labelledButtons.isEmpty, availableWidth > 0.0 else {
@@ -70,7 +71,8 @@ func instantPageV2LayoutButtonRow(
             labelledButtons: labelledButtons,
             availableWidth: availableWidth,
             horizontalInset: horizontalInset,
-            rtl: rtl
+            rtl: rtl,
+            metrics: metrics
         )
     case .left, .center, .right:
         return instantPageV2LayoutHuggingButtonRow(
@@ -78,7 +80,8 @@ func instantPageV2LayoutButtonRow(
             alignment: alignment,
             availableWidth: availableWidth,
             horizontalInset: horizontalInset,
-            rtl: rtl
+            rtl: rtl,
+            metrics: metrics
         )
     }
 }
@@ -89,14 +92,15 @@ private func instantPageV2LayoutJustifiedButtonRow(
     labelledButtons: [(button: InstantPageButton, labelString: NSAttributedString)],
     availableWidth: CGFloat,
     horizontalInset: CGFloat,
-    rtl: Bool
+    rtl: Bool,
+    metrics: InstantPageMetrics
 ) -> (entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)], totalHeight: CGFloat) {
     var entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)] = []
     var y: CGFloat = 0.0
     var index = 0
     while index < labelledButtons.count {
         let rowButtons = Array(labelledButtons[index ..< min(index + instantPageBlockButtonsPerRow, labelledButtons.count)])
-        let totalSpacing = instantPageBlockButtonSpacing * CGFloat(max(0, rowButtons.count - 1))
+        let totalSpacing = metrics.blockButtonSpacing * CGFloat(max(0, rowButtons.count - 1))
         let buttonWidth = max(0.0, (availableWidth - totalSpacing) / CGFloat(rowButtons.count))
         for (position, entry) in rowButtons.enumerated() {
             // Cap the label at the column it will be stretched to. The pill centres its label, so the
@@ -110,13 +114,13 @@ private func instantPageV2LayoutJustifiedButtonRow(
             let iconReserve = instantPageBlockButtonIconName(for: entry.button.action) != nil ? instantPageBlockButtonIconReserve * 2.0 : 0.0
             let attachment = instantPageInlineButtonAttachment(button: entry.button, labelString: entry.labelString, maxWidth: max(0.0, buttonWidth - iconReserve))
             let column = rtl ? (rowButtons.count - 1 - position) : position
-            let x = horizontalInset + CGFloat(column) * (buttonWidth + instantPageBlockButtonSpacing)
-            entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: instantPageBlockButtonHeight)))
+            let x = horizontalInset + CGFloat(column) * (buttonWidth + metrics.blockButtonSpacing)
+            entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: metrics.blockButtonHeight)))
         }
-        y += instantPageBlockButtonHeight + instantPageBlockButtonSpacing
+        y += metrics.blockButtonHeight + metrics.blockButtonSpacing
         index += instantPageBlockButtonsPerRow
     }
-    return (entries, max(0.0, y - instantPageBlockButtonSpacing))
+    return (entries, max(0.0, y - metrics.blockButtonSpacing))
 }
 
 /// Left / centre / right: every pill hugs its label, rows fill greedily, and each row is placed at its
@@ -126,7 +130,8 @@ private func instantPageV2LayoutHuggingButtonRow(
     alignment: InstantPageButtonRowAlignment,
     availableWidth: CGFloat,
     horizontalInset: CGFloat,
-    rtl: Bool
+    rtl: Bool,
+    metrics: InstantPageMetrics
 ) -> (entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)], totalHeight: CGFloat) {
     // Pass 1 — measure each pill at its natural width, capped so that even the longest label fits
     // `availableWidth` on its own (the attachment builder ellipsises past the cap). Pass 2 depends on
@@ -148,14 +153,14 @@ private func instantPageV2LayoutHuggingButtonRow(
     for index in 0 ..< measured.count {
         let width = measured[index].width
         if !currentRow.isEmpty {
-            let projected = currentWidth + instantPageBlockButtonSpacing + width
+            let projected = currentWidth + metrics.blockButtonSpacing + width
             if projected > availableWidth || currentRow.count >= instantPageBlockButtonsPerRow {
                 rows.append(currentRow)
                 currentRow = []
                 currentWidth = 0.0
             }
         }
-        currentWidth = currentRow.isEmpty ? width : currentWidth + instantPageBlockButtonSpacing + width
+        currentWidth = currentRow.isEmpty ? width : currentWidth + metrics.blockButtonSpacing + width
         currentRow.append(index)
     }
     if !currentRow.isEmpty {
@@ -166,16 +171,16 @@ private func instantPageV2LayoutHuggingButtonRow(
     var frames = [CGRect](repeating: .zero, count: measured.count)
     var y: CGFloat = 0.0
     for row in rows {
-        let rowWidth = row.reduce(0.0) { $0 + measured[$1].width } + instantPageBlockButtonSpacing * CGFloat(max(0, row.count - 1))
+        let rowWidth = row.reduce(0.0) { $0 + measured[$1].width } + metrics.blockButtonSpacing * CGFloat(max(0, row.count - 1))
         let slack = max(0.0, availableWidth - rowWidth)
         var x = horizontalInset + instantPageBlockButtonRowSlackOffset(alignment: alignment, slack: slack, rtl: rtl)
         // The first button sits at the reading start, so on an RTL page the pills run right-to-left.
         let visualOrder = rtl ? Array(row.reversed()) : row
         for index in visualOrder {
-            frames[index] = CGRect(x: x, y: y, width: measured[index].width, height: instantPageBlockButtonHeight)
-            x += measured[index].width + instantPageBlockButtonSpacing
+            frames[index] = CGRect(x: x, y: y, width: measured[index].width, height: metrics.blockButtonHeight)
+            x += measured[index].width + metrics.blockButtonSpacing
         }
-        y += instantPageBlockButtonHeight + instantPageBlockButtonSpacing
+        y += metrics.blockButtonHeight + metrics.blockButtonSpacing
     }
 
     // Indexed rather than `enumerated().map { (offset, item) in … }`: Swift rejects destructuring a
@@ -183,5 +188,5 @@ private func instantPageV2LayoutHuggingButtonRow(
     let entries = (0 ..< measured.count).map { index in
         return (attachment: measured[index].attachment, frame: frames[index])
     }
-    return (entries, max(0.0, y - instantPageBlockButtonSpacing))
+    return (entries, max(0.0, y - metrics.blockButtonSpacing))
 }

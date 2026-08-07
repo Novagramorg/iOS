@@ -497,7 +497,7 @@ public func layoutInstantPageBlock(webpage: TelegramMediaWebpage, userLocation: 
                             let subBlock = blocks[i]
                             let subLayout = layoutInstantPageBlock(webpage: webpage, userLocation: userLocation, rtl: rtl, block: subBlock, boundingWidth: boundingWidth - horizontalInset * 2.0 - contentGutter, horizontalInset: 0.0, safeInset: 0.0, isCover: false, previousItems: listItems, fillToSize: nil, media: media, mediaIndexCounter: &mediaIndexCounter, embedIndexCounter: &embedIndexCounter, detailsIndexCounter: &detailsIndexCounter, theme: theme, strings: strings, dateTimeFormat: dateTimeFormat, webEmbedHeights: webEmbedHeights, cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight, excludeCaptions: false, isLast: i == blocks.count - 1, fitToWidth: fitToWidth)
                             
-                            let spacing: CGFloat = previousBlock != nil && subLayout.contentSize.height > 0.0 ? spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .topLevel) : 0.0
+                            let spacing: CGFloat = previousBlock != nil && subLayout.contentSize.height > 0.0 ? spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .topLevel, metrics: .unscaled) : 0.0
                             let blockItems = subLayout.flattenedItemsWithOrigin(CGPoint(x: horizontalInset + contentGutter, y: contentSize.height + spacing))
                             if previousBlock == nil {
                                 originY += spacing
@@ -814,7 +814,7 @@ public func layoutInstantPageBlock(webpage: TelegramMediaWebpage, userLocation: 
                 let subBlock = blocks[i]
                 let subLayout = layoutInstantPageBlock(webpage: webpage, userLocation: userLocation, rtl: rtl, block: subBlock, boundingWidth: boundingWidth - horizontalInset * 2.0 - lineInset, horizontalInset: 0.0, safeInset: 0.0, isCover: false, previousItems: items, fillToSize: nil, media: media, mediaIndexCounter: &mediaIndexCounter, embedIndexCounter: &embedIndexCounter, detailsIndexCounter: &detailsIndexCounter, theme: theme, strings: strings, dateTimeFormat: dateTimeFormat, webEmbedHeights: webEmbedHeights, cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight, excludeCaptions: false, isLast: i == blocks.count - 1, fitToWidth: fitToWidth)
                 
-                let spacing = spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .topLevel)
+                let spacing = spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .topLevel, metrics: .unscaled)
                 let blockItems = subLayout.flattenedItemsWithOrigin(CGPoint(x: horizontalInset + lineInset, y: contentSize.height + spacing))
                 items.append(contentsOf: blockItems)
                 contentSize.height += subLayout.contentSize.height + spacing
@@ -998,7 +998,7 @@ public func layoutInstantPageBlock(webpage: TelegramMediaWebpage, userLocation: 
                 let subBlock = blocks[i]
                 let subLayout = layoutInstantPageBlock(webpage: webpage, userLocation: userLocation, rtl: rtl, block: subBlock, boundingWidth: boundingWidth, horizontalInset: horizontalInset, safeInset: safeInset, isCover: false, previousItems: subitems, fillToSize: nil, media: media, mediaIndexCounter: &mediaIndexCounter, embedIndexCounter: &embedIndexCounter, detailsIndexCounter: &subDetailsIndex, theme: theme, strings: strings, dateTimeFormat: dateTimeFormat, webEmbedHeights: webEmbedHeights, cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight, excludeCaptions: false, isLast: i == blocks.count - 1, fitToWidth: fitToWidth)
                 
-                let spacing = spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .topLevel)
+                let spacing = spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .topLevel, metrics: .unscaled)
                 let blockItems = subLayout.flattenedItemsWithOrigin(CGPoint(x: 0.0, y: contentSize.height + spacing))
                 subitems.append(contentsOf: blockItems)
                 contentSize.height += subLayout.contentSize.height + spacing
@@ -1006,7 +1006,7 @@ public func layoutInstantPageBlock(webpage: TelegramMediaWebpage, userLocation: 
             }
             
             if !blocks.isEmpty {
-                let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: .topLevel)
+                let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: .topLevel, metrics: .unscaled)
                 contentSize.height += closingSpacing
             }
             
@@ -1141,7 +1141,7 @@ public func instantPageLayoutForWebPage(_ webPage: TelegramMediaWebpage, instant
     for i in 0 ..< pageBlocks.count {
         let block = pageBlocks[i]
         let blockLayout = layoutInstantPageBlock(webpage: webPage, userLocation: userLocation, rtl: rtl, block: block, boundingWidth: boundingWidth, horizontalInset: sideInset + safeInset, safeInset: safeInset, isCover: false, previousItems: items, fillToSize: nil, media: media, mediaIndexCounter: &mediaIndexCounter, embedIndexCounter: &embedIndexCounter, detailsIndexCounter: &detailsIndexCounter, theme: theme, strings: strings, dateTimeFormat: dateTimeFormat, webEmbedHeights: webEmbedHeights, cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight, excludeCaptions: false, isLast: i == pageBlocks.count - 1, fitToWidth: fitToWidth)
-        let spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, kind: .topLevel)
+        let spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, kind: .topLevel, metrics: .unscaled)
         let blockItems = blockLayout.flattenedItemsWithOrigin(CGPoint(x: 0.0, y: contentSize.height + spacing))
         items.append(contentsOf: blockItems)
         if CGFloat(0.0).isLess(than: blockLayout.contentSize.height) {
@@ -1150,7 +1150,7 @@ public func instantPageLayoutForWebPage(_ webPage: TelegramMediaWebpage, instant
         }
     }
     
-    let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: .topLevel)
+    let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: .topLevel, metrics: .unscaled)
     contentSize.height += closingSpacing
     
     if webPage.webpageId.id != 0 && addFeedback {
