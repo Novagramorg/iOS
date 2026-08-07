@@ -270,10 +270,16 @@ tmp_path = repo + '/variables.bzl.tmp'
 # profiles and looks for ones Xcode would create.
 use_xcode_managed = ('$MODE' == 'simulator')
 
+# Passing '' here makes Telegram/BUILD omit the aps-environment key ENTIRELY, so
+# registerForRemoteNotifications() fails and the app never gets a device token —
+# total push silence. publish.sh had the exact same defect until 2026-07-15.
+# Device builds are signed with Fenixuz.mobileprovision, which carries
+# aps-environment: development, so that is the only valid value here.
+# Simulator builds use Xcode-managed signing and don't deliver remote push at all.
 config.write_to_variables_file(
     bazel_path=bazel,
     use_xcode_managed_codesigning=use_xcode_managed,
-    aps_environment='',
+    aps_environment=('' if '$MODE' == 'simulator' else 'development'),
     path=tmp_path
 )
 new_content = open(tmp_path).read()

@@ -552,9 +552,9 @@ Module: `submodules/Fenixuz/NovagramAds` — target `FenixNovagramAds` (bridge) 
 
 Hooks in this file (all additive, `.novagramAdPeer` sorts before every other case so it renders first):
 
-1. **Import** — add `import FenixNovagramAds` next to `import FetchManagerImpl`.
+1. **Import** — add `import FenixNovagramAds` next to `import FetchManagerImpl`, plus `import AdsInfoScreen` (already a `//submodules/ChatListUI` BUILD dep, used by `ChatListController.swift`) for the ad-badge menu.
 2. **`ChatListSearchEntryStableId`** — add `case novagramAdPeerId(EnginePeer.Id)`.
-3. **`ChatListSearchEntry`** — add `case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, String?)` (peer, orderId, index, theme, strings, query). Handle it in `stableId`, `==`, `<` (sorts first — less than `.topic`; add it to the `return false` group of every other case's rhs switch), and `item(...)` (renders a `ContactsPeerItem` with `rightLabelText: .init(text: "ads by Novagram", …)`, tap → `interaction.peerSelected` + `FenixNovagramSearchAds.reportClick`).
+3. **`ChatListSearchEntry`** — add `case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, String?)` (peer, orderId, index, theme, strings, query). Handle it in `stableId`, `==`, `<` (sorts first — less than `.topic`; add it to the `return false` group of every other case's rhs switch), and `item(...)` (renders a `ContactsPeerItem` with `isAd: true`, tap → `interaction.peerSelected` + `FenixNovagramSearchAds.reportClick`, and `adButtonAction:` → `interaction.present(AdsInfoScreen(context:mode: .search), nil)`). **2026-08-07:** this used to pass a custom `rightLabelText: .init(text: "ads by Novagram", …)` pill and `isAd: false`, which made our promoted row visibly different from Telegram's own sponsored results. It now uses upstream's `isAd: true`, which draws `PresentationResourcesChatList.searchAdIcon` — the localized `ChatList_Search_Ad` label ("Ad" / "Reklama") plus the three-dot button — so ours is pixel-identical to a server-side ad. The theme payload is no longer bound in the `case let` (it stays in the enum for equality-driven relayout).
 4. **`foundRemotePeers`** — widen its tuple from `([FoundPeer],[FoundPeer],[AdPeer],Bool)` to `(…,Bool, FenixNovagramPromotedChannel?)`. In the `.chats` branch, `combineLatest` the existing `searchAdPeers(query:)` with `FenixNovagramSearchAds.promotedChannel(context:query:)`; every other branch passes `nil` as the 5th element.
 5. **Entry insert** — right after `var existingPeerIds = Set<EnginePeer.Id>()`, if `foundRemotePeers.4` is non-nil and not hidden, insert `.novagramAdPeer(...)` at index 0 of `entries` and add its peer id to `existingPeerIds` (so it isn't duplicated as a local/global result).
 
@@ -3758,3 +3758,61 @@ Do not touch these three gate sites when re-applying hooks after an upstream pul
 one-line `||`/`&&` addition verbatim; upstream's surrounding condition (`isPremium`,
 `maybeSuggestPremium`, `hasAutoTranslate`, `autoTranslate`, `isHidden`,
 `translationState.isEnabled`) is taken as-is.
+
+
+## 📌 Generic "You have a new message" banners — NSE fallback fixes (2026-08-07)
+
+Symptom: bursts of banners reading only `PUSH_ENCRYPTED_MESSAGE` ("You have a new message") — no sender, no text,
+no avatar — that also never clear off the lock screen. Root-caused by a 127-agent audit; full write-up in
+`Telegram-iOS/PUSH_AUDIT_2026-08-07.md` and `Telegram-iOS/_push-audit-2026-08-07/SYNTHESIS.md` (both untracked).
+
+**Mechanism.** The banner is the RAW server payload: both completion sites in `NotificationService` fall through to
+`contentHandler(initialContent)` whenever the `content` atomic is still nil. Real-message pushes pre-set their
+content well before the poll, so a late stall still renders sender + text — the generic string is only reachable
+when the NSE dies *before* that pre-set. That whole pre-set segment has **no timeout anywhere**, builds a full
+Postbox plus a live MTProto Network per invocation, and runs on ONE process-global serial queue
+(`NotificationService.swift:24` `private let queue = Queue()`), which iOS shares across a burst of pushes.
+Note that decrypt failures are NOT the cause — every decrypt error branch publishes an empty content first, and
+iOS suppresses an empty content, so a decrypt failure yields no banner at all.
+
+### A. `Telegram/NotificationService/Sources/NotificationService.swift` — watchdog (F2)
+
+In `didReceive`, after the `QueueLocalObject` is created, a 20 s watchdog runs on
+`DispatchQueue.global(qos: .userInitiated)` — deliberately **not** on `queue`, which is the starved resource. If the
+content atomic is still nil it takes over `contentHandler` and delivers an empty `NotificationContent`, so a stall
+is silent instead of emitting the misleading generic banner. Behaviour change approved by the owner 2026-08-07:
+*suppress rather than show a useless banner* (the message still lands in the app and the badge still updates).
+
+### B. `Telegram/NotificationService/Sources/NotificationService.swift` — nil-content hole (F6)
+
+In the real-message branch, the `else` arm taken when `aps["alert"]` is neither a dict nor a string used to call
+`completed()` with the atomic never published, which re-emitted the raw payload. It now calls
+`updateCurrentContent(content)` first. Pure bug fix, no behaviour removed.
+
+### C. `submodules/TelegramUI/Sources/AppDelegate.swift` — sweep un-enriched banners (F5)
+
+Inside `ClearNotificationsManager`'s `getNotificationIds`, a delivered notification that resolves to no
+`NotificationManagedNotificationRequestId` **and** still carries the encrypted `p` key is collected into
+`fenixuzUnenrichedIdentifiers` and passed to `removeDeliveredNotifications(withIdentifiers:)`. `p` survives only on
+notifications the NSE did **not** rewrite (an enriched one carries the NSE's own `userInfo`), so this can never
+touch a real message banner, a call banner, or the local unread reminder. This is what stops the pile-up.
+
+### D. `run.sh` — device builds had NO push entitlement at all
+
+`run.sh` passed `aps_environment=''`, and `Telegram/BUILD` omits the `aps-environment` key entirely when that value
+is empty, so `registerForRemoteNotifications()` failed and every `./run.sh -r` build got no device token — total
+push silence. This is the same defect `publish.sh` carried until 2026-07-15; `run.sh` was never fixed. It now
+passes `'development'` for device builds (matching `Fenixuz.mobileprovision`) and `''` for the simulator.
+⚠️ `release.sh:282` still has the original `aps_environment=''` plus a stale comment claiming the App ID has no
+Push capability — untrue since 2026-07-07. Fix it if that script is ever used.
+
+### E. ⚠️ TEMPORARY DIAGNOSTIC — must be reverted before an App Store build
+
+`NotificationService.swift` forces `Logger.shared.logToFile = true` instead of honouring the stored setting.
+Reason: `installedSharedLogger` is a process-global, so `setupSharedLogger` installs the logger only on a cold
+process; applying a stored `logToFile: false` there silences every **reused-process** invocation, meaning a burst
+of notifications leaves no trace at all and the notification log shows only cold starts hours apart. Do not read
+such a log as "the NSE did not run". The permanent fix would be to re-apply the stored setting per invocation
+rather than pinning it on; until then this block is tagged `FENIX DIAGNOSTIC — REVERT BEFORE APP STORE RELEASE`.
+
+### BUILD changes: none

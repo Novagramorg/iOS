@@ -802,7 +802,13 @@ private final class NotificationServiceHandler {
         
         Logger.shared.log("NotificationService \(episode)", "Logging settings: (logToFile: \(loggingSettings.logToFile))")
         
-        Logger.shared.logToFile = loggingSettings.logToFile
+        // FENIX DIAGNOSTIC — REVERT BEFORE APP STORE RELEASE.
+        // iOS reuses one NSE process for a burst of notifications, and setupSharedLogger only
+        // installs the logger on a cold process. Setting logToFile from the stored setting here
+        // silences every reused-process invocation, so a burst leaves no trace at all in
+        // notification-logs and the only visible episodes are cold starts hours apart.
+        // Keep file logging on unconditionally while we chase the generic-banner bug.
+        Logger.shared.logToFile = true
         Logger.shared.logToConsole = loggingSettings.logToConsole
         Logger.shared.redactSensitiveData = loggingSettings.redactSensitiveData
 
@@ -1169,6 +1175,12 @@ private final class NotificationServiceHandler {
                             } else if let alert = aps["alert"] as? String {
                                 content.body = alert
                             } else {
+                                // Fenixuz: publish the (bodyless) content before completing. Leaving the
+                                // atomic nil here makes both completion sites fall through to
+                                // contentHandler(initialContent), which re-emits the raw server payload —
+                                // the generic "You have a new message" banner. An empty content is
+                                // suppressed by iOS instead, which is what this branch means.
+                                updateCurrentContent(content)
                                 completed()
                                 return
                             }
@@ -2633,6 +2645,31 @@ final class NotificationService: UNNotificationServiceExtension {
                 payload: request.content.userInfo
             ))
         })
+
+        // Fenixuz: watchdog against the generic-banner bug.
+        // Everything before the content pre-set inside the handler runs on ONE process-global
+        // serial queue (`queue`, file scope) with no timeout anywhere in that segment, and each
+        // invocation builds a full Postbox plus a live MTProto Network. iOS reuses a single NSE
+        // process for a burst of pushes, so later ones starve past the extension budget. When
+        // that happens both completion sites fall through to `contentHandler(initialContent)`
+        // and re-emit the raw server payload — the useless "You have a new message" banner that
+        // then stacks up on the lock screen. Publishing an empty content instead makes iOS
+        // suppress the banner, which is the same idiom upstream already uses for silent pushes.
+        // Deliberately NOT scheduled on `queue`: that queue is precisely what is starved.
+        // Scheduled on main because that is exactly where the system already calls
+        // serviceExtensionTimeWillExpire from — reusing that thread means this introduces no new
+        // concurrent access to `contentHandler` beyond the main/queue pair upstream already has.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20.0) { [weak self] in
+            guard let strongSelf = self, let contentHandler = strongSelf.contentHandler else {
+                return
+            }
+            if content.with({ $0 }) != nil {
+                return
+            }
+            strongSelf.contentHandler = nil
+            Logger.shared.log("NotificationService \(episode)", "Watchdog: still no content after 20s, suppressing the raw server fallback")
+            contentHandler(NotificationContent(isLockedMessage: nil).generate())
+        }
     }
     
     override func serviceExtensionTimeWillExpire() {
