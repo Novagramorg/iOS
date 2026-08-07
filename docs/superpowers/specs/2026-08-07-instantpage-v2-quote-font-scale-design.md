@@ -127,7 +127,7 @@ against the literals.
 | Block rhythm (`InstantPageLayoutSpacings.swift`) | `baseBlockSpacing` 8 · `blockVerticalPadding` 4 · `headingVerticalPadding` 8 · `dividerVerticalPadding` 4 · `detailsAdjacentSpacing` 4 |
 | Caption/credit (`layoutCaptionAndCredit`) | `captionTopPad` 9 · `creditTopPad` 10 · `coverCaptionExtraPad` 14 |
 | Quote (`layoutBlockQuote`, `layoutQuoteText`) | `quoteVerticalInset` 6 · `pullQuoteVerticalInset` 12 · `quoteLineInset` 9 · `quoteLeadingInset` 9 · `quoteTrailingInset` 16 · `pullQuotePadding` 30 · `quoteAttributionGap` 3 |
-| Code block (`layoutCodeBlock`) | `codeBlockVerticalInset` 6 · `codeBlockHorizontalInset` 9 · `codeBlockFontSize` 15 |
+| Code block (`layoutCodeBlock`) | `codeBlockVerticalInset` 6 · `codeBlockHorizontalInset` 9 · `codeBlockFontSize` 15 · `codeBlockLanguageFontSize` 11 |
 | List (`layoutList`, `InstantPageShapeItem.swift`) | `listIndexSpacing` 8 · `checklistMarkerSize` 18×18 · `bulletDiameter` 5 · `listItemTextwardOffset` 2 · `numberMarkerTextwardOffset` 5 |
 | Table (`layoutTable`) | `tableCellInsets` 7/13 · `tableMinCompressedColumnWidth` 60 |
 | Details (`layoutDetails`) | `detailsMinTitleHeight` 36 · `detailsTitleVerticalPad` 15 · `detailsChevronReserve` 32 · `detailsTitleHorizontalInset` 23 |
