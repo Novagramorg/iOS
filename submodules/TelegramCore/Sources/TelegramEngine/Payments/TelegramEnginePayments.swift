@@ -13,6 +13,10 @@ public extension TelegramEngine {
         public func getBankCardInfo(cardNumber: String) -> Signal<BankCardInfo?, NoError> {
             return _internal_getBankCardInfo(account: self.account, cardNumber: cardNumber)
         }
+
+        public func currencyRates() -> Signal<[CurrencyRate]?, NoError> {
+            return _internal_currencyRates(account: self.account)
+        }
         
         public func fetchBotPaymentInvoice(source: BotPaymentInvoiceSource) -> Signal<TelegramMediaInvoice, BotPaymentFormRequestError> {
             return _internal_fetchBotPaymentInvoice(postbox: self.account.postbox, network: self.account.network, source: source)

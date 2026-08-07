@@ -177,7 +177,8 @@ enum Mappers {
             bounce: wire.bounce ?? false,
             bounced: wire.bounced ?? false,
             bodyBoc: wire.messageContent?.body,
-            comment: wire.messageContent?.decoded?.comment
+            comment: wire.messageContent?.decoded?.comment,
+            hasStateInit: wire.initState != nil
         )
     }
 }

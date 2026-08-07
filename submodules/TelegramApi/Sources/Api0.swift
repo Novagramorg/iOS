@@ -256,6 +256,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[341499403] = { return Api.Contact.parse_contact($0) }
     dict[496600883] = { return Api.ContactBirthday.parse_contactBirthday($0) }
     dict[383348795] = { return Api.ContactStatus.parse_contactStatus($0) }
+    dict[819557436] = { return Api.CurrencyRate.parse_currencyRate($0) }
     dict[2104790276] = { return Api.DataJSON.parse_dataJSON($0) }
     dict[414687501] = { return Api.DcOption.parse_dcOption($0) }
     dict[1135897376] = { return Api.DefaultHistoryTTL.parse_defaultHistoryTTL($0) }
@@ -1620,6 +1621,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[927967149] = { return Api.payments.CheckCanSendGiftResult.parse_checkCanSendGiftResultOk($0) }
     dict[-342343793] = { return Api.payments.CheckedGiftCode.parse_checkedGiftCode($0) }
     dict[-1730811363] = { return Api.payments.ConnectedStarRefBots.parse_connectedStarRefBots($0) }
+    dict[-1144199998] = { return Api.payments.CurrencyRates.parse_currencyRates($0) }
     dict[-1362048039] = { return Api.payments.ExportedInvoice.parse_exportedInvoice($0) }
     dict[1130879648] = { return Api.payments.GiveawayInfo.parse_giveawayInfo($0) }
     dict[-512366993] = { return Api.payments.GiveawayInfo.parse_giveawayInfoResults($0) }
@@ -1922,6 +1924,8 @@ public extension Api {
         case let _1 as Api.ContactBirthday:
             _1.serialize(buffer, boxed)
         case let _1 as Api.ContactStatus:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.CurrencyRate:
             _1.serialize(buffer, boxed)
         case let _1 as Api.DataJSON:
             _1.serialize(buffer, boxed)
@@ -2866,6 +2870,8 @@ public extension Api {
         case let _1 as Api.payments.CheckedGiftCode:
             _1.serialize(buffer, boxed)
         case let _1 as Api.payments.ConnectedStarRefBots:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.payments.CurrencyRates:
             _1.serialize(buffer, boxed)
         case let _1 as Api.payments.ExportedInvoice:
             _1.serialize(buffer, boxed)

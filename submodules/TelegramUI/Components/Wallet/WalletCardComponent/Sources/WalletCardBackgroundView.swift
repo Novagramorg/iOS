@@ -11,8 +11,7 @@ private struct WalletCardTilt {
     static let zero = WalletCardTilt(x: 0.0, y: 0.0)
 }
 
-#if targetEnvironment(simulator)
-private final class WalletCardSimulatorDisplayLinkTarget: NSObject {
+private final class WalletCardDisplayLinkTarget: NSObject {
     private let update: (CADisplayLink) -> Void
 
     init(update: @escaping (CADisplayLink) -> Void) {
@@ -23,7 +22,6 @@ private final class WalletCardSimulatorDisplayLinkTarget: NSObject {
         self.update(displayLink)
     }
 }
-#endif
 
 private enum WalletCardEffectCache {
     static let stepCount = 200
@@ -262,6 +260,9 @@ private final class WalletCardTextureView: UIView {
 }
 
 final class WalletCardBackgroundView: UIView {
+    private static let ambientShineAngleAmplitude: CGFloat = 15.0 * .pi / 180.0
+    private static let ambientShineAnimationDuration: CFTimeInterval = 16.0
+
     private static let rawStars: [CGPoint] = [
         CGPoint(x: 14.0, y: 10.0),
         CGPoint(x: 70.0, y: 26.0),
@@ -301,10 +302,12 @@ final class WalletCardBackgroundView: UIView {
     private var starAnimationOrdinals: [Int]
     private var currentMagnitudeEffectIndex = -1
     private var currentColorEffectIndex = -1
+    private var animationDisplayLinkTarget: WalletCardDisplayLinkTarget?
+    private var animationDisplayLink: CADisplayLink?
+    private var animationStartTimestamp: CFTimeInterval?
+    private var ambientShineAngle: CGFloat = 0.0
     #if targetEnvironment(simulator)
-    private var demoDisplayLinkTarget: WalletCardSimulatorDisplayLinkTarget?
-    private var demoDisplayLink: CADisplayLink?
-    private var demoStartTimestamp: CFTimeInterval?
+    private var isSimulatorTiltEnabled = false
     #endif
 
     override init(frame: CGRect) {
@@ -406,9 +409,7 @@ final class WalletCardBackgroundView: UIView {
             NotificationCenter.default.removeObserver(observer)
         }
         self.motionManager.stopDeviceMotionUpdates()
-        #if targetEnvironment(simulator)
-        self.demoDisplayLink?.invalidate()
-        #endif
+        self.animationDisplayLink?.invalidate()
     }
 
     override func didMoveToWindow() {
@@ -484,52 +485,64 @@ final class WalletCardBackgroundView: UIView {
 
         if shouldAnimate && self.motionManager.isDeviceMotionAvailable {
             #if targetEnvironment(simulator)
-            self.setSimulatorTiltEnabled(false)
+            self.isSimulatorTiltEnabled = false
             #endif
             self.startMotionUpdates()
         } else {
-            #if targetEnvironment(simulator)
-            self.stopMotionUpdates(resetTilt: false)
-            self.setSimulatorTiltEnabled(shouldAnimate && !self.motionManager.isDeviceMotionAvailable)
-            #else
             self.stopMotionUpdates(resetTilt: true)
+            #if targetEnvironment(simulator)
+            self.isSimulatorTiltEnabled = shouldAnimate && !self.motionManager.isDeviceMotionAvailable
             #endif
         }
+        self.setEffectAnimationsEnabled(shouldAnimate)
+    }
+
+    private func setEffectAnimationsEnabled(_ enabled: Bool) {
+        if enabled {
+            guard self.animationDisplayLink == nil else {
+                return
+            }
+            self.animationStartTimestamp = nil
+            let displayLinkTarget = WalletCardDisplayLinkTarget(update: { [weak self] displayLink in
+                self?.updateEffectAnimations(timestamp: displayLink.timestamp)
+            })
+            let displayLink = CADisplayLink(target: displayLinkTarget, selector: #selector(WalletCardDisplayLinkTarget.displayLinkUpdated(_:)))
+            displayLink.preferredFramesPerSecond = 60
+            displayLink.add(to: .main, forMode: .common)
+            self.animationDisplayLinkTarget = displayLinkTarget
+            self.animationDisplayLink = displayLink
+        } else {
+            self.animationDisplayLink?.invalidate()
+            self.animationDisplayLink = nil
+            self.animationDisplayLinkTarget = nil
+            self.animationStartTimestamp = nil
+            if self.ambientShineAngle != 0.0 {
+                self.ambientShineAngle = 0.0
+                self.updateEffects(tilt: self.currentTilt)
+            }
+        }
+    }
+
+    private func updateEffectAnimations(timestamp: CFTimeInterval) {
+        if self.animationStartTimestamp == nil {
+            self.animationStartTimestamp = timestamp
+        }
+        let elapsed = timestamp - (self.animationStartTimestamp ?? timestamp)
+        let ambientProgress = elapsed / WalletCardBackgroundView.ambientShineAnimationDuration
+        self.ambientShineAngle = CGFloat(sin(ambientProgress * 2.0 * Double.pi)) * WalletCardBackgroundView.ambientShineAngleAmplitude
+
+        #if targetEnvironment(simulator)
+        if self.isSimulatorTiltEnabled {
+            self.updateSimulatorTilt(elapsed: elapsed)
+            return
+        }
+        #endif
+
+        self.updateEffects(tilt: self.currentTilt)
     }
 
     #if targetEnvironment(simulator)
-    private func setSimulatorTiltEnabled(_ enabled: Bool) {
-        if enabled {
-            guard self.demoDisplayLink == nil else {
-                return
-            }
-            self.demoStartTimestamp = nil
-            let displayLinkTarget = WalletCardSimulatorDisplayLinkTarget(update: { [weak self] displayLink in
-                self?.updateSimulatorTilt(timestamp: displayLink.timestamp)
-            })
-            let displayLink = CADisplayLink(target: displayLinkTarget, selector: #selector(WalletCardSimulatorDisplayLinkTarget.displayLinkUpdated(_:)))
-            displayLink.preferredFramesPerSecond = 60
-            displayLink.add(to: .main, forMode: .common)
-            self.demoDisplayLinkTarget = displayLinkTarget
-            self.demoDisplayLink = displayLink
-        } else {
-            let wasActive = self.demoDisplayLink != nil
-            self.demoDisplayLink?.invalidate()
-            self.demoDisplayLink = nil
-            self.demoDisplayLinkTarget = nil
-            self.demoStartTimestamp = nil
-            if wasActive && (self.currentTilt.x != 0.0 || self.currentTilt.y != 0.0) {
-                self.currentTilt = .zero
-                self.updateEffects(tilt: .zero)
-            }
-        }
-    }
-
-    private func updateSimulatorTilt(timestamp: CFTimeInterval) {
-        if self.demoStartTimestamp == nil {
-            self.demoStartTimestamp = timestamp
-        }
-        let elapsed = timestamp - (self.demoStartTimestamp ?? timestamp)
+    private func updateSimulatorTilt(elapsed: CFTimeInterval) {
         let animationTime = elapsed * 1.5
         let target = WalletCardTilt(
             x: CGFloat(sin(animationTime * 0.47) * 0.62 + sin(animationTime * 1.13 + 0.8) * 0.1),
@@ -690,11 +703,12 @@ final class WalletCardBackgroundView: UIView {
             self.shineLayer.locations = WalletCardEffectCache.shineLocations[magnitudeIndex]
             self.starsMaskLayer.locations = WalletCardEffectCache.starLocations[magnitudeIndex]
         }
-        self.shineLayer.endPoint = walletCardConicEndPoint(angle: (-58.0 + tilt.x * 60.0) * .pi / 180.0)
+        let rotationOffset = tilt.x * 60.0 * .pi / 180.0 + self.ambientShineAngle
+        self.shineLayer.endPoint = walletCardConicEndPoint(angle: -58.0 * .pi / 180.0 + rotationOffset)
 
-        self.starsMaskLayer.endPoint = walletCardConicEndPoint(angle: (-58.0 + tilt.x * 60.0) * .pi / 180.0)
+        self.starsMaskLayer.endPoint = walletCardConicEndPoint(angle: -58.0 * .pi / 180.0 + rotationOffset)
 
-        let shadowAngle = (212.0 + tilt.x * 60.0) * .pi / 180.0
+        let shadowAngle = 212.0 * .pi / 180.0 + rotationOffset
         let shadowDistance = self.currentSize.width / walletCardBackgroundReferenceSize.width
         self.innerShadowLayer.shadowOffset = CGSize(
             width: -sin(shadowAngle) * shadowDistance,

@@ -91,7 +91,7 @@ final class WalletTransactionAmountComponent: Component {
                 formattedAmount = formatTonAmountText(
                     component.amount,
                     dateTimeFormat: component.dateTimeFormat,
-                    maxDecimalPositions: nil
+                    maxDecimalPositions: 3
                 )
                 iconName = "Wallet/TransactionGramLarge"
             case .usdt:

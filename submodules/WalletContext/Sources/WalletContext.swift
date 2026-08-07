@@ -8,7 +8,6 @@ import TONToncenter
 import TONWalletKit
 
 private let walletApiKey = "84f56a3a13a49c973bba18b3b69e5589c0a87c5227631629941155ef6ab0b555"
-private let walletFiatRatesUrl = "https://api.mywallet.io/currency-rates"
 private let walletFiatRatesRefreshInterval: TimeInterval = 15.0 * 60.0
 private let walletMetadataCachedItemLimit = 10
 
@@ -18,6 +17,96 @@ public final class WalletContext {
         case eur = "EUR"
         case rub = "RUB"
         case cny = "CNY"
+        case aed = "AED"
+        case afn = "AFN"
+        case all = "ALL"
+        case amd = "AMD"
+        case ars = "ARS"
+        case aud = "AUD"
+        case azn = "AZN"
+        case bam = "BAM"
+        case bdt = "BDT"
+        case bgn = "BGN"
+        case bhd = "BHD"
+        case bnd = "BND"
+        case bob = "BOB"
+        case brl = "BRL"
+        case byn = "BYN"
+        case cad = "CAD"
+        case chf = "CHF"
+        case clp = "CLP"
+        case cop = "COP"
+        case crc = "CRC"
+        case czk = "CZK"
+        case dkk = "DKK"
+        case dop = "DOP"
+        case dzd = "DZD"
+        case egp = "EGP"
+        case etb = "ETB"
+        case gbp = "GBP"
+        case gel = "GEL"
+        case ghs = "GHS"
+        case gtq = "GTQ"
+        case hkd = "HKD"
+        case hnl = "HNL"
+        case hrk = "HRK"
+        case huf = "HUF"
+        case idr = "IDR"
+        case ils = "ILS"
+        case inr = "INR"
+        case iqd = "IQD"
+        case irr = "IRR"
+        case isk = "ISK"
+        case jmd = "JMD"
+        case jod = "JOD"
+        case jpy = "JPY"
+        case kes = "KES"
+        case kgs = "KGS"
+        case krw = "KRW"
+        case kzt = "KZT"
+        case lbp = "LBP"
+        case lkr = "LKR"
+        case mad = "MAD"
+        case mdl = "MDL"
+        case mmk = "MMK"
+        case mnt = "MNT"
+        case mop = "MOP"
+        case mur = "MUR"
+        case mvr = "MVR"
+        case mxn = "MXN"
+        case myr = "MYR"
+        case mzn = "MZN"
+        case ngn = "NGN"
+        case nio = "NIO"
+        case nok = "NOK"
+        case npr = "NPR"
+        case nzd = "NZD"
+        case pab = "PAB"
+        case pen = "PEN"
+        case php = "PHP"
+        case pkr = "PKR"
+        case pln = "PLN"
+        case pyg = "PYG"
+        case qar = "QAR"
+        case ron = "RON"
+        case rsd = "RSD"
+        case sar = "SAR"
+        case sek = "SEK"
+        case sgd = "SGD"
+        case syp = "SYP"
+        case thb = "THB"
+        case tjs = "TJS"
+        case tryCurrency = "TRY"
+        case ttd = "TTD"
+        case twd = "TWD"
+        case tzs = "TZS"
+        case uah = "UAH"
+        case ugx = "UGX"
+        case uyu = "UYU"
+        case uzs = "UZS"
+        case vnd = "VND"
+        case yer = "YER"
+        case zar = "ZAR"
 
         public var symbol: String {
             switch self {
@@ -29,6 +118,66 @@ public final class WalletContext {
                 return "₽"
             case .cny:
                 return "¥"
+            case .afn:
+                return "؋"
+            case .amd:
+                return "֏"
+            case .aud:
+                return "A$"
+            case .azn:
+                return "₼"
+            case .bdt:
+                return "৳"
+            case .brl:
+                return "R$"
+            case .cad:
+                return "CA$"
+            case .crc:
+                return "₡"
+            case .egp:
+                return "E£"
+            case .gbp:
+                return "£"
+            case .gel:
+                return "₾"
+            case .ghs:
+                return "GH₵"
+            case .hkd:
+                return "HK$"
+            case .ils:
+                return "₪"
+            case .inr:
+                return "₹"
+            case .jpy:
+                return "JP¥"
+            case .krw:
+                return "₩"
+            case .kzt:
+                return "₸"
+            case .mnt:
+                return "₮"
+            case .mxn:
+                return "MX$"
+            case .ngn:
+                return "₦"
+            case .nzd:
+                return "NZ$"
+            case .php:
+                return "₱"
+            case .pyg:
+                return "₲"
+            case .thb:
+                return "฿"
+            case .tryCurrency:
+                return "₺"
+            case .twd:
+                return "NT$"
+            case .uah:
+                return "₴"
+            case .vnd:
+                return "₫"
+            default:
+                return self.rawValue
             }
         }
     }
@@ -115,6 +264,44 @@ public final class WalletContext {
     }
 
     public struct TonConnectTransferRequest: Equatable {
+        public struct PreviewItem: Equatable {
+            public enum Kind: Equatable {
+                case transfer
+                case callContract
+                case deployContract
+                case excess
+                case unknown
+            }
+
+            public enum Direction: Equatable {
+                case incoming
+                case outgoing
+            }
+
+            public let id: String
+            public let kind: Kind
+            public let direction: Direction?
+            public let address: String?
+            public let amount: Int64?
+            public let comment: String?
+
+            public init(
+                id: String,
+                kind: Kind,
+                direction: Direction?,
+                address: String?,
+                amount: Int64?,
+                comment: String?
+            ) {
+                self.id = id
+                self.kind = kind
+                self.direction = direction
+                self.address = address
+                self.amount = amount
+                self.comment = comment
+            }
+        }
+
         public let id: String
         public let applicationName: String
         public let domain: String
@@ -122,6 +309,7 @@ public final class WalletContext {
         public let recipient: String
         public let amount: Int64
         public let fee: Int64
+        public let previewItems: [PreviewItem]
 
         public init(
             id: String,
@@ -130,7 +318,8 @@ public final class WalletContext {
             iconUrl: String?,
             recipient: String,
             amount: Int64,
-            fee: Int64
+            fee: Int64,
+            previewItems: [PreviewItem] = []
         ) {
             self.id = id
             self.applicationName = applicationName
@@ -139,6 +328,7 @@ public final class WalletContext {
             self.recipient = recipient
             self.amount = amount
             self.fee = fee
+            self.previewItems = previewItems
         }
     }
 
@@ -208,6 +398,11 @@ public final class WalletContext {
     }
 
     public struct Transaction: Codable, Equatable {
+        public enum Kind: String, Codable, Equatable {
+            case transfer
+            case deployContract
+        }
+
         public enum Direction: String, Codable, Equatable {
             case incoming
             case outgoing
@@ -264,6 +459,7 @@ public final class WalletContext {
         public let externalMessageHash: String?
         public let logicalTime: String
         public let timestamp: Int32
+        public let kind: Kind
         public let direction: Direction
         public let amount: Int64
         public let fee: Int64
@@ -288,13 +484,15 @@ public final class WalletContext {
             comment: String?,
             currency: Currency = .ton,
             collectible: CollectibleTransfer? = nil,
-            status: Status = .completed
+            status: Status = .completed,
+            kind: Kind = .transfer
         ) {
             self.id = id
             self.transactionHash = transactionHash
             self.externalMessageHash = externalMessageHash
             self.logicalTime = logicalTime
             self.timestamp = timestamp
+            self.kind = kind
             self.direction = direction
             self.amount = amount
             self.fee = fee
@@ -312,6 +510,7 @@ public final class WalletContext {
             case externalMessageHash
             case logicalTime
             case timestamp
+            case kind
             case direction
             case amount
             case fee
@@ -330,6 +529,7 @@ public final class WalletContext {
             self.externalMessageHash = try container.decodeIfPresent(String.self, forKey: .externalMessageHash)
             self.logicalTime = try container.decode(String.self, forKey: .logicalTime)
             self.timestamp = try container.decode(Int32.self, forKey: .timestamp)
+            self.kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .transfer
             self.direction = try container.decode(Direction.self, forKey: .direction)
             self.amount = try container.decode(Int64.self, forKey: .amount)
             self.fee = try container.decode(Int64.self, forKey: .fee)
@@ -348,6 +548,7 @@ public final class WalletContext {
             try container.encodeIfPresent(self.externalMessageHash, forKey: .externalMessageHash)
             try container.encode(self.logicalTime, forKey: .logicalTime)
             try container.encode(self.timestamp, forKey: .timestamp)
+            try container.encode(self.kind, forKey: .kind)
             try container.encode(self.direction, forKey: .direction)
             try container.encode(self.amount, forKey: .amount)
             try container.encode(self.fee, forKey: .fee)
@@ -360,6 +561,9 @@ public final class WalletContext {
         }
 
         public var isVisibleInWalletHistory: Bool {
+            if self.kind == .deployContract {
+                return true
+            }
             if self.collectible != nil {
                 return self.direction != .unknown
             }
@@ -958,10 +1162,7 @@ public final class WalletContext {
         var transactionKeys: Set<String>
     }
 
-    private struct FiatRatesResponse: Decodable {
-        let rates: [String: String]
-    }
-
+    private let engine: TelegramEngine
     private let log: (String) -> Void
     private let vault: WalletKeychainVault
     private let tonConnectStorage: WalletTonConnectStorage
@@ -1005,7 +1206,8 @@ public final class WalletContext {
     private var collectibleMetadataCache: [String: WalletCollectibleMetadata] = [:]
     private var usdtJettonWalletRawAddress: String?
     private var lifecycleGeneration = 0
-    private var fiatRatesDataTask: URLSessionDataTask?
+    private let fiatRatesRequestDisposable = MetaDisposable()
+    private var fiatRatesRequestInProgress = false
     private var fiatRatesRefreshTask: Task<Void, Never>?
     private var fiatRatesRequestGeneration = 0
     private var fiatRatesLastSuccessfulAt: Int32?
@@ -1018,8 +1220,8 @@ public final class WalletContext {
         networkAvailable: Signal<Bool, NoError>,
         log: @escaping (String) -> Void = { _ in }
     ) {
+        self.engine = engine
         self.log = log
-        _ = engine
         self.vault = WalletKeychainVault(namespace: storageNamespace)
         self.tonConnectStorage = WalletTonConnectStorage(namespace: storageNamespace)
         let initialState = State(
@@ -1138,7 +1340,7 @@ public final class WalletContext {
         self.streamRetryTask?.cancel()
         self.pendingPollTask?.cancel()
         self.streamSnapshotTask?.cancel()
-        self.fiatRatesDataTask?.cancel()
+        self.fiatRatesRequestDisposable.dispose()
         self.fiatRatesRefreshTask?.cancel()
         self.streamingTask?.cancel()
         if let kit = self.kit {
@@ -2304,7 +2506,50 @@ public final class WalletContext {
             iconUrl: iconUrl,
             recipient: recipient,
             amount: amount,
-            fee: fee
+            fee: fee,
+            previewItems: preview.operations.map { operation in
+                let kind: TonConnectTransferRequest.PreviewItem.Kind
+                switch operation.kind {
+                case .transfer:
+                    kind = .transfer
+                case .callContract:
+                    kind = .callContract
+                case .deployContract:
+                    kind = .deployContract
+                case .excess:
+                    kind = .excess
+                case .unknown:
+                    kind = .unknown
+                }
+
+                let direction: TonConnectTransferRequest.PreviewItem.Direction?
+                if let operationDirection = operation.direction {
+                    switch operationDirection {
+                    case .incoming:
+                        direction = .incoming
+                    case .outgoing:
+                        direction = .outgoing
+                    }
+                } else {
+                    direction = nil
+                }
+
+                let address = operation.address.flatMap { value -> String? in
+                    guard let parsed = try? Address.parse(value) else {
+                        return value
+                    }
+                    return parsed.toString(bounceable: false)
+                }
+                let amount = operation.amount.flatMap { Int64(String($0)) }
+                return TonConnectTransferRequest.PreviewItem(
+                    id: operation.id,
+                    kind: kind,
+                    direction: direction,
+                    address: address,
+                    amount: amount,
+                    comment: operation.comment
+                )
+            }
         )
         guard !self.pendingTonConnectRequests.contains(where: { $0.id == model.id }) else {
             return
@@ -2652,7 +2897,7 @@ public final class WalletContext {
 
     private func requestFiatRatesIfNeeded() {
         assert(Queue.mainQueue().isCurrent())
-        guard self.canUseNetworkRuntime, self.hasWalletDataRuntimeDemand, self.fiatRatesDataTask == nil else {
+        guard self.canUseNetworkRuntime, self.hasWalletDataRuntimeDemand, !self.fiatRatesRequestInProgress else {
             return
         }
         self.fiatRatesRefreshTask?.cancel()
@@ -2668,80 +2913,72 @@ public final class WalletContext {
             fiat: FiatState(selectedCurrency: self.currentState.fiat.selectedCurrency, rates: .loading(previous: previous))
         )
 
-        guard let url = URL(string: walletFiatRatesUrl) else {
-            self.updateFiatRatesFailure(.invalidData)
-            return
-        }
         self.fiatRatesRequestGeneration &+= 1
         let generation = self.fiatRatesRequestGeneration
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30.0
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            Queue.mainQueue().async {
-                guard let self, self.fiatRatesRequestGeneration == generation else {
-                    return
-                }
-                self.fiatRatesDataTask = nil
-                if let error {
-                    if (error as? URLError)?.code == .cancelled {
-                        return
-                    }
-                    if (error as? URLError)?.code == .timedOut {
-                        self.updateFiatRatesFailure(.timeout)
-                    } else {
-                        self.updateFiatRatesFailure(.network)
-                    }
-                    return
-                }
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    self.updateFiatRatesFailure(.invalidData)
-                    return
-                }
-                guard (200 ..< 300).contains(httpResponse.statusCode) else {
-                    self.updateFiatRatesFailure(.http(statusCode: httpResponse.statusCode))
-                    return
-                }
-                guard let data,
-                      let response = try? JSONDecoder().decode(FiatRatesResponse.self, from: data),
-                      let tonValue = response.rates["TON"].flatMap(Double.init),
-                      tonValue.isFinite,
-                      tonValue > 0.0 else {
-                    self.updateFiatRatesFailure(.invalidData)
-                    return
-                }
-                var result: [FiatCurrency: FiatRate] = [:]
-                for currency in FiatCurrency.allCases {
-                    guard let unitsPerUsd = response.rates[currency.rawValue].flatMap(Double.init),
-                          unitsPerUsd.isFinite,
-                          unitsPerUsd > 0.0 else {
-                        self.updateFiatRatesFailure(.invalidData)
-                        return
-                    }
-                    let unitsPerGram = unitsPerUsd / tonValue
-                    guard unitsPerGram.isFinite, unitsPerGram > 0.0 else {
-                        self.updateFiatRatesFailure(.invalidData)
-                        return
-                    }
-                    result[currency] = FiatRate(unitsPerUsd: unitsPerUsd, unitsPerGram: unitsPerGram)
-                }
-                let updatedAt = currentTimestamp()
-                self.fiatRatesLastSuccessfulAt = updatedAt
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: self.currentState.balance,
-                    transactions: self.currentState.transactions,
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation,
-                    fiat: FiatState(
-                        selectedCurrency: self.currentState.fiat.selectedCurrency,
-                        rates: .value(result, updatedAt: updatedAt)
-                    )
-                )
-                self.scheduleFiatRatesRefresh()
+        self.fiatRatesRequestInProgress = true
+        self.fiatRatesRequestDisposable.set((combineLatest(
+            self.engine.payments.currencyRates(),
+            self.engine.data.get(TelegramEngine.EngineData.Item.Configuration.App())
+        )
+        |> deliverOnMainQueue).start(next: { [weak self] currencyRates, appConfiguration in
+            guard let self, self.fiatRatesRequestGeneration == generation else {
+                return
             }
-        }
-        self.fiatRatesDataTask = task
-        task.resume()
+            self.fiatRatesRequestInProgress = false
+            guard let currencyRates else {
+                self.updateFiatRatesFailure(.network)
+                return
+            }
+            guard let tonUsdRate = appConfiguration.data?["ton_usd_rate"] as? Double,
+                  tonUsdRate.isFinite,
+                  tonUsdRate > 0.0 else {
+                self.updateFiatRatesFailure(.invalidData)
+                return
+            }
+
+            let supportedCurrencyCodes = Set(FiatCurrency.allCases.map(\.rawValue))
+            var ratesByCurrency: [String: Double] = [:]
+            for currencyRate in currencyRates {
+                guard supportedCurrencyCodes.contains(currencyRate.currency) else {
+                    continue
+                }
+                guard ratesByCurrency[currencyRate.currency] == nil,
+                      currencyRate.rate.isFinite,
+                      currencyRate.rate > 0.0 else {
+                    self.updateFiatRatesFailure(.invalidData)
+                    return
+                }
+                ratesByCurrency[currencyRate.currency] = currencyRate.rate
+            }
+
+            var result: [FiatCurrency: FiatRate] = [:]
+            for currency in FiatCurrency.allCases {
+                guard let unitsPerUsd = ratesByCurrency[currency.rawValue] else {
+                    self.updateFiatRatesFailure(.invalidData)
+                    return
+                }
+                let unitsPerGram = unitsPerUsd * tonUsdRate
+                guard unitsPerGram.isFinite, unitsPerGram > 0.0 else {
+                    self.updateFiatRatesFailure(.invalidData)
+                    return
+                }
+                result[currency] = FiatRate(unitsPerUsd: unitsPerUsd, unitsPerGram: unitsPerGram)
+            }
+            let updatedAt = currentTimestamp()
+            self.fiatRatesLastSuccessfulAt = updatedAt
+            self.replaceState(
+                phase: self.currentState.phase,
+                balance: self.currentState.balance,
+                transactions: self.currentState.transactions,
+                pendingTransfers: self.currentState.pendingTransfers,
+                activeOperation: self.currentState.activeOperation,
+                fiat: FiatState(
+                    selectedCurrency: self.currentState.fiat.selectedCurrency,
+                    rates: .value(result, updatedAt: updatedAt)
+                )
+            )
+            self.scheduleFiatRatesRefresh()
+        }))
     }
 
     private func updateFiatRatesFailure(_ error: SynchronizationError) {
@@ -2786,8 +3023,8 @@ public final class WalletContext {
 
     private func cancelFiatRatesRequest() {
         self.fiatRatesRequestGeneration &+= 1
-        self.fiatRatesDataTask?.cancel()
-        self.fiatRatesDataTask = nil
+        self.fiatRatesRequestInProgress = false
+        self.fiatRatesRequestDisposable.set(nil)
         self.fiatRatesRefreshTask?.cancel()
         self.fiatRatesRefreshTask = nil
     }

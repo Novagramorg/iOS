@@ -154,6 +154,7 @@ extension Wire {
         let nftItemAddress: String?
         let nftItemOwner: String?
         let domain: String?
+        let dnsWallet: String?
         let dnsWalletAddress: String?
         let dnsNextResolver: String?
         let dnsSiteAdnl: String?
@@ -162,6 +163,7 @@ extension Wire {
             case domain
             case nftItemAddress = "nft_item_address"
             case nftItemOwner = "nft_item_owner"
+            case dnsWallet = "dns_wallet"
             case dnsWalletAddress = "dns_wallet_address"
             case dnsNextResolver = "dns_next_resolver"
             case dnsSiteAdnl = "dns_site_adnl"

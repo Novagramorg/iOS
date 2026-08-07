@@ -50,6 +50,71 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(activities[1].counterparty, bob)
     }
 
+    func testExtractsWalletDeploymentAlongsideTransfer() throws {
+        let transaction = chainTransaction(
+            inMessage: ChainMessage(
+                hash: "external-message",
+                normalizedHash: "external-normalized-hash",
+                destination: wallet.toString(),
+                opcode: "0x7369676e",
+                hasStateInit: true
+            ),
+            outMessages: [ChainMessage(
+                hash: "out-message",
+                source: wallet.toString(),
+                destination: bob.toString(),
+                value: "80000000"
+            )],
+            fee: "7"
+        )
+
+        let activities = try WalletActivityExtractor.activities(
+            from: [transaction],
+            traceID: "trace",
+            walletAddress: wallet,
+            status: .completed
+        )
+
+        XCTAssertEqual(activities.count, 2)
+        XCTAssertEqual(activities[0].kind, .transfer)
+        XCTAssertEqual(activities[0].direction, .outgoing)
+        XCTAssertEqual(activities[0].counterparty, bob)
+        XCTAssertEqual(activities[0].amount, 80_000_000)
+        XCTAssertEqual(activities[0].fee, 7)
+
+        XCTAssertEqual(activities[1].kind, .deployContract)
+        XCTAssertEqual(activities[1].direction, .outgoing)
+        XCTAssertEqual(activities[1].counterparty, wallet)
+        XCTAssertEqual(activities[1].amount, 0)
+        XCTAssertEqual(activities[1].fee, 0)
+    }
+
+    func testExtractsContractDeploymentWithoutDuplicateTonTransfer() throws {
+        let transaction = chainTransaction(
+            outMessages: [ChainMessage(
+                hash: "deploy-message",
+                source: wallet.toString(),
+                destination: bob.toString(),
+                value: "100000000",
+                hasStateInit: true
+            )],
+            fee: "9"
+        )
+
+        let activities = try WalletActivityExtractor.activities(
+            from: [transaction],
+            traceID: "trace",
+            walletAddress: wallet,
+            status: .completed
+        )
+
+        XCTAssertEqual(activities.count, 1)
+        XCTAssertEqual(activities[0].kind, .deployContract)
+        XCTAssertEqual(activities[0].counterparty, bob)
+        XCTAssertEqual(activities[0].amount, 0)
+        XCTAssertEqual(activities[0].fee, 9)
+    }
+
     func testExtractsJettonInsteadOfServiceTon() throws {
         let payload = try TransferPayloads.jettonTransfer(
             amount: 123,

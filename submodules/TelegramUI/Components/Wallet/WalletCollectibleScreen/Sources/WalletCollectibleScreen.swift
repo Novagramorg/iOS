@@ -448,19 +448,11 @@ private final class WalletCollectibleContentComponent: Component {
                         color: theme.contextMenu.primaryColor
                     )
                 },
-                action: { [weak self] contextController, dismiss in
-                    let open = {
-                        guard let self, let explorerUrl else {
-                            return
-                        }
-                        self.close()
+                action: { _, dismiss in
+                    dismiss(.default)
+                    
+                    if let explorerUrl {
                         component.openExternalUrl(explorerUrl)
-                    }
-                    if let contextController {
-                        contextController.dismiss(result: .default, completion: open)
-                    } else {
-                        dismiss(.default)
-                        open()
                     }
                 }
             )

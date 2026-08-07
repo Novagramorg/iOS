@@ -11312,6 +11312,20 @@ public extension Api.functions.payments {
     }
 }
 public extension Api.functions.payments {
+    static func getCurrencyRates() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.CurrencyRates>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-749108248)
+        return (FunctionDescription(name: "payments.getCurrencyRates", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.payments.CurrencyRates? in
+            let reader = BufferReader(buffer)
+            var result: Api.payments.CurrencyRates?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.payments.CurrencyRates
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
     static func getGiveawayInfo(peer: Api.InputPeer, msgId: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.payments.GiveawayInfo>) {
         let buffer = Buffer()
         buffer.appendInt32(-198994907)

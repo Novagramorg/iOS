@@ -529,7 +529,7 @@ private final class WalletTransactionContentComponent: Component {
         private func showSuccessIfNeeded(address: String, isCollectible: Bool) {
             guard !self.didShowSuccess,
                   let component = self.component,
-                  let controller = self.environment?.controller() else {
+                  let controller = self.environment?.controller() as? WalletTransactionScreen else {
                 return
             }
             self.didShowSuccess = true
@@ -577,9 +577,11 @@ private final class WalletTransactionContentComponent: Component {
             self.hapticFeedback.tap()
 
             guard let component = self.component,
-                  let controller = self.environment?.controller() else {
+                  let controller = self.environment?.controller() as? WalletTransactionScreen else {
                 return
             }
+            controller.dismissAllTooltips()
+            
             //TODO:localize
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             controller.present(
@@ -640,19 +642,11 @@ private final class WalletTransactionContentComponent: Component {
                         color: theme.contextMenu.primaryColor
                     )
                 },
-                action: { [weak self] contextController, dismiss in
-                    let open = {
-                        guard let self, let explorerUrl else {
-                            return
-                        }
-                        self.close()
+                action: { _, dismiss in
+                    dismiss(.default)
+                    
+                    if let explorerUrl {
                         component.openExplorer(explorerUrl)
-                    }
-                    if let contextController {
-                        contextController.dismiss(result: .default, completion: open)
-                    } else {
-                        dismiss(.default)
-                        open()
                     }
                 }
             )
@@ -1238,13 +1232,12 @@ private final class WalletTransactionContentComponent: Component {
                 } else {
                     //TODO:localize
                     let sendPrefix = "Send "
-                    //TODO:localize
-                    let gramsSuffix = " Grams"
                     actionTitle = sendPrefix + formatTonAmountText(
                         transaction.amount,
                         dateTimeFormat: environment.dateTimeFormat,
-                        maxDecimalPositions: 9
-                    ) + gramsSuffix
+                        maxDecimalPositions: 9,
+                        formatString: environment.strings.Currency_Grams
+                    )
                 }
             } else {
                 //TODO:localize
@@ -2113,27 +2106,7 @@ private func walletTransactionDateText(
 }
 
 private func walletTransactionExplorerUrl(id: String) -> String? {
-    let hash: String
-    if id.count == 64 && id.unicodeScalars.allSatisfy({ scalar in
-        switch scalar.value {
-        case 48 ... 57, 65 ... 70, 97 ... 102:
-            return true
-        default:
-            return false
-        }
-    }) {
-        hash = id.lowercased()
-    } else {
-        var base64 = id.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        while base64.count % 4 != 0 {
-            base64.append("=")
-        }
-        guard let data = Data(base64Encoded: base64), data.count == 32 else {
-            return nil
-        }
-        hash = data.map { String(format: "%02x", $0) }.joined()
-    }
-    return "https://tonviewer.com/transaction/\(hash)"
+    return "https://tonviewer.com/transaction/\(id)"
 }
 
 private final class WalletTransactionContextReferenceContentSource: ContextReferenceContentSource {

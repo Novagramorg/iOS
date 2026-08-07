@@ -16,6 +16,7 @@ import ButtonComponent
 import WalletContext
 import WalletCardComponent
 import AlertUI
+import UndoUI
 
 fileprivate enum WalletConnectFinishResult {
     case cancelled
@@ -710,6 +711,8 @@ private final class WalletConnectSheetComponent: CombinedComponent {
 }
 
 public final class WalletConnectScreen: ViewControllerComponentContainer {
+    private let context: AccountContext
+    private let applicationName: String
     private let cancelled: () -> Void
     private var finishResult: WalletConnectFinishResult?
 
@@ -720,6 +723,8 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
         cancelled: @escaping () -> Void,
         connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void
     ) {
+        self.context = context
+        self.applicationName = request.applicationName
         self.cancelled = cancelled
 
         super.init(
@@ -764,7 +769,32 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
         case .cancelled:
             callback = self.cancelled
         case .connected:
-            callback = {}
+            let context = self.context
+            let applicationName = self.applicationName
+            callback = {
+                guard let navigationController = context.sharedContext.mainWindow?.viewController as? NavigationController,
+                      let controller = navigationController.viewControllers.reversed().first(where: { !($0 is WalletConnectScreen) }) as? ViewController else {
+                    return
+                }
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                controller.present(
+                    UndoOverlayController(
+                        presentationData: presentationData,
+                        content: .actionSucceeded(
+                            title: "Connection Successful",
+                            text: "You are now connected to [\(applicationName)]().",
+                            cancel: nil,
+                            destructive: false
+                        ),
+                        elevatedLayout: false,
+                        animateInAsReplacement: false,
+                        action: { _ in
+                            return false
+                        }
+                    ),
+                    in: .current
+                )
+            }
         }
 
         let dismissController: () -> Void = { [weak self] in

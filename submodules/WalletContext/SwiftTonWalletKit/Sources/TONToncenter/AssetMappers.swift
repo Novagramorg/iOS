@@ -116,8 +116,10 @@ extension Mappers {
     /// Returns nil rather than throwing when the domain does not resolve — an
     /// unregistered domain is an ordinary outcome, not an error.
     static func dnsWallet(_ wire: Wire.DNSRecordsResponse) throws -> String? {
-        guard let record = wire.records?.first(where: { $0.dnsWalletAddress != nil }),
-              let raw = record.dnsWalletAddress
+        guard let record = wire.records?.first(where: {
+            $0.dnsWallet != nil || $0.dnsWalletAddress != nil
+        }),
+              let raw = record.dnsWallet ?? record.dnsWalletAddress
         else { return nil }
         return try canonical(address: raw)
     }

@@ -48,6 +48,7 @@ public struct ChainMessage: Sendable {
     public let bounced: Bool
     public let bodyBoc: String?
     public let comment: String?
+    public let hasStateInit: Bool
 
     public init(
         hash: String?,
@@ -61,7 +62,8 @@ public struct ChainMessage: Sendable {
         bounce: Bool = false,
         bounced: Bool = false,
         bodyBoc: String? = nil,
-        comment: String? = nil
+        comment: String? = nil,
+        hasStateInit: Bool = false
     ) {
         self.hash = hash
         self.normalizedHash = normalizedHash
@@ -75,6 +77,7 @@ public struct ChainMessage: Sendable {
         self.bounced = bounced
         self.bodyBoc = bodyBoc
         self.comment = comment
+        self.hasStateInit = hasStateInit
     }
 }
 

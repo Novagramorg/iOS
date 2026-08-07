@@ -4,6 +4,9 @@ import TONToncenter
 
 let walletCollectibleFetchLimit = 30
 private let walletCollectibleMetadataMaximumSize = 2 * 1024 * 1024
+private let walletCollectibleLottieHosts: Set<String> = [
+    "nft.fragment.com"
+]
 private let walletTelegramAnonymousNumbersCollection = "0:0e41dc1dc3c9067ed24248580e12b3359818d83dee0304fabcf80845eafafdb2"
 private let walletTelegramUsernamesCollection = "0:80d78a35f955a14b679faa887ff4cd5bfc0f43b4a4eea2a7e6927f3701b273c2"
 
@@ -140,7 +143,7 @@ func walletCollectibleMetadata(from nft: NFTItem) -> WalletCollectibleMetadata {
             nft.info?.extra,
             keys: ["_image_medium", "_image_small", "image", "image_url", "_image_big"]
         )
-    let lottieUrl = normalizedFragmentLottieUrl(collectibleExtraString(nft.info?.extra, keys: ["lottie"]))
+    let lottieUrl = normalizedCollectibleLottieUrl(collectibleExtraString(nft.info?.extra, keys: ["lottie"]))
     let collectionName = nonEmptyCollectibleString(nft.collectionInfo?.name)
     let collectionUrl = normalizedFragmentCollectibleUrl(
         collectibleExtraString(nft.collectionInfo?.extra, keys: ["external_link"])
@@ -193,7 +196,7 @@ func walletCollectibleMetadata(from url: URL) async throws -> WalletCollectibleM
         description: description,
         imageUrl: imageUrl,
         lottieUrl: nonEmptyCollectibleString(object["lottie"] as? String)
-            .flatMap { normalizedFragmentLottieUrl($0, relativeTo: url) },
+            .flatMap { normalizedCollectibleLottieUrl($0, relativeTo: url) },
         attributes: collectibleAttributes(from: object["attributes"])
     )
 }
@@ -402,11 +405,12 @@ func normalizedFragmentCollectibleUrl(_ value: String?, relativeTo baseUrl: URL?
     return url.absoluteString
 }
 
-func normalizedFragmentLottieUrl(_ value: String?, relativeTo baseUrl: URL? = nil) -> String? {
+func normalizedCollectibleLottieUrl(_ value: String?, relativeTo baseUrl: URL? = nil) -> String? {
     guard let value,
           let url = normalizedCollectibleUrl(value, relativeTo: baseUrl),
           url.scheme?.lowercased() == "https",
-          url.host?.lowercased() == "nft.fragment.com" else {
+          let host = url.host?.lowercased(),
+          walletCollectibleLottieHosts.contains(host) else {
         return nil
     }
     return url.absoluteString

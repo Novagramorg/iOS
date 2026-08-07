@@ -145,7 +145,7 @@ public enum MessageClassifier {
 extension ChainMessage {
     /// What this message does.
     public var kind: MessageKind {
-        MessageClassifier.classify(self)
+        MessageClassifier.classify(self, hasStateInit: self.hasStateInit)
     }
 
     /// A text comment, decoded from the body when Toncenter has not decoded it.
