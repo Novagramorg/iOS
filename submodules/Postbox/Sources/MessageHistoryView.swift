@@ -1123,10 +1123,7 @@ final class MutableMessageHistoryView: MutablePostboxView {
         return Message(
             stableId: typingDraft.stableId,
             stableVersion: typingDraft.stableVersion,
-            id: MessageId(
-                peerId: peerId,
-                namespace: 1,
-                id: Int32.max - 50000),
+            id: typingDraftMessageId(peerId: peerId, randomId: typingDraft.id),
             globallyUniqueId: nil,
             groupingKey: nil,
             groupInfo: nil,

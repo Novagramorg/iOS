@@ -1394,7 +1394,7 @@ public final class Transaction {
         self.postbox!.reindexSavedMessagesCustomTagsWithTagsIfNeeded(peerId: peerId, threadId: threadId, tag: tag)
     }
     
-    public func getCurrentTypingDraft(location: PeerAndThreadId) -> (id: Int64, stableId: UInt32, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute])? {
+    public func getCurrentTypingDraft(location: PeerAndThreadId) -> (id: Int64, stableId: UInt32, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool)? {
         assert(!self.disposed)
         if let value = self.postbox!.currentTypingDrafts[location] {
             return (
@@ -1403,14 +1403,15 @@ public final class Transaction {
                 value.authorId,
                 value.timestamp,
                 value.text,
-                value.attributes
+                value.attributes,
+                value.isStopped
             )
         } else {
             return nil
         }
     }
     
-    public func combineTypingDrafts(locations: Set<PeerAndThreadId>, update: (PeerAndThreadId, (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute])?) -> (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute])?) {
+    public func combineTypingDrafts(locations: Set<PeerAndThreadId>, update: (PeerAndThreadId, (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool)?) -> (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool)?) {
         assert(!self.disposed)
         self.postbox!.combineTypingDrafts(locations: locations, update: update)
     }
@@ -1666,9 +1667,13 @@ final class PostboxImpl {
         var timestamp: Int32
         var text: String
         var attributes: [MessageAttribute]
+        // A draft whose author has stopped composing. It stays on screen, but it no
+        // longer gates outgoing messages (AllTypingDraftsView) and it never expires
+        // (restartTypingDraftExpirationTimerIfNeeded / processTypingDraftExpirations).
+        var isStopped: Bool
         var addedAtTimestamp: Double
-        
-        init(id: Int64, namespace: MessageId.Namespace, stableId: UInt32, stableVersion: UInt32, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], addedAtTimestamp: Double) {
+
+        init(id: Int64, namespace: MessageId.Namespace, stableId: UInt32, stableVersion: UInt32, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool, addedAtTimestamp: Double) {
             self.id = id
             self.namespace = namespace
             self.stableId = stableId
@@ -1678,6 +1683,7 @@ final class PostboxImpl {
             self.timestamp = timestamp
             self.text = text
             self.attributes = attributes
+            self.isStopped = isStopped
             self.addedAtTimestamp = addedAtTimestamp
         }
         
@@ -1701,6 +1707,9 @@ final class PostboxImpl {
                 return false
             }
             if lhs.text != rhs.text {
+                return false
+            }
+            if lhs.isStopped != rhs.isStopped {
                 return false
             }
             if lhs.attributes.count != rhs.attributes.count {
@@ -2495,12 +2504,12 @@ final class PostboxImpl {
         }
     }
     
-    fileprivate func combineTypingDrafts(locations: Set<PeerAndThreadId>, update: (PeerAndThreadId, (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute])?) -> (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute])?) {
+    fileprivate func combineTypingDrafts(locations: Set<PeerAndThreadId>, update: (PeerAndThreadId, (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool)?) -> (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool)?) {
         for location in locations {
-            var updated: (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute])?
+            var updated: (id: Int64, namespace: MessageId.Namespace, threadId: Int64?, authorId: PeerId, timestamp: Int32, text: String, attributes: [MessageAttribute], isStopped: Bool)?
             let current = self.currentTypingDrafts[location]
             if let current {
-                updated = update(location, (current.id, current.namespace, current.threadId, current.authorId, current.timestamp, current.text, current.attributes))
+                updated = update(location, (current.id, current.namespace, current.threadId, current.authorId, current.timestamp, current.text, current.attributes, current.isStopped))
             } else {
                 updated = update(location, nil)
             }
@@ -2514,7 +2523,7 @@ final class PostboxImpl {
                     stableId = self.messageHistoryMetadataTable.getNextStableMessageIndexId()
                     stableVersion = 100000
                 }
-                let mappedDraft = TypingDraft(id: updated.id, namespace: updated.namespace, stableId: stableId, stableVersion: stableVersion, threadId: updated.threadId, authorId: updated.authorId, timestamp: updated.timestamp, text: updated.text, attributes: updated.attributes, addedAtTimestamp: CFAbsoluteTimeGetCurrent())
+                let mappedDraft = TypingDraft(id: updated.id, namespace: updated.namespace, stableId: stableId, stableVersion: stableVersion, threadId: updated.threadId, authorId: updated.authorId, timestamp: updated.timestamp, text: updated.text, attributes: updated.attributes, isStopped: updated.isStopped, addedAtTimestamp: CFAbsoluteTimeGetCurrent())
                 if self.currentTypingDrafts[location] != mappedDraft {
                     self.currentTypingDrafts[location] = mappedDraft
                     self.currentUpdatedTypingDrafts[location] = TypingDraftUpdate(value: mappedDraft)
@@ -2531,6 +2540,9 @@ final class PostboxImpl {
         
         var nextTypingDraftExpirationTimestamp: Double?
         for (_, draft) in self.currentTypingDrafts {
+            if draft.isStopped {
+                continue
+            }
             if let nextTypingDraftExpirationTimestampValue = nextTypingDraftExpirationTimestamp {
                 nextTypingDraftExpirationTimestamp = min(draft.addedAtTimestamp + expirationTimeout, nextTypingDraftExpirationTimestampValue)
             } else {
@@ -2543,15 +2555,24 @@ final class PostboxImpl {
                 let timeout = nextTypingDraftExpirationTimestamp - CFAbsoluteTimeGetCurrent()
                 
                 self.nextTypingDraftExpirationTimer?.invalidate()
-                self.nextTypingDraftExpirationTimer = SwiftSignalKit.Timer(timeout: max(0.0, timeout - 0.1), repeat: false, completion: { [weak self] in
+                self.nextTypingDraftExpirationTimer = SwiftSignalKit.Timer(timeout: max(0.0, timeout), repeat: false, completion: { [weak self] in
                     guard let self else {
                         return
                     }
+                    // The timer has fired and is spent. Drop it *before* the sweep runs, so
+                    // that the rearm at the end of processTypingDraftExpirations (and the
+                    // commit-path rearm) both see "nothing armed" and arm a new one. Leaving
+                    // a fired timer in place here would let it masquerade as armed and
+                    // suppress its own replacement.
+                    self.nextTypingDraftExpirationTimer = nil
+                    self.nextTypingDraftExpirationTimestamp = nil
+
                     let _ = self.transaction { _ in
                         self.processTypingDraftExpirations(expirationTimeout: expirationTimeout)
                     }.startStandalone()
                 }, queue: self.queue)
                 self.nextTypingDraftExpirationTimer?.start()
+                self.nextTypingDraftExpirationTimestamp = nextTypingDraftExpirationTimestamp
             }
         } else {
             self.nextTypingDraftExpirationTimestamp = nil
@@ -2566,7 +2587,10 @@ final class PostboxImpl {
         let timestamp = CFAbsoluteTimeGetCurrent()
         var removedKeys: [PeerAndThreadId] = []
         for (key, draft) in self.currentTypingDrafts {
-            if draft.addedAtTimestamp + expirationTimeout >= timestamp {
+            if draft.isStopped {
+                continue
+            }
+            if timestamp - draft.addedAtTimestamp >= expirationTimeout {
                 removedKeys.append(key)
             }
         }
@@ -2576,6 +2600,11 @@ final class PostboxImpl {
                 self.currentUpdatedTypingDrafts[key] = TypingDraftUpdate(value: nil)
             }
         }
+        // Unconditional: the completion block cleared the armed timer, and a wakeup that
+        // landed a hair early removes nothing — so the commit-path rearm (gated on
+        // currentUpdatedTypingDrafts being non-empty) would not fire and nothing would be
+        // armed at all.
+        self.restartTypingDraftExpirationTimerIfNeeded()
     }
     
     func renderIntermediateMessage(_ message: IntermediateMessage) -> Message {
