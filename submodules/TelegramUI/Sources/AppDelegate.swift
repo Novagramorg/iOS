@@ -426,6 +426,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             if #available(iOS 10.0, *) {
                 UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in
                     var result: [(String, NotificationManagedNotificationRequestId)] = []
+                    // Fenixuz: banners the NSE never enriched (see below) — swept at the end.
+                    var fenixuzUnenrichedIdentifiers: [String] = []
                     for notification in notifications {
                         if let requestId = NotificationManagedNotificationRequestId(string: notification.request.identifier) {
                             result.append((notification.request.identifier, requestId))
@@ -463,8 +465,20 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
                             if let notificationRequestId = notificationRequestId {
                                 result.append((notification.request.identifier, notificationRequestId))
+                            } else if payload["p"] != nil {
+                                // Fenixuz: the NSE fell back to the raw server payload, so this banner
+                                // reads the generic "You have a new message" and carries no peer or
+                                // message id. With no id ClearNotificationsManager can never sweep it
+                                // and these stack up on the lock screen indefinitely. The encrypted "p"
+                                // key only survives on notifications the NSE did NOT rewrite — an
+                                // enriched one carries the NSE's own userInfo instead — so this cannot
+                                // touch a real message banner, a call banner, or the local reminder.
+                                fenixuzUnenrichedIdentifiers.append(notification.request.identifier)
                             }
                         }
+                    }
+                    if !fenixuzUnenrichedIdentifiers.isEmpty {
+                        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: fenixuzUnenrichedIdentifiers)
                     }
                     completion.f(result)
                 })
