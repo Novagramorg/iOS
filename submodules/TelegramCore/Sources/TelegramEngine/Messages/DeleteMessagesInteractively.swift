@@ -49,7 +49,7 @@ func _internal_deleteMessagesInteractively(account: Account, messageIds: [Messag
             let signal: Signal<Api.Bool, MTRpcError>
             switch request {
             case let .message(peer, receiverId, id):
-                signal = account.network.request(Api.functions.ephemeral.deleteMessage(peer: peer, receiverId: receiverId, id: id))
+                signal = account.network.request(Api.functions.ephemeral.deleteMessage(flags: 1 << 0, peer: peer, receiverId: receiverId, id: id))
             case let .welcomeMessage(peer, id):
                 signal = account.network.request(Api.functions.ephemeral.deleteWelcomeMessage(peer: peer, id: id))
             }

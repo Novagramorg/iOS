@@ -211,7 +211,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                 
                 let request: Signal<Api.Updates, MTRpcError>
                 if messageId.namespace == Namespaces.Message.WelcomeMessageCloud {
-                    var welcomeFlags: Int32 = (1 << 0) | (1 << 6)
+                    var welcomeFlags: Int32 = (1 << 0) | (1 << 6) | (1 << 7)
                     if apiEntities != nil {
                         welcomeFlags |= (1 << 1)
                     }

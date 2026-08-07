@@ -426,7 +426,7 @@ public final class ChatButtonKeyboardInputNode: ChatInputNode, UIScrollViewDeleg
                     break
                 case let .urlAuth(url, buttonId):
                     if let message = self.message {
-                        self.controllerInteraction.requestMessageActionUrlAuth(url, .message(id: message.id, buttonId: buttonId))
+                        self.controllerInteraction.requestMessageActionUrlAuth(url, .message(id: message._asMessage().callbackTargetMessageId, buttonId: buttonId))
                     }
                 case let .setupPoll(isQuiz):
                     self.controllerInteraction.openPollCreation(nil, isQuiz)

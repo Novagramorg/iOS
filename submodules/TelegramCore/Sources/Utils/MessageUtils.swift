@@ -9,6 +9,91 @@ public extension MessageFlags {
 }
 
 public extension Message {
+    var activeEphemeralReplacementMessage: Message? {
+        for attribute in self.attributes {
+            if let attribute = attribute as? EphemeralReplacementMessageAttribute, case .active = attribute.state {
+                return self.associatedMessages[attribute.replacementMessageId]
+            }
+        }
+        return nil
+    }
+
+    var callbackTargetMessageId: MessageId {
+        return self.activeEphemeralReplacementMessage?.id ?? self.id
+    }
+
+    func withAppliedEphemeralReplacementMessage() -> Message {
+        guard let replacementMessage = self.activeEphemeralReplacementMessage else {
+            return self
+        }
+
+        func isReplacementContentAttribute(_ attribute: MessageAttribute) -> Bool {
+            return attribute is TextEntitiesMessageAttribute
+                || attribute is ReplyMarkupMessageAttribute
+                || attribute is RichTextMessageAttribute
+                || attribute is InvertMediaMessageAttribute
+                || attribute is NonPremiumMessageAttribute
+                || attribute is MediaSpoilerMessageAttribute
+                || attribute is ForwardVideoTimestampAttribute
+                || attribute is WebpagePreviewMessageAttribute
+        }
+
+        var attributes = self.attributes.filter { !isReplacementContentAttribute($0) }
+        attributes.append(contentsOf: replacementMessage.attributes.filter(isReplacementContentAttribute))
+
+        var peers = self.peers
+        for (id, peer) in replacementMessage.peers {
+            peers[id] = peer
+        }
+
+        var associatedMessages = self.associatedMessages
+        for (id, message) in replacementMessage.associatedMessages {
+            associatedMessages[id] = message
+        }
+
+        var associatedMessageIds = self.associatedMessageIds
+        for id in replacementMessage.associatedMessageIds where !associatedMessageIds.contains(id) {
+            associatedMessageIds.append(id)
+        }
+
+        var associatedMedia = self.associatedMedia
+        for (id, media) in replacementMessage.associatedMedia {
+            associatedMedia[id] = media
+        }
+
+        var associatedStories = self.associatedStories
+        for (id, story) in replacementMessage.associatedStories {
+            associatedStories[id] = story
+        }
+
+        return Message(
+            stableId: self.stableId,
+            stableVersion: self.stableVersion,
+            id: self.id,
+            globallyUniqueId: self.globallyUniqueId,
+            groupingKey: self.groupingKey,
+            groupInfo: self.groupInfo,
+            threadId: self.threadId,
+            timestamp: self.timestamp,
+            flags: self.flags,
+            tags: self.tags,
+            globalTags: self.globalTags,
+            localTags: self.localTags,
+            customTags: self.customTags,
+            forwardInfo: self.forwardInfo,
+            author: self.author,
+            text: replacementMessage.text,
+            attributes: attributes,
+            media: replacementMessage.media,
+            peers: peers,
+            associatedMessages: associatedMessages,
+            associatedMessageIds: associatedMessageIds,
+            associatedMedia: associatedMedia,
+            associatedThreadInfo: self.associatedThreadInfo,
+            associatedStories: associatedStories
+        )
+    }
+
     var ephemeralOutgoingAttribute: EphemeralOutgoingMessageAttribute? {
         for attribute in self.attributes {
             if let attribute = attribute as? EphemeralOutgoingMessageAttribute {

@@ -392,7 +392,9 @@ func apiEphemeralMessagePeerIds(_ message: Api.EphemeralMessage) -> [PeerId] {
             }
         }
 
-        appendUnique(peerId.peerId)
+        if let peerId {
+            appendUnique(peerId.peerId)
+        }
         appendUnique(fromId.peerId)
         if receiverId != 0 {
             appendUnique(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(receiverId)))
@@ -484,16 +486,25 @@ func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: Refere
 }
 
 extension StoreMessage {
-    convenience init(apiEphemeralMessage: Api.EphemeralMessage) {
+    convenience init?(apiEphemeralMessage: Api.EphemeralMessage, namespace: MessageId.Namespace? = nil) {
         switch apiEphemeralMessage {
         case let .ephemeralMessage(messageData):
-            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo, richMessage) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo, messageData.richMessage)
+            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo, richMessage, anchorMsgId) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo, messageData.richMessage, messageData.anchorMsgId)
+            guard let apiPeerId else {
+                return nil
+            }
             let peerId = apiPeerId.peerId
             let authorId = fromId.peerId
             let isWelcomeTemplate = (flags & (1 << 5)) != 0
+            let anchorMessageId = anchorMsgId.flatMap { id -> MessageId? in
+                guard !isWelcomeTemplate else {
+                    return nil
+                }
+                return MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: id)
+            }
 
             var attributes: [MessageAttribute] = [
-                EphemeralMessageAttribute(receiverId: receiverId, isWelcomeTemplate: isWelcomeTemplate)
+                EphemeralMessageAttribute(receiverId: receiverId, isWelcomeTemplate: isWelcomeTemplate, anchorMessageId: anchorMessageId)
             ]
             var medias: [Media] = []
 
@@ -576,8 +587,19 @@ extension StoreMessage {
                 date += 1
             }
 
+            let messageNamespace: MessageId.Namespace
+            if let namespace {
+                messageNamespace = namespace
+            } else if anchorMessageId != nil {
+                messageNamespace = Namespaces.Message.EphemeralAnchored
+            } else if isWelcomeTemplate {
+                messageNamespace = Namespaces.Message.WelcomeMessageCloud
+            } else {
+                messageNamespace = Namespaces.Message.EphemeralLocal
+            }
+
             self.init(
-                id: MessageId(peerId: peerId, namespace: isWelcomeTemplate ? Namespaces.Message.WelcomeMessageCloud : Namespaces.Message.EphemeralLocal, id: id),
+                id: MessageId(peerId: peerId, namespace: messageNamespace, id: id),
                 customStableId: nil,
                 globallyUniqueId: nil,
                 groupingKey: nil,

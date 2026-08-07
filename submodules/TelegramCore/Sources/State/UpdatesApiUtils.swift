@@ -199,18 +199,28 @@ extension Api.Message {
 }
 
 extension Api.EphemeralMessage {
-    var peerId: PeerId {
+    var peerId: PeerId? {
         switch self {
         case let .ephemeralMessage(messageData):
-            return messageData.peerId.peerId
+            return messageData.peerId?.peerId
         }
     }
 
-    var id: MessageId {
+    var id: MessageId? {
         switch self {
         case let .ephemeralMessage(messageData):
-            let namespace = (messageData.flags & (1 << 5)) != 0 ? Namespaces.Message.WelcomeMessageCloud : Namespaces.Message.EphemeralLocal
-            return MessageId(peerId: messageData.peerId.peerId, namespace: namespace, id: messageData.id)
+            guard let peerId = messageData.peerId?.peerId else {
+                return nil
+            }
+            let namespace: MessageId.Namespace
+            if (messageData.flags & (1 << 5)) != 0 {
+                namespace = Namespaces.Message.WelcomeMessageCloud
+            } else if messageData.anchorMsgId != nil {
+                namespace = Namespaces.Message.EphemeralAnchored
+            } else {
+                namespace = Namespaces.Message.EphemeralLocal
+            }
+            return MessageId(peerId: peerId, namespace: namespace, id: messageData.id)
         }
     }
 

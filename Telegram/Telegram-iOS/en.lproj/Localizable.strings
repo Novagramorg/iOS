@@ -16617,3 +16617,5 @@ Error: %8$@";
 
 "Chat.EphemeralMessage.BadgeYou" = "Only visible to you";
 "Chat.EphemeralMessage.Badge" = "Only visible to %@";
+"Chat.EphemeralMessage.Revert" = "Revert";
+"Chat.EphemeralMessage.RevertInfo" = "Restores the message to it's original content";
