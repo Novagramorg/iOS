@@ -31,6 +31,7 @@ import UndoUI
 import Postbox
 import FetchManagerImpl
 import FenixNovagramAds
+import AdsInfoScreen
 import AnimationCache
 import MultiAnimationRenderer
 import AvatarNode
@@ -1128,13 +1129,17 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                     }
                 }, adButtonAction: { _ in
                 })
-            case let .novagramAdPeer(peer, orderId, _, theme, _, query):
+            case let .novagramAdPeer(peer, orderId, _, _, _, query):
                 // The @username is rendered automatically by the .generalSearch peerMode,
                 // so the status line stays empty — otherwise the username shows twice.
-                return ContactsPeerItem(presentationData: ItemListPresentationData(presentationData), sortOrder: .firstLast, displayOrder: .firstLast, context: context, peerMode: .generalSearch(isSavedMessages: false), peer: .peer(peer: peer, chatPeer: peer), status: .none, badge: nil, rightLabelText: ContactsPeerItem.LabelText(text: "ads by Novagram", color: theme.list.itemAccentColor, hasBackground: true), enabled: true, selection: .none, editing: ContactsPeerItemEditing(editable: false, editing: false, revealed: false), index: nil, header: nil, searchQuery: query, isAd: false, action: { _ in
+                // isAd draws Telegram's own localized "Ad" pill with the three-dot button, so
+                // our promoted rows are indistinguishable from server-side sponsored results.
+                return ContactsPeerItem(presentationData: ItemListPresentationData(presentationData), sortOrder: .firstLast, displayOrder: .firstLast, context: context, peerMode: .generalSearch(isSavedMessages: false), peer: .peer(peer: peer, chatPeer: peer), status: .none, badge: nil, enabled: true, selection: .none, editing: ContactsPeerItemEditing(editable: false, editing: false, revealed: false), index: nil, header: nil, searchQuery: query, isAd: true, action: { _ in
                     interaction.peerSelected(peer, nil, nil, nil, false)
                     FenixNovagramSearchAds.reportClick(orderId: orderId, context: context)
-                }, animationCache: interaction.animationCache, animationRenderer: interaction.animationRenderer)
+                }, animationCache: interaction.animationCache, animationRenderer: interaction.animationRenderer, adButtonAction: { _ in
+                    interaction.present(AdsInfoScreen(context: context, mode: .search))
+                })
             case let .message(message, peer, readState, threadInfo, presentationData, _, selected, displayCustomHeader, orderingKey, _, section, allPaused, storyStats, requiresPremiumForMessaging, searchScope):
                 let header: ChatListSearchItemHeader
                 switch orderingKey {
