@@ -9,234 +9,142 @@ enum BlockSequenceKind {
     case list
 }
 
-func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, fitToWidth: Bool, kind: BlockSequenceKind) -> CGFloat {
+/// Per-block-type contribution to the vertical rhythm of a block sequence.
+///
+/// `verticalPadding` is symmetric: it is added on BOTH sides of the block, on top of the base gap
+/// (`instantPageBaseBlockSpacing`). The flush flags suppress a gap entirely on that side — the base
+/// AND both neighbours' padding — for blocks that must butt against what precedes or follows them.
+///
+/// The flags are directional because every structural zero in this layout is one-sided: a cover is
+/// flush against the page above it but takes a real gap below, before its title; related articles
+/// are flush below but not above. `.anchor` is the one block that sets both, being an invisible
+/// zero-height marker.
+struct InstantPageBlockSpacing {
+    var verticalPadding: CGFloat = 4.0
+    var flushAbove: Bool = false
+    var flushBelow: Bool = false
+}
+
+/// The gap between any two adjacent blocks, before either block's padding is added.
+let instantPageBaseBlockSpacing: CGFloat = 8.0
+
+extension InstantPageBlock {
+    /// Resolved from the whole block value, not just its case, so a rule may depend on the payload
+    /// (e.g. a checklist reading differently from a bullet list) without widening the model.
+    ///
+    /// Deliberately NOT exhaustive: every unnamed case takes the defaults, which are a genuine
+    /// correct value rather than a silently-wrong one. Naming all thirty-odd cases to return the
+    /// same literal would bury the four that carry meaning.
+    var spacing: InstantPageBlockSpacing {
+        switch self {
+        case .anchor:
+            // A zero-height invisible marker: transparent to spacing on both sides. The padding is
+            // pinned to 0 rather than left at the default — it is unreachable while both flush flags
+            // are set, but a default 8.0 here reads as "an anchor has padding" and would come alive
+            // the moment a flag is dropped or a new read forgets to check flush first.
+            return InstantPageBlockSpacing(verticalPadding: 0.0, flushAbove: true, flushBelow: true)
+        case .cover, .channelBanner:
+            // Page-header elements: they butt against the top of the page, while their successor
+            // (the title) takes a normal gap.
+            return InstantPageBlockSpacing(flushAbove: true)
+        case .relatedArticles:
+            // A full-bleed footer section: flush against whatever follows it.
+            return InstantPageBlockSpacing(flushBelow: true)
+        case .heading:
+            return InstantPageBlockSpacing(verticalPadding: 8.0)
+        case .divider:
+            return InstantPageBlockSpacing(verticalPadding: 4.0)
+        case .image, .video:
+            return InstantPageBlockSpacing(flushAbove: true, flushBelow: true)
+        default:
+            return InstantPageBlockSpacing()
+        }
+    }
+}
+
+/// The vertical gap between two adjacent blocks, or at a sequence edge when one side is nil.
+///
+/// Three rules, in order: a flush side wins and yields 0; two `.paragraph` (body) blocks have no gap
+/// at all, neither the base nor either block's padding; otherwise the gap is
+/// `upper.verticalPadding + instantPageBaseBlockSpacing + lower.verticalPadding`. At an edge only the
+/// one present block contributes — the base is strictly a *between two blocks* quantity.
+///
+/// `kind` is currently unread. It is kept because container-specific spacing (denser table cells,
+/// tighter list sub-blocks) is expected to return; do not delete it as dead, and do not read its
+/// absence from the body as a bug.
+func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, kind: BlockSequenceKind) -> CGFloat {
     if let upper, let lower {
-        var upperIsMediaBlock = false
-        var upperIsDocumentBlock = false
-        var upperIsButtonBlock = false
-        var otherBlock = upper
+        var upperSpacing = upper.spacing
+        let lowerSpacing = lower.spacing
+        
         switch upper {
-        case .image, .video, .collage, .slideshow:
-            upperIsMediaBlock = true
-            otherBlock = lower
-        case .document:
-            upperIsDocumentBlock = true
-            otherBlock = lower
-        case .buttonRow:
-            upperIsButtonBlock = true
-            otherBlock = lower
+        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption):
+            if caption.credit != .empty && caption.credit != .plain("") {
+                upperSpacing.verticalPadding += 2.0
+            }
+            break
         default:
             break
         }
         
-        var lowerIsMediaBlock = false
-        var lowerIsDocumentBlock = false
-        var lowerIsButtonBlock = false
-        switch lower {
-        case .image, .video, .collage, .slideshow:
-            lowerIsMediaBlock = true
-            otherBlock = upper
-        case .document:
-            lowerIsDocumentBlock = true
-            otherBlock = upper
-        case .buttonRow:
-            lowerIsButtonBlock = true
-            otherBlock = upper
-        default:
-            break
-        }
-        
-        if upperIsMediaBlock || lowerIsMediaBlock {
-            switch otherBlock {
-            case .heading, .paragraph:
-                if fitToWidth {
-                    return 8.0
+        if case .list = kind {
+            return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
+        } else {
+            switch upper {
+            case .heading:
+                switch lower {
+                case .heading:
+                    return upperSpacing.verticalPadding
+                case .paragraph, .list:
+                    return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
+                default:
+                    break
                 }
             default:
                 break
             }
-        }
-        if upperIsDocumentBlock || lowerIsDocumentBlock {
-            switch otherBlock {
-            case .heading, .paragraph:
-                if fitToWidth {
-                    return 8.0
-                }
-            default:
-                break
-            }
-        }
-        if upperIsButtonBlock || lowerIsButtonBlock {
-            if upperIsButtonBlock && lowerIsButtonBlock {
-                return 8.0
-            }
-            return 12.0
-        }
-        
-        switch (upper, lower) {
-        case (_, .cover), (_, .channelBanner), (.details, .details), (.relatedArticles, _), (_, .anchor):
-            return 0.0
-        case (.divider, _), (_, .divider):
-            if fitToWidth {
-                return 21.0
-            } else {
-                return 25.0
-            }
-        case (_, .blockQuote), (.blockQuote, _):
-            if fitToWidth {
-                return 11.0
-            } else {
-                return 27.0
-            }
-        case (_, .pullQuote), (.pullQuote, _):
-            if fitToWidth {
-                return 14.0
-            } else {
-                return 27.0
-            }
-        case (.kicker, .title), (.cover, .title):
-            return 16.0
-        case (_, .title):
-            return 20.0
-        case (.title, .authorDate), (.subtitle, .authorDate):
-            return 18.0
-        case (_, .authorDate):
-            return 20.0
-        case (.title, .paragraph), (.authorDate, .paragraph):
-            return 34.0
-        case (.header, .paragraph), (.subheader, .paragraph), (.heading, .paragraph):
-            if fitToWidth {
-                return 14.0
-            } else {
-                return 25.0
-            }
-        case (.list, .paragraph):
-            if fitToWidth {
-                return 14.0
-            } else {
-                return 31.0
-            }
-        case (.paragraph, .list):
-            if fitToWidth {
-                return 14.0
-            } else {
-                return 31.0
-            }
-        case (.formula, .paragraph):
-            return 19.0
-        case (.paragraph, .paragraph):
-            if fitToWidth {
-                return 2.0
-            } else {
-                return 25.0
-            }
-        case (.title, .formula), (.authorDate, .formula):
-            return 34.0
-        case (.header, .formula), (.subheader, .formula), (.heading, .formula):
-            if fitToWidth {
-                return 10.0
-            } else {
-                return 25.0
-            }
-        case (.list, .formula):
-            return 31.0
-        case (.paragraph, .formula):
-            return 19.0
-        case (_, .formula):
-            return 20.0
-        case (.title, .list), (.authorDate, .list):
-            return 34.0
-        case (.header, .list), (.subheader, .list), (.heading, .list):
-            return 31.0
-        case (.preformatted, _), (_, .preformatted):
-            if fitToWidth {
-                return 12.0
-            } else {
-                return 19.0
-            }
-        case (.formula, .list):
-            if fitToWidth {
-                return 10.0
-            } else {
-                return 25.0
-            }
-        case (_, .list):
-            if fitToWidth {
-                return 10.0
-            } else {
-                return 25.0
-            }
-        case (_, .header), (_, .subheader), (_, .heading):
-            return 32.0
-        default:
-            return 20.0
-        }
-    } else if let lower {
-        switch lower {
-        case .cover, .channelBanner, .details, .anchor:
-            return 0.0
-        default:
-            if fitToWidth {
-                switch kind {
-                case .topLevel:
-                    switch lower {
-                    case .heading:
-                        return 6.0
-                    case .table:
-                        return 10.0
-                    case .blockQuote, .pullQuote, .preformatted:
-                        return 10.0
-                    case .image, .video, .collage, .slideshow:
-                        if fitToWidth {
-                            return 0.0
-                        } else {
-                            return 5.0
-                        }
-                    case let .list(items, _):
-                        if items.first?.checked != nil {
-                            return 8.0
-                        } else {
-                            return 5.0
-                        }
-                    default:
-                        return 5.0
-                    }
-                case .cell:
+            switch upper {
+            case .paragraph, .list:
+                switch lower {
+                case .heading:
+                    return upperSpacing.verticalPadding + instantPageBaseBlockSpacing + lowerSpacing.verticalPadding
+                case .paragraph, .list:
                     return 0.0
-                case .detail, .list:
-                    return 4.0
+                default:
+                    break
                 }
-            } else {
-                return 25.0
+            default:
+                break
             }
         }
+        if case .details = upper {
+            if case .details = lower {
+                return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
+            }
+            return upperSpacing.verticalPadding + 4.0 + lowerSpacing.verticalPadding
+        }
+        return upperSpacing.verticalPadding + instantPageBaseBlockSpacing + lowerSpacing.verticalPadding
+    } else if let lower {
+        let lowerSpacing = lower.spacing
+        if case .paragraph = lower {
+            return lowerSpacing.verticalPadding + 2.0
+        }
+        return lowerSpacing.flushAbove ? 0.0 : lowerSpacing.verticalPadding
     } else if let upper {
-        switch kind {
-        case .topLevel:
-            if case .relatedArticles = upper {
-                return 0.0
-            } else if case .thinking = upper {
-                return 2.0
-            } else if case .image = upper, fitToWidth {
-                return 0.0
-            } else if case .video = upper, fitToWidth {
-                return 0.0
-            } else if case .collage = upper, fitToWidth {
-                return 0.0
-            } else if case .slideshow = upper, fitToWidth {
-                return 0.0
-            } else {
-                if fitToWidth {
-                    return 5.0
-                } else {
-                    return 25.0
-                }
-            }
-        case .detail, .list:
-            return 16.0
-        case .cell:
-            return 0.0
+        let upperSpacing = upper.spacing
+        if case .paragraph = lower {
+            return upperSpacing.verticalPadding + 3.0
         }
+        switch lower {
+        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption):
+            if caption.credit != .empty && caption.credit != .plain("") {
+                return upperSpacing.verticalPadding + 2.0
+            }
+            break
+        default:
+            break
+        }
+        return upperSpacing.flushBelow ? 0.0 : upperSpacing.verticalPadding
     } else {
         return 0.0
     }

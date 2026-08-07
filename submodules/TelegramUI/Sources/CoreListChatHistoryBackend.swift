@@ -1414,6 +1414,12 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
             self.rebuild(width: width)
         }
         if let itemNode = self.itemNode {
+            /*self.layer.borderColor = UIColor.blue.cgColor
+            self.layer.borderWidth = 0.5
+
+            itemNode.layer.borderColor = UIColor.red.cgColor
+            itemNode.layer.borderWidth = 1.5*/
+
             // The node's box is applied by `rebuild`, before the item's own apply — see there for why
             // that ordering is load-bearing and why the pass transition animates it. This call is the
             // backstop for the passes that do NOT rebuild (an unchanged survivor, a fresh view), and it
