@@ -136,7 +136,6 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     required public init() {
         self.containerNode = ContainerNode()
         self.containerNode.clipsToBounds = true
-        self.containerNode.layer.cornerCurve = .circular
 
         super.init()
 
@@ -902,6 +901,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             return
                         }
                         self.item = item
+                        
+                        self.containerNode.layer.cornerCurve = .circular
 
                         // If the bubble was recycled onto a different message while a full-text
                         // request was in flight, cancel it so this message never shows another's
