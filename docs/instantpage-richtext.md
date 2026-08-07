@@ -76,6 +76,46 @@ rebuild → fresh `InstantPageImageNode`s → `setSignal` re-run → fade-in fla
   reuse). If a future change makes a slideshow rich message blink or break tap-to-open on send,
   apply the same `updateInteractiveMediaBinding` refresh to `InstantPageV2SlideshowView`'s pages.
 
+### Whole-content vs same-content updates
+
+`ensurePageView` splits a same-`stableId` content change two ways. A **same-content update** keeps
+the view and lets `InstantPageV2View.update` diff item views by stable id — a streamed chunk, the
+Local→Cloud send flip, a text edit that preserves shape, a checkbox tap, a `<details>` toggle. A
+**whole-content update** rebuilds the view and crossfades: the outgoing view stays live (0.12s out)
+under the new one (0.1s in), the same numbers `ChatMessageTextBubbleContentNode` uses.
+
+Load-bearing details, none of which the compiler checks:
+
+- **Compare `richPageKey.caseTag`, never `richPageKey`.** The key carries `ObjectIdentifier`s of
+  the attribute and page, and a streamed chunk produces a fresh `RichTextMessageAttribute` on every
+  tick — comparing keys would dissolve the bubble on every chunk.
+- **The fingerprint (`instantPageStructureFingerprint`) reads strings, not identities.** In: case
+  tags, child counts, optional-child *presence*, and every string the user reads — `RichText` leaves
+  and their wrapper tags (so adding bold counts), urls, captions, table cell text, button labels,
+  `formula` latex. Out: `MediaId`, `webpageId`, `fileId`, `peerId`, invisible `anchor` names.
+  - **Excluding media identity is load-bearing.** The send flip rewrites every `MediaId` in the page,
+    *including the inline ones inside `RichText.image`*, while nothing visible changes. Fold them in
+    and every rich message with media dissolves on send.
+  - Optional *value* is payload, which is why ticking a checkbox (`checked: Bool?` going
+    `false`→`true`) does not dissolve but a checkbox marker appearing does.
+  - **`RichText.textDate` contributes its model `date`, never the formatted string** — so the
+    relative-date refresh timer re-lays-out ("3 minutes ago" → "4 minutes ago") without dissolving.
+  - Still excluded as presentation payload: heading `level`, list `ordered`, preformatted `language`,
+    `blockQuote.collapsed`, `details.expanded`, `image.spoiler`.
+- **The `InstantPage ==` guard is what makes the pending-edit exit safe.** `.pendingEdit →
+  .original` fires when the server confirms an edit, at which point the content usually matches the
+  optimistic local page already on screen; without the guard that is a flash for nothing.
+- **The outgoing view is live, not a snapshot** — a snapshot would freeze a playing inline video and
+  stop custom-emoji loops mid-dissolve. It is safe because `mediaRegistry` is per-root-view and every
+  bubble-side lookup goes through `self.pageView`, which already points at the new view.
+- **The fade-in is gated on a local `crossfadeIn` flag, not on `fadingOutPageView != nil`.** A
+  dissolve from a previous update can still be in flight when a scroll recycle rebuilds for a
+  different message; keying off the slot would fade the recycled bubble in for no reason. The
+  recycle path also drops the stale dissolve outright.
+- **A non-animated pass takes the same-content path.** `update(layout:theme:)` re-renders every
+  reused view, so the content is correct either way; rebuilding would only re-create media wrappers
+  and their fetches for a transition nobody sees.
+
 ### Status node (date/time/checks) positioning
 
 The `ChatMessageDateAndStatusNode` mirrors TextBubble's placement, adapted to the heterogeneous V2 layout. The node is a child of `self` (the content node), **not** of the clipping `containerNode`, so it is never clipped — the bubble height must be grown to contain it.

@@ -25,6 +25,30 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         case pendingEdit(attribute: ObjectIdentifier, page: ObjectIdentifier)
         case translated(language: String, attribute: ObjectIdentifier, page: ObjectIdentifier)
         case original(attribute: ObjectIdentifier, page: ObjectIdentifier)
+
+        /// Which KIND of page this is, with the per-object identities stripped.
+        enum CaseTag: Equatable {
+            case pendingEdit
+            case translated(language: String)
+            case original
+        }
+
+        /// The full key must NOT be used to detect a content change: it carries `ObjectIdentifier`s
+        /// of the attribute and page objects, and a streamed AI chunk produces a fresh
+        /// `RichTextMessageAttribute` on every tick — so comparing keys would report a change on
+        /// every chunk. Only a move BETWEEN kinds (translate, enter or leave a pending edit) is a
+        /// whole-content transition. `language` is part of the tag so that switching between two
+        /// translation languages counts as one too.
+        var caseTag: CaseTag {
+            switch self {
+            case .pendingEdit:
+                return .pendingEdit
+            case let .translated(language, _, _):
+                return .translated(language: language)
+            case .original:
+                return .original
+            }
+        }
     }
 
     private struct ResolvedRichDataContent {
@@ -43,6 +67,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // `init()` may run off the main thread; UIView construction must happen on the main thread.
     // The page view is built lazily inside the apply closure (always main-thread) via ensurePageView().
     private var pageView: InstantPageV2View?
+    // The page view being crossfaded OUT by a whole-content update. Kept LIVE rather than replaced
+    // by a `snapshotView(afterScreenUpdates:)` replicant, so its inline video keeps playing and its
+    // custom-emoji layers keep looping through the fade.
+    //
+    // At most one is held: a second whole-content update landing mid-fade removes the in-flight one
+    // immediately rather than stacking dissolves.
+    //
+    // It does NOT compete with the incoming view for the media registry: `mediaRegistry` is
+    // per-root-view (`rootMediaRegistryHost = self` in InstantPageV2View.init) and every bubble-side
+    // lookup — transitionArgsFor, applyHiddenMedia — goes through `self.pageView`, which by then
+    // points at the new view. The outgoing view's registry is unreachable, not conflicting.
+    private var fadingOutPageView: InstantPageV2View?
     // Tracks the message (id + stableVersion) baked into the current pageView's render context.
     // The synthesized webpage uses a sentinel id (namespace 0, id 0) shared across all richText
     // messages, so we key cache invalidation on the message itself. When the bubble is recycled
@@ -52,7 +88,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // rendered pixels — survive send instead of being rebuilt (which caused the media blink). A
     // genuinely recycled bubble carries a different stableId, so recycling still rebuilds.
     // `messageId` is kept only to detect the Local→Cloud id flip, gating the reference refresh.
-    private var pageViewMessageKey: (stableId: UInt32, messageId: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
+    private var pageViewMessageKey: (stableId: UInt32, messageId: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool, structure: Int)?
+    // The `InstantPage` last handed to `pageView`, held so a whole-content candidate can be
+    // suppressed when the incoming page is structurally AND textually identical to what is already
+    // on screen. The case that reaches it in practice is `.pendingEdit -> .original` when the server
+    // confirms an edit whose result matches the optimistic local page — a dissolve there would be a
+    // flash for nothing. `InstantPage` is a class with a deep `==`, and
+    // `RichTextMessageAttribute.instantPage` is a plain stored `let` (no FlatBuffers
+    // materialization), so this is a straight structural compare. It runs only on the
+    // about-to-crossfade path, never on the hot same-content path.
+    private var appliedInstantPage: InstantPage?
     // messageStableVersion is in the cache key because the synthesized instantPage content
     // mutates between streamed AI message chunks (each chunk bumps stableVersion); without
     // this, the cached layout would shadow newly-arrived content during streaming.
@@ -133,6 +178,70 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         }
     }
 
+    /// Drops every piece of node state derived from the OUTGOING page's layout. Called when a
+    /// whole-content update rebuilds `pageView`: each of these holds page-space geometry or block
+    /// indices that no longer refer to anything in the new page.
+    ///
+    /// `currentExpandedDetails` is deliberately NOT reset. It is keyed by details index and read by
+    /// the LAYOUT pass, which runs before apply — clearing it here would need an extra relayout
+    /// round-trip to take effect, and carrying an expand state onto a same-indexed details block
+    /// reads as reasonable rather than wrong.
+    private func resetPageDerivedState() {
+        if let textSelectionNode = self.textSelectionNode {
+            // Built from the old view's `selectableTextItems()`; its rects are in the old page's
+            // coordinate space.
+            self.textSelectionNode = nil
+            self.textSelectionAdapter = nil
+            textSelectionNode.highlightAreaNode.removeFromSupernode()
+            textSelectionNode.removeFromSupernode()
+        }
+        self.linkProgressDisposable?.dispose()
+        self.linkProgressDisposable = nil
+        if self.linkProgressRects != nil {
+            self.linkProgressRects = nil
+            self.updateLinkProgressState()
+        }
+        // Clears `linkHighlightingNode` through its own animated teardown.
+        self.updateTouchesAtPoint(nil)
+        // An in-flight anchor scroll targets blocks that no longer exist.
+        self.pendingScrollAnchor = nil
+        self.lastExpandedPendingDetailsIndex = nil
+        // Defensive: streaming is exempt from whole-content updates, so these are already inert.
+        self.currentRevealCostMap = nil
+        self.lastAppliedRevealedCount = 0
+    }
+
+    /// Fades `outgoing` out and hands it to `fadingOutPageView` for the duration. Durations match
+    /// `ChatMessageTextBubbleContentNode`'s plain-text content swap (0.12s out / 0.1s in, started
+    /// together), so a message that changes between rich and plain dissolves identically either way.
+    ///
+    /// No clipping work is needed here: `containerNode.clipsToBounds` is already true and the corner
+    /// mask lives on `containerNode`, so a shrinking bubble clips the outgoing view for free while
+    /// its own resize animation runs underneath.
+    private func beginCrossfadeOut(_ outgoing: InstantPageV2View) {
+        // Only one dissolve at a time.
+        if let previous = self.fadingOutPageView {
+            self.fadingOutPageView = nil
+            previous.removeFromSuperview()
+        }
+        // Inert for input and for VoiceOver, but still animating visually.
+        outgoing.isUserInteractionEnabled = false
+        outgoing.accessibilityElementsHidden = true
+        self.fadingOutPageView = outgoing
+        // The incoming view is added via addSubview and therefore lands on top; bring the outgoing
+        // one forward so it is the layer fading out over the new content, matching TextBubble.
+        outgoing.superview?.bringSubviewToFront(outgoing)
+        outgoing.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.12, removeOnCompletion: false, completion: { [weak self, weak outgoing] _ in
+            guard let outgoing else {
+                return
+            }
+            if let self, self.fadingOutPageView === outgoing {
+                self.fadingOutPageView = nil
+            }
+            outgoing.removeFromSuperview()
+        })
+    }
+
     required public init() {
         self.containerNode = ContainerNode()
         self.containerNode.clipsToBounds = true
@@ -204,37 +313,90 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     }
 
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
-    /// the existing view, updating only the webpage content in place. The view is rebuilt only when
-    /// the bubble is recycled with a genuinely different message (different stableId).
-    private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool) -> InstantPageV2View {
-        let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
+    /// the existing view, updating only the webpage content in place. The view is rebuilt when the
+    /// bubble is recycled with a genuinely different message (different `stableId`), and — since
+    /// the whole-content split — when the SAME message's content is wholly replaced.
+    private func ensurePageView(
+        item: ChatMessageBubbleContentItem,
+        webpage: TelegramMediaWebpage,
+        page: InstantPage,
+        richPageKey: ResolvedRichDataPageKey,
+        showMoreExpanded: Bool,
+        structure: Int,
+        isStreaming: Bool,
+        animation: ListViewItemUpdateAnimation
+    ) -> InstantPageV2View {
+        // Set only by the whole-content branch below; read by the rebuild tail. This cannot be
+        // inferred from `self.fadingOutPageView != nil` — a dissolve from a PREVIOUS update can
+        // still be in flight when a scroll recycle rebuilds for a different message, which would
+        // fade the recycled bubble in for no reason.
+        var crossfadeIn = false
+        let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded, structure: structure)
         if let existing = self.pageView, let current = self.pageViewMessageKey, current.stableId == key.stableId {
             if current.stableVersion == key.stableVersion && current.messageId == key.messageId && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
+                // `structure` is not compared here: `richPageKey` carries the page object's
+                // ObjectIdentifier, so an equal key already implies the same page and therefore
+                // the same structure.
                 return existing
             }
-            // Same logical message (stableId), new content. Two sub-cases:
-            //  - messageId unchanged (streamed AI chunk / pending edit): swap only the webpage;
-            //    the construction-time reference snapshot stays valid (media resolves by id). The
-            //    subsequent pageView.update(layout:) diffs item views by stable id, so content
-            //    blocks keep their views + in-flight reveal state (only added/removed blocks
-            //    change) — eliminating the per-chunk full-text-then-mask flash.
-            //  - messageId changed (Local→Cloud send flip): also refresh the render context's
-            //    MessageReference + reference closures, so live consumers (inline video/audio/
-            //    gallery) use the Cloud reference. The reused media VIEWS keep their init-time
-            //    (local) reference — their bytes are already local, so the poster does not reload
-            //    and there is no blink; a later scroll-recycle rebuilds them against the Cloud ref.
-            if current.messageId != key.messageId {
-                let messageReference = MessageReference(item.message)
-                let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
-                existing.renderContext?.updateContent(webpage: webpage, message: messageReference, imageReference: closures.image, fileReference: closures.file)
-            } else {
-                existing.renderContext?.updateContent(webpage: webpage)
+
+            // A whole-content update replaces the document rather than editing it. Diffing into the
+            // existing view would reuse item views positionally — a paragraph view at position 3
+            // rendering whatever unrelated block now occupies position 3 — so the view is rebuilt.
+            let isLocalToCloudFlip = current.messageId != key.messageId
+            let isWholeContentUpdate =
+                   animation.isAnimated                                          // nothing to show otherwise
+                && !isStreaming                                                  // streamed chunk: exempt
+                && !isLocalToCloudFlip                                           // send flip: exempt
+                && (   current.richPageKey.caseTag != key.richPageKey.caseTag    // translate / pending edit
+                    || current.showMoreExpanded    != key.showMoreExpanded       // "show more"
+                    || current.structure           != key.structure)             // block shape
+                // Suppress the no-op confirmation: `.pendingEdit -> .original` where the server's
+                // result matches the optimistic local page already on screen.
+                && !(self.appliedInstantPage.flatMap({ $0 == page }) ?? false)
+
+            if !isWholeContentUpdate {
+                // Same logical message (stableId), same document. Two sub-cases:
+                //  - messageId unchanged (streamed AI chunk / pending edit): swap only the webpage;
+                //    the construction-time reference snapshot stays valid (media resolves by id). The
+                //    subsequent pageView.update(layout:) diffs item views by stable id, so content
+                //    blocks keep their views + in-flight reveal state (only added/removed blocks
+                //    change) — eliminating the per-chunk full-text-then-mask flash.
+                //  - messageId changed (Local→Cloud send flip): also refresh the render context's
+                //    MessageReference + reference closures, so live consumers (inline video/audio/
+                //    gallery) use the Cloud reference. The reused media VIEWS keep their init-time
+                //    (local) reference — their bytes are already local, so the poster does not reload
+                //    and there is no blink; a later scroll-recycle rebuilds them against the Cloud ref.
+                if isLocalToCloudFlip {
+                    let messageReference = MessageReference(item.message)
+                    let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
+                    existing.renderContext?.updateContent(webpage: webpage, message: messageReference, imageReference: closures.image, fileReference: closures.file)
+                } else {
+                    existing.renderContext?.updateContent(webpage: webpage)
+                }
+                self.pageViewMessageKey = key
+                self.appliedInstantPage = page
+                return existing
             }
-            self.pageViewMessageKey = key
-            return existing
+
+            self.resetPageDerivedState()
+            self.beginCrossfadeOut(existing)
+            crossfadeIn = true
+            // `beginCrossfadeOut` took ownership of the outgoing view, so clear the slot before the
+            // rebuild below to keep its `removeFromSuperview()` from tearing down the fading view.
+            self.pageView = nil
+            // Falls through to the rebuild below, which fades the new view in.
         }
         self.pageView?.removeFromSuperview()
         self.pageView = nil
+
+        // Abandon any dissolve still in flight when this rebuild is NOT a crossfade: the bubble is
+        // now showing a different message, so finishing the previous message's fade would leave
+        // content on screen that no longer belongs to it.
+        if !crossfadeIn, let previous = self.fadingOutPageView {
+            self.fadingOutPageView = nil
+            previous.removeFromSuperview()
+        }
 
         // Capture only the MessageReference (value type) — the closures are retained on the
         // render context which is owned by the V2View, so we must avoid making them retain
@@ -282,7 +444,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         let view = InstantPageV2View(renderContext: renderContext)
         self.pageView = view
         self.pageViewMessageKey = key
+        self.appliedInstantPage = page
         self.containerNode.view.addSubview(view)
+        if crossfadeIn {
+            view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+        }
         view.detailsTapped = { [weak self] index in
             guard let self else { return }
             let current = self.currentExpandedDetails[index] ?? self.defaultExpanded(forDetailsIndex: index)
@@ -392,6 +558,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 var pageLayout: InstantPageV2Layout?
                 // Built alongside pageLayout so the apply closure can hand it to ensurePageView.
                 var pageWebpage: TelegramMediaWebpage?
+                // Shape-only fingerprint of the resolved page, decided in the layout pass (pure,
+                // safe off-main, one tree walk against a pass already O(page)) and consumed by
+                // `ensurePageView` in apply.
+                var pageStructure: Int = 0
+                var pageResolvedInstantPage: InstantPage?
 
                 // The page's text left edge in THIS node's coordinate space — the status node's left
                 // edge + side inset, mirroring TextBubble's bubbleInsets. The page itself is inset by
@@ -574,6 +745,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         instantPage: instantPage
                     )))
                     pageWebpage = webpage
+                    pageStructure = instantPageStructureFingerprint(instantPage)
+                    pageResolvedInstantPage = instantPage
 
                     let presentationThemeIdentity = ObjectIdentifier(item.presentationData.theme.theme)
                     let currentMessageStableVersion = item.message.stableVersion
@@ -1034,7 +1207,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 showMoreExpanded,
                                 pageLayout
                             )
-                            let pageView = self.ensurePageView(item: item, webpage: pageWebpage, richPageKey: resolvedContent.key, showMoreExpanded: showMoreExpanded)
+                            let pageView = self.ensurePageView(
+                                item: item,
+                                webpage: pageWebpage,
+                                page: pageResolvedInstantPage ?? resolvedContent.instantPage,
+                                richPageKey: resolvedContent.key,
+                                showMoreExpanded: showMoreExpanded,
+                                structure: pageStructure,
+                                isStreaming: hasDraft || hadDraft,
+                                animation: animation
+                            )
                             if self.checkboxesInteractive(item: item, resolved: resolvedContent) {
                                 pageView.checkboxTapped = { [weak self] path, newValue in
                                     guard let self, let item = self.item else {
