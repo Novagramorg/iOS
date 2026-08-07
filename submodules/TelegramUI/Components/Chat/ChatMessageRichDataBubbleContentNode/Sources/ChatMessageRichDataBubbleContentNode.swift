@@ -1501,13 +1501,44 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         }
 
         guard let urlHit = self.urlForTapLocation(point) else {
-            if let entityHit = self.entityForTapLocation(point), let content = self.entityTapContent(entityHit.attributes) {
+            if let entityHit = self.entityForTapLocation(point) {
                 let rects = self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
-                return ChatMessageBubbleContentTapAction(
-                    content: content,
-                    rects: rects,
-                    activate: self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
-                )
+
+                // A link-styled page button (richButtonStyle link:flags.3) whose action is not a URL,
+                // so it carries the button rather than an InstantPageUrlItem and cannot use the url
+                // arm below.
+                //
+                // `.custom` is the only content case that fits, and ChatMessageBubbleItemNode's
+                // `.custom` arm (:6021) calls the closure but IGNORES `tapAction.activate` — so the
+                // closure mints the progress promise itself. `makeActivate` is the call that wires
+                // the shimmer over the tapped rects, which is how a link-styled `.callback` gets the
+                // same loading treatment a pill does.
+                if let actionItem = entityHit.attributes[NSAttributedString.Key(rawValue: InstantPageButtonActionAttribute)] as? InstantPageButtonActionItem {
+                    let activate = self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
+                    return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        let progress = activate?() ?? Promise<Bool>()
+                        // Mirrors the pill's dispatch (:1056): synthesise the ReplyMarkupButton the
+                        // bot-button handler expects. Only InlineButtonType-derived actions can occur
+                        // on a page button, so .text (which would sendMessage) is unreachable here.
+                        self.performRichTextButtonAction?(ReplyMarkupButton(
+                            title: actionItem.button.text.plainText,
+                            titleWhenForwarded: nil,
+                            action: actionItem.button.action,
+                            style: nil
+                        ), progress)
+                    }), rects: rects)
+                }
+
+                if let content = self.entityTapContent(entityHit.attributes) {
+                    return ChatMessageBubbleContentTapAction(
+                        content: content,
+                        rects: rects,
+                        activate: self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
+                    )
+                }
             }
             return ChatMessageBubbleContentTapAction(content: .none)
         }
@@ -1584,6 +1615,20 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         self.displayContentsUnderSpoilers = true
         let local = self.view.convert(point, to: pageView)
         pageView.setDisplayContentsUnderSpoilers(true, atLocation: local, animated: true)
+    }
+
+    /// Whether a tap on these attributes does anything.
+    ///
+    /// LOAD-BEARING that `tapActionAtPoint` and `updateTouchesAtPoint` agree on this set: the first
+    /// decides what a tap DOES, the second whether it lights up. A link-styled button is not an
+    /// `entityTapContent` case — `tapActionAtPoint` handles it separately, because it needs the hit
+    /// geometry that `entityTapContent` deliberately does not take — so gating the highlight on
+    /// `entityTapContent` alone gave a control that acted on tap but never highlighted.
+    private func entityIsTappable(_ attributes: [NSAttributedString.Key: Any]) -> Bool {
+        if attributes[NSAttributedString.Key(rawValue: InstantPageButtonActionAttribute)] is InstantPageButtonActionItem {
+            return true
+        }
+        return self.entityTapContent(attributes) != nil
     }
 
     private func entityTapContent(_ attributes: [NSAttributedString.Key: Any]) -> ChatMessageBubbleContentTapAction.Content? {
@@ -1711,7 +1756,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 rects = [showMoreTextNode.frame.offsetBy(dx: -1.0, dy: -1.0)]
             } else if let urlHit = self.urlForTapLocation(point) {
                 rects = self.computeHighlightRects(item: urlHit.item, parentOffset: urlHit.parentOffset, localPoint: urlHit.localPoint)
-            } else if let entityHit = self.entityForTapLocation(point), self.entityTapContent(entityHit.attributes) != nil {
+            } else if let entityHit = self.entityForTapLocation(point), self.entityIsTappable(entityHit.attributes) {
                 rects = self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
             }
         }

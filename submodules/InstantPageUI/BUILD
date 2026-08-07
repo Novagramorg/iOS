@@ -57,6 +57,8 @@ swift_library(
     deps = [
         ":InstantPageUI",
         "//submodules/Display:Display",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TextFormat:TextFormat",
     ],
 )
 

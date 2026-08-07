@@ -16587,7 +16587,7 @@ Error: %8$@";
 "RichText.Menu.List.Bullet" = "Bulleted List";
 "RichText.Menu.List.Numbered" = "Numbered List";
 "RichText.Menu.List.Checklist" = "Checklist";
-"RichText.Menu.List.Detail" = "Detail Block";
+"RichText.Menu.List.Detail" = "Toggle Block";
 "RichText.Menu.Table.Copy" = "Copy Table";
 "RichText.Menu.Table.ConvertToText" = "Convert to Text";
 "RichText.Menu.Table.Delete" = "Delete Table";

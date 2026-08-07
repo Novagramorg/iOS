@@ -41,17 +41,9 @@ private final class InstantPageV2ButtonPillContentView: UIView {
             return
         }
         context.textMatrix = CGAffineTransform(scaleX: 1.0, y: -1.0)
-        // `attachment.ascent` already includes the vertical padding, so it is exactly the baseline's
-        // distance from the pill's top edge.
-        // Horizontally centre the label: for an inline pill this equals the padding, but a row pill's
-        // frame is stretched to an equal column width, so the label must centre within it.
-        let labelWidth = self.attachment.size.width - instantPageInlineButtonHorizontalPadding * 2.0
-        let x = max(instantPageInlineButtonHorizontalPadding, (self.bounds.width - labelWidth) / 2.0)
-        // Vertically: `attachment.ascent` is the baseline's distance from the pill top for an inline
-        // pill. A row pill has a fixed taller height, so centre the label's box instead.
-        let labelBoxHeight = self.attachment.ascent + self.attachment.descent
-        let y = (self.bounds.height - labelBoxHeight) / 2.0 + self.attachment.ascent - 0.33
-        context.textPosition = CGPoint(x: x, y: y)
+        // Shared with `instantPageButtonEmojiPlacements`, so a pill's emoji can never drift away
+        // from the label they sit in.
+        context.textPosition = instantPageButtonLabelOrigin(attachment: self.attachment, pillSize: self.bounds.size)
         let line = CTLineCreateWithAttributedString(self.displayLabelString)
         CTLineDraw(line, context)
 
@@ -77,7 +69,9 @@ private final class InstantPageV2ButtonPillContentView: UIView {
 ///
 /// The frame is set by the owner (the item view or the row view) — this view never writes its own.
 final class InstantPageV2ButtonPillView: UIView {
-    private var attachment: InstantPageInlineButtonAttachment
+    // Module-internal: `InstantPageV2View.updateInlineEmoji()` needs the laid-out label to derive
+    // its emoji placements.
+    private(set) var attachment: InstantPageInlineButtonAttachment
     private var theme: InstantPageTheme
     /// Inline (`RichText.textButton`) vs block-level (`pageBlockButtonRow`). Fixed at init: a pill is
     /// created by exactly one kind of owner and never changes kind.
@@ -87,6 +81,14 @@ final class InstantPageV2ButtonPillView: UIView {
     /// Owns the label + badge drawing. Kept as a subview rather than drawn by the pill so the loading
     /// shimmer can sit between the fill and the text.
     private let contentView: InstantPageV2ButtonPillContentView
+    /// Hosts the `InlineStickerItemLayer`s for custom emoji in this pill's label. Owned and
+    /// populated by `InstantPageV2View.updateInlineEmoji()`, which holds the render context.
+    ///
+    /// Inserted ABOVE `contentView`, which matters twice: the pill's label is painted into the
+    /// content view's layer `contents` bitmap and a sublayer composites over it, and the loading
+    /// shimmer is deliberately inserted BELOW `contentView`, so an emoji placed there would be
+    /// washed by the sweep instead of sitting on top of it.
+    let emojiContainerView: UIView = UIView()
     /// Live only while the tapped action is in flight. Nilled at the *start* of the fade-out, so the
     /// upkeep in `updateLoadingEffectLayout` cannot fight the removal animation.
     private var loadingEffectView: TextLoadingEffectView?
@@ -107,6 +109,8 @@ final class InstantPageV2ButtonPillView: UIView {
 
         self.isOpaque = false
         self.addSubview(self.contentView)
+        self.emojiContainerView.isUserInteractionEnabled = false
+        self.addSubview(self.emojiContainerView)
         self.applyColors()
         self.clipsToBounds = true
 
@@ -126,6 +130,19 @@ final class InstantPageV2ButtonPillView: UIView {
         self.theme = theme
         self.isDisabled = attachment.button.action == .disabled
         self.applyColors()
+    }
+
+    /// The colour the label is actually drawn in — `instantPageButtonColors(...)`'s resolution, not
+    /// the paragraph colour baked into `attachment.labelString`. Used as an emoji layer's
+    /// `dynamicColor`, so a template emoji in a `danger` or disabled pill tints with its text
+    /// rather than with the surrounding body copy.
+    var resolvedLabelColor: UIColor {
+        return instantPageButtonColors(
+            self.attachment.button.color,
+            theme: self.theme,
+            isInline: self.isInline,
+            isDisabled: self.isDisabled
+        ).label
     }
 
     private func applyColors() {
@@ -150,6 +167,7 @@ final class InstantPageV2ButtonPillView: UIView {
         super.layoutSubviews()
         self.layer.cornerRadius = self.bounds.height / 2.0
         self.contentView.frame = CGRect(origin: CGPoint(), size: self.bounds.size)
+        self.emojiContainerView.frame = CGRect(origin: CGPoint(), size: self.bounds.size)
         self.updateLoadingEffectLayout()
     }
 
@@ -248,7 +266,8 @@ final class InstantPageV2ButtonPillView: UIView {
 /// Item view for an inline `RichText.textButton`.
 final class InstantPageV2InlineButtonView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2InlineButtonItem
-    private let pillView: InstantPageV2ButtonPillView
+    // Module-internal: `InstantPageV2View.updateInlineEmoji()` reaches in to host emoji layers.
+    let pillView: InstantPageV2ButtonPillView
 
     var itemFrame: CGRect { return self.item.frame }
 
@@ -284,7 +303,8 @@ final class InstantPageV2InlineButtonView: UIView, InstantPageItemView {
 /// chose (which already encode wrapping at 8 per row and equal widths within a row).
 final class InstantPageV2ButtonRowView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2ButtonRowItem
-    private var pillViews: [InstantPageV2ButtonPillView] = []
+    // Module-internal, see `InstantPageV2InlineButtonView.pillView`.
+    var pillViews: [InstantPageV2ButtonPillView] = []
     private var theme: InstantPageTheme
 
     var itemFrame: CGRect { return self.item.frame }

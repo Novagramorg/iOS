@@ -134,6 +134,10 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
             return 1.0
         }
         
+        if case .buttonRow = upper, case .buttonRow = lower {
+            return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
+        }
+        
         if case .list = kind {
             return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
         } else {
@@ -158,6 +162,8 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
                 switch lower {
                 case .heading:
                     return upperSpacing.verticalPadding + metrics.baseBlockSpacing + lowerSpacing.verticalPadding
+                case .list:
+                    return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
                 case .paragraph:
                     // A minimum separation, not a body-font-derived size: two paragraphs are held
                     // apart by their own line boxes. Left unscaled deliberately —
@@ -170,6 +176,14 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
                 }
             default:
                 break
+            }
+            if case .list = upper {
+                switch lower {
+                case .paragraph:
+                    return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
+                default:
+                    break
+                }
             }
             switch lower {
             case .paragraph, .thinking, .list:

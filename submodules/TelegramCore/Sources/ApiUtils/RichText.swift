@@ -86,7 +86,8 @@ extension RichText {
             self = .textButton(InstantPageButton(
                 text: RichText(apiText: data.text),
                 action: ReplyMarkupButtonAction.from(apiType: data.type).action,
-                color: data.style.flatMap(ReplyMarkupButton.Style.Color.init(apiRichStyle:))
+                color: data.style.flatMap(ReplyMarkupButton.Style.Color.init(apiRichStyle:)),
+                isLink: InstantPageButton.isLinkStyle(data.style)
             ))
         }
     }

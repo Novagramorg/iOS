@@ -3619,7 +3619,10 @@ func v2FrameForLine(_ line: InstantPageTextLine, boundingWidth: CGFloat, alignme
 // the directional-boundary secondary-offset handling. For a pure-LTR line this returns exactly the
 // start-index offset (primary == secondary, and start-offset < end-offset), so LTR layout is
 // byte-identical to the previous single-offset behavior.
-private func v2LeadingOffsetForRange(_ line: CTLine, range: NSRange) -> CGFloat {
+/// Module-internal (not `private`) so the button-label geometry in `InstantPageInlineButton.swift`
+/// can reuse it. A bare `CTLineGetOffsetForStringIndex` returns the glyph's RIGHT edge on an RTL
+/// line, which shifts an attachment by roughly one advance.
+func v2LeadingOffsetForRange(_ line: CTLine, range: NSRange) -> CGFloat {
     var secondaryStartOffset: CGFloat = 0.0
     let rawStartOffset = CTLineGetOffsetForStringIndex(line, range.location, &secondaryStartOffset)
     var startOffset = rawStartOffset
@@ -3942,7 +3945,19 @@ func layoutTextItem(
                             // proportionally) so it reads a touch larger than the bare line box.
                             // The line is NOT inflated (lineAscent stays fontLineHeight). Must match
                             // the run-delegate width in attributedStringForRichText (InstantPageTextItem.swift).
-                            let itemSize = font.ascender - font.descender + 4.0 * font.pointSize / 17.0
+                            //
+                            // The drawn square is derived from the FONT here, never from the run
+                            // delegate — the delegate only supplies the advance — so a caller wanting
+                            // a different size must set BOTH, and the size travels on
+                            // `InstantPageEmojiSizeAttribute`. Button labels use it: a body-sized
+                            // emoji (24.29pt at 17pt) is taller than the chat bubble's whole 22pt row
+                            // and would overlap the lines above and below.
+                            let itemSize: CGFloat
+                            if let explicitSize = attributes[NSAttributedString.Key(rawValue: InstantPageEmojiSizeAttribute)] as? NSNumber {
+                                itemSize = CGFloat(explicitSize.doubleValue)
+                            } else {
+                                itemSize = font.ascender - font.descender + 4.0 * font.pointSize / 17.0
+                            }
                             pendingEmoji.append(PendingV2EmojiAttachment(xOffset: xOffset, range: range, emoji: emoji, size: itemSize))
                         }
                     }

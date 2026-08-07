@@ -707,6 +707,81 @@ related, a fixed radius rather than `height / 2` is the lever.
 - **`checkboxFill` / `checkboxForeground` are misnamed for their current use.** They are the `.primary`
   button's solid fill and label colour; nothing checkbox-related reads them. `InstantPageListItem`
   checkboxes still derive their own colours. Rename or wire them up before relying on the names.
+- **A button-label custom emoji uses a DIFFERENT run delegate from a body-text one**, rewritten by
+  `instantPageButtonLabelWithFittedEmoji` inside `instantPageInlineButtonAttachment` — the single
+  construction path — and therefore before truncation and before measurement, so the reserved advance
+  and the drawn square are the same number by construction. Two of the body-text delegate's three
+  numbers are wrong in a pill. Its **width** is `A − D + 4·pointSize/17`, which overflows the pill's
+  ink box (≈21.3 vs ≈19.7pt at the 15pt inline label font) and gets shaved by `clipsToBounds`; a
+  button-label emoji is sized to `A − D` instead, so it reads slightly smaller than the same emoji in
+  the surrounding paragraph. Its **descent** is `font.descender`, which is NEGATIVE — inert in body
+  text, because the V2 line layout pins `lineDescent` to `fontDescentBelowBaseline` and never reads
+  it, but a pill measures itself with `CTLineGetTypographicBounds`, so for a label that is *only* an
+  emoji (no other run contributing a positive descent) the line's descent comes back negative and the
+  pill collapses from ≈19.7pt to ≈12.9pt. The button-label delegate negates it.
+- **`instantPageButtonLabelOrigin` is shared by the drawing and the emoji placement, deliberately.**
+  It is the math that used to be inlined in `InstantPageV2ButtonPillContentView.draw(_:)`, `- 0.33`
+  optical nudge included. Recomputing it at the emoji site instead is the same drift hazard the
+  "single construction path" rule already exists for.
+- **The placement functions must not read a pill's live `bounds`.** `updateInlineEmoji()` runs during
+  `update(layout:theme:animation:)`, before a freshly created `InstantPageV2InlineButtonView` has run
+  `layoutSubviews` — so its pill's frame is still zero. Both functions take `pillSize` explicitly, and
+  the renderer sources it from the item (`item.frame.size`, `item.buttons[i].frame.size`).
+- **Pill emoji live in the page's central `inlineStickerItemLayers` registry, not in the pill.** That
+  is what makes them inherit the reveal, energy-setting and visibility-rect gates rather than needing
+  a parallel implementation of all three. `InstantPageEmojiLayerData.textView` is therefore generalised
+  to `hostView: UIView?`: `updateEmojiReveal` downcasts it, so a pill host lands in the existing `else`
+  → `revealed = true`, which is correct because a pill already pops in atomically when its paragraph
+  finishes revealing. The button views are deliberately NOT given a `renderContext` — the renderer
+  creates the layers and already holds one.
+- **`emojiContainerView` sits ABOVE the pill's `contentView`, and that ordering is load-bearing twice
+  over.** The label is painted into the content view's layer `contents` bitmap, so a sublayer must be
+  above it to be seen at all; and the loading shimmer is deliberately inserted BELOW `contentView`, so
+  an emoji placed there would be washed by the sweep instead of riding on top of it.
+- **An emoji layer's `dynamicColor` is the pill's `resolvedLabelColor`, not the label string's baked
+  colour** — the same reason the label itself is recoloured in the view rather than at construction.
+  Sourcing it from `attachment.labelString` would tint a template emoji in a `danger` or disabled pill
+  with body-text colour.
+- **Not covered: spoilers inside a button label.** A pill renders no spoiler treatment at all, so an
+  emoji under a `.textSpoiler` in a label shows unhidden — exactly as the label text around it already
+  does.
+- **`richButtonStyle`'s `link:flags.3` is stored as its own `InstantPageButton.isLink`, not as a
+  fourth `ReplyMarkupButton.Style.Color` case.** That enum is shared with bot reply markups, whose
+  `keyboardButtonStyle` has no link bit, and it is `Int32`-raw-valued and persisted by both features.
+  Keeping the facts independent also means `link` + `bg_danger` round-trips losslessly even though
+  the renderer makes `link` win. No TL regeneration was needed: `Api.RichButtonStyle` is already a
+  bare `flags: Int32` and its constructor id `63312061` is the same `0x3C610BD`.
+- **`apiFlagsAndStyle()` accumulates the flag word and THEN checks it.** Its previous shape opened
+  with `guard let color = self.color else { return (0, nil) }`, which would drop the style object
+  entirely for a link-only button and lose `flags.3` on the way out. `apiRichStyleFlagWord` is public
+  so that composition is testable.
+- **`link` wins over the background bits, and the link uses the page's ordinary link colour.** Same
+  first-match precedence as `bg_primary > bg_danger > bg_success` and `align_left > center > right`,
+  so a malformed style is deterministic rather than evaluation-order dependent.
+- **A link-styled button is only honoured on an inline `RichText.textButton`.** A `pageBlockButtonRow`
+  entry stores and round-trips `isLink` but never reads it — rows always draw pills.
+- **The link route produces no attachment**, so it is invisible to every piece of attachment
+  machinery: the line-breaker's re-break arm, the `lineAscent` discount, `additionalItems`, and the
+  pill view. Two side effects follow: a link button's label is selectable and copyable (a pill's is
+  not, being outside the text), and it reveals character-by-character with its paragraph instead of
+  popping in atomically.
+- **`.link(false)` is pushed for every non-`.disabled` action, not only `.url`.** The action decides
+  which tap attribute is attached, not whether the label looks like a link — a link-styled
+  `.callback` is visually indistinguishable from a link-styled `.url`. Note also that the link route
+  deliberately does NOT push `.fontSize`/`.medium`: a pill owns its typography, a link inherits the
+  paragraph's.
+- **Only `.url` rides `TelegramTextAttributes.URL`.** That is what buys the long-press menu, the
+  concealed-URL confirmation, anchor scrolling and the link-progress shimmer for free.
+  `.urlAuth` and `.openWebView` carry URLs but take the button-dispatch route instead, because their
+  dispatch differs from opening a plain URL. `.disabled` renders as ordinary text with no link
+  styling and no attribute at all — a link-coloured span that does nothing is worse than plain text.
+- **`InstantPageButtonActionAttribute` must appear in `linkSelectionRects`'s `interactiveKeys`
+  allow-list.** Omitting it costs the tap highlight *and* the loading shimmer, silently, because the
+  bubble's `linkProgressRects` is computed from exactly those rects.
+- **`.custom` tap actions do not receive `tapAction.activate`.** `ChatMessageBubbleItemNode`'s
+  `.custom` arm calls the closure and ignores the field, so the link-button arm mints its own promise
+  by calling `makeActivate(...)()` inside the closure — that call is what wires the shimmer. Any
+  future `.custom` arm wanting progress must do the same.
 - **Interactive V2 items route taps through a pageView closure, NOT `tapActionAtPoint`.**
   `buttonTapped` on `InstantPageV2View` mirrors the pre-existing `checkboxTapped`
   (`InstantPageRenderer.swift:178`). `.custom` + `rects` on `ChatMessageBubbleContentTapAction` is for
