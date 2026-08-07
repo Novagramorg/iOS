@@ -1618,7 +1618,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
         
         let messageTheme = incoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
-        let isEphemeralMessage = Namespaces.Message.allEphemeral.contains(firstMessage.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(firstMessage.id.namespace)
+        let ephemeralBadgeMessage = content.first(where: { message, _ in
+            return Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace) || message.activeEphemeralReplacementMessage != nil
+        })?.0
+        let isEphemeralMessage = ephemeralBadgeMessage != nil
+        let isAnchoredEphemeralMessage = ephemeralBadgeMessage?.activeEphemeralReplacementMessage != nil
         let ephemeralBadgeHeight: CGFloat = 17.0
         let ephemeralBadgeHorizontalInset: CGFloat = 5.0
         let ephemeralBadgeIconSize = CGSize(width: 14.0, height: 17.0)
@@ -1626,20 +1630,23 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
 
         let ephemeralBadgeText: String?
         if isEphemeralMessage {
-            if incoming {
+            if incoming || isAnchoredEphemeralMessage {
                 ephemeralBadgeText = item.presentationData.strings.Chat_EphemeralMessage_BadgeYou
             } else {
                 var botPeerId: PeerId?
-                for attribute in firstMessage.attributes {
+                let ephemeralMessage = ephemeralBadgeMessage ?? firstMessage
+                for attribute in ephemeralMessage.attributes {
                     if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
                         botPeerId = attribute.botPeerId
                         break
                     } else if let attribute = attribute as? EphemeralMessageAttribute {
                         botPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(attribute.receiverId))
+                    } else if let attribute = attribute as? EphemeralReplacementMessageAttribute {
+                        botPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(attribute.receiverId))
                     }
                 }
 
-                let botPeer = botPeerId.flatMap { firstMessage.peers[$0] }
+                let botPeer = botPeerId.flatMap { ephemeralMessage.peers[$0] }
                 let botName: String
                 if let addressName = botPeer?.addressName, !addressName.isEmpty {
                     botName = "@\(addressName)"
@@ -4671,17 +4678,21 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 iconNode.isUserInteractionEnabled = false
                 iconNode.contentMode = .scaleAspectFit
                 strongSelf.ephemeralBadgeIconNode = iconNode
-                strongSelf.clippingNode.view.addSubview(iconNode)
-
-                if animation.isAnimated {
-                    iconNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                }
             }
             if themeUpdated || iconNode.image == nil {
                 iconNode.image = UIImage(bundleImageName: "Chat/Message/Hidden")?.withRenderingMode(.alwaysTemplate)
             }
             iconNode.tintColor = textColor
-            animation.animator.updateFrame(layer: iconNode.layer, frame: iconFrame, completion: nil)
+            if iconNode.superview == nil {
+                strongSelf.clippingNode.view.addSubview(iconNode)
+                iconNode.frame = iconFrame
+
+                if animation.isAnimated {
+                    iconNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                }
+            } else {
+                animation.animator.updateFrame(layer: iconNode.layer, frame: iconFrame, completion: nil)
+            }
         } else {
             if animation.isAnimated {
                 if let backgroundNode = strongSelf.ephemeralBadgeBackgroundNode {

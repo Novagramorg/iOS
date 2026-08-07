@@ -80,6 +80,55 @@ final class MixedPassStressOracleTests: XCTestCase {
         )
     }
 
+    /// Non-vacuity for the clock branch of `validateTrack`. It is the suite's highest-volume model↔CA
+    /// assertion, and it now reads metadata rather than `beginTime` — so something has to prove the
+    /// branch can still fail, or a replacement could quietly become a tautology.
+    func testOracleDetectsAWrongDeclaredTrackClock() throws {
+        let track = ListAnimationTrack(generation: 7, from: 20, to: 0,
+                                       startTime: 1, duration: 0.5, curve: .linear)
+        let animation = CoreAnimationCompiler().animation(for: track, property: .positionY)
+        animation.setValue(2.0, forKey: "CoreListAnimation.startTime")
+
+        XCTAssertThrowsError(
+            try MixedPassStressOracle.validateTrack(expected: track, animation: animation,
+                                                    property: .positionY)
+        ) { error in
+            XCTAssertEqual(error as? MixedPassOracleError, .wrongClock)
+        }
+    }
+
+    /// Non-vacuity for the origin-policy branch: an emission that claims `.explicit` must actually
+    /// carry a stamp on the phase axis.
+    func testOracleDetectsAnOriginThatContradictsItsPolicy() throws {
+        let track = ListAnimationTrack(generation: 8, from: 20, to: 0,
+                                       startTime: 1, duration: 0.5, curve: .linear)
+        let compiler = CoreAnimationCompiler()
+
+        let explicit = compiler.animation(for: track, property: .positionY,
+                                          origin: .explicit(track.startTime))
+        XCTAssertNoThrow(
+            try MixedPassStressOracle.validateTrack(expected: track, animation: explicit,
+                                                    property: .positionY)
+        )
+        explicit.beginTime = 0
+        XCTAssertThrowsError(
+            try MixedPassStressOracle.validateTrack(expected: track, animation: explicit,
+                                                    property: .positionY)
+        ) { error in
+            XCTAssertEqual(error as? MixedPassOracleError, .wrongOrigin)
+        }
+
+        // The `.atCommit` half is deliberately unasserted at stress scale — `beginTime == 0` there is
+        // a statement about Core Animation, not CoreList — so a stray stamp on an `.atCommit`
+        // emission must NOT be reported by this oracle.
+        let implicit = compiler.animation(for: track, property: .positionY)
+        implicit.beginTime = 1
+        XCTAssertNoThrow(
+            try MixedPassStressOracle.validateTrack(expected: track, animation: implicit,
+                                                    property: .positionY)
+        )
+    }
+
     func testSettlementCheckpointReapsTracksAlreadyPastTheirDeadline() {
         let initial = (0..<20).map {
             MixedPassItem(id: $0, height: 60)

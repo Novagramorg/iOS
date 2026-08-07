@@ -11,14 +11,28 @@ public enum InstantPageFontStyle {
 }
 
 public struct InstantPageFont {
+    /// Deliberately narrow rather than a re-export of `Font.Weight`: every case here has a real
+    /// resolution path. A weight enum whose cases are silently ignored type-checks, reads as
+    /// working, and does nothing. Widen it only when a new weight actually gets resolved.
+    ///
+    /// `.medium` and `.semibold` both resolve serif runs to the system serif design (New York),
+    /// which ships real Medium and Semibold faces — neither is a synthesised weight.
+    public enum Weight {
+        case regular
+        case medium
+        case semibold
+    }
+
     let style: InstantPageFontStyle
     let size: CGFloat
     let lineSpacingFactor: CGFloat
+    let weight: Weight
 
-    public init(style: InstantPageFontStyle, size: CGFloat, lineSpacingFactor: CGFloat) {
+    public init(style: InstantPageFontStyle, size: CGFloat, lineSpacingFactor: CGFloat, weight: Weight = .regular) {
         self.style = style
         self.size = size
         self.lineSpacingFactor = lineSpacingFactor
+        self.weight = weight
     }
 }
 
@@ -38,7 +52,7 @@ public struct InstantPageTextAttributes {
     }
     
     func withUpdatedFontStyles(sizeMultiplier: CGFloat, lineSpacingFactor: CGFloat, forceSerif: Bool) -> InstantPageTextAttributes {
-        return InstantPageTextAttributes(font: InstantPageFont(style: forceSerif ? .serif : self.font.style, size: floor(self.font.size * sizeMultiplier), lineSpacingFactor: self.font.lineSpacingFactor * lineSpacingFactor), color: self.color, underline: self.underline)
+        return InstantPageTextAttributes(font: InstantPageFont(style: forceSerif ? .serif : self.font.style, size: floor(self.font.size * sizeMultiplier), lineSpacingFactor: self.font.lineSpacingFactor * lineSpacingFactor, weight: self.font.weight), color: self.color, underline: self.underline)
     }
 }
 
@@ -114,6 +128,17 @@ public struct InstantPageTextCategories {
         )
     }
 }
+
+/// The nominal `subheader` size every `InstantPageTextCategories` declares.
+///
+/// `InstantPageTheme.headingTextAttributes` divides the live subheader size by this to derive the
+/// H3–H6 scale, so the two MUST agree. When they do, the multiplier is exactly 1.0 in the default
+/// case and the `baseSize` literals in that function ARE the rendered default sizes. When they
+/// drift, every H3–H6 silently renders at a size no literal in this file mentions — which is what
+/// happened when the subheader moved off 18pt and this divisor did not follow. Reference this at
+/// the category construction sites rather than repeating `22.0`, so disagreement requires
+/// deliberately opting out.
+public let instantPageNominalSubheaderFontSize: CGFloat = 22.0
 
 public final class InstantPageTheme {
     public let type: InstantPageThemeType
@@ -219,24 +244,26 @@ public final class InstantPageTheme {
             break
         }
 
-        // H3–H6: serif at a per-level base size, scaled by the same dynamic-type
-        // multiplier the subheader category uses (subheader.size / 19.0).
+        // H3–H6: serif at a per-level base size. `sizeMultiplier` is exactly 1.0 in the default
+        // case, so these base sizes are the rendered default sizes; it departs from 1.0 only when
+        // the reader's font-size slider has scaled the categories, and then the whole ladder
+        // scales proportionally.
         let subheaderAttributes = self.textCategories.subheader
         let baseSize: CGFloat
         switch clampedLevel {
         case 3:
-            baseSize = 17.0
+            baseSize = 20.0
         case 4:
-            baseSize = 16.0
+            baseSize = 19.0
         case 5:
-            baseSize = 15.0
+            baseSize = 18.0
         default:
-            baseSize = 13.0
+            baseSize = 17.0
         }
 
-        let sizeMultiplier = subheaderAttributes.font.size / 18.0
+        let sizeMultiplier = subheaderAttributes.font.size / instantPageNominalSubheaderFontSize
         let attributes = InstantPageTextAttributes(
-            font: InstantPageFont(style: .serif, size: floor(baseSize * sizeMultiplier), lineSpacingFactor: subheaderAttributes.font.lineSpacingFactor),
+            font: InstantPageFont(style: .serif, size: floor(baseSize * sizeMultiplier), lineSpacingFactor: subheaderAttributes.font.lineSpacingFactor, weight: .medium),
             color: subheaderAttributes.color,
             underline: subheaderAttributes.underline
         )
@@ -249,8 +276,8 @@ private let lightTheme = InstantPageTheme(
     pageBackgroundColor: .white,
     textCategories: InstantPageTextCategories(
         kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 0.685), color: .black),
-        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685), color: .black),
-        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 19.0, lineSpacingFactor: 0.685), color: .black),
+        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685, weight: .medium), color: .black),
+        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 0.685, weight: .medium), color: .black),
         paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 1.0), color: .black),
         caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x79828b)),
         credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x79828b)),
@@ -286,8 +313,8 @@ private let sepiaTheme = InstantPageTheme(
     pageBackgroundColor: UIColor(rgb: 0xf8f1e2),
     textCategories: InstantPageTextCategories(
         kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0x4f321d)),
-        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0x4f321d)),
-        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 19.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0x4f321d)),
+        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685, weight: .medium), color: UIColor(rgb: 0x4f321d)),
+        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 0.685, weight: .medium), color: UIColor(rgb: 0x4f321d)),
         paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x4f321d)),
         caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x927e6b)),
         credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x927e6b)),
@@ -323,8 +350,8 @@ private let grayTheme = InstantPageTheme(
     pageBackgroundColor: UIColor(rgb: 0x5a5a5c),
     textCategories: InstantPageTextCategories(
         kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0xcecece)),
-        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0xcecece)),
-        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 19.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0xcecece)),
+        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685, weight: .medium), color: UIColor(rgb: 0xcecece)),
+        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 0.685, weight: .medium), color: UIColor(rgb: 0xcecece)),
         paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0xcecece)),
         caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0xa0a0a0)),
         credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0xa0a0a0)),
@@ -360,8 +387,8 @@ private let darkTheme = InstantPageTheme(
     pageBackgroundColor: UIColor(rgb: 0x000000),
     textCategories: InstantPageTextCategories(
         kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0xb0b0b0)),
-        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0xb0b0b0)),
-        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 19.0, lineSpacingFactor: 0.685), color: UIColor(rgb: 0xb0b0b0)),
+        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685, weight: .medium), color: UIColor(rgb: 0xb0b0b0)),
+        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 0.685, weight: .medium), color: UIColor(rgb: 0xb0b0b0)),
         paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0xb0b0b0)),
         caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x6a6a6a)),
         credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: UIColor(rgb: 0x6a6a6a)),

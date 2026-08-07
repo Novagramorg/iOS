@@ -81,6 +81,15 @@ public protocol CoreListItem: AnyObject {
     /// view that animates its own internals should use it, or hold it for its next layout.
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition)
 
+    /// This row pins to the viewport's BOTTOM edge: the list declares whatever extra TOP-inset slack
+    /// is needed to bring it there, so it can reach the edge even when the content above it is
+    /// shorter than the viewport. The analogue of `ListViewItem.pinToEdgeWithInset`
+    /// (`Display/Source/ListViewItem.swift:83`).
+    ///
+    /// When several loaded rows declare it, the LOWEST index wins — `ListViewImpl`'s
+    /// `lowestPinnedIndex` (`Display/Source/ListView.swift:1107`).
+    var pinsToBottomEdge: Bool { get }
+
     /// Attachments this row publishes, keyed by attachment key. A key identifies a RUN: adjacent
     /// items publishing the same key, and agreeing under `combines(with:)`, share one attachment
     /// view. The same key may recur in disjoint runs of the loaded window, which is why runs carry a
@@ -90,6 +99,10 @@ public protocol CoreListItem: AnyObject {
 
 public extension CoreListItem {
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {}
+
+    /// Unlike `isEqual`, `false` is honest rather than a conservative guess: a row that says nothing
+    /// about pinning is not pinned, and there is no behavior to degrade silently.
+    var pinsToBottomEdge: Bool { false }
 
     /// Unlike `isEqual`, an empty default is honest here — most rows publish no attachments — and it
     /// keeps every existing conformance compiling.
@@ -244,6 +257,14 @@ public final class CoreVirtualListView: UIView {
         let index: Int
         let offset: Offset
         let preservesVisibleContent: Bool
+        /// Set only by `resolveAnchor`'s pin branch. Read by `pinsLoadedTop`, which must not ALSO
+        /// place the window: in the short-content regime both mechanisms land the row on the bottom
+        /// edge and agree exactly, and "two mechanisms that happen to agree" is what this design
+        /// exists to remove.
+        ///
+        /// Stored rather than re-derived as `index == lowestPinnedItemIndex`: an explicit `scrollTo`
+        /// to the pinned row is a DIFFERENT case that keeps its own behaviour.
+        let isPin: Bool
 
         // Every non-scrollTo branch of resolveAnchor computes a plain point offset, so they keep
         // their existing call shape.
@@ -251,12 +272,14 @@ public final class CoreVirtualListView: UIView {
             self.index = index
             self.offset = .fixed(pointOffset)
             self.preservesVisibleContent = preservesVisibleContent
+            self.isPin = false
         }
 
-        init(index: Int, offset: Offset, preservesVisibleContent: Bool) {
+        init(index: Int, offset: Offset, preservesVisibleContent: Bool, isPin: Bool = false) {
             self.index = index
             self.offset = offset
             self.preservesVisibleContent = preservesVisibleContent
+            self.isPin = isPin
         }
     }
 
@@ -414,7 +437,31 @@ public final class CoreVirtualListView: UIView {
         let isMoveParticipant: Bool
     }
 
-    private var _items: [CoreListItem] = []
+    private var _items: [CoreListItem] = [] {
+        didSet { lowestPinnedItemIndex = _items.firstIndex(where: { $0.pinsToBottomEdge }) }
+    }
+    /// The collection's lowest `pinsToBottomEdge` index — `ListViewImpl`'s `lowestPinnedIndex`.
+    ///
+    /// Cached rather than scanned per build: `buildWindow` needs it to decide how far down to load
+    /// before the slack is answerable, and that would be an O(collection) scan on the hot path. Kept
+    /// on `_items`'s `didSet` so it cannot go stale behind any of the three assignment sites.
+    private var lowestPinnedItemIndex: Int?
+
+    /// Whether the list is currently HOLDING its lowest `pinsToBottomEdge` row against the bottom
+    /// edge. `ListViewImpl.experimentalSnapScrollToPinnedItem` (`Display/Source/ListView.swift:215`).
+    ///
+    /// A plain flag, deliberately — not a remembered index, identity or settled offset. The pinned
+    /// row's index shifts every time a message arrives, and `lowestPinnedItemIndex` is already
+    /// re-derived per pass, so there is nothing here to go stale.
+    ///
+    /// Engaged by an explicit `scrollTo` at the pinned index; released on finger-down, on the pinned
+    /// row leaving the collection, and on a full replace. Release is PERMANENT for that pin —
+    /// scrolling back to the edge does not re-engage it, matching `ListViewImpl`.
+    ///
+    /// This answers WHERE the pinned row goes. `bottomEdgePinSlack` answers whether the list has
+    /// scroll ROOM to rest there, and is deliberately independent of this flag.
+    private var holdsPinnedRow = false
+
     var items: [CoreListItem] {
         get { _items }
         set {
@@ -542,7 +589,7 @@ public final class CoreVirtualListView: UIView {
         return 0.0
     }
     // Mirrors the last `engine.setEdges` — the engine takes them but does not hand them back.
-    private var declaredEdges: (min: CGFloat?, max: CGFloat?) = (nil, nil)
+    private(set) var declaredEdges: (min: CGFloat?, max: CGFloat?) = (nil, nil)
     // The contiguous loaded item-index span of the settled window, or nil when empty.
     public var loadedIndexRange: (first: Int, last: Int)? {
         activeWindow.isEmpty ? nil : (activeWindow.startIndex, activeWindow.endIndex)
@@ -622,6 +669,34 @@ public final class CoreVirtualListView: UIView {
 
     // The current settled scroll offset reported by the scroll engine.
     public var currentScrollOffset: CGFloat { engine.offset }
+
+    /// Whether a `pinsToBottomEdge` row is currently HELD against the bottom edge, as opposed to
+    /// merely happening to be near it. `ListViewImpl.isStrictlyScrolledToPinToEdgeItem()`
+    /// (`Display/Source/ListView.swift:2708`), tolerance included.
+    ///
+    /// One member rather than a slack getter for the host to compare against: a pair of raw members
+    /// is a pair a backend can half-implement or half-sample.
+    ///
+    /// Reads the PRESENTED frame — the question is where the row is on screen right now, so a pass
+    /// whose animation has not landed yet must answer false.
+    ///
+    /// Gated on the LATCH, not on geometry. With a latch there is no such thing as a row sitting at
+    /// the edge "by coincidence": the flag distinguishes held from coincident directly, which is what
+    /// the old `slack != 0 || ext > 0` guard was a proxy for. That guard could not survive the clamp
+    /// anyway — it reads false in the tall-content regime, where the pin is most firmly held.
+    ///
+    /// Load-bearing beyond the scroll-to-bottom button: `ChatControllerLoadDisplayNode.swift:900-904`
+    /// uses this to decide whether SENDING A MESSAGE drops the pin.
+    public var isStrictlyPinnedToBottomEdge: Bool {
+        guard holdsPinnedRow,
+              let pinnedIndex = lowestPinnedItemIndex,
+              let pinned = activeWindow.items.first(where: { $0.index == pinnedIndex })
+        else { return false }
+        let visibleArea = logicalSize.height - viewportInsets.top - viewportInsets.bottom
+        let ext = max(0, pinned.frame.height - visibleArea * 0.5)
+        let expectedMaxY = logicalSize.height - viewportInsets.bottom + ext
+        return abs(presentedFrame(of: pinned.view).maxY - expectedMaxY) < 0.5
+    }
 
     /// A view's rect in this list's coordinate space, as PRESENTED — where it is on screen right now, not
     /// where its settled model geometry says it will end up.
@@ -765,6 +840,10 @@ public final class CoreVirtualListView: UIView {
             self?.handleUserScroll(offset)
         }
         engine.onWillBeginDragging = { [weak self] in
+            // Mirrors `ListViewImpl.scrollViewWillBeginDragging` (`Display/Source/ListView.swift:879`).
+            // The TOUCH releases the pin, not the movement: a programmatic offset write keeps it, which
+            // is what every self-update flush and inset change is.
+            self?.holdsPinnedRow = false
             self?.willBeginDragging?()
         }
         engine.onDidEndDragging = { [weak self] in
@@ -836,6 +915,7 @@ public final class CoreVirtualListView: UIView {
                       additionalScrollDistance: CGFloat = 0.0,
                       anchorMode: CoreListAnchorMode = .automatic,
                       compensatesInsetChange: Bool = true,
+                      animatesInsertions: Bool = true,
                       transition: CoreListTransition) {
         let animationDuration = transition.duration
         if isApplyingChanges {
@@ -847,6 +927,7 @@ public final class CoreVirtualListView: UIView {
                                    additionalScrollDistance: additionalScrollDistance,
                                    anchorMode: anchorMode,
                                    compensatesInsetChange: compensatesInsetChange,
+                                   animatesInsertions: animatesInsertions,
                                    transition: transition)
             }
             return
@@ -972,6 +1053,9 @@ public final class CoreVirtualListView: UIView {
            maximum < minimum {
             oldMaximum = minimum
         }
+        // Captured here, while `viewportInsets`, `logicalSize` and `_items` are all still the pass's
+        // OLD state — the geometry assignment is below.
+        let oldPinSlack = bottomEdgePinSlack(for: oldWindow)
         var oldSettledOffset = oldBoundsOriginY
         if let minimum = oldEdges.min {
             oldSettledOffset = max(oldSettledOffset, minimum)
@@ -1028,6 +1112,12 @@ public final class CoreVirtualListView: UIView {
         let widthBeforePass = contentWidth
         if let newSize { logicalSize = newSize }
         if let newInsets { viewportInsets = newInsets }
+        // The OLD window measured against the NEW viewport geometry — precisely what `ListViewImpl`
+        // computes at `Display/Source/ListView.swift:3291`, where `calculatePinToEdgeTopInset()` runs
+        // after `self.insets`/`self.visibleSize` are assigned but before anything is re-laid out. The
+        // pass's own `buildWindow` applies the real new slack; this pair only says how far the
+        // EFFECTIVE inset edge moved, which is what the anchor must be projected by.
+        let updatedPinSlack = bottomEdgePinSlack(for: oldWindow)
         contentWidthChangedInPass = abs(contentWidth - widthBeforePass) > 0.5
         if !oldItems.isEmpty, effectiveItems.isEmpty {
             engine.haltMotionInPlace()
@@ -1083,6 +1173,19 @@ public final class CoreVirtualListView: UIView {
 
         let isNoOverlapSwap = hasItems && !hasScrollTo
             && diff.survivorMap.isEmpty && !effectiveItems.isEmpty
+
+        // The pin latch, resolved against THIS pass's collection (`_items` is assigned above, so
+        // `lowestPinnedItemIndex` is current).
+        if lowestPinnedItemIndex == nil || isNoOverlapSwap {
+            // The row left the collection, or this is a full replace — a chat switch or hole reload,
+            // whose incoming collection must not inherit a hold from the outgoing one.
+            holdsPinnedRow = false
+        } else if let scrollTo, scrollTo.index == lowestPinnedItemIndex {
+            // `ListView.swift:2737`. The chat produces exactly one of these per streamed answer, from
+            // `scrollToPinToTopStableId` (`ChatHistoryListNode.swift:2244-2246`), which fires only when
+            // the pinned stableId CHANGES.
+            holdsPinnedRow = true
+        }
         let resolvedAnchor: ResolvedAnchor?
         if effectiveItems.isEmpty {
             resolvedAnchor = nil
@@ -1112,8 +1215,18 @@ public final class CoreVirtualListView: UIView {
             // moves under it. The new insets are already installed above and still drive content x/width,
             // the viewport band, the load band and the loaded-top pin below — the same split ListViewImpl
             // makes when it zeroes `offsetFix` but still assigns `self.insets` and still snaps to bounds.
+            // Against the EFFECTIVE top edge (`viewportInsets.top + slack`), not the raw inset: while
+            // a bottom-edge pin is active the slack absorbs an inset change — exactly, until it runs
+            // out — so the effective edge moves less than the inset did, and content must follow the
+            // effective edge. `ListViewImpl` does the same at `Display/Source/ListView.swift:3291`.
+            //
+            // Needs no gate, unlike `ListViewImpl`'s, whose `+=` sits inside `if let
+            // updateSizeAndInsets`. The two samples read the SAME `oldWindow` and the SAME `_items`
+            // (`_items` is assigned further down), so they differ only if `logicalSize` or
+            // `viewportInsets` changed between them — the addend is provably zero on any other pass.
+            let pinSlackDelta = updatedPinSlack - oldPinSlack
             let topInsetDelta = compensatesInsetChange
-                ? viewportInsets.top - oldViewportInsets.top
+                ? (viewportInsets.top - oldViewportInsets.top) + pinSlackDelta
                 : 0.0
             // `additionalScrollDistance` rides the same addend as the inset compensation, which is
             // exactly where ListViewImpl puts it (`offsetFix += additionalScrollDistance`), and it
@@ -1140,6 +1253,7 @@ public final class CoreVirtualListView: UIView {
             // displacement at the top edge opens such a gap and is clipped away by both; a negative one
             // scrolls down into content, which ListViewImpl honours and the pin would discard.
             let pinsLoadedTop = !resolvedAnchor.preservesVisibleContent
+                && !resolvedAnchor.isPin
                 && !hasScrollTo
                 && !hasAdditionalScrollDistance
                 && oldWindow.startIndex == 0
@@ -1946,9 +2060,14 @@ public final class CoreVirtualListView: UIView {
         // or a carousel within a surviving collection, carrying a genuinely new row must still fade
         // that row in; see `isFullReplaceCarousel`.
         //
+        // `animatesInsertions` is the host's version of the same statement: the row's arrival is
+        // real, but something outside the list is already staging it, so a fade here would be a
+        // second, uncoordinated animation of one arrival. The chat's send morph is the caller — it
+        // carries the bubble out of the input field itself.
+        //
         // Nothing else is needed for the incoming side — render() already stamps `layer.opacity = 1`
         // on every window item, and it runs earlier in this pass.
-        if !isFullReplaceCarousel {
+        if !isFullReplaceCarousel && animatesInsertions {
             let insertedIDs = Set(diff.inserts.compactMap { newIndex in
                 effectiveItems.indices.contains(newIndex)
                     ? effectiveItems[newIndex].identity
@@ -2014,7 +2133,11 @@ public final class CoreVirtualListView: UIView {
         let edges = loadedEdgeRange(for: activeWindow, originY: containerOriginY)
         if let minimum = edges.min { initialOffset = max(initialOffset, minimum) }
         if let maximum = edges.max { initialOffset = min(initialOffset, maximum) }
-        if activeWindow.startIndex == 0 { initialOffset = viewportGeometry.minimumOffset }
+        // `edges.min` is non-nil exactly when `startIndex == 0`, so this is the old condition — but it
+        // reads the CLAMPED minimum, which carries the pin's slack. Reading
+        // `viewportGeometry.minimumOffset` here instead would discard it on the cold-start path (a chat
+        // opened with a stream already in flight).
+        if let minimum = edges.min { initialOffset = minimum }
         setBoundsOriginY(initialOffset)
         // As in `applyChanges`: the solve consumes the offset, so it must run after the final write.
         renderAttachments()
@@ -2039,6 +2162,38 @@ public final class CoreVirtualListView: UIView {
             return ResolvedAnchor(index: scrollTo.index,
                                   offset: .resolved(scrollTo.resolve),
                                   preservesVisibleContent: false)
+        }
+        if holdsPinnedRow, let pinnedIndex = lowestPinnedItemIndex {
+            // Above `preserveVisibleContent`: loading older history above a held pin must not move it.
+            // Below `scrollTo`: an explicit jump still wins, and re-arms the latch when it targets the
+            // pin.
+            //
+            // Reads ONLY the pinned row's own height — no span, no window membership, no loading
+            // precondition, because anchoring on a row loads it. That is the whole reason this is an
+            // anchor: the slack needed every row from the window start through the pin, which is what
+            // made it fragile about load order.
+            //
+            // `logicalSize`/`viewportInsets` are read when the closure RUNS, inside `buildWindow`,
+            // which is after this pass has assigned its `newSize`/`newInsets` — so a pass that
+            // re-insets and re-pins in one transaction resolves against the new geometry.
+            return ResolvedAnchor(
+                index: pinnedIndex,
+                offset: .resolved { [weak self] height, _ in
+                    guard let self else { return 0 }
+                    let visibleArea = self.logicalSize.height
+                        - self.viewportInsets.top - self.viewportInsets.bottom
+                    // `pinToEdgeBottomExtension` (`ListView.swift:1137`): a row taller than half the
+                    // viewport hangs off the edge, so it never takes more than half the screen.
+                    let ext = max(0, height - visibleArea * 0.5)
+                    // `Offset` means "settled Y as an offset from the top inset edge", and `resolveY`
+                    // adds `viewportInsets.top`, so the screen target is
+                    // `logicalSize.height - viewportInsets.bottom + ext - height`: the row's maxY on
+                    // the bottom inset edge.
+                    return visibleArea + ext - height
+                },
+                preservesVisibleContent: false,
+                isPin: true
+            )
         }
         if anchorMode == .preserveVisibleContent,
            let preserved = resolvePreservedAnchor(
@@ -2396,7 +2551,11 @@ public final class CoreVirtualListView: UIView {
         ])
 
         let band = projectedLoadBand
-        let topEdge = viewportInsets.top
+        // Assigned after the first prepend below, which is the earliest point at which rows 0…k are
+        // members and the slack is therefore answerable. Every later `topEdge` read in this build —
+        // the loaded-top pin, both underfill alignments, the whole-collection underfill test — uses
+        // the same value.
+        var topEdge = viewportInsets.top
         let bottomEdge = logicalSize.height - viewportInsets.bottom
 
         func alignTopIfUnderfilled() -> Bool {
@@ -2433,7 +2592,45 @@ public final class CoreVirtualListView: UIView {
             }
         }
 
+        // The pinned row sits at a HIGHER index than the anchor on exactly the passes that matter —
+        // the cold start and any pass resting at the edge both anchor on the newest row, with the pin
+        // just below it — so `prependUntilCoveredOrAtTop` has NOT loaded it and the slack would read
+        // 0. Load down to it first. These rows are inside the viewport whenever the slack is non-zero,
+        // so `appendUntilCoveredOrAtBottom` below would have loaded them regardless; this only moves
+        // that work before the measurement that depends on it.
+        //
+        // While the pin latch is ENGAGED this is a no-op: the pinned row is the anchor, so it is
+        // member zero of the window before this runs. It still matters once the latch is released and
+        // the content above the pin is short — the case that keeps the pin reachable by scrolling
+        // back to it.
+        //
+        // The `window.height` bound is load-bearing and exact under the clamped slack: once the rows
+        // above the pin alone exceed the viewport, the slack is zero regardless of the pinned row's
+        // height, so there is nothing to learn by loading down to it. (Reply 620 / viewport 400 /
+        // pinned 60: the loop stops after the reply, and 0 IS the right answer, since 620 + 60 > 400.)
+        //
+        // This bound was once reported as the cause of a dropped pin and patched; the patch made the
+        // device behaviour worse and was reverted (`2f31d2bc5a`). It only looked wrong because the
+        // unclamped slack needed an exact negative value here. Do not patch it again.
+        func appendUntilPinnedRowLoaded() {
+            guard window.startIndex == 0, let pinnedIndex = lowestPinnedItemIndex else { return }
+            let visibleArea = logicalSize.height - viewportInsets.top - viewportInsets.bottom
+            while window.endIndex < pinnedIndex,
+                  window.endIndex < _items.count - 1,
+                  window.height < visibleArea {
+                appendItem(to: &window,
+                           width: width,
+                           sourceWindow: sourceWindow,
+                           survivorMapNewToOld: survivorMapNewToOld,
+                           moveReuseNewToOld: moveReuseNewToOld)
+            }
+        }
+
         prependUntilCoveredOrAtTop()
+        appendUntilPinnedRowLoaded()
+        // Ordering is safe in one direction only, and this is that direction: the slack pushes the
+        // window DOWN, so the append below needs no more rows than it would have without it.
+        topEdge = viewportInsets.top + bottomEdgePinSlack(for: window)
         if pinsLoadedTop, window.startIndex == 0 {
             translate(&window, by: topEdge - window.minY)
         } else {
@@ -2542,13 +2739,63 @@ public final class CoreVirtualListView: UIView {
         return fresh
     }
 
+    /// Extra TOP-inset slack this window needs so its lowest `pinsToBottomEdge` row can rest against
+    /// the bottom edge — `ListViewImpl.calculatePinToEdgeTopInset` (`Display/Source/ListView.swift:1106`),
+    /// re-derived against the window's own geometry.
+    ///
+    /// Reads only INTRA-window offsets (`pinned.frame.maxY - window.minY`), never a placement, so it
+    /// is well defined at any point after the members have been measured — including inside the very
+    /// alignment step that consumes it. That is the same property `ListViewImpl` relies on by summing
+    /// `apparentBounds.height` rather than reading positions.
+    ///
+    /// `window.minY`/`maxY` already cover the reserved attachment bands, so a date header above the
+    /// pinned row is accounted for without a separate term.
+    private func bottomEdgePinSlack(for window: Window) -> CGFloat {
+        // `sawIndexZero`: the slack is scroll room at an edge, and it means nothing until that edge
+        // is loaded.
+        guard window.startIndex == 0,
+              let pinnedIndex = lowestPinnedItemIndex,
+              let pinned = window.items.first(where: { $0.index == pinnedIndex })
+        else { return 0 }
+        let visibleArea = logicalSize.height - viewportInsets.top - viewportInsets.bottom
+        // `pinToEdgeBottomExtension` (`ListView.swift:1137`): a row taller than half the viewport is
+        // allowed to hang off the edge, so it never takes more than half.
+        let ext = max(0, pinned.frame.height - visibleArea * 0.5)
+        let span = pinned.frame.maxY - window.minY
+        // **Clamped at zero**, as `ListViewImpl` clamps the same expression (`ListView.swift:1134`).
+        //
+        // This answers ONE question: does the list have scroll ROOM to rest with the pinned row on
+        // the bottom edge. It is not what holds the row there — `holdsPinnedRow` is. Once `span`
+        // outgrows the viewport the natural scroll range already contains the pinned position, so
+        // zero is the correct answer and the latch alone carries the hold.
+        //
+        // The two are matched by construction, which is why the clamp cannot strand the anchor: the
+        // pin's target sits exactly `visibleArea - span + ext` points past the natural minimum, the
+        // same expression this returns. Positive, and the edge extends by precisely that much;
+        // negative, and the target is INSIDE the natural range — ordinary scrolled-down territory.
+        //
+        // It was briefly unclamped, to make the edge carry the hold without a latch. A negative slack
+        // is placement leaking into a scroll-range quantity: it fed `loadedEdgeRange`'s minimum and
+        // extended the range into empty space, so on device the chat could not be scrolled down to a
+        // tall streaming reply at all — it overscroll-bounced instead.
+        //
+        // Deliberately INDEPENDENT of the latch. Release happens at finger-down, so a slack that
+        // vanished with it would move content under the user's finger before the drag had travelled a
+        // point. `ListViewImpl` computes its inset unconditionally for the same reason.
+        return max(0.0, (logicalSize.height - viewportInsets.bottom + ext)
+                      - (viewportInsets.top + span))
+    }
+
     private func loadedEdgeRange(for window: Window,
                                  originY: CGFloat,
                                  itemCount: Int? = nil) -> (min: CGFloat?, max: CGFloat?) {
         guard !window.isEmpty else { return (0, 0) }
         let count = itemCount ?? _items.count
+        // The pin's slack rides the MINIMUM edge, which is what makes it stick: `render()` and
+        // `refreshReachedLoadedEdges()` both come through here and `rebalanceActiveWindow()` re-renders,
+        // so user scrolling, momentum and self-update flushes all see it with no extra plumbing.
         let minimum: CGFloat? = window.startIndex == 0
-            ? viewportGeometry.minimumOffset
+            ? viewportGeometry.minimumOffset - bottomEdgePinSlack(for: window)
             : nil
         let maximum: CGFloat? = window.endIndex == count - 1
             ? viewportGeometry.maximumOffset(

@@ -132,7 +132,7 @@ final class NoOpAnimationCompletionTests: XCTestCase {
             mediaTime: { time },
             durationFactor: { 1 },
             scheduleAfter: { scheduled.append(($0, $1)) },
-            animationInstaller: { track, _, _, completion in
+            animationInstaller: { track, _, _, _, completion in
                 installed.append((track, completion))
             }
         )

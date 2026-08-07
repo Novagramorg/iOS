@@ -168,7 +168,19 @@ final class InstantPageTextStyleStack {
             parsedFontSize = round(parsedFontSize * 0.85)
         }
         
-        if (bold != nil && bold!) && (italic != nil && italic!) {
+        if fontSerif == true, semibold == true || medium == true {
+            // Georgia ships only Regular and Bold, so a weighted serif run resolves to the system
+            // serif design (New York), which has real Medium and Semibold faces. Bold and italic
+            // inside such a run stay in the same family — falling through to the Georgia arms below
+            // would mix two serif families mid-line inside a single heading.
+            let weightedFace: Font.Weight = (semibold == true) ? .semibold : .medium
+            attributes[NSAttributedString.Key.font] = Font.with(
+                size: parsedFontSize,
+                design: .serif,
+                weight: (bold == true) ? .bold : weightedFace,
+                traits: (italic == true) ? [.italic] : []
+            )
+        } else if (bold != nil && bold!) && (italic != nil && italic!) {
             if fontSerif != nil && fontSerif! {
                 attributes[NSAttributedString.Key.font] = UIFont(name: "Georgia-BoldItalic", size: parsedFontSize)
             } else if fontFixed != nil && fontFixed! {
@@ -197,9 +209,9 @@ final class InstantPageTextStyleStack {
                 attributes[NSAttributedString.Key.font] = Font.italic(parsedFontSize)
             }
         } else {
-            // `.semibold` only affects the sans variant: Georgia and Menlo ship no semibold face, so a
-            // serif or fixed run keeps its regular face rather than silently falling back to a
-            // synthesised weight.
+            // A semibold SERIF run is handled by the leading branch above (New York). `.semibold` is
+            // still ignored on a fixed run: Menlo ships no semibold face, and synthesising one is
+            // worse than keeping the regular face.
             if fontSerif != nil && fontSerif! {
                 attributes[NSAttributedString.Key.font] = UIFont(name: "Georgia", size: parsedFontSize)
             } else if fontFixed != nil && fontFixed! {

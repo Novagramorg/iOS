@@ -302,3 +302,28 @@ final class ContentResizableItemView: UIView, CoreListItemView {
 
     nonisolated func update(width: CGFloat, transition: CoreListTransition) -> CGFloat { contentHeight + bonusHeight }
 }
+
+// MARK: - Bottom-edge-pinned items
+
+/// A fixed-height row that pins to the viewport's bottom edge — the fixture analogue of a chat
+/// message carrying `ListViewItem.pinToEdgeWithInset`.
+final class PinnedFixedHeightItem: CoreListItem {
+    let id: UUID
+    var identity: AnyHashable { id }
+    let height: CGFloat
+    var pinsToBottomEdge: Bool { true }
+
+    init(id: UUID, height: CGFloat) {
+        self.id = id
+        self.height = height
+    }
+
+    func view() -> UIView & CoreListItemView {
+        FixedHeightItemView(height: height)
+    }
+
+    func isEqual(to other: CoreListItem) -> Bool {
+        guard let other = other as? PinnedFixedHeightItem else { return false }
+        return id == other.id && height == other.height
+    }
+}

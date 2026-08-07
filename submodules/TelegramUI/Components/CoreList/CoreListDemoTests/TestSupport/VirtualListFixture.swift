@@ -48,6 +48,7 @@ final class VirtualListFixture {
     var activeWindow: CoreVirtualListView.Window { listView.activeWindow }
     var loadedIndices: [Int] { activeWindow.items.map(\.index) }
     var contentSize: CGSize { scrollView.contentSize }
+    var declaredEdges: (min: CGFloat?, max: CGFloat?) { listView.declaredEdges }
     var containerOriginY: CGFloat { listView.containerOriginY }
     var boundsOriginY: CGFloat { scrollView.bounds.origin.y }
     var viewportTrack: ListAnimationTrack? {
@@ -108,6 +109,15 @@ final class VirtualListFixture {
 
     func simulateRelease() {
         scrollView.simulateRelease()
+    }
+
+    /// Fires the engine's finger-down callback without moving the offset.
+    ///
+    /// `scroll(to:)` and `simulateDrag(by:)` are both offset writes that reach the list through
+    /// `scrollViewDidScroll` only — neither is a *touch*. The bottom-edge pin latch releases on the
+    /// touch, not on the movement, so a test for release has to say so explicitly.
+    func beginUserDrag() {
+        driver.engine.scrollViewWillBeginDragging(scrollView)
     }
 
     func settledScreenY(identity: AnyHashable) -> CGFloat? {

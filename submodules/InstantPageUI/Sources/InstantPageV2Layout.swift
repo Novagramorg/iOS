@@ -206,7 +206,14 @@ public struct InstantPageV2CheckboxColors {
 
 public enum InstantPageV2ListMarkerKind {
     case bullet
-    case number(String)
+    /// The MEASURED attributed string, not a bare `String`, so the marker is drawn with exactly the
+    /// attributes its column width was measured with — font size, weight, serif and colour all ride
+    /// along. The renderer previously rebuilt it as a hardcoded `systemFont(ofSize: 17.0)`, which
+    /// silently disagreed with the theme's paragraph font and broke the column alignment it feeds.
+    ///
+    /// `alignment` pins the number to the text-facing edge of the shared marker column: trailing in
+    /// LTR (so the dots line up), leading in RTL, where the column is mirrored onto the right.
+    case number(NSAttributedString, alignment: NSTextAlignment)
     case checklist(checked: Bool, colors: InstantPageV2CheckboxColors)
 }
 
@@ -678,7 +685,7 @@ private func layoutBlockSequence(
     var previousBlock: InstantPageBlock?
 
     for (i, block) in blocks.enumerated() {
-        let spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, fitToWidth: context.fitToWidth, kind: kind)
+        let spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, kind: kind)
         let localItems = layoutBlock(
             block,
             boundingWidth: boundingWidth,
@@ -712,7 +719,7 @@ private func layoutBlockSequence(
         }
     }
 
-    let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, fitToWidth: context.fitToWidth, kind: kind)
+    let closingSpacing = spacingBetweenBlocks(upper: previousBlock, lower: nil, kind: kind)
     contentHeight += closingSpacing
 
     var contentSize = CGSize(width: boundingWidth, height: contentHeight)
@@ -1273,6 +1280,9 @@ private func layoutDetails(
     // V1 (InstantPageDetailsItem.swift:98–101): boundingWidth - detailsInset*2 - titleInset, titleHeight = max(44, titleSize.height + 26).
     let titleStyleStack = InstantPageTextStyleStack()
     setupStyleStack(titleStyleStack, theme: context.theme, category: .paragraph, link: false)
+    // The header reads as a control, not body copy — semibold as a BASELINE weight, so an explicit
+    // `.bold` inside the title still wins over it.
+    titleStyleStack.push(.semibold)
     let (titleTextItem, _, _) = layoutTextItem(
         attributedStringForRichText(title, styleStack: titleStyleStack, formatDate: context.formatDate),
         boundingWidth: boundingWidth - horizontalInset * 2.0 - 32.0,   // reserve right edge for chevron
@@ -1282,7 +1292,7 @@ private func layoutDetails(
     )
     guard let titleTextItem = titleTextItem else { return [] }
     
-    let titleHeight = max(44.0, titleTextItem.frame.height + 26.0)
+    let titleHeight = max(36.0, titleTextItem.frame.height + 15.0)
     titleTextItem.frame.origin.x = context.rtl
         ? (boundingWidth - horizontalInset - 23.0 - titleTextItem.frame.width)
         : (horizontalInset + 23.0)
@@ -1331,7 +1341,7 @@ private struct V2TableRow {
 }
 
 let v2TableCellInsets: UIEdgeInsets = {
-    return UIEdgeInsets(top: 15.0, left: 13.0, bottom: 15.0, right: 13.0)
+    return UIEdgeInsets(top: 7.0, left: 13.0, bottom: 7.0, right: 13.0)
 }()
 let v2TableBorderWidth: CGFloat = {
     return UIScreenPixel * 2.0
@@ -2146,7 +2156,7 @@ private func layoutTypedMediaWithCaption(
 
     let (captionItems, captionHeight) = layoutCaptionAndCredit(
         caption,
-        offset: scaledSize.height,
+        offset: scaledSize.height - 5.0,
         boundingWidth: boundingWidth,
         horizontalInset: horizontalInset,
         context: &context
@@ -2681,7 +2691,7 @@ private func layoutBlockQuote(
     var contentHeight: CGFloat = verticalInset
 
     // Fixed, compact gap between a quote's child blocks. The full page-flow spacing
-    // (spacingBetweenBlocks ~27pt around quotes) is too airy when nested; the first
+    // (spacingBetweenBlocks, 24pt around quotes) is too airy when nested; the first
     // child hugs the top (only verticalInset above it).
     let childSpacing: CGFloat = 10.0
     for (i, child) in blocks.enumerated() {
@@ -2712,6 +2722,17 @@ private func layoutBlockQuote(
         contentHeight += 3.0
         let captionStyleStack = InstantPageTextStyleStack()
         setupStyleStack(captionStyleStack, theme: context.theme, category: .caption, link: false)
+        // The author is part of the quote's own chrome, so it takes the quote accent — the SAME
+        // theme field the bar and fill read, not a copy, so the three cannot drift apart. (This is
+        // why it is not a `.quoteAuthor` text category: a category would have to carry the colour
+        // through all ten `InstantPageTextCategories` construction sites, each free to disagree with
+        // `quoteAccentColor`. Make it a category only if the author ever needs its own font metrics,
+        // which the `.caption` base supplies today.)
+        //
+        // `linkColor` moves with the text colour to preserve the caption-family rule that a link
+        // matches its surrounding text and is therefore auto-underlined — see `setupStyleStack`.
+        captionStyleStack.push(.textColor(context.theme.quoteAccentColor))
+        captionStyleStack.push(.linkColor(context.theme.quoteAccentColor))
         captionStyleStack.push(.bold)
         let attributedCaption = attributedStringForRichText(caption, styleStack: captionStyleStack, formatDate: context.formatDate)
         let (_, captionItems, captionSize) = layoutTextItem(
@@ -2810,6 +2831,17 @@ private func layoutQuoteText(
         contentHeight += 3.0
         let captionStyleStack = InstantPageTextStyleStack()
         setupStyleStack(captionStyleStack, theme: context.theme, category: .caption, link: false)
+        // The author is part of the quote's own chrome, so it takes the quote accent — the SAME
+        // theme field the bar and fill read, not a copy, so the three cannot drift apart. (This is
+        // why it is not a `.quoteAuthor` text category: a category would have to carry the colour
+        // through all ten `InstantPageTextCategories` construction sites, each free to disagree with
+        // `quoteAccentColor`. Make it a category only if the author ever needs its own font metrics,
+        // which the `.caption` base supplies today.)
+        //
+        // `linkColor` moves with the text colour to preserve the caption-family rule that a link
+        // matches its surrounding text and is therefore auto-underlined — see `setupStyleStack`.
+        captionStyleStack.push(.textColor(context.theme.quoteAccentColor))
+        captionStyleStack.push(.linkColor(context.theme.quoteAccentColor))
         captionStyleStack.push(.bold)
         if isPull {
             captionStyleStack.push(.italic)
@@ -2872,6 +2904,18 @@ private func layoutQuoteText(
 
 // MARK: - List layout (ported from V1 InstantPageLayout.swift lines 365–516)
 
+/// Extra textward nudge for an ORDERED list's item content, on top of the shared
+/// `instantPageListItemTextwardOffset` that every list gets.
+///
+/// V2-only, and deliberately not in the shared constants file: V1 places its numbers through a
+/// different path with its own marker metrics, so shifting the item content there without the
+/// matching marker nudge below would pull its numbered lists out of alignment.
+let instantPageV2NumberedListItemTextwardOffset: CGFloat = 3.0
+
+/// Textward nudge for a number marker within its column — the partner of the item offset above.
+/// Applied to the marker's whole (full-column) frame, so it moves the right-aligned digits with it.
+let instantPageV2NumberMarkerTextwardOffset: CGFloat = 2.0
+
 private func layoutList(
     _ listItems: [InstantPageListItem],
     ordered: Bool,
@@ -2900,10 +2944,6 @@ private func layoutList(
     }
 
     // Build per-item marker descriptors and measure their natural widths.
-    struct MarkerInfo {
-        let kind: InstantPageV2ListMarkerKind
-        let naturalWidth: CGFloat   // for right-aligning number markers
-    }
     let checklistMarkerSize = CGSize(width: 18.0, height: 18.0)
 
     let checkboxColors = InstantPageV2CheckboxColors(
@@ -2919,11 +2959,11 @@ private func layoutList(
     // a pure bullet list `maxIndexWidth == 6` and the bullet sits at `horizontalInset` (visually
     // identical to the pre-change formula), and for a pure checkbox list `maxIndexWidth == 18`
     // matches the previous left-aligned placement too.
-    var markerInfos: [MarkerInfo] = []
+    var markerKinds: [InstantPageV2ListMarkerKind] = []
     for (i, item) in listItems.enumerated() {
         if let checked = item.checked {
             maxIndexWidth = max(maxIndexWidth, checklistMarkerSize.width)
-            markerInfos.append(MarkerInfo(kind: .checklist(checked: checked, colors: checkboxColors), naturalWidth: checklistMarkerSize.width))
+            markerKinds.append(.checklist(checked: checked, colors: checkboxColors))
         } else if ordered {
             let value: String
             if hasNums {
@@ -2953,11 +2993,13 @@ private func layoutList(
                 w = 0.0
             }
             maxIndexWidth = max(maxIndexWidth, w)
-            markerInfos.append(MarkerInfo(kind: .number(value), naturalWidth: w))
+            // Hand the renderer the very string that was just measured, so drawn width and measured
+            // column width cannot disagree.
+            markerKinds.append(.number(attrStr, alignment: context.rtl ? .left : .right))
         } else {
-            // Bullet: 6×6 ellipse (matches V1 InstantPageShapeItem dimensions).
-            maxIndexWidth = max(maxIndexWidth, 6.0)
-            markerInfos.append(MarkerInfo(kind: .bullet, naturalWidth: 6.0))
+            // Bullet: a round dot (matches V1's InstantPageShapeItem ellipse).
+            maxIndexWidth = max(maxIndexWidth, instantPageBulletMarkerDiameter)
+            markerKinds.append(.bullet)
         }
     }
 
@@ -2971,26 +3013,35 @@ private func layoutList(
     // loosens unordered-checkbox very slightly (6→8) so all four kinds match.
     let indexSpacing: CGFloat = 8.0
 
-    // Inter-item spacing: keep successive items close to the baseline rhythm of the body text,
-    // but slightly tighter (lists read denser than prose) — see `instantPageV2ListItemGap`.
-    // Derived from the list's paragraph style, the same style each `.text` item uses below.
-    // (This replaces the former fixed 18pt/12pt gap, which read as too airy.)
-    let interItemSpacingStyleStack = InstantPageTextStyleStack()
-    setupStyleStack(interItemSpacingStyleStack, theme: context.theme, category: .paragraph, link: false)
-    let interItemSpacingProbe = attributedStringForRichText(.plain("A"), styleStack: interItemSpacingStyleStack, formatDate: context.formatDate)
-    let interItemSpacing = instantPageV2ListItemGap(for: interItemSpacingProbe)
+    // Gutter from the page inset to the item content: the marker column, the marker→text gap, and
+    // the item's own textward nudge. Every content-column read below goes through this one value so
+    // the origin and the width can't drift apart.
+    // Ordered lists carry an extra nudge (see `instantPageV2NumberedListItemTextwardOffset`). Note
+    // this keys on `ordered`, not on "the markers are digits", so an ordered CHECKLIST gets it too —
+    // its items stay aligned with a sibling numbered list rather than with an unordered one.
+    let contentGutter = indexSpacing + maxIndexWidth + instantPageListItemTextwardOffset
+        + (ordered ? instantPageV2NumberedListItemTextwardOffset : 0.0)
+
+    // Inter-item spacing comes from `spacingBetweenBlocks` — see the loop below. It replaced a
+    // font-derived gap that reproduced body text's baseline rhythm; list spacing now follows the
+    // one block-spacing model and is tuned there, not here.
 
     // Layout each item.
     var result: [InstantPageV2LaidOutItem] = []
     var contentHeight: CGFloat = 0.0
 
     for (i, item) in listItems.enumerated() {
-        // Inter-item spacing: match the body text's line spacing (see `interItemSpacing` above).
+        // Inter-item spacing: exactly the `spacingBetweenBlocks` that separates any other pair of
+        // adjacent blocks, applied to the previous item's last block and this item's first.
         if i != 0 {
-            contentHeight += interItemSpacing
+            contentHeight += spacingBetweenBlocks(
+                upper: instantPageV2ListItemSpacingBlocks(listItems[i - 1]).last,
+                lower: instantPageV2ListItemSpacingBlocks(item).first,
+                kind: .list
+            )
         }
 
-        let markerInfo = markerInfos[i]
+        let markerKind = markerKinds[i]
 
         // Path to this list item (root→item), stamped onto checkbox markers only. Matches
         // InstantPage.togglingCheckbox path semantics: list items are addressed by item index
@@ -3019,8 +3070,8 @@ private func layoutList(
 
         // Derive the markdown marker string and checked state from the original item.
         let markdownMarker: String
-        switch markerInfo.kind {
-        case let .number(value): markdownMarker = value
+        switch markerKind {
+        case let .number(string, _): markdownMarker = string.string
         default: markdownMarker = "-"
         }
         let markdownChecked: Bool? = item.checked
@@ -3031,8 +3082,8 @@ private func layoutList(
             let styleStack = InstantPageTextStyleStack()
             setupStyleStack(styleStack, theme: context.theme, category: .paragraph, link: false)
             let attrStr = attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
-            let textX = instantPageV2ContentColumnX(horizontalInset: horizontalInset, gutter: indexSpacing + maxIndexWidth, rtl: context.rtl)
-            let textWidth = boundingWidth - horizontalInset * 2.0 - indexSpacing - maxIndexWidth
+            let textX = instantPageV2ContentColumnX(horizontalInset: horizontalInset, gutter: contentGutter, rtl: context.rtl)
+            let textWidth = boundingWidth - horizontalInset * 2.0 - contentGutter
             let (textItem, textLaidOutItems, textSize) = layoutTextItem(
                 attrStr,
                 boundingWidth: textWidth,
@@ -3054,8 +3105,7 @@ private func layoutList(
 
             // Compute marker frame.
             let markerFrame = markerFrameFor(
-                kind: markerInfo.kind,
-                naturalWidth: markerInfo.naturalWidth,
+                kind: markerKind,
                 maxIndexWidth: maxIndexWidth,
                 horizontalInset: horizontalInset,
                 checklistMarkerSize: checklistMarkerSize,
@@ -3066,7 +3116,7 @@ private func layoutList(
 
             result.append(.listMarker(InstantPageV2ListMarkerItem(
                 frame: markerFrame,
-                kind: markerInfo.kind,
+                kind: markerKind,
                 color: context.theme.textCategories.paragraph.color,
                 checkboxPath: itemCheckboxPath
             )))
@@ -3083,7 +3133,7 @@ private func layoutList(
             for (j, subBlock) in blocks.enumerated() {
                 let subItems = layoutBlock(
                     subBlock,
-                    boundingWidth: boundingWidth - horizontalInset * 2.0 - indexSpacing - maxIndexWidth,
+                    boundingWidth: boundingWidth - horizontalInset * 2.0 - contentGutter,
                     horizontalInset: 0.0,
                     kind: kind,
                     isCover: false,
@@ -3093,8 +3143,8 @@ private func layoutList(
                     context: &context
                 )
                 let subLocalMaxY: CGFloat = subItems.map { $0.frame.maxY }.max() ?? 0.0
-                let spacing: CGFloat = (previousBlock != nil && subLocalMaxY > 0.0) ? spacingBetweenBlocks(upper: previousBlock, lower: subBlock, fitToWidth: context.fitToWidth, kind: .list) : 0.0
-                let offsetX = instantPageV2ContentColumnX(horizontalInset: horizontalInset, gutter: indexSpacing + maxIndexWidth, rtl: context.rtl)
+                let spacing: CGFloat = (previousBlock != nil && subLocalMaxY > 0.0) ? spacingBetweenBlocks(upper: previousBlock, lower: subBlock, kind: .list) : 0.0
+                let offsetX = instantPageV2ContentColumnX(horizontalInset: horizontalInset, gutter: contentGutter, rtl: context.rtl)
                 let offsetY = contentHeight + spacing
                 let translatedItems = subItems.map { $0.offsetBy(CGPoint(x: offsetX, y: offsetY)) }
 
@@ -3141,8 +3191,7 @@ private func layoutList(
             // (image-first lists are rare); mirrors the existing .checklist fallback.
             let markerLineMidY: CGFloat = firstBlockLineMidY ?? originY
             let markerFrame = markerFrameFor(
-                kind: markerInfo.kind,
-                naturalWidth: markerInfo.naturalWidth,
+                kind: markerKind,
                 maxIndexWidth: maxIndexWidth,
                 horizontalInset: horizontalInset,
                 checklistMarkerSize: checklistMarkerSize,
@@ -3153,7 +3202,7 @@ private func layoutList(
 
             result.append(.listMarker(InstantPageV2ListMarkerItem(
                 frame: markerFrame,
-                kind: markerInfo.kind,
+                kind: markerKind,
                 color: context.theme.textCategories.paragraph.color,
                 checkboxPath: itemCheckboxPath
             )))
@@ -3168,15 +3217,18 @@ private func layoutList(
 
 /// Computes the frame for a list marker, handling RTL and all three marker kinds.
 ///
-/// All marker kinds are right-aligned within the shared `[horizontalInset, horizontalInset +
-/// maxIndexWidth]` column (LTR) or left-aligned within the mirrored column on the right (RTL).
-/// For a pure-kind list `maxIndexWidth == markerWidth`, so the marker lands at `horizontalInset`
-/// exactly as before; for mixed unordered lists, bullets and checkboxes align flush at the
-/// column's inner edge. Column right-alignment is the single rule across every marker shape
-/// — no `ordered` / `indexSpacing` split — which is why those parameters dropped.
+/// Bullets and checkboxes are drawn at their own size, right-aligned within the shared
+/// `[horizontalInset, horizontalInset + maxIndexWidth]` column (LTR) or left-aligned within the
+/// mirrored column on the right (RTL), so mixed unordered lists align flush at the column's inner edge.
+///
+/// A NUMBER instead takes the WHOLE column as its frame and is aligned by the text system inside it
+/// (`InstantPageV2ListMarkerKind.number` carries the alignment). Sizing each number's box to its own
+/// glyph width and relying on frame arithmetic to line the boxes up only works while the measured
+/// width matches the drawn one — which is exactly the coupling that broke when the renderer drew the
+/// digits in a hardcoded font. A shared box makes "the dots line up" a property of one alignment
+/// setting rather than of two measurements agreeing.
 private func markerFrameFor(
     kind: InstantPageV2ListMarkerKind,
-    naturalWidth: CGFloat,
     maxIndexWidth: CGFloat,
     horizontalInset: CGFloat,
     checklistMarkerSize: CGSize,
@@ -3185,21 +3237,34 @@ private func markerFrameFor(
     boundingWidth: CGFloat
 ) -> CGRect {
     let size: CGSize
+    // Only the bullet takes the optical nudges — below the line midpoint, and toward its item's
+    // text. Numbers and checkboxes stay put, so both offsets are selected here rather than applied
+    // to the shared return. `textwardOffset` is signed by direction, not by axis: the marker column
+    // is mirrored onto the trailing edge in RTL, so moving toward the text means moving LEFT there.
+    let verticalOffset: CGFloat
+    let textwardOffset: CGFloat
     switch kind {
     case .bullet:
-        size = CGSize(width: 6.0, height: 6.0)
+        size = CGSize(width: instantPageBulletMarkerDiameter, height: instantPageBulletMarkerDiameter)
+        verticalOffset = instantPageBulletMarkerVerticalOffset
+        textwardOffset = instantPageBulletMarkerTextwardOffset
     case .number:
-        size = CGSize(width: naturalWidth, height: 20.0)
+        // The full marker column — alignment inside it is the renderer's job.
+        size = CGSize(width: maxIndexWidth, height: 20.0)
+        verticalOffset = 0.0
+        textwardOffset = instantPageV2NumberMarkerTextwardOffset
     case .checklist:
         size = checklistMarkerSize
+        verticalOffset = 0.0
+        textwardOffset = 0.0
     }
     let x: CGFloat
     if rtl {
-        x = boundingWidth - horizontalInset - maxIndexWidth
+        x = boundingWidth - horizontalInset - maxIndexWidth - textwardOffset
     } else {
-        x = horizontalInset + maxIndexWidth - size.width
+        x = horizontalInset + maxIndexWidth - size.width + textwardOffset
     }
-    return CGRect(x: x, y: floorToScreenPixels(lineMidY - size.height / 2.0), width: size.width, height: size.height)
+    return CGRect(x: x, y: floorToScreenPixels(lineMidY - size.height / 2.0 + verticalOffset), width: size.width, height: size.height)
 }
 
 /// Leading/trailing geometry helpers — the single source of truth for "which side is the
@@ -3237,6 +3302,14 @@ private func setupStyleStack(_ stack: InstantPageTextStyleStack, theme: InstantP
     case .monospace:
         stack.push(.fontFixed(true))
     }
+    switch attributes.font.weight {
+    case .regular:
+        break
+    case .medium:
+        stack.push(.medium)
+    case .semibold:
+        stack.push(.semibold)
+    }
     stack.push(.fontSize(attributes.font.size))
     stack.push(.lineSpacingFactor(attributes.font.lineSpacingFactor))
     if attributes.underline {
@@ -3245,7 +3318,24 @@ private func setupStyleStack(_ stack: InstantPageTextStyleStack, theme: InstantP
 }
 
 private func setupStyleStack(_ stack: InstantPageTextStyleStack, theme: InstantPageTheme, category: InstantPageTextCategoryType, link: Bool) {
-    setupStyleStack(stack, theme: theme, attributes: theme.textCategories.attributes(type: category, link: link))
+    let attributes = theme.textCategories.attributes(type: category, link: link)
+    setupStyleStack(stack, theme: theme, attributes: attributes)
+    switch category {
+    case .caption, .credit:
+        // Caption-family links read as their own text rather than as accent. The underline is NOT
+        // applied here: `InstantPageTextStyleStack.textAttributes()` underlines a link whose colour
+        // equals the surrounding text colour, so setting the colour is what produces both.
+        //
+        // LOAD-BEARING: the text colour and the link colour must come from this ONE `attributes`
+        // value. Source them from two separate reads and a later tweak to either one desynchronises
+        // them — at which point the underline silently disappears with no other symptom.
+        //
+        // The push must come AFTER `setupStyleStack`, which pushes `theme.linkColor` itself: the
+        // stack resolves by scanning pushes in reverse and taking the first hit, so the last push wins.
+        stack.push(.linkColor(attributes.color))
+    case .kicker, .header, .subheader, .paragraph, .table, .article, .codeBlock:
+        break
+    }
 }
 
 private func instantPageFont(style: InstantPageTextAttributes, bold: Bool = false, italic: Bool = false, fixed: Bool = false) -> UIFont {
@@ -3412,41 +3502,29 @@ private struct PendingV2EmojiAttachment {
     let size: CGFloat
 }
 
-// The vertical gap to insert between two stacked text boxes (e.g. successive list items).
-//
-// Within one `layoutTextItem` box the inter-line baseline advance is `fontLineHeight +
-// fontLineSpacing`. Each box also reserves the full ascender (A) above its first baseline and the
-// descender (D) below its last (the box is shifted down by `A − fontLineHeight` and its height is
-// padded by D, so a single-line box measures exactly A + D). Stacking two boxes with gap `g`
-// gives a baseline advance of `A + g + D`, so the gap that makes items follow the SAME baseline
-// rhythm as body-text lines is `baselineGap = fontLineHeight + fontLineSpacing − A − D`.
-//
-// Lists are meant to read slightly tighter than body text, though: we reclaim half of the
-// invisible ascender headroom above the cap line (`A − capHeight`) — ink-free space that visually
-// overlaps the previous item's descender region — which pulls the gap ~2pt below exact line
-// rhythm at 17pt (≈3.98 → ≈1.75). Result clamped ≥ 0.
-func instantPageV2ListItemGap(for string: NSAttributedString) -> CGFloat {
-    guard string.length > 0 else { return 0.0 }
-    var font = string.attribute(NSAttributedString.Key.font, at: 0, effectiveRange: nil) as? UIFont
-    if font == nil {
-        string.enumerateAttributes(in: NSMakeRange(0, string.length), options: []) { attributes, _, _ in
-            if font == nil, let furtherFont = attributes[NSAttributedString.Key.font] as? UIFont {
-                font = furtherFont
-            }
+/// A list item's content expressed as blocks, so the gap between two items can be decided by the
+/// same `spacingBetweenBlocks` as any other adjacent pair: a `.text` item is the paragraph it
+/// renders as, a `.blocks` item contributes its own outermost blocks (its last faces the next
+/// item, its first faces the previous one).
+///
+/// This replaced `instantPageV2ListItemGap`, which derived the gap from the paragraph font so that
+/// successive items followed body text's baseline rhythm. That is no longer wanted — list spacing
+/// is now one more consumer of the block-spacing model and is tuned there.
+///
+/// An empty `.blocks` and `.unknown` map to an empty paragraph, matching how `layoutList`
+/// normalises an empty item into a single-space `.text` for rendering.
+private func instantPageV2ListItemSpacingBlocks(_ item: InstantPageListItem) -> (first: InstantPageBlock, last: InstantPageBlock) {
+    switch item {
+    case let .text(text, _, _):
+        return (.paragraph(text), .paragraph(text))
+    case let .blocks(blocks, _, _):
+        guard let first = blocks.first, let last = blocks.last else {
+            return (.paragraph(.empty), .paragraph(.empty))
         }
+        return (first, last)
+    case .unknown:
+        return (.paragraph(.empty), .paragraph(.empty))
     }
-    guard let font else { return 0.0 }
-    var lineSpacingFactor: CGFloat = 1.12
-    if let lineSpacingFactorAttribute = string.attribute(NSAttributedString.Key(rawValue: InstantPageLineSpacingFactorAttribute), at: 0, effectiveRange: nil) {
-        lineSpacingFactor = CGFloat((lineSpacingFactorAttribute as! NSNumber).floatValue)
-    }
-    let ascent = font.ascender
-    let descentBelowBaseline = max(0.0, -font.descender)
-    let fontLineHeight = floor(ascent + font.descender)
-    let fontLineSpacing = floor(fontLineHeight * lineSpacingFactor)
-    let baselineGap = fontLineHeight + fontLineSpacing - ascent - descentBelowBaseline
-    let capHeadroom = max(0.0, ascent - font.capHeight)
-    return max(0.0, baselineGap - capHeadroom * 0.5)
 }
 
 func layoutTextItem(
@@ -3919,7 +3997,17 @@ func layoutTextItem(
         textWidth = maxLineWidth
     }
 
-    let textItem = InstantPageTextItem(frame: CGRect(x: 0.0, y: 0.0, width: textWidth, height: height), attributedString: string, alignment: alignment, opaqueBackground: opaqueBackground, lines: lines)
+    // Round the measured box UP to whole points. `height` comes from font metrics and `textWidth`
+    // from CTLine measurement, so both are fractional — and because callers stack blocks by adding
+    // this size to a running origin, one fractional box makes every later block origin fractional
+    // too. Ceiling (not rounding, not flooring) is the only direction that cannot clip the text.
+    //
+    // Scope: the item's own box only. `lines` keep their fractional frames, and the inline button /
+    // formula / image / emoji frames built below stay fractional on purpose — they are registered
+    // against glyph positions the line-breaker cannot re-measure, so snapping them would drift the
+    // attachment off its text.
+    let itemSize = CGSize(width: ceil(textWidth), height: ceil(height))
+    let textItem = InstantPageTextItem(frame: CGRect(origin: CGPoint(), size: itemSize), attributedString: string, alignment: alignment, opaqueBackground: opaqueBackground, lines: lines)
     textItem.frame = textItem.frame.offsetBy(dx: offset.x, dy: offset.y)
     var items: [InstantPageV2LaidOutItem] = []
     if imageItems.isEmpty || string.length > 1 {

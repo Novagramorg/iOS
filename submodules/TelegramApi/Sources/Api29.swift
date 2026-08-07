@@ -1557,22 +1557,26 @@ public extension Api {
             }
         }
         public class Cons_updateEphemeralBotCallbackQuery: TypeConstructorDescription {
+            public var flags: Int32
             public var queryId: Int64
             public var userId: Int64
-            public var peer: Api.Peer
+            public var peer: Api.Peer?
             public var msgId: Int32
             public var data: Buffer
+            public var chatInstance: Int64?
             public var message: Api.EphemeralMessage
-            public init(queryId: Int64, userId: Int64, peer: Api.Peer, msgId: Int32, data: Buffer, message: Api.EphemeralMessage) {
+            public init(flags: Int32, queryId: Int64, userId: Int64, peer: Api.Peer?, msgId: Int32, data: Buffer, chatInstance: Int64?, message: Api.EphemeralMessage) {
+                self.flags = flags
                 self.queryId = queryId
                 self.userId = userId
                 self.peer = peer
                 self.msgId = msgId
                 self.data = data
+                self.chatInstance = chatInstance
                 self.message = message
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("updateEphemeralBotCallbackQuery", [("queryId", ConstructorParameterDescription(self.queryId)), ("userId", ConstructorParameterDescription(self.userId)), ("peer", ConstructorParameterDescription(self.peer)), ("msgId", ConstructorParameterDescription(self.msgId)), ("data", ConstructorParameterDescription(self.data)), ("message", ConstructorParameterDescription(self.message))])
+                return ("updateEphemeralBotCallbackQuery", [("flags", ConstructorParameterDescription(self.flags)), ("queryId", ConstructorParameterDescription(self.queryId)), ("userId", ConstructorParameterDescription(self.userId)), ("peer", ConstructorParameterDescription(self.peer)), ("msgId", ConstructorParameterDescription(self.msgId)), ("data", ConstructorParameterDescription(self.data)), ("chatInstance", ConstructorParameterDescription(self.chatInstance)), ("message", ConstructorParameterDescription(self.message))])
             }
         }
         public class Cons_updateFolderPeers: TypeConstructorDescription {
@@ -3490,13 +3494,19 @@ public extension Api {
                 break
             case .updateEphemeralBotCallbackQuery(let _data):
                 if boxed {
-                    buffer.appendInt32(-1690826910)
+                    buffer.appendInt32(2081454550)
                 }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt64(_data.queryId, buffer: buffer, boxed: false)
                 serializeInt64(_data.userId, buffer: buffer, boxed: false)
-                _data.peer.serialize(buffer, true)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    _data.peer!.serialize(buffer, true)
+                }
                 serializeInt32(_data.msgId, buffer: buffer, boxed: false)
                 serializeBytes(_data.data, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeInt64(_data.chatInstance!, buffer: buffer, boxed: false)
+                }
                 _data.message.serialize(buffer, true)
                 break
             case .updateFavedStickers:
@@ -4494,7 +4504,7 @@ public extension Api {
             case .updateEncryption(let _data):
                 return ("updateEncryption", [("chat", ConstructorParameterDescription(_data.chat)), ("date", ConstructorParameterDescription(_data.date))])
             case .updateEphemeralBotCallbackQuery(let _data):
-                return ("updateEphemeralBotCallbackQuery", [("queryId", ConstructorParameterDescription(_data.queryId)), ("userId", ConstructorParameterDescription(_data.userId)), ("peer", ConstructorParameterDescription(_data.peer)), ("msgId", ConstructorParameterDescription(_data.msgId)), ("data", ConstructorParameterDescription(_data.data)), ("message", ConstructorParameterDescription(_data.message))])
+                return ("updateEphemeralBotCallbackQuery", [("flags", ConstructorParameterDescription(_data.flags)), ("queryId", ConstructorParameterDescription(_data.queryId)), ("userId", ConstructorParameterDescription(_data.userId)), ("peer", ConstructorParameterDescription(_data.peer)), ("msgId", ConstructorParameterDescription(_data.msgId)), ("data", ConstructorParameterDescription(_data.data)), ("chatInstance", ConstructorParameterDescription(_data.chatInstance)), ("message", ConstructorParameterDescription(_data.message))])
             case .updateFavedStickers:
                 return ("updateFavedStickers", [])
             case .updateFolderPeers(let _data):
@@ -6080,30 +6090,40 @@ public extension Api {
             }
         }
         public static func parse_updateEphemeralBotCallbackQuery(_ reader: BufferReader) -> Update? {
-            var _1: Int64?
-            _1 = reader.readInt64()
+            var _1: Int32?
+            _1 = reader.readInt32()
             var _2: Int64?
             _2 = reader.readInt64()
-            var _3: Api.Peer?
-            if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.Peer
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Api.Peer?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _4 = Api.parse(reader, signature: signature) as? Api.Peer
+                }
             }
-            var _4: Int32?
-            _4 = reader.readInt32()
-            var _5: Buffer?
-            _5 = parseBytes(reader)
-            var _6: Api.EphemeralMessage?
+            var _5: Int32?
+            _5 = reader.readInt32()
+            var _6: Buffer?
+            _6 = parseBytes(reader)
+            var _7: Int64?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _7 = reader.readInt64()
+            }
+            var _8: Api.EphemeralMessage?
             if let signature = reader.readInt32() {
-                _6 = Api.parse(reader, signature: signature) as? Api.EphemeralMessage
+                _8 = Api.parse(reader, signature: signature) as? Api.EphemeralMessage
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
-                return Api.Update.updateEphemeralBotCallbackQuery(Cons_updateEphemeralBotCallbackQuery(queryId: _1!, userId: _2!, peer: _3!, msgId: _4!, data: _5!, message: _6!))
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _7 != nil
+            let _c8 = _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Update.updateEphemeralBotCallbackQuery(Cons_updateEphemeralBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, peer: _4, msgId: _5!, data: _6!, chatInstance: _7, message: _8!))
             }
             else {
                 return nil

@@ -155,12 +155,45 @@ Each row is measured **once per pass** (the `buildWindow` anchor plus the two ex
 pre-build `consumedDirty` sweep which already carries the animated pass transition), so the delta
 cannot be consumed by an earlier immediate call in the same pass.
 
+**`from` is THIS property's own current presentation value**, expressed against the new target — the
+residual the node's `bounds.origin.y` still carries, plus this pass's height delta. That is the same
+rule the row's height track follows: a re-issue cancels the previous animation and starts the new one
+from the current presentation value.
+
+**Deriving it from the ROW's rendered height instead was tried, and is worse.** The reasoning was that
+the content must match the height the row is really rendering at, so read
+`hostPresentedHeight - lastHeight`. The two readings disagree by whatever drift has accumulated
+between the node's compensation and the row's height track — instrumented over 149 real streaming
+passes: 0.00pt with nothing in flight, growing with the residual to a median of 0.23pt and a max of
+4.05pt — and that disagreement was mistaken for evidence that the height reading was the correct one.
+It is not. Starting from a value the property is not currently at makes the content JUMP by the drift
+at the start of every pass, a visible artifact; starting from its own presented value is
+C0-continuous and lets the drift decay into the new animation. Reverted.
+
+**Also ruled out as the cause of a reported streaming wobble**: `beginTime` phase skew between the two
+animations. `CoreAnimationCompiler` stamps the height track with the pass clock (deliberately in the
+past, so phase survives a rebind) while the compensation goes through `CAAnimationUtils` and starts at
+commit. Measured over 87 passes that skew is a median of 4.5ms against a 150ms duration — 3% of the
+curve, under 1pt of displacement. Real, but far too small to see.
+
+**What DID matter on that path was `customAnimationTransition` being dropped** — see the deferred-items
+entry. The streaming node asks for 0.15s ease-in-out and the row was running spring-over-0.4s.
+
 Both paths also stamp `contentSize` / `insets` / `apparentHeight` on the node, as `ListViewImpl` does
 on every node it lays out. This is not bookkeeping for its own sake — see "Item visibility" below for
 what reads it. Note `ChatMessageItemImpl` assigns `contentSize`/`insets` itself on the
 `nodeConfiguredForParams` path but **not** on `updateNode`, which is why the host must.
 
 ### Item height is replaced from scratch each pass, never amended
+
+> **Superseded 2026-08-06.** The height compensation described below no longer exists. The node's box
+> is animated directly (`ListViewItemNode.hostOwnsFrame` — see "Hosted node geometry"), and CoreList
+> now resumes a changed property from what the layer is **rendering** rather than from its analytic
+> value on the pass clock. The two differ by the pass's commit delay, which is what made the row and
+> its hosted node drift by up to 3.2pt per streamed token and produced the wobble this compensation
+> was invented to hide. See `submodules/TelegramUI/Components/CoreList/CLAUDE.md`. The section is kept
+> because the reasoning about *why* a decaying displacement cannot be retargeted like an ordinary
+> property is still correct, and still worth reading before adding one.
 
 **This applies to the item's height compensation and to nothing else.** Every other animated property —
 row position, opacity, x/width, the shared viewport offset, and the item's own internal animations — is
@@ -874,12 +907,186 @@ and for the same reason: the value must be the one that held when the transactio
 - **`.visible` on an unloaded target** falls back to center-with-top-overflow. Only reachable from
   the `experimentalSnapScrollToItem` path, which nothing in chat enables; `ensureItemNodeVisible`
   always holds a loaded node.
-- **Pin-to-edge is still unimplemented.** `ListViewImpl` synthesizes its own `scrollToItem` for
-  `pinToEdgeWithInset` items via `experimentalSnapScrollToPinnedItem` (`ListView.swift:2737-2765`),
-  and `isStrictlyScrolledToPinToEdgeItem()` remains `false`.
+- **A pin-to-edge target ignores the requested position entirely** — see "Pin to bottom edge" below.
+  `ListViewImpl` does the same (`ListView.swift:3146-3170`); the divergence is that the override here
+  omits `scrollPositioningInsets.bottom`.
 - **`resetScrolledToItem()` remains a no-op**, which is correct while nothing sets
   `experimentalSnapScrollToItem = true` (the only assignments, `ChatHistoryListNode.swift:1023` and
   `ChatController.swift:7674`, are both `false`).
+
+## Pin to bottom edge
+
+While a bot streams a reply, the chat pins the user's last outgoing message to the screen top
+(`pinToTopStableId` → `ChatMessageEntryAttributes.pinToTop` → `ListViewItem.pinToEdgeWithInset`).
+Both backends realise it the same way — a latch for placement plus a clamped inset for scroll room —
+and CoreList's halves are `holdsPinnedRow` and `bottomEdgePinSlack`. The contract, the open
+released-state defect, and the three approaches already known not to fix it are in
+`submodules/TelegramUI/Components/CoreList/CLAUDE.md`;
+`docs/superpowers/specs/2026-08-04-corelist-pin-to-edge-design.md` describes the superseded
+slack-only mechanism.
+
+**The chat arms the latch exactly once per streamed answer.**
+`ChatHistoryListNode.swift:2238-2253` watches the view for a `TypingDraftMessageAttribute`, names the
+last outgoing Cloud message before it as `pinToTopStableId`, and sets `scrollToPinToTopStableId` **only
+when that stableId changes**. `:2521-2530` turns that into a `.top(0.0)` scroll, and
+`pointOffset(for:index:height:view:)` (`:369-372`) replaces the requested position wholesale for a
+lowest-pin-to-edge index — `ListViewImpl` does the same at `ListView.swift:3146-3170`, and the chat
+relies on the list to know better. CoreList engages `holdsPinnedRow` when a `scrollTo` names
+`lowestPinnedItemIndex`, so this one scroll is the entire engagement path. Cold start is covered: a
+fresh history node has `pinToTopStableId == nil`, so opening a chat with an answer already streaming
+fires it on the first view.
+
+**Release is permanent for that answer**, and is an event rather than a measurement: finger-down
+(`engine.onWillBeginDragging`), the pinned row leaving the collection, or a full replace. Dragging away
+mid-stream and scrolling back does **not** re-pin — only a new pinned message does. That is
+`ListViewImpl`'s behaviour, and it is why nothing here infers release from geometry.
+
+**The slack still has to be computed inside the pass, and that is why it lives in CoreList.** It
+depends on the measured heights of the rows above the pin, which change on every streamed token — and
+some of those changes arrive as `onContentDidChange` self-update flushes that never reach
+`chatHistoryTransaction` at all. A backend computing it before the pass would be one pass stale on some
+tokens and blind on others.
+
+**Never un-clamp the slack.** It was, for one revision, on the theory that the edge could carry the
+hold without a latch — CoreList had no latch then. A negative slack is placement leaking into a
+scroll-range quantity: it reached `loadedEdgeRange`'s minimum and extended the range into empty space,
+so on device a tall streaming reply **could not be scrolled down to at all** — it overscroll-bounced.
+The clamp is safe because the latch now owns placement, and the two are matched by construction (see
+`CoreList/CLAUDE.md`).
+
+Two consequences worth knowing:
+
+- **`isStrictlyPinnedToBottomEdge` reads the latch**, plus a presented-frame check that the animation
+  has landed. Its old `slack != 0 || ext > 0` guard was a proxy for "held rather than coincident", and
+  it reads false in exactly the tall-content regime where the pin is most firmly held.
+  `ChatControllerLoadDisplayNode.swift:900-904` uses this to decide whether **sending a message drops
+  the pin**, so the scroll-to-bottom button is not the only consumer that depends on it.
+- **The effective-inset compensation reads a slack DELTA** (`:1026`, `:1088`), and the clamp bounds
+  inset absorption by the slack running out. Pushing the top inset past the slack the pin holds absorbs
+  only what there is; the remainder moves content
+  (`testPartiallyAbsorbedInsetChangeMovesContentByTheUnabsorbedRemainder`).
+
+**The pinned row is not loaded when you would expect it to be** — while the latch is *disengaged*. It
+sits at a *higher* index than the anchor on exactly the passes that matter, so
+`prependUntilCoveredOrAtTop` has not loaded it and a slack measured there reads 0; CoreList runs a
+bounded `appendUntilPinnedRowLoaded` first. This was a real bug in the first implementation and it
+presents as the feature simply not working, with correct edges and a correct-looking window. An
+*engaged* latch cannot hit it: the pinned row is the anchor, so it is window member zero.
+
+Three chat-side specifics:
+
+- **`pointOffset` overrides the requested position** for the lowest pin-to-edge entry. The chat's
+  `scrollToPinToTopStableId` asks for `.top(0.0)` and relies on `ListViewImpl` knowing better; here
+  `.top(0.0)` would land the row on the screen *bottom*.
+- **`scrollPositioningInsets.bottom` is omitted from that override**, unlike `ListViewImpl`. CoreList's
+  resting pin cannot see it, so including it would desynchronise an explicit scroll-to-pin from the
+  position every later pass re-pins to. It is zero for every row that can carry the flag.
+- **`visibleContentOffset()` reads `−slack` while pinned**, because index 0 sits at
+  `insets.top + slack` and the backend subtracts the raw inset. `ListViewImpl` produces the identical
+  value for the identical reason — its pin inset is a local `effectiveInsets` and never reaches
+  `self.insets` — so the scroll-to-bottom button and the `scrollToEndOfHistory` short-circuit behave
+  the same on both backends.
+
+**Verification status (2026-08-04): tests green, partially runtime-verified.** `BottomEdgePinTests`
+(30 cases) covers placement, the bottom extension, invariance across a growing neighbour through both
+a transaction and a self-update flush *and at every phase of the animation rather than only its
+endpoints*, the latch in both directions, effective-inset compensation including partial absorption
+and suppression, the strict query, and the collection edges — including the fresh-bot-chat shape where
+both loaded edges are reachable. The full suite is 811 green and the app builds.
+
+Confirmed on screen against a real streaming bot chat: the pin engages and holds the outgoing message
+while the reply streams (the held bubble's edge measured at the SAME PIXEL on every frame of a 40s
+30fps recording), and shows the shrinking slack below the reply. **The over-tall question, drag-away
+-and-re-latch, and a second send while pinned were confirmed on 2026-08-05.** Still not run: the
+keyboard, floating headers, and the scroll-to-bottom button — checks 5, 7 and 9 in
+`docs/superpowers/plans/2026-08-04-corelist-pin-to-edge.md`.
+
+That same session found what this entry previously recorded as correct — "releases once the reply
+outgrows the viewport" — to be the clamp bug described above. It is not a release; the pin is supposed
+to hold until the user drags away or the flag clears, as it does on `ListViewImpl`. Fixed by letting
+the slack go negative.
+
+**Driving this chat from XcodeBuildMCP does not work well**, which is worth knowing before planning a
+check around it. Beyond the accessibility gaps already recorded (the scroll-to-bottom button, gutter
+avatars and date-header pills are not in the tree), a *streaming* bot chat invalidates the runtime UI
+snapshot faster than a follow-up call can use it, so `swipe`/`tap` fail with `SNAPSHOT_EXPIRED` in a
+loop. Taps immediately after a fresh snapshot work; scrolling generally does not. Note also that
+absent debug borders are NOT evidence the CoreList backend is off — a bubble taller than the viewport
+puts both its borders off screen.
+
+**Two pre-existing issues this work surfaced.** The height-compensation clock skew is described above
+and is FIXED. The other is not: UIScrollView clamps a negative `bounds.origin.y` on a layout pass, so
+an offset established at construction is lost — in `CoreListDemoTests`, a plain 100pt top inset with
+no pin involved goes `-100 → 0` across `layoutIfNeeded()`, leaving index 0 at 0 instead of 100. Every
+existing CoreList suite applies its geometry *after* `VirtualListDriver.init` and so never meets it;
+`BottomEdgePinTests` introduces the pin in a pass for the same reason (which is also how it arrives in
+reality). Whether this reaches the app — where a layout pass can land between `applyChanges` and the
+next frame — has not been established.
+
+## Send animation
+
+The outgoing-message morph (`ChatMessageTransitionNodeImpl`) parents its animating content **under the
+item node**, so the bubble rides the list's scroll for free and only its *starting* offset has to be
+calibrated. That calibration converts the input field's window rect down the layer chain into the item
+node's space — and the conversion has to describe where the input field renders **when the morph
+starts**, not where the geometry is headed.
+
+`CALayer.convert` cannot answer that: both backends schedule the pass's scroll as an animation and
+leave the MODEL at the destination, so a plain convert returns end-of-scroll geometry and the bubble
+starts a whole scroll's worth away from the input field. `convertAnimatingSourceRectFromWindow`
+therefore corrects each parent→child step by that step's pending rendered-minus-model translation. It
+reads the mechanism off the layers rather than asking the list, because the two backends move content
+in different ways and a row can be moving under its own track while the viewport moves too:
+
+| | carries the travel in | model holds |
+|---|---|---|
+| `ListViewImpl` | additive `sublayerTransform` on its own layer (`ListView.swift:3775`) | the destination |
+| CoreList | additive `bounds.origin.y` on `contentHost`, additive `position` per row (`CoreAnimationCompiler.keyPath(for:)`) | the destination |
+
+Only the first of those was handled, so under this backend the morph started ~37pt below the input
+field on a one-line message. That reads as a *fixed* offset however tall the message is, which is what
+makes it look like a constant rather than a scroll: the pass's travel is `newItemHeight −
+inputPanelShrink`, and every extra line of text grows both terms by the same amount.
+
+Two CoreList specifics the correction has to respect, both learned the hard way:
+
+- **`presentation()` is not the answer.** CoreList rebases its container with a model write and no
+  animation in the same turn; that write renders immediately, so its presentation layer is stale by
+  exactly the rebase. Only a property that is *actually animating* may be read as displaced — which
+  is why the scan is keyed on the animation rather than on a model-vs-presented difference.
+- **A CoreList track is already partway through when a transaction completion runs.** Every track in a
+  pass is stamped with the time that pass BEGAN (`ListAnimationController.now()`), which is
+  milliseconds in the past by then, so it renders past its start value on its very first frame.
+  The correction therefore evaluates each animation's curve at the current time instead of taking its
+  `fromValue`; a `ListViewImpl` animation has `beginTime == 0` and evaluates to exactly its start
+  value, so that path is unchanged to the last bit.
+
+**Also suppressed: the entering row's fade.** CoreList gives every new row an opacity track on its
+**host view** (`ListAnimationController.insert`), which would cross-fade the bubble a second time
+while the morph is already carrying it. The chat's own suppression cannot reach it —
+`ChatMessageItemView.cancelInsertionAnimations()` walks the item node's *subnodes*, and the host is a
+superview — and removing the CA animation behind the controller's back would leave `ListAnimationModel`
+still believing it owns a fade. So the backend states it up front instead, passing
+`animatesInsertions: false` whenever the pass carries `.RequestItemInsertionAnimations`. That is the
+option `ListViewImpl` reads as "hand the insertion animation to the node", which the morph then
+cancels; CoreList has no node-animation step, so the same statement lands as "do not fade".
+
+The flag sits next to `isFullReplaceCarousel` on the same call and says the same kind of thing: the
+arrival is real, but something outside the list is already staging it. It is **pass-level**, and it
+must be forwarded through `applyChanges`'s re-entrancy deferral — a send pass landing inside another
+pass is re-dispatched through the scheduler with its arguments listed explicitly, and would otherwise
+regain its fade intermittently, only under load. `InsertionFadeSuppressionTests` pins all three
+cases, the deferral included.
+
+Under reduce-motion or with an ad in view the flag is still set but no morph runs
+(`ChatControllerNode.swift:5464`), so the row simply appears rather than animating in — accepted, see
+`docs/superpowers/specs/2026-08-04-corelist-insertion-fade-design.md`.
+
+Related: a send that happens while the bottom-edge pin is held takes no `scrollToItem` at all (see
+"Pin to bottom edge"), so the calibration above is exercised on both paths. Until
+`isStrictlyScrolledToPinToEdgeItem()` answered honestly it was a hard `false`, and every send here
+went down the `scrollToItem` path — `ListViewImpl` at the bottom of a chat took the pin-to-edge path
+instead and never scrolled.
 
 ## Deferred items / known limitations
 
@@ -890,19 +1097,27 @@ option:
    `updateSizeAndInsets` / `options` (see Transaction flow), but it applies to the pass as a whole:
    `options` distinctions finer than "does this animate, and on what curve" — per-index insertion
    animations, `.AnimateCrossfade`, `.AnimateTopItemPosition` — still have no analogue.
-2. **Fine-grained transaction features ignored.** `customAnimationTransition` is not honored, and
-   `stationaryItemRange` is mapped only by its nil-ness (to `anchorMode`): the range's actual bounds
-   are discarded, so a transaction asking to hold a *specific* index range stationary gets CoreList's
-   general visible-content preservation instead.
+2. **Fine-grained transaction features ignored.** `stationaryItemRange` is mapped only by its
+   nil-ness (to `anchorMode`): the range's actual bounds are discarded, so a transaction asking to
+   hold a *specific* index range stationary gets CoreList's general visible-content preservation
+   instead.
 
-   Not honoring `customAnimationTransition` is believed to be harmless, and the reasoning is worth
-   keeping: the chat sets it in exactly one place — a floating topics **side panel** change
-   (`ChatControllerNode.swift:2610-2615`) — and that same `containerLayoutUpdated` also puts the
-   panel's width onto `listInsets.left` (`:2527`). `contentBounds` is independent of the panel
-   (`:2049`, derived from `wrappingInsets`, which is only the iPad centring margin), so
-   `contentWidth` genuinely changes in that pass and CoreList's own `contentWidthChangedInPass`
-   already makes every row and attachment measure with the pass transition. `ListViewImpl` needs the
-   explicit flag only because it never infers anything from geometry.
+   **`customAnimationTransition` is now honored** — it sets the pass transition, outranking the
+   generic `.AnimateInsertion` fallback. It used to be dropped, on the recorded reasoning that "the
+   chat sets it in exactly one place — a floating topics side panel change", and **that reasoning was
+   wrong**: it conflated two different fields with the same name. The side panel sets
+   `ListViewUpdateSizeAndInsets.customAnimationTransition` (`ChatControllerNode.swift:2619`), which
+   reaches the `updateSizeAndInsets` branch and never needed the standalone parameter. The standalone
+   `chatHistoryTransaction(customAnimationTransition:)` has a second, much hotter producer that the
+   survey missed: any content node calling `requestFullUpdate`
+   (`ChatMessageBubbleItemNode.swift:5047` → `requestMessageUpdate` →
+   `ChatHistoryListNode.swift:4920/:4941`). A streaming bubble does that on every chunk, asking for
+   `ControlledTransition(duration: 0.15, curve: .easeInOut)`, and the dropped value left the ROW on
+   the `.AnimateInsertion` fallback of spring-over-0.4s while the node animated its own content over
+   0.15s ease-in-out — a 2.7× duration difference and a different curve, per token.
+
+   The lesson generalises past this entry: **"the chat only sets X in one place" is a claim about a
+   grep, and a grep for a field name finds two fields when a struct member and a parameter share it.**
 3. **Config/geometry stubs.** The `// Config flags` and `// Geometry / range` members are plain
    storage with no behavior; only the display-path values are real. (`didInteractivelyDragFromTopOrigin`
    used to be two of these and is now real — see "Interactive drag start". It is worth reading that
@@ -940,3 +1155,29 @@ option:
    Watch out for `ChatHistoryListNode.swift:4429`, which looks like a fourth consumer and is not: its
    whole block is guarded by `(transition.animateIn || animateIn) && !"".isEmpty`, and `!"".isEmpty` is
    constant `false`. That cascade is dead on **both** backends.
+5. **The hosted node's content offset is applied unanimated.** Under `hostOwnsFrame` the node no
+   longer maintains `bounds.origin.y == -insets.top` itself (`insets.didSet` is suppressed), so
+   `rebuild` writes it — with a plain assignment, while the box beside it travels on the pass curve.
+   If the insets ever change mid-conversation, that term steps instead of sliding. This is the
+   analogue of ListViewImpl's `insetPart` (`ListView.swift:3063`), which folds the same quantity into
+   the `transitionOffset` seed so it decays on the height's curve.
+
+   **Dormant today:** the chat's items no longer carry insets, so the term is constant and the snap
+   has nothing to show.
+
+   Routing it through `pendingTransition.setBoundsOriginY` — the obvious fix, and the same
+   resume-from-presentation setter the box uses — was tried on device and **brought back the height
+   wobble that `hostOwnsFrame` had just removed.** It was reverted, and the mechanism was never
+   established; do not re-apply it without one. Two things found while looking are the places to
+   start, both concerning who accounts for a non-zero `bounds.origin`:
+
+   - `CoreListTransition.setFrame` derives position as `frame.minY + frame.height * anchor.y`,
+     ignoring `bounds.origin` entirely.
+   - `ASDisplayNode`'s frame setter derives it through `ASBoundsAndPositionForFrame`
+     (`ASDisplayNode+UIViewBridge.mm:314`), which *does* fold in the current `layer.bounds.origin`.
+   - `ListViewItemNode.frame`'s own setter caches `_position = (value.midX, value.midY)`, ignoring it
+     again.
+
+   `rebuild` calls all three in sequence, so they agree only while `bounds.origin` is zero — which is
+   exactly the condition that makes this entry dormant, and exactly the condition that animating the
+   origin would break.

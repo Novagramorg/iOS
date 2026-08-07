@@ -50,7 +50,36 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
     }
 
-    func testPositionKeyframeIsAdditiveAndUsesTrackClock() throws {
+    /// The rendered-parity proofs below all pin `layer.timeOffset = track.startTime` before the first
+    /// commit and then scrub. That pin is what makes the comparison against `track.value(at:)` valid
+    /// now that `beginTime` is left implicit: a paused layer's local time AT THE COMMIT is its
+    /// `timeOffset`, so Core Animation resolves the origin to exactly the track's clock.
+    ///
+    /// Asserting it here turns nine accidental passes into deliberate ones, and reads back the value
+    /// Core Animation itself computed — strictly stronger evidence than the number the compiler used
+    /// to stamp. Call this while the layer is still pinned, before any scrub.
+    private func assertCommitResolvesOriginToTheTrackClock(
+        layer: CALayer,
+        property: ListAnimatedProperty,
+        compiler: CoreAnimationCompiler,
+        track: ListAnimationTrack,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(layer.timeOffset, track.startTime, accuracy: 1e-9,
+                       "the layer must still be pinned at the track clock", file: file, line: line)
+        flushCoreAnimation()   // this commit is what resolves the implicit origin
+        guard let animation = layer.animation(forKey: compiler.animationKey(for: property)) else {
+            XCTFail("no installed animation for \(property)", file: file, line: line)
+            return
+        }
+        XCTAssertEqual(animation.beginTime, track.startTime, accuracy: 1e-9,
+                       "the commit must resolve the implicit origin to the layer's paused local time",
+                       file: file, line: line)
+        XCTAssertFalse(animation.coreListPreservesPhase, file: file, line: line)
+    }
+
+    func testPositionKeyframeIsAdditiveDeclaresTheTrackClockAndLeavesTheOriginToTheCommit() throws {
         let compiler = CoreAnimationCompiler()
         let track = ListAnimationTrack(generation: 1, from: -80, to: 0,
                                        startTime: 12, duration: 3)
@@ -58,10 +87,37 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
                                       as? CABasicAnimation)
         XCTAssertEqual(animation.keyPath, "position.y")
         XCTAssertTrue(animation.isAdditive)
-        XCTAssertEqual(animation.beginTime, 12)
+        // The animation has never been added to a layer, so `beginTime` is literally unset here —
+        // this is a fact about the compiler, not about Core Animation.
+        XCTAssertEqual(animation.beginTime, 0,
+                       "a fresh install must leave the origin to the commit")
+        XCTAssertEqual(try XCTUnwrap(animation.coreListDeclaredStartTime), 12, accuracy: 1e-9)
+        XCTAssertFalse(animation.coreListPreservesPhase)
         XCTAssertEqual(animation.duration, 3)
         XCTAssertEqual(animation.fillMode, .both)
         XCTAssertFalse(animation.isRemovedOnCompletion)
+    }
+
+    func testExplicitOriginStampsTheGivenPhaseOrigin() throws {
+        let compiler = CoreAnimationCompiler()
+        let track = ListAnimationTrack(generation: 92, from: 20, to: 0,
+                                       startTime: 40, duration: 3)
+        let animation = try XCTUnwrap(
+            compiler.animation(for: track, property: .positionY,
+                               origin: .explicit(track.startTime)) as? CABasicAnimation
+        )
+        XCTAssertEqual(animation.beginTime, 40)
+        XCTAssertTrue(animation.coreListPreservesPhase)
+        XCTAssertEqual(try XCTUnwrap(animation.coreListDeclaredStartTime), 40, accuracy: 1e-9)
+
+        // The stamped origin is whatever the caller resolved — it is NOT required to be the track's
+        // own clock, and on a real rebind it is not (see `phaseOrigin(for:…)`).
+        let resolved = try XCTUnwrap(
+            compiler.animation(for: track, property: .positionY,
+                               origin: .explicit(41.5)) as? CABasicAnimation
+        )
+        XCTAssertEqual(resolved.beginTime, 41.5)
+        XCTAssertEqual(try XCTUnwrap(resolved.coreListDeclaredStartTime), 40, accuracy: 1e-9)
     }
 
     func testOpacityKeyframeIsAbsolute() throws {
@@ -134,7 +190,9 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
                                        startTime: 40, duration: 3)
         let animation = try XCTUnwrap(compiler.animation(for: track, property: .positionY)
                                       as? CABasicAnimation)
-        XCTAssertEqual(animation.beginTime, 40)
+        XCTAssertEqual(animation.beginTime, 0,
+                       "a fresh install must leave the origin to the commit")
+        XCTAssertEqual(try XCTUnwrap(animation.coreListDeclaredStartTime), 40, accuracy: 1e-9)
         XCTAssertEqual(animation.duration, 3, "the compiler must not apply Slow Animation scaling twice")
         XCTAssertEqual(animation.speed, 1.0)
         XCTAssertEqual((animation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -239,7 +297,11 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
             layer.timeOffset = track.startTime
             root.view.layer.addSublayer(layer)
             compiler.install(track, property: .positionY, on: layer)
+            assertCommitResolvesOriginToTheTrackClock(layer: layer, property: .positionY,
+                                                      compiler: compiler, track: track)
 
+            // Do NOT reorder the phase loop ahead of the pin+flush above: the COMMIT chooses the
+            // origin, so a scrub before it silently re-anchors the animation (measured).
             for phase in [0.0, 0.25, 0.5, 0.75, 1.0] {
                 layer.timeOffset = track.startTime + phase * track.duration
                 root.view.layoutIfNeeded()
@@ -269,6 +331,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         layer.timeOffset = track.startTime
         root.view.layer.addSublayer(layer)
         compiler.install(track, property: .opacity, on: layer)
+        assertCommitResolvesOriginToTheTrackClock(layer: layer, property: .opacity,
+                                                  compiler: compiler, track: track)
 
         for phase in [0.0, 0.5, 1.0] {
             layer.timeOffset = track.startTime + phase * track.duration
@@ -292,6 +356,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         layer.timeOffset = track.startTime
         root.view.layer.addSublayer(layer)
         compiler.install(track, property: .height, on: layer)
+        assertCommitResolvesOriginToTheTrackClock(layer: layer, property: .height,
+                                                  compiler: compiler, track: track)
 
         for phase in [0.0, 0.5, 1.0] {
             layer.timeOffset = track.startTime + phase * track.duration
@@ -311,9 +377,16 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         layer.bounds = CGRect(x: 0, y: 500, width: 320, height: 640)
         layer.position = CGPoint(x: 160, y: 320)
         layer.speed = 0
-        layer.timeOffset = 14
+        // Pinned at the track clock BEFORE the install, so the commit resolves the implicit origin
+        // there and the analytic comparison below is on the model's own axis. The mid-phase scrub
+        // that used to be this pin now happens after the origin is fixed.
+        layer.timeOffset = track.startTime
         root.view.layer.addSublayer(layer)
         compiler.install(track, property: .viewportOffset, on: layer)
+        assertCommitResolvesOriginToTheTrackClock(layer: layer, property: .viewportOffset,
+                                                  compiler: compiler, track: track)
+
+        layer.timeOffset = 14
         flushCoreAnimation()
 
         let correction = track.value(at: layer.timeOffset)
@@ -380,9 +453,11 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let opacityAfter = try XCTUnwrap(layer.animation(
             forKey: compiler.animationKey(for: .opacity)
         ))
-        XCTAssertEqual(positionAfter.beginTime, positionBefore.beginTime)
+        // `beginTime` is no longer a same-object witness — it is commit-resolved, and identical for
+        // any two emissions in one turn — so generation carries the "not replaced" claim here.
+        XCTAssertEqual(positionAfter.coreListGeneration, positionBefore.coreListGeneration)
         XCTAssertEqual(positionAfter.duration, positionBefore.duration)
-        XCTAssertEqual(opacityAfter.beginTime, opacityBefore.beginTime)
+        XCTAssertEqual(opacityAfter.coreListGeneration, opacityBefore.coreListGeneration)
         XCTAssertEqual(opacityAfter.duration, opacityBefore.duration)
         XCTAssertNotNil(layer.animation(forKey: compiler.animationKey(for: .height)))
     }
@@ -420,6 +495,10 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let replacement = try XCTUnwrap(controller.model.track(
             for: .live(AnyHashable("row")), property: .positionY
         ))
+        layer.timeOffset = replacement.startTime
+        assertCommitResolvesOriginToTheTrackClock(layer: layer, property: .positionY,
+                                                  compiler: controller.compiler,
+                                                  track: replacement)
 
         for phase in [0.0, 0.5, 1.0] {
             time = replacement.startTime + phase * replacement.duration
@@ -450,11 +529,16 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let outgoingView = try XCTUnwrap(
             outgoingFixture.crossingCarryView(identity: outgoingIdentity)
         )
+        // Pause BEFORE the first commit and at the pass clock (0): the commit is what resolves an
+        // implicit origin, so pausing after one would anchor the curve at a wall-clock media time and
+        // every comparison below would be against Core Animation's fill value. Nothing between
+        // `apply` and here flushes — keep it that way.
+        outgoingView.layer.speed = 0
+        outgoingView.layer.timeOffset = 0
         let outgoingAnimation = try XCTUnwrap(outgoingView.layer.animation(
             forKey: "CoreListAnimation.positionY"
         ) as? CABasicAnimation)
         XCTAssertTrue(outgoingAnimation.isAdditive)
-        outgoingView.layer.speed = 0
 
         for time in [0.0, 4.0, 8.0] {
             outgoingFixture.clock.now = time
@@ -482,11 +566,13 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         incomingFixture.apply(items(original), duration: 8)
         let incomingIdentity = AnyHashable(8)
         let incomingView = try XCTUnwrap(incomingFixture.view(identity: incomingIdentity))
+        // Pause before the first commit, at the pass clock — see the outgoing half above.
+        incomingView.layer.speed = 0
+        incomingView.layer.timeOffset = 0
         let incomingAnimation = try XCTUnwrap(incomingView.layer.animation(
             forKey: "CoreListAnimation.positionY"
         ) as? CABasicAnimation)
         XCTAssertTrue(incomingAnimation.isAdditive)
-        incomingView.layer.speed = 0
 
         for time in [0.0, 4.0, 8.0] {
             incomingFixture.clock.now = time
@@ -524,8 +610,11 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
             try XCTUnwrap(fixture.crossingCarryView(identity: $0))
         }
         for view in views {
-            XCTAssertNotNil(view.layer.animation(forKey: "CoreListAnimation.positionY"))
+            // Pause before the first commit, at the pass clock (0) — the commit resolves the
+            // implicit origin, so pausing afterwards would anchor these curves at a media time.
             view.layer.speed = 0
+            view.layer.timeOffset = 0
+            XCTAssertNotNil(view.layer.animation(forKey: "CoreListAnimation.positionY"))
         }
 
         for time in [0.0, 4.0, 8.0] {
@@ -581,6 +670,11 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         rebound.timeOffset = time
         root.view.layer.addSublayer(rebound)
         controller.rebind(identity: "row", layer: rebound)
+        // The 10-vs-11 gap is load-bearing: the track starts at 10 while the layer is pinned at 11,
+        // so an `.atCommit` emission here would resolve to 11 and render phase 0 where the model
+        // says 0.25. This is the one case that must NOT take the commit's clock.
+        XCTAssertTrue(try XCTUnwrap(rebound.animation(forKey: "CoreListAnimation.positionY"))
+            .coreListPreservesPhase)
 
         for phase in [0.25, 0.5, 1.0] {
             time = original.startTime + phase * original.duration
@@ -661,7 +755,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let afterAnimation = try XCTUnwrap(layer.animation(forKey: key))
         XCTAssertEqual(mutation, .unchanged)
         XCTAssertEqual(afterTrack, beforeTrack)
-        XCTAssertEqual(afterAnimation.beginTime, beforeAnimation.beginTime)
+        // `beginTime` no longer witnesses non-replacement (it is commit-resolved); the exact
+        // generation equality below does.
         XCTAssertEqual(afterAnimation.duration, beforeAnimation.duration)
         XCTAssertEqual(
             (afterAnimation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -704,7 +799,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
             forKey: compiler.animationKey(for: .positionY)
         ))
         XCTAssertEqual(afterTrack, beforeTrack)
-        XCTAssertEqual(afterAnimation.beginTime, beforeAnimation.beginTime)
+        // `beginTime` no longer witnesses non-replacement (it is commit-resolved); the exact
+        // generation equality below does.
         XCTAssertEqual(afterAnimation.duration, beforeAnimation.duration)
         XCTAssertEqual(
             (afterAnimation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -734,6 +830,10 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let key = compiler.animationKey(for: .height)
         let installed = try XCTUnwrap(layer.animation(forKey: key))
         installed.setValue("preserve-height-install", forKey: "HeightRebind.installSentinel")
+        // Re-adding a RETRIEVED animation under the same key is safe only because this layer is a
+        // bare `CALayer` that never enters a render tree: an `.atCommit` origin stays unresolved, so
+        // the re-add cannot re-zero a phase. Window-host this layer and the technique breaks
+        // silently — the sentinel assertion would still pass while the curve restarted.
         layer.add(installed, forKey: key)
 
         time = 11
@@ -807,7 +907,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
             (opacityAfter.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
             (opacityBefore.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value
         )
-        XCTAssertEqual(opacityAfter.beginTime, opacityBefore.beginTime)
+        // `beginTime` no longer witnesses non-replacement (it is commit-resolved); the exact
+        // generation equality above does.
         XCTAssertEqual(opacityAfter.duration, opacityBefore.duration)
         XCTAssertEqual(
             (position.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -892,7 +993,13 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         let rebound = try XCTUnwrap(reboundLayer.animation(
             forKey: compiler.animationKey(for: .positionY)
         ))
+        // Both layers are bare `CALayer`s that never enter a render tree, so the original never
+        // resolved an origin and `rebind` correctly falls back to the model's clock. Non-vacuous:
+        // `original.startTime` is 10, and an `.atCommit` emission would read 0 here.
         XCTAssertEqual(rebound.beginTime, original.startTime)
+        XCTAssertTrue(rebound.coreListPreservesPhase)
+        XCTAssertEqual(try XCTUnwrap(rebound.coreListDeclaredStartTime),
+                       original.startTime, accuracy: 1e-9)
         XCTAssertEqual(rebound.duration, original.duration)
         XCTAssertEqual(
             (rebound.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -1025,8 +1132,10 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
             compiler: compiler,
             mediaTime: { time },
             durationFactor: { 1 },
-            animationInstaller: { track, property, layer, completion in
-                compiler.install(track, property: property, on: layer)
+            // A forwarding installer MUST pass the origin through: dropping it would emit `.atCommit`
+            // for the rebind install below, restarting a curve that has to resume mid-phase.
+            animationInstaller: { track, property, layer, origin, completion in
+                compiler.install(track, property: property, on: layer, origin: origin)
                 installedCompletions.append(completion)
             }
         )
@@ -1067,7 +1176,8 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
             (afterStaleCompletions.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
             replacement.generation
         )
-        XCTAssertEqual(afterStaleCompletions.beginTime, installedReplacement.beginTime)
+        // `beginTime` no longer witnesses non-replacement (it is commit-resolved); the exact
+        // generation equality above does.
         XCTAssertEqual(afterStaleCompletions.duration, installedReplacement.duration)
     }
 
@@ -1138,6 +1248,10 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
                                         newSettledY: 180,
                                         transition: .easeInOut(duration: 4),
                                         transactionTime: time)
+        assertCommitResolvesOriginToTheTrackClock(
+            layer: wrapper.layer, property: .positionY, compiler: controller.compiler,
+            track: try XCTUnwrap(controller.model.track(for: owner, property: .positionY))
+        )
 
         for phase in [0.0, 0.5, 1.0] {
             time = 12 + phase * 4
@@ -1150,4 +1264,216 @@ final class CoreAnimationCompilerParityTests: XCTestCase {
         }
     }
 
+    // MARK: - The feature: one commit-resolved origin
+
+    /// The detector for a regression back to the unconditional stamp. The layer is paused at 14 while
+    /// the track's own clock is 12, so the two conventions render different values: an implicit origin
+    /// resolves to 14 and renders phase 0.5 at local 16, an explicit `startTime` stamp would resolve
+    /// to 12 and render phase 1.0 (the settled endpoint, 0).
+    func testImplicitOriginResolvesAtTheCommitNotAtTheTrackClock() throws {
+        let compiler = CoreAnimationCompiler()
+        let track = ListAnimationTrack(generation: 61, from: -80, to: 0,
+                                       startTime: 12, duration: 4, curve: .linear)
+        let (window, root) = try visibleWindow()
+        defer { window.isHidden = true }
+        let layer = CALayer()
+        layer.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
+        layer.position = CGPoint(x: 100, y: 200)
+        layer.backgroundColor = UIColor.red.cgColor
+        layer.speed = 0
+        layer.timeOffset = 14
+        root.view.layer.addSublayer(layer)
+
+        compiler.install(track, property: .positionY, on: layer)
+        flushCoreAnimation()
+        XCTAssertEqual(
+            try XCTUnwrap(layer.animation(forKey: compiler.animationKey(for: .positionY))).beginTime,
+            14, accuracy: 1e-9,
+            "the commit, not the track, chooses the origin"
+        )
+
+        layer.timeOffset = 16
+        flushCoreAnimation()
+        let rendered = try XCTUnwrap(layer.presentation()).position.y - layer.position.y
+        XCTAssertEqual(rendered, track.value(at: 14), accuracy: 0.5,
+                       "phase must be measured from the commit-resolved origin")
+        XCTAssertEqual(rendered, -40, accuracy: 0.5)
+        XCTAssertNotEqual(rendered, track.value(at: 16), accuracy: 1.0,
+                          "non-vacuity: an explicit `startTime` stamp would render this instead")
+    }
+
+    /// The feature's own proof: a CoreList model track and a `CALayer.animate` executor animation,
+    /// committed in one runloop turn on two layers paused at the same local time, start on ONE clock
+    /// and render identically. This is what lets a host animation compose with a CoreList track.
+    func testModelPathAndExecutorPathShareOneResolvedOrigin() throws {
+        try XCTSkipUnless(UIView.animationDurationFactor == 1,
+                          "CALayer.animate applies the Slow Animations factor itself")
+        let compiler = CoreAnimationCompiler()
+        let track = ListAnimationTrack(generation: 62, from: -80, to: 0,
+                                       startTime: 12, duration: 4, curve: .linear)
+        let (window, root) = try visibleWindow()
+        defer { window.isHidden = true }
+
+        var layers: [CALayer] = []
+        for index in 0..<2 {
+            let layer = CALayer()
+            layer.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
+            layer.position = CGPoint(x: 100, y: 200 + CGFloat(index) * 60)
+            layer.backgroundColor = UIColor.red.cgColor
+            layer.speed = 0
+            layer.timeOffset = 30
+            root.view.layer.addSublayer(layer)
+            layers.append(layer)
+        }
+
+        compiler.install(track, property: .positionY, on: layers[0])
+        layers[1].animate(from: track.from, to: track.to, keyPath: "position.y",
+                          duration: track.duration, curve: track.curve,
+                          removeOnCompletion: false, additive: true, key: "executor")
+        flushCoreAnimation()
+
+        let modelOrigin = try XCTUnwrap(
+            layers[0].animation(forKey: compiler.animationKey(for: .positionY))
+        ).beginTime
+        let executorOrigin = try XCTUnwrap(layers[1].animation(forKey: "executor")).beginTime
+        XCTAssertEqual(modelOrigin, executorOrigin, accuracy: 1e-9,
+                       "the model path and the executor path must start on one clock")
+        XCTAssertEqual(modelOrigin, 30, accuracy: 1e-9)
+
+        for phase in [0.25, 0.5, 0.75] {
+            layers.forEach { $0.timeOffset = 30 + phase * track.duration }
+            flushCoreAnimation()
+            let model = try XCTUnwrap(layers[0].presentation()).position.y - layers[0].position.y
+            let executor = try XCTUnwrap(layers[1].presentation()).position.y - layers[1].position.y
+            XCTAssertEqual(model, executor, accuracy: 0.5,
+                           "diverged at phase \(phase)")
+            XCTAssertNotEqual(model, track.from, accuracy: 1.0,
+                              "non-vacuity: neither is parked at `from` at phase \(phase)")
+        }
+    }
+
+    /// One pass, one clock — on the CA side, as a fact Core Animation computed rather than one the
+    /// compiler stamped. This is the only test anywhere that reads real resolved `beginTime`s
+    /// produced by a full `applyChanges`; every other fixture in the suite is windowless, where an
+    /// `.atCommit` emission reads 0 and per-emission origin skew is structurally invisible.
+    func testOnePassCommitsEveryEmittedAnimationOnOneResolvedClock() throws {
+        func items(_ ids: [Int]) -> [CoreListItem] {
+            ids.map { IntItem(id: $0, height: 75) }
+        }
+        let (window, root) = try visibleWindow()
+        defer { window.isHidden = true }
+        let clock = SyntheticClock()
+        clock.now = 5
+        let fixture = VirtualListFixture(viewport: CGSize(width: 320, height: 600),
+                                         items: items(Array(0..<12)),
+                                         preloadMargin: 100,
+                                         clock: clock,
+                                         emitsCA: true)
+        root.view.addSubview(fixture.listView)
+
+        // One insert among survivors: an insertion fade on the new row plus position tracks on every
+        // row below it, so the pass emits on several distinct layers.
+        fixture.apply(items([0, 1, 99, 2, 3, 4, 5, 6, 7, 8, 9, 10]), duration: 3)
+        flushCoreAnimation()
+
+        var origins: [Double] = []
+        var layers: [ObjectIdentifier] = []
+        for entry in fixture.listView.loadedItemEntries {
+            for property in [ListAnimatedProperty.positionY, .opacity] {
+                let key = fixture.animationController.compiler.animationKey(for: property)
+                guard let animation = entry.view.layer.animation(forKey: key) else { continue }
+                origins.append(animation.beginTime)
+                layers.append(ObjectIdentifier(entry.view.layer))
+                XCTAssertEqual(try XCTUnwrap(animation.coreListDeclaredStartTime), 5,
+                               accuracy: 1e-9,
+                               "the declared phase axis is still the pass clock")
+                XCTAssertFalse(animation.coreListPreservesPhase)
+            }
+        }
+
+        XCTAssertGreaterThanOrEqual(origins.count, 3, "non-vacuity: the pass emitted too little")
+        XCTAssertGreaterThanOrEqual(Set(layers).count, 2,
+                                    "non-vacuity: all emissions landed on one layer")
+        XCTAssertEqual(Set(origins).count, 1,
+                       "one pass must resolve to one origin, not one per emission: \(origins)")
+        let origin = try XCTUnwrap(origins.first)
+        XCTAssertNotEqual(origin, 0,
+                          "non-vacuity: the window-hosted commit must actually have resolved one")
+        XCTAssertGreaterThanOrEqual(origin, 5,
+                                    "the CA origin is at or after the pass clock — the direction the "
+                                        + "analytic-completion deadline depends on")
+    }
+
+    /// The rebind exception, measured where it is observable: the original resolved its origin at a
+    /// commit, so re-emitting the track must reproduce THAT origin. Stamping `track.startTime`
+    /// instead — which is earlier by the producing pass's commit delay, here a deliberate 2 — jumps
+    /// the curve forward by exactly that much and desyncs the row from its still-bound neighbours.
+    func testWindowBackedRebindResumesTheOriginalResolvedPhase() throws {
+        var time: CFTimeInterval = 10
+        let compiler = CoreAnimationCompiler()
+        let controller = ListAnimationController(
+            compiler: compiler,
+            mediaTime: { time },
+            durationFactor: { 1 }
+        )
+        let (window, root) = try visibleWindow()
+        defer { window.isHidden = true }
+
+        let first = CALayer()
+        first.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
+        first.anchorPoint = .zero
+        first.position.y = 100
+        first.backgroundColor = UIColor.red.cgColor
+        first.speed = 0
+        first.timeOffset = 14           // the commit delay, made observable
+        root.view.layer.addSublayer(first)
+        controller.seedLive(identity: "row", layer: first)
+        controller.transitionPosition(identity: "row", layer: first,
+                                      oldSettledY: 0, newSettledY: 100,
+                                      transition: .linear(duration: 4), transactionTime: time)
+        let original = try XCTUnwrap(controller.model.track(
+            for: .live(AnyHashable("row")), property: .positionY
+        ))
+        XCTAssertEqual(original.startTime, 10, accuracy: 1e-9)
+        flushCoreAnimation()
+        let resolved = try XCTUnwrap(
+            first.animation(forKey: compiler.animationKey(for: .positionY))
+        ).beginTime
+        XCTAssertEqual(resolved, 14, accuracy: 1e-9,
+                       "non-vacuity: the original's origin must differ from its track clock")
+
+        controller.unbind(identity: "row", layer: first)
+
+        time = 11
+        let rebound = CALayer()
+        rebound.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
+        rebound.anchorPoint = .zero
+        rebound.position.y = 100
+        rebound.backgroundColor = UIColor.red.cgColor
+        rebound.speed = 0
+        rebound.timeOffset = 20
+        root.view.layer.addSublayer(rebound)
+        controller.rebind(identity: "row", layer: rebound)
+
+        let reboundAnimation = try XCTUnwrap(
+            rebound.animation(forKey: compiler.animationKey(for: .positionY))
+        )
+        XCTAssertTrue(reboundAnimation.coreListPreservesPhase)
+        XCTAssertEqual(reboundAnimation.beginTime, resolved, accuracy: 1e-9,
+                       "a rebind must reproduce the origin Core Animation resolved, not the "
+                           + "model's clock")
+        XCTAssertEqual(try XCTUnwrap(reboundAnimation.coreListDeclaredStartTime),
+                       original.startTime, accuracy: 1e-9,
+                       "the declared phase axis stays the model's")
+
+        // ...and it renders where the original was rendering: at local 16 the original was at phase
+        // (16 - 14)/4 = 0.5. Under a `track.startTime` stamp this would be phase (16 - 10)/4 > 1.
+        rebound.timeOffset = 16
+        flushCoreAnimation()
+        let rendered = try XCTUnwrap(rebound.presentation()).position.y - rebound.position.y
+        XCTAssertEqual(rendered, original.value(at: original.startTime + 0.5 * original.duration),
+                       accuracy: 0.5)
+        XCTAssertNotEqual(rendered, original.to, accuracy: 1.0,
+                          "non-vacuity: a `startTime` stamp would render the settled endpoint")
+    }
 }

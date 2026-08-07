@@ -21,10 +21,11 @@ struct MixedPassBoundarySnapshot: Equatable {
     )
 }
 
-enum MixedPassOracleError: Error {
+enum MixedPassOracleError: Error, Equatable {
     case missingAnimation(ListAnimatedProperty)
     case wrongGeneration
     case wrongClock
+    case wrongOrigin
     case wrongEndpoints
     case wrongMapping
 }
@@ -572,8 +573,26 @@ final class MixedPassStressOracle {
         ) as? NSNumber)?.uint64Value == expected.generation else {
             throw MixedPassOracleError.wrongGeneration
         }
-        guard abs(animation.beginTime - expected.startTime) < 1e-9 else {
+        // The emitted animation's phase axis must be the model's. `beginTime` no longer carries it —
+        // Core Animation resolves that at the commit, and these fixtures are windowless so it never
+        // resolves at all — so the emitter declares it as metadata, which is exact with no commit.
+        guard let declared = animation.coreListDeclaredStartTime,
+              abs(declared - expected.startTime) < 1e-9 else {
             throw MixedPassOracleError.wrongClock
+        }
+        // ...and a rebind's `.explicit` stamp must land on the phase axis. Deliberately only this
+        // half: asserting `beginTime == 0` for an `.atCommit` emission would be a statement about
+        // Core Animation (an origin outside the render tree is never resolved), not about CoreList,
+        // and it stops being true the moment a fixture here is window-hosted. The two focused
+        // compiler tests on provably bare layers own that assertion instead.
+        //
+        // This guard has the same premise, stated: a stress fixture is never in a window, so no
+        // commit ever resolves an origin and `rebind` falls back to `track.startTime`. Window-host a
+        // fixture here and the rebind will correctly stamp the RESOLVED origin instead, and this
+        // must be relaxed to "non-zero" rather than the equality being taken as the contract.
+        if animation.coreListPreservesPhase,
+           abs(animation.beginTime - expected.startTime) >= 1e-9 {
+            throw MixedPassOracleError.wrongOrigin
         }
         // A system spring's `animation.duration` is the spring's own settling duration, not the
         // track's — `speed` maps it onto the pass duration — so the track duration is not expected to

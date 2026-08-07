@@ -852,7 +852,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
                 case .payment:
                     item.controllerInteraction.openCheckoutOrReceipt(item.message.id, nil)
                 case let .urlAuth(url, buttonId):
-                    item.controllerInteraction.requestMessageActionUrlAuth(url, .message(id: item.message.id, buttonId: buttonId))
+                    item.controllerInteraction.requestMessageActionUrlAuth(url, .message(id: item.message.callbackTargetMessageId, buttonId: buttonId))
                 case .setupPoll:
                     break
                 case let .openUserProfile(peerId):

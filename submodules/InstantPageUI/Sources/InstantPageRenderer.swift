@@ -1761,12 +1761,16 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
             )
             dot.cornerRadius = radius
             self.layer.addSublayer(dot)
-        case let .number(text):
+        case let .number(string, alignment):
+            // The string carries the font and colour it was MEASURED with during layout; do not
+            // rebuild them here. This used to set `systemFont(ofSize: 17.0)` and `item.color`
+            // explicitly, which silently disagreed with the theme's paragraph font whenever that
+            // was not system 17 — and since the marker column's width comes from the measured
+            // string, the drawn digits then no longer filled the box that was supposed to align them.
             let label = UILabel()
-            label.text = text
-            label.textColor = item.color
-            label.font = UIFont.systemFont(ofSize: 17.0)
-            label.textAlignment = .right
+            label.attributedText = string
+            // The frame is the WHOLE marker column, so this alignment is what lines the dots up.
+            label.textAlignment = alignment
             label.frame = CGRect(origin: .zero, size: item.frame.size)
             self.addSubview(label)
         case let .checklist(checked, colors):
@@ -1944,7 +1948,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
 
     let titleTextView: InstantPageV2TextView
     private let chevronView: UIImageView
-    private let separator: UIView
     var bodyView: InstantPageV2View?
     private let titleHitView: UIView
 
@@ -1979,9 +1982,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         // Decorative: let taps fall through to titleHitView (which carries the toggle gesture).
         self.chevronView.isUserInteractionEnabled = false
 
-        self.separator = UIView()
-        self.separator.isUserInteractionEnabled = false
-
         self.titleHitView = UIView()
         self.titleHitView.backgroundColor = .clear
 
@@ -1991,7 +1991,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
 
         self.addSubview(self.titleTextView)
         self.addSubview(self.chevronView)
-        self.addSubview(self.separator)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(self.titleTapped))
         self.insertSubview(self.titleHitView, at: 0)
@@ -2023,7 +2022,7 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         self.chevronView.bounds = CGRect(origin: .zero, size: chevronSize)
         self.chevronView.center = CGPoint(
             x: item.rtl ? (item.frame.width - item.sideInset - chevronSize.width / 2.0) : (item.sideInset + chevronSize.width / 2.0),
-            y: item.titleFrame.midY + 1.0
+            y: item.titleFrame.midY
         )
 
         self.titleHitView.frame = item.titleFrame
@@ -2032,7 +2031,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         // view's own frame height (clipsToBounds = true), not by the body itself — see
         // InstantPageV2View.update. The body's internal layout is forwarded `animation` so a
         // *nested* details block inside the body can also animate its own toggle.
-        let blockHeight: CGFloat
         if item.isExpanded {
             if let innerLayout = item.innerLayout {
                 let body: InstantPageV2View
@@ -2058,9 +2056,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
                     origin: CGPoint(x: 0.0, y: item.titleFrame.maxY),
                     size: innerLayout.contentSize
                 )
-                blockHeight = body.frame.maxY
-            } else {
-                blockHeight = item.titleFrame.maxY
             }
         } else {
             if let existingBody = self.bodyView {
@@ -2074,16 +2069,7 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
                     self.bodyView = nil
                 }
             }
-            blockHeight = item.titleFrame.maxY
         }
-        
-        self.separator.backgroundColor = item.separatorColor
-        animation.animator.updateFrame(layer: self.separator.layer, frame: CGRect(
-            x: 8.0,
-            y: blockHeight - UIScreenPixel,
-            width: item.frame.width - 8.0 * 2.0,
-            height: UIScreenPixel
-        ), completion: nil)
 
         // Chevron rotation. The body teardown on collapse is NOT tied to this completion — see
         // finalizePendingCollapse(), which the parent calls from the frame-shrink (clip) animation.

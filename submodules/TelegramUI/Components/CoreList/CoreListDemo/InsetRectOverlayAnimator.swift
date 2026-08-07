@@ -85,7 +85,17 @@ final class InsetRectOverlayAnimator {
                                        startTime: startTime,
                                        duration: duration,
                                        curve: curve)
-        compiler.install(track, property: property, on: layer) { [weak self, weak layer] in
+        // `.atCommit`, stated rather than defaulted, because this animator is the module's one
+        // producer whose `from` is sampled from the RENDER SERVER (`layer.presentation()`) rather
+        // than from the model. Under an explicit stamp at `startTime` the new curve rendered exactly
+        // the sampled value at its own origin, so a retarget was continuous by construction; under an
+        // implicit origin the curve starts at `startTime + δ` while `from` still holds the value from
+        // `startTime`, costing a `velocity × δ` step on every retarget of an in-flight guide. That is
+        // accepted: the guide must share the list's clock, and every other presentation-sampled
+        // emitter in the module (the `CoreListTransition` setters, via `CALayer.animate` with no
+        // delay) already pays exactly this. Do NOT "fix" a visible step here by re-stamping — that
+        // would put the guide δ ahead of the list it annotates.
+        compiler.install(track, property: property, on: layer, origin: .atCommit) { [weak self, weak layer] in
             guard let self, let layer else { return }
             self.complete(property: property,
                           generation: track.generation,

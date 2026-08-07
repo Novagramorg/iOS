@@ -48,6 +48,22 @@ enum ListAnimatedProperty: Hashable {
     case opacity
 }
 
+extension ListAnimatedProperty {
+    /// Whether this property's track carries an OFFSET that decays to zero, rather than an absolute
+    /// value.
+    ///
+    /// The single source of truth: `CoreAnimationCompiler.isAdditive` delegates here, and
+    /// `ListAnimationModel.resumeValue` uses it to convert a presented value into the track's space.
+    /// Two switches that must agree is precisely the shape of defect this seam was added to fix, so
+    /// there is one — and `PresentationResumeSamplingTests` asserts the delegation still holds.
+    var isAdditiveTrack: Bool {
+        switch self {
+        case .viewportOffset, .positionX, .positionY: return true
+        case .width, .height, .opacity: return false
+        }
+    }
+}
+
 struct ListAnimationTrack: Equatable {
     let generation: UInt64
     let from: CGFloat
@@ -142,6 +158,14 @@ final class ListAnimationModel {
     private var nextTransientSerial: UInt64 = 0
     private var states: [ListAnimationOwner: OwnerState] = [:]
 
+    /// Supplies the value a layer is CURRENTLY RENDERING for a property, or nil when there is no
+    /// binding, no layer, or no presentation layer.
+    ///
+    /// Installed by `ListAnimationController`, which is the only half of that pair that knows about
+    /// layers — so the Core Animation dependency stops there and this stays a plain function of its
+    /// inputs. Nil in windowless tests, which is what keeps their analytic assertions exact.
+    var presentedValueProvider: ((ListAnimationOwner, ListAnimatedProperty) -> CGFloat?)?
+
     var ownerCount: Int { states.count }
 
     init(positionEpsilon: CGFloat = 1e-6) {
@@ -205,9 +229,9 @@ final class ListAnimationModel {
         guard abs(newSettledOffset - oldSettledOffset) > positionEpsilon else {
             return .unchanged
         }
-        let correction = value(for: .viewport,
-                               property: .viewportOffset,
-                               at: time) ?? 0
+        let correction = resumeValue(for: .viewport,
+                                     property: .viewportOffset,
+                                     at: time) ?? 0
         return replace(owner: .viewport,
                        property: .viewportOffset,
                        from: oldSettledOffset + correction - newSettledOffset,
@@ -238,7 +262,7 @@ final class ListAnimationModel {
         if owner.isLive { ensureLive(owner) }
         guard states[owner] != nil else { return .unchanged }
         guard abs(newSettledX - oldSettledX) > positionEpsilon else { return .unchanged }
-        let currentOffset = value(for: owner, property: .positionX, at: time) ?? 0
+        let currentOffset = resumeValue(for: owner, property: .positionX, at: time) ?? 0
         return replace(owner: owner,
                        property: .positionX,
                        from: oldSettledX + currentOffset - newSettledX,
@@ -267,7 +291,18 @@ final class ListAnimationModel {
                                           at time: TimeInterval,
                                           transition: CoreListTransition) -> ListAnimationMutation {
         guard abs(newSettledY - oldSettledY) > positionEpsilon else { return .unchanged }
-        let currentOffset = value(for: owner, property: .positionY, at: time) ?? 0
+        // `currentOffset` is the track's own quantity — the additive contribution decaying to zero —
+        // and the provider measures it as `presented - the layer's own model value`. That subtraction
+        // happens entirely in LAYER space, and the `- newSettledY` below is a delta in MODEL space;
+        // deltas agree across two spaces that differ by a constant within a pass, so nothing needs
+        // converting or threading.
+        //
+        // Two earlier versions got this wrong by mixing the spaces inside one subtraction. Sampling
+        // the presented POSITION and subtracting `newSettledY` is off by
+        // `containerOriginY - transactionOffset` — the model is handed `containerOriginY + localY`
+        // (`CoreVirtualListView.swift:2818`) while the layer is handed `localY` (`:3121`) — and that
+        // is hundreds of points, which is what a whole-list jump per re-issue looks like.
+        let currentOffset = resumeValue(for: owner, property: .positionY, at: time) ?? 0
         let currentVisibleY = oldSettledY + currentOffset
         return replace(owner: owner,
                        property: .positionY,
@@ -287,7 +322,7 @@ final class ListAnimationModel {
         guard abs(newSettledHeight - oldSettledHeight) > positionEpsilon else {
             return .unchanged
         }
-        let currentHeight = value(for: owner, property: .height, at: time)
+        let currentHeight = resumeValue(for: owner, property: .height, at: time)
             ?? oldSettledHeight
         return replace(owner: owner, property: .height,
                        from: currentHeight, to: newSettledHeight,
@@ -304,7 +339,7 @@ final class ListAnimationModel {
         guard abs(newSettledWidth - oldSettledWidth) > positionEpsilon else {
             return .unchanged
         }
-        let currentWidth = value(for: owner, property: .width, at: time)
+        let currentWidth = resumeValue(for: owner, property: .width, at: time)
             ?? oldSettledWidth
         return replace(owner: owner,
                        property: .width,
@@ -320,7 +355,7 @@ final class ListAnimationModel {
                            transition: CoreListTransition) -> ListAnimationMutation {
         guard let state = states[owner] else { return .unchanged }
         guard state.opacity != target else { return .unchanged }
-        let from = value(for: owner, property: .opacity, at: time) ?? state.opacity
+        let from = resumeValue(for: owner, property: .opacity, at: time) ?? state.opacity
         return replace(owner: owner, property: .opacity, from: from, to: target,
                        at: time, transition: transition)
     }
@@ -408,6 +443,32 @@ final class ListAnimationModel {
     func track(for owner: ListAnimationOwner,
                property: ListAnimatedProperty) -> ListAnimationTrack? {
         states[owner]?.tracks[property]
+    }
+
+    /// The value a new animation for `property` should start FROM.
+    ///
+    /// Deliberately a different method from `value(for:property:at:)`, which answers "where will this
+    /// be when settled" and must stay analytic — window building, `bottomEdgePinSlack`, the `finalize`
+    /// deadline and the controller's own queries all depend on that. Hooking the provider onto
+    /// `value(...)` itself would silently convert every one of them into presented reads, which is the
+    /// one thing this change must not do. The distinct name makes that structural instead of a comment
+    /// someone has to notice.
+    ///
+    /// The provider returns values already in the TRACK's space, so there is no conversion here.
+    /// An earlier version passed a `settled` reference and subtracted it for additive properties;
+    /// that is wrong, because an additive track's contribution is `presented - the layer's own model
+    /// value`, and the two coincide only when the model value happens to be the settled one. It does
+    /// for a row (the engine writes the settled frame and animates additively on top) and does NOT
+    /// for `.viewportOffset`, whose model `bounds.origin.y` is driven continuously by the physics
+    /// scroll engine (`CoreVirtualListView.swift:717-720`). Sampling that one cost a whole-list jump
+    /// on every re-issue.
+    func resumeValue(for owner: ListAnimationOwner,
+                     property: ListAnimatedProperty,
+                     at time: TimeInterval) -> CGFloat? {
+        if let presented = presentedValueProvider?(owner, property) {
+            return presented
+        }
+        return value(for: owner, property: property, at: time)
     }
 
     func value(for owner: ListAnimationOwner,

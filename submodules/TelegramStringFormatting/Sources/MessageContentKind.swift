@@ -273,28 +273,9 @@ public func messageTextWithAttributes(message: EngineMessage) -> NSAttributedStr
         }
     }
     if let entities = entities?.entities {
-        let updatedString = NSMutableAttributedString(attributedString: attributedText)
-        
-        for entity in entities.sorted(by: { $0.range.lowerBound > $1.range.lowerBound }) {
-            guard case let .CustomEmoji(_, fileId) = entity.type else {
-                continue
-            }
-            
-            let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
-            if range.upperBound >= updatedString.length {
-                continue
-            }
-            
-            let currentDict = updatedString.attributes(at: range.lowerBound, effectiveRange: nil)
-            var updatedAttributes: [NSAttributedString.Key: Any] = currentDict
-            updatedAttributes[ChatTextInputAttributes.customEmoji] = ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: message.associatedMedia[EngineMedia.Id(namespace: Namespaces.Media.CloudFile, id: fileId)] as? TelegramMediaFile)
-            
-            let insertString = NSAttributedString(string: updatedString.attributedSubstring(from: range).string, attributes: updatedAttributes)
-            updatedString.replaceCharacters(in: range, with: insertString)
-        }
-        attributedText = updatedString
+        attributedText = stringWithAppliedCustomEmojiEntities(attributedText, entities: entities, message: message._asMessage())
     }
-    
+
     return attributedText
 }
 

@@ -1168,37 +1168,46 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 }
             case let .updateNewEphemeralMessage(updateNewEphemeralMessageData):
                 let apiMessage = updateNewEphemeralMessageData.message
-                if let preCachedResources = apiMessage.preCachedResources {
-                    for (resource, data) in preCachedResources {
-                        updatedState.addPreCachedResource(resource, data: data)
+                if let message = StoreMessage(apiEphemeralMessage: apiMessage) {
+                    if let attribute = message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute, let anchorMessageId = attribute.anchorMessageId {
+                        updatedState.upsertEphemeralReplacement(anchorId: anchorMessageId, message: message)
+                    } else {
+                        if let preCachedResources = apiMessage.preCachedResources {
+                            for (resource, data) in preCachedResources {
+                                updatedState.addPreCachedResource(resource, data: data)
+                            }
+                        }
+                        if let preCachedStories = apiMessage.preCachedStories {
+                            for (id, story) in preCachedStories {
+                                updatedState.addPreCachedStory(id: id, story: story)
+                            }
+                        }
+                        updatedState.addMessages([message], location: .Random)
                     }
                 }
-                if let preCachedStories = apiMessage.preCachedStories {
-                    for (id, story) in preCachedStories {
-                        updatedState.addPreCachedStory(id: id, story: story)
-                    }
-                }
-                updatedState.addMessages([StoreMessage(apiEphemeralMessage: apiMessage)], location: .Random)
             case let .updateEditEphemeralMessage(updateEditEphemeralMessageData):
                 let apiMessage = updateEditEphemeralMessageData.message
-                if let preCachedResources = apiMessage.preCachedResources {
-                    for (resource, data) in preCachedResources {
-                        updatedState.addPreCachedResource(resource, data: data)
+                if let message = StoreMessage(apiEphemeralMessage: apiMessage) {
+                    if let attribute = message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute, let anchorMessageId = attribute.anchorMessageId {
+                        updatedState.upsertEphemeralReplacement(anchorId: anchorMessageId, message: message)
+                    } else {
+                        if let preCachedResources = apiMessage.preCachedResources {
+                            for (resource, data) in preCachedResources {
+                                updatedState.addPreCachedResource(resource, data: data)
+                            }
+                        }
+                        if let preCachedStories = apiMessage.preCachedStories {
+                            for (id, story) in preCachedStories {
+                                updatedState.addPreCachedStory(id: id, story: story)
+                            }
+                        }
+                        if case let .Id(messageId) = message.id {
+                            updatedState.editMessage(messageId, message: message)
+                        }
                     }
-                }
-                if let preCachedStories = apiMessage.preCachedStories {
-                    for (id, story) in preCachedStories {
-                        updatedState.addPreCachedStory(id: id, story: story)
-                    }
-                }
-                let message = StoreMessage(apiEphemeralMessage: apiMessage)
-                if case let .Id(messageId) = message.id {
-                    updatedState.editMessage(messageId, message: message)
                 }
             case let .updateDeleteEphemeralMessages(updateDeleteEphemeralMessagesData):
-                updatedState.deleteMessages(updateDeleteEphemeralMessagesData.ids.map { id in
-                    MessageId(peerId: updateDeleteEphemeralMessagesData.peer.peerId, namespace: Namespaces.Message.EphemeralLocal, id: id)
-                })
+                updatedState.deleteEphemeralMessages(peerId: updateDeleteEphemeralMessagesData.peer.peerId, ids: updateDeleteEphemeralMessagesData.ids)
             case let .updateServiceNotification(updateServiceNotificationData):
                 let (flags, date, type, text, media, entities) = (updateServiceNotificationData.flags, updateServiceNotificationData.inboxDate, updateServiceNotificationData.type, updateServiceNotificationData.message, updateServiceNotificationData.media, updateServiceNotificationData.entities)
                 let popup = (flags & (1 << 0)) != 0
@@ -2827,6 +2836,8 @@ private func messagesFromOperations(state: AccountMutableState) -> [StoreMessage
             messages.append(contentsOf: messagesValue)
         case let .EditMessage(_, message):
             messages.append(message)
+        case let .UpsertEphemeralReplacement(_, message):
+            messages.append(message)
         default:
             break
         }
@@ -3821,7 +3832,7 @@ private func optimizedOperations(_ operations: [AccountStateMutationOperation]) 
     var currentAddQuickReplyMessages: OptimizeAddMessagesState?
     for operation in operations {
         switch operation {
-        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo:
+        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo:
                 if let currentAddMessages = currentAddMessages, !currentAddMessages.messages.isEmpty {
                     result.append(.AddMessages(currentAddMessages.messages, currentAddMessages.location))
                 }
@@ -3905,6 +3916,100 @@ private func recordPeerActivityTimestamp(peerId: PeerId, timestamp: Int32, into 
     } else {
         timestamps[peerId] = timestamp
     }
+}
+
+private func upsertEphemeralReplacement(transaction: Transaction, anchorMessageId: MessageId, message: StoreMessage) {
+    guard anchorMessageId.namespace == Namespaces.Message.Cloud, let anchorMessage = transaction.getMessage(anchorMessageId) else {
+        return
+    }
+    guard case let .Id(replacementMessageId) = message.id, replacementMessageId.peerId == anchorMessageId.peerId, replacementMessageId.namespace == Namespaces.Message.EphemeralAnchored else {
+        return
+    }
+    guard let ephemeralAttribute = message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute else {
+        return
+    }
+
+    let currentAttribute = anchorMessage.attributes.first(where: { $0 is EphemeralReplacementMessageAttribute }) as? EphemeralReplacementMessageAttribute
+    if let currentAttribute, currentAttribute.state == .reverted, currentAttribute.replacementMessageId == replacementMessageId {
+        return
+    }
+
+    if let currentAttribute, currentAttribute.state == .active, currentAttribute.replacementMessageId != replacementMessageId {
+        transaction.deleteMessages([currentAttribute.replacementMessageId], forEachMedia: nil)
+    }
+
+    if transaction.getMessage(replacementMessageId) != nil {
+        transaction.updateMessage(replacementMessageId, update: { _ in
+            return .update(message)
+        })
+    } else {
+        let _ = transaction.addMessages([message], location: .Random)
+    }
+
+    transaction.updateMessage(anchorMessageId, update: { currentMessage in
+        var attributes = currentMessage.attributes.filter { !($0 is EphemeralReplacementMessageAttribute) }
+        attributes.append(EphemeralReplacementMessageAttribute(state: .active, replacementMessageId: replacementMessageId, receiverId: ephemeralAttribute.receiverId))
+        let message = StoreMessage(
+            id: currentMessage.id,
+            customStableId: nil,
+            globallyUniqueId: currentMessage.globallyUniqueId,
+            groupingKey: currentMessage.groupingKey,
+            threadId: currentMessage.threadId,
+            timestamp: currentMessage.timestamp,
+            flags: StoreMessageFlags(currentMessage.flags),
+            tags: currentMessage.tags,
+            globalTags: currentMessage.globalTags,
+            localTags: currentMessage.localTags,
+            forwardInfo: currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init),
+            authorId: currentMessage.author?.id,
+            text: currentMessage.text,
+            attributes: attributes,
+            media: currentMessage.media
+        )
+        return .update(message)
+    })
+}
+
+private func deleteEphemeralMessages(transaction: Transaction, peerId: PeerId, ids: [Int32]) {
+    let idSet = Set(ids)
+    var activeReplacements: [(MessageId, EphemeralReplacementMessageAttribute)] = []
+    transaction.withAllMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, { message in
+        if let attribute = message.attributes.first(where: { $0 is EphemeralReplacementMessageAttribute }) as? EphemeralReplacementMessageAttribute, attribute.state == .active, attribute.replacementMessageId.peerId == peerId, attribute.replacementMessageId.namespace == Namespaces.Message.EphemeralAnchored, idSet.contains(attribute.replacementMessageId.id) {
+            activeReplacements.append((message.id, attribute))
+        }
+        return true
+    })
+    for (anchorMessageId, attribute) in activeReplacements {
+        transaction.updateMessage(anchorMessageId, update: { currentMessage in
+            var attributes = currentMessage.attributes.filter { !($0 is EphemeralReplacementMessageAttribute) }
+            attributes.append(EphemeralReplacementMessageAttribute(state: .reverted, replacementMessageId: attribute.replacementMessageId, receiverId: attribute.receiverId))
+            let message = StoreMessage(
+                id: currentMessage.id,
+                customStableId: nil,
+                globallyUniqueId: currentMessage.globallyUniqueId,
+                groupingKey: currentMessage.groupingKey,
+                threadId: currentMessage.threadId,
+                timestamp: currentMessage.timestamp,
+                flags: StoreMessageFlags(currentMessage.flags),
+                tags: currentMessage.tags,
+                globalTags: currentMessage.globalTags,
+                localTags: currentMessage.localTags,
+                forwardInfo: currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init),
+                authorId: currentMessage.author?.id,
+                text: currentMessage.text,
+                attributes: attributes,
+                media: currentMessage.media
+            )
+            return .update(message)
+        })
+    }
+
+    var messageIds: [MessageId] = []
+    for id in ids {
+        messageIds.append(MessageId(peerId: peerId, namespace: Namespaces.Message.EphemeralLocal, id: id))
+        messageIds.append(MessageId(peerId: peerId, namespace: Namespaces.Message.EphemeralAnchored, id: id))
+    }
+    transaction.deleteMessages(messageIds, forEachMedia: nil)
 }
 
 func replayFinalState(
@@ -4439,6 +4544,10 @@ func replayFinalState(
                         let _ = transaction.addMessages(messages, location: .Random)
                     }
                 }
+            case let .UpsertEphemeralReplacement(anchorMessageId, message):
+                upsertEphemeralReplacement(transaction: transaction, anchorMessageId: anchorMessageId, message: message)
+            case let .DeleteEphemeralMessages(peerId, ids):
+                deleteEphemeralMessages(transaction: transaction, peerId: peerId, ids: ids)
             case let .DeleteMessagesWithGlobalIds(ids):
                 var resourceIds: [MediaResourceId] = []
                 transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in

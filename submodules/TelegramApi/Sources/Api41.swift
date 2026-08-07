@@ -584,6 +584,56 @@ public extension Api.toncenter {
         }
     }
 }
+public extension Api.toncenter {
+    enum StreamingUrl: TypeConstructorDescription {
+        public class Cons_streamingUrl: TypeConstructorDescription {
+            public var url: String
+            public var expires: Int32
+            public init(url: String, expires: Int32) {
+                self.url = url
+                self.expires = expires
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("streamingUrl", [("url", ConstructorParameterDescription(self.url)), ("expires", ConstructorParameterDescription(self.expires))])
+            }
+        }
+        case streamingUrl(Cons_streamingUrl)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .streamingUrl(let _data):
+                if boxed {
+                    buffer.appendInt32(428373505)
+                }
+                serializeString(_data.url, buffer: buffer, boxed: false)
+                serializeInt32(_data.expires, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .streamingUrl(let _data):
+                return ("streamingUrl", [("url", ConstructorParameterDescription(_data.url)), ("expires", ConstructorParameterDescription(_data.expires))])
+            }
+        }
+
+        public static func parse_streamingUrl(_ reader: BufferReader) -> StreamingUrl? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int32?
+            _2 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.toncenter.StreamingUrl.streamingUrl(Cons_streamingUrl(url: _1!, expires: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
 public extension Api.updates {
     indirect enum ChannelDifference: TypeConstructorDescription {
         public class Cons_channelDifference: TypeConstructorDescription {

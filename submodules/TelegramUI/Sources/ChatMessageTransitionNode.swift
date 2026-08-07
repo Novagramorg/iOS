@@ -30,43 +30,187 @@ private func convertAnimatingSourceRect(_ rect: CGRect, fromView: UIView, toView
     }
 }
 
-private func pendingAdditiveSublayerTranslation(_ layer: CALayer) -> CGPoint {
-    guard let keys = layer.animationKeys() else { return .zero }
+/// The eased progress `animation` will be at when the frame this runloop turn is composing hits the
+/// screen — 0.0 for one that has not started yet.
+///
+/// A brand-new animation has `beginTime == 0.0`: CoreAnimation stamps it at commit, so it renders its
+/// start value. CoreList instead stamps every track in a pass with the time that pass BEGAN
+/// (`ListAnimationController.now()`, via `CoreAnimationCompiler.animation(for:property:)`), which is
+/// already some milliseconds in the past by the time a transaction completion runs — such a track is
+/// partway through on its very first rendered frame, and reading its `fromValue` would over-correct by
+/// that much.
+///
+/// Times are taken in the layer's own space, which is what CoreAnimation evaluates in, so a
+/// speed/timeOffset anywhere up the tree (Slow Animations) does not skew the result. A curve this
+/// cannot evaluate — a `CASpringAnimation`, whose value needs the spring solution rather than a
+/// bezier — reports 0.0 and therefore contributes its start value: the same answer this file gave for
+/// every animation before, and an under- rather than over-correction.
+private func pendingAnimationProgress(_ animation: CAAnimation, on layer: CALayer) -> CGFloat {
+    guard animation.beginTime > 0.0 else {
+        return 0.0
+    }
+    guard let timingFunction = animation.timingFunction, !(animation is CASpringAnimation) else {
+        return 0.0
+    }
+    let speed = animation.speed == 0.0 ? 1.0 : Double(animation.speed)
+    let elapsed = (layer.convertTime(CACurrentMediaTime(), from: nil) - animation.beginTime) * speed + animation.timeOffset
+    guard elapsed > 0.0, animation.duration > 0.0 else {
+        return elapsed > 0.0 ? 1.0 : 0.0
+    }
+    return CGFloat(timingFunction.solveOutput(atInput: min(1.0, elapsed / animation.duration)))
+}
+
+private extension CAMediaTimingFunction {
+    /// The cubic bezier's y for a given x, both on [0, 1] — the curve's output at a fraction of its
+    /// duration. Newton-Raphson on x, which converges in a couple of steps for the shallow curves
+    /// used here; the clamp keeps a degenerate control point (a zero derivative) from diverging.
+    func solveOutput(atInput input: Double) -> Double {
+        var rawPoint = [Float](repeating: 0.0, count: 2)
+        self.getControlPoint(at: 1, values: &rawPoint)
+        let control1 = (x: Double(rawPoint[0]), y: Double(rawPoint[1]))
+        self.getControlPoint(at: 2, values: &rawPoint)
+        let control2 = (x: Double(rawPoint[0]), y: Double(rawPoint[1]))
+
+        func bezier(_ t: Double, _ a: Double, _ b: Double) -> Double {
+            let inverseT = 1.0 - t
+            return 3.0 * inverseT * inverseT * t * a + 3.0 * inverseT * t * t * b + t * t * t
+        }
+
+        var t = input
+        for _ in 0 ..< 8 {
+            let error = bezier(t, control1.x, control2.x) - input
+            if abs(error) < 1.0e-5 {
+                break
+            }
+            let inverseT = 1.0 - t
+            let derivative = 3.0 * inverseT * inverseT * control1.x + 6.0 * inverseT * t * (control2.x - control1.x) + 3.0 * t * t * (1.0 - control2.x)
+            if abs(derivative) < 1.0e-6 {
+                break
+            }
+            t = min(1.0, max(0.0, t - error / derivative))
+        }
+        return bezier(t, control1.y, control2.y)
+    }
+}
+
+/// The per-axis value an animation's endpoint describes, or nil on an axis the keyPath does not
+/// drive. Only the geometry keyPaths the list backends actually emit are decoded; anything else
+/// reports nothing and is skipped by the caller.
+private func animatedGeometryValue(_ value: Any?, keyPath: String) -> (x: CGFloat?, y: CGFloat?) {
+    guard let value = value else {
+        return (nil, nil)
+    }
+    let nsValueType = (value as? NSValue).map { String(cString: $0.objCType) } ?? ""
+    switch keyPath {
+    case "sublayerTransform", "transform":
+        guard nsValueType.contains("CATransform3D"), let value = value as? NSValue else {
+            return (nil, nil)
+        }
+        let transform = value.caTransform3DValue
+        return (transform.m41, transform.m42)
+    case "bounds":
+        guard nsValueType.contains("CGRect"), let value = value as? NSValue else {
+            return (nil, nil)
+        }
+        return (value.cgRectValue.origin.x, value.cgRectValue.origin.y)
+    case "bounds.origin", "position":
+        guard nsValueType.contains("CGPoint"), let value = value as? NSValue else {
+            return (nil, nil)
+        }
+        return (value.cgPointValue.x, value.cgPointValue.y)
+    default:
+        guard let value = value as? NSNumber else {
+            return (nil, nil)
+        }
+        if keyPath.hasSuffix(".x") {
+            return (CGFloat(value.doubleValue), nil)
+        } else if keyPath.hasSuffix(".y") {
+            return (nil, CGFloat(value.doubleValue))
+        } else {
+            return (nil, nil)
+        }
+    }
+}
+
+/// How far `layer`'s animations on one geometry property displace it from its MODEL value, as the
+/// next frame will render it. Zero when nothing is animating that property — which is what keeps a
+/// model value written in this same turn WITHOUT an animation (CoreList rebases its container that
+/// way) from being counted: that write renders immediately, so the model already is the truth for it.
+private func pendingGeometryDisplacement(_ layer: CALayer, keyPathPrefixes: [String], modelValue: CGPoint) -> CGPoint {
+    guard let keys = layer.animationKeys() else {
+        return .zero
+    }
     var result = CGPoint.zero
     for key in keys {
-        guard let anim = layer.animation(forKey: key) as? CABasicAnimation,
-              anim.keyPath == "sublayerTransform",
-              anim.isAdditive,
-              let fromValue = anim.fromValue as? NSValue else {
+        guard let animation = layer.animation(forKey: key) as? CABasicAnimation, let keyPath = animation.keyPath else {
             continue
         }
-        let t = fromValue.caTransform3DValue
-        result.x += t.m41
-        result.y += t.m42
+        guard keyPathPrefixes.contains(where: { keyPath == $0 || keyPath.hasPrefix("\($0).") }) else {
+            continue
+        }
+        let progress = pendingAnimationProgress(animation, on: layer)
+        let from = animatedGeometryValue(animation.fromValue, keyPath: keyPath)
+        let to = animatedGeometryValue(animation.toValue, keyPath: keyPath)
+        // An additive animation's endpoints are displacements from the model value, so its
+        // contribution is the interpolated value itself; a plain one's are absolute, and the model
+        // value stands in for an omitted endpoint as it does for CoreAnimation.
+        let baseX = animation.isAdditive ? 0.0 : modelValue.x
+        let baseY = animation.isAdditive ? 0.0 : modelValue.y
+        let currentX = (from.x ?? baseX) + ((to.x ?? baseX) - (from.x ?? baseX)) * progress
+        let currentY = (from.y ?? baseY) + ((to.y ?? baseY) - (from.y ?? baseY)) * progress
+        result.x += currentX - baseX
+        result.y += currentY - baseY
     }
     return result
 }
 
+/// The translation, in `parent`'s bounds coordinate space, between where `child` and its contents
+/// RENDER on the next frame and where the model geometry `CALayer.convert` reads puts them.
+///
+/// Every list movement in the chat leaves the model at the destination and carries the travel in an
+/// animation, so this is what separates "where the content is" from "where it is going". The chat has
+/// one backend per mechanism: `ListViewImpl` scrolls by animating its own `sublayerTransform`
+/// additively (Display/Source/ListView.swift:3775), while CoreList parks its content host's model
+/// `bounds.origin.y` at the settled offset and carries the travel in an additive `bounds.origin.y`
+/// track, moving individual rows with additive `position` tracks
+/// (CoreListDemo/CoreAnimationCompiler.swift `keyPath(for:)`). Reading the mechanism off the layers
+/// rather than asking the list keeps this correct for either backend — and for a row that is moving
+/// under its own track while the viewport moves too.
+///
+/// A `bounds.origin` displacement enters NEGATED: it is the origin of the coordinate space the
+/// children are positioned in, so scrolling it down moves them up.
+private func pendingRenderedTranslation(parent: CALayer, child: CALayer) -> CGPoint {
+    let sublayerTransformModel = CGPoint(x: parent.sublayerTransform.m41, y: parent.sublayerTransform.m42)
+    let sublayerTransform = pendingGeometryDisplacement(parent, keyPathPrefixes: ["sublayerTransform"], modelValue: sublayerTransformModel)
+    let boundsOrigin = pendingGeometryDisplacement(parent, keyPathPrefixes: ["bounds"], modelValue: parent.bounds.origin)
+    let position = pendingGeometryDisplacement(child, keyPathPrefixes: ["position"], modelValue: child.position)
+
+    return CGPoint(
+        x: sublayerTransform.x - boundsOrigin.x + position.x,
+        y: sublayerTransform.y - boundsOrigin.y + position.y
+    )
+}
+
 /// Convert a rect expressed in window coordinates to `toView`'s local coordinates,
-/// accounting for pending additive `sublayerTransform` animations on any ancestor
-/// of `toView`. Returns the position in `toView.bounds` that will render at
-/// `windowRect` visually at t=0 of the pending animations (once CA commits them).
+/// accounting for the movement any ancestor of `toView` is in the middle of. Returns
+/// the position in `toView.bounds` that `windowRect` renders at on the next frame.
 ///
-/// Standard `toView.layer.convert(windowRect, from: nil)` reads model transforms
-/// only, so it yields the position that will render at `windowRect` *at t=end* of
-/// any pending additive animations (since additive animations don't change model
-/// values). For source-side morph calibration, where the snapshot was captured at
-/// pre-animation state, the t=0 position is what we want.
+/// Standard `toView.layer.convert(windowRect, from: nil)` reads model geometry only,
+/// so it yields the position that will render at `windowRect` once every animation in
+/// flight has FINISHED — a list schedules its scroll and leaves the model at the
+/// destination. For source-side morph calibration, where the snapshot was captured at
+/// pre-animation state, the position it renders at when the morph starts is what we
+/// want; taking the settled one instead offsets the bubble by the list's whole travel.
 ///
-/// Walks the layer chain top-down from the root to `toView`. At each parent→child
-/// step it subtracts the parent's pending additive `sublayerTransform` translation
-/// *in the parent's own bounds coord space*, then does the standard one-step
-/// `convert(_:to:)` into the child. Applying the correction at the right level
-/// (rather than flat-summing the translations in the destination space) lets
-/// `CALayer.convert` propagate each correction through any remaining
-/// transforms — child `transform`, further ancestors' own model
-/// `sublayerTransform`, etc. — so the result is correct even when the chain
-/// contains non-translation transforms (rotations, scales).
+/// Walks the layer chain top-down from the root to `toView`. At each parent→child step
+/// it subtracts that step's pending rendered-minus-model translation *in the parent's
+/// own bounds coord space*, then does the standard one-step `convert(_:to:)` into the
+/// child. Applying the correction at the right level (rather than flat-summing the
+/// translations in the destination space) lets `CALayer.convert` propagate each
+/// correction through any remaining transforms — child `transform`, further ancestors'
+/// own model `sublayerTransform`, etc. — so the result is correct even when the chain
+/// contains non-translation transforms, and both chat list backends put a π rotation in
+/// it twice over.
 private func convertAnimatingSourceRectFromWindow(_ windowRect: CGRect, toView: UIView) -> CGRect {
     var chain: [CALayer] = []
     var layer: CALayer? = toView.layer
@@ -81,7 +225,7 @@ private func convertAnimatingSourceRectFromWindow(_ windowRect: CGRect, toView: 
         let parent = chain[i]
         let child = chain[i + 1]
 
-        let pending = pendingAdditiveSublayerTranslation(parent)
+        let pending = pendingRenderedTranslation(parent: parent, child: child)
         let adjustedR = r.offsetBy(dx: -pending.x, dy: -pending.y)
         r = parent.convert(adjustedR, to: child)
     }

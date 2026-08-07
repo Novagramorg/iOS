@@ -1008,7 +1008,7 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
                         controllerInteraction.openCheckoutOrReceipt(message.id, nil)
                         return
                     case let .urlAuth(url, buttonId):
-                        controllerInteraction.requestMessageActionUrlAuth(url, .message(id: message.id, buttonId: buttonId))
+                        controllerInteraction.requestMessageActionUrlAuth(url, .message(id: message.callbackTargetMessageId, buttonId: buttonId))
                         return
                     case .setupPoll:
                         break
