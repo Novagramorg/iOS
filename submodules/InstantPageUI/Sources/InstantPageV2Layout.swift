@@ -151,7 +151,7 @@ public enum InstantPageV2LaidOutItem {
         case var .mediaMap(item):          item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .mediaMap(item)
         case var .mediaCoverImage(item):   item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .mediaCoverImage(item)
         case var .mediaAudio(item):        item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .mediaAudio(item)
-        case var .formula(item):          item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .formula(item)
+        case var .formula(item):          item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); item.centeringBounds = item.centeringBounds?.offsetBy(dx: delta.x, dy: delta.y); return .formula(item)
         case var .inlineButton(item):     item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .inlineButton(item)
         case var .buttonRow(item):        item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .buttonRow(item)
         case var .document(item):         item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .document(item)
@@ -264,6 +264,17 @@ public struct InstantPageV2FormulaItem {
     public let isScrollable: Bool                     // true only for block formulas wider than bounds
     public let imageFrame: CGRect                     // image rect in this item's local coords; size must equal attachment.rendered.size for pixel-perfect rendering
     public let scrollContentSize: CGSize              // == frame.size unless isScrollable
+
+    /// The horizontal band a *block* formula is centered within, in the same coordinate space as
+    /// `frame` (so it is translated alongside it by `offsetBy`). Non-nil only for a narrow block
+    /// formula: `nil` marks the two kinds that must keep the position the layout gave them —
+    /// inline formula runs (pinned to their glyph position inside a text line) and wide/scrollable
+    /// block formulas (full-bleed, panned inside their own scroll view).
+    ///
+    /// Centering is resolved by `layoutBlockSequence` *after* the sequence's `contentSize` is known,
+    /// not here: under `fitToWidth` the achieved content width shrinks below `boundingWidth`, and
+    /// centering against the pre-shrink width would push the formula off to the right.
+    public var centeringBounds: CGRect? = nil
 }
 
 /// An inline `RichText.textButton`. Emitted as a top-level item next to the text item it visually
@@ -753,7 +764,32 @@ private func layoutBlockSequence(
         contentSize.width = min(maxX, boundingWidth)
     }
 
+    centerBlockFormulas(in: &items, contentWidth: contentSize.width, horizontalInset: horizontalInset)
+
     return InstantPageV2Layout(contentSize: contentSize, items: items, detailsIndices: detailsIndices, media: context.media, webpage: context.webpage)
+}
+
+/// Horizontally centers every narrow block formula in a finished sequence (see
+/// `InstantPageV2FormulaItem.centeringBounds`; items without one — inline runs and wide scrollable
+/// formulas — are left where they are).
+///
+/// This runs after `contentSize` because the band a formula should center in is the band that
+/// survives the `fitToWidth` shrink, not the one it was laid out against: a bubble whose widest
+/// item is a short paragraph ends up much narrower than `boundingWidth`, and centering against the
+/// latter would leave the formula hanging past the bubble's right edge. Clamping to
+/// `contentWidth - horizontalInset` (the content area's true trailing edge — `contentSize.width`
+/// reserves a right margin equal to the leading inset) also keeps a formula that *is* the widest
+/// item exactly where it was, so a formula-only bubble still hugs it.
+private func centerBlockFormulas(in items: inout [InstantPageV2LaidOutItem], contentWidth: CGFloat, horizontalInset: CGFloat) {
+    for i in items.indices {
+        guard case var .formula(item) = items[i], let bounds = item.centeringBounds else {
+            continue
+        }
+        let trailingEdge = min(bounds.maxX, contentWidth - horizontalInset)
+        let x = bounds.minX + max(0.0, (trailingEdge - bounds.minX - item.frame.width) / 2.0)
+        item.frame.origin.x = x
+        items[i] = .formula(item)
+    }
 }
 
 // MARK: - Markdown block context stamping helpers
@@ -1267,6 +1303,11 @@ private func layoutFormulaBlock(
         // Narrow formula: report the image's natural extent (left-inset + width) so the
         // bubble's `fitToWidth` contentSize shrinks instead of stretching to `boundingWidth`.
         // When the formula is the widest item, the bubble centers itself in the chat row.
+        //
+        // The frame stays at the leading inset here and is centered later, by the post-pass in
+        // `layoutBlockSequence` — see `centeringBounds`. Widening the frame to the whole band
+        // instead (image centered inside via `imageFrame`) would report `maxX == boundingWidth`
+        // and defeat the hug above, stretching every formula-bearing bubble to full width.
         let frame = CGRect(x: horizontalInset, y: 0.0,
                            width: renderedSize.width, height: renderedSize.height)
         let item = InstantPageV2FormulaItem(
@@ -1274,7 +1315,9 @@ private func layoutFormulaBlock(
             attachment: attachment,
             isScrollable: false,
             imageFrame: CGRect(origin: .zero, size: renderedSize),
-            scrollContentSize: renderedSize
+            scrollContentSize: renderedSize,
+            centeringBounds: CGRect(x: horizontalInset, y: 0.0,
+                                    width: availableWidth, height: renderedSize.height)
         )
         return [.formula(item)]
     }
@@ -2016,6 +2059,14 @@ private func layoutTable(
 /// top of the media block); `offset` is the y-position of the bottom of the placeholder, so
 /// caption items start at `offset + topPadding`. The caller uses the returned total height to
 /// compute block size. Returns (items, totalHeight).
+///
+/// **Every caller passes the media's bottom edge unmodified** — the 9pt pad below is the whole
+/// media→caption gap, for single media, collages, slideshows and placeholders alike. Do not nudge
+/// `offset` at a call site to tune the gap: `layoutTypedMediaWithCaption` once passed
+/// `scaledSize.height - 5.0` to absorb the ascender headroom `lineBoxTopInset` adds inside a text
+/// box, and because the other three call sites did not, a single image's caption sat 5pt tighter
+/// than the identical caption under a slideshow or collage. Tune the pad here instead, where all
+/// four kinds move together.
 private func layoutCaptionAndCredit(
     _ caption: InstantPageCaption,
     offset: CGFloat,
@@ -2174,7 +2225,7 @@ private func layoutTypedMediaWithCaption(
 
     let (captionItems, captionHeight) = layoutCaptionAndCredit(
         caption,
-        offset: scaledSize.height - 5.0,
+        offset: scaledSize.height,
         boundingWidth: boundingWidth,
         horizontalInset: horizontalInset,
         context: &context
@@ -2672,7 +2723,7 @@ private func layoutThinking(
     )
     guard let textItem = textItem else { return [] }
 
-    let blockFrame = CGRect(x: horizontalInset, y: 0.0, width: textSize.width, height: textSize.height)
+    let blockFrame = CGRect(x: horizontalInset, y: 0.0, width: textSize.width, height: textSize.height - 4.0)
     return [.thinking(InstantPageV2ThinkingItem(frame: blockFrame, textItem: textItem))]
 }
 
@@ -2688,13 +2739,6 @@ private func layoutBlockQuote(
     pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
-    // Legacy single-paragraph fast path: preserve today's italicized body styling.
-    if blocks.count == 1, case let .paragraph(text) = blocks[0] {
-        return layoutQuoteText(text: text, caption: caption, isPull: false,
-                               boundingWidth: boundingWidth, horizontalInset: horizontalInset,
-                               context: &context)
-    }
-
     let verticalInset: CGFloat = 6.0
     let lineInset: CGFloat = 9.0
 
@@ -2708,12 +2752,29 @@ private func layoutBlockQuote(
     var result: [InstantPageV2LaidOutItem] = []
     var contentHeight: CGFloat = verticalInset
 
-    // Fixed, compact gap between a quote's child blocks. The full page-flow spacing
-    // (spacingBetweenBlocks, 24pt around quotes) is too airy when nested; the first
-    // child hugs the top (only verticalInset above it).
-    let childSpacing: CGFloat = 10.0
+    // A quote's children are spaced by the page's own rhythm, like every other block sequence
+    // (`layoutBlockSequence`, details bodies, table cells, list sub-blocks): a quote is a container,
+    // not a separate spacing regime. This replaced a flat 10pt `childSpacing`, which meant a
+    // heading, a list and a paragraph all sat the same distance apart inside a quote while the
+    // identical run of blocks outside it did not — and, being a constant here, silently ignored
+    // every rule the spacing model gained.
+    //
+    // `kind` is the enclosing sequence's, matching what the children themselves are laid out with.
+    // If quotes ever want a denser rhythm of their own, that belongs in `spacingBetweenBlocks` as a
+    // `BlockSequenceKind` case (the way `.list` already is), not as a constant at this call site.
+    //
+    // The sequence EDGES stay the quote's own `verticalInset`: `layoutBlockSequence`'s leading /
+    // trailing edge contributions are deliberately NOT added, because the quote already pads itself
+    // and stacking both would double the gap above the first child and below the last.
+    //
+    // `previousBlock` advances only when a child actually contributed height, mirroring
+    // `layoutBlockSequence` — a zero-height child (an anchor, an unresolvable medium) has to stay
+    // transparent to spacing rather than open a gap against nothing.
+    var previousBlock: InstantPageBlock?
     for (i, child) in blocks.enumerated() {
-        let spacing: CGFloat = i == 0 ? 0.0 : childSpacing
+        let spacing: CGFloat = previousBlock == nil
+            ? 0.0
+            : spacingBetweenBlocks(upper: previousBlock, lower: child, kind: kind)
         let childItems = layoutBlock(
             child,
             boundingWidth: innerBoundingWidth,
@@ -2727,8 +2788,16 @@ private func layoutBlockQuote(
         )
         let dy = contentHeight + spacing
         let offsetItems = childItems.map { $0.offsetBy(CGPoint(x: bandOffsetX, y: dy)) }
-        let childMaxY = offsetItems.map { $0.frame.maxY }.max() ?? dy
-        contentHeight = max(contentHeight, childMaxY)
+        var childMaxY: CGFloat = 0.0
+        for item in offsetItems {
+            if item.frame.maxY > childMaxY {
+                childMaxY = item.frame.maxY
+            }
+        }
+        if childMaxY > contentHeight {
+            contentHeight = childMaxY
+            previousBlock = child
+        }
         result.append(contentsOf: offsetItems)
     }
 

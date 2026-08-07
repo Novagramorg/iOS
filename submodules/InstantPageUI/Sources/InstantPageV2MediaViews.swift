@@ -465,6 +465,16 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
                 autoplay: true
             )
             videoNode.isUserInteractionEnabled = false
+            // Confine the player to the cell. `NativeVideoContentNode.updateLayout` deliberately
+            // inflates its `playerNode` to `bounds.insetBy(dx: -1, dy: -1)` (a seam hack so no hairline
+            // of backdrop shows at the video's edge), and nothing below us clips it: this path builds a
+            // `GalleryVideoDecoration`, whose `contentContainerNode.clipsToBounds` is only set inside
+            // `updateCorners`, which no one calls here. Unclipped, an autoplaying video paints 1pt past
+            // its item frame on every side — which in a `.collage` mosaic is exactly the 1pt gutter
+            // between cells, so a video cell visibly bleeds over its neighbours (image cells don't:
+            // they draw into `boundingSize == bounds.size`). Clipping here rather than on `self` keeps
+            // the wrapper's own `clipsToBounds` tied to `cornerRadius`, as the image view's is.
+            videoNode.clipsToBounds = true
             videoNode.frame = self.bounds
             self.addSubview(videoNode.view)
             self.videoNode = videoNode
