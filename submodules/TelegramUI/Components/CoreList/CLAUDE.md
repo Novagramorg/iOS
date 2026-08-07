@@ -512,45 +512,48 @@ value sits systematically ahead of the screen. That is invisible while one autho
 becomes a compounding drift the moment two do — the chat's hosted item node sets its own box from
 `presentation()`, and the row and the node diverged one-signed up to 3.2pt per streamed token.
 
-**The provider answers for ABSOLUTE properties only — `.height`, `.width`, `.opacity` — and returns
-the presented value.** Those are the same quantity in the same space as the model's, so there is
-nothing to convert and no base to be wrong about. Every ADDITIVE property (`.positionY`, `.positionX`,
-`.viewportOffset`) declines.
+**The provider answers for the ABSOLUTE properties — `.height`, `.width`, `.opacity` — with the
+presented value.** Those are the same quantity in the same space as the model's, so there is nothing to
+convert and no base to be wrong about.
 
-**Why no additive property can be sampled here: the base is gone by the time the provider is asked.**
-An additive contribution is `presented − the base the render tree was committed against`, and the only
-handle on that base is the layer's model value. A pass overwrites it long before any transition
-installs: `render()` writes every window item's NEW settled frame (`CoreVirtualListView.swift:2870`)
-and the transitions install ~550 lines later (`:2022`); the crossing-carry path writes the new position
-explicitly one statement before its own call (`:3012`). So `presented − layer.position.y` is
-`contribution − (this pass's displacement)`, and `transitionPositionOffset` adds the displacement back
-onto `oldSettledY` — **counting it twice**. It shipped exactly once, as a chat whose every row below a
-growing message snapped one whole growth backwards and then animated 2× the distance into place. It
-looked like an anchorPoint problem and was not; rows carry `anchorPoint = (0, 0)`, which is what made
-`presented − model` look like a safe read in the first place.
+**`.positionY` is answered too, but from a snapshot taken at PASS ENTRY, never sampled in the
+provider.** An additive contribution is `presented − the base the render tree was committed against`,
+and the only handle on that base is the layer's model value. A pass overwrites it long before any
+transition installs: `render()` writes every window item's NEW settled frame
+(`CoreVirtualListView.swift:2870`) and the transitions install ~550 lines later (`:2022`); the
+crossing-carry path writes the new position explicitly one statement before its own call (`:3012`). So
+sampling *there* yields `contribution − (this pass's displacement)`, and `transitionPositionOffset`
+adds the displacement back onto `oldSettledY` — **counting it twice**. That shipped once, as a chat
+whose every row below a growing message snapped one whole growth backwards and then animated 2× the
+distance into place. It looked like an anchorPoint problem and was not; rows carry
+`anchorPoint = (0, 0)`, which is what made `presented − model` look like a safe read in the first place.
+`ListAnimationController.capturePresentedPositionOffsets()` takes the snapshot before the pass writes
+anything — the order `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`)
+already uses — and `applyChanges` clears it in the same `defer` as the rest of the per-pass state.
 
-Contrast `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`), which samples
-presentation and THEN writes the model. That order is what makes the additive form work, and CoreList's
-pass cannot adopt it in place — **the only correct way to resume positions from the screen is to hoist
-the sample to before `render()`** (a per-owner snapshot taken where `oldRenderedState` is captured, fed
-to the provider for the pass's duration). Nobody has needed it: the residual it would remove is the
-accepted δ lead named below, and there is no second authority for a row's position to drift against.
-The height divergence that motivated presented-resume at all is height-ONLY, because the chat's hosted
-item node is pinned at frame origin (0, 0) inside its host
-(`CoreListChatHistoryBackend.swift:1537`) — only its extent can disagree with the row's.
+**Why it became necessary: a model-resumed property and a screen-resumed one disagree about where
+"now" is by δ, and the seam the eye watches is their SUM.** A growing row's bottom against the row
+below it is one `.height` (screen) plus one `.positionY`, so every re-target lost `δ × velocity` there
+and it accumulated — measured as a seam opening 1.9pt over ten 20pt growth steps under a released pin,
+~24pt without one, and reported from the device as micro-wobble under a streaming reply. Isolating it
+is a one-line experiment: make `.height` decline too and the seam closes to exactly 0.000. This is what
+retired the old reasoning that position had "no second authority to drift against" — its own row's
+height is one.
 
-`.positionX` and `.viewportOffset` additionally each have their own reason, and a distinct symptom to
-watch for if someone re-enables them. `.positionX`: a horizontal jump on a sidebar/inset change — the
-transition gets bare `contentX` while the layer gets `contentX + positionOffsetX`, and that offset is
-the track's own contribution rather than a within-pass constant. `.viewportOffset`: jitter during a
-FLING — its model is written by the physics engine outside the commit cycle, so `presented − model` can
-straddle a frame. Measure before switching any of the three on.
+`.positionX` and `.viewportOffset` still decline, and the hoist does NOT fix them: their reasons are
+not the ordering one. `.positionX` — the transition gets bare `contentX` while the layer gets
+`contentX + positionOffsetX`, and that offset is the track's own contribution rather than a within-pass
+constant; resolve that disagreement first. `.viewportOffset` — its model is written by the physics
+engine outside the commit cycle, so `presented − model` can straddle a frame, and at fling speed a
+frame is a lot of points. Measure before switching either on.
 
-Windowless layers resolve no presentation layer, so the provider returns nil and the analytic path is
-taken — which is why the existing suite keeps its exact model-vs-CA assertions unchanged.
-`PresentedPositionResumeBaseTests` locks the position arithmetic (one displacement, never two) at both
-the seam and end-to-end through a `CoreVirtualListView` in a real rendering window;
-`PresentationResumeSamplingTests` locks which properties are sampled.
+Windowless layers resolve no presentation layer, so nothing is captured, the provider returns nil and
+the analytic path is taken — which is why the existing suite keeps its exact model-vs-CA assertions
+unchanged. `PresentedPositionResumeBaseTests` locks the position arithmetic (one displacement, never
+two) at both the seam and end-to-end through a `CoreVirtualListView` in a real rendering window;
+`PresentationResumeSamplingTests` locks which properties are sampled; `PresentedResumeSeamTests` locks
+the rendered seam between a growing row and the row below it across in-flight re-targets, which is the
+consequence the arithmetic exists to protect.
 
 **That same property makes the whole suite blind to this provider, and a test to catch it is vacuous
 by default.** `VirtualListFixture` never enters a render tree, so its rows take the analytic path and
@@ -564,13 +567,19 @@ on both and returns nil before its switch otherwise, which is how the original
 "these properties must not be sampled" test passed against the very defect it named. Assert a sampled
 property is non-nil in the same test as the witness. Verify by mutation, not by reading.
 
-**Three forms of this have now been shipped and reverted**, all the same mistake — one subtraction
-mixing two spaces, or two bases. `.viewportOffset` as `presented - settled`: the viewport's model
+**Three forms of this have been shipped and reverted**, all the same mistake — one subtraction mixing
+two spaces, or two bases. `.viewportOffset` as `presented - settled`: the viewport's model
 `bounds.origin.y` is the live scroll position driven by the physics engine, never the settled offset.
 `.positionY` as the presented POSITION with the model subtracting `newSettledY`: the model is handed
 `containerOriginY + localY` (`CoreVirtualListView.swift:2818`) while the layer is handed `localY`
-(`:3121`). `.positionY` as `presented - layer.position.y`: right spaces, wrong base, as above. The
-first two jumped the whole list on device; the third doubled every displacement.
+(`:3121`). `.positionY` as `presented - layer.position.y` **evaluated inside the provider**: right
+spaces, wrong base, as above. The first two jumped the whole list on device; the third doubled every
+displacement.
+
+Note what separates the third from what ships now, because they are the same subtraction: WHEN it is
+evaluated. At pass entry the layer's model value is still the base its render tree was committed
+against; ~570 lines later it is this pass's new settled position. A future change that moves the
+capture later, or adds a second capture after any settled write, re-creates the reverted form exactly.
 
 `CoreAnimationCompiler` is an output renderer, never an authority. It builds through the shared
 `makeCoreListAnimation` factory — a copy of `CAAnimationUtils.makeAnimation`'s branch tree — so what
@@ -905,7 +914,10 @@ Animation an authority.
     measured only on the demo, never on the chat surface. Two consequences follow and are accepted
     rather than fixed: a retarget's residual discontinuity is `velocity × (δ_new − δ_old)` instead of
     the old `velocity × δ`, which is smaller when consecutive passes cost the same and can exceed it
-    (and change sign) when they do not; and an equal-endpoint track completing on its analytic
+    (and change sign) when they do not — this is what the presented-position capture removes for
+    `.positionY` specifically, by resuming that property from the screen rather than from the leading
+    model, and it still applies to any query or property that does not; and an equal-endpoint track
+    completing on its analytic
     deadline now finishes δ BEFORE its CA-driven siblings from the same pass, so a ghost block can
     tear down that much before it finishes moving. Do NOT resolve the `presentedFrame` lead by
     redirecting hosts to `settledFrame(of:)` — that is a different value with its own shipped failure

@@ -51,6 +51,21 @@ final class ListAnimationController {
     private let scheduleAfter: ScheduleAfter
     private let animationInstaller: AnimationInstaller?
     private var bindings: [ListAnimationOwner: WeakLayer] = [:]
+
+    /// Per-PASS snapshot of each bound layer's additive position contribution, taken at pass ENTRY.
+    ///
+    /// `presented - layer.position.y` is the additive contribution only while the layer's model value
+    /// is still the base the render tree was committed against. A pass overwrites it in `render()`
+    /// (`CoreVirtualListView.swift:2870`) long before any transition installs (`:2022`), which is why
+    /// the provider cannot sample this itself — doing so counts the pass's own displacement twice, and
+    /// shipped once as a chat whose every row snapped a whole growth backwards before animating.
+    /// Hoisting the sample to before those writes is the one ordering that makes the form correct, and
+    /// it is the order `CoreListTransition.setPositionY` already uses.
+    ///
+    /// Empty outside a pass, and empty for any layer with no presentation layer — a windowless test
+    /// fixture, or a layer that has never reached a commit — so those fall back to the analytic value
+    /// and every exact assertion in the suite is unchanged.
+    private var passPresentedPositionOffsets: [ListAnimationOwner: CGFloat] = [:]
     private var knownOwners: Set<ListAnimationOwner> = []
     private var pendingCompletions: [UInt64: PendingCompletion] = [:]
     private var nextCompletionSerial: UInt64 = 0
@@ -96,30 +111,33 @@ final class ListAnimationController {
             // ABSOLUTE properties only. An absolute track's presented value IS the track's own
             // quantity, in the track's own space, with nothing to convert.
             //
-            // **No ADDITIVE property is sampled, and the reason is an ordering one that applies to all
-            // three of them.** An additive track's contribution is `presented - the base the render
-            // tree was committed against`, and the only handle on that base is the layer's model
-            // value — which is the right number only for as long as nobody has overwritten it. By the
-            // time this provider is asked, somebody has: a pass writes every window item's NEW settled
-            // frame in `render()` (`CoreVirtualListView.swift:2870`) and installs the transitions ~550
-            // lines later (`:2022`), and the crossing-carry path writes the new position explicitly one
-            // statement before its own call (`:3012`). So `presented - layer.position.y` is
-            // `contribution - (this pass's displacement)`, and `transitionPositionOffset` then adds the
-            // displacement back on — counting it TWICE. Shipped once, as a chat whose rows snapped one
-            // whole growth backwards before animating into place, on every message that changed height.
+            // **An ADDITIVE property's contribution is `presented - the base the render tree was
+            // committed against`, and the only handle on that base is the layer's model value** — the
+            // right number only for as long as nobody has overwritten it. By the time this provider is
+            // asked, somebody has: a pass writes every window item's NEW settled frame in `render()`
+            // (`CoreVirtualListView.swift:2870`) and installs the transitions ~550 lines later
+            // (`:2022`), and the crossing-carry path writes the new position explicitly one statement
+            // before its own call (`:3012`). Sampling HERE therefore yields
+            // `contribution - (this pass's displacement)`, which `transitionPositionOffset` then adds
+            // the displacement back onto — counting it TWICE. Shipped once, as a chat whose rows
+            // snapped one whole growth backwards before animating into place.
             //
-            // Contrast `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`),
-            // which samples presentation and THEN writes the model. That order is what makes the form
-            // work, and CoreList's pass cannot adopt it without hoisting the sample to before
-            // `render()` — see `PresentedPositionResumeBaseTests` for what that would have to buy.
+            // `.positionY` is answered from `passPresentedPositionOffsets` instead: the same quantity,
+            // sampled at pass ENTRY, before any of those writes. That is the order
+            // `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`) already
+            // uses, and it is what `PresentedPositionResumeBaseTests` was written to make safe.
             //
-            // Each additive property additionally has its own reason, and they are different ones:
+            // **Why it became necessary.** A property resumed from the model and one resumed from the
+            // screen disagree about where "now" is by the commit delay δ, and the user-visible seam
+            // between a growing row and the row below it is their SUM: the grower's `.height` (screen)
+            // plus a `.positionY` (model). Every re-target lost δ×velocity there and it accumulated —
+            // measured as a seam opening 1.9pt over ten 20pt growth steps with a pin, ~24pt without
+            // one, reported from the device as micro-wobble under a streaming reply.
+            // `PresentedResumeSeamTests` locks it, and needs a real window: the seam is exact in the
+            // analytic model, so every windowless suite here agrees trivially and sees nothing.
             //
-            //   `.positionY` — the ordering above, plus: there is no measured divergence to fix. What
-            //     motivated presented-resume was the chat's hosted item node setting its own box from
-            //     `presentation()` while the row read the model, and the node's frame origin is pinned
-            //     at (0,0) inside its host (`CoreListChatHistoryBackend.swift:1537`). Only its HEIGHT
-            //     can disagree with the row's. Position has no second authority to drift against.
+            // The other two additive properties stay analytic, for reasons that are NOT the ordering
+            // one and are not fixed by the hoist:
             //
             //   `.positionX` — a horizontal jump when the sidebar opens/closes or insets change. The
             //     transition is handed bare `contentX` (`CoreVirtualListView.swift:1987`) while the
@@ -140,9 +158,27 @@ final class ListAnimationController {
             case .width: return presentation.bounds.size.width
             case .height: return presentation.bounds.size.height
             case .opacity: return CGFloat(presentation.opacity)
-            case .positionY, .viewportOffset, .positionX: return nil
+            case .positionY: return self.passPresentedPositionOffsets[owner]
+            case .viewportOffset, .positionX: return nil
             }
         }
+    }
+
+    /// Samples every bound layer's rendered position offset. MUST be called before the pass writes any
+    /// settled geometry; `CoreVirtualListView.applyChanges` calls it at entry and clears it in the same
+    /// `defer` that clears the rest of the per-pass state.
+    func capturePresentedPositionOffsets() {
+        passPresentedPositionOffsets.removeAll(keepingCapacity: true)
+        for (owner, binding) in bindings {
+            guard let layer = binding.value,
+                  let presentation = layer.presentation()
+            else { continue }
+            passPresentedPositionOffsets[owner] = presentation.position.y - layer.position.y
+        }
+    }
+
+    func clearPresentedPositionOffsets() {
+        passPresentedPositionOffsets.removeAll(keepingCapacity: true)
     }
 
     func setReferenceLayer(_ layer: CALayer?) {

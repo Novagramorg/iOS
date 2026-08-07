@@ -933,7 +933,13 @@ public final class CoreVirtualListView: UIView {
             return
         }
         isApplyingChanges = true
+        // BEFORE anything this pass writes. Every bound layer's model position is still the base its
+        // render tree was committed against, which is the only moment `presented - model` means the
+        // additive contribution — `render()` overwrites it ~570 lines below. Re-entrant calls are
+        // deferred to the scheduler above rather than nested, so one pass owns this snapshot.
+        animationController.capturePresentedPositionOffsets()
         defer {
+            animationController.clearPresentedPositionOffsets()
             isApplyingChanges = false
             reconciledIdentities.removeAll()
         reconciledAttachmentSerials.removeAll()
