@@ -941,6 +941,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(tintTextString),
+                    insets: textRenderInsets
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - lineFrame.maxX - textInsets.left - textInsets.right, height: 100.0)
