@@ -42,6 +42,14 @@ private func setupStyleStack(_ stack: InstantPageTextStyleStack, theme: InstantP
     case .monospace:
         stack.push(.fontFixed(true))
     }
+    switch attributes.font.weight {
+    case .regular:
+        break
+    case .medium:
+        stack.push(.medium)
+    case .semibold:
+        stack.push(.semibold)
+    }
     stack.push(.fontSize(attributes.font.size))
     stack.push(.lineSpacingFactor(attributes.font.lineSpacingFactor))
     if attributes.underline {
