@@ -54,8 +54,12 @@ extension InstantPageBlock {
             return InstantPageBlockSpacing(verticalPadding: 8.0)
         case .divider:
             return InstantPageBlockSpacing(verticalPadding: 4.0)
-        case .image, .video, .slideshow, .collage:
-            return InstantPageBlockSpacing(flushAbove: true, flushBelow: true)
+        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption), let .slideshow(_, caption), let .collage(_, caption), let .map(_, _, _, _, caption):
+            if caption.credit != .empty && caption.credit != .plain("") {
+                return InstantPageBlockSpacing(flushAbove: true, flushBelow: false)
+            } else {
+                return InstantPageBlockSpacing(flushAbove: true, flushBelow: true)
+            }
         default:
             return InstantPageBlockSpacing()
         }
@@ -79,11 +83,16 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         
         var upperIsRawMedia = false
         switch upper {
-        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption), let .slideshow(_, caption), let .collage(_, caption):
+        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption), let .slideshow(_, caption), let .collage(_, caption), let .map(_, _, _, _, caption):
             if caption.credit != .empty && caption.credit != .plain("") {
                 upperSpacing.verticalPadding += 2.0
             } else {
-                upperIsRawMedia = true
+                switch upper {
+                case .image, .video, .slideshow, .collage, .map:
+                    upperIsRawMedia = true
+                default:
+                    break
+                }
             }
             break
         default:
@@ -92,25 +101,37 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         
         var lowerIsRawMedia = false
         switch lower {
-        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption), let .slideshow(_, caption), let .collage(_, caption):
+        case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .document(_, caption), let .audio(_, caption), let .slideshow(_, caption), let .collage(_, caption), let .map(_, _, _, _, caption):
             if caption.credit != .empty && caption.credit != .plain("") {
             } else {
-                lowerIsRawMedia = true
+                switch lower {
+                case .image, .video, .slideshow, .collage, .map:
+                    lowerIsRawMedia = true
+                default:
+                    break
+                }
             }
             break
         default:
             break
         }
         
+        if upperIsRawMedia && lowerIsRawMedia {
+            return 1.0
+        }
+        
         if case .list = kind {
             return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
         } else {
+            if case .list = upper, case .list = lower {
+                return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
+            }
             switch upper {
             case .heading:
                 switch lower {
                 case .heading:
                     return upperSpacing.verticalPadding
-                case .paragraph, .list:
+                case .paragraph, .thinking, .list:
                     return upperSpacing.verticalPadding + lowerSpacing.verticalPadding
                 default:
                     break
@@ -119,12 +140,12 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
                 break
             }
             switch upper {
-            case .paragraph, .list:
+            case .paragraph:
                 switch lower {
                 case .heading:
                     return upperSpacing.verticalPadding + instantPageBaseBlockSpacing + lowerSpacing.verticalPadding
-                case .paragraph, .list:
-                    return 0.0
+                case .paragraph:
+                    return 1.0
                 default:
                     if lowerIsRawMedia {
                         return max(1.0, upperSpacing.verticalPadding + lowerSpacing.verticalPadding + 1.0)
@@ -134,7 +155,7 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
                 break
             }
             switch lower {
-            case .paragraph, .list:
+            case .paragraph, .thinking, .list:
                 if upperIsRawMedia {
                     return max(1.0, upperSpacing.verticalPadding + lowerSpacing.verticalPadding + 1.0)
                 }
@@ -151,16 +172,22 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         return upperSpacing.verticalPadding + instantPageBaseBlockSpacing + lowerSpacing.verticalPadding
     } else if let lower {
         let lowerSpacing = lower.spacing
-        if case .paragraph = lower {
+        switch lower {
+        case .paragraph, .thinking:
             return lowerSpacing.verticalPadding + 2.0
+        default:
+            break
         }
         return lowerSpacing.flushAbove ? 0.0 : lowerSpacing.verticalPadding
     } else if let upper {
         let upperSpacing = upper.spacing
-        if case .paragraph = lower {
-            return upperSpacing.verticalPadding + 3.0
+        switch upper {
+        case .paragraph, .thinking:
+            return upperSpacing.verticalPadding + 2.0
+        default:
+            break
         }
-        switch lower {
+        switch upper {
         case let .image(_, caption, _, _, _), let .video(_, caption, _, _, _), let .slideshow(_, caption), let .collage(_, caption), let .document(_, caption), let .audio(_, caption):
             if caption.credit != .empty && caption.credit != .plain("") {
                 return upperSpacing.verticalPadding + 2.0
