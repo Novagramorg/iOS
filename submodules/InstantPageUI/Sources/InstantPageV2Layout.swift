@@ -2015,8 +2015,8 @@ private func layoutCaptionAndCredit(
         // no caption text
     } else {
         captionIsEmpty = false
-        totalHeight += 14.0
-        y += 14.0
+        totalHeight += 9.0
+        y += 9.0
         let styleStack = InstantPageTextStyleStack()
         setupStyleStack(styleStack, theme: context.theme, category: .caption, link: false)
         let attributedString = attributedStringForRichText(caption.text, styleStack: styleStack, formatDate: context.formatDate)
@@ -2037,8 +2037,8 @@ private func layoutCaptionAndCredit(
         // no credit text
     } else {
         if captionIsEmpty {
-            totalHeight += 14.0
-            y += 14.0
+            totalHeight += 9.0
+            y += 9.0
         } else {
             totalHeight += 10.0
             y += 10.0
@@ -2910,11 +2910,11 @@ private func layoutQuoteText(
 /// V2-only, and deliberately not in the shared constants file: V1 places its numbers through a
 /// different path with its own marker metrics, so shifting the item content there without the
 /// matching marker nudge below would pull its numbered lists out of alignment.
-let instantPageV2NumberedListItemTextwardOffset: CGFloat = 3.0
+let instantPageV2NumberedListItemTextwardOffset: CGFloat = 1.0
 
 /// Textward nudge for a number marker within its column — the partner of the item offset above.
 /// Applied to the marker's whole (full-column) frame, so it moves the right-aligned digits with it.
-let instantPageV2NumberMarkerTextwardOffset: CGFloat = 2.0
+let instantPageV2NumberMarkerTextwardOffset: CGFloat = 5.0
 
 private func layoutList(
     _ listItems: [InstantPageListItem],
@@ -2978,6 +2978,13 @@ private func layoutList(
             // Measure using a UILabel to get the expected label width.
             let styleStack = InstantPageTextStyleStack()
             setupStyleStack(styleStack, theme: context.theme, category: .paragraph, link: false)
+            // A number leading a bold item is bold too, so the marker reads as part of its line.
+            // This must happen BEFORE the measure below: bold digits are wider, and since the
+            // marker carries the string it was measured with, weight and column width stay in step.
+            if let leading = instantPageV2LeadingRichText(of: item),
+               instantPageV2FirstCharacterIsBold(leading) == true {
+                styleStack.push(.bold)
+            }
             let attrStr = attributedStringForRichText(.plain(value), styleStack: styleStack, formatDate: context.formatDate)
             let (textItem, _, _) = layoutTextItem(
                 attrStr,
@@ -3513,6 +3520,68 @@ private struct PendingV2EmojiAttachment {
 ///
 /// An empty `.blocks` and `.unknown` map to an empty paragraph, matching how `layoutList`
 /// normalises an empty item into a single-space `.text` for rendering.
+/// Whether the FIRST rendered character of `text` is bold.
+///
+/// Returns `nil` when the subtree renders no character at all, which is what lets `.concat` skip
+/// empty leading runs and ask the next one instead of answering `false` for `["", **bold**]`.
+///
+/// `bold` is threaded down rather than read off a leaf, because emphasis in `RichText` is a WRAPPER
+/// node: a leaf's weight is a property of what encloses it, not of the leaf.
+private func instantPageV2FirstCharacterIsBold(_ text: RichText, inheritingBold bold: Bool = false) -> Bool? {
+    switch text {
+    case .empty:
+        return nil
+    case let .plain(string):
+        return string.isEmpty ? nil : bold
+    case let .bold(inner):
+        return instantPageV2FirstCharacterIsBold(inner, inheritingBold: true)
+    // Wrappers that carry emphasis or entity meaning but not weight — recurse keeping what we inherited.
+    case let .italic(inner), let .underline(inner), let .strikethrough(inner), let .fixed(inner),
+         let .superscript(inner), let .marked(inner), let .textAutoEmail(inner),
+         let .textAutoPhone(inner), let .textAutoUrl(inner), let .textBankCard(inner),
+         let .textBotCommand(inner), let .textCashtag(inner), let .textHashtag(inner),
+         let .textMention(inner), let .textSpoiler(inner):
+        return instantPageV2FirstCharacterIsBold(inner, inheritingBold: bold)
+    case let .`subscript`(inner):
+        return instantPageV2FirstCharacterIsBold(inner, inheritingBold: bold)
+    case let .url(inner, _, _), let .textDate(inner, _, _):
+        return instantPageV2FirstCharacterIsBold(inner, inheritingBold: bold)
+    case let .email(inner, _), let .phone(inner, _), let .anchor(inner, _), let .textMentionName(inner, _):
+        return instantPageV2FirstCharacterIsBold(inner, inheritingBold: bold)
+    case let .concat(texts):
+        for inner in texts {
+            if let result = instantPageV2FirstCharacterIsBold(inner, inheritingBold: bold) {
+                return result
+            }
+        }
+        return nil
+    // Atoms occupy a character position but have no weight of their own, so they answer with the
+    // emphasis they are wrapped in.
+    case .image, .formula, .textCustomEmoji, .textButton:
+        return bold
+    }
+}
+
+/// The rich text a list item leads with — the run whose weight the number marker should match.
+/// `nil` when the item leads with something that is not text (so the marker keeps its normal weight).
+private func instantPageV2LeadingRichText(of item: InstantPageListItem) -> RichText? {
+    switch item {
+    case let .text(text, _, _):
+        return text
+    case let .blocks(blocks, _, _):
+        switch blocks.first {
+        case let .paragraph(text):
+            return text
+        case let .heading(text, _):
+            return text
+        default:
+            return nil
+        }
+    case .unknown:
+        return nil
+    }
+}
+
 private func instantPageV2ListItemSpacingBlocks(_ item: InstantPageListItem) -> (first: InstantPageBlock, last: InstantPageBlock) {
     switch item {
     case let .text(text, _, _):
