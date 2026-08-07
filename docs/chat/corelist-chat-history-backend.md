@@ -188,10 +188,13 @@ what reads it. Note `ChatMessageItemImpl` assigns `contentSize`/`insets` itself 
 
 > **Superseded 2026-08-06.** The height compensation described below no longer exists. The node's box
 > is animated directly (`ListViewItemNode.hostOwnsFrame` — see "Hosted node geometry"), and CoreList
-> now resumes a changed property from what the layer is **rendering** rather than from its analytic
-> value on the pass clock. The two differ by the pass's commit delay, which is what made the row and
-> its hosted node drift by up to 3.2pt per streamed token and produced the wobble this compensation
-> was invented to hide. See `submodules/TelegramUI/Components/CoreList/CLAUDE.md`. The section is kept
+> now resumes a changed **absolute** property — height, width, opacity — from what the layer is
+> **rendering** rather than from its analytic value on the pass clock. The two differ by the pass's
+> commit delay, which is what made the row and its hosted node drift by up to 3.2pt per streamed token
+> and produced the wobble this compensation was invented to hide. Additive properties, row position
+> included, still resume analytically and must: the pass has already overwritten the base a presented
+> sample would have to be measured against, and sampling one anyway double-counted every displacement.
+> See `submodules/TelegramUI/Components/CoreList/CLAUDE.md`. The section is kept
 > because the reasoning about *why* a decaying displacement cannot be retargeted like an ordinary
 > property is still correct, and still worth reading before adding one.
 

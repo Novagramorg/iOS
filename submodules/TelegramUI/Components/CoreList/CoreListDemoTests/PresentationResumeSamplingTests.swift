@@ -61,20 +61,53 @@ final class PresentationResumeSamplingTests: XCTestCase {
                        63.5, accuracy: 1e-9)
     }
 
-    /// `.viewportOffset` and `.positionX` are not sampled. The viewport's model `bounds.origin.y` is
-    /// the live scroll position rather than the settled offset, and sampling it produced a whole-list
-    /// jump on every re-issue; `.positionX` is simply unmeasured. `.positionY` IS sampled and is read
-    /// as a position by its consumer, so it is not in this list.
-    func testUnsampledPropertiesAreDeclinedByTheInstalledProvider() throws {
+    /// **No additive property is sampled** — the provider answers for absolute properties only.
+    /// An additive contribution is `presented - the base the render tree was committed against`, and a
+    /// pass overwrites that base (`render()` writes the new settled frame) long before any transition
+    /// installs, so the only available handle on it is already the wrong number. `.positionY` was
+    /// sampled for one build and double-counted every pass's displacement; see
+    /// `PresentedPositionResumeBaseTests`.
+    ///
+    /// **This test has to reach the switch, and two things stop it by default** — both of which the
+    /// version this replaced tripped over, leaving it vacuously green against the real defect. The
+    /// provider guards on a bound owner AND on a resolved presentation layer, so a query about an
+    /// unrelated owner, or a bare `CALayer()`, returns nil before the switch is ever consulted. Hence
+    /// the scene-attached window, the bound owner, and the absolute-property assertions below: those
+    /// are the non-vacuity witness, and without them this asserts nothing at all.
+    func testAdditivePropertiesAreDeclinedByTheInstalledProvider() throws {
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "no UIWindowScene in the test host; this test needs a rendering window")
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let host = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 40))
+        window.addSubview(host)
+        window.layoutIfNeeded()
+        CATransaction.flush()
+
         let controller = ListAnimationController()
-        let layer = CALayer()
-        controller.transitionHeight(identity: AnyHashable(UUID()), layer: layer,
+        let identity = AnyHashable(UUID())
+        controller.transitionHeight(identity: identity, layer: host.layer,
                                     oldSettledHeight: 40, newSettledHeight: 140,
                                     transition: .linear(duration: 1.0))
         let provider = try XCTUnwrap(controller.model.presentedValueProvider)
-        let owner = ListAnimationOwner.live(AnyHashable(UUID()))
-        for property in [ListAnimatedProperty.viewportOffset, .positionX] {
+        let owner = ListAnimationOwner.live(identity)
+        XCTAssertNotNil(host.layer.presentation(),
+                        "precondition: the layer resolves a presentation layer, so the provider "
+                        + "reaches its switch instead of returning nil at the guard")
+
+        let compiler = CoreAnimationCompiler(emitsAnimations: false)
+        for property in [ListAnimatedProperty.viewportOffset, .positionX, .positionY] {
+            XCTAssertTrue(compiler.isAdditive(property), "precondition: \(property) is additive")
             XCTAssertNil(provider(owner, property), "\(property) must not be sampled")
+        }
+        for property in [ListAnimatedProperty.width, .height, .opacity] {
+            XCTAssertFalse(compiler.isAdditive(property), "precondition: \(property) is absolute")
+            XCTAssertNotNil(provider(owner, property),
+                            "\(property) must be sampled — and this is what proves the nils above "
+                            + "are a decision rather than a guard firing early")
         }
     }
 
@@ -146,6 +179,66 @@ final class PresentationResumeSamplingTests: XCTestCase {
         let from = try XCTUnwrap((reissued.fromValue as? NSNumber)?.doubleValue)
         XCTAssertEqual(from, Double(presented), accuracy: 5.0,
                        "re-issue started from the model clock (~120) instead of the screen (~\(presented))")
+    }
+
+    /// The same invariant through a real list PASS, which is the shape the test above cannot reach.
+    ///
+    /// It matters separately because a pass overwrites the layer before any transition installs:
+    /// `render()` writes every window item's new settled frame (`CoreVirtualListView.swift:2870`) and
+    /// the transitions install ~550 lines later (`:2022`). That ordering is exactly what made the
+    /// ADDITIVE `.positionY` sample unusable (see `PresentedPositionResumeBaseTests`), and height's
+    /// immunity to it — an absolute property's presented value does not depend on the model value the
+    /// pass just changed — was an argument rather than a test until here.
+    ///
+    /// The two answers are separated by driving two clocks apart, which is what the fixture's synthetic
+    /// clock is for: Core Animation runs on the real clock for ~0.2s (screen ≈ 90) while the model's
+    /// clock is advanced 0.8s (analytic ≈ 210). 120pt apart, so neither can be mistaken for the other.
+    func testReissuedRowHeightInAPassResumesFromTheScreen() throws {
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "no UIWindowScene in the test host; this test needs a rendering window")
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 400)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        let ids = (0..<8).map { _ in UUID() }
+        let items = ids.map { ContentResizableItem(id: $0, contentHeight: 50) }
+        let fixture = VirtualListFixture(viewport: viewport, items: items, emitsCA: true)
+        window.addSubview(fixture.listView)
+        window.layoutIfNeeded()
+        CATransaction.flush()
+
+        func grow(_ height: CGFloat) {
+            var next = items
+            next[0] = ContentResizableItem(id: ids[0], contentHeight: height)
+            fixture.listView.applyChanges(items: next, transition: .linear(duration: 1.0))
+        }
+
+        let grownIdentity = AnyHashable(ids[0])
+        let layer = try XCTUnwrap(fixture.view(identity: grownIdentity)).layer
+        grow(250)
+        CATransaction.flush()
+
+        let deadline = Date().addingTimeInterval(0.2)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        let presented = try XCTUnwrap(layer.presentation()?.bounds.size.height)
+        XCTAssertGreaterThan(presented, 50.5, "precondition: the height animation is in flight")
+        XCTAssertLessThan(presented, 150.0,
+                          "precondition: well short of the model's 0.8s answer (~210)")
+
+        // Only the MODEL's clock moves — no real time passes, so the screen stays where it is.
+        fixture.advance(by: 0.8)
+        grow(450)
+
+        let track = try XCTUnwrap(fixture.heightTrack(identity: grownIdentity))
+        XCTAssertEqual(track.to, 450, accuracy: 1e-6, "precondition: this is the re-issued track")
+        XCTAssertEqual(track.from, presented, accuracy: 5.0,
+                       "the re-issue started from the model clock (~210) instead of the screen "
+                       + "(~\(presented)) — a pass's own frame write must not disturb an absolute "
+                       + "property's presented read")
     }
 
     /// The additive/absolute split must agree with what the compiler actually emits, or a presented

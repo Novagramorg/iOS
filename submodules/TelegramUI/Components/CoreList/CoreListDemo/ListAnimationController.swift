@@ -93,52 +93,54 @@ final class ListAnimationController {
                   let layer = self.bindings[owner]?.value,
                   let presentation = layer.presentation()
             else { return nil }
-            // ABSOLUTE properties only. An additive track's model value is what the presented value
-            // must be measured against, and that is not the same as the settled value for every
-            // track: for a row it is (the engine writes the settled frame and animates additively on
-            // top), but `.viewportOffset`'s model `bounds.origin.y` is driven continuously by the
-            // physics scroll engine (`CoreVirtualListView.swift:717-720`). Sampling it cost a
-            // whole-list jump on every re-issue, measured on device.
+            // ABSOLUTE properties only. An absolute track's presented value IS the track's own
+            // quantity, in the track's own space, with nothing to convert.
             //
-            // Absolute properties are the presented value. ADDITIVE ones are the presented value
-            // MINUS the layer's own model value: that difference is by definition what the additive
-            // animation is contributing right now, which is the track's own quantity. Measuring it
-            // this way needs no coordinate conversion, because both terms are the layer's.
+            // **No ADDITIVE property is sampled, and the reason is an ordering one that applies to all
+            // three of them.** An additive track's contribution is `presented - the base the render
+            // tree was committed against`, and the only handle on that base is the layer's model
+            // value — which is the right number only for as long as nobody has overwritten it. By the
+            // time this provider is asked, somebody has: a pass writes every window item's NEW settled
+            // frame in `render()` (`CoreVirtualListView.swift:2870`) and installs the transitions ~550
+            // lines later (`:2022`), and the crossing-carry path writes the new position explicitly one
+            // statement before its own call (`:3012`). So `presented - layer.position.y` is
+            // `contribution - (this pass's displacement)`, and `transitionPositionOffset` then adds the
+            // displacement back on — counting it TWICE. Shipped once, as a chat whose rows snapped one
+            // whole growth backwards before animating into place, on every message that changed height.
             //
-            // Sampling the presented POSITION instead and letting the model subtract a settled
-            // reference is what jumped the whole list twice: the model is handed
-            // `containerOriginY + localY` (`CoreVirtualListView.swift:2818`) while the layer is handed
-            // `localY` (`:3121`), so that subtraction silently mixes two spaces.
+            // Contrast `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`),
+            // which samples presentation and THEN writes the model. That order is what makes the form
+            // work, and CoreList's pass cannot adopt it without hoisting the sample to before
+            // `render()` — see `PresentedPositionResumeBaseTests` for what that would have to buy.
             //
-            // `.positionX` and `.viewportOffset` stay unsampled. Neither has a measured divergence, so
-            // there may be nothing there at all — but each also has a specific reason the contribution
-            // form is not a drop-in, and they are different reasons. **Symptoms to watch for, and what
-            // to check if you see them:**
+            // Each additive property additionally has its own reason, and they are different ones:
             //
-            //   `.positionX` — a horizontal jump when the sidebar opens/closes or insets change.
-            //     What makes the form safe for `.positionY` is that the layer term and the model term
-            //     differ by `containerOriginY`, constant within a pass, so the `oldSettled -
-            //     newSettled` delta survives. For X that does not hold: the transition is handed bare
-            //     `contentX` (`CoreVirtualListView.swift:1987`) while the layer gets `contentX +
-            //     positionOffsetX` (`:3121`), and `positionOffsetX` is the track's OWN contribution,
-            //     not a constant. Two other sites already treat it as part of the settled position
-            //     (`:3139`, `:3171`). Resolve that disagreement before sampling.
+            //   `.positionY` — the ordering above, plus: there is no measured divergence to fix. What
+            //     motivated presented-resume was the chat's hosted item node setting its own box from
+            //     `presentation()` while the row read the model, and the node's frame origin is pinned
+            //     at (0,0) inside its host (`CoreListChatHistoryBackend.swift:1537`). Only its HEIGHT
+            //     can disagree with the row's. Position has no second authority to drift against.
+            //
+            //   `.positionX` — a horizontal jump when the sidebar opens/closes or insets change. The
+            //     transition is handed bare `contentX` (`CoreVirtualListView.swift:1987`) while the
+            //     layer gets `contentX + positionOffsetX` (`:3121`), and `positionOffsetX` is the
+            //     track's OWN contribution, not a within-pass constant. Two other sites already treat
+            //     it as part of the settled position (`:3139`, `:3171`). Resolve that disagreement
+            //     before sampling.
             //
             //   `.viewportOffset` — jitter during a fling rather than a static jump. `presentation()`
             //     is the last COMMITTED value while the model is whatever the physics engine wrote
-            //     this frame (`PhysicsScrollCore.swift:216`, `PhysicsScrollEngine.swift:341-342`).
-            //     For rows those coincide because the model is written during the pass; here
+            //     this frame (`PhysicsScrollCore.swift:216`, `PhysicsScrollEngine.swift:341-342`), so
             //     `presented - model` can straddle a frame, and at fling speed a frame is a lot of
-            //     points.
+            //     points. Sampling it cost a whole-list jump on every re-issue, measured on device.
             //
-            // In both cases: measure first, the way the height divergence was measured. Reasoning
-            // about additive tracks without measurement is what cost two builds.
+            // In every case: measure first, the way the height divergence was measured. Reasoning
+            // about additive tracks without measurement is what cost three builds.
             switch property {
             case .width: return presentation.bounds.size.width
             case .height: return presentation.bounds.size.height
             case .opacity: return CGFloat(presentation.opacity)
-            case .positionY: return presentation.position.y - layer.position.y
-            case .viewportOffset, .positionX: return nil
+            case .positionY, .viewportOffset, .positionX: return nil
             }
         }
     }
