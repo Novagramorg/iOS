@@ -253,13 +253,25 @@ unzip -q "$OUT_IPA" -d "$TMP_VERIFY"
 EMBEDDED_APP="$(find "$TMP_VERIFY/Payload" -maxdepth 1 -name "*.app" | head -1)"
 EMBEDDED_PROV="$EMBEDDED_APP/embedded.mobileprovision"
 if [ -f "$EMBEDDED_PROV" ]; then
-    GTA=$(security cms -D -i "$EMBEDDED_PROV" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /dev/stdin 2>/dev/null)
+    # PlistBuddy cannot read /dev/stdin — it returns "Error Reading File" and exit 1, which
+    # under `set -e` killed the script here silently, right after the IPA was written. That
+    # meant this whole Distribution-vs-Development guard, the entitlement check below and the
+    # Transporter instructions in Step 8 never ran once. Decode to a real file instead.
+    PROV_PLIST_FILE="$TMP_VERIFY/embedded-profile.plist"
+    security cms -D -i "$EMBEDDED_PROV" > "$PROV_PLIST_FILE" 2>/dev/null || true
+    GTA=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" "$PROV_PLIST_FILE" 2>/dev/null || echo "")
     if [ "$GTA" = "true" ]; then
         rm -rf "$TMP_VERIFY"
         err "Embedded profil Development! App Store rad qiladi. Distribution profillarni qayta tekshiring."
     fi
-    PROV_NAME=$(security cms -D -i "$EMBEDDED_PROV" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin 2>/dev/null)
+    PROV_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$PROV_PLIST_FILE" 2>/dev/null || echo "nomsiz")
     ok "Embedded profil: $PROV_NAME (Distribution)"
+    APS_ENV=$(codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | sed -n 's/.*<key>aps-environment<\/key><string>\([a-z]*\)<\/string>.*/\1/p' | head -1)
+    if [ "$APS_ENV" = "production" ]; then
+        ok "aps-environment: production ✓ (push ishlaydi)"
+    else
+        warn "aps-environment = [${APS_ENV:-yoq}] — push ISHLAMAYDI. publish.sh aps_environment va Distribution profilni tekshiring."
+    fi
     # Communication Notifications entitlement (lock-screen sender avatar) imzolanganini tekshirish
     if codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "usernotifications.communication"; then
         ok "Communication Notifications entitlement: signed ✓ (lock-screen avatar)"
