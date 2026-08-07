@@ -206,7 +206,7 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
             compiler: CoreAnimationCompiler(emitsAnimations: false),
             mediaTime: { clock.now },
             durationFactor: { 1 },
-            animationInstaller: { _, property, _, completion in
+            animationInstaller: { _, property, _, _, completion in
                 if property == .viewportOffset {
                     viewportCompletions.append(completion)
                 }

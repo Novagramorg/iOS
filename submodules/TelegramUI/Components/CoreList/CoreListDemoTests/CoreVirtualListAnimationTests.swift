@@ -1270,6 +1270,10 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             preloadMargin: 0,
             emitsCA: true
         )
+        // Start the clock away from 0 so the rebind assertion below distinguishes the two origin
+        // conventions: at clock 0 an implicit origin and the track's own clock are both 0. Every
+        // other assertion here is clock-relative and unaffected.
+        fixture.advance(by: 2)
         fixture.apply(idItems([0, 99] + Array(1..<20)), duration: 4)
         let original = try XCTUnwrap(fixture.opacityTrack(identity: 99))
         fixture.advance(by: 1)
@@ -1285,7 +1289,10 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let animation = try XCTUnwrap(
             reboundView.layer.animation(forKey: "CoreListAnimation.opacity")
         )
+        // This fixture is never in a window, so Core Animation resolved nothing for the original and
+        // `rebind` falls back to the model's clock — non-vacuous now that the clock started at 2.
         XCTAssertEqual(animation.beginTime, original.startTime)
+        XCTAssertTrue(animation.coreListPreservesPhase)
         XCTAssertEqual(animation.duration, original.duration)
     }
 
@@ -1382,6 +1389,10 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             emitsCA: true
         )
         let identity = ids[0]
+        // See the sibling rebind test: a clock at 0 cannot distinguish an implicit origin from the
+        // track's own clock. The closing assertion compares against `original.value(at: clock.now)`,
+        // so it self-adjusts, and `bounds.height == 100` is settled geometry.
+        fixture.advance(by: 2)
         fixture.apply(items(rowHeight: 100), duration: 8)
         let original = try XCTUnwrap(fixture.heightTrack(identity: identity))
         let originalAnimation = try XCTUnwrap(
@@ -1401,7 +1412,12 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         )
         XCTAssertEqual(fixture.heightTrack(identity: identity), original)
         XCTAssertEqual(rebound.layer.bounds.height, 100, accuracy: 1e-9)
-        XCTAssertEqual(reboundAnimation.beginTime, originalAnimation.beginTime)
+        // The original install is commit-resolved and this fixture never commits, so it carries no
+        // origin at all; the rebind, which must resume mid-phase, falls back to the model's clock.
+        XCTAssertEqual(originalAnimation.beginTime, 0,
+                       "the original install is commit-resolved")
+        XCTAssertEqual(reboundAnimation.beginTime, original.startTime)
+        XCTAssertTrue(reboundAnimation.coreListPreservesPhase)
         XCTAssertEqual(reboundAnimation.duration, originalAnimation.duration)
         XCTAssertEqual(
             (reboundAnimation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -1786,7 +1802,8 @@ final class CoreVirtualListAnimationTests: XCTestCase {
                 forKey: "CoreListAnimation.positionY"
             )
         )
-        XCTAssertEqual(preservedPositionAnimation.beginTime, movedPositionAnimation.beginTime)
+        // `beginTime` no longer witnesses non-replacement (it is commit-resolved); the exact
+        // generation equality below does.
         XCTAssertEqual(preservedPositionAnimation.duration, movedPositionAnimation.duration)
         XCTAssertEqual(
             (preservedPositionAnimation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -1947,7 +1964,12 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             XCTAssertEqual(try XCTUnwrap(try keyframeValues(animation).first),
                            expectedFrom[ordinal], accuracy: 1e-9,
                            "the replacement CA correction must start at the analytic boundary")
-            XCTAssertEqual(animation.beginTime, 1, accuracy: 1e-9)
+            // The full-pipeline lock for the new convention: a track minted in this pass declares
+            // the pass clock (1) and leaves its origin to the commit.
+            XCTAssertEqual(animation.beginTime, 0, accuracy: 1e-9,
+                           "a track minted in this pass leaves its origin to the commit")
+            XCTAssertEqual(try XCTUnwrap(animation.coreListDeclaredStartTime), 1, accuracy: 1e-9)
+            XCTAssertFalse(animation.coreListPreservesPhase)
             XCTAssertEqual(animation.duration, 3, accuracy: 1e-9)
         }
 
@@ -2346,7 +2368,8 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         XCTAssertEqual(after.witness, witness)
         XCTAssertEqual(fixture.ghostBlockTrack(block.id), track)
         let preserved = try XCTUnwrap(render.wrapper.layer.animation(forKey: key))
-        XCTAssertEqual(preserved.beginTime, animation.beginTime, accuracy: 1e-9)
+        // `beginTime` no longer witnesses non-replacement (it is commit-resolved); the exact
+        // generation equality below does.
         XCTAssertEqual(preserved.duration, animation.duration, accuracy: 1e-9)
         XCTAssertEqual(
             (preserved.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value,
@@ -2660,6 +2683,9 @@ final class CoreVirtualListAnimationTests: XCTestCase {
     func testReplacementCrossfadesIndependentOutgoingAndIncomingOwners() throws {
         let fixture = VirtualListFixture(items: idItems([0, 1, 2]), emitsCA: true)
         let outgoing = try XCTUnwrap(fixture.view(identity: 1))
+        // A pass clock of 0 makes the declared-clock equality below `0 == 0`; advance so the two
+        // fades actually have to agree on something.
+        fixture.advance(by: 2)
 
         fixture.apply(idItems([0, 9, 2]), duration: 3)
 
@@ -2674,7 +2700,12 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let incomingFade = try XCTUnwrap(
             fixture.driver.exitAnimation(view: incoming, property: .opacity)
         )
-        XCTAssertEqual(outgoingFade.beginTime, incomingFade.beginTime, accuracy: 1e-9)
+        // The two fades belong to one pass, so they declare one phase axis — the claim `beginTime`
+        // used to carry, now on the metadata that survives having no commit.
+        XCTAssertEqual(try XCTUnwrap(outgoingFade.coreListDeclaredStartTime),
+                       try XCTUnwrap(incomingFade.coreListDeclaredStartTime), accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(outgoingFade.coreListDeclaredStartTime),
+                       fixture.clock.now, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(try keyframeValues(outgoingFade).first), 1, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(try keyframeValues(outgoingFade).last), 0, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(try keyframeValues(incomingFade).first), 0, accuracy: 1e-9)
@@ -2813,8 +2844,8 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             try XCTUnwrap(fixture.opacityTrack(identity: 9)).startTime,
             try XCTUnwrap(fixture.positionTrack(identity: 3)).startTime,
             try XCTUnwrap(fixture.positionTrack(identity: 4)).startTime,
-            outgoingFade.beginTime,
-            incomingFade.beginTime,
+            try XCTUnwrap(outgoingFade.coreListDeclaredStartTime),
+            try XCTUnwrap(incomingFade.coreListDeclaredStartTime),
         ]
         XCTAssertEqual(Set(trackStarts).count, 1,
                        "exit, insertion, move, and survivor tracks must share one pass clock")

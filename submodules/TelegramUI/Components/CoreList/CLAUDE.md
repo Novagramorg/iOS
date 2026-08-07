@@ -127,6 +127,87 @@ The plain `container` holds loaded live views:
 - neither edge loaded: the engine supplies its neutral origin and `applyShift` preserves screen
   position across container rebases.
 
+A row declaring `pinsToBottomEdge` is held against the viewport's bottom edge. **That is two
+mechanisms answering two different questions, and collapsing them into one number is the defect family
+this replaced** — the analogue of `ListViewImpl`'s `experimentalSnapScrollToPinnedItem` +
+`calculatePinToEdgeTopInset`:
+
+- **`holdsPinnedRow` — a latch, answering WHERE the row goes.** Engaged by an explicit `scrollTo` at
+  `lowestPinnedItemIndex` (`ListView.swift:2737`); released on `engine.onWillBeginDragging`
+  (`:879`), on the pinned row leaving the collection, and on a full replace. Release is **permanent**
+  for that pin: scrolling back to the edge does not re-engage it, and only a new `scrollTo` does. The
+  release is the TOUCH, not the movement, so every programmatic offset write — self-update flushes,
+  inset changes — keeps the pin. While engaged, `resolveAnchor` returns a `.resolved` `ResolvedAnchor`
+  on the pinned row (directly below the `scrollTo` branch, so an explicit jump still wins and
+  `preserveVisibleContent` does not). Its placement reads **only the pinned row's own height**, so it
+  has no loading precondition — anchoring on a row loads it.
+- **`bottomEdgePinSlack` — extra top-inset slack, answering whether there is scroll ROOM to rest
+  there.** Positive only while the content above the pin is shorter than the viewport;
+  `max(0, …)`-clamped exactly as `ListView.swift:1134` clamps it. Derived from the built window's own
+  geometry, reading only intra-window offsets so it is answerable inside the very alignment step that
+  consumes it, and folded into an effective top inset at three points: `buildWindow`'s `topEdge`,
+  `loadedEdgeRange`'s `minimum` (the one that makes it survive user scrolling and self-update flushes,
+  since render and rebalance both go through there), and `rebuildFromScratch`'s initial offset.
+  `applyChanges` compensates inset changes against that effective edge rather than the raw inset.
+
+The two are **matched by construction**, which is why the clamp cannot strand the anchor: the pin's
+target sits exactly `visibleArea − span + ext` points past the natural minimum, the same expression the
+slack returns. Positive and the edge extends by precisely that much; negative and the target is already
+inside the natural range.
+
+**Never un-clamp the slack.** It was, briefly, to make the edge hold the row without a latch. A
+negative slack is placement leaking into a scroll-range quantity: it reached `loadedEdgeRange`'s
+minimum and extended the range into empty space, so on device a tall streaming reply could not be
+scrolled down to at all — it overscroll-bounced. **And the slack must stay latch-INDEPENDENT**, since
+release happens at finger-down: a range that shrank with it would move content under the user's finger
+before the drag had travelled a point.
+
+`isStrictlyPinnedToBottomEdge` answers "is the row held", and reads the **latch** plus a presented-frame
+check that the animation has landed. Not geometry: with a latch there is no such thing as a row at the
+edge by coincidence, and the old `slack != 0 || ext > 0` guard reads false in exactly the tall-content
+regime where the pin is most firmly held. `ChatControllerLoadDisplayNode.swift:900-904` uses it to
+decide whether **sending a message drops the pin**, so it is not only the scroll-to-bottom button that
+depends on it.
+
+`appendUntilPinnedRowLoaded` still exists and runs only while the latch is **disengaged** (an engaged
+latch anchors on the pinned row, making it window member zero). Its `window.height < visibleArea` bound
+is **correct** under the clamped slack — once the rows above the pin alone exceed the viewport the
+slack is zero regardless of the pinned row's height. It was patched once on the theory that it was
+defective; the patch made device behaviour worse and was reverted. Do not patch it again.
+
+**Open defect: the released state stutters while content above the pin keeps growing.**
+Device-confirmed 2026-08-06, locked by `testReleasedGrowthIsNotFoughtByTheRetractingEdge`, which is
+**deliberately failing**. The slack shrinks as the reply grows, so the minimum edge RISES; released,
+nothing re-places the content, and the rising edge cancels part of the growth on each pass. Four equal
+100pt growth steps move the pinned row +100, **+40, +60**, +100. Engaged, it cannot happen — the anchor
+re-places the row every pass at a target that provably never sits below the minimum. It is **not** a
+regression from the clamp (the edge rose the same way when the slack was signed); it was simply
+invisible until the released state was first exercised.
+
+Three things are already known not to work, and re-deriving them is expensive:
+
+1. **Collapsing the slack at finger-up** yanks a short-reply chat ~210pt on any small drag-and-lift.
+   Benign only when the slack is already small — i.e. when there was nothing to fix.
+2. **Flooring the declared minimum so it cannot rise past the user** reaches only one of two movers:
+   `buildWindow`'s `topEdge` feeds `alignTopIfUnderfilled`, which yanks the window to the retracted
+   edge *before* the settle clamp runs. Any fix must drive `topEdge` and the edge from one helper.
+3. **"Is the user parked, or is the list tracking its own edge?" is not answerable from geometry.**
+   `render()` writes `declaredEdges` mid-pass, so a test against the declared minimum sees the
+   post-fix state and undoes itself; testing against the natural minimum instead breaks the ordinary
+   unarmed re-pin. It needs the drag EVENT, as the latch does. And even with an event gate, flooring
+   the slack **changes window MEMBERSHIP** — the pinned row was evicted from the loaded window
+   entirely by the fourth growth step. The slack is an input to window construction, not just to
+   placement, and that is the fact to design against.
+
+Also unresolved and **unreproduced**: a mid-stream send reportedly snaps although the pin survives. An
+engaged latch should be immune, so suspect that `isStrictlyPinnedToBottomEdge` reading the PRESENTED
+frame answers false mid-animation, `ChatControllerLoadDisplayNode.swift:900-904` nils
+`pinToTopStableId`, and the `lowestPinnedItemIndex == nil` release fires — which is **permanent**, and
+cannot tell a transient absence from a real one.
+
+`docs/superpowers/specs/2026-08-04-corelist-pin-to-edge-design.md` (telegram-ios repo root) describes
+the **superseded** slack-only mechanism; this section is the current contract.
+
 `activeWindow` is a pure settled `Window` value containing contiguous `(index, view, frame)` items.
 It is the loaded projection of the current item collection, not animation state. Frames are
 container-local; `minY` may be negative, and `render()` places each view at
@@ -393,15 +474,56 @@ through `CAAnimation.setCoreListCompletion`, a copy of Display's `CALayerAnimati
 than to a transaction. See
 `docs/superpowers/specs/2026-07-27-corelist-transition-design.md`.
 
+**A new animation resumes from what the layer is RENDERING, not from the model's analytic value.**
+`ListAnimationModel.resumeValue` consults a provider `ListAnimationController` installs over its layer
+bindings; `value(for:property:at:)` is untouched and still answers settled geometry, which window
+building, `bottomEdgePinSlack` and the `finalize` deadline all depend on. The two are separate methods
+so a future change cannot convert the settled consumers by accident.
+
+The model's clock is the pass clock and Core Animation's is the commit that follows, so the analytic
+value sits systematically ahead of the screen. That is invisible while one authority owns a layer and
+becomes a compounding drift the moment two do — the chat's hosted item node sets its own box from
+`presentation()`, and the row and the node diverged one-signed up to 3.2pt per streamed token.
+
+What the provider returns depends on the track, and the axis is NOT additive vs absolute — it is
+whether the CA property is the same quantity, in the same space, as the model's:
+
+- `.height`, `.width`, `.opacity` — the presented value.
+- `.positionY` — the presented value MINUS the layer's own model value, which is by definition the
+  additive contribution. Reading the presented position directly and letting the model subtract a
+  settled reference mixes two spaces (`containerOriginY + localY` vs `localY`) and jumps the list.
+- `.positionX`, `.viewportOffset` — NOT sampled. Neither has a measured divergence, so there may be
+  nothing there; but each has its own reason the contribution form is not a drop-in, and a symptom to
+  watch for. `.positionX`: a horizontal jump on a sidebar/inset change — the transition gets bare
+  `contentX` while the layer gets `contentX + positionOffsetX`, and that offset is the track's own
+  contribution rather than a within-pass constant, so the delta argument fails. `.viewportOffset`:
+  jitter during a FLING — its model is written by the physics engine outside the commit cycle, so
+  `presented - model` can straddle a frame. Measure before switching either on.
+
+Windowless layers resolve no presentation layer, so the provider returns nil and the analytic path is
+taken — which is why the existing suite keeps its exact model-vs-CA assertions unchanged.
+
+**Two forms of this were shipped and reverted before the right one was found**, both the same mistake —
+mixing a layer-space quantity with a model-space one inside a single subtraction. `.viewportOffset` as
+`presented - settled`: the viewport's model `bounds.origin.y` is the live scroll position driven by the
+physics engine, never the settled offset. `.positionY` as the presented POSITION with the model
+subtracting `newSettledY`: the model is handed `containerOriginY + localY`
+(`CoreVirtualListView.swift:2818`) while the layer is handed `localY` (`:3121`). Each jumped the whole
+list on device.
+
 `CoreAnimationCompiler` is an output renderer, never an authority. It builds through the shared
 `makeCoreListAnimation` factory — a copy of `CAAnimationUtils.makeAnimation`'s branch tree — so what
 CoreList emits is what every other Telegram surface emits: a `CABasicAnimation` with a
 `CAMediaTimingFunction` for bezier curves, and a real `CASpringAnimation` for the two system-spring
 durations (0.5, and 0.3832 on iOS 26). It then adds the model-path properties the factory does not
-set: `beginTime = track.startTime`, `fillMode = .both`, `isRemovedOnCompletion = false`, and the
-generation metadata. Position is additive on `position.x`/`position.y`, width/height absolute on
-`bounds.size.width`/`bounds.size.height`, opacity absolute, all on the track's own curve, start time,
-and already-scaled duration. **`CAKeyframeAnimation` is emitted in exactly two places, and both play a
+set: `fillMode = .both`, `isRemovedOnCompletion = false`, the generation metadata, and — alongside it
+— `CoreListAnimation.startTime` (the model track's declared phase axis) and
+`CoreListAnimation.preservesPhase` (the origin policy the emission chose). It leaves `beginTime`
+UNSET, so Core Animation resolves it at the commit, on the same clock as every other animation in the
+app; the one exception is `ListAnimationController.rebind`, which passes
+`CoreListAnimationOrigin.explicit` (see the gotcha below). Position is additive on
+`position.x`/`position.y`, width/height absolute on `bounds.size.width`/`bounds.size.height`, opacity
+absolute, all on the track's own curve and already-scaled duration. **`CAKeyframeAnimation` is emitted in exactly two places, and both play a
 baked trajectory rather than a curve:** the physics deceleration flights (`KeyframeFlight`,
 `Trajectory+Keyframe`, the two physics engines), and attachment flight tracks
 (`CoreVirtualListView+Attachments.installAttachmentFlightTracks`), which compose the same trajectory
@@ -523,6 +645,7 @@ protocol CoreListItem: AnyObject {
     func view() -> UIView & CoreListItemView
     func isEqual(to other: CoreListItem) -> Bool
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition)
+    var pinsToBottomEdge: Bool { get }
 }
 
 protocol CoreListItemView: AnyObject {
@@ -538,6 +661,12 @@ default** (equality-by-identity is almost never correct in production, so every 
 equality explicitly); an identity-only item still opts in by writing `isEqual` to compare just its
 identity field(s). `apply(to:transition:)` updates a reused view in place (default: no-op).
 `update(width:transition:)` lays out the row and returns its measured height.
+
+`pinsToBottomEdge` declares that this row is held against the viewport's BOTTOM edge, with the list
+declaring whatever extra top-inset slack that needs (see "Virtual content and settled window"). It
+defaults to `false` — honest rather than conservative, unlike `isEqual`, since a row that says nothing
+about pinning is not pinned. When several loaded rows declare it the LOWEST index wins, matching
+`ListViewImpl`'s `lowestPinnedIndex`.
 
 Both receive the enclosing pass's `CoreListTransition`, so a row can animate its own internals on the
 same curve and duration as its outer geometry. It is non-immediate in exactly two cases, both meaning
@@ -678,8 +807,53 @@ Animation an authority.
   `convertTime(CACurrentMediaTime(), from: nil)`. Layer-local time, not raw media time, preserves
   analytic/CA agreement when Simulator Slow Animations changes layer speed. Sampling once per row
   creates clock skew and breaks cross-property transaction guarantees.
-- Every emitted CA keyframe uses the analytic track's explicit `beginTime`; allowing Core Animation
-  to choose commit time introduces phase drift at retarget boundaries.
+- **Every emitted CA animation leaves `beginTime` IMPLICIT, so the commit resolves it.** That is what
+  puts a CoreList track on the same clock as everything a host can write — `ContainedViewLayoutTransition`
+  / `CAAnimationUtils`, and CoreList's own executor path (`CALayer.animate` stamps an origin only in
+  its unreachable `delay != 0` branch). Measured: every animation added in one runloop turn resolves
+  to one origin, the model path and the executor path included, so a pass's tracks stay mutually exact.
+  The model's own phase axis rides `CoreListAnimation.startTime` metadata instead, which is exact with
+  no commit — needed because a layer outside the render tree never resolves an origin at all
+  (`beginTime` stays 0 forever, `presentation()` nil), which is every windowless test fixture.
+  - **The exception is `rebind`**, re-emitting an in-flight track onto another layer: `fillMode = .both`
+    holds `from` before-begin, so an implicit origin would replay the whole curve. It stamps
+    `CoreListAnimationOrigin.explicit` with the origin Core Animation RESOLVED for the animation it
+    replaces (read back off the layer, or remembered by `captureResolvedOrigins` when the binding was
+    dropped), **not** `track.startTime` — the two differ by the producing pass's commit delay, and
+    stamping the model's clock would jump the curve forward by that much on every rebind and desync
+    the row from its still-bound neighbours.
+  - **Two sites must NOT be swept into a grep-driven change here**, both deliberately past origins on
+    a different clock: the attachment flight keyframes (`CoreVirtualListView+Attachments`, key
+    `coreListAttachmentFlight`) and the physics trajectories (`PhysicsScrollEngine`,
+    `Trajectory+Keyframe`, `SplicedTrajectory`), which re-install with a past origin on every rebake
+    precisely so a mid-flight rebake resumes at its current phase.
+  - **The residual, named:** the model now LEADS the screen by the commit delay δ for any query that
+    compares a model sample against the screen at the same instant (`presentedFrame(of:)`). δ is the
+    rest of `applyChanges` plus the rest of the runloop turn — it contains the pass's own main-thread
+    cost, so it is neither constant nor bounded by a measurement of one pass shape; it has been
+    measured only on the demo, never on the chat surface. Two consequences follow and are accepted
+    rather than fixed: a retarget's residual discontinuity is `velocity × (δ_new − δ_old)` instead of
+    the old `velocity × δ`, which is smaller when consecutive passes cost the same and can exceed it
+    (and change sign) when they do not; and an equal-endpoint track completing on its analytic
+    deadline now finishes δ BEFORE its CA-driven siblings from the same pass, so a ghost block can
+    tear down that much before it finishes moving. Do NOT resolve the `presentedFrame` lead by
+    redirecting hosts to `settledFrame(of:)` — that is a different value with its own shipped failure
+    mode (see "Row geometry is a pair"). The only real fix shares one commit-resolved origin between
+    the model and CA, which nothing does today.
+  - **Do NOT re-stamp `ListAnimationTrack.startTime` to the resolved commit time.** `install` arms
+    `scheduleAnalyticCompletion(deadline: startTime + duration)` at the moment of install and never
+    re-reads the track, and that timer is one-shot; a `startTime` moved forward makes it fire early,
+    `model.complete` returns false, `finalize` re-inserts the pending, and nothing in production ever
+    re-drives it. The victims are exactly the tenants that deadline exists for — the non-fading
+    full-replace carousel exit strip and the `viewportOffset: 0 -> 0` re-target — and the whole suite
+    is blind to it, because `VirtualListFixture` defaults to `emitsCA: false` and drives teardown from
+    the model clock.
+  - `InsetRectOverlayAnimator` is `.atCommit` too, and it pays a cost the model path does not: it
+    samples `from` from the RENDER SERVER (`layer.presentation()`), so an implicit origin costs it a
+    `velocity × δ` step on every retarget of an in-flight guide, where the explicit stamp was
+    continuous by construction. Accepted — the guide must share the list's clock, and every other
+    presentation-sampled emitter in the module already pays it. Do not "fix" a visible step there by
+    re-stamping.
 - Duration scaling happens only in `ListAnimationController`; the compiler receives the final
   duration and must not scale again.
 - Same-target position and extent writes must return before touching the model, CA key, completion ledger,

@@ -206,8 +206,35 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
     open func longTapped() {
     }
     
+    /// Frame-ownership override for hosts that position this node themselves.
+    ///
+    /// By default this node writes its OWN `frame` and `bounds` as a side effect of being told its
+    /// layout: assigning `contentSize` or `insets` resizes the frame (`:contentSize`/`:insets`
+    /// below), and `contentSize` is not even stored — it round-trips through the frame, which is what
+    /// derives `_contentSize`. Reporting a new layout is therefore indistinguishable from committing
+    /// it, and a host cannot animate the box: by the time it sees the new height the old one is
+    /// already gone, and every frame setter it might use no-ops on an equality guard
+    /// (`CoreListTransition.setFrame`, `ContainedViewLayoutTransition.updateFrame(node:)`,
+    /// `CALayer.animateFrame`) because the destination is already installed.
+    ///
+    /// With this set, `contentSize` and `insets` are plain stored properties and the node writes no
+    /// geometry of its own. The host owns `frame`/`bounds` outright, and owes the node two things it
+    /// would otherwise have done for itself: the box, and the content-offset convention
+    /// `bounds.origin.y == -insets.top` that the item's own layout is expressed against.
+    ///
+    /// Only the `-insets.top` term, because the other two summands of that expression are inert here.
+    /// `contentOffset` is assigned nowhere in the codebase, and `transitionOffset` is written only by
+    /// `ListViewImpl` (`ListView.swift:2516/2557/2584/2597/3064/3068`) and by its own display-link
+    /// animation — neither of which runs under a host that sets this.
+    ///
+    /// Defaults to false: `ListViewImpl` depends on the self-writes.
+    public var hostOwnsFrame: Bool = false
+
     public final var insets: UIEdgeInsets = UIEdgeInsets() {
         didSet {
+            if self.hostOwnsFrame {
+                return
+            }
             let effectiveInsets = self.insets
             self.frame = CGRect(origin: self.frame.origin, size: CGSize(width: self.contentSize.width, height: self.contentSize.height + effectiveInsets.top + effectiveInsets.bottom))
             let bounds = self.bounds
@@ -220,13 +247,23 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
         get {
             return self._contentSize
         } set(value) {
+            if self.hostOwnsFrame {
+                // Stored outright. Without the frame round-trip there is nothing else to derive it
+                // from, and the host reads it back (as the content-box term of the row's height and
+                // of the visibility fraction) before it has applied any geometry.
+                self._contentSize = value
+                return
+            }
             let effectiveInsets = self.insets
             self.frame = CGRect(origin: self.frame.origin, size: CGSize(width: value.width, height: value.height + effectiveInsets.top + effectiveInsets.bottom))
         }
     }
-    
+
     private var contentOffset: CGFloat = 0.0 {
         didSet {
+            if self.hostOwnsFrame {
+                return
+            }
             let effectiveInsets = self.insets
             let bounds = self.bounds
             self.bounds = CGRect(origin: CGPoint(x: bounds.origin.x, y: -effectiveInsets.top + self.contentOffset + self.transitionOffset), size: bounds.size)
@@ -235,6 +272,9 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
     
     public var transitionOffset: CGFloat = 0.0 {
         didSet {
+            if self.hostOwnsFrame {
+                return
+            }
             let effectiveInsets = self.insets
             let bounds = self.bounds
             self.bounds = CGRect(origin: CGPoint(x: bounds.origin.x, y: -effectiveInsets.top + self.contentOffset + self.transitionOffset), size: bounds.size)
@@ -282,9 +322,14 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
             super.frame = value
             self._bounds.size = value.size
             self._position = CGPoint(x: value.midX, y: value.midY)
-            let effectiveInsets = self.insets
-            self._contentSize = CGSize(width: value.size.width, height: value.size.height - effectiveInsets.top - effectiveInsets.bottom)
-            
+            // Under `hostOwnsFrame` the layout is the authority and the box is the host's rendering of
+            // it, so the two are allowed to disagree — that disagreement is what an animated box IS.
+            // Re-deriving here would let the frame overwrite the layout the item just reported.
+            if !self.hostOwnsFrame {
+                let effectiveInsets = self.insets
+                self._contentSize = CGSize(width: value.size.width, height: value.size.height - effectiveInsets.top - effectiveInsets.bottom)
+            }
+
             if previousSize != value.size {
                 if let headerAccessoryItemNode = self.headerAccessoryItemNode {
                     self.layoutHeaderAccessoryItemNode(headerAccessoryItemNode)
@@ -301,9 +346,12 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
             
             super.bounds = value
             self._bounds = value
-            let effectiveInsets = self.insets
-            self._contentSize = CGSize(width: value.size.width, height: value.size.height - effectiveInsets.top - effectiveInsets.bottom)
-            
+            // See the note in the `frame` setter.
+            if !self.hostOwnsFrame {
+                let effectiveInsets = self.insets
+                self._contentSize = CGSize(width: value.size.width, height: value.size.height - effectiveInsets.top - effectiveInsets.bottom)
+            }
+
             if previousSize != value.size {
                 if let headerAccessoryItemNode = self.headerAccessoryItemNode {
                     self.layoutHeaderAccessoryItemNode(headerAccessoryItemNode)

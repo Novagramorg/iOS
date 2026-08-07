@@ -38,7 +38,11 @@ final class InsetRectOverlayAnimatorTests: XCTestCase {
         XCTAssertFalse(width.isAdditive)
         XCTAssertFalse(height.isAdditive)
         for track in [x, y, width, height] {
-            XCTAssertEqual(track.beginTime, 3, accuracy: 1e-9)
+            // This layer is never in a window, so the implicit origin is deterministically 0. What the
+            // assertion was actually checking — that the animator handed the compiler the clock it
+            // was given — is the declared phase axis, and that is exact with no commit.
+            XCTAssertEqual(track.beginTime, 0, accuracy: 1e-9)
+            XCTAssertEqual(try XCTUnwrap(track.coreListDeclaredStartTime), 3, accuracy: 1e-9)
             XCTAssertEqual(track.duration, 0.5, accuracy: 1e-9)
         }
         XCTAssertEqual(try XCTUnwrap(try values(x).first).doubleValue, -20, accuracy: 1e-6)
@@ -79,7 +83,8 @@ final class InsetRectOverlayAnimatorTests: XCTestCase {
         XCTAssertNotEqual(replacement, first)
         let y = try animation(.positionY, on: layer)
         XCTAssertEqual(try XCTUnwrap(try values(y).first).doubleValue, 20, accuracy: 1e-6)
-        XCTAssertEqual(y.beginTime, 1.2, accuracy: 1e-9)
+        XCTAssertEqual(y.beginTime, 0, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(y.coreListDeclaredStartTime), 1.2, accuracy: 1e-9)
 
         animator.complete(property: .positionY, generation: first, on: layer)
         XCTAssertEqual(animator.generation(for: .positionY, on: layer), replacement)
