@@ -53,8 +53,8 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                         innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil, spoiler: item.isSpoiler))
                     case .video:
                         innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false, spoiler: item.isSpoiler))
-                    case .audio, .location:
-                        // Audio/location are documented as permanently single-item; never grouped into a collage.
+                    case .audio, .location, .document:
+                        // Audio/location/document are permanently single-item; never grouped into a collage.
                         continue
                     }
                 }
@@ -64,8 +64,9 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                 }
             } else if let resolved = media[mediaBlock.mediaID] {
                 switch mediaBlock.kind {
-                case .image, .video, .audio:
-                    // Media.id is optional on the protocol; real TelegramMedia* image/video/audio always return non-nil.
+                case .image, .video, .audio, .document:
+                    // Media.id is optional on the protocol; real TelegramMedia* image/video/audio/document
+                    // always return non-nil.
                     if let mediaId = resolved.id {
                         pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
                         // The single-item convenience accessors (`mediaBlock.mediaID`/`.kind`) resolve to `items.first`;
@@ -77,6 +78,10 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                         case .audio:
                             // music & voice both → `.audio`; the file's `.Audio(isVoice:)` attribute drives the render.
                             pageBlocks.append(.audio(id: mediaId, caption: caption))
+                        case .document:
+                            // A caption-less block, so `caption` is always .empty here — the field is
+                            // carried anyway because the wire block has one.
+                            pageBlocks.append(.document(id: mediaId, caption: caption))
                         default:
                             pageBlocks.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false, spoiler: spoiler))
                         }

@@ -135,7 +135,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let oldViews = viewByIdentity(fixture.listView)
 
         fixture.listView.applyChanges(
-            scrollTo: (index: 100, pointOffset: 200),
+            scrollTo: .init(index: 100, pointOffset: 200),
             transition: .easeInOut(duration: 0)
         )
 
@@ -160,7 +160,7 @@ final class CoreVirtualListCoreTests: XCTestCase {
 
         let bottom = VirtualListFixture(items: source)
         bottom.listView.applyChanges(
-            scrollTo: (index: 49, pointOffset: 750),
+            scrollTo: .init(index: 49, pointOffset: 750),
             transition: .easeInOut(duration: 0)
         )
         let lastIdentity = source[48].identity
@@ -277,12 +277,12 @@ final class CoreVirtualListCoreTests: XCTestCase {
         )
 
         fixture.listView.applyChanges(
-            scrollTo: (index: 50, pointOffset: 0),
+            scrollTo: .init(index: 50, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         fixture.advance(by: 0.25)
         fixture.listView.applyChanges(
-            scrollTo: (index: 0, pointOffset: 0),
+            scrollTo: .init(index: 0, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
 
@@ -323,8 +323,8 @@ final class CoreVirtualListCoreTests: XCTestCase {
         let uikitViews = viewByIdentity(uikit.listView)
         let physicsViews = viewByIdentity(physics.listView)
 
-        uikit.listView.applyChanges(scrollTo: (index: 40, pointOffset: 125), transition: .easeInOut(duration: 0))
-        physics.listView.applyChanges(scrollTo: (index: 40, pointOffset: 125), transition: .easeInOut(duration: 0))
+        uikit.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 125), transition: .easeInOut(duration: 0))
+        physics.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 125), transition: .easeInOut(duration: 0))
         var changed = source
         changed.insert(items([999])[0], at: 43)
         changed.remove(at: 38)

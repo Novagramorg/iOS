@@ -285,7 +285,10 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let commitEmojiInteraction: (EngineMessage.Id, String, EmojiInteraction, TelegramMediaFile) -> Void
     public let openLargeEmojiInfo: (String, String?, TelegramMediaFile) -> Void
     public let openJoinLink: (String) -> Void
-    public let openWebView: (String, String, Bool, ChatOpenWebViewSource) -> Void
+    /// The trailing promise reports the open request's progress. Supply one from a surface that can
+    /// show the loading state on the button itself (an InstantPage V2 pill); pass nil from a surface
+    /// that cannot, and `openWebAppImpl` falls back to the `.requestInProgress` title panel.
+    public let openWebView: (String, String, Bool, ChatOpenWebViewSource, Promise<Bool>?) -> Void
     public let activateAdAction: (EngineMessage.Id, Promise<Bool>?, Bool, Bool) -> Void
     public let adContextAction: (EngineRawMessage, ASDisplayNode, ContextGesture?) -> Void
     public let removeAd: (Data) -> Void
@@ -470,7 +473,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         commitEmojiInteraction: @escaping (EngineMessage.Id, String, EmojiInteraction, TelegramMediaFile) -> Void,
         openLargeEmojiInfo: @escaping (String, String?, TelegramMediaFile) -> Void,
         openJoinLink: @escaping (String) -> Void,
-        openWebView: @escaping (String, String, Bool, ChatOpenWebViewSource) -> Void,
+        openWebView: @escaping (String, String, Bool, ChatOpenWebViewSource, Promise<Bool>?) -> Void,
         activateAdAction: @escaping (EngineMessage.Id, Promise<Bool>?, Bool, Bool) -> Void,
         adContextAction: @escaping (EngineRawMessage, ASDisplayNode, ContextGesture?) -> Void,
         removeAd: @escaping (Data) -> Void,

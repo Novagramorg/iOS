@@ -128,9 +128,11 @@ public extension ReplyMarkupButtonAction {
 }
 
 extension ReplyMarkupButton {
+    // `style` sits at flags bit 10 on both `keyboardButton` and `keyboardInlineButton` — read once
+    // per initializer rather than per-behaviour as the pre-unification code did. The two are separate
+    // TL types (and so separate initializers), but they collapse to the same domain button here;
+    // `ReplyMarkupMessageFlags.inline` on the attribute is what distinguishes them downstream.
     init(apiButton: Api.KeyboardButton) {
-        // `style` sits at flags bit 10 on both constructors — read once here rather than
-        // per-behaviour as the pre-unification code did.
         switch apiButton {
         case let .keyboardButton(data):
             let mapped = ReplyMarkupButtonAction.from(apiType: data.type)
@@ -140,6 +142,11 @@ extension ReplyMarkupButton {
                 action: mapped.action,
                 style: data.style.flatMap(ReplyMarkupButton.Style.init(apiStyle:))
             )
+        }
+    }
+
+    init(apiInlineButton: Api.KeyboardInlineButton) {
+        switch apiInlineButton {
         case let .keyboardInlineButton(data):
             let mapped = ReplyMarkupButtonAction.from(apiType: data.type)
             self.init(
@@ -158,6 +165,14 @@ extension ReplyMarkupRow {
             case let .keyboardButtonRow(keyboardButtonRowData):
                 let buttons = keyboardButtonRowData.buttons
                 self.init(buttons: buttons.map { ReplyMarkupButton(apiButton: $0) })
+        }
+    }
+
+    init(apiInlineRow: Api.KeyboardInlineButtonRow) {
+        switch apiInlineRow {
+            case let .keyboardInlineButtonRow(keyboardInlineButtonRowData):
+                let buttons = keyboardInlineButtonRowData.buttons
+                self.init(buttons: buttons.map { ReplyMarkupButton(apiInlineButton: $0) })
         }
     }
 }
@@ -190,7 +205,7 @@ extension ReplyMarkupMessageAttribute {
             case let .replyInlineMarkup(replyInlineMarkupData):
                 let markupFlags = replyInlineMarkupData.flags
                 let apiRows = replyInlineMarkupData.rows
-                rows = apiRows.map { ReplyMarkupRow(apiRow: $0) }
+                rows = apiRows.map { ReplyMarkupRow(apiInlineRow: $0) }
                 if (markupFlags & (1 << 5)) != 0 {
                     flags.insert(.setupReply)
                 }

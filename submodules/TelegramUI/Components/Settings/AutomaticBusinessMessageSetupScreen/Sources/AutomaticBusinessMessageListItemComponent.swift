@@ -287,7 +287,7 @@ final class GreetingMessageListItemComponent: Component {
                         current.insets = layout.insets
                         current.frame = nodeFrame
                         
-                        apply(ListViewItemApply(isOnScreen: true))
+                        apply(ListViewItemApply())
                     })
             } else {
                 var outItemNode: ListViewItemNode?
@@ -298,7 +298,7 @@ final class GreetingMessageListItemComponent: Component {
                     neighbors: .none,
                     completion: { node, apply in
                         outItemNode = node
-                        apply().1(ListViewItemApply(isOnScreen: true))
+                        apply().1(ListViewItemApply())
                     }
                 )
                 itemNode = outItemNode

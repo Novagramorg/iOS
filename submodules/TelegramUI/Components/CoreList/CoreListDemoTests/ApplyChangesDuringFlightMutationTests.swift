@@ -112,7 +112,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 let fixture = fixture(mode: mode)
                 startFlight(fixture)
                 fixture.listView.applyChanges(
-                    scrollTo: (index: 5, pointOffset: 0),
+                    scrollTo: .init(index: 5, pointOffset: 0),
                     transition: .easeInOut(duration: 0.3)
                 )
                 XCTAssertFalse(fixture.engine.isDecelerating, "\(mode) scrollTo must halt motion")
@@ -138,7 +138,7 @@ final class ApplyChangesDuringFlightMutationTests: XCTestCase {
                 itemCount: 200, itemHeight: 50,
                 viewport: CGSize(width: 390, height: 300),
                 preloadMargin: 100, decelerationMode: mode)
-            fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+            fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                           transition: .easeInOut(duration: 4))
             fixture.tick(dt: 1)
             let before = try XCTUnwrap(fixture.viewportTrack)

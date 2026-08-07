@@ -51,9 +51,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         pan.onTouchDown = { [weak self] in self?.sawDrag = false }
         pan.onTouchUp = { [weak self] in self?.handleTouchUp() }
         // Grab the scroll the instant a finger lands on MOVING content (UIScrollView's no-deadzone feel).
-        // The forced .began runs handlePan(.began) → the catch; and because the engine (pan's delegate)
-        // makes content recognizers require this pan to fail, a begun pan absorbs the stopping tap
-        // instead of it falling through to the row. At rest the closure is false → normal hysteresis.
+        // The forced .began runs handlePan(.began) → the catch; and because the engine grants no
+        // simultaneity, UIKit's plain exclusion FAILS the content recognizer as the pan begins, so the
+        // stopping tap is absorbed instead of falling through to the row. At rest the closure is
+        // false → normal hysteresis, and the content recognizer wins on its own.
         pan.shouldBeginImmediately = { [weak self] in
             guard let self else { return false }
             return self.flight != nil || self.core.isDecelerating
@@ -68,6 +69,9 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         get { core.onScroll }
         set { core.onScroll = newValue }
     }
+
+    /// Published only in `.keyframe` mode, where the render server plays the trajectory.
+    var onFlightChanged: ((ScrollFlight?) -> Void)?
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
     /// The physics scroll position, advanced once per frame by whichever driver is running — NEVER a sample of
@@ -119,6 +123,13 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             host.bounds.origin.y += dy
             core.applyShiftPhysicsOnly(dy)
             flight?.noteShift(dy)
+            // Republish: a consumer composing against the trajectory must learn the new base, or it
+            // keeps positioning against where the flight WOULD have landed before the re-base.
+            if let f = flight {
+                onFlightChanged?(ScrollFlight(trajectory: f.trajectory,
+                                              beginTime: f.startTime,
+                                              coordinateShift: f.coordinateShift))
+            }
             if changesShape {
                 noteFlightEdgesChanged()
             }
@@ -250,6 +261,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             // isDecelerating doesn't stay stale (matches .stepped's settle + TestScrollEngine).
             core.setOffset(f.trajectory.finalOffset)
             core.cancelDeceleration()
+            onFlightChanged?(nil)
             onScroll?(f.trajectory.finalOffset)
             return
         }
@@ -267,6 +279,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             self.finalizeFlight()
         }
         host.layer.add(flightAnim, forKey: Self.flightKey)
+        onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: now))
         startSamplingLink()
     }
 
@@ -309,6 +322,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             self.finalizeFlight()
         }
         host.layer.add(flightAnim, forKey: Self.flightKey)
+        onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: f.startTime))
     }
 
     /// Catch an in-flight `.keyframe` deceleration: read the live offset, snap the model (physics + host
@@ -329,6 +343,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         flight = nil
         flightGeneration &+= 1
         host.layer.removeAnimation(forKey: Self.flightKey)
+        onFlightChanged?(nil)
     }
 
     /// Catch an in-flight deceleration when fingers REST on the list. Trackpad delivers no touch-down,
@@ -354,6 +369,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         core.setOffset(f.settledOffset)            // settle at the LIST-coord rest (finalOffset + accrued shift)
         core.cancelDeceleration()                  // idle the core (phase → .idle) — matches TestScrollEngine
         flight = nil
+        onFlightChanged?(nil)                      // BEFORE onScroll: a consumer re-entering must see no flight
         onScroll?(core.offset)
     }
 
@@ -395,38 +411,57 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
 }
 
 extension PhysicsScrollEngine: UIGestureRecognizerDelegate {
-    /// While content is MOVING, a content recognizer (one whose view lives under `host` — e.g. a
-    /// `DemoRow`'s tap) must wait for our pan to fail. A finger landing on moving content makes the pan
-    /// recognize immediately (forced `.began` via `shouldBeginImmediately`), and a begun pan never
-    /// fails → the content recognizer is permanently prevented, so the stopping tap is absorbed.
-    /// Scoped to descendants of `host` so it never interferes with system gestures (screen-edge pan).
+    /// **Never grant simultaneity to a content recognizer.** UIKit resolves simultaneity as *either
+    /// delegate says yes*, so a grant here overrides a refusal written in a file this one never
+    /// mentions — a nested scroll view's UIKit default, or `ContextGesture`'s explicit
+    /// `other is UIPanGestureRecognizer -> false` (`Display/Source/ContextGesture.swift:66`). Our pan
+    /// IS a pan, so anything refusing pans is refusing us, and neither refusal can be seen from here.
+    /// That is what makes a grant unfindable from the content side, and it shipped twice: first as an
+    /// in-bubble carousel and the chat history both scrolling on one diagonal drag, then as a bubble's
+    /// long-press running its press animation and never activating.
     ///
-    /// **The motion gate is load-bearing, not an optimization.** Absorbing the stopping tap is the
-    /// rule's only purpose, and that can only arise while content moves. Applying it at rest breaks
-    /// every press-and-hold recognizer under the list — most visibly the chat bubble's `ContextGesture`
-    /// (long-press → context menu). Such a recognizer must recognize *while the finger is still down*,
-    /// but at rest our pan is merely `.possible` and does not fail until lift, so UIKit cannot release
-    /// the dependency and tears the recognizer down instead: no activation, no cancellation callback,
-    /// just a `Gestures`-internal `_resetGestureRecognizer`. A tap is immune (it recognizes on lift, the
-    /// same moment the pan fails), which is why this went unnoticed — the demo's rows only tap.
+    /// Denying leaves plain UIKit exclusion, which is the whole of `ListViewImpl`'s mechanism
+    /// (`ListViewScroller` denies everything but `ListViewTapGestureRecognizer`,
+    /// `Display/Source/ListViewScroller.swift:15`). Exclusion is also what absorbs the stopping tap:
+    /// a pan force-begun on moving content FAILS the content recognizer at touch-down. There is
+    /// deliberately no `shouldBeRequiredToFailBy` counterpart — a failure dependency HOLDS a
+    /// recognizer instead of failing it, and a pan that force-began never fails until lift, so the
+    /// held recognizer sits in `.possible` while its own timer-driven animation runs to completion.
     ///
-    /// At rest the recognizer instead wins on its own and cancels our pan itself (`ContextGesture`
-    /// calls `cancelParentGestures` on activation), which is exactly how `ListViewImpl`'s plain
-    /// `UIScrollView` behaves. The condition matches `shouldBeginImmediately` / `shouldReceive(event:)`,
-    /// and UIKit queries this delegate at touch-down, so it is evaluated at the right instant.
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                           shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-        guard gestureRecognizer === pan, other.view?.isDescendant(of: host) ?? false else {
-            return false
-        }
-        return flight != nil || core.isDecelerating
-    }
-
-    /// Let the pan's forced-immediate `.began` coexist with whatever content recognizer shares the
-    /// touch, so grabbing/dragging moving content is never blocked by, e.g., a row's tap recognizer.
+    /// `false` is UIKit's default, so this method is redundant in the strict sense. It stays as the
+    /// marker in the exact spot both bugs were introduced, and because the policy tests need
+    /// something to call.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        gestureRecognizer === pan && (other.view?.isDescendant(of: host) ?? false)
+        return false
+    }
+
+    /// Ported from `ListViewScroller.gestureRecognizerShouldBegin`
+    /// (`Display/Source/ListViewScroller.swift:22`), the delegate that governs `ListViewImpl`'s scroll
+    /// pan. Two deferrals:
+    ///
+    /// - a two-touch pan on the same view wins while two fingers are down. Currently inert — nothing
+    ///   else attaches to `host` — but it is the rule, and it costs nothing to keep true;
+    /// - a `UIControl` already tracking keeps the touch. This one is live: chat's inline bot keyboards
+    ///   put real `UIButton`s inside the list (`ChatMessageActionButtonsNode`).
+    ///
+    /// Note this also gates the forced-immediate `.began`: writing `state = .began` runs the same
+    /// transition machinery as a natural begin, so a tracking control can deny a grab on moving
+    /// content. `ListViewImpl` behaves identically — `UIScrollView`'s decelerating-grab passes
+    /// through this same override.
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === pan, let view = pan.view else { return true }
+        if let recognizers = view.gestureRecognizers {
+            for other in recognizers where other !== pan {
+                if let otherPan = other as? UIPanGestureRecognizer, otherPan.minimumNumberOfTouches == 2 {
+                    return pan.numberOfTouches < 2
+                }
+            }
+        }
+        if let hit = view.hitTest(pan.location(in: view), with: nil) as? UIControl {
+            return !hit.isTracking
+        }
+        return true
     }
 
     /// Trackpad two-finger scroll delivers no `UITouch`, so `touchesBegan`/`onTouchDown`/

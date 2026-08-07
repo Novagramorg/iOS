@@ -545,11 +545,16 @@ Spec: [`docs/superpowers/specs/2026-05-29-instantpage-blockquote-blocks-design.m
 
 ## Inline buttons & document blocks
 
-The TL schema that unified `keyboardButton`/`keyboardInlineButton` also added inline buttons inside
+The TL schema that reshaped `keyboardButton`/`keyboardInlineButton` also added inline buttons inside
 `RichText` (`textButton`), block-level button rows (`pageBlockButtonRow`), and a generic file block
 (`pageBlockDocument`). All three are modelled losslessly (Postbox + FlatBuffers + both Api
 directions) **and rendered in V2**; V1 Instant View still skips them via its `default:` arms.
 Because the models round-trip, no cached page needed re-fetching when the rendering landed.
+
+A later revision split `keyboardInlineButton` back out into its own `KeyboardInlineButton` type
+(plus `keyboardInlineButtonRow`, which `replyInlineMarkup.rows` now carries). That split does not
+reach this module: `pageBlockButtonRow` carries `Api.PageButton`, a separate type, and the reply-markup
+domain model merges keyboard and inline buttons anyway.
 
 The models were added first and left unrendered on purpose, so that the rendering could land as a pure
 view change with no cache migration. That is why the sections below separate the (lossless, tested)
@@ -567,11 +572,10 @@ model layer from the V2 rendering built on top of it.
 | `submodules/TelegramCore/Sources/SyncCore/SyncCore_InstantPage.swift` | `case buttonRow` (tag **31**), `case document` (tag **32**), codecs, and the `allMedia(mediaDict:)` arm. |
 | `submodules/TextFormat/Tests/` | `InstantPageButtonModelTests`, `RichTextButtonTests`, `InstantPageBlockNewCasesTests` — 24 tests over both codecs. |
 | `submodules/InstantPageUI/Sources/InstantPageInlineButton.swift` | `InstantPageInlineButtonAttachment` (the measured payload) + `instantPageInlineButtonAttachment(button:labelString:maxWidth:)`, the **single** construction path for both inline and row pills, incl. the ellipsis truncation + `instantPageButtonColors(_:theme:isInline:isDisabled:)` + the padding and font-size constants. |
-| `submodules/InstantPageUI/Sources/InstantPageV2ButtonViews.swift` | `InstantPageV2ButtonPillView` (one pill: `backgroundColor` fill + `draw(_:)` label + press state + label recolour), `InstantPageV2InlineButtonView`, `InstantPageV2ButtonRowView`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2ButtonViews.swift` | `InstantPageV2ButtonPillView` (one pill: `backgroundColor` fill + press state + label recolour + the `TextLoadingEffectView` shimmer and its `Promise<Bool>` subscription), `InstantPageV2ButtonPillContentView` (draws the label + badge), `InstantPageV2InlineButtonView`, `InstantPageV2ButtonRowView`. |
 | `submodules/InstantPageUI/Sources/InstantPageV2DocumentContentNode.swift` | `InstantPageV2DocumentContentNode` (file row) + `InstantPageV2DocumentView` (item view). |
 | `submodules/InstantPageUI/Sources/InstantPageTextStyleStack.swift` | `.semibold` / `.medium` baseline weights (button labels are semibold regardless of the surrounding paragraph) + the `InstantPageInlineButtonAttribute` key. |
 | `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `buttonDangerColor`, `buttonSuccessColor`, `checkboxFill`, `checkboxForeground` — all defaulted, all threaded through `withUpdatedFontStyles`. |
-| `submodules/TelegramUI/Sources/ChatControllerSyntheticButtons.swift` | Debug fixture (`#if DEBUG`): `/synthetic_buttons` inserts a local rich message — one incoming, one outgoing — covering all four colours, disabled pills, a very long label (exercising truncation + re-break) and a button row. Hooked into the `sendMessages` **closure** in `ChatControllerLoadDisplayNode.swift:986`, itself `#if DEBUG`. |
 
 ### Geometry (as shipped; tuned by eye, not derived)
 
@@ -582,7 +586,7 @@ model layer from the V2 rendering built on top of it.
 | Vertical inner padding | 1pt | implied by the fixed height |
 | Height | derived: label ink + 2·vPad | fixed **40pt** (a touch target) |
 | Corner radius | `bounds.height / 2` (capsule) | `bounds.height / 2` → 20pt |
-| Width | label ink + 2·hPad, capped at the line width | equal share of the row, wrapping at 8 |
+| Width | label ink + 2·hPad, capped at the line width | justify: equal share of the row, wrapping at 8; left/center/right: label ink + 2·(badge ? 18 : 7), greedy wrap |
 
 Font sizes are **fixed**, not scaled by the Instant View font-size setting — the chat bubble's own text
 categories are hardcoded too. The two pill shapes therefore read differently side by side: a block pill
@@ -630,6 +634,25 @@ related, a fixed radius rather than `height / 2` is the lever.
 
 ### Rendering invariants (V2)
 
+- **A button row's alignment comes from `pageBlockButtonRow`'s flag bits**, read as
+  `InstantPageButtonRowAlignment` (`justify = 0`, so cached pages keep the old layout with no
+  migration; precedence `left > center > right` when a malformed row sets several bits). Justify keeps
+  the equal-column split and its fixed 8-per-row chunking; left/center/right hug the label and wrap
+  greedily by width, still capped at 8. **Each wrapped row is aligned on its own width**, so a short
+  last row re-centres rather than staying flush with the row above.
+- **One RTL rule covers all four modes: a row lays out in the page's reading direction.** `align_left`
+  means *leading* (the right edge on an RTL page), `align_right` means trailing, and the first button
+  of a row sits at the reading start — so pills run right-to-left on RTL pages, justify included. This
+  deliberately differs from V2 table cells, which apply `.left`/`.right` literally.
+- **Pass 1's `maxWidth` is what makes pass 2 safe.** Every pill is measured capped to
+  `availableWidth − 2·extra`, so no single pill can exceed the row; greedy packing therefore never
+  produces an overflowing row, and an over-long label ellipsises instead. `extra` is the badge reserve
+  *beyond* the padding the attachment builder already adds (`iconReserve − hPad`), because the pill
+  centres its label under a top-right badge.
+- **Justify's truncation cap is knowingly 14pt more conservative** than the hug path's: it passes
+  `columnWidth − 2·iconReserve` and the attachment builder subtracts `2·hPad` again. Unifying them
+  would shift where ellipses appear on already-published pages, so it is left alone and documented at
+  the site.
 - **`textButton` follows the inline-FORMULA path, not the inline-image path.** The two disagree twice,
   and both choices matter. (1) The formula run delegate reports **real** ascent/descent
   (`InstantPageTextItem.swift:854`) so CoreText grows the line box; the image one reports `0/0`
@@ -702,21 +725,90 @@ related, a fixed radius rather than `height / 2` is the lever.
   reaches them, because an inline attachment lands in `additionalItems` *after* the text item it sits
   inside and the cost map walks items in array order. **Formulas already behave this way**; fixing it
   means interleaving sub-item cost entries inside a text entry, i.e. changing the cost model.
-- **`pageBlockDocument`: tapping a downloaded file is inert, by decision.** Opening needs a
-  document-preview presenter, and `presentDocumentPreviewController` is internal to the TelegramUI
-  target — unreachable from `InstantPageUI` *and* from the rich-bubble component module. Routing via
-  `controllerInteraction.openMessage` was rejected: the file lives in the `RichTextMessageAttribute`'s
-  `InstantPage`, not the message's media, so it could open the wrong attachment. Download and cancel
-  do work, through the **fetch manager** (`messageMediaFileStatus` keys progress off its `hasEntry`,
-  so `freeMediaFileInteractiveFetched` would show no ring).
-- **`/synthetic_buttons` is hooked into the `sendMessages` CLOSURE, not the method.** Typed input goes
-  `ChatControllerNode.sendCurrentMessage` → the `sendMessages` closure property
-  (`ChatControllerNode.swift:333`, assigned `ChatControllerLoadDisplayNode.swift:986`) →
-  `transformEnqueueMessages` + `enqueueMessages`. It never reaches
-  `ChatControllerImpl.sendMessages`, so a hook there compiles and silently never runs.
+- **`pageBlockDocument` is produced by the RichText article editor** (attach a file → `MediaKind.document`
+  → `InstantPageBlock.document`), so the renderer is exercised by real content. Download and cancel
+  work through the **fetch manager**
+  (`messageMediaFileStatus` keys progress off its `hasEntry`, so `freeMediaFileInteractiveFetched` would
+  show no ring). **Runtime-verified 2026-07-31** (thumbnails, download/cancel, tap-to-open) — this block
+  had never been on screen before.
+- **Tapping a downloaded file opens it through the stock pipeline.** The row's `.Local` tap travels
+  `InstantPageV2DocumentContentNode.openDocument` → `InstantPageV2DocumentView.onDocumentTapped` →
+  `InstantPageV2View.documentTapped` → `ChatMessageBubbleContentNode.openRichTextDocument` →
+  `ChatMessageBubbleItemNode` → `controllerInteraction.openMessage(…, mediaSubject:
+  .richTextMedia(file.fileId))`, which reaches `BrowserScreen` for pdf/markdown,
+  `presentDocumentPreviewController` otherwise, the SVG warning and `canShare`. **Naming the medium is
+  load-bearing**: a rich message's files live in the `RichTextMessageAttribute`'s `InstantPage`, not
+  `message.media`, so `mediaForMessage`'s default first-match resolution over `effectiveMedia` could open
+  a DIFFERENT attachment — which is exactly why this was previously left inert. `mediaForMessage` returns
+  `[]` on a named-but-absent medium: opening nothing beats opening the wrong file.
+- **`documentTapped` must be wired in BOTH renderer arms** (create and reuse), like `buttonTapped`. A
+  recycled view may have been created against a previous `InstantPageV2View`; without re-wiring, taps
+  silently stop working after scrolling away and back.
+- **The row has two modes.** `isAuthoring` (the editor, via `StandaloneInstantPageDocumentView`) shows the
+  thumbnail (or a static file glyph when there is none), never fetches, and its tap is inert — a just-picked
+  file is already local and an edit-loaded cloud file is re-sent by reference. Message mode keeps download /
+  progress / cancel plus the open affordance. Built with `message: nil` and NO authoring flag, `fetchStatus`
+  stays nil and `updateFetchState` maps that to `.download` — a download arrow over a file the user just chose.
+- **LOAD-BEARING — `tapped()` and `updateFetchState()` must partition `fetchStatus` IDENTICALLY**, or the
+  control lies about what tapping it does. In particular **`.none` means "status not known YET"** (the
+  `messageMediaFileStatus` subscription is async, so this is the window right after a bubble appears), **not
+  "downloaded"**: it renders as a download arrow, so it must FETCH. Mapping `.none` alongside `.Local` to
+  open — the shape the original inert `break` invited — opened undownloaded files instead of fetching them.
+  Partition: `.Local` → open; `.Fetching` → cancel; `.Remote`/`.Paused`/`.none` → fetch.
+- **The thumbnail is a sibling node, which changes which foreground colour the control uses.** A file with a
+  preview (`previewRepresentations` — the picker populates them for `image/*` and `application/pdf` in
+  `PollAttachmentScreen`; `immediateThumbnailData` or an `image/*` mime also qualify) renders a
+  `TransformImageNode` fed by `chatMessageImageFile(…, thumbnail: true)`, in the SAME Ø40 slot as the status
+  disc, with the disc scrimmed over it (`mediaOverlayControlColors`) and hidden entirely when idle
+  (authoring, or `.Local`). **Do NOT pass `foregroundNodeColor: .clear` for the overlay look:**
+  `SemanticStatusNodeAppearanceContext.effectiveForegroundColor` prefers `overlayForegroundNodeColor` only
+  when the status node owns a `backgroundImage`, and ours is nil — so a clear foreground renders the download
+  arrow and the progress ring **invisible** over artwork. Pass the overlay colour as the foreground.
+- **The thumbnail deliberately does NOT change the row height.** Telegram's own file bubbles grow to 59–74pt
+  for artwork, but `MediaBlockBox` sizes the editor's row from `kind` alone — it is account-free and cannot
+  resolve the file — so a thumbnail-dependent height would desync the editor preview from the V2 renderer.
+  Any height change must be uniform across all document rows and applied to `documentRowHeight` **and**
+  `InstantPageV2Layout`'s `documentFrame` together.
+- **`InstantPageDocumentColorOverride` is required outside a bubble.** The row's title/description colours
+  come from `theme.chat.message.incoming/outgoing`; without the override an editor-hosted row renders in
+  outgoing-bubble colours. Twin of `InstantPageAudioColorOverride`.
+- **KNOWN: `fetch`/`cancelFetch` and the status subscription all guard on `message?.id`**, so on a message
+  with no id (a pending/unsent one) the row shows a download arrow whose tap quietly does nothing. Routing
+  through a `.standalone(media:)` reference when there is no message id is the fix if it matters.
 - **`.buttonRow` still sits in `InstantPageAnchorPath`'s `default:`** — Stage 1's reason ("V2 does not
   lay it out") has expired, but the outcome is unchanged for a new one: a button's label renders
   inside its own view, so it is not a page-text anchor scroll target.
+- **The loading shimmer needs the label in a child view.** A `UIView`'s own `draw(_:)` output lands in
+  its layer's `contents`, and sublayers always composite *above* that — so a `TextLoadingEffectView`
+  added to a pill that draws its own label would wash over the text. Hence
+  `InstantPageV2ButtonPillContentView`: the pill keeps the fill and the touch handling, the child
+  draws, and the shimmer is inserted between them. `ChatMessageActionButtonsNode` gets this for free
+  by inserting below its title *node*.
+- **The shimmer is tinted with the pill's label colour, not the reference's white.** A chat action
+  button sits on a translucent dark blur; a neutral V2 pill's fill is `0xf3f4f5` in the light theme,
+  where a white sweep is invisible. `instantPageButtonColors` already resolves a label colour that
+  contrasts with the fill in all four IV themes.
+- **`InstantPageV2ButtonRowView.rebuild()` must reuse pills positionally.** A pill now holds an
+  in-flight loading effect, and a `.callback` tap updates the message — which relayouts the bubble and
+  calls `rebuild()`. Recreating the pills there wipes the shimmer the tap just started. Same reuse
+  policy, and same swap-on-edit consequence, as `ChatMessageActionButtonsNode.asyncLayout`.
+- **Only `.url`, `.openWebApp`, `.openWebView` and `.callback` ever shimmer.** Those are the arms of
+  `performMessageButtonAction` that take the `progress` promise; `.switchInline`, `.copyText`,
+  `.openUserProfile`, `.payment` and `.urlAuth` leave it unfulfilled, so nothing appears. This needs
+  no special-casing — reply-markup buttons behave identically.
+- **A supplied promise suppresses the `.requestInProgress` title panel.** Both web-app entry points
+  used to raise a panel across the top of the chat: `openWebAppImpl`
+  (`ChatControllerOpenWebApp.swift`) for `.openWebView`, and `requestMessageActionCallback`
+  (`ChatController.swift`) for `.openWebApp` and `.callback`. Each now raises it only when
+  `progress == nil`, so a surface that shows the loading state on the button itself does not also get
+  a panel. The surfaces that pass nil — the reply keyboard (`ChatButtonKeyboardInputNode`), the game
+  bubble, and the menu / inline-bot panels — keep the panel as their only indicator. Threading a
+  promise into a new caller therefore silently *removes* its panel; that is the intent, but only if
+  that caller actually renders the promise.
+- **A button inside `<details>` or a table cell is inert, and so never shimmers.** The nested
+  `InstantPageV2View`s built in `InstantPageRenderer.swift` never get `buttonTapped` propagated —
+  only `rootMediaRegistryHost` is pushed down, by `propagateRegistryHost`. Pre-existing; unrelated to
+  the loading effect, but it is why a nested button does nothing at all.
 
 ## InstantPage thinking blocks (InstantPageBlock.thinking)
 

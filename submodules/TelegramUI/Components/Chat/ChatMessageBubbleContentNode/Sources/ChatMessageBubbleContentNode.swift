@@ -232,7 +232,9 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
     /// Performs a message-button action on behalf of a content node. Wired by
     /// `ChatMessageBubbleItemNode`, which owns `performMessageButtonAction` — a content node cannot
     /// reach its item view directly, and the dispatch is not on `ControllerInteraction`.
-    public var performRichTextButtonAction: ((ReplyMarkupButton) -> Void)?
+    public var performRichTextButtonAction: ((ReplyMarkupButton, Promise<Bool>) -> Void)?
+    /// Fires when a downloaded `.document` row in a rich message is tapped, with that exact file.
+    public var openRichTextDocument: ((TelegramMediaFile) -> Void)?
     
     open var disablesClipping: Bool {
         return false
@@ -306,12 +308,6 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
     open func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
     }
 
-    open func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-    }
-
-    open func applyAbsoluteOffsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-    }
-    
     open func unreadMessageRangeUpdated() {
     }
     

@@ -242,16 +242,16 @@ extension DocumentCanvasView {
     }
 
     /// The position just past a media/code block's coverable content, for the Select-All / covered-range
-    /// delete checks. Captioned media and code end at their caption/text end; a caption-less AUDIO block has
-    /// no text region, so its coverable content ends just after the media atom (`nodeStart + 1`) — NOT at the
-    /// collapsed `textStart + textLength` (which equals `nodeStart` for audio).
+    /// delete checks. Captioned media and code end at their caption/text end; a caption-less block (audio or
+    /// document) has no text region, so its coverable content ends just after the media atom
+    /// (`nodeStart + 1`) — NOT at the collapsed `textStart + textLength` (which equals `nodeStart` there).
     /// NOTE: for a `PullQuoteBox` this deliberately only reaches the END OF THE PULL TEXT, not the trailing
     /// author region — `textStart`/`textLength` are the pull-text-only convenience members (see `PullQuoteBox`).
     /// That is fine for the CROSS-BLOCK drop (a fully-covered endpoint quote is removed wholesale, author and
     /// all). A LONE quote whose entire content (incl. author) is selected is dropped separately by the
     /// exact-content-span branch in `applySelectionReplace` (Task 5), which uses the box's full `leafRegions()`.
     func coverableContentEnd(_ box: CanvasBlock) -> Int {
-        if let m = box as? MediaBlockBox, m.isAudio { return box.nodeStart + 1 }
+        if let m = box as? MediaBlockBox, m.isCaptionless { return box.nodeStart + 1 }
         return box.textStart + box.textLength
     }
 
@@ -700,10 +700,11 @@ extension DocumentCanvasView {
         }
         // Enter in a media caption (image / video / location) splits it: the head stays as the caption,
         // the tail becomes a new body paragraph immediately after the media (caret there). A caret at the
-        // end produces an empty new paragraph; a caret at the start moves the whole caption down. Audio is
-        // caption-less and excluded — its Enter fires the gap-caret branch in insertText before we reach here.
+        // end produces an empty new paragraph; a caret at the start moves the whole caption down. Audio and
+        // document are caption-less and excluded — their Enter fires the gap-caret branch in insertText
+        // before we reach here.
         if selFrom == selTo, let active = activeStack(at: head),
-           let mediaBox = active.box as? MediaBlockBox, !mediaBox.isAudio {
+           let mediaBox = active.box as? MediaBlockBox, !mediaBox.isCaptionless {
             editing {
                 guard case .media(let mediaBlock) = mediaBox.currentBlock() else { return }
                 let tmpCaption = ParagraphBlock(id: BlockID.generate(), style: .caption, runs: mediaBlock.caption)
@@ -880,9 +881,9 @@ extension DocumentCanvasView {
             }
             pos.stack.boxes = newBoxes
             recomputeSpans()
-            if kind == .audio {
-                // Audio is caption-less: land the caret in the body paragraph AFTER the audio, appending an
-                // empty one when the audio is the last block or is followed by a non-paragraph atom, so typing
+            if kind.isCaptionless {
+                // Audio/document are caption-less: land the caret in the body paragraph AFTER the block,
+                // appending an empty one when it is last or is followed by a non-paragraph atom, so typing
                 // continues. (Captioned media lands the caret in its caption.) All within the SAME stack.
                 let stackBoxes = pos.stack.boxes
                 let mediaIndex = stackBoxes.firstIndex(where: { $0.id == mediaBox.id }) ?? stackBoxes.count - 1

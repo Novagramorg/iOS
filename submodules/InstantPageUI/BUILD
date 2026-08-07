@@ -39,6 +39,7 @@ swift_library(
         "//third-party/SwiftMath:SwiftMath",
         "//submodules/ComponentFlow:ComponentFlow",
         "//submodules/TelegramUI/Components/ShimmeringMask:ShimmeringMask",
+        "//submodules/TelegramUI/Components/TextLoadingEffect:TextLoadingEffect",
     ],
     visibility = [
         "//visibility:public",

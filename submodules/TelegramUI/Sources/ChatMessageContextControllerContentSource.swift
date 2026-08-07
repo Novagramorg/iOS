@@ -258,7 +258,7 @@ final class ChatViewOnceMessageContextExtractedContentSource: ContextExtractedCo
                 
                 messageItem.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: .none, completion: { messageNode, apply in
                     node = messageNode
-                    apply().1(ListViewItemApply(isOnScreen: true))
+                    apply().1(ListViewItemApply())
                 })
                 
                 if let messageNode = node as? ChatMessageItemView, let copyContentNode = messageNode.getMessageContextSourceNode(stableId: self.message.stableId) {
@@ -274,7 +274,7 @@ final class ChatViewOnceMessageContextExtractedContentSource: ContextExtractedCo
                     
                     if isVideo {
                         messageItem.updateNode(async: { $0() }, node: { return messageNode }, params: params, neighbors: .none, animation: .System(duration: 0.4, transition: ControlledTransition(duration: 0.4, curve: .spring, interactive: false)), completion: { (layout, apply) in
-                            apply(ListViewItemApply(isOnScreen: true))
+                            apply(ListViewItemApply())
                         })
                     }
                 }

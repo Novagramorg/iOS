@@ -439,7 +439,9 @@ public final class ChatButtonKeyboardInputNode: ChatInputNode, UIScrollViewDeleg
                         self.controllerInteraction.openPeer(peer, .info(nil), nil, .default)
                     })
                 case let .openWebView(url, simple):
-                    self.controllerInteraction.openWebView(markupButton.title, url, simple, .generic)
+                    // nil: a reply-keyboard button has no inline loading state, so the
+                    // `.requestInProgress` title panel stays its progress indicator.
+                    self.controllerInteraction.openWebView(markupButton.title, url, simple, .generic, nil)
                 case let .requestPeer(peerType, buttonId, maxQuantity):
                     if let message = self.message {
                         self.controllerInteraction.openRequestedPeerSelection(message.id, peerType, buttonId, maxQuantity)

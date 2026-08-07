@@ -56,7 +56,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// Factory the panel supplies (it owns `AccountContext`) to turn a `Media` + natural size into a hosted
     /// media view. The editor's media-view provider (registered in `didLoad`) resolves its opaque `mediaID` →
     /// `mediaByID` → this factory. Read lazily, so the panel may set it after `didLoad`. Mirrors `emojiViewProvider`.
-    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
+    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
     public var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? {
         didSet {
@@ -283,9 +283,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // to the provider's `RichTextMediaItemView?` return type.
         self.editorView.registerMediaViewProvider { [weak self] items, _, _, existing in
             guard let self, let factory = self.mediaItemViewFactory else { return nil }
-            let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
+            let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)] = items.compactMap { item in
                 guard let media = self.mediaByID[item.mediaID] else { return nil }
-                return (EngineMedia(media), item.naturalSize, item.isSpoiler)
+                return (EngineMedia(media), item.naturalSize, item.isSpoiler, item.kind)
             }
             guard !resolved.isEmpty else { return nil }
             return factory(resolved, existing)

@@ -32,6 +32,9 @@ final class TestScrollEngine: ScrollEngine {
 
     // MARK: - ScrollEngine
 
+    /// Mirrors PhysicsScrollEngine: published only in `.keyframe` mode, at the same lifecycle points.
+    var onFlightChanged: ((ScrollFlight?) -> Void)?
+
     var onScroll: ((CGFloat) -> Void)? {
         get { core.onScroll }
         set { core.onScroll = newValue }
@@ -82,6 +85,13 @@ final class TestScrollEngine: ScrollEngine {
             host.bounds.origin.y += dy          // mirror PhysicsScrollEngine — the model rides the re-base
             core.applyShiftPhysicsOnly(dy)
             flight?.noteShift(dy)
+            // Republish: a consumer composing against the trajectory must learn the new base, or it
+            // keeps positioning against where the flight WOULD have landed before the re-base.
+            if let f = flight {
+                onFlightChanged?(ScrollFlight(trajectory: f.trajectory,
+                                              beginTime: f.startTime,
+                                              coordinateShift: f.coordinateShift))
+            }
             if changesShape {
                 flight?.noteEdgesChanged()
             }
@@ -106,6 +116,7 @@ final class TestScrollEngine: ScrollEngine {
         if let f = flight {                                    // catch a moving flight at its live offset
             core.setOffset(f.liveOffset(now: clock.now))
             flight = nil
+            onFlightChanged?(nil)
         }
         core.beginDrag()
     }
@@ -125,6 +136,7 @@ final class TestScrollEngine: ScrollEngine {
             // but it must reproduce the model value or a host reading geometry through `UIView.convert`
             // cannot be tested against it — the destination-space defect is invisible otherwise.
             host.bounds.origin.y = f.trajectory.finalOffset
+            onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: f.startTime))
         }
         return decelerate
     }
@@ -153,6 +165,7 @@ final class TestScrollEngine: ScrollEngine {
                 core.setOffset(f.settledOffset)            // settle at the LIST-coord rest (finalOffset + accrued shift)
                 core.cancelDeceleration()                  // phase → .idle so isDecelerating is false
                 flight = nil
+                onFlightChanged?(nil)
                 onScroll?(core.offset)
                 return
             }
@@ -165,7 +178,10 @@ final class TestScrollEngine: ScrollEngine {
                     core.setOffset(f.settledOffset)
                     core.cancelDeceleration()
                     flight = nil
+                    onFlightChanged?(nil)
                     onScroll?(core.offset)
+                } else {
+                    onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: f.startTime))
                 }
             }
             return

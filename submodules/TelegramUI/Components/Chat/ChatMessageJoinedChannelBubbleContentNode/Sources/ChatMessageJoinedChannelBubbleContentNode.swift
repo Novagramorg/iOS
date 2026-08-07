@@ -393,12 +393,6 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
         self.absoluteRect = (rect, containerSize)
         
-        if let backgroundNode = self.backgroundNode {
-            var backgroundFrame = backgroundNode.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += rect.minY
-            backgroundNode.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-        }
         
         var panelBackgroundFrame = panelBackgroundNode.frame
         panelBackgroundFrame.origin.x += self.panelNode.frame.minX + rect.minX
@@ -406,18 +400,6 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
         self.panelBackgroundNode.updateAbsoluteRect(panelBackgroundFrame, within: containerSize)
     }
 
-    override public func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-    }
-
-    override public func applyAbsoluteOffsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.offsetSpring(value: value, duration: duration, damping: damping)
-        }
-    }
-    
     override public func updateTouchesAtPoint(_ point: CGPoint?) {
         if let item = self.item {
             var rects: [(CGRect, CGRect)]?
@@ -541,7 +523,6 @@ private class MessageBackgroundNode: ASDisplayNode {
         var backgroundWallpaperFrame = self.backgroundWallpaperNode.frame
         backgroundWallpaperFrame.origin.x += rect.minX
         backgroundWallpaperFrame.origin.y += rect.minY
-        self.backgroundWallpaperNode.update(rect: backgroundWallpaperFrame, within: containerSize)
     }
 }
 

@@ -491,14 +491,16 @@ public extension Api {
             }
         }
         public class Cons_pageBlockBlockquote: TypeConstructorDescription {
+            public var flags: Int32
             public var text: Api.RichText
             public var caption: Api.RichText
-            public init(text: Api.RichText, caption: Api.RichText) {
+            public init(flags: Int32, text: Api.RichText, caption: Api.RichText) {
+                self.flags = flags
                 self.text = text
                 self.caption = caption
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("pageBlockBlockquote", [("text", ConstructorParameterDescription(self.text)), ("caption", ConstructorParameterDescription(self.caption))])
+                return ("pageBlockBlockquote", [("flags", ConstructorParameterDescription(self.flags)), ("text", ConstructorParameterDescription(self.text)), ("caption", ConstructorParameterDescription(self.caption))])
             }
         }
         public class Cons_pageBlockBlockquoteBlocks: TypeConstructorDescription {
@@ -957,8 +959,9 @@ public extension Api {
                 break
             case .pageBlockBlockquote(let _data):
                 if boxed {
-                    buffer.appendInt32(641563686)
+                    buffer.appendInt32(1724999435)
                 }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 _data.text.serialize(buffer, true)
                 _data.caption.serialize(buffer, true)
                 break
@@ -1285,7 +1288,7 @@ public extension Api {
             case .pageBlockAuthorDate(let _data):
                 return ("pageBlockAuthorDate", [("author", ConstructorParameterDescription(_data.author)), ("publishedDate", ConstructorParameterDescription(_data.publishedDate))])
             case .pageBlockBlockquote(let _data):
-                return ("pageBlockBlockquote", [("text", ConstructorParameterDescription(_data.text)), ("caption", ConstructorParameterDescription(_data.caption))])
+                return ("pageBlockBlockquote", [("flags", ConstructorParameterDescription(_data.flags)), ("text", ConstructorParameterDescription(_data.text)), ("caption", ConstructorParameterDescription(_data.caption))])
             case .pageBlockBlockquoteBlocks(let _data):
                 return ("pageBlockBlockquoteBlocks", [("blocks", ConstructorParameterDescription(_data.blocks)), ("caption", ConstructorParameterDescription(_data.caption))])
             case .pageBlockButtonRow(let _data):
@@ -1432,18 +1435,21 @@ public extension Api {
             }
         }
         public static func parse_pageBlockBlockquote(_ reader: BufferReader) -> PageBlock? {
-            var _1: Api.RichText?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.RichText
-            }
+            var _1: Int32?
+            _1 = reader.readInt32()
             var _2: Api.RichText?
             if let signature = reader.readInt32() {
                 _2 = Api.parse(reader, signature: signature) as? Api.RichText
             }
+            var _3: Api.RichText?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.RichText
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.PageBlock.pageBlockBlockquote(Cons_pageBlockBlockquote(text: _1!, caption: _2!))
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.PageBlock.pageBlockBlockquote(Cons_pageBlockBlockquote(flags: _1!, text: _2!, caption: _3!))
             }
             else {
                 return nil

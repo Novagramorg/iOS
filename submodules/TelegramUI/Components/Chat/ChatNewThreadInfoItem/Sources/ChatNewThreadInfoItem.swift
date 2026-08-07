@@ -154,12 +154,6 @@ public final class ChatNewThreadInfoItemNode: ListViewItemNode, ASGestureRecogni
         super.updateAbsoluteRect(rect, within: containerSize)
         
         self.absolutePosition = (rect, containerSize)
-        if let backgroundContent = self.backgroundContent {
-            var backgroundFrame = backgroundContent.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += containerSize.height - rect.minY
-            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-        }
     }
     
     public func asyncLayout() -> (_ item: ChatNewThreadInfoItem, _ width: ListViewItemLayoutParams) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation) -> Void) {
@@ -293,12 +287,6 @@ public final class ChatNewThreadInfoItemNode: ListViewItemNode, ASGestureRecogni
                     if let backgroundContent = strongSelf.backgroundContent {
                         backgroundContent.cornerRadius = item.presentationData.chatBubbleCorners.mainRadius
                         backgroundContent.frame = backgroundFrame
-                        if let (rect, containerSize) = strongSelf.absolutePosition {
-                            var backgroundFrame = backgroundContent.frame
-                            backgroundFrame.origin.x += rect.minX
-                            backgroundFrame.origin.y += containerSize.height - rect.minY
-                            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                        }
                     }
                 }
             })

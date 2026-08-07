@@ -744,4 +744,68 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         XCTAssertEqual(m.displayMode, .slideshow)
         XCTAssertEqual(back, content)
     }
+
+    // MARK: Document (generic file) blocks
+
+    private func makeDocumentFile(id: Int64, name: String = "Report.pdf") -> TelegramMediaFile {
+        return TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.CloudFile, id: id), partialReference: nil,
+                                 resource: EmptyMediaResource(), previewRepresentations: [], videoThumbnails: [],
+                                 immediateThumbnailData: nil, mimeType: "application/pdf", size: 1024,
+                                 attributes: [.FileName(fileName: name)], alternativeRepresentations: [])
+    }
+
+    func testDocumentForwardEmitsADocumentBlock() {
+        let file = makeDocumentFile(id: 200)
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(
+            media: file, kind: .document, naturalSize: ChatInputSize(width: 0, height: 0),
+            displayWidth: nil, alignment: .center, caption: []))])
+
+        let page = instantPage(from: content)
+        guard case .document(let id, _)? = page.blocks.first else { return XCTFail("expected a .document block") }
+        XCTAssertEqual(id, file.fileId)
+        XCTAssertNotNil(page.media[id], "the file must be stored in the page media dict so it uploads")
+    }
+
+    func testDocumentIsNeverGroupedIntoACollage() {
+        // Two media in ONE container: the image groups, the document is skipped (permanently single-item).
+        let image = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.CloudImage, id: 201),
+                                       representations: [imageRep(100, 80)], immediateThumbnailData: nil,
+                                       reference: nil, partialReference: nil, flags: [])
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(items: [
+            ChatInputMediaItem(media: image, kind: .image, naturalSize: ChatInputSize(width: 100, height: 80)),
+            ChatInputMediaItem(media: makeDocumentFile(id: 202), kind: .document,
+                               naturalSize: ChatInputSize(width: 0, height: 0)),
+        ], displayWidth: nil, alignment: .center, caption: []))])
+
+        let page = instantPage(from: content)
+        guard case .collage(let items, _)? = page.blocks.first else { return XCTFail("expected a .collage block") }
+        XCTAssertEqual(items.count, 1, "the document must be skipped, leaving only the image")
+        guard case .image = items[0] else { return XCTFail("expected the surviving item to be the image") }
+    }
+
+    func testDocumentRoundTripContentToInstantPageToContent() {
+        let file = makeDocumentFile(id: 300)
+        let media = ChatInputMedia(media: file, kind: .document, naturalSize: ChatInputSize(width: 0, height: 0),
+                                   displayWidth: nil, alignment: .center, caption: [ChatInputRun(text: "cap")])
+        let content = ChatInputContent(blocks: [.media(media)])
+
+        let page = instantPage(from: content)
+        guard case .document(let id, let caption)? = page.blocks.first else { return XCTFail("expected .document") }
+        XCTAssertEqual(id, file.fileId)
+        XCTAssertEqual(caption.text.plainText, "cap")
+
+        // Reverse: back to a .document media block, file + caption preserved. (The EDITOR drops the caption
+        // at the MediaBlockBox boundary — a document is caption-less on screen — but the chat currency
+        // carries it, exactly as .audio does.)
+        let back = chatInputContent(fromInstantPage: page)
+        guard case .media(let m)? = back.blocks.first else { return XCTFail("expected .media") }
+        XCTAssertEqual(m.kind, .document)
+        XCTAssertEqual(m.media.id, file.fileId)
+        XCTAssertEqual(m.caption.map(\.text).joined(), "cap")
+    }
+
+    func testDocumentMediaKindRawValueIsStable() {
+        // Persisted in drafts (local + cross-device). Changing it invalidates stored drafts.
+        XCTAssertEqual(ChatInputMediaKind.document.rawValue, 4)
+    }
 }

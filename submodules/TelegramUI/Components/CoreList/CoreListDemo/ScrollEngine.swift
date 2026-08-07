@@ -5,9 +5,46 @@ import UIKit
 /// Physics-semantic on purpose: an offset, programmatic writes, edges, and a per-frame
 /// user-scroll callback — NOT `UIScrollView`'s `bounds`/`contentSize` vocabulary. The first
 /// implementation (`UIKitScrollEngine`) wraps `UIScrollView`; a later one drives `ScrollPhysics`.
+
+/// A baked scroll trajectory the RENDER SERVER is playing, published by engines that move content
+/// with a keyframe animation rather than per-frame main-thread writes.
+///
+/// A consumer that positions anything against the scroll offset must compose against this rather than
+/// sampling `offset` per frame: during a flight `offset` is advanced by a main-thread sampling tick
+/// while the content is moved by Core Animation, so the two run on different clocks. Composing against
+/// the trajectory's OWN vertices — rather than resampling it — is what keeps a composed animation in
+/// exact phase with the content's.
+struct ScrollFlight {
+    let trajectory: Trajectory
+    /// Layer-local time at which the trajectory's `t = 0` plays.
+    let beginTime: CFTimeInterval
+    /// Coordinate shift accrued since the trajectory was baked.
+    ///
+    /// The trajectory's own offsets are in the base it was baked in. Window rebalancing re-bases the
+    /// container mid-flight (`applyShift`), so a consumer positioning anything against the trajectory
+    /// must add this — `trajectory.finalOffset + coordinateShift` is where the flight actually comes
+    /// to rest, which is what `KeyframeFlight.settledOffset` reports. Engines republish whenever it
+    /// changes.
+    var coordinateShift: CGFloat = 0
+
+    /// The flight's resting place in CURRENT list coordinates.
+    var settledOffset: CGFloat { trajectory.finalOffset + coordinateShift }
+
+    /// A trajectory sample's offset in CURRENT list coordinates.
+    func offset(atSampleIndex index: Int) -> CGFloat {
+        trajectory.samples[index].offset + coordinateShift
+    }
+}
+
+/// The seam between `CoreVirtualListView` and its scroll engine (see the file header).
 protocol ScrollEngine: AnyObject {
     /// Current scroll position in the engine's offset coordinate.
     var offset: CGFloat { get }
+
+    /// Fires when a baked flight starts, is re-baked or spliced, or ends (`nil`). Engines that move
+    /// content on the main thread never fire it: their per-frame consumers are already in lockstep,
+    /// so `nil` forever is the honest answer rather than a missing feature.
+    var onFlightChanged: ((ScrollFlight?) -> Void)? { get set }
 
     /// Fires ONLY on user-driven scroll (drag/momentum/bounce). The programmatic writes below
     /// never re-enter this — the adapter absorbs the old `CoreVirtualListView.isUpdating` guard.

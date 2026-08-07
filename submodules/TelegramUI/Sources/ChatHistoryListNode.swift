@@ -1179,14 +1179,14 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 
                 var maxMessage: MessageIndex?
                 strongSelf.forEachVisibleMessageItemNode { itemNode in
-                    if let item = itemNode.item {
+                    if let item = itemNode.item, let itemFrame = strongSelf.listView.itemNodeFrame(itemNode) {
                         var matches = false
-                        if itemNode.frame.maxY < strongSelf.insets.top {
+                        if itemFrame.maxY < strongSelf.insets.top {
                             return
                         }
-                        if itemNode.frame.minY >= strongSelf.insets.top {
+                        if itemFrame.minY >= strongSelf.insets.top {
                             matches = true
-                        } else if itemNode.frame.minY >= strongSelf.insets.top - 100.0 {
+                        } else if itemFrame.minY >= strongSelf.insets.top - 100.0 {
                             matches = true
                         } else if let lastMessageId {
                             for (message, _) in item.content {
@@ -1459,8 +1459,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     if resetScrollingMessageId != nil {
                         return
                     }
-                    if let item = itemNode.item, item.message.id == frozenMessageForScrollingReset {
-                        let distanceToNode = self.insets.top - itemNode.frame.minY
+                    if let item = itemNode.item, item.message.id == frozenMessageForScrollingReset, let itemFrame = self.listView.itemNodeFrame(itemNode) {
+                        let distanceToNode = self.insets.top - itemFrame.minY
                         resetScrollingMessageId = (item.message.index, -distanceToNode)
                     }
                 }
@@ -1470,8 +1470,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 if resetScrollingMessageId != nil {
                     return
                 }
-                if let item = itemNode.item {
-                    let distanceToNode = self.insets.top - itemNode.frame.minY
+                if let item = itemNode.item, let itemFrame = self.listView.itemNodeFrame(itemNode) {
+                    let distanceToNode = self.insets.top - itemFrame.minY
                     resetScrollingMessageId = (item.message.index, -distanceToNode)
                 }
             }
@@ -2422,43 +2422,54 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     }
                 }
 
-                if let strongSelf = self, updatedScrollPosition == nil, case .InteractiveChanges = reason, case let .known(offset) = strongSelf.visibleContentOffset(), abs(offset) <= 0.9, let previous = previous {
-                    var fillsScreen = true
-                    switch strongSelf.listView.visibleBottomContentOffset() {
-                    case let .known(bottomOffset):
-                        if bottomOffset <= strongSelf.listView.visibleSize.height - strongSelf.insets.bottom {
-                            fillsScreen = false
-                        }
-                    default:
-                        break
-                    }
+                if let strongSelf = self, updatedScrollPosition == nil, case .InteractiveChanges = reason, let previous = previous {
+                    // ONE sample feeds both gates below. They are compared against each other to decide a
+                    // scroll position, and this runs while a transaction is being PREPARED — so the
+                    // question is what state the list is in, not where a pass in flight happens to have
+                    // the content at this instant. On ListViewImpl the settled and presented geometries
+                    // are the same thing; under a hosting backend, two separate reads would let "am I
+                    // pinned to the newest message" and "does the content fill the screen" describe
+                    // different moments of the same animation.
+                    let settledOffsets = strongSelf.listView.settledContentOffsets()
 
-                    var previousNumAds = 0
-                    for entry in previous.filteredEntries {
-                        if case let .MessageEntry(message, _, _, _, _, _) = entry {
-                            if message.adAttribute != nil {
-                                previousNumAds += 1
+                    if case let .known(offset) = settledOffsets.top, abs(offset) <= 0.9 {
+                        var fillsScreen = true
+                        switch settledOffsets.bottom {
+                        case let .known(bottomOffset):
+                            if bottomOffset <= strongSelf.listView.visibleSize.height - strongSelf.insets.bottom {
+                                fillsScreen = false
                             }
+                        default:
+                            break
                         }
-                    }
 
-                    var updatedNumAds = 0
-                    var firstNonAdIndex: MessageIndex?
-                    for entry in processedView.filteredEntries.reversed() {
-                        if case let .MessageEntry(message, _, _, _, _, _) = entry {
-                            if message.adAttribute != nil {
-                                updatedNumAds += 1
-                            } else {
-                                if firstNonAdIndex == nil {
-                                    firstNonAdIndex = message.index
+                        var previousNumAds = 0
+                        for entry in previous.filteredEntries {
+                            if case let .MessageEntry(message, _, _, _, _, _) = entry {
+                                if message.adAttribute != nil {
+                                    previousNumAds += 1
                                 }
                             }
                         }
-                    }
 
-                    if fillsScreen, let firstNonAdIndex = firstNonAdIndex, previousNumAds == 0, updatedNumAds != 0 {
-                        updatedScrollPosition = .index(subject: MessageHistoryScrollToSubject(index: .message(firstNonAdIndex), quote: nil), position: .top(0.0), directionHint: .Up, animated: false, highlight: false, displayLink: false, setupReply: false)
-                        disableAnimations = true
+                        var updatedNumAds = 0
+                        var firstNonAdIndex: MessageIndex?
+                        for entry in processedView.filteredEntries.reversed() {
+                            if case let .MessageEntry(message, _, _, _, _, _) = entry {
+                                if message.adAttribute != nil {
+                                    updatedNumAds += 1
+                                } else {
+                                    if firstNonAdIndex == nil {
+                                        firstNonAdIndex = message.index
+                                    }
+                                }
+                            }
+                        }
+
+                        if fillsScreen, let firstNonAdIndex = firstNonAdIndex, previousNumAds == 0, updatedNumAds != 0 {
+                            updatedScrollPosition = .index(subject: MessageHistoryScrollToSubject(index: .message(firstNonAdIndex), quote: nil), position: .top(0.0), directionHint: .Up, animated: false, highlight: false, displayLink: false, setupReply: false)
+                            disableAnimations = true
+                        }
                     }
                 }
                 
@@ -4402,7 +4413,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 if (transition.animateIn || animateIn) && !"".isEmpty {
                     let heightNorm = strongSelf.bounds.height - strongSelf.insets.top
                     strongSelf.forEachVisibleItemNode { itemNode in
-                        let delayFactor = itemNode.frame.minY / heightNorm
+                        let itemMinY = (itemNode as? ListViewItemNode).flatMap { strongSelf.listView.itemNodeFrame($0)?.minY } ?? 0.0
+                        let delayFactor = itemMinY / heightNorm
                         let delay = Double(delayFactor * 0.1)
 
                         if let itemNode = itemNode as? ChatMessageItemView {
@@ -4675,32 +4687,20 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             }
         }*/
         var scrollToItem: ListViewScrollToItem?
-        var postScrollToItem: ListViewScrollToItem?
+        // The unread-separator re-pin used to be computed here, from `itemNode.index` and
+        // `itemNode.frame` — both of which only mean anything on ListViewImpl, so the behavior was
+        // silently dead under any hosting backend. It is now a backend responsibility
+        // (`maintainsUnreadItemAlignment`), because the measurement and the re-pin straddle this
+        // pass's inset change and only the backend can keep them atomic.
+        var maintainsUnreadItemAlignment = false
         if scrollToTop, case .known = self.visibleContentOffset() {
             scrollToItem = ListViewScrollToItem(index: 0, position: .top(0.0), animated: true, curve: .Spring(duration: updateSizeAndInsets.duration), directionHint: .Up)
         } else if self.enableUnreadAlignment {
-            if updateSizeAndInsets.insets.bottom != self.insets.bottom {
-                self.forEachVisibleItemNode { itemNode in
-                    if let itemNode = itemNode as? ChatUnreadItemNode, let index = itemNode.index {
-                        if abs(itemNode.frame.maxY - (self.listView.visibleSize.height - self.insets.bottom + 6.0)) < 1.0 {
-                            postScrollToItem = ListViewScrollToItem(index: index, position: .bottom(0.0), animated: updateSizeAndInsets.duration != 0.0, curve: updateSizeAndInsets.curve, directionHint: .Up)
-                        }
-                    }
-                }
-            }
+            maintainsUnreadItemAlignment = true
         }
         transition.updateFrame(node: self.listView, frame: CGRect(origin: CGPoint(), size: updateSizeAndInsets.size))
-        self.listView.chatHistoryTransaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: scrollToItem, additionalScrollDistance: scrollToTop ? 0.0 : additionalScrollDistance, updateSizeAndInsets: updateSizeAndInsets, stationaryItemRange: nil, updateOpaqueState: nil, completion: { [weak self] _ in
-            guard let self else {
-                return
-            }
-            if let postScrollToItem = postScrollToItem {
-                self.listView.chatHistoryTransaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: postScrollToItem, additionalScrollDistance: 0.0, updateSizeAndInsets: nil, stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in
-                    completion()
-                })
-            } else {
-                completion()
-            }
+        self.listView.chatHistoryTransaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: scrollToItem, additionalScrollDistance: scrollToTop ? 0.0 : additionalScrollDistance, updateSizeAndInsets: updateSizeAndInsets, stationaryItemRange: nil, maintainsUnreadItemAlignment: maintainsUnreadItemAlignment, updateOpaqueState: nil, completion: { _ in
+            completion()
         })
         
         if !self.dequeuedInitialTransitionOnLayout {
@@ -4840,7 +4840,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     var nextItem = false
                     self.forEachItemNode { itemNode in
                         if let itemNode = itemNode as? ChatMessageItemView, itemNode.item?.content.index == scrollState.messageIndex {
-                            if itemNode.frame.maxY >= self.bounds.size.height - self.insets.bottom - 4.0 {
+                            if let itemFrame = self.listView.itemNodeFrame(itemNode), itemFrame.maxY >= self.bounds.size.height - self.insets.bottom - 4.0 {
                                 nextItem = true
                             }
                         }
@@ -5003,7 +5003,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private func messagesAtPoint(_ point: CGPoint) -> [Message]? {
         var resultMessages: [Message]?
         self.forEachVisibleItemNode { itemNode in
-            if resultMessages == nil, let itemNode = itemNode as? ListViewItemNode, itemNode.frame.contains(point) {
+            // List-space frame, not the node's own: under a hosting backend the node's view sits at
+            // (0, 0, w, h) inside its host, so `itemNode.frame.contains(point)` could never match.
+            if resultMessages == nil, let itemNode = itemNode as? ListViewItemNode, self.listView.itemNodeFrame(itemNode)?.contains(point) == true {
                 if let itemNode = itemNode as? ChatMessageItemView, let item = itemNode.item {
                     switch item.content {
                         case let .message(message, _, _ , _, _):
@@ -5227,11 +5229,15 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         var snapshotTopInset: CGFloat = 0.0
         var snapshotBottomInset: CGFloat = 0.0
         self.forEachItemNode { itemNode in
-            let topOverflow = itemNode.frame.maxY - self.bounds.height
+            guard let itemNode = itemNode as? ListViewItemNode,
+                  let itemFrame = self.listView.itemNodeFrame(itemNode) else {
+                return
+            }
+            let topOverflow = itemFrame.maxY - self.bounds.height
             snapshotTopInset = max(snapshotTopInset, topOverflow)
 
-            if itemNode.frame.minY < 0.0 {
-                snapshotBottomInset = max(snapshotBottomInset, -itemNode.frame.minY)
+            if itemFrame.minY < 0.0 {
+                snapshotBottomInset = max(snapshotBottomInset, -itemFrame.minY)
             }
         }
 
@@ -5270,11 +5276,15 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         var snapshotTopInset: CGFloat = 0.0
         var snapshotBottomInset: CGFloat = 0.0
         self.forEachItemNode { itemNode in
-            let topOverflow = itemNode.frame.maxY - self.bounds.height
+            guard let itemNode = itemNode as? ListViewItemNode,
+                  let itemFrame = self.listView.itemNodeFrame(itemNode) else {
+                return
+            }
+            let topOverflow = itemFrame.maxY - self.bounds.height
             snapshotTopInset = max(snapshotTopInset, topOverflow)
 
-            if itemNode.frame.minY < 0.0 {
-                snapshotBottomInset = max(snapshotBottomInset, -itemNode.frame.minY)
+            if itemFrame.minY < 0.0 {
+                snapshotBottomInset = max(snapshotBottomInset, -itemFrame.minY)
             }
         }
 
@@ -5352,6 +5362,12 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     }
     public func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {
         self.listView.forEachItemHeaderNode(f)
+    }
+    public func itemNodeFrame(_ node: ListViewItemNode) -> CGRect? {
+        return self.listView.itemNodeFrame(node)
+    }
+    public func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect? {
+        return self.listView.itemHeaderNodeFrame(node)
     }
     public func enumerateItemNodes(_ f: (ASDisplayNode) -> Bool) {
         self.listView.enumerateItemNodes(f)

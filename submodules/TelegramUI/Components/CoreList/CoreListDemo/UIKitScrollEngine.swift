@@ -7,6 +7,10 @@ import UIKit
 final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
     let scrollView: UIScrollView
     var onScroll: ((CGFloat) -> Void)?
+
+    /// Never fires: UIScrollView advances `bounds.origin` on the main thread every frame, so a
+    /// per-frame consumer is already in lockstep with the content.
+    var onFlightChanged: ((ScrollFlight?) -> Void)?
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
 

@@ -32,4 +32,25 @@ final class CoreListItemEqualityTests: XCTestCase {
         let b = DemoListItem(id: UUID(), title: "A", detail: "d", accentColor: .red)
         XCTAssertFalse(a.isEqual(to: b))
     }
+
+    func test_demoListItem_isEqual_includesNestedScrollerFlag() {
+        let id = UUID()
+        let without = DemoListItem(id: id, title: "Row", detail: "d", accentColor: .systemBlue,
+                                   hasNestedScroller: false)
+        let with = DemoListItem(id: id, title: "Row", detail: "d", accentColor: .systemBlue,
+                                hasNestedScroller: true)
+        XCTAssertFalse(without.isEqual(to: with),
+                       "the nested-scroller flag is content: a same-identity row that gains one must reconcile")
+        XCTAssertTrue(without.isEqual(to: DemoListItem(id: id, title: "Row", detail: "d",
+                                                       accentColor: .systemBlue,
+                                                       hasNestedScroller: false)))
+    }
+
+    func test_makeItems_placesNestedScrollersOnlyWhenAsked() {
+        XCTAssertTrue(DemoListItem.makeItems(count: 20).allSatisfy { !$0.hasNestedScroller },
+                      "the default must stay off so existing fixtures are unaffected")
+        let strided = DemoListItem.makeItems(count: 20, nestedScrollerEvery: 5)
+        XCTAssertEqual(strided.enumerated().filter { $0.element.hasNestedScroller }.map(\.offset),
+                       [0, 5, 10, 15])
+    }
 }

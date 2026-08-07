@@ -308,9 +308,6 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                         let bubbleBackgroundFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: -backgroundInsets, dy: -backgroundInsets)
                         if let bubbleBackgroundNode = strongSelf.bubbleBackgroundNode {
                             animation.animator.updateFrame(layer: bubbleBackgroundNode.layer, frame: bubbleBackgroundFrame, completion: nil)
-                            if let (rect, containerSize) = strongSelf.absoluteRect {
-                                bubbleBackgroundNode.update(rect: rect, within: containerSize, transition: animation.transition)
-                            }
                         } else if strongSelf.bubbleBackgroundNode == nil {
                             if let bubbleBackgroundNode = backgroundNode.makeBubbleBackground(for: .free) {
                                 strongSelf.bubbleBackgroundNode = bubbleBackgroundNode
@@ -522,29 +519,11 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
     public func update(rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition) {
         self.absoluteRect = (rect, containerSize)
         
-        if let bubbleBackgroundNode = self.bubbleBackgroundNode {
-            bubbleBackgroundNode.update(rect: rect, within: containerSize, transition: transition)
-        }
     }
     
     public func update(rect: CGRect, within containerSize: CGSize, transition: CombinedTransition) {
         self.absoluteRect = (rect, containerSize)
         
-        if let bubbleBackgroundNode = self.bubbleBackgroundNode {
-            bubbleBackgroundNode.update(rect: rect, within: containerSize, transition: transition)
-        }
-    }
-    
-    public func offset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let bubbleBackgroundNode = self.bubbleBackgroundNode {
-            bubbleBackgroundNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
-    public func offsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-        if let bubbleBackgroundNode = self.bubbleBackgroundNode {
-            bubbleBackgroundNode.offsetSpring(value: value, duration: duration, damping: damping)
-        }
     }
     
     public func reactionTargetView(value: MessageReaction.Reaction) -> UIView? {
@@ -839,11 +818,4 @@ public final class ChatMessageReactionButtonsNode: ASDisplayNode {
         self.buttonsNode.update(rect: rect, within: containerSize, transition: transition)
     }
     
-    public func offset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        self.buttonsNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-    }
-    
-    public func offsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-        self.buttonsNode.offsetSpring(value: value, duration: duration, damping: damping)
-    }
 }

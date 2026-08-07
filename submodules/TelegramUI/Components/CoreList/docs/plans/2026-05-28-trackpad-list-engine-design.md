@@ -1,7 +1,14 @@
 # Trackpad on the list engine (`PhysicsScrollEngine`) — increment 4b — design
 
 **Date:** 2026-05-28
-**Status:** IMPLEMENTED / CURRENT
+**Status:** IMPLEMENTED / CURRENT, with one mechanism superseded 2026-08-04
+
+> **Superseded detail.** This document refers in passing to `shouldBeRequiredToFailBy` as part of the
+> touch tap-absorption path (§ "Fix", and the "Touch tap-stop path is orthogonal" note). That
+> delegate method no longer exists: the engine now grants no gesture simultaneity at all and declares
+> no failure dependency, so absorption is plain UIKit exclusion. See the arbitration gotcha in
+> `CoreList/CLAUDE.md`. Everything here about `shouldReceive(event:)` and the trackpad path is
+> unchanged and still current.
 
 ## 1. Goal & scope
 

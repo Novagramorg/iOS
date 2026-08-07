@@ -71,7 +71,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
 
     func testContentChangeDuringScrollToDrainsOverlays() throws {
         let fixture = selfUpdatingFixture()
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         let view = try XCTUnwrap(visibleSelfUpdatingView(fixture),
@@ -87,7 +87,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     /// carry re-stamp.
     func testUnanimatedContentChangeDuringScrollToDrainsOverlays() throws {
         let fixture = selfUpdatingFixture()
-        fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         let view = try XCTUnwrap(visibleSelfUpdatingView(fixture))
@@ -101,12 +101,12 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     /// viewport track has already been replaced.
     func testContentChangeStraddlingOverlappingScrollToDrainsOverlays() throws {
         let fixture = selfUpdatingFixture(count: 300)
-        fixture.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 200, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.08)
         let first = try XCTUnwrap(visibleSelfUpdatingView(fixture))
         first.simulateContentChange(newHeight: 120, animated: true)
-        fixture.listView.applyChanges(scrollTo: (index: 60, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 60, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.flushScheduler()
         fixture.advance(by: 0.05)
@@ -123,7 +123,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     func testUserScrollDuringScrollToDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 200, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.scroll(to: fixture.boundsOriginY + 600)
@@ -136,7 +136,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     func testUserScrollThenEmptyDuringScrollToDrainsOverlays() {
         let fixture = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
-        fixture.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
+        fixture.listView.applyChanges(scrollTo: .init(index: 200, pointOffset: 0),
                                       transition: .easeInOut(duration: 0.3))
         fixture.advance(by: 0.1)
         fixture.scroll(to: fixture.boundsOriginY + 600)
@@ -152,7 +152,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
     func testReentrancyAndDragSequencesActuallyParkViews() throws {
         var peak = 0
         let reentrancy = selfUpdatingFixture()
-        reentrancy.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+        reentrancy.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                          transition: .easeInOut(duration: 0.3))
         reentrancy.advance(by: 0.1)
         peak = max(peak, reentrancy.listView.exitOverlay.subviews.count
@@ -170,7 +170,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         var dragPeak = 0
         let drag = VirtualListFixture(itemCount: 300, itemHeight: 50,
                                       viewport: CGSize(width: 390, height: 400))
-        drag.listView.applyChanges(scrollTo: (index: 200, pointOffset: 0),
+        drag.listView.applyChanges(scrollTo: .init(index: 200, pointOffset: 0),
                                    transition: .easeInOut(duration: 0.3))
         drag.advance(by: 0.1)
         drag.scroll(to: drag.boundsOriginY + 600)

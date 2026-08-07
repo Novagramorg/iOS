@@ -1350,6 +1350,16 @@ public protocol ChatHistoryListNode: ASDisplayNode {
     func forEachItemNode(_ f: (ASDisplayNode) -> Void)
     func forEachVisibleItemNode(_ f: (ASDisplayNode) -> Void)
     func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void)
+
+    // A loaded node's frame in the history list's own space, or nil when it is not loaded.
+    //
+    // Paired with the enumerators above, and not optional extras: under a hosting list backend a node's
+    // view is a subview of its host at `(0, 0, w, h)`, so `node.frame` read straight off something
+    // `forEachItemNode`/`forEachItemHeaderNode` handed you is host-local and every position derived
+    // from it is zero. That reads as "everything is at the top", which is a plausible-looking answer
+    // rather than a visible failure.
+    func itemNodeFrame(_ node: ListViewItemNode) -> CGRect?
+    func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect?
 }
 
 public extension ChatFolderTitle {

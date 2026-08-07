@@ -143,6 +143,8 @@ private func chatInputMediaKind(fromKind kind: MediaKind) -> ChatInputMediaKind 
         return .location
     case .audio:
         return .audio
+    case .document:
+        return .document
     }
 }
 
@@ -420,6 +422,8 @@ private func mediaKind(fromChatInputKind kind: ChatInputMediaKind) -> MediaKind 
         return .location
     case .audio:
         return .audio
+    case .document:
+        return .document
     }
 }
 

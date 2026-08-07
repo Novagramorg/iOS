@@ -115,7 +115,7 @@ private final class ChatMessageBubbleClippingNode: ASDisplayNode {
     }
 }
 
-private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([(Message, AnyClass, ChatMessageEntryAttributes, BubbleItemAttributes)], Bool, Bool) {
+private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([(Message, AnyClass, ChatMessageEntryAttributes, BubbleItemAttributes)], Bool, Bool, Bool) {
     var result: [(Message, AnyClass, ChatMessageEntryAttributes, BubbleItemAttributes)] = []
     var skipText = false
     var messageWithCaptionToAdd: (Message, ChatMessageEntryAttributes)?
@@ -289,7 +289,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
             } else if let _ = media as? TelegramMediaExpiredContent {
                 result.removeAll()
                 result.append((message, ChatMessageActionBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
-                return (result, false, true)
+                return (result, false, true, false)
             } else if let poll = media as? TelegramMediaPoll {
                 if item.controllerInteraction.currentPollMessageWithTooltip == item.message.id, let _ = poll.results.solution {
                     result.append((message, ChatMessageQuizAnswerBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .media, neighborSpacing: .default)))
@@ -328,7 +328,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
             }
             previousItemIsFile = isFile
         }
-        
+
         var messageText = message.text
         if let updatingMedia = itemAttributes.updatingMedia {
             messageText = updatingMedia.text
@@ -356,7 +356,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
             }
         }
                 
-        if !messageText.isEmpty || (message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) && richText == nil) || isUnsupportedMedia || isStoryWithText {
+        if (!messageText.isEmpty || (message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) && richText == nil) || isStoryWithText) && !isUnsupportedMedia {
             if !skipText {
                 if case .group = item.content, !isFile {
                     messageWithCaptionToAdd = (message, itemAttributes)
@@ -519,7 +519,9 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         needReactions = false
     }
     
-    return (result, needSeparateContainers, needReactions)
+    // The last element reports unsupported content, which the caller needs before it can decide
+    // bubble width and share-button visibility.
+    return (result, needSeparateContainers, needReactions, isUnsupportedMedia)
 }
 
 private enum ContentNodeOperation {
@@ -569,28 +571,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         fileprivate var absoluteRect: (CGRect, CGSize)?
         fileprivate func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
             self.absoluteRect = (rect, containerSize)
-            guard let backgroundWallpaperNode = self.backgroundWallpaperNode else {
-                return
-            }
-            guard !self.sourceNode.isExtractedToContextPreview else {
-                return
-            }
-            let mappedRect = CGRect(origin: CGPoint(x: rect.minX + backgroundWallpaperNode.frame.minX, y: rect.minY + backgroundWallpaperNode.frame.minY), size: rect.size)
-            backgroundWallpaperNode.update(rect: mappedRect, within: containerSize)
-        }
-        
-        fileprivate func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-            guard let backgroundWallpaperNode = self.backgroundWallpaperNode else {
-                return
-            }
-            backgroundWallpaperNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        
-        fileprivate func applyAbsoluteOffsetSpring(value: CGFloat, duration: Double, damping: CGFloat) {
-            guard let backgroundWallpaperNode = self.backgroundWallpaperNode else {
-                return
-            }
-            backgroundWallpaperNode.offsetSpring(value: value, duration: duration, damping: damping)
         }
         
         fileprivate func willUpdateIsExtractedToContextPreview(isExtractedToContextPreview: Bool, transition: ContainedViewLayoutTransition) {
@@ -633,11 +613,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     self.backgroundNode?.updateLayout(size: backgroundFrame.size, transition: .immediate)
                     self.backgroundNode?.frame = backgroundFrame
                     self.backgroundWallpaperNode?.frame = backgroundFrame
-                    
-                    if let (rect, containerSize) = self.absoluteRect {
-                        let mappedRect = CGRect(origin: CGPoint(x: rect.minX + backgroundFrame.minX, y: rect.minY + backgroundFrame.minY), size: rect.size)
-                        self.backgroundWallpaperNode?.update(rect: mappedRect, within: containerSize)
-                    }
                 }
             } else {
                 if let backgroundNode = self.backgroundNode {
@@ -1004,18 +979,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 return
             }
             strongSelf.updateAbsoluteRectInternal(rect, within: size)
-        }
-        self.mainContextSourceNode.applyAbsoluteOffset = { [weak self] value, animationCurve, duration in
-            guard let strongSelf = self, strongSelf.mainContextSourceNode.isExtractedToContextPreview else {
-                return
-            }
-            strongSelf.applyAbsoluteOffsetInternal(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        self.mainContextSourceNode.applyAbsoluteOffsetSpring = { [weak self] value, duration, damping in
-            guard let strongSelf = self, strongSelf.mainContextSourceNode.isExtractedToContextPreview else {
-                return
-            }
-            strongSelf.applyAbsoluteOffsetSpringInternal(value: value, duration: duration, damping: damping)
         }
     }
         
@@ -1536,9 +1499,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private func internalUpdateLayout() {
-        if let inputParams = self.currentInputParams, let currentApplyParams = self.currentApplyParams {
+        if let inputParams = self.currentInputParams, self.currentApplyParams != nil {
             let (_, applyLayout) = self.asyncLayout()(inputParams.item, inputParams.params, inputParams.mergedTop, inputParams.mergedBottom, inputParams.dateHeaderAtBottom)
-            applyLayout(.None, ListViewItemApply(isOnScreen: currentApplyParams.isOnScreen, timestamp: nil), false)
+            applyLayout(.None, ListViewItemApply(timestamp: nil), false)
         }
     }
     
@@ -1887,7 +1850,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         let isFailed = item.content.firstMessage.effectivelyFailed(timestamp: item.context.account.network.getApproximateRemoteTimestamp())
-        
+
+        // Resolved here rather than at its point of use below, because allowFullWidth and
+        // needsShareButton are both consumed before the bubble width is computed. The function
+        // depends only on `item`, so hoisting it is safe.
+        let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions, isUnsupportedContent) = contentNodeMessagesAndClassesForItem(item)
+
         var needsShareButton = false
         var needsSummarizeButton = false
     
@@ -1999,7 +1967,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         /*if isInlinePage {
             needsShareButton = false
         }*/
-                        
+
+        // Unsupported content draws a full-width service banner with no bubble behind it. There is
+        // nothing to share or summarize in a message this client cannot decode, and the banner
+        // reads as a strip across the line rather than a bubble sized to its text.
+        if isUnsupportedContent {
+            needsShareButton = false
+            needsSummarizeButton = false
+            allowFullWidth = true
+        }
+
         var tmpWidth: CGFloat
         if allowFullWidth {
             tmpWidth = baseWidth
@@ -2021,9 +1998,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         tmpWidth -= deliveryFailedInset
-        
-        let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions) = contentNodeMessagesAndClassesForItem(item)
-        
+
         var maximumContentWidth = floor(tmpWidth - layoutConstants.bubble.edgeInset * 3.0 - layoutConstants.bubble.contentInsets.left - layoutConstants.bubble.contentInsets.right - avatarInset)
         if (needsShareButton && !isSidePanelOpen) {
             maximumContentWidth -= 10.0
@@ -2387,7 +2362,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var currentCredibilityIcon: (EmojiStatusComponent.Content, UIColor?)?
         
         let displayEphemeralBadge: Bool
-        if ephemeralBadgeText != nil && !hidesHeaders && item.message.adAttribute == nil {
+        if ephemeralBadgeText != nil && !mergedTop.merged && !hidesHeaders && item.message.adAttribute == nil {
             if let backgroundHiding, case .always = backgroundHiding {
                 displayEphemeralBadge = false
             } else {
@@ -3959,10 +3934,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             animation = .System(duration: 0.25, transition: ControlledTransition(duration: 0.25, curve: .easeInOut, interactive: false))
         }
         
-        var legacyTransition: ContainedViewLayoutTransition = .immediate
-        if case let .System(duration, _) = animation {
-            legacyTransition = .animated(duration: duration, curve: .spring)
-        }
+        // The pass's own curve, rather than a locally reconstructed `.spring`. `ListViewItemUpdateAnimation`
+        // already carries it (`transition.legacyAnimator.transition`), and it is `.immediate` for
+        // `.None`/`.Crossfade` — what this defaulted to. Rebuilding `.spring` here was correct only by
+        // accident: `ListViewImpl` hard-codes `curve: .spring` for every item update
+        // (Display/Source/ListView.swift:1805), so the two always agreed. The CoreList chat backend routes
+        // real pass curves through the same channel — `.easeInOut` and `.custom(...)`
+        // (CoreListChatHistoryBackend.swift:689, :692) — and this then ran the bubble on a spring while
+        // its row ran the pass curve. It also silently overrode the `.easeInOut` that the
+        // extracted-to-context-preview branch just above explicitly asks for.
+        var legacyTransition: ContainedViewLayoutTransition = animation.transition
         
         var forceBackgroundSide = false
         if actionButtonsSizeAndApply != nil {
@@ -4731,7 +4712,20 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
             
-        let timingFunction = kCAMediaTimingFunctionSpring        
+        // Same reason as `legacyTransition` above — take the pass's curve instead of assuming a spring.
+        // Drives the forwardInfo / threadInfo / replyInfo / content-node frame animations below, each of
+        // which already takes its duration from the pass. Exactly equivalent under `ListViewImpl`, whose
+        // curve is always `.spring` and whose `.spring.timingFunction` IS `kCAMediaTimingFunctionSpring`.
+        // `mediaTimingFunction` travels with it: for `.custom` the name is only `easeInEaseOut` and the
+        // real bezier lives in the media timing function, so taking the name alone would degrade a
+        // custom pass curve rather than fix it. It is nil for `.spring` and `.easeInOut`, so this is
+        // still a no-op wherever those apply.
+        var timingFunction = kCAMediaTimingFunctionSpring
+        var mediaTimingFunction: CAMediaTimingFunction? = nil
+        if case let .animated(_, curve) = animation.transition {
+            timingFunction = curve.timingFunction
+            mediaTimingFunction = curve.mediaTimingFunction
+        }
         if let forwardInfoNode = forwardInfoSizeApply.1(bubbleContentWidth) {
             strongSelf.forwardInfoNode = forwardInfoNode
             var animateFrame = true
@@ -4754,7 +4748,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if case let .System(duration, _) = animation {
                 if animateFrame {
                     forwardInfoNode.frame = forwardInfoFrame
-                    forwardInfoNode.layer.animateFrame(from: previousForwardInfoNodeFrame, to: forwardInfoFrame, duration: duration, timingFunction: timingFunction)
+                    forwardInfoNode.layer.animateFrame(from: previousForwardInfoNodeFrame, to: forwardInfoFrame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 } else {
                     forwardInfoNode.frame = forwardInfoFrame
                 }
@@ -4792,7 +4786,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             threadInfoNode.frame = CGRect(origin: CGPoint(x: contentOrigin.x + layoutConstants.text.bubbleInsets.left, y: layoutConstants.bubble.contentInsets.top + threadInfoOriginY), size: threadInfoSizeApply.0)
             if case let .System(duration, _) = animation {
                 if animateFrame {
-                    threadInfoNode.layer.animateFrame(from: previousThreadInfoNodeFrame, to: threadInfoNode.frame, duration: duration, timingFunction: timingFunction)
+                    threadInfoNode.layer.animateFrame(from: previousThreadInfoNodeFrame, to: threadInfoNode.frame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 }
             }
         } else {
@@ -4827,7 +4821,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             replyInfoNode.frame = replyInfoFrame
             if case let .System(duration, _) = animation {
                 if animateFrame {
-                    replyInfoNode.layer.animateFrame(from: previousReplyInfoNodeFrame, to: replyInfoNode.frame, duration: duration, timingFunction: timingFunction)
+                    replyInfoNode.layer.animateFrame(from: previousReplyInfoNodeFrame, to: replyInfoNode.frame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 }
             }
         } else {
@@ -4956,18 +4950,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     }
                     container?.updateAbsoluteRect(relativeFrame.offsetBy(dx: rect.minX, dy: rect.minY), within: size)
                 }
-                contextSourceNode.applyAbsoluteOffset = { [weak strongSelf, weak container, weak contextSourceNode] value, animationCurve, duration in
-                    guard let _ = strongSelf, let strongContextSourceNode = contextSourceNode, strongContextSourceNode.isExtractedToContextPreview else {
-                        return
-                    }
-                    container?.applyAbsoluteOffset(value: value, animationCurve: animationCurve, duration: duration)
-                }
-                contextSourceNode.applyAbsoluteOffsetSpring = { [weak strongSelf, weak container, weak contextSourceNode] value, duration, damping in
-                    guard let _ = strongSelf, let strongContextSourceNode = contextSourceNode, strongContextSourceNode.isExtractedToContextPreview else {
-                        return
-                    }
-                    container?.applyAbsoluteOffsetSpring(value: value, duration: duration, damping: damping)
-                }
                 
                 strongSelf.contentContainers.append(container)
                 contentContainer = container
@@ -5080,12 +5062,27 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         
                         item.controllerInteraction.requestMessageUpdate(item.message.id, false, customTransition)
                     }
-                    contentNode.performRichTextButtonAction = { [weak strongSelf] button in
+                    contentNode.performRichTextButtonAction = { [weak strongSelf] button, progress in
                         guard let strongSelf else {
                             return
                         }
 
-                        strongSelf.performMessageButtonAction(button: button, progress: nil)
+                        // `progress` is fulfilled for .url, .openWebApp and .callback — the only
+                        // arms of performMessageButtonAction that take it. The others leave it
+                        // unfulfilled and the tapped pill simply never shimmers.
+                        strongSelf.performMessageButtonAction(button: button, progress: progress)
+                    }
+                    contentNode.openRichTextDocument = { [weak strongSelf] file in
+                        guard let strongSelf, let item = strongSelf.item else {
+                            return
+                        }
+                        // Name the exact medium: a rich message's files live in the RichTextMessageAttribute's
+                        // InstantPage, not message.media, so the default first-match resolution over
+                        // effectiveMedia could open a DIFFERENT attachment.
+                        let _ = item.controllerInteraction.openMessage(
+                            item.message,
+                            OpenMessageParams(mode: .default, mediaSubject: .richTextMedia(file.fileId))
+                        )
                     }
                 }
             }
@@ -5223,7 +5220,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     contentNode.animateInsertionIntoBubble(duration)
                     var previousAlignedContentNodeFrame = contentNodeFrame
                     previousAlignedContentNodeFrame.origin.x += backgroundFrame.size.width - strongSelf.backgroundNode.frame.size.width
-                    contentNode.layer.animateFrame(from: previousAlignedContentNodeFrame, to: contentNodeFrame, duration: duration, timingFunction: timingFunction)
+                    contentNode.layer.animateFrame(from: previousAlignedContentNodeFrame, to: contentNodeFrame, duration: duration, timingFunction: timingFunction, mediaTimingFunction: mediaTimingFunction)
                 } else {
                     contentNode.frame = contentNodeFrame
                 }
@@ -5628,32 +5625,23 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 animation.animator.updateScale(layer: shareButtonNode.layer, scale: (isCurrentlyPlayingMedia || isSidePanelOpen) ? 0.001 : 1.0, completion: nil)
             }
             
-            if case .System = animation, strongSelf.mainContextSourceNode.isExtractedToContextPreview {
-                legacyTransition.updateFrame(node: strongSelf.backgroundNode, frame: backgroundFrame)
-                if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
-                    legacyTransition.updateFrame(node: backgroundHighlightNode, frame: backgroundFrame, completion: nil)
-                    backgroundHighlightNode.updateLayout(size: backgroundFrame.size, transition: legacyTransition)
-                }
-
-                legacyTransition.updateFrame(node: strongSelf.clippingNode, frame: backgroundFrame)
-                legacyTransition.updateBounds(node: strongSelf.clippingNode, bounds: CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: backgroundFrame.size))
-
-                strongSelf.backgroundNode.updateLayout(size: backgroundFrame.size, transition: legacyTransition)
-                strongSelf.backgroundWallpaperNode.updateFrame(backgroundFrame, transition: legacyTransition)
-                strongSelf.shadowNode.updateLayout(backgroundFrame: backgroundFrame, transition: legacyTransition)
-            } else {
-                strongSelf.backgroundNode.frame = backgroundFrame
-                if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
-                    backgroundHighlightNode.frame = backgroundFrame
-                    backgroundHighlightNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
-                }
-                
-                strongSelf.clippingNode.frame = backgroundFrame
-                strongSelf.clippingNode.bounds = CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: backgroundFrame.size)
-                strongSelf.backgroundNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
-                strongSelf.backgroundWallpaperNode.frame = backgroundFrame
-                strongSelf.shadowNode.updateLayout(backgroundFrame: backgroundFrame, transition: .immediate)
+            // The non-animated path. The enclosing `else` already establishes that `animation` is not
+            // `.System`, so every write here is immediate. This used to branch first on `.System` +
+            // `isExtractedToContextPreview` and animate through `legacyTransition`; that branch became
+            // unreachable when the `!isExtractedToContextPreview` clause was commented out of the outer
+            // test above, which routes the extracted case into the animated branch instead. Deleted
+            // rather than left in place, because it read as a live second spelling of this same layout.
+            strongSelf.backgroundNode.frame = backgroundFrame
+            if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
+                backgroundHighlightNode.frame = backgroundFrame
+                backgroundHighlightNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
             }
+            
+            strongSelf.clippingNode.frame = backgroundFrame
+            strongSelf.clippingNode.bounds = CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: backgroundFrame.size)
+            strongSelf.backgroundNode.updateLayout(size: backgroundFrame.size, transition: .immediate)
+            strongSelf.backgroundWallpaperNode.frame = backgroundFrame
+            strongSelf.shadowNode.updateLayout(backgroundFrame: backgroundFrame, transition: .immediate)
             if let (rect, size) = strongSelf.absoluteRect {
                 strongSelf.updateAbsoluteRect(rect, within: size)
             }
@@ -7259,10 +7247,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private func updateAbsoluteRectInternal(_ rect: CGRect, within containerSize: CGSize) {
-        var backgroundWallpaperFrame = self.backgroundWallpaperNode.frame
-        backgroundWallpaperFrame.origin.x += rect.minX
-        backgroundWallpaperFrame.origin.y += rect.minY
-        self.backgroundWallpaperNode.update(rect: backgroundWallpaperFrame, within: containerSize)
         for contentNode in self.contentNodes {
             contentNode.updateAbsoluteRect(CGRect(origin: CGPoint(x: rect.minX + contentNode.frame.minX, y: rect.minY + contentNode.frame.minY), size: rect.size), within: containerSize)
         }
@@ -7304,36 +7288,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             reactionButtonsNodeFrame.origin.y += rect.minY
             
             reactionButtonsNode.update(rect: rect, within: containerSize, transition: .immediate)
-        }
-    }
-    
-    override public func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if !self.mainContextSourceNode.isExtractedToContextPreview {
-            self.applyAbsoluteOffsetInternal(value: CGPoint(x: -value.x, y: -value.y), animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
-    private func applyAbsoluteOffsetInternal(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        self.backgroundWallpaperNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-
-        for contentNode in self.contentNodes {
-            contentNode.applyAbsoluteOffset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        
-        if let reactionButtonsNode = self.reactionButtonsNode {
-            reactionButtonsNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
-    private func applyAbsoluteOffsetSpringInternal(value: CGFloat, duration: Double, damping: CGFloat) {
-        self.backgroundWallpaperNode.offsetSpring(value: value, duration: duration, damping: damping)
-
-        for contentNode in self.contentNodes {
-            contentNode.applyAbsoluteOffsetSpring(value: value, duration: duration, damping: damping)
-        }
-        
-        if let reactionButtonsNode = self.reactionButtonsNode {
-            reactionButtonsNode.offsetSpring(value: value, duration: duration, damping: damping)
         }
     }
     

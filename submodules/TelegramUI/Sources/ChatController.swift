@@ -2940,24 +2940,31 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     return
                 }
                 
-                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, {
-                    return $0.updatedTitlePanelContext {
-                        if !$0.contains(where: {
-                            switch $0 {
-                                case .requestInProgress:
-                                    return true
-                                default:
-                                    return false
+                // Only when the caller has no inline loading state of its own. Every site that passes
+                // a promise renders it on the button itself (message action buttons, InstantPage V2
+                // pills, the pinned-message panel), and showing the title panel too would give one
+                // tap two progress indicators. The sites that pass nil — the reply keyboard and the
+                // game bubble — still get the panel, unchanged.
+                if progress == nil {
+                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, {
+                        return $0.updatedTitlePanelContext {
+                            if !$0.contains(where: {
+                                switch $0 {
+                                    case .requestInProgress:
+                                        return true
+                                    default:
+                                        return false
+                                }
+                            }) {
+                                var updatedContexts = $0
+                                updatedContexts.append(.requestInProgress)
+                                return updatedContexts.sorted()
                             }
-                        }) {
-                            var updatedContexts = $0
-                            updatedContexts.append(.requestInProgress)
-                            return updatedContexts.sorted()
+                            return $0
                         }
-                        return $0
-                    }
-                })
-                
+                    })
+                }
+
                 let proceedWithResult: (MessageActionCallbackResult) -> Void = { [weak self] result in
                     guard let strongSelf = self else {
                         return
@@ -3056,16 +3063,23 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 let context = strongSelf.context
                 if requiresPassword {
+                    // The promise is driven here exactly as in the branch below. Without it this path
+                    // would show no progress at all now that supplying a promise suppresses the title
+                    // panel — the panel used to be its only indicator.
+                    progress?.set(.single(true))
                     strongSelf.messageActionCallbackDisposable.set(((strongSelf.context.engine.messages.requestMessageActionCallbackPasswordCheck(messageId: messageId, isGame: isGame, data: data)
                     |> afterDisposed {
+                        progress?.set(.single(false))
                         updateProgress()
                     })
                     |> deliverOnMainQueue).startStrict(error: { error in
                         let controller = ownershipTransferController(context: context, updatedPresentationData: strongSelf.updatedPresentationData, initialError: error, present: { c, a in
                             strongSelf.present(c, in: .window(.root), with: a)
                         }, commit: { password in
+                            progress?.set(.single(true))
                             return context.engine.messages.requestMessageActionCallback(messageId: messageId, isGame: isGame, password: password, data: data)
                             |> afterDisposed {
+                                progress?.set(.single(false))
                                 updateProgress()
                             }
                         }, completion: { result in
@@ -4904,11 +4918,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return
             }
             strongSelf.openResolved(result: .join(joinHash), sourceMessageId: nil)
-        }, openWebView: { [weak self] buttonText, url, simple, source in
+        }, openWebView: { [weak self] buttonText, url, simple, source, progress in
             guard let self else {
                 return
             }
-            self.openWebApp(buttonText: buttonText, url: url, simple: simple, source: source)
+            self.openWebApp(buttonText: buttonText, url: url, simple: simple, source: source, progress: progress)
         }, activateAdAction: { [weak self] messageId, progress, media, fullscreen in
             guard let self else {
                 return

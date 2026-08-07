@@ -3769,7 +3769,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
             
             let mapInfoFrame = CGRect(origin: CGPoint(x: 0.0, y: mapFrame.maxY + mapInfoTopInset), size: mapInfoLayout.contentSize)
             transition.updateFrame(node: mapInfoNode, frame: mapInfoFrame)
-            mapInfoReadyAndApply().1(ListViewItemApply(isOnScreen: true))
+            mapInfoReadyAndApply().1(ListViewItemApply())
             
             self.effectiveMapHeight += mapInfoLayout.contentSize.height + mapInfoTopInset
             

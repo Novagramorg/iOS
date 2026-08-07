@@ -88,6 +88,28 @@ final class ListAnimationController {
         writeOpacity(1, on: layer)
     }
 
+    /// Seeds a newly created attachment owner's settled geometry without starting any track — the
+    /// attachment analogue of `seedLive`, and a near-copy of it: `model.seedLive(owner:…)` accepts any
+    /// `ownsLiveElement` owner, so only the owner and the `precondition` differ.
+    ///
+    /// The `== nil` guard matters: this runs for every serial with no old state, which includes a run
+    /// that scrolled into the window while a track from an earlier pass is still live. Seeding
+    /// unconditionally would overwrite it.
+    func seedAttachment(owner: ListAnimationOwner, layer: CALayer) {
+        precondition(owner.isAttachment)
+        _ = bind(owner: owner, to: layer)
+        knownOwners.insert(owner)
+        if model.value(for: owner, property: .opacity, at: now()) == nil {
+            model.seedLive(owner: owner,
+                           positionOffsetX: 0,
+                           positionOffsetY: 0,
+                           opacity: 1,
+                           width: layer.bounds.width,
+                           height: layer.bounds.height)
+        }
+        writeOpacity(1, on: layer)
+    }
+
     func seedGhostBlock(owner: ListAnimationOwner,
                         layer: CALayer,
                         settledRootY: CGFloat) {
@@ -109,7 +131,24 @@ final class ListAnimationController {
                             transactionTime: TimeInterval? = nil,
                             completion: @escaping (UInt64) -> Void = { _ in })
         -> ListAnimationMutation {
-        let owner = ListAnimationOwner.live(identity)
+        transitionPosition(owner: .live(identity),
+                           layer: layer,
+                           oldSettledY: oldSettledY,
+                           newSettledY: newSettledY,
+                           transition: transition,
+                           transactionTime: transactionTime,
+                           completion: completion)
+    }
+
+    @discardableResult
+    func transitionPosition(owner: ListAnimationOwner,
+                            layer: CALayer,
+                            oldSettledY: CGFloat,
+                            newSettledY: CGFloat,
+                            transition: CoreListTransition,
+                            transactionTime: TimeInterval? = nil,
+                            completion: @escaping (UInt64) -> Void = { _ in })
+        -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
         let time = transactionTime ?? now()
@@ -240,7 +279,21 @@ final class ListAnimationController {
                           newSettledHeight: CGFloat,
                           transition: CoreListTransition,
                           transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
-        let owner = ListAnimationOwner.live(identity)
+        transitionHeight(owner: .live(identity),
+                         layer: layer,
+                         oldSettledHeight: oldSettledHeight,
+                         newSettledHeight: newSettledHeight,
+                         transition: transition,
+                         transactionTime: transactionTime)
+    }
+
+    @discardableResult
+    func transitionHeight(owner: ListAnimationOwner,
+                          layer: CALayer,
+                          oldSettledHeight: CGFloat,
+                          newSettledHeight: CGFloat,
+                          transition: CoreListTransition,
+                          transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
         let time = transactionTime ?? now()
@@ -299,7 +352,17 @@ final class ListAnimationController {
                 layer: CALayer,
                 transition: CoreListTransition,
                 transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
-        let owner = ListAnimationOwner.live(identity)
+        insert(owner: .live(identity),
+               layer: layer,
+               transition: transition,
+               transactionTime: transactionTime)
+    }
+
+    @discardableResult
+    func insert(owner: ListAnimationOwner,
+                layer: CALayer,
+                transition: CoreListTransition,
+                transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
         let mutation = model.beginInsertion(
@@ -321,15 +384,33 @@ final class ListAnimationController {
                   contentY: CGFloat,
                   transition: CoreListTransition,
                   transactionTime: TimeInterval? = nil,
+                  fadesOut: Bool = true,
                   completion: @escaping () -> Void) -> ListAnimationOwner {
-        let liveOwner = ListAnimationOwner.live(identity)
+        makeExit(owner: .live(identity),
+                 layer: layer,
+                 contentY: contentY,
+                 transition: transition,
+                 transactionTime: transactionTime,
+                 fadesOut: fadesOut,
+                 completion: completion)
+    }
+
+    @discardableResult
+    func makeExit(owner liveOwner: ListAnimationOwner,
+                  layer: CALayer,
+                  contentY: CGFloat,
+                  transition: CoreListTransition,
+                  transactionTime: TimeInterval? = nil,
+                  fadesOut: Bool = true,
+                  completion: @escaping () -> Void) -> ListAnimationOwner {
         _ = bind(owner: liveOwner, to: layer)
         knownOwners.insert(liveOwner)
 
         let exit = model.beginExit(
             from: liveOwner,
             at: transactionTime ?? now(),
-            transition: transition.scaled(by: durationFactor())
+            transition: transition.scaled(by: durationFactor()),
+            fadesOut: fadesOut
         )
         // Detached layers store their sampled horizontal position absolutely.
         // Their new owner therefore starts with no additive x correction.
@@ -395,7 +476,12 @@ final class ListAnimationController {
     func unbind(identity: AnyHashable,
                 layer: CALayer,
                 at time: TimeInterval? = nil) {
-        let owner = ListAnimationOwner.live(identity)
+        unbind(owner: .live(identity), layer: layer, at: time)
+    }
+
+    func unbind(owner: ListAnimationOwner,
+                layer: CALayer,
+                at time: TimeInterval? = nil) {
         guard let binding = bindings[owner], binding.value === layer else { return }
         removeModelAnimations(from: layer)
         bindings.removeValue(forKey: owner)
@@ -482,6 +568,24 @@ final class ListAnimationController {
 
     func opacity(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
         model.value(for: owner, property: .opacity, at: time)
+    }
+
+    func positionOffset(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
+        model.value(for: owner, property: .positionY, at: time)
+    }
+
+    /// Whether an owner currently has a live layer binding. Test affordance; the pass itself never
+    /// needs to ask.
+    func isBound(owner: ListAnimationOwner) -> Bool {
+        bindings[owner]?.value != nil
+    }
+
+    func width(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
+        model.value(for: owner, property: .width, at: time)
+    }
+
+    func height(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
+        model.value(for: owner, property: .height, at: time)
     }
 
     func viewportOffset(at time: TimeInterval) -> CGFloat {
@@ -609,6 +713,42 @@ final class ListAnimationController {
             compiler.install(track, property: property, on: layer,
                              completion: completion)
         }
+        if track.deliversNoCoreAnimationCompletion {
+            scheduleAnalyticCompletion(serial: serial,
+                                       deadline: track.startTime + track.duration)
+        }
+    }
+
+    /// Drive `finalize` from the analytic deadline for a track Core Animation will never call back
+    /// for. **An animation whose `fromValue` equals its `toValue` produces no visual change, so the
+    /// render server never runs it and `animationDidStop` is never sent** — the animation just sits
+    /// on the layer (`isRemovedOnCompletion = false`) forever.
+    ///
+    /// That matters because a completion here is not only bookkeeping: it is the teardown trigger for
+    /// every tenant of the exit overlay. Three of them ride equal-endpoint tracks by design, and all
+    /// three stranded stale rows on top of live content:
+    ///
+    /// - a **non-fading exit** (`beginExit(fadesOut: false)`, i.e. every departing row of a
+    ///   full-replace carousel) installs `opacity: o -> o` purely to own a teardown deadline, so the
+    ///   whole outgoing strip stayed parked in `exitOverlay`;
+    /// - a **viewport re-target onto the displacement already in flight** yields
+    ///   `viewportOffset: 0 -> 0`, and `finishViewportGeneration` never ran — stranding its viewport
+    ///   carries and every crossing carry that had migrated onto that generation.
+    ///
+    /// The model is the presentation authority and the compiler is an output renderer, so a
+    /// model-owned completion must not depend on whether Core Animation found the animation worth
+    /// running. Scheduled only for the tracks that need it — arming a timer per animated property
+    /// would cost dozens of timers per pass for no gain, since a track that moves does get its
+    /// callback. `finalize` removes the pending record first, so a later CA callback for the same
+    /// serial is an exact no-op and the two paths cannot double-fire.
+    private func scheduleAnalyticCompletion(serial: UInt64, deadline: TimeInterval) {
+        // One shot: `scheduleAfter` never fires early, so `now()` inside the block is at or past the
+        // deadline and `track.isComplete(at:)` therefore holds — the re-arm loop that
+        // `scheduleUnboundTrackReap` needs (it races an unbind, not a deadline) has no analogue here.
+        scheduleAfter(max(0, deadline - now())) { [weak self] in
+            guard let self, self.pendingCompletions[serial] != nil else { return }
+            self.finalize(serial, at: self.now())
+        }
     }
 
     private func finalize(_ serial: UInt64, at time: TimeInterval) {
@@ -711,7 +851,9 @@ final class ListAnimationController {
 
     private func pruneUnboundSettledLiveOwner(_ owner: ListAnimationOwner,
                                               at time: TimeInterval) {
-        guard owner.isLive, bindings[owner] == nil else { return }
+        // `ownsLiveElement`, not `isLive`: an unbound attachment owner must be pruned on exactly the
+        // same terms as an unbound row owner, or its settled state outlives every reference to it.
+        guard owner.ownsLiveElement, bindings[owner] == nil else { return }
         model.reap(owner: owner, at: time)
         let hasTrack = [ListAnimatedProperty.positionX, .positionY,
                         .width, .height, .opacity].contains {

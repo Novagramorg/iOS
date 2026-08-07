@@ -23,10 +23,10 @@ final class OverlayOrphanProbeTests: XCTestCase {
 
     func testOverlappingScrollToActuallyParksViews() {
         let peak = peakOverlayOccupancy { fixture in
-            fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+            fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                           transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.1)
-            fixture.listView.applyChanges(scrollTo: (index: 40, pointOffset: 0),
+            fixture.listView.applyChanges(scrollTo: .init(index: 40, pointOffset: 0),
                                           transition: .easeInOut(duration: 0.3))
         }
         XCTAssertGreaterThan(peak, 0,
@@ -36,7 +36,7 @@ final class OverlayOrphanProbeTests: XCTestCase {
 
     func testEmptyingListActuallyParksViews() {
         let peak = peakOverlayOccupancy { fixture in
-            fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+            fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                           transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.1)
             fixture.listView.applyChanges(items: [], transition: .easeInOut(duration: 0.3))
@@ -47,7 +47,7 @@ final class OverlayOrphanProbeTests: XCTestCase {
 
     func testSizeChangeDuringScrollToActuallyParksViews() {
         let peak = peakOverlayOccupancy { fixture in
-            fixture.listView.applyChanges(scrollTo: (index: 120, pointOffset: 0),
+            fixture.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                           transition: .easeInOut(duration: 0.3))
             fixture.advance(by: 0.1)
             fixture.listView.applyChanges(newSize: CGSize(width: 390, height: 300),

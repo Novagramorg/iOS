@@ -988,19 +988,6 @@ extension ChatControllerImpl {
                 return
             }
 
-            #if DEBUG
-            // Debug fixture, intercepted here rather than in ChatControllerImpl.sendMessages: typed
-            // input reaches THIS closure (via ChatControllerNode.sendCurrentMessage) and then goes
-            // straight to transformEnqueueMessages + enqueueMessages, never through that method.
-            // See ChatControllerSyntheticButtons.swift.
-            // The input field is already cleared by sendCurrentMessage before this closure runs, so
-            // returning early leaves the composer empty as expected.
-            if let peerId = strongSelf.chatLocation.peerId, strongSelf.isSyntheticButtonsCommand(messages) {
-                strongSelf.insertSyntheticButtonsMessage(peerId: peerId, threadId: strongSelf.chatLocation.threadId)
-                return
-            }
-            #endif
-
             var correlationIds: [Int64] = []
             for message in messages {
                 switch message {
@@ -4324,7 +4311,9 @@ extension ChatControllerImpl {
            }
         }, openWebView: { [weak self] buttonText, url, simple, source in
             if let strongSelf = self {
-                strongSelf.controllerInteraction?.openWebView(buttonText, url, simple, source)
+                // nil: this arrives from ChatPanelInterfaceInteraction (menu / inline-bot panels),
+                // which have no inline loading state and whose sources never raise the panel anyway.
+                strongSelf.controllerInteraction?.openWebView(buttonText, url, simple, source, nil)
             }
         }, updateShowWebView: { [weak self] f in
             if let strongSelf = self {

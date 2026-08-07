@@ -25,6 +25,67 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-08-03 — a completion Core Animation never sends**: the exit overlay's teardown hangs on a
+  CA completion, and **Core Animation does not run an animation whose `fromValue` equals its
+  `toValue`** — it changes nothing, the render server has nothing to schedule, and
+  `animationDidStop` is never sent (with `isRemovedOnCompletion = false` the animation just sits on
+  the layer). Two tenants ride equal-endpoint tracks BY DESIGN: a non-fading exit
+  (`beginExit(fadesOut: false)` — every departing row of a full-replace carousel) installs
+  `opacity: o -> o` purely to own a teardown deadline, and a viewport re-target onto the
+  displacement already in flight yields `viewportOffset: 0 -> 0`, whose completion runs
+  `finishViewportGeneration`. Both stranded their content in `exitOverlay`, which sits above
+  `container` and takes no touches — stale rows drawn over live ones, permanently. It presented in
+  the chat as the outgoing strip of a scroll-to-bottom sticking over the conversation.
+  `ListAnimationController.install` now drives such a track's completion from the ANALYTIC deadline
+  (`ListAnimationTrack.deliversNoCoreAnimationCompletion`), which is the rule the architecture
+  already states: the model is the presentation authority, the compiler is an output renderer, and a
+  model-owned completion must not depend on whether Core Animation found the animation worth
+  running. Only equal-endpoint tracks arm a timer — a moving track still rides its callback, so a
+  pass does not pay dozens of timers — and `finalize` removes the pending record first, so the two
+  paths cannot double-fire. Note the model-level no-op guard was NOT enough and had already been
+  deliberately bypassed: `beginExit` routes around the equal-target early-out precisely so the track
+  exists, with a comment explaining that returning `.unchanged` would leak every member — the
+  emitted animation then leaked them anyway. Three defences all missed it: `assertOverlayInvariants`
+  passes because the view IS owned (by an owner that can never be reaped), the test harness runs
+  `emitsAnimations: false` so it never exercised completion delivery at all, and `DEBUG` is not
+  defined for Swift in the app's Bazel build, so the assertions are compiled out of the app.
+  `NoOpAnimationCompletionTests` locks both cases plus a non-vacuity guard that a moving track arms
+  no timer.
+
+- **2026-08-02 — `settledFrame(of:)`, the other half of `presentedFrame(of:)`**: `presentedFrame(of:)`
+  landed as *the* host geometry accessor, on the reasoning that a host asking where a row is wants
+  where it is. That is right for every per-frame read and wrong for exactly one: a host reporting the
+  OUTCOME of a pass it just submitted, alongside that pass's transition. At that instant the pass has
+  been applied but its animation has moved nothing, so presented is the pre-animation position — and
+  because there is no per-frame hook outside user scrolling, nothing re-reports when the animation
+  lands. `settledFrame(of:)` is the sibling for that case: exactly `presentedFrame` without the
+  correction, i.e. what a bare `convert` returns, but named so the choice is deliberate rather than
+  the mistake `presentedFrame` exists to prevent. It changes nothing inside CoreList. The chat backend
+  is the first consumer and shows why it matters: reporting presented at its transaction point left
+  the scroll-to-bottom button on screen after a jump and made it appear when the keyboard opened at
+  the bottom of a chat — measured at ~270pt against a settled `-0.0`. See "Content offsets" in
+  `docs/chat/corelist-chat-history-backend.md`.
+
+- **2026-07-31 — a carousel's ghost blocks take no boundary witness**: a full-replace carousel gives
+  every departing row a ghost block, and `initialGhostWitness` — finding no surviving predecessor,
+  which a full replace guarantees — fell through to proposing `newItems[0]` (or, at the far end,
+  `newItems.last`). That proposal *resolves* exactly when the destination window reaches a collection
+  edge, so the departed strip acquired a position track onto the head of the incoming window and
+  walked across it while the shared viewport track carried both. The rule it broke was already stated
+  for the incoming side — the additive viewport track is a carousel's exclusive vertical-motion owner
+  — and a carousel's departed strip has no live neighbourhood to attach to anyway: its destination is
+  a different region of the collection, which is what made the pass a carousel. Blocks are born
+  `.unresolved`, so declining to attach one is the whole fix; `resolve` then returns the block's own
+  `settledRootY` and the equal-endpoint `transitionGhostBlock` is an exact no-op. Found as a chat
+  jumping from far in the past to the newest message: 348pt of overlap on a 400pt strip at 75% of the
+  travel. Every mid-collection jump stayed rigid, which is why nothing caught it — the carousel suites
+  all sit at index 50, and `ProgrammaticScrollAnimationTests` asserts strip adjacency but keeps the
+  same collection, so its old rows become viewport carries rather than ghosts.
+  `FullReplaceCarouselStripSeparationTests` locks both collection edges, a mid-collection control, and
+  the mechanism (`witness == .unresolved`, no ghost position track). The debugging note worth keeping:
+  sampling `ListAnimationModel` for the two strips' screen bounds across the travel and asserting the
+  overlap turned an eyeballed "heavy intersection" into a number and a named owner in one 15ms run.
+
 - **2026-07-28 — inset compensation is suppressible while dragging**: `applyChanges` gained
   `compensatesInsetChange` (default `true`), and the seam gained `ScrollEngine.onDidEndDragging` →
   `CoreVirtualListView.didEndDragging` so a host can close a finger-down interval at all — only

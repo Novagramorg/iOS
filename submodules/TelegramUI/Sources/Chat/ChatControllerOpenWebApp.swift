@@ -28,7 +28,12 @@ func openWebAppImpl(
     source: ChatOpenWebViewSource,
     skipTermsOfService: Bool,
     payload: String?,
-    verifyAgeCompletion: ((Int) -> Void)?
+    verifyAgeCompletion: ((Int) -> Void)?,
+    /// When supplied, the caller renders the loading state itself (an InstantPage V2 button pill
+    /// shimmers) and the `.requestInProgress` title panel is suppressed — two simultaneous progress
+    /// indicators for one tap read as a bug. When nil, the panel behaves exactly as before, which is
+    /// what surfaces with no inline affordance (reply keyboard, pinned-message panel) rely on.
+    progress: Promise<Bool>? = nil
 ) {
     if context.isFrozen {
         parentController.push(context.sharedContext.makeAccountFreezeInfoScreen(context: context))
@@ -65,7 +70,9 @@ func openWebAppImpl(
         botVerified = botPeer.isVerified
     }
     
-    if source == .generic {
+    progress?.set(.single(true))
+
+    if source == .generic && progress == nil {
         if let parentController = parentController as? ChatControllerImpl {
             parentController.updateChatPresentationInterfaceState(animated: true, interactive: true, {
                 return $0.updatedTitlePanelContext {
@@ -88,6 +95,7 @@ func openWebAppImpl(
     }
     
     let updateProgress = { [weak parentController] in
+        progress?.set(.single(false))
         Queue.mainQueue().async {
             if let parentController = parentController as? ChatControllerImpl {
                 parentController.updateChatPresentationInterfaceState(animated: true, interactive: true, {
@@ -564,13 +572,18 @@ func openJoinChatWebViewImpl(
 }
 
 public extension ChatControllerImpl {
-    func openWebApp(buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource) {
+    func openWebApp(buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, progress: Promise<Bool>? = nil) {
         guard let peer = self.presentationInterfaceState.renderedPeer?.peer else {
             return
         }
         self.chatDisplayNode.dismissInput()
         
-        self.context.sharedContext.openWebApp(
+        // Calls `openWebAppImpl` directly rather than going through
+        // `sharedContext.openWebApp`, which is a pure one-line forwarder to it living in this same
+        // module. The detour exists so *other* modules can reach this function; taking it here would
+        // mean adding `progress` to a public protocol and updating its eleven callers — all in other
+        // modules, all passing nil — for no behavioural gain.
+        openWebAppImpl(
             context: self.context,
             parentController: self,
             updatedPresentationData: self.updatedPresentationData,
@@ -583,7 +596,8 @@ public extension ChatControllerImpl {
             source: source,
             skipTermsOfService: false,
             payload: nil,
-            verifyAgeCompletion: nil
+            verifyAgeCompletion: nil,
+            progress: progress
         )
     }
     

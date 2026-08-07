@@ -145,6 +145,26 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
 
     public internal(set) var attachedHeaderNodes: [ListViewItemHeaderNode] = []
 
+    /// Replaces the header nodes bound to this row, for a list backend that lives outside this module
+    /// and so cannot reach the `internal` setter. `ListViewImpl` keeps maintaining the array directly.
+    ///
+    /// Assign-and-notify is one operation deliberately: a caller that could do either half alone would
+    /// eventually do only the first, and a row whose bound headers changed without
+    /// `attachedHeaderNodesUpdated()` keeps pushing its state to headers it no longer owns — silently,
+    /// since nothing reads the array back.
+    ///
+    /// The unchanged case must also be silent, which is why the comparison is here rather than left to
+    /// the caller: a backend recomputing this binding per scroll frame would otherwise re-push every
+    /// frame, and `attachedHeaderNodesUpdated` re-applies transform state that may be mid-animation.
+    public func setAttachedHeaderNodes(_ nodes: [ListViewItemHeaderNode]) {
+        if self.attachedHeaderNodes.count == nodes.count
+            && zip(self.attachedHeaderNodes, nodes).allSatisfy({ $0 === $1 }) {
+            return
+        }
+        self.attachedHeaderNodes = nodes
+        self.attachedHeaderNodesUpdated()
+    }
+
     open func attachedHeaderNodesUpdated() {
     }
     
@@ -615,13 +635,6 @@ open class ListViewItemNode: ASDisplayNode, AccessibilityFocusableNode {
     }
     
     open func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
-    }
-    
-    open func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let extractedBackgroundNode = self.extractedBackgroundNode {
-            let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: animationCurve)
-            transition.animatePositionAdditive(node: extractedBackgroundNode, offset: CGPoint(x: -value.x, y: -value.y))
-        }
     }
     
     open func snapshotForReordering() -> UIView? {

@@ -476,6 +476,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     article: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 18.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
                     codeBlock: InstantPageTextAttributes(font: InstantPageFont(style: .monospace, size: 14.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
                 )
+                let tableHeaderColor = isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.1) : UIColor(white: 0.0, alpha: 0.05)
                 let pageTheme = InstantPageTheme(
                     type: isDark ? .dark : .light,
                     pageBackgroundColor: .clear,
@@ -492,7 +493,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     panelSecondaryColor: messageTheme.secondaryTextColor,
                     panelAccentColor: messageTheme.accentTextColor,
                     tableBorderColor: isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.25) : UIColor(white: 0.0, alpha: 0.1),
-                    tableHeaderColor: isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.1) : UIColor(white: 0.0, alpha: 0.05),
+                    tableHeaderColor: tableHeaderColor,
                     controlColor: messageTheme.accentControlColor,
                     imageTintColor: nil,
                     overlayPanelColor: isDark ? UIColor(white: 0.0, alpha: 0.13) : UIColor(white: 1.0, alpha: 0.13),
@@ -502,7 +503,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
                     buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
                     checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
-                    checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor
+                    checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor,
+                    neutralButtonBackgroundColor: tableHeaderColor,
+                    neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor
                 )
                 
                 var hasDraft = false
@@ -989,7 +992,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             } else {
                                 pageView.checkboxTapped = nil
                             }
-                            pageView.buttonTapped = { [weak self] button in
+                            pageView.buttonTapped = { [weak self] button, progress in
                                 guard let self else {
                                     return
                                 }
@@ -1002,7 +1005,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                     titleWhenForwarded: nil,
                                     action: button.action,
                                     style: nil
-                                ))
+                                ), progress)
+                            }
+                            pageView.documentTapped = { [weak self] file in
+                                guard let self else {
+                                    return
+                                }
+                                self.openRichTextDocument?(file)
                             }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
                             pageView.frame = CGRect(

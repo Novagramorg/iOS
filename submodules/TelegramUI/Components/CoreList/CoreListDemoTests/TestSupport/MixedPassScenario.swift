@@ -23,21 +23,73 @@ final class MixedPassItemView: UIView, CoreListItemView {
     }
 }
 
-final class MixedPassItem: CoreListItem, Equatable {
-    let id: Int
+final class MixedPassAttachmentView: UIView, CoreListAttachedItemView {
+    var onContentDidChange: ((Bool) -> Void)?
+    private var contentHeight: CGFloat
+
+    init(height: CGFloat) {
+        contentHeight = height
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func apply(height: CGFloat) { contentHeight = height }
+
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat { contentHeight }
+}
+
+/// Even groups reserve space, odd groups overlay, so one seeded run exercises both placements — and
+/// therefore the reservation gap the oracle now accounts for. Edge and floating vary on other moduli
+/// so a run of groups covers the combinations without needing a separate action for each.
+final class MixedPassAttachment: CoreListAttachedItem {
+    let group: Int
     let height: CGFloat
 
-    var identity: AnyHashable { id }
-
-    init(id: Int, height: CGFloat) {
-        self.id = id
+    init(group: Int, height: CGFloat) {
+        self.group = group
         self.height = height
     }
 
-    // Reference type ⇒ no synthesized ==; keep value equality over id + height (what
+    var placement: CoreListAttachmentPlacement { group.isMultiple(of: 2) ? .reservesSpace : .overlay }
+    var edge: CoreListAttachmentEdge { group.isMultiple(of: 3) ? .bottom : .top }
+    var isFloating: Bool { !group.isMultiple(of: 5) }
+
+    func view() -> UIView & CoreListAttachedItemView { MixedPassAttachmentView(height: height) }
+
+    func isEqual(to other: CoreListAttachedItem) -> Bool {
+        guard let other = other as? MixedPassAttachment else { return false }
+        return other.group == group && other.height == height
+    }
+
+    func apply(to view: UIView & CoreListAttachedItemView, transition: CoreListTransition) {
+        (view as? MixedPassAttachmentView)?.apply(height: height)
+    }
+}
+
+final class MixedPassItem: CoreListItem, Equatable {
+    let id: Int
+    let height: CGFloat
+    /// `nil` means this row publishes no attachment, which is what creates gaps between runs.
+    let group: Int?
+
+    var identity: AnyHashable { id }
+
+    init(id: Int, height: CGFloat, group: Int? = nil) {
+        self.id = id
+        self.height = height
+        self.group = group
+    }
+
+    // Reference type ⇒ no synthesized ==; keep value equality over id + height + group (what
     // `isEqual(to:)` relies on).
     static func == (lhs: MixedPassItem, rhs: MixedPassItem) -> Bool {
-        lhs.id == rhs.id && lhs.height == rhs.height
+        lhs.id == rhs.id && lhs.height == rhs.height && lhs.group == rhs.group
+    }
+
+    var attachedItems: [AnyHashable: CoreListAttachedItem] {
+        guard let group else { return [:] }
+        return ["g\(group)": MixedPassAttachment(group: group, height: 28)]
     }
 
     func view() -> UIView & CoreListItemView {
@@ -46,7 +98,7 @@ final class MixedPassItem: CoreListItem, Equatable {
 
     func isEqual(to other: CoreListItem) -> Bool {
         guard let other = other as? MixedPassItem else { return false }
-        return other == self   // value equality over id + height
+        return other == self   // value equality over id + height + group
     }
 
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
@@ -64,6 +116,8 @@ enum MixedPassAction: Equatable, CustomStringConvertible {
     case verticalInsets(top: CGFloat, bottom: CGFloat)
     case viewport(CGSize)
     case scroll(index: Int, pointOffset: CGFloat)
+    case regroup(size: Int)
+    case dropAttachments(range: Range<Int>)
     case sameTarget
 
     var description: String {
@@ -86,6 +140,10 @@ enum MixedPassAction: Equatable, CustomStringConvertible {
             return "viewport:\(size.width)x\(size.height)"
         case let .scroll(index, pointOffset):
             return "scroll@\(index)+\(pointOffset)"
+        case let .regroup(size):
+            return "regroup(size: \(size))"
+        case let .dropAttachments(range):
+            return "dropAttachments(\(range))"
         case .sameTarget:
             return "sameTarget"
         }
@@ -96,7 +154,7 @@ struct MixedPassStep: CustomStringConvertible {
     let items: [MixedPassItem]
     let size: CGSize
     let insets: UIEdgeInsets
-    let scrollTo: (index: Int, pointOffset: CGFloat)?
+    let scrollTo: CoreListScrollTarget?
     let transition: CoreListTransition
     let advanceAfter: TimeInterval
     let actions: [MixedPassAction]
@@ -121,21 +179,32 @@ struct MixedPassScenario {
     private(set) var actionLog: [String] = []
 
     private var rng: SeededRNG
+    /// Attachment decisions draw from their OWN generator. `MixedPassScenario` is a shared seeded
+    /// generator and some focused suites replay its exact sequence (`ProgrammaticScrollAnimationTests`
+    /// depends on a specific pass producing a crossing carry), so drawing attachment actions from
+    /// `rng` would silently hand every one of them a different scenario.
+    private var attachmentRNG: SeededRNG
     private var nextIdentity: Int
     private var positivePassSerial = 0
+    /// Opt-in: only the stress suite wants attachments. Off, the scenario is byte-for-byte what it
+    /// was before attachments existed.
+    private let includesAttachments: Bool
 
     static let heights: [CGFloat] = [44, 60, 75, 96, 128]
     static let durations: [TimeInterval] = [0, 0.15, 0.35, 0.5]
     static let phases: [Double] = [0, 0.1, 0.5, 0.9]
 
-    init(seed: UInt64, itemCount: Int) {
+    init(seed: UInt64, itemCount: Int, includesAttachments: Bool = false) {
         precondition(itemCount > 0)
         self.seed = seed
+        self.includesAttachments = includesAttachments
         rng = SeededRNG(seed: seed)
+        attachmentRNG = SeededRNG(seed: seed &+ 0x9E37_79B9_7F4A_7C15)
         items = (0..<itemCount).map {
             MixedPassItem(
                 id: $0,
-                height: Self.heights[$0 % Self.heights.count]
+                height: Self.heights[$0 % Self.heights.count],
+                group: includesAttachments ? $0 / 4 : nil
             )
         }
         nextIdentity = itemCount
@@ -176,11 +245,19 @@ struct MixedPassScenario {
             }
         }
 
-        var scrollTo: (index: Int, pointOffset: CGFloat)?
+        if includesAttachments {
+            switch attachmentRNG.int(in: 0..<4) {
+            case 0: actions.append(regroup())
+            case 1: actions.append(dropAttachments())
+            default: break
+            }
+        }
+
+        var scrollTo: CoreListScrollTarget?
         if let pointOffset = pendingScrollOffset {
             let index = rng.int(in: items.indices)
             actions.append(.scroll(index: index, pointOffset: pointOffset))
-            scrollTo = (index, pointOffset)
+            scrollTo = CoreListScrollTarget(index: index, pointOffset: pointOffset)
         }
         if actions.isEmpty {
             actions.append(.sameTarget)
@@ -210,6 +287,31 @@ struct MixedPassScenario {
         )
         actionLog.append(step.description)
         return step
+    }
+
+    /// Re-derives every row's group from its POSITION, which splits and merges runs — the operation
+    /// the witness rule exists for. Sizes are chosen so successive regroups rarely align.
+    mutating private func regroup() -> MixedPassAction {
+        let sizes = [2, 3, 5, 8]
+        let size = sizes[rng.int(in: sizes.indices)]
+        items = items.enumerated().map { position, item in
+            MixedPassItem(id: item.id, height: item.height, group: position / size)
+        }
+        return .regroup(size: size)
+    }
+
+    /// Strips the attachment from a contiguous block, creating a gap between runs.
+    mutating private func dropAttachments() -> MixedPassAction {
+        guard !items.isEmpty else { return .sameTarget }
+        let start = rng.int(in: items.indices)
+        let length = min(rng.int(in: 1..<4), items.count - start)
+        let range = start..<(start + length)
+        for position in range {
+            items[position] = MixedPassItem(id: items[position].id,
+                                            height: items[position].height,
+                                            group: nil)
+        }
+        return .dropAttachments(range: range)
     }
 
     mutating private func insertBlock() -> MixedPassAction {

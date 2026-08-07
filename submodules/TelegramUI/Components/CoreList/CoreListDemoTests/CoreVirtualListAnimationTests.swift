@@ -26,7 +26,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let fixture = VirtualListFixture(itemCount: 100, itemHeight: 50,
                                          viewport: CGSize(width: 390, height: 400))
         fixture.listView.applyChanges(
-            scrollTo: (index: 5, pointOffset: 100),
+            scrollTo: .init(index: 5, pointOffset: 100),
             transition: .easeInOut(duration: 4)
         )
         let identity = fixture.listView.items[5].identity
@@ -134,7 +134,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             transition: .easeInOut(duration: 0)
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 99, pointOffset: 50),
+            scrollTo: .init(index: 99, pointOffset: 50),
             transition: .easeInOut(duration: 0)
         )
         let settledBottom = fixture.boundsOriginY
@@ -155,7 +155,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             transition: .easeInOut(duration: 0)
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 99, pointOffset: 50),
+            scrollTo: .init(index: 99, pointOffset: 50),
             transition: .easeInOut(duration: 0)
         )
         let identity = fixture.listView.items[99].identity
@@ -216,7 +216,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             newInsets: UIEdgeInsets(top: 300, left: 0, bottom: 0, right: 0),
-            scrollTo: (index: 20, pointOffset: 40),
+            scrollTo: .init(index: 20, pointOffset: 40),
             transition: .easeInOut(duration: 0)
         )
 
@@ -654,6 +654,8 @@ final class CoreVirtualListAnimationTests: XCTestCase {
     private final class ClampingScrollEngine: ScrollEngine {
         let contentHost = UIView()
         var onScroll: ((CGFloat) -> Void)?
+        /// Never fires: this stub writes offsets directly, with no baked trajectory to compose against.
+        var onFlightChanged: ((ScrollFlight?) -> Void)?
         var onWillBeginDragging: (() -> Void)?
         var onDidEndDragging: (() -> Void)?
         private(set) var offset: CGFloat = 0
@@ -1228,7 +1230,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             items: idItems(Array(0..<30)),
             preloadMargin: 200
         )
-        fixture.listView.applyChanges(scrollTo: (index: 10, pointOffset: 100),
+        fixture.listView.applyChanges(scrollTo: .init(index: 10, pointOffset: 100),
                                       transition: .easeInOut(duration: 0))
         var changed = Array(0..<30)
         changed.insert(90, at: 8)
@@ -1352,7 +1354,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             items: items(includeFirst: false, rowHeight: 150),
-            scrollTo: (index: 0, pointOffset: 0),
+            scrollTo: .init(index: 0, pointOffset: 0),
             transition: .easeInOut(duration: 4)
         )
 
@@ -1490,7 +1492,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             items: idItems([100, 99] + Array(1..<30)),
-            scrollTo: (index: 1, pointOffset: 0),
+            scrollTo: .init(index: 1, pointOffset: 0),
             transition: .easeInOut(duration: 4)
         )
 
@@ -1553,7 +1555,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
 
         for index in stride(from: 0, to: 100, by: 5) {
             fixture.listView.applyChanges(
-                scrollTo: (index: index, pointOffset: 0),
+                scrollTo: .init(index: index, pointOffset: 0),
                 transition: .easeInOut(duration: 0)
             )
             for item in fixture.activeWindow.items {
@@ -1625,7 +1627,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let before = try XCTUnwrap(fixture.screenY(identity: 2))
 
         fixture.listView.applyChanges(
-            scrollTo: (index: 1, pointOffset: 100),
+            scrollTo: .init(index: 1, pointOffset: 100),
             transition: .easeInOut(duration: 4)
         )
 
@@ -1641,7 +1643,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             preloadMargin: 100
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 10, pointOffset: 100),
+            scrollTo: .init(index: 10, pointOffset: 100),
             transition: .easeInOut(duration: 0)
         )
         fixture.apply(idItems(Array(0..<10) + Array(11..<40)), duration: 4)
@@ -2029,7 +2031,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             preloadMargin: 60
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 3, pointOffset: 0),
+            scrollTo: .init(index: 3, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         XCTAssertEqual(try XCTUnwrap(fixture.screenY(identity: 3)), 0, accuracy: 1e-9)
@@ -2167,7 +2169,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             preloadMargin: 0
         )
         fixture.listView.applyChanges(
-            scrollTo: (index: 10, pointOffset: 0),
+            scrollTo: .init(index: 10, pointOffset: 0),
             transition: .easeInOut(duration: 0)
         )
         fixture.apply(idItems(Array(0..<10) + Array(11..<30)), duration: 12)
@@ -2293,7 +2295,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let witness = block.witness
         let track = try XCTUnwrap(fixture.ghostBlockTrack(block.id))
 
-        fixture.listView.applyChanges(scrollTo: (index: 10, pointOffset: 100),
+        fixture.listView.applyChanges(scrollTo: .init(index: 10, pointOffset: 100),
                                       transition: .easeInOut(duration: 4))
 
         let after = try XCTUnwrap(
@@ -2313,7 +2315,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         fixture.apply(idItems([0, 8, 9] + Array(10..<28)), duration: 8)
         let block = try XCTUnwrap(fixture.ghostBlocks.first)
         fixture.listView.applyChanges(
-            scrollTo: (index: 10, pointOffset: 100),
+            scrollTo: .init(index: 10, pointOffset: 100),
             transition: .easeInOut(duration: 4)
         )
         XCTAssertNil(fixture.view(identity: 9))
@@ -2432,7 +2434,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             items: idItems([0, 8, 9] + Array(10..<28)),
-            scrollTo: (index: 2, pointOffset: 100),
+            scrollTo: .init(index: 2, pointOffset: 100),
             transition: .easeInOut(duration: 4)
         )
 
@@ -2463,7 +2465,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         let fixture = VirtualListFixture(viewport: CGSize(width: 390, height: 300),
                                          items: idItems(Array(0..<100)),
                                          preloadMargin: 0)
-        fixture.listView.applyChanges(scrollTo: (index: 80, pointOffset: 100),
+        fixture.listView.applyChanges(scrollTo: .init(index: 80, pointOffset: 100),
                                       transition: .easeInOut(duration: 10))
         XCTAssertFalse(fixture.viewportCarryViews.isEmpty)
 
@@ -2512,7 +2514,7 @@ final class CoreVirtualListAnimationTests: XCTestCase {
 
         fixture.listView.applyChanges(
             items: changed,
-            scrollTo: (index: 10, pointOffset: 100),
+            scrollTo: .init(index: 10, pointOffset: 100),
             transition: .easeInOut(duration: 4)
         )
 
