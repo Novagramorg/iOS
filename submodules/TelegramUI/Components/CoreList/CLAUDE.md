@@ -52,7 +52,7 @@ Every test command must use all three mandatory options:
 - `-collect-test-diagnostics never` — **without this, any run with a failing test hangs forever.**
   xcodebuild defaults to `on-failure`, and on failure it blocks in
   `XCTHRunDestinationAllocator.collectSimulatorDiagnostics` gathering a sysdiagnose; with several
-  simulators booted it effectively never returns. Measured on the same deliberately-failing test:
+  simulators booted it effectively never returns. Measured on a deliberately-failing test:
   5.26s with the flag, still blocked after 240s without it (and only ~1.7s of CPU, so it is waiting,
   not working). A PASSING run exits in ~5s either way, which is what makes this so confusing — the
   hang appears only when you have something to fix.
@@ -175,29 +175,56 @@ is **correct** under the clamped slack — once the rows above the pin alone exc
 slack is zero regardless of the pinned row's height. It was patched once on the theory that it was
 defective; the patch made device behaviour worse and was reverted. Do not patch it again.
 
-**Open defect: the released state stutters while content above the pin keeps growing.**
-Device-confirmed 2026-08-06, locked by `testReleasedGrowthIsNotFoughtByTheRetractingEdge`, which is
-**deliberately failing**. The slack shrinks as the reply grows, so the minimum edge RISES; released,
-nothing re-places the content, and the rising edge cancels part of the growth on each pass. Four equal
-100pt growth steps move the pinned row +100, **+40, +60**, +100. Engaged, it cannot happen — the anchor
-re-places the row every pass at a target that provably never sits below the minimum. It is **not** a
-regression from the clamp (the edge rose the same way when the slack was signed); it was simply
-invisible until the released state was first exercised.
+**A released anchor rides the EFFECTIVE top edge (`inset + slack`), and that is what absorbs a
+streaming reply's growth.** The slack shrinks by exactly what the content above the pin gains, so an
+anchor holding its distance from that edge lets the reply extend into the room the slack gives up
+while the pinned row — and all the history below it, which is what the user is reading — holds still.
+That is already what happens resting at the edge, which is why only the released state was ever wrong.
+Held at an ABSOLUTE offset instead, nothing takes up the retreat and every point of growth pushes the
+rows below: measured as pinned 200 → 250 → 300 → 350 → 400 → 440 for reply 100 → 340, and reported
+from the device as the chat drifting upward mid-stream. The settle clamp then cancelled only the part
+that crossed the edge, which is the same absorption arriving late, partially and in one jerk —
++100, **+40, +60**, +100 for four equal 100pt steps, drift-tug-drift-tug. Once `span` reaches the
+viewport the slack clamps at zero and there is nothing left to spend, so the growth pushes; that
+regime is unchanged.
 
-Three things are already known not to work, and re-deriving them is expensive:
+Mechanically it is one addend, and it lives in **`buildWindow`'s `pinSlackBaseline`** because it needs
+the NEW window's slack, which exists nowhere earlier. `topInsetDelta` carries the geometry half and
+structurally cannot see this one — both of its samples read `oldWindow` and the old items, so they
+differ only when `logicalSize` or `viewportInsets` changed. It is deliberately NOT gated on
+`compensatesInsetChange` — a caller whose own drag owns the movement still wants growth absorbed rather
+than pushed under its finger.
+
+**Two conditions gate the baseline, and the second one is the subtle one.** Only a `.fixed` anchor
+takes it: a `.resolved` one (an explicit `scrollTo`, or the latch itself) computes placement from the
+geometry the pass is building, and the `pinsLoadedTop` branch translates onto `topEdge` outright. And
+only an anchor **above** the pinned row — an anchor above the pin has to MOVE by the spend to deliver
+the invariant, while one at or below the pin delivers it by HOLDING, its old screen position already
+being the right answer because nothing above it can displace it. Projecting there moves it by the whole
+slack delta. That is not hypothetical: it is the pass that ENDS a stream. The typing draft carrying
+`TypingDraftMessageAttribute` is replaced by the real cloud message
+(`ChatHistoryListNode.swift:2240`), so index 0 departs, `topItemWasDeleted` sends `resolveAnchor` past
+it to the first survivor — the pinned row — and the final message measuring differently from the last
+draft moved the pin by exactly that difference. Reported as one small jerk at the end of streaming, and
+"usually" because the two often measure the same. `testTheDraftBecomingTheRealMessageDoesNotMoveThePin`
+locks it.
+
+Because the anchor moves with the edge, a parked user's distance from the declared minimum is
+invariant and they can no longer be clamped at all. Three things are known NOT to work here, and
+re-deriving them is expensive:
 
 1. **Collapsing the slack at finger-up** yanks a short-reply chat ~210pt on any small drag-and-lift.
    Benign only when the slack is already small — i.e. when there was nothing to fix.
-2. **Flooring the declared minimum so it cannot rise past the user** reaches only one of two movers:
-   `buildWindow`'s `topEdge` feeds `alignTopIfUnderfilled`, which yanks the window to the retracted
-   edge *before* the settle clamp runs. Any fix must drive `topEdge` and the edge from one helper.
-3. **"Is the user parked, or is the list tracking its own edge?" is not answerable from geometry.**
-   `render()` writes `declaredEdges` mid-pass, so a test against the declared minimum sees the
-   post-fix state and undoes itself; testing against the natural minimum instead breaks the ordinary
-   unarmed re-pin. It needs the drag EVENT, as the latch does. And even with an event gate, flooring
-   the slack **changes window MEMBERSHIP** — the pinned row was evicted from the loaded window
-   entirely by the fourth growth step. The slack is an input to window construction, not just to
-   placement, and that is the fact to design against.
+2. **Reserving the room the user is standing in** (a stored floor under the slack, gated on the drag
+   event) does stop the tug, and is the wrong cure: it freezes the effective edge, so the growth it
+   was meant to protect goes straight back into pushing the rows below, and the chat drifts for as
+   long as the user stays parked. Absorption removes the clamp's reason to fire instead of outvoting
+   it. Built, device-tested and abandoned; it needed a stored value, an event gate, three retirement
+   rules and three guards, all to outvote a clamp that then had no reason to fire.
+3. **Fixing only the settle clamp** reaches one of two movers: `buildWindow`'s `topEdge` feeds
+   `alignTopIfUnderfilled`, which places the window before the clamp ever runs. Anything acting on the
+   effective edge must act on both, which is why the projection is a window translate rather than an
+   offset correction.
 
 Also unresolved and **unreproduced**: a mid-stream send reportedly snaps although the pin survives. An
 engaged latch should be immune, so suspect that `isStrictlyPinnedToBottomEdge` reading the PRESENTED
