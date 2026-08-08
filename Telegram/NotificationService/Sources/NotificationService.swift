@@ -700,6 +700,31 @@ private struct NotificationContent: CustomStringConvertible {
             }
         }
 
+        // Fenixuz: a content with no visible text at all means "this push is housekeeping — a read
+        // receipt, a deletion, a reaction read — the user must not see anything". Upstream can rely on
+        // that because official Telegram carries com.apple.developer.usernotifications.filtering, which
+        // lets its extension genuinely suppress the banner. Telegram/BUILD gates that entitlement to
+        // ph.telegra.Telegraph, so on this fork it is absent, and Apple is explicit about what happens
+        // then: "the system always displays the notification banner to the user." Worse, iOS refuses to
+        // draw a wholly empty banner and falls back to the ORIGINAL server payload, whose alert body is
+        // PUSH_ENCRYPTED_MESSAGE — which is exactly the phantom "You have a new message" users report.
+        //
+        // We cannot suppress it, so make it as close to invisible as the API allows: a single space
+        // keeps the content non-empty (so iOS renders OUR mutation instead of the raw payload), and
+        // .passive stops the screen lighting up and any sound. It still lands in the notification list,
+        // where the extension's own sweep removes it on the next service push. This mirrors what
+        // Swiftgram ships for the same reason. Verified: no other API can prevent the banner —
+        // apns-collapse-id is sender-side and pre-delivery, threadIdentifier only groups,
+        // hiddenPreviewsBodyPlaceholder is static and user-setting dependent, relevanceScore only
+        // affects the scheduled summary. Telegram's own engineer states the entitlement is the only way.
+        if content.title.isEmpty && content.subtitle.isEmpty && content.body.isEmpty {
+            content.title = " "
+            if #available(iOS 15.0, *) {
+                content.interruptionLevel = .passive
+                content.relevanceScore = 0.0
+            }
+        }
+
         return content
     }
 }
