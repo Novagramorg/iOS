@@ -2513,6 +2513,16 @@ private final class NotificationServiceHandler {
                                             if PeerId(peerIdValue) == id.peerId && messageIdValue <= id.id {
                                                 removeIdentifiers.append(notification.request.identifier)
                                             }
+                                        } else if notification.request.content.userInfo["p"] != nil {
+                                            // Fenixuz: a banner this extension never rewrote — it still carries the
+                                            // encrypted "p" payload, which only survives when iOS displayed the RAW
+                                            // server alert ("You have a new message") because the extension was not
+                                            // launched for that push. Such a banner has no peerId/msg_id, so the match
+                                            // above can never remove it and it sits on the lock screen until the user
+                                            // opens the app. Sweep it here instead: on a multi-account/multi-device
+                                            // setup these read-receipt pushes arrive constantly, so a stray clears
+                                            // within minutes without the user doing anything.
+                                            removeIdentifiers.append(notification.request.identifier)
                                         }
                                     }
 
