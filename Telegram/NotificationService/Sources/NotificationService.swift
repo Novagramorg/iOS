@@ -1102,6 +1102,26 @@ private final class NotificationServiceHandler {
                     } else if let groupCallData {
                         action = .groupCall(groupCallData)
                     } else if let locKey = payloadJson["loc-key"] as? String {
+                        // Fenixuz: every loc-key below is a SILENT service push — read receipts,
+                        // deletions, reaction reads, story reads, session revoke. None of them may
+                        // ever put anything on screen. This branch used to leave the content atomic
+                        // nil for the whole duration of its async action, so if the extension stalled
+                        // or was killed mid-flight both completion sites fell through to
+                        // contentHandler(initialContent) and iOS drew the RAW server payload, whose
+                        // alert body is PUSH_ENCRYPTED_MESSAGE = "You have a new message".
+                        //
+                        // That is exactly where the phantom banners came from: with several devices
+                        // on one account, reading a chat on any of them makes the server send
+                        // READ_HISTORY to the others to REMOVE the delivered banner — and a removal
+                        // that failed here turned into a brand new bogus banner instead of clearing
+                        // one. Removal is also the slowest thing this extension does (~1 s for six
+                        // notifications, vs ~250 ms for a normal message), so it is the likeliest
+                        // path to run out of budget.
+                        //
+                        // Publish empty content up front: the floor becomes "invisible", which is
+                        // what a service push means. Anything that genuinely needs a banner still
+                        // overwrites it downstream via updateCurrentContent.
+                        updateCurrentContent(NotificationContent(isLockedMessage: nil))
                         switch locKey {
                         case "SESSION_REVOKE":
                             action = .logout

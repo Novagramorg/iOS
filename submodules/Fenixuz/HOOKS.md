@@ -3775,6 +3775,27 @@ Postbox plus a live MTProto Network per invocation, and runs on ONE process-glob
 Note that decrypt failures are NOT the cause — every decrypt error branch publishes an empty content first, and
 iOS suppresses an empty content, so a decrypt failure yields no banner at all.
 
+### A0. `Telegram/NotificationService/Sources/NotificationService.swift` — service pushes must start invisible (F1) ← **THE ROOT CAUSE**
+
+Found 2026-08-07 by the owner from real-world behaviour, not from code: he runs the same account on
+**three devices**. When any message arrives every device shows a correct banner. When he reads it on one
+device, the server sends **`READ_HISTORY`** to the others so they can REMOVE their banner. On the iPhone that
+removal sometimes failed — and instead of clearing a banner it produced a brand-new bogus one reading
+"You have a new message".
+
+Mechanism: the `loc-key` branch (`READ_HISTORY`, `MESSAGE_DELETED`, `READ_REACTION`, `READ_STORIES`,
+`MESSAGE_MUTED`, `SESSION_REVOKE`) never called `updateCurrentContent`, so the content atomic stayed nil for
+the entire duration of its async action. Any stall, kill or budget expiry in that window sent both completion
+sites down `contentHandler(initialContent)`, which re-emits the RAW server payload — whose alert body is
+`PUSH_ENCRYPTED_MESSAGE`. Removal is also the slowest thing the extension does: a measured `READ_HISTORY`
+episode took **1044 ms** (`Will try to remove 6 notifications`) versus ~250 ms for a normal message push.
+
+Fix: publish `NotificationContent(isLockedMessage: nil)` immediately on entering the branch, before the switch.
+Empty content is suppressed by iOS, so the floor for a service push is "invisible" — which is what it means.
+Nothing is lost: any path that genuinely needs a banner overwrites it downstream. This explains the original
+report exactly (bursts of generic banners with nothing new in the app, while reading on another device) and why
+single-device tests never reproduced it.
+
 ### A. `Telegram/NotificationService/Sources/NotificationService.swift` — watchdog (F2)
 
 In `didReceive`, after the `QueueLocalObject` is created, a 20 s watchdog runs on
