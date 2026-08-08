@@ -3796,6 +3796,45 @@ Nothing is lost: any path that genuinely needs a banner overwrites it downstream
 report exactly (bursts of generic banners with nothing new in the app, while reading on another device) and why
 single-device tests never reproduced it.
 
+### A1. `NotificationService.swift` `NotificationContent.generate()` — never hand iOS a wholly empty content
+
+**Confirmed root cause of the phantom banners, by controlled A/B on one device:** official Telegram cleared the
+banner with no phantom; this fork produced "You have a new message". The difference is `Telegram/BUILD` gating
+`com.apple.developer.usernotifications.filtering` to `ph.telegra.Telegraph`. Apple's documentation is explicit:
+without that entitlement *"the system always displays the notification banner to the user."* And iOS refuses to
+draw a wholly empty banner — it falls back to the ORIGINAL server payload, whose alert body is
+`PUSH_ENCRYPTED_MESSAGE`. So upstream's "suppress by returning empty content" idiom, which works for official
+Telegram, actively produces a phantom banner on any fork.
+
+Fix: in `generate()`, when title, subtitle and body are all empty, set `title = " "` (a single space keeps the
+content non-empty so iOS renders OUR mutation instead of the raw payload) and, on iOS 15+,
+`interruptionLevel = .passive` + `relevanceScore = 0` so the screen does not light up and no sound plays. The
+notification still enters the notification list; the extension's own sweep (section A2) removes it on the next
+service push. Swiftgram ships the same mitigation for the same reason.
+
+Researched and ruled out — do not retry: `apns-collapse-id` (sender-side, pre-delivery only, cannot touch an
+already-delivered banner, and an NSE cannot read or set HTTP/2 headers), `threadIdentifier` (grouping only),
+`hiddenPreviewsBodyPlaceholder` (static per-category, and only applies when the *user* hides previews),
+`relevanceScore` alone (scheduled-summary ranking only), `filterCriteria` (Focus modes — a different feature),
+removing the current request's own identifier (it is not a delivered notification until `contentHandler` returns),
+not calling `contentHandler` (iOS then shows the original payload — strictly worse), crashing the extension
+(same, plus it risks iOS refusing to launch the extension at all, which would break real message decryption).
+Telegram's own engineer states on issue #1046 that the filtering entitlement is "the only way" to handle these
+events. Nicegram's developer tried and publicly gave up. Full research: `_push-audit-2026-08-07/RESEARCH-2-suppression.json`.
+
+⚠️ `minimum_os_version` stays **13.0**. Bumping it to 15.0 (to clear ASC warning 90068, required by Spring 2027)
+produces **77 build errors** — upstream compiles with warnings-as-errors and many upstream APIs are deprecated in
+iOS 15 (`featureIdentifier`, `typeIdentifier`, `adjustsImageWhenHighlighted`, …). Take upstream's own bump instead
+of fixing their deprecations here. `.passive` is guarded with `#available(iOS 15.0, *)` so it needs no bump.
+
+### A2. `NotificationService.swift` — sweep stray raw banners from inside the extension
+
+In the `READ_HISTORY` removal loop, a delivered notification that resolves to no
+`NotificationManagedNotificationRequestId` **and** still carries the encrypted `p` key is added to
+`removeIdentifiers`. `p` survives only on notifications the extension never rewrote, so this cannot hit a real
+message banner, a call, or the local reminder. Because these read receipts arrive constantly on a multi-device
+account, a stray now clears on its own within minutes instead of waiting for the user to open the app.
+
 ### A. `Telegram/NotificationService/Sources/NotificationService.swift` — watchdog (F2)
 
 In `didReceive`, after the `QueueLocalObject` is created, a 20 s watchdog runs on
