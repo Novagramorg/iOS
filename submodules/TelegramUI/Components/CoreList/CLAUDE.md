@@ -1003,6 +1003,28 @@ Animation an authority.
   genuinely clamps on a `contentSize` shrink, and the realized shift is the only correct amount); and any
   lurch test must measure against `TestScrollEngine.liveViewportOffset`, never `engine.offset`, or it passes
   by its own measuring stick freezing.
+- **Stopping a render-server-played flight is a SWAP, not a removal.** A catch cannot take effect at the
+  instant it is decided: the model write and the animation removal travel in one transaction, and that
+  transaction is presented at the next frame the pipeline can produce, never the frame its value was
+  sampled in. The render server keeps playing until it lands, so freezing the list at
+  `flight.liveOffset(now: localNow())` hands it a value the screen has already passed and the content
+  snaps *back* by `velocity × (that gap)` — measured 40pt one frame late and 79pt two frames late off a
+  3000 pt/s release. The gap is the rest of the main-thread turn plus commit-to-display, which is why it
+  reads as a barely-visible early stop on a pipeline that commits within its frame and as a real
+  reversal on one that does not. `catchFlight(braking:)` therefore stops the flight at `brakeStopTime()`
+  (the sampling link's `targetTimestamp` plus a frame of headroom) and swaps in the path
+  `truncated(at:)` that instant, on the flight's own `startTime` — the same continuous-swap idiom
+  `reemitFlightAnimation` uses, and truncation is exact before the cut, so whichever frame the swap
+  lands on presents what the flight would have anyway. **`presentation()` cannot detect or fix this**:
+  it is evaluated on the main thread at `CACurrentMediaTime()` and agrees with the analytic sampler to
+  −0.02ms, so it describes the same instant the defect is already sampling, not scan-out. Bias the lead
+  LATE: with a swap, landing early costs only a few more milliseconds of the flight's own motion, while
+  landing late is the step — an asymmetry a plain forward-projected snap does not have (it turns an
+  early landing into a forward jump instead). Only the interactive catches brake; `setOffset` /
+  `haltMotionInPlace` / `tearDown` immediately impose their own position, and an additive brake residual
+  would ride on top of that write. `FlightCatchContinuityTests` pins all of it, including the measured
+  step as its own non-vacuity control. The deterministic engine harness is structurally blind here —
+  `TestScrollEngine` has no render server, so its correct lead is zero and it keeps the hard stop.
 - **Anything that displaces screen-space content must join `displacesViewport`, or it silently degrades
   to per-row tracks.** The predicate (`logicalSizeChanged || insetsChanged || hasAdditionalScrollDistance`)
   gates the ONE shared additive viewport track that owns a pass's displacement. Omitted from it, a pass

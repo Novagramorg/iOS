@@ -165,7 +165,8 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             onWillBeginDragging?()
             // Trackpad-style indirect scroll delivers no touch-down, so `onTouchDown` never catches an
             // in-flight keyframe flight — catch it here. Idempotent for touch (onTouchDown nulled it).
-            if flight != nil { catchFlight() }
+            // Braking: this is a finger landing on moving content, the one catch a user watches happen.
+            if flight != nil { catchFlight(braking: true) }
             stopDisplayLink()
             refreshScale()                 // round the upcoming decel to DEVICE PIXELS, not whole points
             // Trackpad (indirect) overscroll uses a looser rubber-band than touch (0.715 vs 0.55).
@@ -325,9 +326,9 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: f.startTime))
     }
 
-    /// Catch an in-flight `.keyframe` deceleration: read the live offset, snap the model (physics + host
-    /// bounds) to it BEFORE removing the animation (so removal reveals the live position, no flash), and
-    /// invalidate `flight`/`flightGeneration` BEFORE `removeAnimation` so the CA completion's stale-
+    /// Catch an in-flight `.keyframe` deceleration: snap the model (physics + host bounds) to the offset
+    /// the flight stops at BEFORE touching the animation (so the swap/removal reveals that position, no
+    /// flash), and invalidate `flight`/`flightGeneration` first so the CA completion's stale-
     /// generation guard fires for both async AND synchronous completion paths. Pre-fix the bump+nil
     /// happened AFTER `removeAnimation`: async completion was guarded fine (the original tap-stop path),
     /// but trackpad Option A (catch from `shouldReceive(event:)`) hit a synchronous completion window
@@ -335,15 +336,63 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// jumped the list to the post-animation rest position at the moment of catch. With the bump first,
     /// the completion's `flightGeneration == g` guard catches the stale fire; `flight = nil` is the
     /// secondary belt-and-suspenders (finalizeFlight's own `guard let f = flight` also short-circuits).
-    private func catchFlight() {
+    ///
+    /// `braking` picks WHICH instant the flight stops at, and it is the difference between a clean stop
+    /// and a visible backward jerk. A catch takes effect only when its transaction is presented — after
+    /// the rest of this main-thread turn and the commit-to-display delay — and the render server plays the
+    /// flight until then, so `liveOffset(now:)` is a value the screen has already passed by the time it
+    /// lands (40pt one frame late, 79pt two frames late, off a 3000 pt/s release; see
+    /// `FlightCatchContinuityTests`). A braking catch instead stops the flight at `brakeStopTime()` and
+    /// swaps in the same path truncated there (`KeyframeFlight.braked`), which presents identically until
+    /// that instant — so the content coasts the last couple of frames along the path it was already on and
+    /// stops, instead of snapping back. INTERACTIVE catches brake; the programmatic ones
+    /// (`setOffset`, `haltMotionInPlace`, `tearDown`) do not, because each of them immediately imposes its
+    /// own position or tears the engine down, and a residual brake would ride on top of that write.
+    private func catchFlight(braking: Bool = false) {
         guard let f = flight else { return }
-        let live = f.liveOffset(now: localNow())
+        let brake = braking ? f.braked(stoppingAt: brakeStopTime()) : nil
+        let live = brake?.offset ?? f.liveOffset(now: localNow())
         core.setOffset(live)                          // also writes host.bounds.origin.y = live (via core.writeOffset)
-        host.bounds.origin.y = live                   // redundant but explicit: model == live BEFORE removeAnimation (no flash)
+        host.bounds.origin.y = live                   // redundant but explicit: model == live BEFORE the swap (no flash)
         flight = nil
         flightGeneration &+= 1
-        host.layer.removeAnimation(forKey: Self.flightKey)
+        if let brake {
+            // Same key ⇒ this REPLACES the flight animation rather than leaving the layer bare, and it
+            // rides the flight's own `startTime` (a past explicit origin, exactly as `reemitFlightAnimation`
+            // does) so its already-played history lines up frame for frame with what is on screen. No
+            // completion: there is no flight left to finalize, and the generation bump above has already
+            // disarmed the animation this one displaces.
+            let brakeAnim = brake.trajectory.boundsOriginKeyframeAnimation(beginTime: f.startTime)
+            brakeAnim.preferHighRefreshRate()
+            if #available(iOS 15.0, *), let r = maxRefreshRange() { brakeAnim.preferredFrameRateRange = r }
+            host.layer.add(brakeAnim, forKey: Self.flightKey)
+        } else {
+            host.layer.removeAnimation(forKey: Self.flightKey)
+        }
         onFlightChanged?(nil)
+    }
+
+    /// Layer-local instant a braking catch should come to rest: the first frame this turn's commit can
+    /// realistically be PRESENTED at, plus one frame of headroom. `targetTimestamp` is the vsync the
+    /// transaction we are about to commit is aiming at, so it is the estimate; the extra frame is because
+    /// the two errors are not symmetric — landing early just means the flight coasts a few more
+    /// milliseconds along the path the eye is already tracking, while landing late is the backward step
+    /// this whole mechanism exists to remove. `max` with `localNow()` covers a turn that has already
+    /// overrun its frame (the link's timestamps only refresh in its callback, so they can be in the past).
+    /// Both link timestamps are converted through the layer, so the headroom stays a real frame under a
+    /// non-unit layer speed.
+    private func brakeStopTime() -> CFTimeInterval {
+        let now = localNow()
+        // `timestamp == 0` means the sampling link has not fired yet (a catch in the same turn as the
+        // launch), so its window is meaningless — fall back to the display's nominal frame.
+        guard let link = displayLink, link.timestamp > 0 else {
+            let frame = 1.0 / Double(Swift.max(UIScreen.main.maximumFramesPerSecond, 60))
+            return now + 2 * frame
+        }
+        let lastFrame = host.layer.convertTime(link.timestamp, from: nil)
+        let nextFrame = host.layer.convertTime(link.targetTimestamp, from: nil)
+        let frame = Swift.max(nextFrame - lastFrame, 1.0 / 120.0)
+        return Swift.max(now, nextFrame) + frame
     }
 
     /// Catch an in-flight deceleration when fingers REST on the list. Trackpad delivers no touch-down,
@@ -354,7 +403,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// to `state == .possible`, so it never fires mid-drag.
     private func catchMotionForFingerRest() {
         if flight != nil {
-            catchFlight()
+            catchFlight(braking: true)      // interactive, same as the touch catch — see `catchFlight`
         } else if core.isDecelerating {
             stopDisplayLink()
             core.cancelDeceleration()

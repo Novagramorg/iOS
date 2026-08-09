@@ -114,6 +114,12 @@ final class TestScrollEngine: ScrollEngine {
     func beginDrag() {
         onWillBeginDragging?()                                  // parity with PhysicsScrollEngine.handlePan(.began)
         if let f = flight {                                    // catch a moving flight at its live offset
+            // Deliberately NOT braked. Production catches interactively with `braking: true`
+            // (PhysicsScrollEngine.catchFlight), stopping a few frames ahead so the swap is continuous on
+            // screen — but that lead exists only to cover a real commit-to-display pipeline, and this
+            // harness has neither a render server nor a display link. `SyntheticClock` presents the model
+            // instantly, so the correct lead here is zero, which is exactly this hard stop. The brake's
+            // own contract is pinned at the value level in `FlightCatchContinuityTests`.
             core.setOffset(f.liveOffset(now: clock.now))
             flight = nil
             onFlightChanged?(nil)

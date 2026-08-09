@@ -62,6 +62,23 @@ extension Trajectory {
     /// Max carried history when rebaking, in seconds. Caps the spliced keyframe count while giving CA
     /// a well-defined recent past across the animation swap. (Design §3.)
     static let historyWindow: TimeInterval = 1.0
+
+    /// This path up to `t` (seconds from launch), coming to rest there — every vertex before `t`
+    /// verbatim, then the interpolated sample AT `t` as the endpoint. `offset(at:)` is therefore
+    /// UNCHANGED for every time ≤ `t` and constant after it.
+    ///
+    /// That exactness is the whole point: replayed as a keyframe animation on the SAME `beginTime`,
+    /// this presents pixel-for-pixel what the full path presents until `t`, so swapping one for the
+    /// other mid-flight is invisible no matter which frame the swap lands on. `KeyframeFlight.braked`
+    /// uses it to stop a caught flight without the render server ever stepping backward.
+    func truncated(at t: TimeInterval) -> Trajectory {
+        guard let first = samples.first else { return self }
+        if t <= first.t { return Trajectory(samples: [first]) }
+        if t >= duration { return self }
+        var out = samples.filter { $0.t < t - 1e-9 }
+        out.append(Sample(t: t, offset: offset(at: t), velocity: velocity(at: t)))
+        return Trajectory(samples: out)
+    }
 }
 
 /// A rebaked trajectory plus the layer-local time it should be played from.

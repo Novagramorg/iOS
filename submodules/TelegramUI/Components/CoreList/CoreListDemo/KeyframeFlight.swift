@@ -119,6 +119,36 @@ final class KeyframeFlight {
         return false
     }
 
+    /// How to stop this flight at `stopTime` (caller's time base) WITHOUT the content ever stepping
+    /// backward: the live path truncated there, plus the LIST-coordinate offset it comes to rest at.
+    ///
+    /// A catch cannot take effect at the instant it is decided. The layer write and the animation removal
+    /// travel in one transaction, and the pipeline presents that transaction at the next frame it can
+    /// produce — after the rest of the main-thread turn and the commit-to-display delay. Until it lands
+    /// the render server keeps playing the flight, so freezing the list at `liveOffset(now:)` hands it a
+    /// value the screen has already passed, and it snaps back by `velocity × (that gap)`. Measured on the
+    /// shipping physics: 40pt one frame late, 79pt two frames late, off a 3000 pt/s release. The gap is
+    /// main-thread cost plus pipeline latency, which is precisely what grows on a slower device.
+    ///
+    /// Replayed on this flight's own `startTime`, the truncated path is EXACTLY the one in flight up to
+    /// `stopTime` (`Trajectory.truncated`), so whichever frame the swap lands on presents the same value
+    /// it would have anyway — and after `stopTime` it holds at the rest offset. The engine therefore
+    /// swaps animations rather than removing one, the same continuous-swap idiom `rebakeIfNeeded` +
+    /// `reemitFlightAnimation` already use for a mid-flight rebake. Overshooting `stopTime` costs a few
+    /// milliseconds of the flight's own remaining motion; undershooting it is the backward step, so the
+    /// caller is expected to bias late.
+    ///
+    /// `nil` when there is no path left to play (the stop is at or before this flight's launch, or the
+    /// flight is already over) — the caller falls back to removing the animation, which is exact there
+    /// because a settled flight presents its rest offset already.
+    func braked(stoppingAt stopTime: TimeInterval) -> (offset: CGFloat, trajectory: Trajectory)? {
+        let cut = trajectory.truncated(at: stopTime - startTime)
+        guard cut.duration > 1e-6, cut.samples.count >= 2 else { return nil }
+        // `cut.finalOffset + coordinateShift == liveOffset(now: stopTime)` by construction: same
+        // trajectory coordinate, and truncation only drops samples after `stopTime`.
+        return (cut.finalOffset + coordinateShift, cut)
+    }
+
     /// After `onScroll`/rebalance: if an edge changed, rebake+splice (a pure shift does not get here —
     /// it rode the model translation). Returns true if rebaked (the engine then re-emits the CA animation
     /// from `trajectory` at `startTime`). The core already reflects the live LIST-coordinate state
