@@ -13,7 +13,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        // Keep only the two production demos: the virtualized list and custom physics scroll view.
+        // Two production demos — the virtualized list and the custom physics scroll view — plus the
+        // debug gesture recorder, which captures real UIScrollView ground truth into the fixtures the
+        // physics replica is regression-tested against. This file is excluded from the Bazel
+        // `CoreList` library, so the recorder tab exists only in the standalone demo app.
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let listVC = ViewController()
@@ -23,8 +26,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         physicsVC.tabBarItem = UITabBarItem(title: "Physics Scroll",
                                             image: UIImage(systemName: "scroll"), tag: 1)
 
+        let abVC = ScrollComparisonViewController()
+        abVC.tabBarItem = UITabBarItem(title: "A/B",
+                                       image: UIImage(systemName: "rectangle.split.2x1"), tag: 3)
+
+        let recorderVC = ScrollRecorderViewController()
+        recorderVC.tabBarItem = UITabBarItem(title: "Recorder",
+                                             image: UIImage(systemName: "record.circle"), tag: 2)
+
         let tabs = UITabBarController()
-        tabs.viewControllers = [listVC, physicsVC]
+        tabs.viewControllers = [listVC, physicsVC, abVC, recorderVC]
 
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = tabs

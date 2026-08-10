@@ -111,7 +111,15 @@ final class TestScrollEngine: ScrollEngine {
 
     var isDecelerating: Bool { flight != nil || core.isDecelerating }
 
+    /// Recognizer velocity (pts/s) of the last `drag` this gesture, so `endDrag()` can keep its
+    /// zero-argument shape while `PhysicsScrollCore` takes the fresh read UIKit makes at release.
+    private var lastRecognizerVelocity: CGFloat = 0
+
     func beginDrag() {
+        // Parity with PhysicsScrollEngine: the finger landing (`onTouchDown` → `_beginTrackingWithEvent:`)
+        // is a distinct moment from the pan beginning, and it is where the fast-scroll streak is
+        // carried or expired. It happens BEFORE the flight catch, as it does in production.
+        core.beginTouchTracking(at: clock.now)
         onWillBeginDragging?()                                  // parity with PhysicsScrollEngine.handlePan(.began)
         if let f = flight {                                    // catch a moving flight at its live offset
             // Deliberately NOT braked. Production catches interactively with `braking: true`
@@ -129,10 +137,14 @@ final class TestScrollEngine: ScrollEngine {
 
     /// `translation`/`velocity` are recognizer-space (points, points/sec) — finger up is negative,
     /// matching `UIPanGestureRecognizer.translation/velocity(in:)`.
-    func drag(translation: CGFloat, velocity: CGFloat) { core.drag(translation: translation, velocity: velocity) }
+    func drag(translation: CGFloat, velocity: CGFloat) {
+        lastRecognizerVelocity = velocity
+        core.drag(translation: translation, velocity: velocity)
+    }
 
     @discardableResult func endDrag() -> Bool {
-        let decelerate = core.endDrag()
+        let decelerate = core.endDrag(recognizerVelocity: lastRecognizerVelocity, at: clock.now)
+        lastRecognizerVelocity = 0
         defer { onDidEndDragging?() }                            // parity with PhysicsScrollEngine.handlePan(.ended)
         if decelerate && decelerationMode == .keyframe {
             let f = KeyframeFlight(core: core, startTime: clock.now)
@@ -149,17 +161,22 @@ final class TestScrollEngine: ScrollEngine {
 
     /// Begin a flick that sends the content offset moving at `offsetVelocity` pts/s (+down/increasing),
     /// anchored at the current offset, leaving the engine decelerating. Drive it with `tick(dt:)`.
-    /// Two zero-translation drag frames load `endDrag`'s `0.75·prev + 0.25·latest` low-pass to the
-    /// target without moving the offset; the recognizer velocity is the opposite sign of the offset
-    /// velocity (the finger moves opposite the content).
+    /// TWO zero-translation drag frames are deliberate and load-bearing: under the parity model the
+    /// first is the `.began` sample and the second the first `.changed`, so `previous == latest` and
+    /// the guarded low-pass yields `0.75·v + 0.25·v == v` — the same release velocity this helper
+    /// produced before the parity work, which is why every suite built on it keeps its expectations.
+    /// Reducing it to one frame would change that: with `previous` still zero the guard skips the
+    /// blend and the release carries the raw sample. The recognizer velocity is the opposite sign of
+    /// the offset velocity (the finger moves opposite the content).
     func simulateFlick(offsetVelocity v: CGFloat) {
         // Fired directly rather than by going through `beginDrag()`, which would also catch a live flight
         // and change the physics of a flick chained onto a decelerating one. This keeps the
         // will-begin/did-end pair balanced (`endDrag()` fires did-end) without altering any offset.
         onWillBeginDragging?()
+        core.beginTouchTracking(at: clock.now)
         core.beginDrag()
-        core.drag(translation: 0, velocity: -v)
-        core.drag(translation: 0, velocity: -v)
+        drag(translation: 0, velocity: -v)
+        drag(translation: 0, velocity: -v)
         _ = endDrag()
     }
 
@@ -170,12 +187,18 @@ final class TestScrollEngine: ScrollEngine {
             if f.isComplete(now: clock.now), !f.hasPendingEdgeRebake {
                 core.setOffset(f.settledOffset)            // settle at the LIST-coord rest (finalOffset + accrued shift)
                 core.cancelDeceleration()                  // phase → .idle so isDecelerating is false
+                core.noteDecelerationEnded()               // parity with PhysicsScrollEngine.finalizeFlight
                 flight = nil
                 onFlightChanged?(nil)
                 onScroll?(core.offset)
                 return
             }
             f.beginTick(now: clock.now)
+            // Parity with PhysicsScrollEngine.sampleTick: a baked path has no per-frame hook, so the
+            // flight's reset instant is where the integrator would have cleared the streak.
+            if let reset = f.trajectory.multiplierResetTime, clock.now - f.startTime >= reset {
+                core.noteDecelerationEnded()
+            }
             onScroll?(f.liveOffset(now: clock.now))         // → list rebalances → applyShift/setEdges → noteShift/noteEdges
             if f.rebakeIfNeeded(now: clock.now) {
                 keyframeRebakeCount += 1
@@ -183,6 +206,7 @@ final class TestScrollEngine: ScrollEngine {
                 if f.isComplete(now: clock.now) {
                     core.setOffset(f.settledOffset)
                     core.cancelDeceleration()
+                    core.noteDecelerationEnded()
                     flight = nil
                     onFlightChanged?(nil)
                     onScroll?(core.offset)

@@ -10,8 +10,10 @@ import UIKit.UIGestureRecognizerSubclass
 /// the scroll view catches a trackpad finger-down via the public `UIGestureRecognizerDelegate`
 /// `gestureRecognizer(_:shouldReceive:)` (UIEvent) callback instead.
 final class PhysicsPanGestureRecognizer: UIPanGestureRecognizer {
-    /// Fired the instant a finger lands (before the pan recognizes a drag).
-    var onTouchDown: (() -> Void)?
+    /// Fired the instant a finger lands (before the pan recognizes a drag), carrying the touch
+    /// event's timestamp — the analogue of `-[UIScrollView _beginTrackingWithEvent:]` reading
+    /// `event.timestamp`, which shares `CACurrentMediaTime`'s timebase.
+    var onTouchDown: ((TimeInterval) -> Void)?
     /// Fired when a finger lifts / the touch is cancelled.
     var onTouchUp: (() -> Void)?
 
@@ -45,7 +47,7 @@ final class PhysicsPanGestureRecognizer: UIPanGestureRecognizer {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
         isIndirectScroll = false               // a real touch landed → this is a direct (finger) gesture
-        onTouchDown?()
+        onTouchDown?(event.timestamp)
         // Grab moving content the instant the finger lands (no hysteresis). Evaluated AFTER onTouchDown
         // so onTouchDown must not have already stopped the motion — the engine no longer catches there.
         if shouldBeginImmediately?() == true { state = .began }

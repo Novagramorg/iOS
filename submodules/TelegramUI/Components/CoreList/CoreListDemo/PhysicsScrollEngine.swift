@@ -13,14 +13,19 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// double-handling a real release, which `.ended`/`.cancelled` already handle).
     private var sawDrag = false
 
-    /// Set when `shouldReceive(event:)` forces the pan to `.began` for the trackpad finger-rest catch.
-    /// `pan.setTranslation(.zero, in:)` is silently ignored for indirect-scroll, so the recognizer's
-    /// translation at our forced `.began` carries the STALE value from the prior gesture and never
-    /// decrements — spurious `.changed` events would feed that value into `core.drag` and overscroll the
-    /// list far past the catch position. We track our own baseline and subtract it in `.changed` so the
-    /// drag math sees the delta SINCE the catch, not the cumulative since the prior gesture. Cleared on
-    /// `.ended`/`.cancelled` so a following natural-`.began` gesture sees raw translation as today.
-    private var trackpadForcedBegan = false
+    /// Set when the pan was FORCED to `.began` rather than reaching it through hysteresis — by
+    /// `shouldBeginImmediately` (a finger landing on moving content) or by `shouldReceive(event:)`
+    /// (the trackpad finger-rest catch). Both are CATCHES, where translation and velocity are ~0 and
+    /// the gesture is not a flick start, so neither feeds the `.began` drag sample.
+    ///
+    /// The trackpad half additionally needs a translation baseline: `pan.setTranslation(.zero, in:)`
+    /// is silently ignored for indirect-scroll, so the recognizer's translation at our forced
+    /// `.began` carries the STALE value from the prior gesture and never decrements — spurious
+    /// `.changed` events would feed that value into `core.drag` and overscroll the list far past the
+    /// catch position. We track our own baseline and subtract it in `.changed` so the drag math sees
+    /// the delta SINCE the catch. That half stays trackpad-only through an explicit `isIndirect`
+    /// conjunction rather than hiding in this flag's name. Cleared on `.ended`/`.cancelled`.
+    private var beganWasForced = false
     private var trackpadTranslationBaseline: CGFloat = 0
 
     /// How a flick/bounce plays out after release. `.stepped` (default) integrates the physics on the
@@ -35,6 +40,35 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     // counts rebakes WITHIN a flight only.
     private var flight: KeyframeFlight?
     private var flightGeneration = 0
+    /// What the ENGINE last wrote to `host.bounds.origin.y`. During a flight that value is the additive
+    /// animation's BASE (parked at the trajectory's `finalOffset`), not a position — so if it ever
+    /// differs from this, something outside the engine rebased the animation mid-flight. Diagnostic
+    /// only; read by `FlightTrace`.
+    private var expectedBoundsBase: CGFloat = 0
+    /// Container rebases move the sampled position without moving content; subtract them so the
+    /// opening samples describe real travel.
+    private var cumulativeFlightShift: CGFloat = 0
+    private var flightLaunchOffset: CGFloat = 0
+    private var flightRebakes = 0
+    /// Wall time of the release, and how many opening samples have been logged. A start-phase
+    /// difference converges by the end of the path, so TOTAL travel and whole-flight profile are both
+    /// blind to it — only the first frames show it.
+    private var launchWallTime: CFTimeInterval = 0
+    private var openingSamples = 0
+
+    /// Log where the content is, relative to the release position, in the opening frames.
+    /// `-[UIScrollView _endPanNormal:]` sets `lastUpdateTime = now - 1/maxFPS` and steps to `now`, so
+    /// its FIRST deceleration step integrates exactly one display frame. `.stepped` inherits that from
+    /// its display link's first callback; whether `.keyframe`'s baked path, begun at `localNow()`,
+    /// hands off the same way is exactly what this measures.
+    private func noteOpening(_ label: String, position: CGFloat) {
+        guard FlightTrace.isEnabled, openingSamples < 6 else { return }
+        openingSamples += 1
+        FlightTrace.shared.log(String(format: "OPENING %@ #%d t=%.2fms moved=%.1f",
+                                      label, openingSamples,
+                                      (CACurrentMediaTime() - launchWallTime) * 1000,
+                                      position - flightLaunchOffset))
+    }
     private static let flightKey = "listDecelerationFlight"
 
     /// Layer-LOCAL time (CLAUDE.md gotcha). Equals `CACurrentMediaTime()` only at default layer speed;
@@ -48,7 +82,19 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         // No catch here any more: when content is moving the pan now recognizes immediately
         // (shouldBeginImmediately below) and the catch runs in handlePan(.began). Catching in
         // onTouchDown would null the motion BEFORE shouldBeginImmediately reads it → no grab, no absorb.
-        pan.onTouchDown = { [weak self] in self?.sawDrag = false }
+        pan.onTouchDown = { [weak self] timestamp in
+            guard let self else { return }
+            self.sawDrag = false
+            // Clear the forced-begin flag at finger-down, which runs BEFORE `shouldBeginImmediately`
+            // is consulted. Clearing it only on `.ended`/`.cancelled` would leak a stale `true` into
+            // the next gesture whenever a forced begin was then denied by `gestureRecognizerShouldBegin`
+            // (a tracking UIControl), and that gesture's natural `.began` would skip its drag sample.
+            self.beganWasForced = false
+            // `-[UIScrollView _beginTrackingWithEvent:]` — the finger landing is a different moment
+            // from the pan beginning, and it is where the repeated-flick streak is carried or
+            // expired. UIKit uses `event.timestamp`, which shares CACurrentMediaTime's timebase.
+            self.core.beginTouchTracking(at: timestamp)
+        }
         pan.onTouchUp = { [weak self] in self?.handleTouchUp() }
         // Grab the scroll the instant a finger lands on MOVING content (UIScrollView's no-deadzone feel).
         // The forced .began runs handlePan(.began) → the catch; and because the engine grants no
@@ -57,7 +103,9 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         // false → normal hysteresis, and the content recognizer wins on its own.
         pan.shouldBeginImmediately = { [weak self] in
             guard let self else { return false }
-            return self.flight != nil || self.core.isDecelerating
+            let moving = self.flight != nil || self.core.isDecelerating
+            if moving { self.beganWasForced = true }   // a catch, not a flick start — see beganWasForced
+            return moving
         }
         pan.delegate = self
         host.addGestureRecognizer(pan)
@@ -86,6 +134,25 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// `flight.liveOffset(now: localNow())` directly, which is the one operation that genuinely needs it.
     var offset: CGFloat { core.offset }
     var contentHost: UIView { host }
+
+    /// Whether any driver is running. Exposed for the seam tests; production reads motion state
+    /// through `onFlightChanged` / the drag pair.
+    var isDecelerating: Bool { flight != nil || core.isDecelerating }
+    /// Where the current release projects to. Exists for the seam tests and for nothing in
+    /// production, which plays the baked trajectory rather than the analytic landing.
+    var projectedRestOffset: CGFloat { core.projectedTarget() }
+    /// `_fastScrollMultiplier` as the replica currently has it. Diagnostic.
+    var decelerationVelocityScale: CGFloat { core.decelerationVelocityScale }
+    var decelerationStreakCount: Int { core.decelerationStreakCount }
+    var decelerationStreakReset: String { core.decelerationStreakReset }
+
+    /// Touch-down bookkeeping, for a harness that drives this engine from a FOREIGN recognizer. Normal
+    /// operation reaches it through our own `pan.onTouchDown`; the A/B comparison view drives the
+    /// engine from `UIScrollView.panGestureRecognizer`, whose touches never route through that pan.
+    /// Without this the repeated-flick streak neither expires on a pause nor compounds
+    /// (`_fastScrollStartMultiplier` stays 1), so the harness would understate our own multiplier and
+    /// read as a physics difference that does not exist in the app.
+    func noteTouchDown(at timestamp: TimeInterval) { core.beginTouchTracking(at: timestamp) }
 
     func setOffset(_ y: CGFloat) {
         // The list's one-viewport delta-clamp routes here; during a flight, catch first (plain catch —
@@ -120,7 +187,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             // translated old bounce is no longer authoritative — unless the translated path still cannot
             // reach that edge, which `noteEdgesChanged` filters out.
             let changesShape = core.hasFiniteEdge
+            cumulativeFlightShift += dy
+            FlightTrace.shared.log("shift dy=\(dy) changesShape=\(changesShape)")
             host.bounds.origin.y += dy
+            expectedBoundsBase += dy
             core.applyShiftPhysicsOnly(dy)
             flight?.noteShift(dy)
             // Republish: a consumer composing against the trajectory must learn the new base, or it
@@ -134,6 +204,8 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
                 noteFlightEdgesChanged()
             }
         } else {
+            cumulativeFlightShift += dy
+            FlightTrace.shared.log("shift dy=\(dy) changesShape=n/a")
             core.applyShift(dy)
         }
     }
@@ -159,7 +231,25 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     }
 
     @objc private func handlePan(_ gr: UIPanGestureRecognizer) {
-        switch gr.state {
+        applyPanUpdate(state: gr.state,
+                       translation: gr.translation(in: host),
+                       velocity: gr.velocity(in: host),
+                       forced: beganWasForced,
+                       isIndirect: pan.isIndirectScroll)
+    }
+
+    /// The gesture→physics seam, split out of `handlePan` so it can be driven from a synthetic event
+    /// list — no recognizer, no window, no display link. This is the layer the short-flick defect
+    /// lived in, and it had no coverage precisely because it was welded to `UIPanGestureRecognizer`.
+    ///
+    /// `translation` is points, `velocity` points/SECOND (both recognizer-space, finger-signed).
+    /// `forced` marks a pan that was force-begun on moving content rather than reaching `.began`
+    /// through hysteresis. `isIndirect` is passed IN rather than read off the recognizer: a
+    /// `PhysicsPanGestureRecognizer` that has received no touches reports `isIndirectScroll == true`,
+    /// so reading it here would hand a synthetic gesture the trackpad rubber-band coefficient.
+    func applyPanUpdate(state: UIGestureRecognizer.State, translation: CGPoint,
+                        velocity: CGPoint, forced: Bool, isIndirect: Bool) {
+        switch state {
         case .began:
             sawDrag = true
             onWillBeginDragging?()
@@ -170,28 +260,39 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             stopDisplayLink()
             refreshScale()                 // round the upcoming decel to DEVICE PIXELS, not whole points
             // Trackpad (indirect) overscroll uses a looser rubber-band than touch (0.715 vs 0.55).
-            // isIndirectScroll is correct by .began (touch's touchesBegan cleared it; trackpad leaves it
-            // true) and resets per gesture, so the coefficient never leaks into a following touch gesture.
-            core.updateRubberBandCoefficient(pan.isIndirectScroll ? RubberBand.trackpadCoefficient
-                                                                   : RubberBand.touchCoefficient)
+            core.updateRubberBandCoefficient(isIndirect ? RubberBand.trackpadCoefficient
+                                                        : RubberBand.touchCoefficient)
             core.beginDrag()
-            // Trackpad forced-.began baseline (see trackpadForcedBegan): capture the recognizer's stale
-            // translation NOW so subsequent .changed events compute the delta since this catch. For the
-            // touch path (trackpadForcedBegan == false) we use raw translation as today.
-            if trackpadForcedBegan { trackpadTranslationBaseline = gr.translation(in: host).y }
+            if forced {
+                // A forced `.began` is a CATCH, not a flick start — see `beganWasForced`. Only the
+                // trackpad half needs the stale-translation baseline.
+                if isIndirect { trackpadTranslationBaseline = translation.y }
+            } else {
+                // `handlePan:` case 1 runs `_updatePanGesture` IMMEDIATELY after zeroing the velocity
+                // ivars, so `.began` contributes a full velocity sample AND applies its translation.
+                // Dropping it ran the whole gesture one sample behind UIKit and released a short
+                // flick at a quarter of its velocity — the reported "modest scroll".
+                core.drag(translation: translation.y, velocity: velocity.y)
+            }
         case .changed:
-            let rawTr = gr.translation(in: host).y
-            let tr = trackpadForcedBegan ? rawTr - trackpadTranslationBaseline : rawTr
-            let v = gr.velocity(in: host).y
-            // Skip no-movement .changed events on the forced-began path: UIKit fires .changed with the
-            // stale-but-unchanging translation after our forced .began (delta=0, vel=0), and calling
-            // core.drag(0, 0) would re-apply the rubber-band on top of the already-rubber-banded live
-            // offset, compressing further. Skipping keeps the caught offset stable until real movement.
-            if trackpadForcedBegan, tr == 0, v == 0 { break }
-            core.drag(translation: tr, velocity: v)
+            // A `.changed` with no preceding `.began` cannot come from UIKit, but a synthetic caller
+            // can produce one; treat it as the gesture start rather than dragging from stale state.
+            if !core.isDragging {
+                core.beginDrag()
+            }
+            let tr = (forced && isIndirect) ? translation.y - trackpadTranslationBaseline
+                                            : translation.y
+            // Skip no-movement `.changed` events on the forced trackpad path: UIKit fires `.changed`
+            // with the stale-but-unchanging translation after our forced `.began` (delta=0, vel=0),
+            // and `core.drag(0, 0)` would re-apply the rubber band on top of the already-rubber-banded
+            // live offset, compressing further.
+            if forced, isIndirect, tr == 0, velocity.y == 0 { break }
+            core.drag(translation: tr, velocity: velocity.y)
         case .ended, .cancelled:
-            if core.endDrag() { startDeceleration() }
-            trackpadForcedBegan = false
+            if core.endDrag(recognizerVelocity: velocity.y, at: CACurrentMediaTime()) {
+                startDeceleration()
+            }
+            beganWasForced = false
             trackpadTranslationBaseline = 0
             // Paired with the `.began` notification above: the pan can only reach `.ended`/`.cancelled`
             // after `.began`, so the two callbacks always bracket the finger-down interval. Fired AFTER
@@ -238,10 +339,25 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
 
     @objc private func step(_ link: CADisplayLink) {
         let dtMs = CGFloat((link.targetTimestamp - link.timestamp) * 1000)
-        if core.step(dtMs: dtMs) { stopDisplayLink() }
+        let done = core.step(dtMs: dtMs)
+        noteOpening("stepped(written)", position: core.offset - cumulativeFlightShift)
+        if done {
+            FlightTrace.shared.log("SETTLED offset=\(core.offset) "
+                + "totalTravel=\(core.offset - flightLaunchOffset)")
+            FlightTrace.shared.flush()
+            stopDisplayLink()
+        }
     }
 
     private func startSteppingLink() {
+        FlightTrace.shared.begin("STEPPED flight")
+        flightLaunchOffset = core.offset
+        launchWallTime = CACurrentMediaTime()
+        openingSamples = 0
+        cumulativeFlightShift = 0
+        FlightTrace.shared.log("launch v=\(core.decelerationVelocity) offset=\(core.offset) projectedTarget=\(core.projectedTarget()) "
+            + "projectedTravel=\(core.projectedTarget() - core.offset) "
+            + "edges=\(String(describing: core.edges)) vScale=\(core.decelerationVelocityScale)")
         stopDisplayLink()
         let link = CADisplayLink(target: self, selector: #selector(step(_:)))
         link.add(to: .main, forMode: .common)
@@ -254,6 +370,12 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// and hand the visual path to the render server. The sampling link reports the live offset (and
     /// drives the list's mid-flight rebalance → rebake); the CA completion finalises.
     private func launchFlight() {
+        // UIScrollView integrates exactly one display frame at release, synchronously, before anything
+        // is presented. Without this the baked path trails it by that frame for the whole flight —
+        // same landing, visibly less initial movement. See `applyDecelerationHandOff`.
+        if Self.appliesReleaseHandOff {
+            core.applyDecelerationHandOff(frameMs: Self.displayFrameMs * Self.releaseHandOffFrames)
+        }
         let now = localNow()
         let f = KeyframeFlight(core: core, startTime: now)
         guard f.trajectory.samples.count >= 2, f.trajectory.duration > 0 else {
@@ -268,6 +390,18 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         }
         flight = f
         host.bounds.origin.y = f.trajectory.finalOffset            // model at settled (sync)
+        expectedBoundsBase = f.trajectory.finalOffset
+        flightLaunchOffset = core.offset
+        flightRebakes = 0
+        launchWallTime = CACurrentMediaTime()
+        openingSamples = 0
+        cumulativeFlightShift = 0
+        FlightTrace.shared.begin("KEYFRAME flight")
+        FlightTrace.shared.log("launch v=\(core.decelerationVelocity) offset=\(core.offset) finalOffset=\(f.trajectory.finalOffset) "
+            + "travel=\(f.trajectory.finalOffset - core.offset) duration=\(f.trajectory.duration) "
+            + "samples=\(f.trajectory.samples.count) edges=\(String(describing: core.edges)) "
+            + "vScale=\(core.decelerationVelocityScale) "
+            + "pinnedRate=\(Self.pinsMaximumRefreshRate) linkPinned=\(Self.pinsSamplingLinkRate)")
         flightGeneration &+= 1
         let g = flightGeneration
         // disablingImplicitActions: false — this site never disabled them, and doing so now would
@@ -295,7 +429,36 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             finalizeFlight()
             return
         }
+        if FlightTrace.isEnabled {
+            // Where the RENDER SERVER actually has the content, against where the baked path says it
+            // should be at this instant. Distance measurements cannot see a profile error: the
+            // animation is installed with `beginTime` already in the past by the commit delay, so CA
+            // starts it at phase δ rather than 0 — the opening, fastest milliseconds are never
+            // rendered while the endpoint, and therefore the travel, stays exactly right.
+            if let presented = host.layer.presentation()?.bounds.origin.y {
+                noteOpening("keyframe(rendered)", position: presented - cumulativeFlightShift)
+                let planned = f.liveOffset(now: now)
+                let lag = planned - presented
+                if abs(lag) > 2.0 {
+                    FlightTrace.shared.log(String(format: "PROFILE t=%.1fms planned=%.1f presented=%.1f lag=%.1f",
+                                                  (now - f.startTime) * 1000, planned, presented, lag))
+                }
+            }
+            let base = host.bounds.origin.y
+            if abs(base - expectedBoundsBase) > 0.5 {
+                FlightTrace.shared.log("BASE-DRIFT expected=\(expectedBoundsBase) actual=\(base) "
+                    + "delta=\(base - expectedBoundsBase)  <-- something rebased the animation")
+                expectedBoundsBase = base
+            }
+        }
         f.beginTick(now: now)
+        // A baked path has no per-frame hook, so the flight's own reset instant is where the
+        // integrator would have cleared the fast-scroll streak (`0x17a87bc` / `0x17a8844`). Without
+        // this the `.keyframe` driver — which is what the chat ships — never clears it at all, since
+        // `PhysicsScrollCore.step` only runs under `.stepped`.
+        if let reset = f.trajectory.multiplierResetTime, now - f.startTime >= reset {
+            core.noteDecelerationEnded()
+        }
         onScroll?(f.liveOffset(now: now))                          // list rebalances → applyShift (model-bump) / setEdges
         if f.rebakeIfNeeded(now: now) {
             if f.isComplete(now: now) {
@@ -313,6 +476,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         guard let f = flight else { return }   // re-entrant catch (setOffset during onScroll) nulled flight → no-op, no stray anim
         host.layer.removeAnimation(forKey: Self.flightKey)
         host.bounds.origin.y = f.trajectory.finalOffset
+        expectedBoundsBase = f.trajectory.finalOffset
+        flightRebakes += 1
+        FlightTrace.shared.log("REBAKE #\(flightRebakes) finalOffset=\(f.trajectory.finalOffset) "
+            + "duration=\(f.trajectory.duration) samples=\(f.trajectory.samples.count)")
         flightGeneration &+= 1
         let g = flightGeneration
         let flightAnim = f.trajectory.boundsOriginKeyframeAnimation(beginTime: f.startTime)
@@ -352,6 +519,8 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         guard let f = flight else { return }
         let brake = braking ? f.braked(stoppingAt: brakeStopTime()) : nil
         let live = brake?.offset ?? f.liveOffset(now: localNow())
+        FlightTrace.shared.log("CATCH braking=\(braking) at=\(live) "
+            + "(flight would have settled at \(f.settledOffset))")
         core.setOffset(live)                          // also writes host.bounds.origin.y = live (via core.writeOffset)
         host.bounds.origin.y = live                   // redundant but explicit: model == live BEFORE the swap (no flash)
         flight = nil
@@ -417,6 +586,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         stopDisplayLink()
         core.setOffset(f.settledOffset)            // settle at the LIST-coord rest (finalOffset + accrued shift)
         core.cancelDeceleration()                  // idle the core (phase → .idle) — matches TestScrollEngine
+        core.noteDecelerationEnded()               // a finished flight has settled, which clears the streak
+        FlightTrace.shared.log("FINALIZE settledOffset=\(f.settledOffset) coreOffset=\(core.offset) "
+            + "totalTravel=\(core.offset - flightLaunchOffset) rebakes=\(flightRebakes)")
+        FlightTrace.shared.flush()
         flight = nil
         onFlightChanged?(nil)                      // BEFORE onScroll: a consumer re-entering must see no flight
         onScroll?(core.offset)
@@ -425,21 +598,69 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     private func startSamplingLink() {
         stopDisplayLink()
         let link = CADisplayLink(target: self, selector: #selector(sampleTick(_:)))
-        if #available(iOS 15.0, *), let r = maxRefreshRange() { link.preferredFrameRateRange = r }   // hold the ProMotion rate (residual-hitch fix)
+        if #available(iOS 15.0, *), Self.pinsSamplingLinkRate, let r = maxRefreshRange() {
+            link.preferredFrameRateRange = r        // hold the ProMotion rate (residual-hitch fix)
+        }
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
 
-    /// A FIXED max-refresh range (`min == max == preferred`) for ProMotion, or nil on ≤60Hz. Diagnosis:
-    /// the residual scroll hitch was the DISPLAY rate dropping (sampling display-link callbacks skipped
-    /// while our main thread sat idle at ~0.5ms, no re-emit). The flight animation requested
-    /// `(min: 30, max, max)` — that low floor let the system throttle the display to ~80Hz and
-    /// intermittently halve it. Pinning the floor on the link AND the flight animation holds the rate.
+    /// Whether a keyframe flight PINS the display to its maximum rate (`min == max == preferred`)
+    /// rather than requesting an adaptive range.
+    ///
+    /// Pinning is the shipped behaviour and was itself a fix: the residual scroll hitch was the
+    /// DISPLAY rate dropping — sampling display-link callbacks skipped while the main thread sat idle
+    /// at ~0.5ms, with no re-emit — because `preferHighRefreshRate()` asks for `(min: 30, max, max)`
+    /// and that low floor let the system throttle to ~80Hz and intermittently halve it.
+    ///
+    /// It is togglable because it is also a **keyframe-only, ProMotion-only** asymmetry, and therefore
+    /// a candidate for a "constrained velocity" reported on device and unreproducible in the 60Hz
+    /// Simulator, where `maxRefreshRange()` is inert: `.stepped` sets no range on its display link at
+    /// all, so the two drivers ask the system for different things on a 120Hz panel. A rigid range is
+    /// also the one the system is least able to satisfy under thermal pressure or Low Power Mode
+    /// (which caps ProMotion at 60Hz), and an unsatisfiable request is served by falling back rather
+    /// than by negotiating. Defaults to the shipped behaviour; only the demo flips it.
+    static var pinsMaximumRefreshRate = true
+
+    /// Whether the SAMPLING display link is also pinned to the maximum rate.
+    ///
+    /// It does not move the content — the render server plays the baked animation — it only drives
+    /// `onScroll` → rebalance → row loading. Pinning it therefore buys no smoothness and costs DOUBLE
+    /// the main-thread row work per second: measured on a 120Hz device, the keyframe sampler runs at
+    /// ~116Hz while `.stepped`'s link runs at ~61Hz, because only the keyframe path applies
+    /// `maxRefreshRange()`. A saturated main thread means rows arrive late behind a container whose
+    /// motion is provably correct (measured within 1% of the analytic path from the first frame),
+    /// which is a candidate for a flick that measures right and feels constrained.
+    ///
+    /// Separate from `pinsMaximumRefreshRate` because the two were conflated: unpinning BOTH gave up
+    /// the animation's rate guarantee — the hitch the pinning was introduced to fix — while only
+    /// incidentally reducing sampler load, so the combination read as worse.
+    static var pinsSamplingLinkRate = true
+
+    /// Whether a baked flight applies UIScrollView's one-frame release hand-off (see
+    /// `PhysicsScrollCore.applyDecelerationHandOff`). Togglable because its evidence is a
+    /// fixture-LANDING argument, and the A/B harness measures the opening instead.
+    static var appliesReleaseHandOff = true
+    /// How much of a display frame the release hand-off integrates. Measured against a real
+    /// UIScrollView driven by the SAME gesture (the A/B harness): 0 leaves us ~313pt behind at peak,
+    /// 1.0 overshoots to ~301pt ahead, so the compensation the real thing actually applies is about
+    /// half a frame. Tunable while that is pinned down.
+    static var releaseHandOffFrames: CGFloat = 0.5
+
+    /// A FIXED max-refresh range for ProMotion, or nil on ≤60Hz (incl. Simulator) or when pinning is
+    /// disabled — in which case the animation keeps `preferHighRefreshRate()`'s adaptive range and the
+    /// display link keeps CoreAnimation's default.
     @available(iOS 15.0, *)
     private func maxRefreshRange() -> CAFrameRateRange? {
+        guard Self.pinsMaximumRefreshRate else { return nil }
         let maxFps = Float(UIScreen.main.maximumFramesPerSecond)
         guard maxFps > 61 else { return nil }   // no-op on ≤60Hz (incl. Simulator)
         return CAFrameRateRange(minimum: maxFps, maximum: maxFps, preferred: maxFps)
+    }
+
+    /// One display frame in ms, for the release hand-off. Falls back to 60Hz.
+    private static var displayFrameMs: CGFloat {
+        1000.0 / CGFloat(Swift.max(UIScreen.main.maximumFramesPerSecond, 60))
     }
 
     private func stopDisplayLink() {
@@ -533,8 +754,8 @@ extension PhysicsScrollEngine: UIGestureRecognizerDelegate {
         // Mark the forced-began path so handlePan(.began) captures the recognizer's stale translation as
         // a baseline (the indirect-scroll recognizer ignores setTranslation, so we subtract our own
         // baseline in .changed to make drag math see the delta since the catch, not the cumulative
-        // translation that leaked from the prior gesture). See `trackpadForcedBegan` for the full why.
-        trackpadForcedBegan = true
+        // translation that leaked from the prior gesture). See `beganWasForced` for the full why.
+        beganWasForced = true
         gestureRecognizer.state = .began
         return true
     }

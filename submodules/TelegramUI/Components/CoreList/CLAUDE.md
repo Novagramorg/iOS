@@ -831,15 +831,17 @@ runtime-selectable between stepped and keyframe modes.
 ## Scroll physics replica
 
 `CoreListDemo/ScrollPhysics/` is a standalone, UIKit-free value-model replica derived from UIKitCore
-on iOS 26.2. Core files implement per-axis drag, release, deceleration, rubber banding, projection,
-and offset math. `PanRecognizer.swift` handles input. `Trajectory.swift` and
+on iOS 26.2. Core files implement per-axis drag, deceleration, rubber banding, projection, and offset
+math; `ReleaseDecision.swift` owns the gesture-RELEASE path (velocity capture, the guarded 2-D
+decelerate/stop decision, and the repeated-flick multiplier), which is two-dimensional and
+gesture-lifetime and therefore deliberately not on `ScrollAxis`. `PanRecognizer.swift` handles input. `Trajectory.swift` and
 `Trajectory+Keyframe.swift` bake rate-independent linear keyframe playback and seamless splicing.
 Recording support and tests live under the corresponding production/test folders.
 
 📖 **Read before changing any physics constant or formula:**
 `docs/plans/2026-05-22-uikit-scrollview-physics-analysis.md` and
-`docs/plans/2026-05-23-pan-recognizer-reproduction-design.md`. The formulas come from assembly;
-decompiler SIMD/FP pseudocode is not authoritative.
+`docs/plans/2026-05-23-pan-recognizer-reproduction-design.md`.
+The formulas come from assembly; decompiler SIMD/FP pseudocode is not authoritative.
 
 ## Tests
 
@@ -983,6 +985,54 @@ Animation an authority.
   writing non-zero offsets.
 - Trackpad indirect scroll ignores `pan.setTranslation(.zero)`; keep the explicit translation
   baseline in the physics engine.
+- **The gesture-release path is a 2-D, gesture-LIFETIME decision, and `.began` is a velocity sample.**
+  `ReleaseDecision` owns it (`ScrollPhysics/ReleaseDecision.swift`), not `ScrollAxis`: the
+  decelerate/stop threshold is `vx² + vy²` evaluated on the RAW latest sample before the low-pass, the
+  0.75/0.25 low-pass is GUARDED on the previous-axis pair being non-zero, and the repeated-flick
+  multiplier outlives a gesture — while `PhysicsScrollCore.beginDrag` rebuilds `ScrollPhysics` from
+  scratch every gesture, so anything stored there would need hand-maintaining. `-[UIScrollView
+  handlePan:]` case 1 zeroes the four velocity ivars and then calls `_updatePanGesture` **immediately**,
+  so `.began` contributes a full sample and applies its translation; treating it as setup only ran every
+  gesture one sample behind UIKit and released a short flick — one or two `.changed` events — at a
+  QUARTER of its velocity. Measured: ~370pt where UIKit travels ~1493pt. A force-begun pan is the
+  exception and feeds nothing, because it is a catch on moving content rather than a flick start.
+  `Deceleration.spring` must NOT apply `vScale`; only the free-decel term and its to-the-edge sub-step
+  do.
+- **A dead axis must not answer questions about a live one.** `ScrollPhysics.step` ORs the two axes'
+  "ended a deceleration" flags — correct in itself, one axis reaching its edge really is an end. But
+  `PhysicsScrollCore` pins x to a DEAD axis (offset 0, `min == max == 0`, no velocity), and
+  `Deceleration.settled()` calls an in-bounds axis settled the moment its velocity is under the floor.
+  So x reported "ended" on every frame it was ever stepped and the OR was unconditionally true. Since
+  the core clears the repeated-flick streak on exactly that signal, the FIRST deceleration frame after
+  every release cleared it — in both drivers (`.stepped` on the display link's first callback,
+  `.keyframe` on the single hand-off step before the bake). The streak could never reach the three
+  consecutive fast flicks growth requires, so `_fastScrollMultiplier` sat at 1 forever and a burst of
+  flicks carried **0.99×** a single flick where UIScrollView compounds to 1.9× and beyond. `ScrollAxis.step`
+  now gates the flag on the deceleration having actually been RUNNING (decelerating, and either above
+  `Deceleration.velocityFloor` or displaced past an edge and still springing back — the exact complement
+  of `settled()`). Note the failure was invisible to every existing streak test because they flicked
+  repeatedly WITHOUT ever stepping the integrator between flicks; the regression tests now drive a burst
+  both ways, and `test_theFourthFlickOfABurstTravelsFartherThanTheSameFlickAlone` states it as distance.
+- **A harness that drives the engine from a foreign recognizer must replay the engine's touch-down
+  hookup too.** `core.beginTouchTracking` is reached only via `PhysicsScrollEngine`'s OWN
+  `pan.onTouchDown`. The A/B comparison view deliberately drives the engine from
+  `UIScrollView.panGestureRecognizer`, whose touches never route through it — so the streak never
+  expired on a pause and `_fastScrollStartMultiplier` stayed pinned at 1, meaning the replica could not
+  compound across a burst even with the physics correct. That reads as a physics difference that does
+  not exist in the app. `PhysicsScrollEngine.noteTouchDown(at:)` exists for that hookup. (The
+  trackpad/indirect path also never calls it — see `gestureRecognizer(_:shouldReceive:)`. Whether UIKit
+  applies the fast-scroll multiplier to indirect scroll at all is **unverified**; do not "fix" that by
+  analogy.)
+- **A replay harness must drive the same entry point production drives, or it validates a driver nobody
+  ships.** `ScrollReplay.replay` folds every recorded DISPLAY FRAME through `drag(...)`, including the
+  first — so it behaved like UIKit whether or not the live engine fed its `.began` sample, and a suite
+  holding the integrator to ≤3px against real `UIScrollView` traces could not see a 4× error in the
+  release. The defect lived in the engine↔core seam and no fixture crossed it. `ScrollReplay.replayEvents`
+  drives the per-EVENT touch stream the way `PhysicsScrollEngine.applyPanUpdate` does and is the seam
+  oracle; `replay` remains the integrator oracle. `applyPanUpdate` takes its indirect-ness as a
+  PARAMETER for the same reason — a `PhysicsPanGestureRecognizer` that has received no touches reports
+  `isIndirectScroll == true`, so a synthetic gesture reading it off the recognizer would silently get
+  the trackpad rubber-band coefficient.
 - **`ScrollEngine.offset` is per-frame stable; never sample a running animation through it, and never read
   `contentHost.bounds.origin.y` as a position.** That layer value is the additive BASE of the emitted keyframe
   animation, parked at the trajectory's `finalOffset` for the whole flight — mid-flight it holds the flight's
@@ -1074,6 +1124,20 @@ Animation an authority.
   is `x²(3−2x)` in real arithmetic, but 1/3 and 2/3 round to float32 and every sample drifts by up to
   1.7e-8 — including at phase 0.5, where the ideal bezier is exactly 0.5. Payload-free cases
   (`.easeInOut`, `.linear`) use `Double` literals and are exact.
+- **A baked deceleration must apply UIScrollView's one-frame release hand-off, and omitting it is
+  invisible to every distance measurement.** `-[UIScrollView _endPanNormal:]` sets the decel's
+  `lastUpdateTime = now − 1/maxFPS` and then calls `_smoothScrollWithUpdateTime:(now)` SYNCHRONOUSLY,
+  so a real scroll view has already integrated exactly one display frame before anything is presented
+  — regardless of the release-to-first-frame gap (analysis §2, "Decel hand-off"). `.stepped` inherits
+  it from its display link's first callback and `ScrollReplay` models it as `firstDecelStepMs`, but a
+  baked `Trajectory` starts at `t = 0` = the release state, so `.keyframe` trailed UIScrollView by one
+  frame of integration for the WHOLE flight: identical shape, identical landing, `v × frame` less
+  displacement at every instant. At 8.9 pts/ms on a 120Hz panel that is 74pt missing from the first
+  frame, which reads as a slower initial speed — while total travel, whole-flight profile, rendered-
+  vs-planned position and the deterministic suite all keep agreeing, because the difference is a phase
+  shift that converges. `PhysicsScrollCore.applyDecelerationHandOff` is applied in `launchFlight`
+  before the bake; it fires no `onScroll` and writes no host bounds, since the flight parks the layer
+  immediately after. Applying it also brings the landing DOWN by ~3-5% — omitting it overshoots.
 - **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
   animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
   real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no
