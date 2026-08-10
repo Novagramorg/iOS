@@ -465,7 +465,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
                             if let notificationRequestId = notificationRequestId {
                                 result.append((notification.request.identifier, notificationRequestId))
-                            } else if payload["p"] != nil {
+                            } else if payload["p"] != nil || payload["fenixuz_blank"] != nil {
                                 // Fenixuz: the NSE fell back to the raw server payload, so this banner
                                 // reads the generic "You have a new message" and carries no peer or
                                 // message id. With no id ClearNotificationsManager can never sweep it

@@ -719,6 +719,15 @@ private struct NotificationContent: CustomStringConvertible {
         // affects the scheduled summary. Telegram's own engineer states the entitlement is the only way.
         if content.title.isEmpty && content.subtitle.isEmpty && content.body.isEmpty {
             content.title = " "
+            // Group every one of these under one thread so repeated service pushes collapse into a
+            // single row instead of stacking, and stamp them so both sweeps (the extension's own and
+            // AppDelegate's) can find and delete them. We build a brand new UNMutableNotificationContent
+            // here, so the encrypted "p" key from the original payload is NOT present and the existing
+            // "still carries p" rule would never match these.
+            content.threadIdentifier = "fenixuz-service-push"
+            var blankInfo = content.userInfo
+            blankInfo["fenixuz_blank"] = "1"
+            content.userInfo = blankInfo
             if #available(iOS 15.0, *) {
                 content.interruptionLevel = .passive
                 content.relevanceScore = 0.0
@@ -2538,7 +2547,7 @@ private final class NotificationServiceHandler {
                                             if PeerId(peerIdValue) == id.peerId && messageIdValue <= id.id {
                                                 removeIdentifiers.append(notification.request.identifier)
                                             }
-                                        } else if notification.request.content.userInfo["p"] != nil {
+                                        } else if notification.request.content.userInfo["p"] != nil || notification.request.content.userInfo["fenixuz_blank"] != nil {
                                             // Fenixuz: a banner this extension never rewrote — it still carries the
                                             // encrypted "p" payload, which only survives when iOS displayed the RAW
                                             // server alert ("You have a new message") because the extension was not
@@ -2665,6 +2674,7 @@ final class NotificationService: UNNotificationServiceExtension {
         
         self.initialContent = request.content
         self.contentHandler = contentHandler
+        let requestIdentifier = request.identifier
 
         self.impl = nil
 
@@ -2689,7 +2699,17 @@ final class NotificationService: UNNotificationServiceExtension {
                         strongSelf.contentHandler = nil
                         
                         if let content = content.with({ $0 }) {
-                            contentHandler(content.generate())
+                            let generated = content.generate()
+                            contentHandler(generated)
+                            // A service push (read receipt, deletion, reaction read) has nothing to show,
+                            // but without the filtering entitlement iOS refuses to let us suppress it, so
+                            // it lands as a blank row. It only becomes a *delivered* notification once the
+                            // handler above returns, which is the first moment we are allowed to delete it.
+                            // Best effort: the extension may be torn down before this XPC call lands, in
+                            // which case the two sweeps still catch it on the next push or app launch.
+                            if generated.userInfo["fenixuz_blank"] != nil {
+                                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [requestIdentifier])
+                            }
                         } else if let initialContent = strongSelf.initialContent {
                             contentHandler(initialContent)
                         }
