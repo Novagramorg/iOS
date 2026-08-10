@@ -376,16 +376,20 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         if Self.appliesReleaseHandOff {
             core.applyDecelerationHandOff(frameMs: Self.displayFrameMs * Self.releaseHandOffFrames)
         }
+        // The hand-off is a real integration frame, so it can also END the deceleration it was handed —
+        // and a release CAN reach here with nothing left to spend. `endDrag` reports `.decelerate` for
+        // two of them: a blend that cancels (the decelerate threshold reads the RAW latest sample and
+        // the 0.75/0.25 low-pass runs after it, so a finger reversing on its last sample releases above
+        // the threshold at ~0 pts/ms), and an overscrolled release already inside
+        // `Deceleration.settleTolerance` — the everyday drag-to-the-edge-and-pause. `.stepped` absorbs
+        // both in its first link callback; here the settle happens BEFORE the bake, so building the
+        // flight would violate the `.decelerating` precondition `KeyframeFlight` asserts.
+        guard core.isDecelerating else { settleWithoutFlight(at: core.offset); return }
         let now = localNow()
         let f = KeyframeFlight(core: core, startTime: now)
         guard f.trajectory.samples.count >= 2, f.trajectory.duration > 0 else {
-            // Degenerate (unreachable in practice — endDrag only decelerates with real motion, and
-            // Trajectory.build always appends ≥1 post-t0 sample). Snap + settle, and idle the core so
-            // isDecelerating doesn't stay stale (matches .stepped's settle + TestScrollEngine).
-            core.setOffset(f.trajectory.finalOffset)
-            core.cancelDeceleration()
-            onFlightChanged?(nil)
-            onScroll?(f.trajectory.finalOffset)
+            // Degenerate (unreachable in practice — Trajectory.build always appends ≥1 post-t0 sample).
+            settleWithoutFlight(at: f.trajectory.finalOffset)
             return
         }
         flight = f
@@ -416,6 +420,18 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         host.layer.add(flightAnim, forKey: Self.flightKey)
         onFlightChanged?(ScrollFlight(trajectory: f.trajectory, beginTime: now))
         startSamplingLink()
+    }
+
+    /// Come to rest at `offset` with no flight at all: a release that had nothing left to play. Writes
+    /// the position through the core (the hand-off deliberately does not touch the host bounds, so the
+    /// "physics offset == host bounds origin while nothing is in flight" identity needs this), idles the
+    /// core so `isDecelerating` cannot read stale, and reports the rest position once — the same settle
+    /// `.stepped` reaches through its first link callback returning `settled`.
+    private func settleWithoutFlight(at offset: CGFloat) {
+        core.setOffset(offset)
+        core.cancelDeceleration()
+        onFlightChanged?(nil)
+        onScroll?(offset)
     }
 
     /// Per-tick protocol (order is load-bearing — `KeyframeFlight` asserts the core is `.decelerating`):

@@ -1138,6 +1138,22 @@ Animation an authority.
   shift that converges. `PhysicsScrollCore.applyDecelerationHandOff` is applied in `launchFlight`
   before the bake; it fires no `onScroll` and writes no host bounds, since the flight parks the layer
   immediately after. Applying it also brings the landing DOWN by ~3-5% — omitting it overshoots.
+  - **It is a real integration frame, so it can END the deceleration it was handed**, and `launchFlight`
+    must re-check `core.isDecelerating` after it rather than baking. `endDrag` reports `.decelerate` for
+    two releases with nothing left to spend: a blend that CANCELS — the decelerate threshold reads the
+    RAW latest sample and the 0.75/0.25 low-pass runs after it, so a finger reversing on its last sample
+    releases above the threshold at ~0 pts/ms, below `Deceleration.velocityFloor` — and an overscrolled
+    release already inside `settleTolerance`. Both settle inside the hand-off's own step, and building a
+    `KeyframeFlight` from the resulting `.idle` core trips its precondition assert on device.
+    **The overscrolled one is an everyday gesture, and the pixel grid is why:** the spring's rest is
+    pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
+    release speed, comes to rest at exactly −1/3 pt. The content therefore sits overscrolled inside the
+    tolerance after any bounce, and the next tap or sub-threshold release springs back from there with
+    nothing left to play. At the tests' default scale 1 it rounds to −0.0 instead, so a fixture that
+    never sets a device scale cannot see it. `.stepped` absorbs both cases silently in its first link
+    callback, and `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this
+    lives only on the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through
+    `applyPanUpdate` (the seam) and at the core.
 - **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
   animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
   real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no

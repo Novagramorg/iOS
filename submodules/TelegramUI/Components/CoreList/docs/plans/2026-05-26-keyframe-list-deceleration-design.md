@@ -190,6 +190,17 @@ render-server.
 
 - **Degenerate trajectory** (`< 2` samples / `duration == 0`): snap to `finalOffset`, settle, no
   animation — the existing `launchFlight` guard.
+- **A release with nothing left to play** (added 2026-08-11, with the UIScrollView release hand-off):
+  `launchFlight` integrates one hand-off frame *before* the bake, and that frame can END the
+  deceleration it was handed — so the `release (.decelerate) → launchFlight` arrow above is not
+  enough to guarantee the `.decelerating` state `KeyframeFlight` asserts on. Two releases reach it
+  with no motion: a low-pass blend that CANCELS (the decelerate threshold reads the raw latest
+  sample, the 0.75/0.25 blend runs after it), and an overscrolled release already inside
+  `Deceleration.settleTolerance` — which is an everyday gesture, because the pixel-rounded spring
+  rest puts EVERY bounce exactly 1/3 pt outside the edge on a 3× device, so the next tap or slow
+  release springs back from there. `launchFlight` re-checks `core.isDecelerating` after the hand-off
+  and takes the same settle path as the degenerate case. `.stepped` absorbs both in its first link
+  callback; `TestScrollEngine` applies no hand-off and so cannot see either.
 - **Stale completion / catch during a rebake:** the generation guard + idempotent `finalizeFlight`
   already cover sampler-first / completion-first / catch-bumps-generation, exactly as in
   `PhysicsScrollView`; the splice bumps generation like a relaunch.
