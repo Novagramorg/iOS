@@ -494,9 +494,10 @@ func updatedChatEditInterfaceMessageState(context: AccountContext, state: ChatPr
     )
 }
 
-private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, message: EngineRawMessage, controllerInteraction: ChatControllerInteraction) -> Signal<ContextController.Items, NoError> {
+private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, message: EngineRawMessage, controllerInteraction: ChatControllerInteraction, interfaceInteraction: ChatPanelInterfaceInteraction) -> Signal<ContextController.Items, NoError> {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
+    let replacementMessage = message.activeEphemeralReplacementMessage
 
     var richMessageInstantPage: InstantPage?
     if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
@@ -579,6 +580,14 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
             })))
         }
 
+        if let replacementMessage {
+            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.contextMenu.primaryColor)
+            }, action: { controller, _ in
+                interfaceInteraction.reportMessages([replacementMessage], controller)
+            })))
+        }
+
         let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0)
         let revertSubtitle = NSAttributedString(string: presentationData.strings.Chat_EphemeralMessage_RevertInfo, font: subtitleFont, textColor: presentationData.theme.contextMenu.destructiveColor)
         actions.append(.action(ContextMenuActionItem(text: presentationData.strings.Chat_EphemeralMessage_Revert, textColor: .destructive, textLayout: .secondLineWithAttributedValue(revertSubtitle), icon: { theme in
@@ -605,7 +614,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     if let message = messages.first, message.activeEphemeralReplacementMessage != nil {
-        return ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, context: context, message: message, controllerInteraction: controllerInteraction)
+        return ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, context: context, message: message, controllerInteraction: controllerInteraction, interfaceInteraction: interfaceInteraction)
     }
     
     var isEmbeddedMode = false
