@@ -2676,6 +2676,29 @@ final class NotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         let requestIdentifier = request.identifier
 
+        // Fenixuz: sweep leftover blank service rows at the START of every invocation, whatever the
+        // push turns out to be. Without the filtering entitlement iOS insists on showing something for
+        // a read-receipt push, so we hand it a blank .passive row (see NotificationContent.generate())
+        // and delete it as soon as we can. Deleting it from the run that created it is unreliable — the
+        // extension is usually suspended the moment contentHandler returns — so the practical clock was
+        // "whenever the next READ_HISTORY arrives". Doing it here instead means ANY next push clears it,
+        // including a plain message, which is much sooner. Fire-and-forget: it never delays this push.
+        UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in
+            let stale = notifications.compactMap { notification -> String? in
+                if notification.request.identifier == requestIdentifier {
+                    return nil
+                }
+                if notification.request.content.userInfo["fenixuz_blank"] != nil {
+                    return notification.request.identifier
+                }
+                return nil
+            }
+            if !stale.isEmpty {
+                Logger.shared.log("NotificationService \(episode)", "Sweeping \(stale.count) leftover blank service rows")
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: stale)
+            }
+        })
+
         self.impl = nil
 
         let content = self.content
