@@ -171,7 +171,7 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 }
                 return InstantPageTableRow(cells: cells)
             }
-            result.append(.table(title: .empty, rows: rows, bordered: true, striped: false))
+            result.append(.table(title: .empty, rows: rows, bordered: true, striped: false, compact: false))
         case let .details(d):
             // Recursive detail (folding) block → InstantPage `.details`. Forward the title as RichText and the
             // inner content unchanged; `expanded` maps 1:1 (the inverse of a block-quote's `collapsed`).
@@ -427,7 +427,7 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             // matching the .image/.video canonicalization above.
             let map = TelegramMediaMap(latitude: latitude, longitude: longitude, heading: nil, accuracyRadius: nil, venue: nil)
             result.append(.media(ChatInputMedia(media: map, kind: .location, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
-        case let .table(_, rows, _, _):
+        case let .table(_, rows, _, _, _):
             // Rebuild the `ChatInputTable`. Columns are inferred from the widest row's SPANNED cell count (each
             // cell occupies `max(1, colspan)` grid columns, so a colspanning first cell no longer under-counts
             // — a plain, no-span table still infers from the raw cell count, matching the prior behavior); column

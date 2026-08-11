@@ -1382,7 +1382,7 @@ private func markdownBlocks(from node: MarkdownIntentNode, context: MarkdownConv
         guard !rows.isEmpty else {
             return []
         }
-        return [.table(title: .empty, rows: rows, bordered: true, striped: false)]
+        return [.table(title: .empty, rows: rows, bordered: true, striped: false, compact: false)]
     case let .header(level):
         guard let text = markdownRichText(from: node.attributedText, context: context) else {
             return nil

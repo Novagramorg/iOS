@@ -139,7 +139,7 @@ final class InstantPageStructureFingerprintTests: XCTestCase {
     func testTableCellTextChangesFingerprint() {
         func table(_ cellText: String) -> InstantPageBlock {
             let cell = InstantPageTableCell(text: .plain(cellText), header: false, alignment: .left, verticalAlignment: .top, colspan: 1, rowspan: 1)
-            return .table(title: .empty, rows: [InstantPageTableRow(cells: [cell])], bordered: false, striped: false)
+            return .table(title: .empty, rows: [InstantPageTableRow(cells: [cell])], bordered: false, striped: false, compact: false)
         }
         XCTAssertNotEqual(fingerprint([table("a")]), fingerprint([table("b")]))
     }
@@ -209,12 +209,12 @@ final class InstantPageStructureFingerprintTests: XCTestCase {
         let twoRows = [InstantPageTableRow(cells: [cell]), InstantPageTableRow(cells: [cell])]
         let wideRow = [InstantPageTableRow(cells: [cell, cell])]
         XCTAssertNotEqual(
-            fingerprint([.table(title: .empty, rows: oneRow, bordered: false, striped: false)]),
-            fingerprint([.table(title: .empty, rows: twoRows, bordered: false, striped: false)])
+            fingerprint([.table(title: .empty, rows: oneRow, bordered: false, striped: false, compact: false)]),
+            fingerprint([.table(title: .empty, rows: twoRows, bordered: false, striped: false, compact: false)])
         )
         XCTAssertNotEqual(
-            fingerprint([.table(title: .empty, rows: oneRow, bordered: false, striped: false)]),
-            fingerprint([.table(title: .empty, rows: wideRow, bordered: false, striped: false)])
+            fingerprint([.table(title: .empty, rows: oneRow, bordered: false, striped: false, compact: false)]),
+            fingerprint([.table(title: .empty, rows: wideRow, bordered: false, striped: false, compact: false)])
         )
     }
 

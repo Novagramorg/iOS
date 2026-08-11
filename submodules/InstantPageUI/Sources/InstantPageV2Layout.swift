@@ -1211,7 +1211,7 @@ private func layoutBlock(
                              boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                              pathPrefix: pathPrefix, context: &context)
 
-    case let .table(title, rows, bordered, striped):
+    case let .table(title, rows, bordered, striped, compact):
         return layoutTable(title: title, rows: rows, bordered: bordered, striped: striped,
                            boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                            context: &context)

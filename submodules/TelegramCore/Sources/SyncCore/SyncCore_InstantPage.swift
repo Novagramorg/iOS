@@ -90,7 +90,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
     case channelBanner(TelegramChannel?)
     case kicker(RichText)
     case thinking(RichText)
-    case table(title: RichText, rows: [InstantPageTableRow], bordered: Bool, striped: Bool)
+    case table(title: RichText, rows: [InstantPageTableRow], bordered: Bool, striped: Bool, compact: Bool)
     case details(title: RichText, blocks: [InstantPageBlock], expanded: Bool)
     case relatedArticles(title: RichText, articles: [InstantPageRelatedArticle])
     case map(latitude: Double, longitude: Double, zoom: Int32, dimensions: PixelDimensions, caption: InstantPageCaption)
@@ -187,7 +187,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             case InstantPageBlockType.thinking.rawValue:
                 self = .thinking(decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case InstantPageBlockType.table.rawValue:
-                self = .table(title: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, rows: decoder.decodeObjectArrayWithDecoderForKey("r"), bordered: decoder.decodeInt32ForKey("b", orElse: 0) != 0, striped: decoder.decodeInt32ForKey("s", orElse: 0) != 0)
+                self = .table(title: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, rows: decoder.decodeObjectArrayWithDecoderForKey("r"), bordered: decoder.decodeInt32ForKey("b", orElse: 0) != 0, striped: decoder.decodeInt32ForKey("s", orElse: 0) != 0, compact: decoder.decodeInt32ForKey("c", orElse: 0) != 0)
             case InstantPageBlockType.details.rawValue:
                 self = .details(title: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, blocks: decoder.decodeObjectArrayWithDecoderForKey("b"), expanded: decoder.decodeInt32ForKey("o", orElse: 0) != 0)
             case InstantPageBlockType.relatedArticles.rawValue:
@@ -374,12 +374,13 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             case let .thinking(text):
                 encoder.encodeInt32(InstantPageBlockType.thinking.rawValue, forKey: "r")
                 encoder.encodeObject(text, forKey: "t")
-            case let .table(title, rows, bordered, striped):
+            case let .table(title, rows, bordered, striped, compact):
                 encoder.encodeInt32(InstantPageBlockType.table.rawValue, forKey: "r")
                 encoder.encodeObject(title, forKey: "t")
                 encoder.encodeObjectArray(rows, forKey: "r")
                 encoder.encodeInt32(bordered ? 1 : 0, forKey: "b")
                 encoder.encodeInt32(striped ? 1 : 0, forKey: "s")
+                encoder.encodeInt32(compact ? 1 : 0, forKey: "c")
             case let .details(title, blocks, expanded):
                 encoder.encodeInt32(InstantPageBlockType.details.rawValue, forKey: "r")
                 encoder.encodeObject(title, forKey: "t")
@@ -589,8 +590,8 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
-            case let .table(lhsTitle, lhsRows, lhsBordered, lhsStriped):
-                if case let .table(rhsTitle, rhsRows, rhsBordered, rhsStriped) = rhs, lhsTitle == rhsTitle, lhsRows == rhsRows, lhsBordered == rhsBordered, lhsStriped == rhsStriped {
+            case let .table(lhsTitle, lhsRows, lhsBordered, lhsStriped, lhsCompact):
+                if case let .table(rhsTitle, rhsRows, rhsBordered, rhsStriped, rhsCompact) = rhs, lhsTitle == rhsTitle, lhsRows == rhsRows, lhsBordered == rhsBordered, lhsStriped == rhsStriped, lhsCompact == rhsCompact {
                     return true
                 } else {
                     return false
@@ -775,7 +776,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Table.self) else {
                 throw FlatBuffersError.missingRequiredField()
             }
-            self = .table(title: try RichText(flatBuffersObject: value.title), rows: try (0 ..< value.rowsCount).map { try InstantPageTableRow(flatBuffersObject: value.rows(at: $0)!) }, bordered: value.bordered, striped: value.striped)
+            self = .table(title: try RichText(flatBuffersObject: value.title), rows: try (0 ..< value.rowsCount).map { try InstantPageTableRow(flatBuffersObject: value.rows(at: $0)!) }, bordered: value.bordered, striped: value.striped, compact: value.compact)
         case .instantpageblockDetails:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Details.self) else {
                 throw FlatBuffersError.missingRequiredField()
@@ -1042,7 +1043,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             let start = TelegramCore_InstantPageBlock_Thinking.startInstantPageBlock_Thinking(&builder)
             TelegramCore_InstantPageBlock_Thinking.add(text: textOffset, &builder)
             offset = TelegramCore_InstantPageBlock_Thinking.endInstantPageBlock_Thinking(&builder, start: start)
-        case let .table(title, rows, bordered, striped):
+        case let .table(title, rows, bordered, striped, compact):
             valueType = .instantpageblockTable
             let titleOffset = title.encodeToFlatBuffers(builder: &builder)
             let rowsOffsets = rows.map { $0.encodeToFlatBuffers(builder: &builder) }
@@ -1052,6 +1053,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_Table.addVectorOf(rows: rowsOffset, &builder)
             TelegramCore_InstantPageBlock_Table.add(bordered: bordered, &builder)
             TelegramCore_InstantPageBlock_Table.add(striped: striped, &builder)
+            TelegramCore_InstantPageBlock_Table.add(compact: compact, &builder)
             offset = TelegramCore_InstantPageBlock_Table.endInstantPageBlock_Table(&builder, start: start)
         case let .details(title, blocks, expanded):
             valueType = .instantpageblockDetails

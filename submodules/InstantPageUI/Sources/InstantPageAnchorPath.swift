@@ -63,7 +63,7 @@ private func instantPageAnchorPathSearch(
             }
         case let .cover(inner):
             if let r = instantPageAnchorPathSearch([inner], name: name, detailsOrdinal: &detailsOrdinal) { return r }
-        case let .table(title, rows, _, _):
+        case let .table(title, rows, _, _, _):
             if richTextContainsAnchor(title, name: name) { return [] }
             for row in rows {
                 for cell in row.cells {
