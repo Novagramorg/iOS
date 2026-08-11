@@ -8679,6 +8679,7 @@ Sorry for the inconvenience.";
 
 "StorageManagement.AutoremoveSpaceDescription" = "If your cache size exceeds this limit, the oldest media will be deleted.";
 
+"StorageManagement.ClearConfirmationTitle" = "Clear Cache";
 "StorageManagement.ClearConfirmationText" = "Media and documents will stay in the cloud and can be re-downloaded if you need them again.";
 
 "StorageManagement.TabChats" = "Chats";

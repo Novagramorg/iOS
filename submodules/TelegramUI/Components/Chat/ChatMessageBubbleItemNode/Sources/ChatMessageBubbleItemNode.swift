@@ -1611,6 +1611,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             return Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)
         })?.0
         let isEphemeralMessage = ephemeralBadgeMessage != nil
+        let isEphemeralBroadcastMessage: Bool
+        if isEphemeralMessage, let channel = firstMessage.peers[firstMessage.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
+            isEphemeralBroadcastMessage = true
+        } else {
+            isEphemeralBroadcastMessage = false
+        }
         let ephemeralBadgeHeight: CGFloat = 17.0
         let ephemeralBadgeHorizontalInset: CGFloat = 5.0
         let ephemeralBadgeIconSize = CGSize(width: 14.0, height: 17.0)
@@ -1762,7 +1768,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
             
             if let channel = firstMessage.peers[firstMessage.id.peerId] as? TelegramChannel, case let .broadcast(info) = channel.info {
-                if info.flags.contains(.messagesShouldHaveProfiles) && !item.presentationData.isPreview {
+                if isEphemeralMessage {
+                    overrideEffectiveAuthor = true
+                } else if info.flags.contains(.messagesShouldHaveProfiles) && !item.presentationData.isPreview {
                     var allowAuthor = incoming
                     overrideEffectiveAuthor = true
                     
@@ -1825,6 +1833,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if isPreview, let peer = firstMessage.peers[firstMessage.id.peerId] as? TelegramUser, peer.firstName == nil {
             hasAvatar = false
             effectiveAuthor = nil
+        }
+        if isEphemeralBroadcastMessage {
+            hasAvatar = false
         }
         
         var isInstantVideo = false
@@ -1956,6 +1967,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         if let subject = item.associatedData.subject, case .messageOptions = subject {
+            needsShareButton = false
+        }
+        if isEphemeralMessage {
             needsShareButton = false
         }
         
