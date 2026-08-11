@@ -2139,7 +2139,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
             text = current.inputText.attributedSubstring(from: NSMakeRange(current.selectionRange.lowerBound, current.selectionRange.count)).string
             return (current, inputMode)
         }
-        if let speechHolder = speakText(context: self.context, text: text) {
+        if let speechHolder = speakText(text: text) {
             speechHolder.completion = { [weak self, weak speechHolder] in
                 if let strongSelf = self, strongSelf.currentSpeechHolder == speechHolder {
                     strongSelf.currentSpeechHolder = nil

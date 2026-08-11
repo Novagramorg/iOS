@@ -154,6 +154,7 @@ public func openUserGeneratedUrl(
             updatedPresentationDataSignal = .single(presentationData)
         }
         let controller = AlertScreen(
+            configuration: .init(allowInputInset: true),
             content: content,
             actions: [
                 .init(title: presentationData.strings.Common_Cancel),

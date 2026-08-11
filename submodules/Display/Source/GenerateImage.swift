@@ -637,7 +637,10 @@ public class DrawingContext {
         self.bytesPerRow = bytesPerRow ?? DeviceGraphicsContextSettings.shared.bytesPerRow(forWidth: Int(scaledSize.width))
         self.length = self.bytesPerRow * Int(scaledSize.height)
 
-        self.imageBuffer = ASCGImageBuffer(length: UInt(self.length))
+        guard let imageBuffer = ASCGImageBuffer(length: UInt(self.length)) else {
+            return nil
+        }
+        self.imageBuffer = imageBuffer
 
         if opaque {
             self.bitmapInfo = DeviceGraphicsContextSettings.shared.opaqueBitmapInfo

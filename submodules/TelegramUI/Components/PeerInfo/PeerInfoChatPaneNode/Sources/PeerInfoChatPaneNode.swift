@@ -100,17 +100,30 @@ public final class PeerInfoChatPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScro
     public weak var parentController: ViewController? {
         didSet {
             if self.parentController !== oldValue {
+                self.detachChatController()
                 if let parentController = self.parentController {
-                    self.chatController.willMove(toParent: parentController)
-                    parentController.addChild(self.chatController)
-                    self.chatController.didMove(toParent: parentController)
-                } else {
-                    self.chatController.willMove(toParent: nil)
-                    self.chatController.removeFromParent()
-                    self.chatController.didMove(toParent: nil)
+                    self.attachChatController(to: parentController)
                 }
             }
         }
+    }
+
+    private func attachChatController(to parentController: ViewController) {
+        if self.chatController.parent === parentController {
+            return
+        }
+        self.chatController.willMove(toParent: parentController)
+        parentController.addChild(self.chatController)
+        self.chatController.didMove(toParent: parentController)
+    }
+
+    private func detachChatController() {
+        guard self.chatController.parent != nil else {
+            return
+        }
+        self.chatController.willMove(toParent: nil)
+        self.chatController.removeFromParent()
+        self.chatController.didMove(toParent: nil)
     }
     
     private var currentParams: (size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, presentationData: PresentationData)?
@@ -220,6 +233,7 @@ public final class PeerInfoChatPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScro
     }
     
     deinit {
+        self.detachChatController()
         self.presentationDataDisposable?.dispose()
     }
 

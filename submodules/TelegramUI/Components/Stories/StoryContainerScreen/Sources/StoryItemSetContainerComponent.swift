@@ -4630,7 +4630,7 @@ public final class StoryItemSetContainerComponent: Component {
                             case .lookup:
                                 self.sendMessageContext.performLookupTextAction(view: self, text: text.string)
                             case .speak:
-                                if let speechHolder = speakText(context: component.context, text: text.string) {
+                                if let speechHolder = speakText(text: text.string) {
                                     speechHolder.completion = { [weak self, weak speechHolder] in
                                         guard let self else {
                                             return

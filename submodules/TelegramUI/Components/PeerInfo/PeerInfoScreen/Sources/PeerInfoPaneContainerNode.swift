@@ -34,6 +34,11 @@ final class PeerInfoPaneWrapper {
         self.key = key
         self.node = node
     }
+
+    func removeFromContainer() {
+        self.node.removeFromSupernode()
+        self.node.parentController = nil
+    }
     
     func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
         if let (currentSize, currentTopInset, currentSideInset, currentBottomInset, _, currentVisibleHeight, currentIsScrollingLockedAtTop, currentExpandProgress, currentNavigationHeight, currentPresentationData) = self.appliedParams {
@@ -1194,7 +1199,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                         if let availablePanes = data?.availablePanes, let currentPaneKey = strongSelf.currentPaneKey, let currentIndex = availablePanes.firstIndex(of: currentPaneKey), let paneIndex = availablePanes.firstIndex(of: key), abs(paneIndex - currentIndex) <= 1 {
                         } else {
                             if let pane = strongSelf.currentPanes.removeValue(forKey: key) {
-                                pane.node.removeFromSupernode()
+                                pane.removeFromContainer()
                             }
                         }
                     }
@@ -1402,7 +1407,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         for (key, paneNode) in self.pendingPanes {
             if !availablePanes.contains(key) && self.pendingSwitchToPaneKey != key {
                 removeKeys.append(key)
-                paneNode.pane.node.removeFromSupernode()
+                paneNode.pane.removeFromContainer()
             }
         }
         for key in removeKeys {
@@ -1413,7 +1418,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         for (key, paneNode) in self.currentPanes {
             if !availablePanes.contains(key) && self.pendingSwitchToPaneKey != key {
                 removeKeys.append(key)
-                paneNode.node.removeFromSupernode()
+                paneNode.removeFromContainer()
             }
         }
         for key in removeKeys {
