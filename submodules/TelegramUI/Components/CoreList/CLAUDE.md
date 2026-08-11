@@ -52,7 +52,7 @@ Every test command must use all three mandatory options:
 - `-collect-test-diagnostics never` — **without this, any run with a failing test hangs forever.**
   xcodebuild defaults to `on-failure`, and on failure it blocks in
   `XCTHRunDestinationAllocator.collectSimulatorDiagnostics` gathering a sysdiagnose; with several
-  simulators booted it effectively never returns. Measured on the same deliberately-failing test:
+  simulators booted it effectively never returns. Measured on a deliberately-failing test:
   5.26s with the flag, still blocked after 240s without it (and only ~1.7s of CPU, so it is waiting,
   not working). A PASSING run exits in ~5s either way, which is what makes this so confusing — the
   hang appears only when you have something to fix.
@@ -175,29 +175,56 @@ is **correct** under the clamped slack — once the rows above the pin alone exc
 slack is zero regardless of the pinned row's height. It was patched once on the theory that it was
 defective; the patch made device behaviour worse and was reverted. Do not patch it again.
 
-**Open defect: the released state stutters while content above the pin keeps growing.**
-Device-confirmed 2026-08-06, locked by `testReleasedGrowthIsNotFoughtByTheRetractingEdge`, which is
-**deliberately failing**. The slack shrinks as the reply grows, so the minimum edge RISES; released,
-nothing re-places the content, and the rising edge cancels part of the growth on each pass. Four equal
-100pt growth steps move the pinned row +100, **+40, +60**, +100. Engaged, it cannot happen — the anchor
-re-places the row every pass at a target that provably never sits below the minimum. It is **not** a
-regression from the clamp (the edge rose the same way when the slack was signed); it was simply
-invisible until the released state was first exercised.
+**A released anchor rides the EFFECTIVE top edge (`inset + slack`), and that is what absorbs a
+streaming reply's growth.** The slack shrinks by exactly what the content above the pin gains, so an
+anchor holding its distance from that edge lets the reply extend into the room the slack gives up
+while the pinned row — and all the history below it, which is what the user is reading — holds still.
+That is already what happens resting at the edge, which is why only the released state was ever wrong.
+Held at an ABSOLUTE offset instead, nothing takes up the retreat and every point of growth pushes the
+rows below: measured as pinned 200 → 250 → 300 → 350 → 400 → 440 for reply 100 → 340, and reported
+from the device as the chat drifting upward mid-stream. The settle clamp then cancelled only the part
+that crossed the edge, which is the same absorption arriving late, partially and in one jerk —
++100, **+40, +60**, +100 for four equal 100pt steps, drift-tug-drift-tug. Once `span` reaches the
+viewport the slack clamps at zero and there is nothing left to spend, so the growth pushes; that
+regime is unchanged.
 
-Three things are already known not to work, and re-deriving them is expensive:
+Mechanically it is one addend, and it lives in **`buildWindow`'s `pinSlackBaseline`** because it needs
+the NEW window's slack, which exists nowhere earlier. `topInsetDelta` carries the geometry half and
+structurally cannot see this one — both of its samples read `oldWindow` and the old items, so they
+differ only when `logicalSize` or `viewportInsets` changed. It is deliberately NOT gated on
+`compensatesInsetChange` — a caller whose own drag owns the movement still wants growth absorbed rather
+than pushed under its finger.
+
+**Two conditions gate the baseline, and the second one is the subtle one.** Only a `.fixed` anchor
+takes it: a `.resolved` one (an explicit `scrollTo`, or the latch itself) computes placement from the
+geometry the pass is building, and the `pinsLoadedTop` branch translates onto `topEdge` outright. And
+only an anchor **above** the pinned row — an anchor above the pin has to MOVE by the spend to deliver
+the invariant, while one at or below the pin delivers it by HOLDING, its old screen position already
+being the right answer because nothing above it can displace it. Projecting there moves it by the whole
+slack delta. That is not hypothetical: it is the pass that ENDS a stream. The typing draft carrying
+`TypingDraftMessageAttribute` is replaced by the real cloud message
+(`ChatHistoryListNode.swift:2240`), so index 0 departs, `topItemWasDeleted` sends `resolveAnchor` past
+it to the first survivor — the pinned row — and the final message measuring differently from the last
+draft moved the pin by exactly that difference. Reported as one small jerk at the end of streaming, and
+"usually" because the two often measure the same. `testTheDraftBecomingTheRealMessageDoesNotMoveThePin`
+locks it.
+
+Because the anchor moves with the edge, a parked user's distance from the declared minimum is
+invariant and they can no longer be clamped at all. Three things are known NOT to work here, and
+re-deriving them is expensive:
 
 1. **Collapsing the slack at finger-up** yanks a short-reply chat ~210pt on any small drag-and-lift.
    Benign only when the slack is already small — i.e. when there was nothing to fix.
-2. **Flooring the declared minimum so it cannot rise past the user** reaches only one of two movers:
-   `buildWindow`'s `topEdge` feeds `alignTopIfUnderfilled`, which yanks the window to the retracted
-   edge *before* the settle clamp runs. Any fix must drive `topEdge` and the edge from one helper.
-3. **"Is the user parked, or is the list tracking its own edge?" is not answerable from geometry.**
-   `render()` writes `declaredEdges` mid-pass, so a test against the declared minimum sees the
-   post-fix state and undoes itself; testing against the natural minimum instead breaks the ordinary
-   unarmed re-pin. It needs the drag EVENT, as the latch does. And even with an event gate, flooring
-   the slack **changes window MEMBERSHIP** — the pinned row was evicted from the loaded window
-   entirely by the fourth growth step. The slack is an input to window construction, not just to
-   placement, and that is the fact to design against.
+2. **Reserving the room the user is standing in** (a stored floor under the slack, gated on the drag
+   event) does stop the tug, and is the wrong cure: it freezes the effective edge, so the growth it
+   was meant to protect goes straight back into pushing the rows below, and the chat drifts for as
+   long as the user stays parked. Absorption removes the clamp's reason to fire instead of outvoting
+   it. Built, device-tested and abandoned; it needed a stored value, an event gate, three retirement
+   rules and three guards, all to outvote a clamp that then had no reason to fire.
+3. **Fixing only the settle clamp** reaches one of two movers: `buildWindow`'s `topEdge` feeds
+   `alignTopIfUnderfilled`, which places the window before the clamp ever runs. Anything acting on the
+   effective edge must act on both, which is why the projection is a window translate rather than an
+   offset correction.
 
 Also unresolved and **unreproduced**: a mid-stream send reportedly snaps although the pin survives. An
 engaged latch should be immune, so suspect that `isStrictlyPinnedToBottomEdge` reading the PRESENTED
@@ -485,31 +512,94 @@ value sits systematically ahead of the screen. That is invisible while one autho
 becomes a compounding drift the moment two do — the chat's hosted item node sets its own box from
 `presentation()`, and the row and the node diverged one-signed up to 3.2pt per streamed token.
 
-What the provider returns depends on the track, and the axis is NOT additive vs absolute — it is
-whether the CA property is the same quantity, in the same space, as the model's:
+**The provider answers for the ABSOLUTE properties — `.height`, `.width`, `.opacity` — with the
+presented value.** Those are the same quantity in the same space as the model's, so there is nothing to
+convert and no base to be wrong about.
 
-- `.height`, `.width`, `.opacity` — the presented value.
-- `.positionY` — the presented value MINUS the layer's own model value, which is by definition the
-  additive contribution. Reading the presented position directly and letting the model subtract a
-  settled reference mixes two spaces (`containerOriginY + localY` vs `localY`) and jumps the list.
-- `.positionX`, `.viewportOffset` — NOT sampled. Neither has a measured divergence, so there may be
-  nothing there; but each has its own reason the contribution form is not a drop-in, and a symptom to
-  watch for. `.positionX`: a horizontal jump on a sidebar/inset change — the transition gets bare
-  `contentX` while the layer gets `contentX + positionOffsetX`, and that offset is the track's own
-  contribution rather than a within-pass constant, so the delta argument fails. `.viewportOffset`:
-  jitter during a FLING — its model is written by the physics engine outside the commit cycle, so
-  `presented - model` can straddle a frame. Measure before switching either on.
+**And `.positionY` is sampled only for owners whose base a PASS writes —
+`ListAnimationOwner.hasPassWrittenPositionBase`, true for `.live` and nothing else.** Pass entry proves
+that *this* pass has not moved the base; it proves nothing about a writer that runs BETWEEN passes, and
+`renderAttachments()` is exactly such a writer — it rewrites every attachment's frame on every render,
+including every user-scroll frame, because a parked attachment stays parked on screen only by moving its
+base with the content. `presentation()` therefore trails an attachment's model by one frame of base
+movement, and reading that as a contribution starts the next animated pass a whole frame of displacement
+away from where the row is drawn. Shipped as a chat whose gutter avatars and date pills snapped, then
+animated into place, at the touch-up of an interactive keyboard dismissal: the parked pill's layer read
+`model=573.00 presented=515.33` **with no animation on it at all**, and it jumped 57.66pt. The
+per-frame passes a drag emits are immediate and settle at once, so the misread costs nothing until the
+one ANIMATED pass at lift inherits it — which is why it looks like a dismissal-only defect.
+`.exit`, `.transient` and `.ghostBlock` are excluded for the same reason (`shiftExitOverlayChildren`
+rebases every overlay child's `position.y` from `render()`, which a scroll rebalance reaches without a
+pass); no defect has been observed there, but the property this samples is not true of them either.
+Note "committed" is not the bar and could not be: a base written last turn may not have been PRESENTED
+when this turn samples, so a per-frame-written base can never be differenced against `presentation()`.
+`AttachmentResumeBaseTests` locks both the seam and the rendered position; it needs a scene-attached
+window, since a windowless fixture resolves no presentation layer and passes vacuously.
 
-Windowless layers resolve no presentation layer, so the provider returns nil and the analytic path is
-taken — which is why the existing suite keeps its exact model-vs-CA assertions unchanged.
+**`.positionY` is answered too, but from a snapshot taken at PASS ENTRY, never sampled in the
+provider.** An additive contribution is `presented − the base the render tree was committed against`,
+and the only handle on that base is the layer's model value. A pass overwrites it long before any
+transition installs: `render()` writes every window item's NEW settled frame
+(`CoreVirtualListView.swift:2870`) and the transitions install ~550 lines later (`:2022`); the
+crossing-carry path writes the new position explicitly one statement before its own call (`:3012`). So
+sampling *there* yields `contribution − (this pass's displacement)`, and `transitionPositionOffset`
+adds the displacement back onto `oldSettledY` — **counting it twice**. That shipped once, as a chat
+whose every row below a growing message snapped one whole growth backwards and then animated 2× the
+distance into place. It looked like an anchorPoint problem and was not; rows carry
+`anchorPoint = (0, 0)`, which is what made `presented − model` look like a safe read in the first place.
+`ListAnimationController.capturePresentedPositionOffsets()` takes the snapshot before the pass writes
+anything — the order `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`)
+already uses — and `applyChanges` clears it in the same `defer` as the rest of the per-pass state.
 
-**Two forms of this were shipped and reverted before the right one was found**, both the same mistake —
-mixing a layer-space quantity with a model-space one inside a single subtraction. `.viewportOffset` as
-`presented - settled`: the viewport's model `bounds.origin.y` is the live scroll position driven by the
-physics engine, never the settled offset. `.positionY` as the presented POSITION with the model
-subtracting `newSettledY`: the model is handed `containerOriginY + localY`
-(`CoreVirtualListView.swift:2818`) while the layer is handed `localY` (`:3121`). Each jumped the whole
-list on device.
+**Why it became necessary: a model-resumed property and a screen-resumed one disagree about where
+"now" is by δ, and the seam the eye watches is their SUM.** A growing row's bottom against the row
+below it is one `.height` (screen) plus one `.positionY`, so every re-target lost `δ × velocity` there
+and it accumulated — measured as a seam opening 1.9pt over ten 20pt growth steps under a released pin,
+~24pt without one, and reported from the device as micro-wobble under a streaming reply. Isolating it
+is a one-line experiment: make `.height` decline too and the seam closes to exactly 0.000. This is what
+retired the old reasoning that position had "no second authority to drift against" — its own row's
+height is one.
+
+`.positionX` and `.viewportOffset` still decline, and the hoist does NOT fix them: their reasons are
+not the ordering one. `.positionX` — the transition gets bare `contentX` while the layer gets
+`contentX + positionOffsetX`, and that offset is the track's own contribution rather than a within-pass
+constant; resolve that disagreement first. `.viewportOffset` — its model is written by the physics
+engine outside the commit cycle, so `presented − model` can straddle a frame, and at fling speed a
+frame is a lot of points. Measure before switching either on.
+
+Windowless layers resolve no presentation layer, so nothing is captured, the provider returns nil and
+the analytic path is taken — which is why the existing suite keeps its exact model-vs-CA assertions
+unchanged. `PresentedPositionResumeBaseTests` locks the position arithmetic (one displacement, never
+two) at both the seam and end-to-end through a `CoreVirtualListView` in a real rendering window;
+`PresentationResumeSamplingTests` locks which properties are sampled; `PresentedResumeSeamTests` locks
+the rendered seam between a growing row and the row below it across in-flight re-targets, which is the
+consequence the arithmetic exists to protect.
+
+**That same property makes the whole suite blind to this provider, and a test to catch it is vacuous
+by default.** `VirtualListFixture` never enters a render tree, so its rows take the analytic path and
+the dozen-plus exact `positionTrack(…).from` assertions in `CoreVirtualListAnimationTests` — any one of
+which would have caught a doubled displacement on sight — simply never executed the sampled code.
+`testFixtureLayersHaveNoPresentationLayer` pins that blindness rather than removing it, deliberately,
+and the only test with both a rendering window and a real list pass
+(`testRealCACompletionTearsDownExitWithoutAnalyticReap`) asserts teardown and no geometry. So a test
+here needs **a scene-attached window AND an owner actually bound to that layer** — the provider guards
+on both and returns nil before its switch otherwise, which is how the original
+"these properties must not be sampled" test passed against the very defect it named. Assert a sampled
+property is non-nil in the same test as the witness. Verify by mutation, not by reading.
+
+**Three forms of this have been shipped and reverted**, all the same mistake — one subtraction mixing
+two spaces, or two bases. `.viewportOffset` as `presented - settled`: the viewport's model
+`bounds.origin.y` is the live scroll position driven by the physics engine, never the settled offset.
+`.positionY` as the presented POSITION with the model subtracting `newSettledY`: the model is handed
+`containerOriginY + localY` (`CoreVirtualListView.swift:2818`) while the layer is handed `localY`
+(`:3121`). `.positionY` as `presented - layer.position.y` **evaluated inside the provider**: right
+spaces, wrong base, as above. The first two jumped the whole list on device; the third doubled every
+displacement.
+
+Note what separates the third from what ships now, because they are the same subtraction: WHEN it is
+evaluated. At pass entry the layer's model value is still the base its render tree was committed
+against; ~570 lines later it is this pass's new settled position. A future change that moves the
+capture later, or adds a second capture after any settled write, re-creates the reverted form exactly.
 
 `CoreAnimationCompiler` is an output renderer, never an authority. It builds through the shared
 `makeCoreListAnimation` factory — a copy of `CAAnimationUtils.makeAnimation`'s branch tree — so what
@@ -761,15 +851,17 @@ runtime-selectable between stepped and keyframe modes.
 ## Scroll physics replica
 
 `CoreListDemo/ScrollPhysics/` is a standalone, UIKit-free value-model replica derived from UIKitCore
-on iOS 26.2. Core files implement per-axis drag, release, deceleration, rubber banding, projection,
-and offset math. `PanRecognizer.swift` handles input. `Trajectory.swift` and
+on iOS 26.2. Core files implement per-axis drag, deceleration, rubber banding, projection, and offset
+math; `ReleaseDecision.swift` owns the gesture-RELEASE path (velocity capture, the guarded 2-D
+decelerate/stop decision, and the repeated-flick multiplier), which is two-dimensional and
+gesture-lifetime and therefore deliberately not on `ScrollAxis`. `PanRecognizer.swift` handles input. `Trajectory.swift` and
 `Trajectory+Keyframe.swift` bake rate-independent linear keyframe playback and seamless splicing.
 Recording support and tests live under the corresponding production/test folders.
 
 📖 **Read before changing any physics constant or formula:**
 `docs/plans/2026-05-22-uikit-scrollview-physics-analysis.md` and
-`docs/plans/2026-05-23-pan-recognizer-reproduction-design.md`. The formulas come from assembly;
-decompiler SIMD/FP pseudocode is not authoritative.
+`docs/plans/2026-05-23-pan-recognizer-reproduction-design.md`.
+The formulas come from assembly; decompiler SIMD/FP pseudocode is not authoritative.
 
 ## Tests
 
@@ -785,6 +877,16 @@ Animation an authority.
   actual paused layer check.
 - `CoreVirtualListAnimationTests` cover insert, remove, replacement, move, mixed passes, view reuse,
   overlay teardown, unchanged-track preservation, full viewport-geometry retargeting, and scrolling while active.
+- `PresentationResumeSamplingTests` and `PresentedPositionResumeBaseTests` cover the presented-value
+  provider: which properties it samples (absolute only), that an absolute re-issue resumes from the
+  screen both at a bare layer and through a real list pass, and that a position track starts one
+  displacement from the screen rather than two. **They are the only tests that reach the provider at
+  all** — every other suite runs windowless, so `presentation()` is nil and the analytic path is taken,
+  which `testFixtureLayersHaveNoPresentationLayer` pins deliberately. A test here needs a
+  scene-attached window AND an owner bound to that layer, or it returns nil at the provider's guard and
+  passes vacuously; assert a sampled property is non-nil in the same test as the witness. Verify by
+  mutation — the "these properties are not sampled" test shipped green against the very defect it
+  named.
 - `MixedPassStressTests` run a bounded fixed-seed grammar over structural, row-geometry,
   viewport-geometry, programmatic-scroll, and attachment-run changes. They verify transaction-boundary
   C0 continuity, exact unchanged-track preservation, installed CA/model metadata parity for observed
@@ -834,7 +936,10 @@ Animation an authority.
     measured only on the demo, never on the chat surface. Two consequences follow and are accepted
     rather than fixed: a retarget's residual discontinuity is `velocity × (δ_new − δ_old)` instead of
     the old `velocity × δ`, which is smaller when consecutive passes cost the same and can exceed it
-    (and change sign) when they do not; and an equal-endpoint track completing on its analytic
+    (and change sign) when they do not — this is what the presented-position capture removes for
+    `.positionY` specifically, by resuming that property from the screen rather than from the leading
+    model, and it still applies to any query or property that does not; and an equal-endpoint track
+    completing on its analytic
     deadline now finishes δ BEFORE its CA-driven siblings from the same pass, so a ghost block can
     tear down that much before it finishes moving. Do NOT resolve the `presentedFrame` lead by
     redirecting hosts to `settledFrame(of:)` — that is a different value with its own shipped failure
@@ -900,6 +1005,54 @@ Animation an authority.
   writing non-zero offsets.
 - Trackpad indirect scroll ignores `pan.setTranslation(.zero)`; keep the explicit translation
   baseline in the physics engine.
+- **The gesture-release path is a 2-D, gesture-LIFETIME decision, and `.began` is a velocity sample.**
+  `ReleaseDecision` owns it (`ScrollPhysics/ReleaseDecision.swift`), not `ScrollAxis`: the
+  decelerate/stop threshold is `vx² + vy²` evaluated on the RAW latest sample before the low-pass, the
+  0.75/0.25 low-pass is GUARDED on the previous-axis pair being non-zero, and the repeated-flick
+  multiplier outlives a gesture — while `PhysicsScrollCore.beginDrag` rebuilds `ScrollPhysics` from
+  scratch every gesture, so anything stored there would need hand-maintaining. `-[UIScrollView
+  handlePan:]` case 1 zeroes the four velocity ivars and then calls `_updatePanGesture` **immediately**,
+  so `.began` contributes a full sample and applies its translation; treating it as setup only ran every
+  gesture one sample behind UIKit and released a short flick — one or two `.changed` events — at a
+  QUARTER of its velocity. Measured: ~370pt where UIKit travels ~1493pt. A force-begun pan is the
+  exception and feeds nothing, because it is a catch on moving content rather than a flick start.
+  `Deceleration.spring` must NOT apply `vScale`; only the free-decel term and its to-the-edge sub-step
+  do.
+- **A dead axis must not answer questions about a live one.** `ScrollPhysics.step` ORs the two axes'
+  "ended a deceleration" flags — correct in itself, one axis reaching its edge really is an end. But
+  `PhysicsScrollCore` pins x to a DEAD axis (offset 0, `min == max == 0`, no velocity), and
+  `Deceleration.settled()` calls an in-bounds axis settled the moment its velocity is under the floor.
+  So x reported "ended" on every frame it was ever stepped and the OR was unconditionally true. Since
+  the core clears the repeated-flick streak on exactly that signal, the FIRST deceleration frame after
+  every release cleared it — in both drivers (`.stepped` on the display link's first callback,
+  `.keyframe` on the single hand-off step before the bake). The streak could never reach the three
+  consecutive fast flicks growth requires, so `_fastScrollMultiplier` sat at 1 forever and a burst of
+  flicks carried **0.99×** a single flick where UIScrollView compounds to 1.9× and beyond. `ScrollAxis.step`
+  now gates the flag on the deceleration having actually been RUNNING (decelerating, and either above
+  `Deceleration.velocityFloor` or displaced past an edge and still springing back — the exact complement
+  of `settled()`). Note the failure was invisible to every existing streak test because they flicked
+  repeatedly WITHOUT ever stepping the integrator between flicks; the regression tests now drive a burst
+  both ways, and `test_theFourthFlickOfABurstTravelsFartherThanTheSameFlickAlone` states it as distance.
+- **A harness that drives the engine from a foreign recognizer must replay the engine's touch-down
+  hookup too.** `core.beginTouchTracking` is reached only via `PhysicsScrollEngine`'s OWN
+  `pan.onTouchDown`. The A/B comparison view deliberately drives the engine from
+  `UIScrollView.panGestureRecognizer`, whose touches never route through it — so the streak never
+  expired on a pause and `_fastScrollStartMultiplier` stayed pinned at 1, meaning the replica could not
+  compound across a burst even with the physics correct. That reads as a physics difference that does
+  not exist in the app. `PhysicsScrollEngine.noteTouchDown(at:)` exists for that hookup. (The
+  trackpad/indirect path also never calls it — see `gestureRecognizer(_:shouldReceive:)`. Whether UIKit
+  applies the fast-scroll multiplier to indirect scroll at all is **unverified**; do not "fix" that by
+  analogy.)
+- **A replay harness must drive the same entry point production drives, or it validates a driver nobody
+  ships.** `ScrollReplay.replay` folds every recorded DISPLAY FRAME through `drag(...)`, including the
+  first — so it behaved like UIKit whether or not the live engine fed its `.began` sample, and a suite
+  holding the integrator to ≤3px against real `UIScrollView` traces could not see a 4× error in the
+  release. The defect lived in the engine↔core seam and no fixture crossed it. `ScrollReplay.replayEvents`
+  drives the per-EVENT touch stream the way `PhysicsScrollEngine.applyPanUpdate` does and is the seam
+  oracle; `replay` remains the integrator oracle. `applyPanUpdate` takes its indirect-ness as a
+  PARAMETER for the same reason — a `PhysicsPanGestureRecognizer` that has received no touches reports
+  `isIndirectScroll == true`, so a synthetic gesture reading it off the recognizer would silently get
+  the trackpad rubber-band coefficient.
 - **`ScrollEngine.offset` is per-frame stable; never sample a running animation through it, and never read
   `contentHost.bounds.origin.y` as a position.** That layer value is the additive BASE of the emitted keyframe
   animation, parked at the trajectory's `finalOffset` for the whole flight — mid-flight it holds the flight's
@@ -920,6 +1073,28 @@ Animation an authority.
   genuinely clamps on a `contentSize` shrink, and the realized shift is the only correct amount); and any
   lurch test must measure against `TestScrollEngine.liveViewportOffset`, never `engine.offset`, or it passes
   by its own measuring stick freezing.
+- **Stopping a render-server-played flight is a SWAP, not a removal.** A catch cannot take effect at the
+  instant it is decided: the model write and the animation removal travel in one transaction, and that
+  transaction is presented at the next frame the pipeline can produce, never the frame its value was
+  sampled in. The render server keeps playing until it lands, so freezing the list at
+  `flight.liveOffset(now: localNow())` hands it a value the screen has already passed and the content
+  snaps *back* by `velocity × (that gap)` — measured 40pt one frame late and 79pt two frames late off a
+  3000 pt/s release. The gap is the rest of the main-thread turn plus commit-to-display, which is why it
+  reads as a barely-visible early stop on a pipeline that commits within its frame and as a real
+  reversal on one that does not. `catchFlight(braking:)` therefore stops the flight at `brakeStopTime()`
+  (the sampling link's `targetTimestamp` plus a frame of headroom) and swaps in the path
+  `truncated(at:)` that instant, on the flight's own `startTime` — the same continuous-swap idiom
+  `reemitFlightAnimation` uses, and truncation is exact before the cut, so whichever frame the swap
+  lands on presents what the flight would have anyway. **`presentation()` cannot detect or fix this**:
+  it is evaluated on the main thread at `CACurrentMediaTime()` and agrees with the analytic sampler to
+  −0.02ms, so it describes the same instant the defect is already sampling, not scan-out. Bias the lead
+  LATE: with a swap, landing early costs only a few more milliseconds of the flight's own motion, while
+  landing late is the step — an asymmetry a plain forward-projected snap does not have (it turns an
+  early landing into a forward jump instead). Only the interactive catches brake; `setOffset` /
+  `haltMotionInPlace` / `tearDown` immediately impose their own position, and an additive brake residual
+  would ride on top of that write. `FlightCatchContinuityTests` pins all of it, including the measured
+  step as its own non-vacuity control. The deterministic engine harness is structurally blind here —
+  `TestScrollEngine` has no render server, so its correct lead is zero and it keeps the hard stop.
 - **Anything that displaces screen-space content must join `displacesViewport`, or it silently degrades
   to per-row tracks.** The predicate (`logicalSizeChanged || insetsChanged || hasAdditionalScrollDistance`)
   gates the ONE shared additive viewport track that owns a pass's displacement. Omitted from it, a pass
@@ -969,6 +1144,36 @@ Animation an authority.
   is `x²(3−2x)` in real arithmetic, but 1/3 and 2/3 round to float32 and every sample drifts by up to
   1.7e-8 — including at phase 0.5, where the ideal bezier is exactly 0.5. Payload-free cases
   (`.easeInOut`, `.linear`) use `Double` literals and are exact.
+- **A baked deceleration must apply UIScrollView's one-frame release hand-off, and omitting it is
+  invisible to every distance measurement.** `-[UIScrollView _endPanNormal:]` sets the decel's
+  `lastUpdateTime = now − 1/maxFPS` and then calls `_smoothScrollWithUpdateTime:(now)` SYNCHRONOUSLY,
+  so a real scroll view has already integrated exactly one display frame before anything is presented
+  — regardless of the release-to-first-frame gap (analysis §2, "Decel hand-off"). `.stepped` inherits
+  it from its display link's first callback and `ScrollReplay` models it as `firstDecelStepMs`, but a
+  baked `Trajectory` starts at `t = 0` = the release state, so `.keyframe` trailed UIScrollView by one
+  frame of integration for the WHOLE flight: identical shape, identical landing, `v × frame` less
+  displacement at every instant. At 8.9 pts/ms on a 120Hz panel that is 74pt missing from the first
+  frame, which reads as a slower initial speed — while total travel, whole-flight profile, rendered-
+  vs-planned position and the deterministic suite all keep agreeing, because the difference is a phase
+  shift that converges. `PhysicsScrollCore.applyDecelerationHandOff` is applied in `launchFlight`
+  before the bake; it fires no `onScroll` and writes no host bounds, since the flight parks the layer
+  immediately after. Applying it also brings the landing DOWN by ~3-5% — omitting it overshoots.
+  - **It is a real integration frame, so it can END the deceleration it was handed**, and `launchFlight`
+    must re-check `core.isDecelerating` after it rather than baking. `endDrag` reports `.decelerate` for
+    two releases with nothing left to spend: a blend that CANCELS — the decelerate threshold reads the
+    RAW latest sample and the 0.75/0.25 low-pass runs after it, so a finger reversing on its last sample
+    releases above the threshold at ~0 pts/ms, below `Deceleration.velocityFloor` — and an overscrolled
+    release already inside `settleTolerance`. Both settle inside the hand-off's own step, and building a
+    `KeyframeFlight` from the resulting `.idle` core trips its precondition assert on device.
+    **The overscrolled one is an everyday gesture, and the pixel grid is why:** the spring's rest is
+    pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
+    release speed, comes to rest at exactly −1/3 pt. The content therefore sits overscrolled inside the
+    tolerance after any bounce, and the next tap or sub-threshold release springs back from there with
+    nothing left to play. At the tests' default scale 1 it rounds to −0.0 instead, so a fixture that
+    never sets a device scale cannot see it. `.stepped` absorbs both cases silently in its first link
+    callback, and `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this
+    lives only on the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through
+    `applyPanUpdate` (the seam) and at the core.
 - **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
   animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
   real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no

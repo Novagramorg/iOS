@@ -42,7 +42,13 @@ final class PhysicsScrollView: UIView {
         clipsToBounds = true
         addSubview(contentView)
         pan.addTarget(self, action: #selector(handlePan(_:)))
-        pan.onTouchDown = { [weak self] in self?.catchContent() }   // stop moving content on touch-down
+        pan.onTouchDown = { [weak self] timestamp in                // stop moving content on touch-down
+            guard let self else { return }
+            // `-[UIScrollView _beginTrackingWithEvent:]` — where the repeated-flick streak is
+            // carried or expired. A distinct moment from the pan beginning.
+            self.release.beginTouchTracking(at: timestamp)
+            self.catchContent()
+        }
         pan.onTouchUp = { [weak self] in self?.handleTouchUp() }
         pan.delegate = self   // trackpad finger-down catch via shouldReceive(event:) — see the extension
         addGestureRecognizer(pan)
@@ -66,6 +72,10 @@ final class PhysicsScrollView: UIView {
             y: ScrollAxis(offset: offsetY, min: 0, max: maxOffsetY, range: bounds.height, rate: 0.998, scale: scale, c: c))
     }
 
+    /// `UIScrollView`'s release path — the same model `PhysicsScrollCore` uses, so this standalone
+    /// demo and the list-backing engine feel identical.
+    private var release = ReleaseDecision()
+
     @objc private func handlePan(_ gr: UIPanGestureRecognizer) {
         switch gr.state {
         case .began:
@@ -76,19 +86,41 @@ final class PhysicsScrollView: UIView {
             var p = makePhysics()
             p.beginDrag()
             physics = p
+            release.beginGesture()
+            // `handlePan:` case 1 runs `_updatePanGesture` immediately, so `.began` is a full
+            // velocity sample and applies its translation. Dropping it releases a short flick at a
+            // quarter of its velocity.
+            noteDrag(gr)
         case .changed:
-            physics?.drag(translation: gr.translation(in: self), recognizerVelocity: gr.velocity(in: self))
-            applyOffset()
+            noteDrag(gr)
         case .ended, .cancelled:
-            guard let decision = physics?.endDrag() else { return }
-            if decision.x == .decelerate || decision.y == .decelerate {
+            guard physics != nil else { return }
+            let outcome = release.release(recognizerVelocity: gr.velocity(in: self),
+                                          at: CACurrentMediaTime())
+            let overscrolled = offsetY < 0 || offsetY > maxOffsetY
+            switch outcome {
+            case let .decelerate(velocity, vScale):
+                physics!.x.vScale = vScale
+                physics!.y.vScale = vScale
+                physics!.applyRelease(velocity: velocity)
                 startDeceleration()
-            } else {
+            case .stop where overscrolled:
+                physics!.applyRelease(velocity: .zero)      // spring back from the edge
+                startDeceleration()
+            case .stop:
                 physics = nil
             }
         default:
             break
         }
+    }
+
+    /// One pan callback — `.began` or `.changed` — fed to both the release model and the physics.
+    private func noteDrag(_ gr: UIPanGestureRecognizer) {
+        release.note(recognizerVelocity: gr.velocity(in: self),
+                     translation: gr.translation(in: self))
+        physics?.drag(translation: gr.translation(in: self))
+        applyOffset()
     }
 
     /// Touch-down catches moving content immediately (UIScrollView behaviour).
@@ -123,7 +155,7 @@ final class PhysicsScrollView: UIView {
         guard offsetY < 0 || offsetY > maxOffsetY else { return }
         var p = makePhysics()
         p.beginDrag()
-        _ = p.endDrag()                                // overscrolled ⇒ .decelerate (springs back)
+        p.applyRelease(velocity: .zero)                // overscrolled ⇒ springs back, at zero velocity
         physics = p
         startDeceleration()
     }
@@ -131,7 +163,9 @@ final class PhysicsScrollView: UIView {
     @objc private func step(_ link: CADisplayLink) {
         guard physics != nil else { stopDisplayLink(); return }
         let dtMs = CGFloat((link.targetTimestamp - link.timestamp) * 1000)   // exactly one display frame
-        let settled = physics!.step(dtMs: dtMs).settled
+        let result = physics!.step(dtMs: dtMs)
+        if result.endedDeceleration { release.resetStreakAfterDeceleration() }
+        let settled = result.settled
         applyOffset()
         if settled {
             stopDisplayLink()

@@ -15,6 +15,9 @@ final class ViewController: UIViewController {
         return CoreVirtualListView(engine: engine)
     }()
     private let engineControl = UISegmentedControl(items: ["UIScrollView", "Physics·step", "Physics·keyframe"])
+    /// Flips `PhysicsScrollEngine.pinsMaximumRefreshRate` so a device session can A/B the rigid
+    /// 120Hz request against an adaptive one on the SAME gesture, without a rebuild. Demo-only.
+    private let rateControl = UISegmentedControl(items: ["120 all", "anim120·link60", "120 adaptive"])
     private let topBar = UIStackView()
     private let jumpButton = UIButton(type: .system)
     private let topButton = UIButton(type: .system)
@@ -86,6 +89,10 @@ final class ViewController: UIViewController {
     }
 
     override func viewDidLoad() {
+        // Debug-only physics tracing, enabled from the DEMO so the shipping app stays inert (this file
+        // is excluded from the Bazel CoreList library). Writes Documents/flight-trace.txt per flight.
+        FlightTrace.isEnabled = true
+
         super.viewDidLoad()
 
         view.backgroundColor = .systemBackground
@@ -194,6 +201,8 @@ final class ViewController: UIViewController {
 
         engineControl.selectedSegmentIndex = 2
         engineControl.addTarget(self, action: #selector(engineChanged), for: .valueChanged)
+        rateControl.selectedSegmentIndex = 0
+        rateControl.addTarget(self, action: #selector(rateChanged), for: .valueChanged)
 
         infoLabel.text = "Virtual list demo"
         infoLabel.font = .systemFont(ofSize: 13, weight: .medium)
@@ -254,6 +263,7 @@ final class ViewController: UIViewController {
         topBar.addArrangedSubview(mixedRow1)
         topBar.addArrangedSubview(mixedRow2)
         topBar.addArrangedSubview(engineControl)
+        topBar.addArrangedSubview(rateControl)
 
         listView.preloadMargin = 200
         bindAutoLoading(to: listView)
@@ -292,6 +302,21 @@ final class ViewController: UIViewController {
         listView.applyChanges(newSize: newSize,
                               newInsets: insets,
                               transition: .easeInOut(duration: 0))
+    }
+
+    /// Takes effect on the NEXT flight — an in-flight animation keeps the range it was emitted with.
+    @objc private func rateChanged() {
+        switch rateControl.selectedSegmentIndex {
+        case 0:     // shipped: animation AND sampling link pinned to the max rate
+            PhysicsScrollEngine.pinsMaximumRefreshRate = true
+            PhysicsScrollEngine.pinsSamplingLinkRate = true
+        case 1:     // keep the animation's rate guarantee, halve the main-thread row work
+            PhysicsScrollEngine.pinsMaximumRefreshRate = true
+            PhysicsScrollEngine.pinsSamplingLinkRate = false
+        default:    // neither pinned — the original adaptive request
+            PhysicsScrollEngine.pinsMaximumRefreshRate = false
+            PhysicsScrollEngine.pinsSamplingLinkRate = false
+        }
     }
 
     @objc private func engineChanged() {

@@ -12,7 +12,7 @@ final class KeyframeFlightTests: XCTestCase {
         core.beginDrag()
         core.drag(translation: 0, velocity: -3000)
         core.drag(translation: 0, velocity: -3000)
-        _ = core.endDrag()
+        _ = core.endDrag(recognizerVelocity: -3000, at: 0)
         let flight = KeyframeFlight(core: core, startTime: startTime)
         return (core, flight)
     }
@@ -121,7 +121,7 @@ final class KeyframeFlightTests: XCTestCase {
         let core = PhysicsScrollCore(contentHost: host)
         core.setEdges(min: 0, max: nil)                    // top loaded; release sits exactly on the edge
         core.beginDrag(); core.drag(translation: 0, velocity: -3000); core.drag(translation: 0, velocity: -3000)
-        _ = core.endDrag()
+        _ = core.endDrag(recognizerVelocity: -3000, at: 0)
         let flight = KeyframeFlight(core: core, startTime: 0)
         XCTAssertEqual(flight.trajectory.offsetExtent().min, 0, accuracy: 0.001, "baked band starts at the edge")
 
@@ -141,7 +141,7 @@ final class KeyframeFlightTests: XCTestCase {
         let core = PhysicsScrollCore(contentHost: host)
         core.setEdges(min: nil, max: 300)
         core.beginDrag(); core.drag(translation: 0, velocity: -6000); core.drag(translation: 0, velocity: -6000)
-        _ = core.endDrag()
+        _ = core.endDrag(recognizerVelocity: -3000, at: 0)
         let flight = KeyframeFlight(core: core, startTime: 0)
         XCTAssertGreaterThan(flight.trajectory.offsetExtent().max, 300, "the baked path overshoots the edge")
 
@@ -161,7 +161,7 @@ final class KeyframeFlightTests: XCTestCase {
         let core = PhysicsScrollCore(contentHost: host)
         core.setEdges(min: nil, max: 4_000)
         core.beginDrag(); core.drag(translation: 0, velocity: -3000); core.drag(translation: 0, velocity: -3000)
-        _ = core.endDrag()
+        _ = core.endDrag(recognizerVelocity: -3000, at: 0)
         let flight = KeyframeFlight(core: core, startTime: 0)
         flight.beginTick(now: 0.05)
         core.setEdges(min: nil, max: 4_000)                  // unchanged: the shift alone moves the geometry
@@ -182,7 +182,7 @@ final class KeyframeFlightTests: XCTestCase {
         let core = PhysicsScrollCore(contentHost: host)
         core.setEdges(min: nil, max: nil)
         core.beginDrag(); core.drag(translation: 0, velocity: -6000); core.drag(translation: 0, velocity: -6000)
-        _ = core.endDrag()
+        _ = core.endDrag(recognizerVelocity: -3000, at: 0)
         let flight = KeyframeFlight(core: core, startTime: 0)
         flight.beginTick(now: 0.05)
         let live = flight.liveOffset(now: 0.05)

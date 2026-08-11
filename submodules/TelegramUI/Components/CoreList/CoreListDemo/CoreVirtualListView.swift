@@ -933,7 +933,13 @@ public final class CoreVirtualListView: UIView {
             return
         }
         isApplyingChanges = true
+        // BEFORE anything this pass writes. Every bound layer's model position is still the base its
+        // render tree was committed against, which is the only moment `presented - model` means the
+        // additive contribution — `render()` overwrites it ~570 lines below. Re-entrant calls are
+        // deferred to the scheduler above rather than nested, so one pass owns this snapshot.
+        animationController.capturePresentedPositionOffsets()
         defer {
+            animationController.clearPresentedPositionOffsets()
             isApplyingChanges = false
             reconciledIdentities.removeAll()
         reconciledAttachmentSerials.removeAll()
@@ -1258,9 +1264,34 @@ public final class CoreVirtualListView: UIView {
                 && !hasAdditionalScrollDistance
                 && oldWindow.startIndex == 0
                 && oldEdges.min.map { abs(oldSettledOffset - $0) <= 1e-6 } == true
+            // Only a `.fixed` anchor was placed against the OLD effective top edge, so only it needs
+            // re-projecting onto the new one. A `.resolved` anchor — an explicit `scrollTo`, or the pin
+            // latch itself — computes its placement from the geometry this pass is building, and the
+            // `pinsLoadedTop` branch translates the window onto `topEdge` outright.
+            //
+            // And only an anchor ABOVE the pinned row. The absorption invariant is that the pinned row
+            // and everything below it hold still while the content above spends the slack: an anchor
+            // above the pin has to move by that spend to deliver it, and an anchor at or below the pin
+            // delivers it by holding — its old screen position is ALREADY the right answer, because
+            // nothing above it can displace it. Projecting there moves it by the whole slack delta.
+            //
+            // Not hypothetical, and it is the pass that ENDS a stream: the typing draft carrying
+            // `TypingDraftMessageAttribute` is replaced by the real cloud message
+            // (`ChatHistoryListNode.swift:2240`), so index 0 departs, `topItemWasDeleted` sends
+            // `resolveAnchor` to the first survivor — the pinned row — and the final message's height
+            // differing from the last draft's moved the pin by exactly that difference. One jerk, at
+            // the end of streaming, only when the two measure differently.
+            let pinSlackBaseline: CGFloat? = {
+                guard let pinnedIndex = lowestPinnedItemIndex,
+                      resolvedAnchor.index < pinnedIndex
+                else { return nil }
+                guard case .fixed = resolvedAnchor.offset else { return nil }
+                return updatedPinSlack
+            }()
             newWindow = buildWindow(anchoredAt: resolvedAnchor.index,
                                     resolveY: resolveY,
                                     pinsLoadedTop: pinsLoadedTop,
+                                    pinSlackBaseline: pinSlackBaseline,
                                     sourceWindow: oldWindow,
                                     survivorMapNewToOld: survivorMapNewToOld,
                                     moveReuseNewToOld: moveReuseNewToOld)
@@ -2523,9 +2554,13 @@ public final class CoreVirtualListView: UIView {
         return currentPassTransition
     }
 
+    /// - Parameter pinSlackBaseline: the pin slack the ANCHOR's placement was computed against, when
+    ///   that placement came from old geometry. Non-nil makes the window ride the effective top edge
+    ///   rather than sit at an absolute offset — see the translate below.
     private func buildWindow(anchoredAt index: Int,
                              resolveY: (CGFloat, UIView & CoreListItemView) -> CGFloat,
                              pinsLoadedTop: Bool = false,
+                             pinSlackBaseline: CGFloat? = nil,
                              sourceWindow: Window?,
                              survivorMapNewToOld: [Int: Int]? = nil,
                              moveReuseNewToOld: [Int: Int]? = nil) -> Window {
@@ -2630,10 +2665,30 @@ public final class CoreVirtualListView: UIView {
         appendUntilPinnedRowLoaded()
         // Ordering is safe in one direction only, and this is that direction: the slack pushes the
         // window DOWN, so the append below needs no more rows than it would have without it.
-        topEdge = viewportInsets.top + bottomEdgePinSlack(for: window)
+        let pinSlack = bottomEdgePinSlack(for: window)
+        topEdge = viewportInsets.top + pinSlack
         if pinsLoadedTop, window.startIndex == 0 {
             translate(&window, by: topEdge - window.minY)
         } else {
+            if let pinSlackBaseline {
+                // The anchor's placement was derived from the OLD effective top edge, and the SLACK
+                // half of that edge moves with the content above the pin — a streaming reply spends
+                // the slack as it grows. Riding the edge is what ABSORBS that growth: the pinned row
+                // and every row below it hold still, exactly as they do resting at the edge, while the
+                // reply extends into the room the slack gives up.
+                //
+                // Held absolutely instead, nothing takes up the retreat and the whole growth goes into
+                // pushing the rows below the anchor — the chat drifting under a streaming reply. The
+                // settle clamp then cancels only the part that crosses the edge, which is the same
+                // absorption arriving late, partially, and in one jerk: drift, tug, drift, tug.
+                //
+                // Only the CONTENT half is applied here. `topInsetDelta` carries the geometry half, and
+                // cannot see this one — both of its samples read `oldWindow` and the old items, so they
+                // differ only when `logicalSize` or `viewportInsets` changed. This half is also
+                // deliberately NOT gated on `compensatesInsetChange`: a caller whose own drag owns the
+                // movement still wants growth absorbed rather than pushed under its finger.
+                translate(&window, by: pinSlack - pinSlackBaseline)
+            }
             _ = alignTopIfUnderfilled()
         }
         appendUntilCoveredOrAtBottom()

@@ -300,7 +300,7 @@ extension InstantPageBlock {
                 self = .kicker(RichText(apiText: text))
             case let .pageBlockTable(pageBlockTableData):
                 let (flags, title, rows) = (pageBlockTableData.flags, pageBlockTableData.title, pageBlockTableData.rows)
-                self = .table(title: RichText(apiText: title), rows: rows.map({ InstantPageTableRow(apiTableRow: $0) }), bordered: (flags & (1 << 0)) != 0, striped: (flags & (1 << 1)) != 0)
+                self = .table(title: RichText(apiText: title), rows: rows.map({ InstantPageTableRow(apiTableRow: $0) }), bordered: (flags & (1 << 0)) != 0, striped: (flags & (1 << 1)) != 0, compact: (flags & (1 << 2)) != 0)
             case let .pageBlockList(pageBlockListData):
                 let items = pageBlockListData.items
                 self = .list(items: items.map({ InstantPageListItem(apiListItem: $0) }), ordered: false)
@@ -437,13 +437,16 @@ extension InstantPageBlock {
             return .pageBlockCollage(Api.PageBlock.Cons_pageBlockCollage(items: items.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         case let .slideshow(items, caption):
             return .pageBlockSlideshow(Api.PageBlock.Cons_pageBlockSlideshow(items: items.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
-        case let .table(title, rows, bordered, striped):
+        case let .table(title, rows, bordered, striped, compact):
             var flags: Int32 = 0
             if bordered {
                 flags |= (1 << 0)
             }
             if striped {
                 flags |= (1 << 1)
+            }
+            if compact {
+                flags |= (1 << 2)
             }
             return .pageBlockTable(Api.PageBlock.Cons_pageBlockTable(flags: flags, title: title.apiRichText(), rows: rows.map { $0.inputPageTableRow() }))
         case let .details(title, blocks, expanded):

@@ -282,6 +282,27 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(cell.rowspan, 2)
     }
 
+    func test_codable_compactTable_roundTripsViaAdaptedPostbox() throws {
+        let table = ChatInputTable(
+            columns: [ChatInputColumnSpec(width: 100.0)],
+            rows: [ChatInputTableRow(height: nil, cells: [ChatInputTableCell(runs: [ChatInputRun(text: "X")])])],
+            compact: true
+        )
+        let content = ChatInputContent(schemaVersion: 3, blocks: [.table(table)])
+        let data = try AdaptedPostboxEncoder().encode(content)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputContent.self, from: data)
+        XCTAssertEqual(decoded, content)
+        guard case .table(let out)? = decoded.blocks.first else { return XCTFail("expected a table") }
+        XCTAssertTrue(out.compact)
+    }
+
+    /// A draft written before `compact` existed must still decode, defaulting to false.
+    func test_codable_tableWithoutCompactKey_decodesAsNonCompact() throws {
+        let json = Data(#"{"columns":[{"width":100}],"rows":[{"cells":[]}]}"#.utf8)
+        let table = try JSONDecoder().decode(ChatInputTable.self, from: json)
+        XCTAssertFalse(table.compact)
+    }
+
     // MARK: - Per-cell H+V alignment (ChatInputTableCell)
 
     func testTableCellAlignmentRoundTrips() throws {

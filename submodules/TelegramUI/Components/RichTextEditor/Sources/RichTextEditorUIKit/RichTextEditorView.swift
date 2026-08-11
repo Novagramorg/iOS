@@ -216,6 +216,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         public let link: String?
         public let hasSelection: Bool
         public let isInTable: Bool
+        /// True when the caret/selection is inside a table whose `compact` flag is set (halved cell
+        /// padding). False when not in a table at all, so a host needs no optional handling.
+        public let isTableCompact: Bool
         /// True when a non-empty selection touches only paragraph text — no media or table block, and
         /// neither endpoint is inside a table cell. A list marker can only be meaningfully applied to
         /// paragraph blocks, so a host toolbar uses this to gate a per-selection List action. False for
@@ -434,6 +437,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func deleteTableColumn() { canvas.deleteTableColumn() }
     /// Deletes the table the caret is in (no-op otherwise).
     public func deleteTable() { canvas.deleteTable() }
+
+    /// Flips the caret's table between compact (halved cell padding) and normal, as one undo step.
+    /// No-op when the caret is not in a table.
+    public func toggleTableCompact() { canvas.toggleTableCompact() }
     /// Copies the caret's current table to the pasteboard (app fragment + RTF table + plain-text flatten). No-op outside a table.
     public func copyCurrentTable() { canvas.copyCurrentTable() }
     /// Replaces the caret's current table with body paragraphs (one per row, cells space-joined), one undo step. No-op outside a table.

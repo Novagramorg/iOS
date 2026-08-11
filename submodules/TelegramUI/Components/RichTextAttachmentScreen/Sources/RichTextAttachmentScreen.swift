@@ -1620,6 +1620,16 @@ final class RichTextAttachmentScreenComponent: Component {
                                 f(.default)
                                 self?.editor.convertCurrentTableToText()
                             })))
+                            let tableIsCompact = self.editor.currentState().isTableCompact
+                            items.append(.action(ContextMenuActionItem(
+                                text: tableIsCompact ? environment.strings.RichText_Menu_Table_CompactOff : environment.strings.RichText_Menu_Table_CompactOn,
+                                icon: { _ in
+                                    return nil
+                                },
+                                action: { [weak self] _, f in
+                                    f(.default)
+                                    self?.editor.toggleTableCompact()
+                                })))
                             items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_Table_Delete, textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTable()
                             })))

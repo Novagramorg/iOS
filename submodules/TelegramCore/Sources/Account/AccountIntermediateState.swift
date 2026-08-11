@@ -110,7 +110,8 @@ enum AccountStateMutationOperation {
     case AddSecretMessages([Api.EncryptedMessage])
     case ReadSecretOutbox(peerId: PeerId, maxTimestamp: Int32, actionTimestamp: Int32)
     case AddPeerInputActivity(chatPeerId: PeerActivitySpace, peerId: PeerId?, activity: PeerInputActivity?)
-    case AddPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId, id: Int64, timestamp: Int32, peerId: PeerId, content: PeerLiveTypingDraftUpdateContent)
+    case AddPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId, id: Int64, timestamp: Int32, peerId: PeerId, canStop: Bool, keepOnStop: Bool, content: PeerLiveTypingDraftUpdateContent)
+    case AddPeerLiveTypingDraftStop(peerAndThreadId: PeerAndThreadId, randomId: Int64, timestamp: Int32)
     case UpdatePinnedItemIds(PeerGroupId, AccountStateUpdatePinnedItemIdsOperation)
     case UpdatePinnedSavedItemIds(AccountStateUpdatePinnedItemIdsOperation)
     case UpdatePinnedTopic(peerId: PeerId, threadId: Int64, isPinned: Bool)
@@ -639,8 +640,12 @@ struct AccountMutableState {
         self.addOperation(.AddPeerInputActivity(chatPeerId: chatPeerId, peerId: peerId, activity: activity))
     }
     
-    mutating func addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId, id: Int64, timestamp: Int32, peerId: PeerId, content: PeerLiveTypingDraftUpdateContent) {
-        self.addOperation(.AddPeerLiveTypingDraftUpdate(peerAndThreadId: peerAndThreadId, id: id, timestamp: timestamp, peerId: peerId, content: content))
+    mutating func addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId, id: Int64, timestamp: Int32, peerId: PeerId, canStop: Bool, keepOnStop: Bool, content: PeerLiveTypingDraftUpdateContent) {
+        self.addOperation(.AddPeerLiveTypingDraftUpdate(peerAndThreadId: peerAndThreadId, id: id, timestamp: timestamp, peerId: peerId, canStop: canStop, keepOnStop: keepOnStop, content: content))
+    }
+
+    mutating func addPeerLiveTypingDraftStop(peerAndThreadId: PeerAndThreadId, randomId: Int64, timestamp: Int32) {
+        self.addOperation(.AddPeerLiveTypingDraftStop(peerAndThreadId: peerAndThreadId, randomId: randomId, timestamp: timestamp))
     }
     
     mutating func addUpdatePinnedItemIds(groupId: PeerGroupId, operation: AccountStateUpdatePinnedItemIdsOperation) {
@@ -789,7 +794,7 @@ struct AccountMutableState {
     
     mutating func addOperation(_ operation: AccountStateMutationOperation) {
         switch operation {
-        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .ReadOutbox, .ReadGroupFeedInbox, .MergePeerPresences, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdatePeerChatUnreadMark, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .UpdateWallpaper, .SyncChatListFilters, .UpdateChatListFilterOrder, .UpdateChatListFilter, .UpdateReadThread, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateMessagesPinned, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo:
+        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .ReadOutbox, .ReadGroupFeedInbox, .MergePeerPresences, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .AddPeerLiveTypingDraftStop, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdatePeerChatUnreadMark, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .UpdateWallpaper, .SyncChatListFilters, .UpdateChatListFilterOrder, .UpdateChatListFilter, .UpdateReadThread, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateMessagesPinned, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo:
                 break
             case let .AddMessages(messages, location):
                 for message in messages {

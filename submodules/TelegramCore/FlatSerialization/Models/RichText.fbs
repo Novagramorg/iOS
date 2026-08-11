@@ -236,4 +236,7 @@ table InstantPageButton {
     text:RichText (id: 0, required);
     action:InstantPageButtonAction (id: 1, required);
     color:int = -1 (id: 2);
+    // `richButtonStyle` link:flags.3. A defaulted trailing scalar, so buffers written before it
+    // existed read `false`. Scalars cannot be `required` in flatc.
+    isLink:bool = false (id: 3);
 }

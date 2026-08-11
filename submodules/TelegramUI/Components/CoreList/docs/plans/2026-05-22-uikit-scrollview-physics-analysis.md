@@ -3,6 +3,10 @@
 **Status:** CURRENT REFERENCE
 
 **Source:** UIKitCore (iOS 26.2, arm64e), reverse-engineered via Hopper (HopperMCPServer).
+**Corrections dated 2026-08-10** come from a later, SYMBOL-BEARING UIKitCore image (ivar names such as
+`_horizontalVelocity`, `_previousVerticalVelocity`, `_fastScrollMultiplier` are present), which is what
+made the guarded low-pass and the fast-scroll mechanism visible at all. Addresses in those sections are
+from that image and do not match the `0x1896…` addresses elsewhere in this document.
 **Goal:** exact replication of UIScrollView's linear scroll physics in a standalone class to drive `CoreVirtualListView`.
 **Method:** Hopper pseudo-code gives structure/control-flow, but its ARM64 decompiler **drops FP/SIMD math** (emits `brk` / bare `asm {}` blocks). All numeric formulas below are reconstructed from the **assembly** and presented as clean math. Argument semantics are verified from **call sites**, not the (misleading) private selector names.
 
@@ -68,7 +72,9 @@ BOOL bouncingDecel(double dt_ms, double currentOffset, double *runningOffset /*i
                    double min, double max, double rate, double lnRate /* = ln(rate) */,
                    double *velocity /*in-out*/)
 //   rate     = decelerationFactor  (0.998 normal / 0.99 fast), per-ms
-//   vScale   = _velocityScaleFactor ivar (default 1.0), multiplies the per-frame distance
+//   vScale   = _fastScrollMultiplier ivar (default 1.0), multiplies the per-frame distance
+//              — NOT _velocityScaleFactor, which is a distinct ivar this function never reads
+//              (corrected 2026-08-10: read at 0x17a85f8 and 0x17a86a4, both `_fastScrollMultiplier`)
 //   returns  finished? (YES → driver calls _stopScrollingNotify:pin:)
 ```
 
@@ -96,6 +102,10 @@ else:                                    // crosses an edge mid-frame
 ```
 
 **(B) OUT-OF-BOUNDS / mid-frame remainder — spring return** (`remainingTime` = sub-frame time past edge)
+
+> **The spring term carries NO `vScale`** (corrected 2026-08-10, `0x17a8784`). Only the free-deceleration
+> distance (`0x17a85f8`) and its to-the-edge sub-step (`0x17a86a4`) are multiplied. Invisible while the
+> multiplier is 1.0, which is why the original pass recorded it on both.
 ```
 edge     = (offset < min) ? min : max
 springK  = exp(remainingTime · ln(0.99))   // bounce stiffness = FIXED 0.99/ms, independent of decelerationRate
@@ -106,6 +116,10 @@ offset = edge + springK·(offset − edge)
 velocity *= decayRem · springK
 ```
 `ln(0.99) = −0.01005…` — the `-0.01005` constant in the binary is exactly `ln(0.99)`.
+
+**Reaching the spring, or settling, resets the fast-scroll streak** (`0x17a87bc`, `0x17a8844`):
+`_fastScrollCount = 0`, `_fastScrollMultiplier = 1.0`. Every deceleration ends in one of the two, so the
+multiplier only ever survives into a gesture that begins BEFORE the previous flight finished.
 
 **SETTLE test**
 ```
@@ -125,7 +139,20 @@ After computing the new offset/velocity it writes them back, then `setContentOff
 ---
 
 ## 3. Live-drag path ✅
-`handlePan:` is a state dispatcher: **Began** → `_resetScrollingWithUIEvent:` + zero velocity ivars (`0x1ea7984c0/c4/c8/cc`); **Changed** → `_updatePanGesture` (the drag math); **Ended/Cancelled** → `_prepareToPage…` + `_endPanNormal:` (§4).
+`handlePan:` is a state dispatcher: **Began** → `_resetScrollingWithUIEvent:`, zero all four velocity
+ivars, **then `_updatePanGesture` immediately**; **Changed** → `_updatePanGesture` (the drag math);
+**Ended/Cancelled** → `_prepareToPage…` + `_endPanNormal:` (§4).
+
+> **Corrected 2026-08-10 (`0x17a1718`).** The original entry omitted that case 1 falls straight into
+> `_updatePanGesture`, so **`.began` contributes a full velocity sample and applies its own
+> translation** — it is a drag callback, not merely a state transition. It also mis-attributed the
+> zeroing: `_resetScrollingWithUIEvent:` (`0x17b11ec`) records `_startOffsetX`/`_startOffsetY` and
+> touches no velocity state at all; the zeroing lives in `handlePan:` case 1 and in
+> `_beginTrackingWithEvent:` (`0x17b12e4`, previous pair only).
+>
+> This was the whole of the CoreList short-flick defect: an engine that treats `.began` as setup only
+> runs a gesture one sample behind UIKit, and a flick with one `.changed` releases at `0.25·v` instead
+> of `0.75·v₀ + 0.25·v₁`.
 
 `_updatePanGesture` per drag-Changed (asm `0x189675a78`–`0x189675d18`):
 ```
@@ -149,22 +176,71 @@ After computing the new offset/velocity it writes them back, then `setContentOff
 ## 4. Velocity capture + release thresholds ✅
 From `_endPanNormal:` assembly (exact).
 
-**Low-pass filter** (`0xa498`–`0xa4d0`), per axis:
+**Low-pass filter** (`0xa498`–`0xa4d0`; `0x179f94c` in the symbol-bearing image), per axis — and
+**GUARDED**: it runs only if at least one of the two PREVIOUS-axis velocities is non-zero.
 ```
+if (previousHorizontalVelocity != 0 || previousVerticalVelocity != 0) {     // corrected 2026-08-10
 releaseVelocity = 0.75·prevFrameVel + 0.25·latestFrameVel   // 0.75 = 0x3fe8…, 0.25 = 0x3fd0…
 // prevFrameVel   = ivar 0x1ea7984c4 (the PRIOR drag frame's velocity, saved each frame — §3), weight 0.75
 // latestFrameVel = ivar 0x1ea7984c0 (the most-recent drag frame's velocity), weight 0.25
 //   → result stored to 0x1ea7984c0 = what projection (§5) and deceleration (§2) read
+}   // else: the RAW latest velocity is released, unblended
 ```
-> ✅ **Resolved (Plan 2 fixture regression):** the **0.75** weight lands on `0x4c4` (the **previous** drag-frame velocity), 0.25 on `0x4c0` (the latest) — i.e. `releaseVelocity = 0.75·previous + 0.25·latest`. Confirmed empirically: the `medium-flick` fixture's free-deceleration **lands within ~1px** of the real `UIScrollView` with this weighting, vs a **~23px** undershoot when reversed. (It only matters for multi-frame flicks; the two agree when `prevVelocity == 0`.) The `ScrollPhysics` replication core uses this weighting.
+> **The guard fires for a gesture that reached release with no `.changed` event.** `handlePan:` case 1
+> zeroes both pairs and then takes one sample, so `previous` is still zero at that point — such a flick
+> is released at full strength rather than at a quarter.
+> ✅ **Resolved (Plan 2 fixture regression):** the **0.75** weight lands on `0x4c4` (the **previous** drag-frame velocity), 0.25 on `0x4c0` (the latest) — i.e. `releaseVelocity = 0.75·previous + 0.25·latest`. Confirmed empirically: the `medium-flick` fixture's free-deceleration **lands within ~1px** of the real `UIScrollView` with this weighting, vs a **~23px** undershoot when reversed. The `ScrollPhysics` replication core uses this weighting.
+>
+> ⚠️ **Corrected 2026-08-10.** This paragraph used to end "the two agree when `prevVelocity == 0`",
+> which is false — they give `0.25·v` and `0.75·v`. What actually happens at `prevVelocity == 0` is
+> that the guard above skips the blend entirely and the raw latest velocity is released.
 
-**Threshold tiers** on `|v|²` (pts/ms; `0xa20c`–`0xa224`, `0xa798`):
+**Threshold tiers** on `|v|²` (pts/ms; `0xa20c`–`0xa224`, `0xa798`; `0x179f6d8` in the symbol-bearing
+image). **Corrected 2026-08-10:** the magnitude tested is `vx² + vy²` — a single 2-D quantity, not a
+per-axis one — and it is evaluated on the **RAW latest** sample, BEFORE the low-pass above
+(`0x179f6d8` precedes `0x179f94c` in control flow; the decelerate branch at `0x179fc7c` returns to the
+shared tail that reaches the blend). Below the floor, all four velocity ivars are zeroed and there is
+no deceleration at all.
 | `|v|²` | `|v|` | behavior |
 |---|---|---|
 | < 0.0625 | < 0.25 pts/ms (250 pts/s) | **no deceleration** — velocity zeroed, snap/settle only |
 | 0.0625 … 0.36 | 0.25 … 0.6 pts/ms | decelerate; reset consecutive-flick counter |
-| ≥ 0.36 | ≥ 0.6 pts/ms | decelerate **and** increment consecutive-flick counter (repeated fast flicks accelerate; event timestamp recorded at ivar `0x1ea7984fc`) |
-(gamepad idiom == 6 bypasses the magnitude tiers.)
+| ≥ 0.36 | ≥ 0.6 pts/ms | decelerate **and** increment `_fastScrollCount`, stamping `_fastScrollEndTime` — see "Repeated-flick acceleration" below |
+(gamepad idiom == 6 bypasses the magnitude tiers. UIKit also skips the increment when `pagingEnabled`
+is set, `0x179fcb8`.)
+
+Also at `0x179f5e0`, before the tiers: UIKit **re-reads** `[pan velocityInView:self]` rather than trusting
+the stored ivar, and zeroes both stored velocities if that fresh read is exactly `CGPointZero`.
+
+### Repeated-flick acceleration ✅ (decoded 2026-08-10)
+
+`_fastScrollMultiplier` is the §2 `vScale`. It is not a bare counter — it is a full mechanism:
+
+**Growth**, in `_updatePanGesture` once `_fastScrollCount >= 3` (`0x179d8d4`–`0x179d94c`):
+```
+dist       = sqrt_float(dx² + dy²)          // cumulative drag translation; 32-bit sqrt at 0x179d904
+multiplier = min(_fastScrollStartMultiplier
+                 + (1 + (_fastScrollCount − 3)/2) · min(dist / 240.0, 0.9),
+                 16.0)
+```
+The single-precision `sqrt` is real: the touch path does `fcvt s0` / `fsqrt s0` / `fcvt d0`, while the
+discrete/trackpad path calls double `hypot` (`0x179db30`). The `240.0` divisor is hard-coded on the touch
+path and preference-driven (`DiscreteFastScrollDistanceScale`, default `240.0`) on the discrete one.
+
+**Four reset sites:**
+- **Touch-down** — `_beginTrackingWithEvent:` (`0x17b1470`–`0x17b14d0`): if
+  `event.timestamp > _fastScrollEndTime + 1.0` then `_fastScrollMultiplier = 1.0`,
+  `_fastScrollCount = 0`; then `_fastScrollStartMultiplier = _fastScrollMultiplier`. The stamp is made
+  at RELEASE, so the timeout means "one second since you last let go". Gated by `_scrollViewFlags` bit
+  23 (`0x17b146c`), the same "this was a real drag with velocity" bit that gates the whole velocity
+  block in `_endPanNormal` (`0x179f4f8`).
+- **During the drag** — `_updatePanGesture` (`0x179d5d8`–`0x179d628`): a direction reversal on the
+  scrolling axis, or `vx² + vy² < 0.0169` (|v| < 0.13 pts/ms). The recorded signs live in
+  `_scrollViewFlags` bits 10 (horizontal, writer `0x179d674`) and 11 (vertical, writer `0x179d6a0`);
+  the touch path's reversal test reads bit 11. Both reader and writer are guarded on the sample being
+  non-zero.
+- **At release** — the `< 0.36` tier above.
+- **Inside the integrator** — §2's spring/settle resets.
 
 **Discrete / paging flick** (`0xa30c`–`0xa3a0`): velocity component is clamped to **[−3, +3]** (`fcsel` vs 3.0 / `fmaxnm` vs −3.0) then scaled by **−0.66** (`double_value_minus_0_66`). Applies to trackpad/discrete (`flags & 0x2800 == 0x800`) and paging direction codes.
 
@@ -176,7 +252,8 @@ From `_scrollViewWillEndDraggingWithDeceleration:` (inline, no helper). Verified
 It first caches `lnRate = log(decelerationRate)` per axis (`log` = stub `0x18d79d210`), then:
 
 ```
-// v = filtered velocity ivar (pts/ms, set by _endPanNormal); vScale = _velocityScaleFactor (≈1.0)
+// v = filtered velocity ivar (pts/ms, set by _endPanNormal); vScale = _fastScrollMultiplier (1.0
+// unless a repeated-flick streak is live — §4; read here at 0x179e95c, corrected 2026-08-10)
 projectedDistance = sign(v) · (|v| − 0.01) / |lnRate| · vScale     // analytic integral of exp decay to the 0.01 cutoff
 target            = contentOffset + projectedDistance
 ```
@@ -274,12 +351,19 @@ if previousSample exists AND previousSample.dt > ~1.2e-7 (2⁻²³):
 
 ## Open questions / to verify
 - §7 sample-validity `dt` thresholds (`0x18addf348`, `0x18addad40`) and pan `_hysteresis` value (validate via the Layer-1 PanRecognizer fit residual).
-- `_velocityScaleFactor` (vScale, ivar `0x1ea7983c4`) default — assumed 1.0; confirm from initializer. (Decoded `0x18968b4d4`: plain stored double; **not** referenced in `_endPanNormal` — no overscroll velocity scaling.)
 - `_getStandardDecelerationOffset` (no-bounce) — expected: free decel (§2-A) with a hard clamp at min/max instead of the spring; decode to confirm.
 - `_getPagingDecelerationOffset` — paging deceleration; decode to confirm vs the §5 paging snap.
 - `_prepareToPageWithHorizontalVelocity:verticalVelocity:` — page target selection at release (paging only).
 
 ## Resolved
+- **The §2 `vScale` is `_fastScrollMultiplier`, not `_velocityScaleFactor`** (2026-08-10). The latter is
+  a distinct stored double that none of the paths in this document read; the former is read inside
+  `_getBouncingDecelerationOffset` (`0x17a85f8`) and by the §5 projection (`0x179e95c`), and is driven
+  by the repeated-flick mechanism in §4.
+- **The §4 low-pass is guarded** on the previous-axis pair being non-zero (2026-08-10, `0x179f94c`).
+- **The §4 threshold is raw, pre-blend and 2-D** (2026-08-10, `0x179f6d8`).
+- **`.began` is a drag callback** — `handlePan:` case 1 runs `_updatePanGesture` immediately (2026-08-10,
+  `0x17a1718`), and `_resetScrollingWithUIEvent:` touches no velocity state (`0x17b11ec`).
 - Velocity unit = **points/ms** (documented delegate contract); stored as `−velocityInView·0.001` (§3).
 - Rubber-band `range` = bounds dimension (§1 wrapper).
 - Pixel-rounding idiom (§6) and min/max bounds (§6) — exact.

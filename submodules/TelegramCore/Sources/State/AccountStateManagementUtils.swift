@@ -1586,22 +1586,34 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let threadId = topMsgId.flatMap { Int64($0) }
             
                 if let date = updatesDate, date + 60 > serverTime {
-                    var typingDraftData: (randomId: Int64, text: TypingDraftText)?
-                    
+                    var typingDraftData: (randomId: Int64, canStop: Bool, keepOnStop: Bool, text: TypingDraftText)?
+
                     if case let .sendMessageTextDraftAction(sendMessageTextDraftActionData) = type {
-                        typingDraftData = (sendMessageTextDraftActionData.randomId, .plain(sendMessageTextDraftActionData.text))
+                        typingDraftData = (
+                            sendMessageTextDraftActionData.randomId,
+                            (sendMessageTextDraftActionData.flags & (1 << 0)) != 0,
+                            (sendMessageTextDraftActionData.flags & (1 << 1)) != 0,
+                            .plain(sendMessageTextDraftActionData.text)
+                        )
                     } else if case let .sendMessageRichMessageDraftAction(sendMessageRichMessageDraftActionData) = type {
-                        typingDraftData = (sendMessageRichMessageDraftActionData.randomId, .rich(sendMessageRichMessageDraftActionData.richMessage))
+                        typingDraftData = (
+                            sendMessageRichMessageDraftActionData.randomId,
+                            (sendMessageRichMessageDraftActionData.flags & (1 << 0)) != 0,
+                            (sendMessageRichMessageDraftActionData.flags & (1 << 1)) != 0,
+                            .rich(sendMessageRichMessageDraftActionData.richMessage)
+                        )
                     }
-                    if let typingDraftData {
+                    if case let .sendMessageStopDraftAction(sendMessageStopDraftActionData) = type {
+                        updatedState.addPeerLiveTypingDraftStop(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), randomId: sendMessageStopDraftActionData.randomId, timestamp: date)
+                    } else if let typingDraftData {
                         switch typingDraftData.text {
                         case let .plain(plain):
                             if case let .textWithEntities(textWithEntitiesData) = plain {
-                                updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), id: typingDraftData.randomId, timestamp: date, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), content: .plain(text: textWithEntitiesData.text, entities: messageTextEntitiesFromApiEntities(textWithEntitiesData.entities)))
+                                updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), id: typingDraftData.randomId, timestamp: date, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), canStop: typingDraftData.canStop, keepOnStop: typingDraftData.keepOnStop, content: .plain(text: textWithEntitiesData.text, entities: messageTextEntitiesFromApiEntities(textWithEntitiesData.entities)))
                             }
                         case let .rich(richMessage):
                             let parsedRichMessage = RichTextMessageAttribute(apiRichMessage: richMessage)
-                            updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), id: typingDraftData.randomId, timestamp: date, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), content: .rich(parsedRichMessage))
+                            updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), id: typingDraftData.randomId, timestamp: date, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), canStop: typingDraftData.canStop, keepOnStop: typingDraftData.keepOnStop, content: .rich(parsedRichMessage))
                         }
                     } else {
                         let activity = PeerInputActivity(apiType: type, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), timestamp: date)
@@ -1630,16 +1642,20 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     let channelPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                     let threadId = topMsgId.flatMap { Int64($0) }
 
-                    if case let .sendMessageTextDraftAction(sendMessageTextDraftActionData) = type {
+                    if case let .sendMessageStopDraftAction(sendMessageStopDraftActionData) = type {
+                        updatedState.addPeerLiveTypingDraftStop(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), randomId: sendMessageStopDraftActionData.randomId, timestamp: date)
+                    } else if case let .sendMessageTextDraftAction(sendMessageTextDraftActionData) = type {
                         let (randomId, text) = (sendMessageTextDraftActionData.randomId, sendMessageTextDraftActionData.text)
+                        let canStop = (sendMessageTextDraftActionData.flags & (1 << 0)) != 0
+                        let keepOnStop = (sendMessageTextDraftActionData.flags & (1 << 1)) != 0
                         switch text {
                         case let .textWithEntities(textWithEntitiesData):
                             let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
-                            updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: randomId, timestamp: date, peerId: userId.peerId, content: .plain(text: text, entities: messageTextEntitiesFromApiEntities(entities)))
+                            updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: randomId, timestamp: date, peerId: userId.peerId, canStop: canStop, keepOnStop: keepOnStop, content: .plain(text: text, entities: messageTextEntitiesFromApiEntities(entities)))
                         }
                     } else if case let .sendMessageRichMessageDraftAction(sendMessageRichMessageDraftActionData) = type {
                         let parsedRichMessage = RichTextMessageAttribute(apiRichMessage: sendMessageRichMessageDraftActionData.richMessage)
-                        updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: sendMessageRichMessageDraftActionData.randomId, timestamp: date, peerId: userId.peerId, content: .rich(parsedRichMessage))
+                        updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: sendMessageRichMessageDraftActionData.randomId, timestamp: date, peerId: userId.peerId, canStop: (sendMessageRichMessageDraftActionData.flags & (1 << 0)) != 0, keepOnStop: (sendMessageRichMessageDraftActionData.flags & (1 << 1)) != 0, content: .rich(parsedRichMessage))
                     } else {
                         let activity = PeerInputActivity(apiType: type, peerId: nil, timestamp: date)
                         var category: PeerActivitySpace.Category = .global
@@ -3832,7 +3848,7 @@ private func optimizedOperations(_ operations: [AccountStateMutationOperation]) 
     var currentAddQuickReplyMessages: OptimizeAddMessagesState?
     for operation in operations {
         switch operation {
-        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo:
+        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .AddPeerLiveTypingDraftStop, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo:
                 if let currentAddMessages = currentAddMessages, !currentAddMessages.messages.isEmpty {
                     result.append(.AddMessages(currentAddMessages.messages, currentAddMessages.location))
                 }
@@ -4122,18 +4138,23 @@ func replayFinalState(
             var threadId: Int64?
             var authorId: PeerId
             var timestamp: Int32
+            var canStop: Bool
+            var keepOnStop: Bool
             var content: PeerLiveTypingDraftUpdateContent
-            
-            init(id: Int64, threadId: Int64?, authorId: PeerId, timestamp: Int32, content: PeerLiveTypingDraftUpdateContent) {
+
+            init(id: Int64, threadId: Int64?, authorId: PeerId, timestamp: Int32, canStop: Bool, keepOnStop: Bool, content: PeerLiveTypingDraftUpdateContent) {
                 self.id = id
                 self.threadId = threadId
                 self.authorId = authorId
                 self.timestamp = timestamp
+                self.canStop = canStop
+                self.keepOnStop = keepOnStop
                 self.content = content
             }
         }
         
         case update(Update)
+        case stop(randomId: Int64, timestamp: Int32)
         case cancel(updatedTimestamp: Int32)
     }
     
@@ -5071,7 +5092,7 @@ func replayFinalState(
                 } else if chatPeerId.peerId.namespace == Namespaces.Peer.SecretChat {
                     updatedSecretChatTypingActivities.insert(chatPeerId.peerId)
                 }
-            case let .AddPeerLiveTypingDraftUpdate(peerAndThreadId, id, timestamp, authorId, content):
+            case let .AddPeerLiveTypingDraftUpdate(peerAndThreadId, id, timestamp, authorId, canStop, keepOnStop, content):
                 if liveTypingDraftUpdates[peerAndThreadId] == nil {
                     liveTypingDraftUpdates[peerAndThreadId] = []
                 }
@@ -5080,6 +5101,8 @@ func replayFinalState(
                     threadId: peerAndThreadId.threadId,
                     authorId: authorId,
                     timestamp: timestamp,
+                    canStop: canStop,
+                    keepOnStop: keepOnStop,
                     content: content
                 )))
                 if peerAndThreadId.threadId != nil {
@@ -5092,8 +5115,22 @@ func replayFinalState(
                         threadId: peerAndThreadId.threadId,
                         authorId: authorId,
                         timestamp: timestamp,
+                        canStop: canStop,
+                        keepOnStop: keepOnStop,
                         content: content
                     )))
+                }
+            case let .AddPeerLiveTypingDraftStop(peerAndThreadId, randomId, timestamp):
+                if liveTypingDraftUpdates[peerAndThreadId] == nil {
+                    liveTypingDraftUpdates[peerAndThreadId] = []
+                }
+                liveTypingDraftUpdates[peerAndThreadId]?.append(.stop(randomId: randomId, timestamp: timestamp))
+                if peerAndThreadId.threadId != nil {
+                    let allKey = PeerAndThreadId(peerId: peerAndThreadId.peerId, threadId: nil)
+                    if liveTypingDraftUpdates[allKey] == nil {
+                        liveTypingDraftUpdates[allKey] = []
+                    }
+                    liveTypingDraftUpdates[allKey]?.append(.stop(randomId: randomId, timestamp: timestamp))
                 }
             case let .UpdatePinnedItemIds(groupId, pinnedOperation):
                 switch pinnedOperation {
@@ -6246,65 +6283,102 @@ func replayFinalState(
             }
         }
         transaction.combineTypingDrafts(locations: Set(liveTypingDraftUpdates.keys), update: { key, current in
-            guard let update = liveTypingDraftUpdates[key]?.max(by: { lhs, rhs in
-                switch lhs {
-                case .cancel:
-                    return false
-                case let .update(lhsUpdate):
-                    switch rhs {
-                    case .cancel:
-                        return true
-                    case let .update(rhsUpdate):
-                        return lhsUpdate.timestamp < rhsUpdate.timestamp
-                    }
-                }
-            }) else {
+            guard let updates = liveTypingDraftUpdates[key], !updates.isEmpty else {
                 return current
             }
-            switch update {
-            case let .update(update):
-                if let current, current.id > update.id {
-                    return current
+
+            // A real message arrived: the draft is gone regardless of anything else in the batch.
+            for update in updates {
+                if case .cancel = update {
+                    return nil
                 }
+            }
+
+            // A stop applies on top of the latest update in the same batch, which is why this
+            // is a reduction rather than a single max-by pick.
+            var latestUpdate: LiveTypingDraftUpdate.Update?
+            var latestStop: (randomId: Int64, timestamp: Int32)?
+            for update in updates {
+                switch update {
+                case let .update(updateValue):
+                    if let latestUpdateValue = latestUpdate {
+                        if latestUpdateValue.timestamp < updateValue.timestamp {
+                            latestUpdate = updateValue
+                        }
+                    } else {
+                        latestUpdate = updateValue
+                    }
+                case let .stop(randomId, timestamp):
+                    if let latestStopValue = latestStop {
+                        if latestStopValue.timestamp < timestamp {
+                            latestStop = (randomId, timestamp)
+                        }
+                    } else {
+                        latestStop = (randomId, timestamp)
+                    }
+                case .cancel:
+                    break
+                }
+            }
+
+            var result = current
+
+            if let update = latestUpdate {
+                // A draft whose random_id differs from the current one is a *replacement*,
+                // not an edit — random_ids are opaque, so there is no ordering to defend.
+                // (This previously began `if let current, current.id > update.id { return current }`,
+                // which silently dropped a legitimately newer draft that happened to sort lower.)
+                let isSameDraft = current?.id == update.id
+
                 var timestamp = update.timestamp
-                if let current, current.id == update.id {
+                if let current, isSameDraft {
                     timestamp = current.timestamp
                 }
-                if current == nil {
+                if !isSameDraft {
                     if let index = transaction.getTopPeerMessageIndex(peerId: key.peerId) {
                         timestamp = max(timestamp, index.timestamp)
                     }
                 }
-                
+
                 let draftText: String
                 let draftAttributes: [MessageAttribute]
+                let draftAttribute = TypingDraftMessageAttribute(randomId: update.id, canStop: update.canStop, keepOnStop: update.keepOnStop, isStopped: false)
                 switch update.content {
                 case let .plain(text, entities):
                     draftText = text
                     draftAttributes = [
-                        TypingDraftMessageAttribute(),
+                        draftAttribute,
                         TextEntitiesMessageAttribute(entities: entities)
                     ]
                 case let .rich(richData):
                     draftText = ""
                     draftAttributes = [
-                        TypingDraftMessageAttribute(),
+                        draftAttribute,
                         richData
                     ]
                 }
                 
-                return (
+                result = (
                     update.id,
                     Namespaces.Message.Cloud,
                     update.threadId,
                     update.authorId,
                     timestamp,
                     draftText,
-                    draftAttributes
+                    draftAttributes,
+                    false
                 )
-            case .cancel:
-                return nil
             }
+
+            if let latestStop, let value = result, value.id == latestStop.randomId {
+                if typingDraftKeepOnStop(value.attributes) {
+                    result = stoppedTypingDraft(value)
+                } else {
+                    result = nil
+                }
+            }
+
+            return result
         })
     }
     

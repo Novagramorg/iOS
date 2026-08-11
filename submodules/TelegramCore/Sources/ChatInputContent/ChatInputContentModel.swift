@@ -1046,9 +1046,20 @@ extension ChatInputTableRow: Codable {
 public struct ChatInputTable: Equatable, Codable {
     public var columns: [ChatInputColumnSpec]
     public var rows: [ChatInputTableRow]
-    public init(columns: [ChatInputColumnSpec] = [], rows: [ChatInputTableRow] = []) {
+    /// Render-only: halve every cell's interior padding. Mirrors `pageBlockTable`'s `compact` flag.
+    public var compact: Bool
+    public init(columns: [ChatInputColumnSpec] = [], rows: [ChatInputTableRow] = [], compact: Bool = false) {
         self.columns = columns
         self.rows = rows
+        self.compact = compact
+    }
+    private enum CodingKeys: String, CodingKey { case columns, rows, compact }
+    // Custom decode so drafts persisted before `compact` existed still load. Encoding stays synthesized.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        columns = try c.decodeIfPresent([ChatInputColumnSpec].self, forKey: .columns) ?? []
+        rows = try c.decodeIfPresent([ChatInputTableRow].self, forKey: .rows) ?? []
+        compact = try c.decodeIfPresent(Bool.self, forKey: .compact) ?? false
     }
 }
 

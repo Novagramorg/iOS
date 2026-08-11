@@ -355,6 +355,39 @@ extension TableBlockBoxTests {
         XCTAssertEqual(bottomGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "bottom gap == cellVerticalPadding")
     }
 
+    func test_compactTable_halvesCellPadding() {
+        func makeView(compact: Bool) -> DocumentCanvasView {
+            let v = DocumentCanvasView()
+            v.setBlocks([.table(TableBlock(id: BlockID("t"),
+                columns: [ColumnSpec(width: 140), ColumnSpec(width: 140)],
+                rows: [Row(id: BlockID("r0"), cells: [cell("a", "Ag"), cell("b", "Bg")]),
+                       Row(id: BlockID("r1"), cells: [cell("c", "Ag"), cell("d", "Bg")])],
+                compact: compact))], width: 320)
+            v.frame = CGRect(x: 0, y: 0, width: 320, height: 400); v.layoutIfNeeded()
+            return v
+        }
+
+        let normal = makeView(compact: false).boxes[0] as! TableBlockBox
+        let compact = makeView(compact: true).boxes[0] as! TableBlockBox
+
+        XCTAssertEqual(compact.cellPadding, TableBlockBox.cellPadding / 2, accuracy: 0.01)
+        XCTAssertEqual(compact.cellVerticalPadding, TableBlockBox.cellVerticalPadding / 2, accuracy: 0.01)
+        XCTAssertEqual(normal.cellPadding, TableBlockBox.cellPadding, accuracy: 0.01)
+
+        // The halved padding must reach the laid-out geometry, not just the property.
+        let normalBox = normal.cells[1][0].boxes[0] as! BlockBox
+        let compactBox = compact.cells[1][0].boxes[0] as! BlockBox
+        let normalTopGap = normalBox.textOrigin.y - normal.cellRect(row: 1, column: 0)!.minY
+        let compactTopGap = compactBox.textOrigin.y - compact.cellRect(row: 1, column: 0)!.minY
+        XCTAssertEqual(normalTopGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5)
+        XCTAssertEqual(compactTopGap, TableBlockBox.cellVerticalPadding / 2, accuracy: 0.5)
+        XCTAssertLessThan(compact.frame.height, normal.frame.height, "a compact table is shorter")
+
+        // `compact` must survive the model read-back.
+        guard case .table(let out) = compact.currentBlock() else { return XCTFail("expected a table") }
+        XCTAssertTrue(out.compact)
+    }
+
     func test_typingFirstCharInEmptyCell_is15pt() {
         let v = DocumentCanvasView()
         let empty = Cell(id: BlockID("a"), blocks: [.paragraph(ParagraphBlock(id: BlockID("ap"), runs: []))])

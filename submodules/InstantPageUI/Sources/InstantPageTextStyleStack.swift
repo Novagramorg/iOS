@@ -34,6 +34,15 @@ let InstantPageMediaDimensionsAttribute = "MediaDimensionsAttribute"
 let InstantPageAnchorAttribute = "AnchorAttribute"
 let InstantPageFormulaAttribute = "FormulaAttribute"
 let InstantPageInlineButtonAttribute = "InlineButtonAttribute"
+/// Carries an `InstantPageButtonActionItem` on a link-styled `RichText.textButton` whose action is
+/// not a URL. Public, unlike its neighbours: the chat bubble reads it from another module to route
+/// the tap into the bot-button dispatch.
+public let InstantPageButtonActionAttribute = "InstantPageButtonActionAttribute"
+/// An explicit square size (NSNumber) for a custom-emoji placeholder, overriding the body-text
+/// formula the V2 layout otherwise derives from the font. Needed because that layout sizes the drawn
+/// emoji from the FONT and never reads the run delegate, so a rewritten delegate alone would change
+/// the advance and leave the square untouched.
+let InstantPageEmojiSizeAttribute = "InstantPageEmojiSizeAttribute"
 
 final class InstantPageTextStyleStack {
     private var items: [InstantPageTextStyle] = []

@@ -1382,7 +1382,7 @@ private func markdownBlocks(from node: MarkdownIntentNode, context: MarkdownConv
         guard !rows.isEmpty else {
             return []
         }
-        return [.table(title: .empty, rows: rows, bordered: true, striped: false)]
+        return [.table(title: .empty, rows: rows, bordered: true, striped: false, compact: false)]
     case let .header(level):
         guard let text = markdownRichText(from: node.attributedText, context: context) else {
             return nil
@@ -2272,7 +2272,7 @@ private func markdownPlainText(from block: InstantPageBlock, depth: Int = 0) -> 
         return text.plainText.isEmpty ? caption.plainText : text.plainText
     case let .kicker(text):
         return text.plainText
-    case let .table(title, _, _, _):
+    case let .table(title, _, _, _, _):
         return title.plainText
     case let .details(title, _, _):
         return title.plainText

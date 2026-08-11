@@ -355,7 +355,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
                 }
             }
         }
-                
+        
         if (!messageText.isEmpty || (message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) && richText == nil) || isStoryWithText) && !isUnsupportedMedia {
             if !skipText {
                 if case .group = item.content, !isFile {
@@ -1619,10 +1619,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         let messageTheme = incoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
         let ephemeralBadgeMessage = content.first(where: { message, _ in
-            return Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace) || message.activeEphemeralReplacementMessage != nil
+            return Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)
         })?.0
         let isEphemeralMessage = ephemeralBadgeMessage != nil
-        let isAnchoredEphemeralMessage = ephemeralBadgeMessage?.activeEphemeralReplacementMessage != nil
         let ephemeralBadgeHeight: CGFloat = 17.0
         let ephemeralBadgeHorizontalInset: CGFloat = 5.0
         let ephemeralBadgeIconSize = CGSize(width: 14.0, height: 17.0)
@@ -1630,7 +1629,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
 
         let ephemeralBadgeText: String?
         if isEphemeralMessage {
-            if incoming || isAnchoredEphemeralMessage {
+            if incoming {
                 ephemeralBadgeText = item.presentationData.strings.Chat_EphemeralMessage_BadgeYou
             } else {
                 var botPeerId: PeerId?

@@ -156,7 +156,11 @@ private final class InstantPageInlineImageData {
 
 private final class InstantPageEmojiLayerData {
     let itemLayer: InlineStickerItemLayer
-    weak var textView: InstantPageV2TextView?
+    /// The view whose coordinate space `itemLayer.frame` is in — an `InstantPageV2TextView` for an
+    /// emoji in body text, or an `InstantPageV2ButtonPillView` for one in a button label. Only a
+    /// text host has a progressive-reveal cursor; a pill already pops in atomically with its
+    /// paragraph, so a pill-hosted emoji is revealed from the start.
+    weak var hostView: UIView?
     var charIndexInItem: Int = 0
     var revealed: Bool = false
 
@@ -424,8 +428,71 @@ public final class InstantPageV2View: UIView {
 
                     data.itemLayer.dynamicColor = textColor
                     data.itemLayer.frame = itemFrame
-                    data.textView = textView
+                    data.hostView = textView
                     data.charIndexInItem = emojiItem.range.location
+                }
+            }
+        }
+
+        // Second walk: custom emoji inside button pills. Registered here rather than owned by the
+        // pill so they inherit the same reveal, looping and visibility gates as body-text emoji
+        // instead of needing a parallel implementation of all three.
+        for view in self.itemViews {
+            // `pillSize` comes from the ITEM, never from the pill's live bounds: a freshly created
+            // InstantPageV2InlineButtonView assigns its pill's frame in `layoutSubviews`, which has
+            // not run yet at this point.
+            var pills: [(pill: InstantPageV2ButtonPillView, size: CGSize)] = []
+            if let buttonView = view as? InstantPageV2InlineButtonView {
+                pills.append((buttonView.pillView, buttonView.item.frame.size))
+            } else if let rowView = view as? InstantPageV2ButtonRowView {
+                for (index, pill) in rowView.pillViews.enumerated() where index < rowView.item.buttons.count {
+                    pills.append((pill, rowView.item.buttons[index].frame.size))
+                }
+            } else {
+                continue
+            }
+
+            for entry in pills {
+                let pill = entry.pill
+                let textColor = pill.resolvedLabelColor
+                for placement in instantPageButtonEmojiPlacements(attachment: pill.attachment, pillSize: entry.size) {
+                    let index = nextIndexById[placement.emoji.fileId] ?? 0
+                    nextIndexById[placement.emoji.fileId] = index + 1
+                    let id = InlineStickerItemLayer.Key(id: placement.emoji.fileId, index: index)
+                    validIds.append(id)
+
+                    let data: InstantPageEmojiLayerData
+                    if let existing = self.inlineStickerItemLayers[id] {
+                        data = existing
+                        if data.itemLayer.superlayer !== pill.emojiContainerView.layer {
+                            pill.emojiContainerView.layer.addSublayer(data.itemLayer)
+                        }
+                    } else {
+                        let pointSize = floor(placement.frame.width * 1.3)
+                        let layer = InlineStickerItemLayer(
+                            context: context,
+                            userLocation: .other,
+                            attemptSynchronousLoad: false,
+                            emoji: placement.emoji,
+                            file: placement.emoji.file,
+                            cache: cache,
+                            renderer: renderer,
+                            placeholderColor: UIColor(white: 0.5, alpha: 0.3),
+                            pointSize: CGSize(width: pointSize, height: pointSize),
+                            dynamicColor: textColor
+                        )
+                        layer.opacity = 0.0
+                        data = InstantPageEmojiLayerData(itemLayer: layer)
+                        self.inlineStickerItemLayers[id] = data
+                        pill.emojiContainerView.layer.addSublayer(layer)
+                    }
+
+                    data.itemLayer.dynamicColor = textColor
+                    data.itemLayer.frame = placement.frame
+                    data.hostView = pill
+                    // No reveal cursor on a pill host, so `charIndexInItem` is unused; the layer is
+                    // taken to full opacity by `updateEmojiReveal` at the end of this method.
+                    data.charIndexInItem = 0
                 }
             }
         }
@@ -531,7 +598,7 @@ public final class InstantPageV2View: UIView {
     func updateEmojiReveal(animated: Bool) {
         for (_, data) in self.inlineStickerItemLayers {
             let revealed: Bool
-            if let textView = data.textView, let count = textView.currentRevealCharacterCount {
+            if let textView = data.hostView as? InstantPageV2TextView, let count = textView.currentRevealCharacterCount {
                 revealed = data.charIndexInItem < count
             } else {
                 revealed = true
@@ -602,8 +669,8 @@ public final class InstantPageV2View: UIView {
     func updateEmojiVisibility() {
         for (_, data) in self.inlineStickerItemLayers {
             let onScreen: Bool
-            if let visibilityRect = self.visibilityRect, let textView = data.textView {
-                let rectInSelf = textView.convert(data.itemLayer.frame, to: self)
+            if let visibilityRect = self.visibilityRect, let hostView = data.hostView {
+                let rectInSelf = hostView.convert(data.itemLayer.frame, to: self)
                 onScreen = rectInSelf.intersects(visibilityRect)
             } else {
                 // No visibility rect == not tracked / off-screen → don't animate. The root view's
@@ -2133,7 +2200,7 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
         if let language = item.language, !language.isEmpty {
             self.languageLabel.isHidden = false
             self.languageLabel.attributedText = NSAttributedString(string: language, attributes: [
-                .font: UIFont(name: "Menlo", size: 11.0) ?? Font.regular(11.0),
+                .font: UIFont(name: "Menlo", size: item.languageFontSize) ?? Font.regular(item.languageFontSize),
                 .foregroundColor: item.languageLabelColor
             ])
             self.languageLabel.sizeToFit()

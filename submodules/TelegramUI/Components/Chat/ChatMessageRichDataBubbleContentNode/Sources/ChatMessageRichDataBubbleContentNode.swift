@@ -25,6 +25,30 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         case pendingEdit(attribute: ObjectIdentifier, page: ObjectIdentifier)
         case translated(language: String, attribute: ObjectIdentifier, page: ObjectIdentifier)
         case original(attribute: ObjectIdentifier, page: ObjectIdentifier)
+
+        /// Which KIND of page this is, with the per-object identities stripped.
+        enum CaseTag: Equatable {
+            case pendingEdit
+            case translated(language: String)
+            case original
+        }
+
+        /// The full key must NOT be used to detect a content change: it carries `ObjectIdentifier`s
+        /// of the attribute and page objects, and a streamed AI chunk produces a fresh
+        /// `RichTextMessageAttribute` on every tick — so comparing keys would report a change on
+        /// every chunk. Only a move BETWEEN kinds (translate, enter or leave a pending edit) is a
+        /// whole-content transition. `language` is part of the tag so that switching between two
+        /// translation languages counts as one too.
+        var caseTag: CaseTag {
+            switch self {
+            case .pendingEdit:
+                return .pendingEdit
+            case let .translated(language, _, _):
+                return .translated(language: language)
+            case .original:
+                return .original
+            }
+        }
     }
 
     private struct ResolvedRichDataContent {
@@ -36,10 +60,25 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     }
     
     private let containerNode: ContainerNode
+    /// Clips `containerNode` to the bubble's four (possibly unequal, when merged) corner radii —
+    /// see `applyContainerCorners`. Created on first layout, since an unloaded node has no layer.
+    private var containerCornerMaskLayer: CAShapeLayer?
     public var statusNode: ChatMessageDateAndStatusNode?
     // `init()` may run off the main thread; UIView construction must happen on the main thread.
     // The page view is built lazily inside the apply closure (always main-thread) via ensurePageView().
     private var pageView: InstantPageV2View?
+    // The page view being crossfaded OUT by a whole-content update. Kept LIVE rather than replaced
+    // by a `snapshotView(afterScreenUpdates:)` replicant, so its inline video keeps playing and its
+    // custom-emoji layers keep looping through the fade.
+    //
+    // At most one is held: a second whole-content update landing mid-fade removes the in-flight one
+    // immediately rather than stacking dissolves.
+    //
+    // It does NOT compete with the incoming view for the media registry: `mediaRegistry` is
+    // per-root-view (`rootMediaRegistryHost = self` in InstantPageV2View.init) and every bubble-side
+    // lookup — transitionArgsFor, applyHiddenMedia — goes through `self.pageView`, which by then
+    // points at the new view. The outgoing view's registry is unreachable, not conflicting.
+    private var fadingOutPageView: InstantPageV2View?
     // Tracks the message (id + stableVersion) baked into the current pageView's render context.
     // The synthesized webpage uses a sentinel id (namespace 0, id 0) shared across all richText
     // messages, so we key cache invalidation on the message itself. When the bubble is recycled
@@ -49,7 +88,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // rendered pixels — survive send instead of being rebuilt (which caused the media blink). A
     // genuinely recycled bubble carries a different stableId, so recycling still rebuilds.
     // `messageId` is kept only to detect the Local→Cloud id flip, gating the reference refresh.
-    private var pageViewMessageKey: (stableId: UInt32, messageId: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool)?
+    private var pageViewMessageKey: (stableId: UInt32, messageId: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool, structure: Int)?
+    // The `InstantPage` last handed to `pageView`, held so a whole-content candidate can be
+    // suppressed when the incoming page is structurally AND textually identical to what is already
+    // on screen. The case that reaches it in practice is `.pendingEdit -> .original` when the server
+    // confirms an edit whose result matches the optimistic local page — a dissolve there would be a
+    // flash for nothing. `InstantPage` is a class with a deep `==`, and
+    // `RichTextMessageAttribute.instantPage` is a plain stored `let` (no FlatBuffers
+    // materialization), so this is a straight structural compare. It runs only on the
+    // about-to-crossfade path, never on the hot same-content path.
+    private var appliedInstantPage: InstantPage?
     // messageStableVersion is in the cache key because the synthesized instantPage content
     // mutates between streamed AI message chunks (each chunk bumps stableVersion); without
     // this, the cached layout would shadow newly-arrived content during streaming.
@@ -130,6 +178,70 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         }
     }
 
+    /// Drops every piece of node state derived from the OUTGOING page's layout. Called when a
+    /// whole-content update rebuilds `pageView`: each of these holds page-space geometry or block
+    /// indices that no longer refer to anything in the new page.
+    ///
+    /// `currentExpandedDetails` is deliberately NOT reset. It is keyed by details index and read by
+    /// the LAYOUT pass, which runs before apply — clearing it here would need an extra relayout
+    /// round-trip to take effect, and carrying an expand state onto a same-indexed details block
+    /// reads as reasonable rather than wrong.
+    private func resetPageDerivedState() {
+        if let textSelectionNode = self.textSelectionNode {
+            // Built from the old view's `selectableTextItems()`; its rects are in the old page's
+            // coordinate space.
+            self.textSelectionNode = nil
+            self.textSelectionAdapter = nil
+            textSelectionNode.highlightAreaNode.removeFromSupernode()
+            textSelectionNode.removeFromSupernode()
+        }
+        self.linkProgressDisposable?.dispose()
+        self.linkProgressDisposable = nil
+        if self.linkProgressRects != nil {
+            self.linkProgressRects = nil
+            self.updateLinkProgressState()
+        }
+        // Clears `linkHighlightingNode` through its own animated teardown.
+        self.updateTouchesAtPoint(nil)
+        // An in-flight anchor scroll targets blocks that no longer exist.
+        self.pendingScrollAnchor = nil
+        self.lastExpandedPendingDetailsIndex = nil
+        // Defensive: streaming is exempt from whole-content updates, so these are already inert.
+        self.currentRevealCostMap = nil
+        self.lastAppliedRevealedCount = 0
+    }
+
+    /// Fades `outgoing` out and hands it to `fadingOutPageView` for the duration. Durations match
+    /// `ChatMessageTextBubbleContentNode`'s plain-text content swap (0.12s out / 0.1s in, started
+    /// together), so a message that changes between rich and plain dissolves identically either way.
+    ///
+    /// No clipping work is needed here: `containerNode.clipsToBounds` is already true and the corner
+    /// mask lives on `containerNode`, so a shrinking bubble clips the outgoing view for free while
+    /// its own resize animation runs underneath.
+    private func beginCrossfadeOut(_ outgoing: InstantPageV2View) {
+        // Only one dissolve at a time.
+        if let previous = self.fadingOutPageView {
+            self.fadingOutPageView = nil
+            previous.removeFromSuperview()
+        }
+        // Inert for input and for VoiceOver, but still animating visually.
+        outgoing.isUserInteractionEnabled = false
+        outgoing.accessibilityElementsHidden = true
+        self.fadingOutPageView = outgoing
+        // The incoming view is added via addSubview and therefore lands on top; bring the outgoing
+        // one forward so it is the layer fading out over the new content, matching TextBubble.
+        outgoing.superview?.bringSubviewToFront(outgoing)
+        outgoing.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.12, removeOnCompletion: false, completion: { [weak self, weak outgoing] _ in
+            guard let outgoing else {
+                return
+            }
+            if let self, self.fadingOutPageView === outgoing {
+                self.fadingOutPageView = nil
+            }
+            outgoing.removeFromSuperview()
+        })
+    }
+
     required public init() {
         self.containerNode = ContainerNode()
         self.containerNode.clipsToBounds = true
@@ -201,37 +313,90 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     }
 
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
-    /// the existing view, updating only the webpage content in place. The view is rebuilt only when
-    /// the bubble is recycled with a genuinely different message (different stableId).
-    private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, richPageKey: ResolvedRichDataPageKey, showMoreExpanded: Bool) -> InstantPageV2View {
-        let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded)
+    /// the existing view, updating only the webpage content in place. The view is rebuilt when the
+    /// bubble is recycled with a genuinely different message (different `stableId`), and — since
+    /// the whole-content split — when the SAME message's content is wholly replaced.
+    private func ensurePageView(
+        item: ChatMessageBubbleContentItem,
+        webpage: TelegramMediaWebpage,
+        page: InstantPage,
+        richPageKey: ResolvedRichDataPageKey,
+        showMoreExpanded: Bool,
+        structure: Int,
+        isStreaming: Bool,
+        animation: ListViewItemUpdateAnimation
+    ) -> InstantPageV2View {
+        // Set only by the whole-content branch below; read by the rebuild tail. This cannot be
+        // inferred from `self.fadingOutPageView != nil` — a dissolve from a PREVIOUS update can
+        // still be in flight when a scroll recycle rebuilds for a different message, which would
+        // fade the recycled bubble in for no reason.
+        var crossfadeIn = false
+        let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded, structure: structure)
         if let existing = self.pageView, let current = self.pageViewMessageKey, current.stableId == key.stableId {
             if current.stableVersion == key.stableVersion && current.messageId == key.messageId && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
+                // `structure` is not compared here: `richPageKey` carries the page object's
+                // ObjectIdentifier, so an equal key already implies the same page and therefore
+                // the same structure.
                 return existing
             }
-            // Same logical message (stableId), new content. Two sub-cases:
-            //  - messageId unchanged (streamed AI chunk / pending edit): swap only the webpage;
-            //    the construction-time reference snapshot stays valid (media resolves by id). The
-            //    subsequent pageView.update(layout:) diffs item views by stable id, so content
-            //    blocks keep their views + in-flight reveal state (only added/removed blocks
-            //    change) — eliminating the per-chunk full-text-then-mask flash.
-            //  - messageId changed (Local→Cloud send flip): also refresh the render context's
-            //    MessageReference + reference closures, so live consumers (inline video/audio/
-            //    gallery) use the Cloud reference. The reused media VIEWS keep their init-time
-            //    (local) reference — their bytes are already local, so the poster does not reload
-            //    and there is no blink; a later scroll-recycle rebuilds them against the Cloud ref.
-            if current.messageId != key.messageId {
-                let messageReference = MessageReference(item.message)
-                let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
-                existing.renderContext?.updateContent(webpage: webpage, message: messageReference, imageReference: closures.image, fileReference: closures.file)
-            } else {
-                existing.renderContext?.updateContent(webpage: webpage)
+
+            // A whole-content update replaces the document rather than editing it. Diffing into the
+            // existing view would reuse item views positionally — a paragraph view at position 3
+            // rendering whatever unrelated block now occupies position 3 — so the view is rebuilt.
+            let isLocalToCloudFlip = current.messageId != key.messageId
+            let isWholeContentUpdate =
+                   animation.isAnimated                                          // nothing to show otherwise
+                && !isStreaming                                                  // streamed chunk: exempt
+                && !isLocalToCloudFlip                                           // send flip: exempt
+                && (   current.richPageKey.caseTag != key.richPageKey.caseTag    // translate / pending edit
+                    || current.showMoreExpanded    != key.showMoreExpanded       // "show more"
+                    || current.structure           != key.structure)             // block shape
+                // Suppress the no-op confirmation: `.pendingEdit -> .original` where the server's
+                // result matches the optimistic local page already on screen.
+                && !(self.appliedInstantPage.flatMap({ $0 == page }) ?? false)
+
+            if !isWholeContentUpdate {
+                // Same logical message (stableId), same document. Two sub-cases:
+                //  - messageId unchanged (streamed AI chunk / pending edit): swap only the webpage;
+                //    the construction-time reference snapshot stays valid (media resolves by id). The
+                //    subsequent pageView.update(layout:) diffs item views by stable id, so content
+                //    blocks keep their views + in-flight reveal state (only added/removed blocks
+                //    change) — eliminating the per-chunk full-text-then-mask flash.
+                //  - messageId changed (Local→Cloud send flip): also refresh the render context's
+                //    MessageReference + reference closures, so live consumers (inline video/audio/
+                //    gallery) use the Cloud reference. The reused media VIEWS keep their init-time
+                //    (local) reference — their bytes are already local, so the poster does not reload
+                //    and there is no blink; a later scroll-recycle rebuilds them against the Cloud ref.
+                if isLocalToCloudFlip {
+                    let messageReference = MessageReference(item.message)
+                    let closures = ChatMessageRichDataBubbleContentNode.mediaReferenceClosures(messageReference: messageReference)
+                    existing.renderContext?.updateContent(webpage: webpage, message: messageReference, imageReference: closures.image, fileReference: closures.file)
+                } else {
+                    existing.renderContext?.updateContent(webpage: webpage)
+                }
+                self.pageViewMessageKey = key
+                self.appliedInstantPage = page
+                return existing
             }
-            self.pageViewMessageKey = key
-            return existing
+
+            self.resetPageDerivedState()
+            self.beginCrossfadeOut(existing)
+            crossfadeIn = true
+            // `beginCrossfadeOut` took ownership of the outgoing view, so clear the slot before the
+            // rebuild below to keep its `removeFromSuperview()` from tearing down the fading view.
+            self.pageView = nil
+            // Falls through to the rebuild below, which fades the new view in.
         }
         self.pageView?.removeFromSuperview()
         self.pageView = nil
+
+        // Abandon any dissolve still in flight when this rebuild is NOT a crossfade: the bubble is
+        // now showing a different message, so finishing the previous message's fade would leave
+        // content on screen that no longer belongs to it.
+        if !crossfadeIn, let previous = self.fadingOutPageView {
+            self.fadingOutPageView = nil
+            previous.removeFromSuperview()
+        }
 
         // Capture only the MessageReference (value type) — the closures are retained on the
         // render context which is owned by the V2View, so we must avoid making them retain
@@ -279,7 +444,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         let view = InstantPageV2View(renderContext: renderContext)
         self.pageView = view
         self.pageViewMessageKey = key
+        self.appliedInstantPage = page
         self.containerNode.view.addSubview(view)
+        if crossfadeIn {
+            view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+        }
         view.detailsTapped = { [weak self] index in
             guard let self else { return }
             let current = self.currentExpandedDetails[index] ?? self.defaultExpanded(forDetailsIndex: index)
@@ -389,12 +558,35 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 var pageLayout: InstantPageV2Layout?
                 // Built alongside pageLayout so the apply closure can hand it to ensurePageView.
                 var pageWebpage: TelegramMediaWebpage?
+                // Shape-only fingerprint of the resolved page, decided in the layout pass (pure,
+                // safe off-main, one tree walk against a pass already O(page)) and consumed by
+                // `ensurePageView` in apply.
+                var pageStructure: Int = 0
+                var pageResolvedInstantPage: InstantPage?
 
-                // Horizontal text inset baked into the InstantPage layout. The pageView sits at
-                // self-x 0 (containerNode at 1, pageView at -1 inside it), so the page's text
-                // left edge in the status node's coordinate space is exactly this value. Used as
-                // the status node's left edge + side inset, mirroring TextBubble's bubbleInsets.
+                // The page's text left edge in THIS node's coordinate space — the status node's left
+                // edge + side inset, mirroring TextBubble's bubbleInsets. The page itself is inset by
+                // `pageContentInset` (below), so the value handed to the layout is smaller by that
+                // much; these two must not be conflated, or the status and date drift off the text.
                 let pageHorizontalInset: CGFloat = 11.0
+
+                // The whole page is inset by this much on all four sides, so full-width media sits
+                // INSIDE the bubble background (corners clipped by the rounded container) instead of
+                // running under it — matching how a regular media bubble insets its image. The page
+                // gives the same amount back out of its own insets (`horizontalInset` here,
+                // `edgeSpacingReduction` vertically), so every block keeps its absolute position and
+                // the bubble keeps its size.
+                //
+                // It is 2, not 1, because THIS NODE'S BOUNDS ARE 1pt LARGER THAN THE BACKGROUND on
+                // each side: the first point only reaches the background edge (which is why the old
+                // container sat at x = 1 and read as flush), and the second is the visible inset.
+                // Measure any change to this against the background, not against these bounds.
+                let pageContentInset: CGFloat = 2.0
+
+                // The text inset INSIDE the page — what the layout is given, and the origin that
+                // page-space frames are measured from. Smaller than `pageHorizontalInset` by the
+                // inset, so that text still lands at `pageHorizontalInset` in this node's space.
+                let pageLayoutHorizontalInset: CGFloat = pageHorizontalInset - pageContentInset
 
                 let isDark = item.presentationData.theme.theme.overallDarkAppearance
                 let isIncoming = item.message.effectivelyIncoming(item.context.account.peerId)
@@ -469,7 +661,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
                     header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 1.0, weight: .medium), color: messageTheme.primaryTextColor),
                     subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 1.0, weight: .medium), color: messageTheme.primaryTextColor),
-                    paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
+                    paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 0.9), color: messageTheme.primaryTextColor),
                     caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.secondaryTextColor),
                     credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: messageTheme.secondaryTextColor),
                     table: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
@@ -553,6 +745,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         instantPage: instantPage
                     )))
                     pageWebpage = webpage
+                    pageStructure = instantPageStructureFingerprint(instantPage)
+                    pageResolvedInstantPage = instantPage
 
                     let presentationThemeIdentity = ObjectIdentifier(item.presentationData.theme.theme)
                     let currentMessageStableVersion = item.message.stableVersion
@@ -579,14 +773,15 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             instantPage: instantPage,
                             userLocation: .other,
                             boundingWidth: suggestedBoundingWidth - 2.0,
-                            horizontalInset: pageHorizontalInset,
+                            horizontalInset: pageLayoutHorizontalInset,
                             theme: pageTheme,
                             strings: item.presentationData.strings,
                             dateTimeFormat: item.presentationData.dateTimeFormat,
                             cachedMessageSyntaxHighlight: nil,
                             expandedDetails: currentExpandedDetails,
                             fitToWidth: true,
-                            computeRevealCharacterRects: hasDraft || hadDraft
+                            computeRevealCharacterRects: hasDraft || hadDraft,
+                            edgeSpacingReduction: pageContentInset
                         )
                     }
                 }
@@ -603,8 +798,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     } else {
                         effectiveSize = pageLayout.contentSize
                     }
-                    boundingSize.width = effectiveSize.width
-                    boundingSize.height = effectiveSize.height
+                    // The page is inset on every side, so the bubble is its content plus the two
+                    // rims. Both axes cancel the trims above (`horizontalInset` is 1pt smaller and
+                    // `layoutTextItem` reserves the right margin as `maxX + horizontalInset`;
+                    // `edgeSpacingReduction` takes 1pt off each vertical edge), so the bubble ends up
+                    // exactly the size it was before the inset.
+                    boundingSize.width = effectiveSize.width + pageContentInset * 2.0
+                    boundingSize.height = effectiveSize.height + pageContentInset * 2.0
                 }
 
                 // Authoritative detector: the bottom-most laid-out item is full-width visual media,
@@ -755,7 +955,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     let constrainedWidth = max(1.0, boundingSize.width - pageHorizontalInset * 2.0)
                     let layout = showMoreTextLayout(TextNodeLayoutArguments(attributedString: attributedTitle, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth, height: 100.0)))
                     let showMoreTopSpacing: CGFloat = 2.0
-                    let frame = CGRect(origin: CGPoint(x: pageHorizontalInset, y: pageLayout.contentSize.height + showMoreTopSpacing), size: layout.0.size)
+                    // Page-space, matching the other frames assigned to `lastTextLineFrame` below —
+                    // the node itself is still placed at `pageHorizontalInset` in self-space.
+                    let frame = CGRect(origin: CGPoint(x: pageLayoutHorizontalInset, y: pageLayout.contentSize.height + showMoreTopSpacing), size: layout.0.size)
                     showMoreLayoutResult = layout
                     showMoreFramePageLocal = frame
                     // Date trails the link line (or wraps below it if it doesn't fit) — reuse the
@@ -780,8 +982,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     // the right text inset (lineFrame.maxX == text.frame.minX + textItem.width).
                     // Feeding the status node just `lineWidth` would let the trail/wrap decision
                     // place the date inline with the line — on top of it. `pageHorizontalInset`
-                    // is the offset between page-coords and status-node-local coords (the status
-                    // node sits at x=pageHorizontalInset in self, and pageView sits at self-x 0).
+                    // is where the text lands in self-coords; `pageLayoutHorizontalInset` is the same
+                    // edge in page-coords (the status node sits at x=pageHorizontalInset in self, and
+                    // the pageView sits at self-x `pageContentInset` inside containerNode).
                     let dateLayoutInput: ChatMessageDateAndStatusNode.LayoutInput
                     if mediaStatusFrame != nil {
                         // Overlaid pill: reactions live outside the bubble. Inline reactions, if any,
@@ -789,7 +992,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         let inlineReactionSettings = shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) ? ChatMessageDateAndStatusNode.StandaloneReactionSettings() : nil
                         dateLayoutInput = .standalone(reactionSettings: item.presentationData.isPreview ? nil : inlineReactionSettings)
                     } else {
-                        let trailingWidthToMeasure: CGFloat = lastTextLineFrame.map { $0.maxX - pageHorizontalInset } ?? 10000.0
+                        let trailingWidthToMeasure: CGFloat = lastTextLineFrame.map { $0.maxX - pageLayoutHorizontalInset } ?? 10000.0
                         dateLayoutInput = .trailingContent(contentWidth: trailingWidthToMeasure, reactionSettings: ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false))
                     }
 
@@ -871,6 +1074,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             return
                         }
                         self.item = item
+                        
+                        self.containerNode.layer.cornerCurve = .circular
 
                         // If the bubble was recycled onto a different message while a full-text
                         // request was in flight, cancel it so this message never shows another's
@@ -892,8 +1097,29 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         }
                         self.appliedShowMoreExpanded = showMoreExpanded
 
-                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: 1.0, y: 0.0), size: CGSize(width: boundingWidth - 2.0, height: boundingSize.height)), completion: nil)
-                        self.containerNode.cornerRadius = layoutConstants.image.defaultCornerRadius
+                        // Inset on all four sides — `boundingWidth` is the FINAL bubble width handed
+                        // back by the bubble layout (it can exceed the width this node proposed), so
+                        // the width term is relative to the bubble, not to the page.
+                        animation.animator.updateFrame(layer: self.containerNode.layer, frame: CGRect(origin: CGPoint(x: pageContentInset, y: pageContentInset), size: CGSize(width: boundingWidth - pageContentInset * 2.0, height: boundingSize.height - pageContentInset * 2.0)), completion: nil)
+                        // Four independent radii, because a merged bubble does not have one: a message
+                        // grouped with the one above gets small top corners and full-size bottom ones.
+                        // `chatMessageBubbleImageContentCorners` is the same helper the media bubble
+                        // uses, so rich bubbles round exactly like a photo in the same merge position.
+                        // `position` is already handed to this layout closure — the merge geometry
+                        // needed no new plumbing from the bubble.
+                        //
+                        // A single `cornerRadius` cannot express this, so the container is masked by a
+                        // path instead. Each radius is reduced by the inset to stay concentric with the
+                        // bubble's own curve.
+                        let imageCorners = chatMessageBubbleImageContentCorners(
+                            relativeContentPosition: position,
+                            normalRadius: layoutConstants.image.defaultCornerRadius,
+                            mergedRadius: layoutConstants.image.mergedCornerRadius,
+                            mergedWithAnotherContentRadius: layoutConstants.image.contentMergedCornerRadius,
+                            layoutConstants: layoutConstants,
+                            chatPresentationData: item.presentationData
+                        )
+                        self.applyContainerCorners(imageCorners, inset: pageContentInset, animation: animation)
 
                         if let statusSizeAndApply {
                             // Match TextBubble: anchor the status node's x at the fixed text-block
@@ -981,7 +1207,16 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 showMoreExpanded,
                                 pageLayout
                             )
-                            let pageView = self.ensurePageView(item: item, webpage: pageWebpage, richPageKey: resolvedContent.key, showMoreExpanded: showMoreExpanded)
+                            let pageView = self.ensurePageView(
+                                item: item,
+                                webpage: pageWebpage,
+                                page: pageResolvedInstantPage ?? resolvedContent.instantPage,
+                                richPageKey: resolvedContent.key,
+                                showMoreExpanded: showMoreExpanded,
+                                structure: pageStructure,
+                                isStreaming: hasDraft || hadDraft,
+                                animation: animation
+                            )
                             if self.checkboxesInteractive(item: item, resolved: resolvedContent) {
                                 pageView.checkboxTapped = { [weak self] path, newValue in
                                     guard let self, let item = self.item else {
@@ -1014,8 +1249,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 self.openRichTextDocument?(file)
                             }
                             pageView.update(layout: pageLayout, theme: pageTheme, animation: animation)
+                            // Flush inside `containerNode`, which supplies the inset on every side.
+                            // This used to be -1, cancelling the container's horizontal inset so the
+                            // page ran under the clip and lost its leading 1pt rather than sitting in.
                             pageView.frame = CGRect(
-                                origin: CGPoint(x: -1.0, y: streamingHeaderOffset),
+                                origin: CGPoint(x: 0.0, y: streamingHeaderOffset),
                                 size: pageLayout.contentSize
                             )
                             self.updatePageViewVisibilityRect()
@@ -1228,6 +1466,94 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         }
     }
 
+    /// Tightens the rich content's corners beyond what the inset alone requires.
+    ///
+    /// Distinct from the inset compensation it sits next to: subtracting the inset is what keeps the
+    /// curve CONCENTRIC with the bubble's, and is not a matter of taste — this is the visual tuning
+    /// on top. Keep them separate so changing the inset does not silently change the look, and
+    /// vice versa.
+    private static let richBubbleExtraCornerRadiusReduction: CGFloat = 2.0
+
+    /// Clips `containerNode` to the bubble's four corner radii.
+    ///
+    /// `CALayer.cornerRadius` carries a single value, which is enough only for an unmerged bubble;
+    /// a merged one has different radii top and bottom, so the clip is a mask path instead. Each
+    /// radius is reduced by `inset` so the curve stays concentric with the bubble's own — an inset
+    /// box that keeps the outer radius reads as a differently-rounded rectangle sitting inside it.
+    ///
+    /// Called from the apply closure right after the container frame is set, so it reads the frame
+    /// that was just applied rather than the presented one.
+    private func applyContainerCorners(_ corners: ImageCorners, inset: CGFloat, animation: ListViewItemUpdateAnimation) {
+        let size = self.containerNode.frame.size
+        guard size.width > 0.0, size.height > 0.0 else {
+            return
+        }
+
+        let cornersTransition: ContainedViewLayoutTransition
+        if case let .System(duration, _) = animation {
+            cornersTransition = .animated(duration: duration, curve: .easeInOut)
+        } else {
+            cornersTransition = .immediate
+        }
+        // A radius can never exceed half the box, or opposite corners' arcs cross and the path
+        // inverts — reachable for a short bubble whose height is under twice the corner radius.
+        let limit = min(size.width, size.height) / 2.0
+        let radius: (ImageCorner) -> CGFloat = { corner in
+            return max(0.0, min(limit, corner.radius - inset - ChatMessageRichDataBubbleContentNode.richBubbleExtraCornerRadiusReduction + 5.0))
+        }
+        let topLeft = radius(corners.topLeft)
+        let topRight = radius(corners.topRight)
+        let bottomLeft = radius(corners.bottomLeft)
+        let bottomRight = radius(corners.bottomRight)
+        let radii = CornerRadii(topLeft: topLeft, topRight: topRight, bottomLeft: bottomLeft, bottomRight: bottomRight)
+
+        // Preferred path: the layer's own per-corner radii. It composites with the layer, so there is
+        // no offscreen mask pass, and it animates as a layer property.
+        if CALayer.cornerRadiiSupported {
+            if let maskLayer = self.containerCornerMaskLayer {
+                // Left over from an earlier layout on a build without the property.
+                self.containerNode.layer.mask = nil
+                self.containerCornerMaskLayer = nil
+                maskLayer.removeAllAnimations()
+            }
+            cornersTransition.updateCornerRadii(layer: self.containerNode.layer, cornerRadii: radii)
+            return
+        }
+
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: topLeft, y: 0.0))
+        path.addLine(to: CGPoint(x: size.width - topRight, y: 0.0))
+        path.addArc(tangent1End: CGPoint(x: size.width, y: 0.0), tangent2End: CGPoint(x: size.width, y: topRight), radius: topRight)
+        path.addLine(to: CGPoint(x: size.width, y: size.height - bottomRight))
+        path.addArc(tangent1End: CGPoint(x: size.width, y: size.height), tangent2End: CGPoint(x: size.width - bottomRight, y: size.height), radius: bottomRight)
+        path.addLine(to: CGPoint(x: bottomLeft, y: size.height))
+        path.addArc(tangent1End: CGPoint(x: 0.0, y: size.height), tangent2End: CGPoint(x: 0.0, y: size.height - bottomLeft), radius: bottomLeft)
+        path.addLine(to: CGPoint(x: 0.0, y: topLeft))
+        path.addArc(tangent1End: CGPoint(x: 0.0, y: 0.0), tangent2End: CGPoint(x: topLeft, y: 0.0), radius: topLeft)
+        path.closeSubpath()
+
+        let maskLayer: CAShapeLayer
+        let isNewMask: Bool
+        if let existing = self.containerCornerMaskLayer {
+            maskLayer = existing
+            isNewMask = false
+        } else {
+            maskLayer = CAShapeLayer()
+            self.containerCornerMaskLayer = maskLayer
+            self.containerNode.layer.mask = maskLayer
+            isNewMask = true
+        }
+        let previousPath = maskLayer.path
+        maskLayer.frame = CGRect(origin: CGPoint(), size: size)
+        maskLayer.path = path
+        // The mask does not follow the layer's frame animation on its own, so a growing bubble would
+        // clip to its old shape for the whole animation and snap at the end. Animate the path
+        // alongside. Skipped on the first application, where there is no previous shape to grow from.
+        if case let .animated(duration, curve) = cornersTransition, !isNewMask, let previousPath, previousPath != path {
+            maskLayer.animate(from: previousPath, to: path, keyPath: "path", timingFunction: curve.timingFunction, duration: duration, mediaTimingFunction: curve.mediaTimingFunction)
+        }
+    }
+
     private func translationShimmerRects(pageView: InstantPageV2View) -> [CGRect] {
         let pageOrigin = pageView.frame.origin
         let entries = pageView.selectableTextItems()
@@ -1357,13 +1683,44 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         }
 
         guard let urlHit = self.urlForTapLocation(point) else {
-            if let entityHit = self.entityForTapLocation(point), let content = self.entityTapContent(entityHit.attributes) {
+            if let entityHit = self.entityForTapLocation(point) {
                 let rects = self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
-                return ChatMessageBubbleContentTapAction(
-                    content: content,
-                    rects: rects,
-                    activate: self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
-                )
+
+                // A link-styled page button (richButtonStyle link:flags.3) whose action is not a URL,
+                // so it carries the button rather than an InstantPageUrlItem and cannot use the url
+                // arm below.
+                //
+                // `.custom` is the only content case that fits, and ChatMessageBubbleItemNode's
+                // `.custom` arm (:6021) calls the closure but IGNORES `tapAction.activate` — so the
+                // closure mints the progress promise itself. `makeActivate` is the call that wires
+                // the shimmer over the tapped rects, which is how a link-styled `.callback` gets the
+                // same loading treatment a pill does.
+                if let actionItem = entityHit.attributes[NSAttributedString.Key(rawValue: InstantPageButtonActionAttribute)] as? InstantPageButtonActionItem {
+                    let activate = self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
+                    return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        let progress = activate?() ?? Promise<Bool>()
+                        // Mirrors the pill's dispatch (:1056): synthesise the ReplyMarkupButton the
+                        // bot-button handler expects. Only InlineButtonType-derived actions can occur
+                        // on a page button, so .text (which would sendMessage) is unreachable here.
+                        self.performRichTextButtonAction?(ReplyMarkupButton(
+                            title: actionItem.button.text.plainText,
+                            titleWhenForwarded: nil,
+                            action: actionItem.button.action,
+                            style: nil
+                        ), progress)
+                    }), rects: rects)
+                }
+
+                if let content = self.entityTapContent(entityHit.attributes) {
+                    return ChatMessageBubbleContentTapAction(
+                        content: content,
+                        rects: rects,
+                        activate: self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
+                    )
+                }
             }
             return ChatMessageBubbleContentTapAction(content: .none)
         }
@@ -1440,6 +1797,20 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         self.displayContentsUnderSpoilers = true
         let local = self.view.convert(point, to: pageView)
         pageView.setDisplayContentsUnderSpoilers(true, atLocation: local, animated: true)
+    }
+
+    /// Whether a tap on these attributes does anything.
+    ///
+    /// LOAD-BEARING that `tapActionAtPoint` and `updateTouchesAtPoint` agree on this set: the first
+    /// decides what a tap DOES, the second whether it lights up. A link-styled button is not an
+    /// `entityTapContent` case — `tapActionAtPoint` handles it separately, because it needs the hit
+    /// geometry that `entityTapContent` deliberately does not take — so gating the highlight on
+    /// `entityTapContent` alone gave a control that acted on tap but never highlighted.
+    private func entityIsTappable(_ attributes: [NSAttributedString.Key: Any]) -> Bool {
+        if attributes[NSAttributedString.Key(rawValue: InstantPageButtonActionAttribute)] is InstantPageButtonActionItem {
+            return true
+        }
+        return self.entityTapContent(attributes) != nil
     }
 
     private func entityTapContent(_ attributes: [NSAttributedString.Key: Any]) -> ChatMessageBubbleContentTapAction.Content? {
@@ -1567,7 +1938,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 rects = [showMoreTextNode.frame.offsetBy(dx: -1.0, dy: -1.0)]
             } else if let urlHit = self.urlForTapLocation(point) {
                 rects = self.computeHighlightRects(item: urlHit.item, parentOffset: urlHit.parentOffset, localPoint: urlHit.localPoint)
-            } else if let entityHit = self.entityForTapLocation(point), self.entityTapContent(entityHit.attributes) != nil {
+            } else if let entityHit = self.entityForTapLocation(point), self.entityIsTappable(entityHit.attributes) {
                 rects = self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
             }
         }
@@ -1615,7 +1986,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             return
         }
 
-        // pageView sits at (-1, 0) inside containerNode; the adapter is placed at
+        // pageView sits flush at (0, 0) inside containerNode; the adapter is placed at
         // containerNode.bounds, so shift each item's page-space origin into
         // containerNode-local coords for the adapter to operate in.
         let pageOrigin = pageView.frame.origin

@@ -24,6 +24,19 @@ struct GestureRecording: Codable {
         var translation: CGPoint            // panGR.translation(in:) after the event — ground truth
         var velocity: CGPoint               // panGR.velocity(in:) after the event, pts/s — ground truth
         var state: Int                      // UIGestureRecognizer.State rawValue
+
+        /// `UIGestureRecognizer.State.possible.rawValue`. Spelled as a constant because this file and
+        /// `ScrollReplay` are deliberately UIKit-free.
+        static let possibleStateRawValue = 0
+
+        /// Whether the recognizer had recognized by the time this event was processed. The recorder
+        /// samples `panGR.state` AFTER the recognizer handles the event, so a sample still reading
+        /// `.possible` is pre-hysteresis and UIKit's scroll view receives no `handlePan` for it.
+        ///
+        /// Identify the `.began` as the FIRST sample where this is true, rather than by
+        /// `state == .began`: `medium-flick.json` records two consecutive `state == 1`, so the raw
+        /// value is not a reliable discriminator.
+        var hasRecognized: Bool { state != Self.possibleStateRawValue }
     }
 
     /// One captured `_rubberBandOffsetForOffset:…` call (per-formula ground truth, axis-agnostic).

@@ -383,48 +383,100 @@ final class BottomEdgePinTests: XCTestCase {
 
     // MARK: - Released, while the reply keeps streaming
 
-    /// Reported on device: touching the chat mid-stream makes it "jump/snap when the streamed message
-    /// reaches the bottom and overflows". Nothing snaps if the chat is left alone, and nothing snaps
-    /// while the latch is engaged.
-    ///
-    /// The slack rides the declared minimum edge and SHRINKS as the reply grows
-    /// (`slack = visibleArea + ext - span`): -240 at reply 100, rising to 0 once the content above the
-    /// pin fills the viewport. An engaged latch is immune — the anchor re-places the row every pass and
-    /// its target provably never sits below the minimum. Released, nothing re-places anything, so a
-    /// user parked inside the slack region has the ground rise under them and
-    /// `newSettledOffset = max(newSettledOffset, minimum)` clamps them out of it.
-    ///
-    /// Not introduced by the clamp: the minimum edge rose the same way when the slack was signed. It
-    /// is inherent to the slack riding that edge, and it was masked because only the engaged state had
-    /// ever been exercised.
-    /// The assertion is *no tug-of-war*, not *no movement*. The reply is directly above the pinned
-    /// row, and the released anchor holds the reply's own top, so each growth step legitimately pushes
-    /// the pinned row down by exactly the height the reply gained. What must NOT happen is the
-    /// retracting edge pulling it back the other way — measured on device as drift, tug, drift, tug.
-    ///
-    /// Before B′ this ran +100, +40, +60, +100 for four equal 100pt growth steps: the middle two are
-    /// the clamp cancelling 60 and then 40 points of the push.
-    func testReleasedGrowthIsNotFoughtByTheRetractingEdge() throws {
+    /// Applies the growth sequence a streaming reply produces, returning the pinned row's settled
+    /// screen Y after each step. Parked deliberately OFF the pin: the at-the-edge case is covered by
+    /// `testPinnedRowDoesNotMoveWhileTheRowAboveGrows`, and it is the only one the released state used
+    /// to get right.
+    private func pinnedYWhileGrowing(from parkedOffset: CGFloat,
+                                     through replyHeights: [CGFloat]) throws -> [CGFloat] {
         let fixture = self.fixture()
         self.armPin(fixture)
         fixture.beginUserDrag()
-        fixture.scroll(to: -100)   // parked 140 short of the -240 edge, inside the slack region
-        var previous = try XCTUnwrap(fixture.settledScreenY(identity: pinnedId))
+        fixture.scroll(to: parkedOffset)
 
         let history = Array(fixture.listView.items.dropFirst(2))
-        for replyHeight in [CGFloat(200), 300, 400, 500] {
+        var result: [CGFloat] = [try XCTUnwrap(fixture.settledScreenY(identity: pinnedId))]
+        for replyHeight in replyHeights {
             var items: [CoreListItem] = [
                 ContentResizableItem(id: replyId, contentHeight: replyHeight),
                 PinnedFixedHeightItem(id: pinnedId, height: 60)
             ]
             items.append(contentsOf: history)
             fixture.listView.applyChanges(items: items, transition: .easeInOut(duration: 0))
-
-            let current = try XCTUnwrap(fixture.settledScreenY(identity: pinnedId))
-            XCTAssertEqual(current - previous, 100, accuracy: 1e-6,
-                           "reply \(replyHeight): the row must follow the growth and nothing else")
-            previous = current
+            result.append(try XCTUnwrap(fixture.settledScreenY(identity: pinnedId)))
         }
+        return result
+    }
+
+    /// THE property for the released state, and it is the same one the engaged state has: while the
+    /// slack still has room, a growing reply SPENDS that room and moves nothing.
+    ///
+    /// The slack is `visibleArea + ext - span`, so it shrinks by exactly the growth. Riding the
+    /// effective top edge (`inset + slack`) rather than an absolute offset is what turns that retreat
+    /// into absorption: the reply extends into the room the slack gives up, and the pinned row — with
+    /// every row of history below it, which is what the user is actually reading — holds still.
+    ///
+    /// Held absolutely instead, the growth had nowhere to go but into pushing those rows: reported from
+    /// the device as the chat drifting upward under a streaming reply. The settle clamp then cancelled
+    /// only the part that crossed the edge, which is this same absorption arriving late, partially and
+    /// in one jerk — drift, tug, drift, tug, measured as +100, +40, +60, +100 for four equal 100pt
+    /// steps.
+    ///
+    /// Reply 100 → 340 with a 60pt pin in a 400pt viewport: `span` reaches `visibleArea` exactly at
+    /// 340, so every step here has room left to spend.
+    func testReleasedGrowthIsAbsorbedWhileTheSlackHasRoom() throws {
+        let pinnedY = try self.pinnedYWhileGrowing(from: -100,   // parked 140 short of the -240 edge
+                                                   through: [150, 200, 250, 300, 340])
+
+        for (step, y) in pinnedY.enumerated() {
+            XCTAssertEqual(y, pinnedY[0], accuracy: 1e-6,
+                           "step \(step): the slack absorbs the growth, so nothing moves")
+        }
+    }
+
+    /// Past the threshold the slack is clamped at zero and has nothing left to give, so the growth has
+    /// nowhere to go but into the rows below — one-directional, never a tug back.
+    ///
+    /// Reply 100 → 340 → 400 → 500. The first step spends all 240 points of slack on 240 points of
+    /// growth and moves nothing; from 340 on there is none left, and each step moves the row by the
+    /// whole growth.
+    func testReleasedGrowthPushesOnceTheSlackIsSpent() throws {
+        let pinnedY = try self.pinnedYWhileGrowing(from: -100, through: [340, 400, 500])
+
+        let deltas = zip(pinnedY.dropFirst(), pinnedY).map { $0 - $1 }
+        XCTAssertEqual(deltas[0], 0, accuracy: 1e-6, "100 → 340: 240 of slack absorbs 240 of growth")
+        XCTAssertEqual(deltas[1], 60, accuracy: 1e-6, "340 → 400: nothing left, the growth pushes")
+        XCTAssertEqual(deltas[2], 100, accuracy: 1e-6, "400 → 500: likewise, point for point")
+    }
+
+    /// The end of streaming is not a growth: the typing draft carrying
+    /// `TypingDraftMessageAttribute` is REPLACED by the real cloud message
+    /// (`ChatHistoryListNode.swift:2240`), so index 0 departs and a new identity takes its place, at
+    /// whatever height the final rendering measures.
+    ///
+    /// That moves the anchor. `topItemWasDeleted` sends `resolveAnchor` past index 0 to the first
+    /// surviving row, which is the PINNED row itself — and a row at or below the pin does not move
+    /// when the content above it changes, so its old screen position is already the right answer.
+    /// Riding the effective edge on top of that moves it by the height delta: one jerk, at the end of
+    /// streaming, and only when the final message measures differently from the last draft.
+    func testTheDraftBecomingTheRealMessageDoesNotMoveThePin() throws {
+        let fixture = self.fixture()
+        self.armPin(fixture)
+        fixture.beginUserDrag()
+        fixture.scroll(to: -100)
+        let before = try XCTUnwrap(fixture.settledScreenY(identity: pinnedId))
+
+        var items: [CoreListItem] = [
+            // A NEW identity at a different height: the draft departing, the real message arriving.
+            ContentResizableItem(id: UUID(), contentHeight: 150),
+            PinnedFixedHeightItem(id: pinnedId, height: 60)
+        ]
+        items.append(contentsOf: fixture.listView.items.dropFirst(2))
+        fixture.listView.applyChanges(items: items, transition: .easeInOut(duration: 0))
+
+        XCTAssertEqual(try XCTUnwrap(fixture.settledScreenY(identity: pinnedId)), before,
+                       accuracy: 1e-6,
+                       "the pin anchors the pass itself; nothing above it may displace it")
     }
 
     // MARK: - The latch

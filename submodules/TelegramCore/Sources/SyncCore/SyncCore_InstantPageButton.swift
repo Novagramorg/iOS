@@ -23,10 +23,17 @@ public struct InstantPageButton: PostboxCoding, Equatable {
     /// reply-markup colour palette.
     public let color: ReplyMarkupButton.Style.Color?
 
-    public init(text: RichText, action: ReplyMarkupButtonAction, color: ReplyMarkupButton.Style.Color?) {
+    /// `richButtonStyle`'s `link:flags.3`. Stored separately from `color` rather than as a fourth
+    /// `Style.Color` case: that enum is shared with bot reply markups, whose `keyboardButtonStyle`
+    /// has no link bit. Keeping the two facts independent also means `link` + `bg_danger`
+    /// round-trips losslessly, even though the renderer makes `link` win.
+    public let isLink: Bool
+
+    public init(text: RichText, action: ReplyMarkupButtonAction, color: ReplyMarkupButton.Style.Color?, isLink: Bool = false) {
         self.text = text
         self.action = action
         self.color = color
+        self.isLink = isLink
     }
 
     public init(decoder: PostboxDecoder) {
@@ -34,12 +41,15 @@ public struct InstantPageButton: PostboxCoding, Equatable {
         self.action = ReplyMarkupButtonAction(decoder: decoder)
         let rawColor = decoder.decodeInt32ForKey("c", orElse: -1)
         self.color = rawColor == -1 ? nil : ReplyMarkupButton.Style.Color(rawValue: rawColor)
+        // `orElse: 0` is what makes cached pages written before this field decode as not-a-link.
+        self.isLink = decoder.decodeInt32ForKey("l", orElse: 0) != 0
     }
 
     public func encode(_ encoder: PostboxEncoder) {
         encoder.encodeObject(self.text, forKey: "t")
         self.action.encode(encoder)
         encoder.encodeInt32(self.color?.rawValue ?? -1, forKey: "c")
+        encoder.encodeInt32(self.isLink ? 1 : 0, forKey: "l")
     }
 }
 
@@ -173,6 +183,7 @@ public extension InstantPageButton {
         self.action = try ReplyMarkupButtonAction(flatBuffersObject: flatBuffersObject.action)
         let rawColor = flatBuffersObject.color
         self.color = rawColor == -1 ? nil : ReplyMarkupButton.Style.Color(rawValue: rawColor)
+        self.isLink = flatBuffersObject.isLink
     }
 
     func encodeToFlatBuffers(builder: inout FlatBufferBuilder) -> Offset {
@@ -182,6 +193,7 @@ public extension InstantPageButton {
         TelegramCore_InstantPageButton.add(text: textOffset, &builder)
         TelegramCore_InstantPageButton.add(action: actionOffset, &builder)
         TelegramCore_InstantPageButton.add(color: self.color?.rawValue ?? -1, &builder)
+        TelegramCore_InstantPageButton.add(isLink: self.isLink, &builder)
         return TelegramCore_InstantPageButton.endInstantPageButton(&builder, start: start)
     }
 }

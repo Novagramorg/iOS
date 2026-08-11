@@ -138,6 +138,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     public let micButtonTintMaskView: UIImageView
     public let micButton: ChatTextInputMediaRecordingButton
     public let stopButtonIcon: GlassBackgroundView.ContentImageView
+    public let stopButton: HighlightTrackingButton
     
     public let sendContainerNode: ASDisplayNode
     public let sendButtonBackgroundView: UIImageView
@@ -197,6 +198,12 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         self.stopButtonIcon = GlassBackgroundView.ContentImageView()
         self.micButtonBackgroundView.contentView.addSubview(self.stopButtonIcon)
         self.stopButtonIcon.alpha = 0.0
+
+        // Hidden rather than alpha-driven: this is the hit-test gate, and it must be closed
+        // whenever Stop is not on screen, independent of the icon's cross-fade.
+        self.stopButton = HighlightTrackingButton()
+        self.micButtonBackgroundView.contentView.addSubview(self.stopButton)
+        self.stopButton.isHidden = true
         
         self.sendContainerNode = ASDisplayNode()
         self.sendContainerNode.layer.allowsGroupOpacity = true
@@ -388,6 +395,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             self.stopButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
             transition.updateFrame(view: self.stopButtonIcon, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: size)))
         }
+        transition.updateFrame(view: self.stopButton, frame: CGRect(origin: CGPoint(), size: size))
         
         var sendSlowmodeTimerTimestamp: (duration: Int32, timestamp: Int32)?
         if let slowmodeState = interfaceState.slowmodeState {

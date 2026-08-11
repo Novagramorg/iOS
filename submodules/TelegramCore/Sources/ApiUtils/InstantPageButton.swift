@@ -106,6 +106,39 @@ extension ReplyMarkupButtonAction {
     }
 }
 
+public extension InstantPageButton {
+    /// `richButtonStyle#3c610bd flags:# … link:flags.3?true`.
+    ///
+    /// Public — like `InstantPageButtonRowAlignment.init(apiFlags:)` and for the same reason —
+    /// because `InstantPageButton.init(apiButton:)` is internal to TelegramCore, so the bit mapping
+    /// would otherwise be untestable.
+    static func isLinkStyle(_ apiRichStyle: Api.RichButtonStyle?) -> Bool {
+        guard let apiRichStyle else {
+            return false
+        }
+        switch apiRichStyle {
+        case let .richButtonStyle(data):
+            return data.flags & (1 << 3) != 0
+        }
+    }
+
+    /// The `richButtonStyle` flag word this button serialises to. `0` means "send no style object".
+    ///
+    /// Split out of `apiFlagsAndStyle()` so the bit composition is testable, and because the
+    /// composition is where the interesting failure lives: the flags are accumulated and THEN
+    /// checked, so a link-only button (no background bit) still emits a style.
+    var apiRichStyleFlagWord: Int32 {
+        var result: Int32 = 0
+        if let color = self.color {
+            result |= color.apiRichStyleFlags
+        }
+        if self.isLink {
+            result |= 1 << 3
+        }
+        return result
+    }
+}
+
 extension InstantPageButton {
     init(apiButton: Api.PageButton) {
         switch apiButton {
@@ -113,18 +146,24 @@ extension InstantPageButton {
             self.init(
                 text: RichText(apiText: data.text),
                 action: ReplyMarkupButtonAction.from(apiType: data.type).action,
-                color: data.style.flatMap(ReplyMarkupButton.Style.Color.init(apiRichStyle:))
+                color: data.style.flatMap(ReplyMarkupButton.Style.Color.init(apiRichStyle:)),
+                isLink: InstantPageButton.isLinkStyle(data.style)
             )
         }
     }
 
     /// `textButton` and `pageButton` carry identical fields, so the flags/style computation is
     /// shared and each caller wraps it in its own constructor.
+    ///
+    /// Accumulate-then-check, NOT `guard let color = self.color`: the old shape early-returned
+    /// whenever there was no background colour, which would drop the style object entirely for a
+    /// link-only button and lose `flags.3` on the way out.
     func apiFlagsAndStyle() -> (flags: Int32, style: Api.RichButtonStyle?) {
-        guard let color = self.color else {
+        let styleFlags = self.apiRichStyleFlagWord
+        guard styleFlags != 0 else {
             return (0, nil)
         }
-        return (1 << 0, .richButtonStyle(Api.RichButtonStyle.Cons_richButtonStyle(flags: color.apiRichStyleFlags)))
+        return (1 << 0, .richButtonStyle(Api.RichButtonStyle.Cons_richButtonStyle(flags: styleFlags)))
     }
 
     func apiPageButton() -> Api.PageButton {

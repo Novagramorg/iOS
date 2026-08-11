@@ -1136,8 +1136,8 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 let ItemWelcomeMessages = 20
                 
                 let isCreator = channel.flags.contains(.isCreator)
-                
-                if isCreator {
+
+                if channel.hasPermission(.changeInfo) {
                     let linkText: String
                     if let _ = channel.addressName {
                         linkText = presentationData.strings.Channel_Setup_TypePublic
@@ -1161,7 +1161,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                     }))
                 }
                 
-                if isCreator || (channel.adminRights?.rights.contains(.canChangeInfo) == true) {
+                if channel.hasPermission(.changeInfo) {
                     let discussionGroupTitle: String
                     if let _ = data.cachedData as? CachedChannelData {
                         if let peer = data.linkedDiscussionPeer {
@@ -1182,7 +1182,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                     }))
                 }
                 
-                if isCreator || (channel.adminRights?.rights.contains(.canChangeInfo) == true) {
+                if channel.hasPermission(.changeInfo) {
                     let label: String
                     if let cachedData = data.cachedData as? CachedChannelData, case let .known(reactionSettings) = cachedData.reactionSettings {
                         switch reactionSettings.allowedReactions {
@@ -1211,12 +1211,12 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 }
                 
                 if channel.hasPermission(.changeInfo) {
-                    items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
+                    items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
                         interaction.editingOpenWelcomeMessages()
                     }))
                 }
 
-                if isCreator || (channel.adminRights?.rights.contains(.canChangeInfo) == true) {
+                if channel.hasPermission(.changeInfo) {
                     var colors: [PeerNameColors.Colors] = []
                     if let nameColor = channel.nameColor.flatMap({ context.peerNameColors.get($0, dark: presentationData.theme.overallDarkAppearance) }) {
                         colors.append(nameColor)
@@ -1248,7 +1248,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                     }))
                 }
                 
-                if isCreator || (channel.adminRights?.rights.contains(.canChangeInfo) == true) {
+                if channel.hasPermission(.changeInfo) {
                     let labelString: NSAttributedString
                     if channel.linkedMonoforumId != nil {
                         if case let .channel(monoforumPeer) = data.linkedMonoforumPeer {

@@ -2810,6 +2810,11 @@ extension ChatControllerImpl {
             strongSelf.beginMediaRecordingRequestId += 1
             strongSelf.lockMediaRecordingRequestId = nil
             strongSelf.stopMediaRecorder(pause: true)
+        }, stopIncomingStreamingMessage: { [weak self] in
+            guard let strongSelf = self, let peerId = strongSelf.chatLocation.peerId else {
+                return
+            }
+            let _ = strongSelf.context.engine.messages.stopIncomingTypingDraft(peerId: peerId, threadId: strongSelf.chatLocation.threadId).startStandalone()
         }, lockMediaRecording: { [weak self] in
             guard let strongSelf = self else {
                 return

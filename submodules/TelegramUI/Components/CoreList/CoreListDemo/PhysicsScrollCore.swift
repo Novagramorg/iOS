@@ -28,6 +28,11 @@ final class PhysicsScrollCore {
     /// Refreshed per gesture from the recognizer's per-gesture `isIndirectScroll`, so it never leaks.
     private var coefficient: CGFloat = RubberBand.touchCoefficient
     private var physics: ScrollPhysics
+    /// `UIScrollView`'s release path. Lives HERE and not on `ScrollPhysics` because `beginDrag`
+    /// rebuilds `physics` from scratch every gesture (`makePhysics`), and the fast-scroll streak is
+    /// gesture-LIFETIME state that has to survive that rebuild. On `ScrollPhysics` its survival
+    /// would be a hand-maintained invariant.
+    private var release = ReleaseDecision()
     private var minEdge: CGFloat?
     private var maxEdge: CGFloat?
 
@@ -58,6 +63,19 @@ final class PhysicsScrollCore {
     /// docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
     var offset: CGFloat { physics.y.offset }
     var isDecelerating: Bool { physics.y.phase == .decelerating }
+    /// `_fastScrollMultiplier` — read by the engine to know whether a flight carries a streak.
+    var decelerationVelocityScale: CGFloat { physics.y.vScale }
+    var decelerationStreakCount: Int { release.streakCount }
+    var decelerationStreakReset: String { release.lastResetReason }
+    /// The release velocity the current deceleration is running on (pts/ms). Diagnostic: it makes two
+    /// hand-made gestures comparable, since expected travel is a known function of it.
+    var decelerationVelocity: CGFloat { physics.y.velocity }
+    /// Whether a drag is in progress, so a caller can tell a `.changed` that follows a `.began` from
+    /// one that does not.
+    var isDragging: Bool { physics.y.phase == .dragging }
+    /// Where the current release projects to, `_scrollViewWillEndDraggingWithDeceleration:`-style.
+    /// Exists for the engine's seam tests; production plays the baked trajectory instead.
+    func projectedTarget() -> CGFloat { physics.y.projectedTarget() }
     var hasFiniteEdge: Bool { minEdge != nil || maxEdge != nil }
     /// The DECLARED edges — `nil` is an open side (the axis gets the far sentinel instead of a bound).
     /// Read by `KeyframeFlight`, which bakes against them and needs to know when a declared change can
@@ -129,33 +147,61 @@ final class PhysicsScrollCore {
 
     // MARK: - User-driven (fires onScroll)
 
+    /// `-[UIScrollView _beginTrackingWithEvent:]`. A finger landing is a different moment from the
+    /// pan beginning, and it is the only place the cross-gesture fast-scroll carry is decided.
+    func beginTouchTracking(at t: TimeInterval) { release.beginTouchTracking(at: t) }
+
+    /// The integrator reached the spring or settled; clear the streak (`0x17a87bc` / `0x17a8844`).
+    func noteDecelerationEnded() { release.resetStreakAfterDeceleration() }
+
     func beginDrag() {
         // Rebuild at the current offset/viewport (mirrors PhysicsScrollView.makePhysics): a fresh drag
         // captures the current viewport for the rubber-band range and a clean dynamic state.
         physics = makePhysics(offset: physics.y.offset)
         physics.beginDrag()
+        release.beginGesture()          // handlePan: case 1 zeroes both velocity pairs
     }
 
-    /// `translation`/`velocity` are the pan recognizer's vertical values (points, points/sec).
+    /// `translation`/`velocity` are the pan recognizer's vertical values (points, points/**second**).
     func drag(translation: CGFloat, velocity: CGFloat) {
-        physics.drag(translation: CGPoint(x: 0, y: translation),
-                     recognizerVelocity: CGPoint(x: 0, y: velocity))
+        release.note(recognizerVelocity: CGPoint(x: 0, y: velocity),
+                     translation: CGPoint(x: 0, y: translation))
+        physics.drag(translation: CGPoint(x: 0, y: translation))
+        physics.y.vScale = release.multiplier
         writeOffset(fireScroll: true)
     }
 
     /// Returns true if the release should decelerate/spring (the caller starts its stepping driver).
+    /// `recognizerVelocity` is a FRESH `velocity(in:)` read in points/second, matching UIKit
+    /// re-reading `velocityInView` inside `_endPanNormal` rather than trusting the stored ivar.
     @discardableResult
-    func endDrag() -> Bool {
-        let d = physics.endDrag()
-        return d.x == .decelerate || d.y == .decelerate
+    func endDrag(recognizerVelocity: CGFloat, at t: TimeInterval) -> Bool {
+        let outcome = release.release(recognizerVelocity: CGPoint(x: 0, y: recognizerVelocity), at: t)
+        switch outcome {
+        case let .decelerate(velocity, vScale):
+            physics.y.vScale = vScale
+            physics.applyRelease(velocity: velocity)
+            return true
+        case .stop:
+            physics.y.vScale = 1
+            // Released while overscrolled still springs back, at zero velocity. UIKit reaches the
+            // same behaviour by a different route — the `_scrollViewFlags` bit-23-clear path at
+            // `0x179f4f8` → `_isBouncing` — but the effect is identical.
+            if isOverscrolled {
+                physics.applyRelease(velocity: .zero)
+                return true
+            }
+            return false
+        }
     }
 
     /// Advance one deceleration frame. Returns true once settled (the caller stops its driver).
     @discardableResult
     func step(dtMs: CGFloat) -> Bool {
-        let settled = physics.step(dtMs: dtMs).settled
+        let result = physics.step(dtMs: dtMs)
+        if result.endedDeceleration { release.resetStreakAfterDeceleration() }
         writeOffset(fireScroll: true)
-        return settled
+        return result.settled
     }
 
     /// Resume a spring-back if the content was left overscrolled by a bare touch (no drag). Mirrors
@@ -165,7 +211,7 @@ final class PhysicsScrollCore {
         guard isOverscrolled else { return false }
         physics = makePhysics(offset: physics.y.offset)
         physics.beginDrag()
-        _ = physics.endDrag()           // overscrolled ⇒ .decelerate (spring back)
+        physics.applyRelease(velocity: .zero)   // overscrolled ⇒ spring back, at zero velocity
         return physics.y.phase == .decelerating
     }
 
@@ -179,6 +225,25 @@ final class PhysicsScrollCore {
     }
 
     // MARK: - Keyframe deceleration (increment 4a)
+
+    /// `-[UIScrollView _endPanNormal:]` sets the deceleration's `lastUpdateTime = now − 1/maxFPS` and
+    /// then calls `_smoothScrollWithUpdateTime:(now)` SYNCHRONOUSLY, so a real `UIScrollView` has
+    /// already integrated exactly one display frame before anything is presented — regardless of the
+    /// actual release-to-first-frame gap (analysis §2, "Decel hand-off").
+    ///
+    /// `.stepped` inherits this from its display link's first callback, and `ScrollReplay` models it
+    /// explicitly as `firstDecelStepMs`. A BAKED path has to apply it too, or the whole trajectory is
+    /// one frame of integration behind UIScrollView's: identical shape and identical landing, but
+    /// `v × frame` less displacement at every instant — largest at the start, which is what makes it
+    /// read as a slower initial speed while every distance measurement still agrees.
+    ///
+    /// Fires no `onScroll` and writes no host bounds: the caller parks the layer at the trajectory's
+    /// settled offset immediately afterwards.
+    func applyDecelerationHandOff(frameMs: CGFloat) {
+        let result = physics.step(dtMs: frameMs)
+        if result.endedDeceleration { release.resetStreakAfterDeceleration() }
+        refreshBounds()
+    }
 
     /// Bake the current y-axis decel state into a `Trajectory`. Call after `endDrag()` returned
     /// `.decelerate`, or after `reseedDeceleration` — both leave the axis `.decelerating`.
@@ -200,7 +265,8 @@ final class PhysicsScrollCore {
             x: ScrollAxis(offset: 0, min: 0, max: 0,
                           range: Swift.max(1, contentHost.bounds.width), rate: 0.998, scale: scale, c: coefficient),
             y: ScrollAxis(offset: offset, min: lo, max: hi,
-                          range: Swift.max(1, contentHost.bounds.height), rate: 0.998, scale: scale, c: coefficient))
+                          range: Swift.max(1, contentHost.bounds.height), rate: 0.998, scale: scale,
+                          vScale: release.multiplier, c: coefficient))
     }
 
     /// Re-point the y-axis bounds: a finite edge stays put; an open edge re-centres on the current

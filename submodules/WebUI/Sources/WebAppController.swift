@@ -2944,10 +2944,17 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 title = self.presentationData.strings.WebApp_Download_Document
             }
             
-            let _ = combineLatest(queue: Queue.mainQueue(),
-                FileDownload.getFileSize(url: url),
-                self.context.engine.messages.checkBotDownload(botId: controller.botId, fileName: fileName, url: url)
-            ).start(next: { [weak self] fileSize, canDownload in
+            let _ = (self.context.engine.messages.checkBotDownload(botId: controller.botId, fileName: fileName, url: url)
+            |> mapToSignal { canDownload -> Signal<(Int64?, Bool), NoError> in
+                guard canDownload else {
+                    return .single((nil, false))
+                }
+                return FileDownload.getFileSize(url: url)
+                |> map { fileSize in
+                    return (fileSize, true)
+                }
+            }
+            |> deliverOnMainQueue).start(next: { [weak self] fileSize, canDownload in
                 guard let self else {
                     return
                 }

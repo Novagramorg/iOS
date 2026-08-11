@@ -37,6 +37,37 @@ enum ListAnimationOwner: Hashable {
         case .viewport, .exit, .transient, .ghostBlock: return false
         }
     }
+
+    /// Whether a PASS is the only thing that writes this owner's layer position — the precondition for
+    /// `presented − model` to mean "the additive track's contribution" and therefore the precondition
+    /// for `ListAnimationController.capturePresentedPositionOffsets` to sample it at all.
+    ///
+    /// A row qualifies: `render()` writes container-local frames, which are offset-independent, so the
+    /// renders that run outside a pass (a scroll rebalance) rewrite a surviving row's base with the
+    /// value it already had. Nothing else qualifies:
+    ///
+    /// - `.attachment` — `renderAttachments()` rewrites every attachment's frame on EVERY render, and
+    ///   it must: a parked attachment stays parked on screen only by moving its base with the content.
+    ///   So between two frames `presentation()` lags the model by one frame of base movement. Reading
+    ///   that lag as a contribution made a parked date pill snap 57.66pt at the touch-up of an
+    ///   interactive keyboard dismissal — its layer showed `model=573.00 presented=515.33` with no
+    ///   animation on it at all. See `AttachmentResumeBaseTests`.
+    /// - `.exit`, `.transient`, `.ghostBlock` — `shiftExitOverlayChildren` adds a coordinate rebase to
+    ///   every overlay child's `position.y`, and it runs from `render()`, which a scroll rebalance
+    ///   reaches without a pass. Same hazard, same exclusion; no defect has been observed there, but
+    ///   the property this samples is not true of them either.
+    /// - `.viewport` — excluded one level up, by property: see the provider in
+    ///   `ListAnimationController.init`.
+    ///
+    /// Note that "committed" is not the bar and could not be: a base written last turn may not have
+    /// been PRESENTED yet when this turn samples, so a per-frame-written base can never be differenced
+    /// against `presentation()` at all.
+    var hasPassWrittenPositionBase: Bool {
+        switch self {
+        case .live: return true
+        case .attachment, .viewport, .exit, .transient, .ghostBlock: return false
+        }
+    }
 }
 
 enum ListAnimatedProperty: Hashable {
@@ -291,17 +322,16 @@ final class ListAnimationModel {
                                           at time: TimeInterval,
                                           transition: CoreListTransition) -> ListAnimationMutation {
         guard abs(newSettledY - oldSettledY) > positionEpsilon else { return .unchanged }
-        // `currentOffset` is the track's own quantity — the additive contribution decaying to zero —
-        // and the provider measures it as `presented - the layer's own model value`. That subtraction
-        // happens entirely in LAYER space, and the `- newSettledY` below is a delta in MODEL space;
-        // deltas agree across two spaces that differ by a constant within a pass, so nothing needs
+        // `currentOffset` is the track's own quantity — the additive contribution decaying to zero,
+        // relative to the OLD settled position — so it composes with `oldSettledY` and nothing needs
         // converting or threading.
         //
-        // Two earlier versions got this wrong by mixing the spaces inside one subtraction. Sampling
-        // the presented POSITION and subtracting `newSettledY` is off by
-        // `containerOriginY - transactionOffset` — the model is handed `containerOriginY + localY`
-        // (`CoreVirtualListView.swift:2818`) while the layer is handed `localY` (`:3121`) — and that
-        // is hundreds of points, which is what a whole-list jump per re-issue looks like.
+        // It is therefore ANALYTIC, and `resumeValue` declines to sample `.positionY` for exactly that
+        // reason: a presented sample can only be expressed against the layer's model value, which
+        // `render()` has already moved to the NEW settled position by the time this runs, so adding it
+        // to `oldSettledY` counts the pass's displacement twice. Three versions of this have now been
+        // wrong, all by mixing spaces or bases inside one subtraction; see the provider in
+        // `ListAnimationController.init`.
         let currentOffset = resumeValue(for: owner, property: .positionY, at: time) ?? 0
         let currentVisibleY = oldSettledY + currentOffset
         return replace(owner: owner,
@@ -454,14 +484,12 @@ final class ListAnimationModel {
     /// one thing this change must not do. The distinct name makes that structural instead of a comment
     /// someone has to notice.
     ///
-    /// The provider returns values already in the TRACK's space, so there is no conversion here.
-    /// An earlier version passed a `settled` reference and subtracted it for additive properties;
-    /// that is wrong, because an additive track's contribution is `presented - the layer's own model
-    /// value`, and the two coincide only when the model value happens to be the settled one. It does
-    /// for a row (the engine writes the settled frame and animates additively on top) and does NOT
-    /// for `.viewportOffset`, whose model `bounds.origin.y` is driven continuously by the physics
-    /// scroll engine (`CoreVirtualListView.swift:717-720`). Sampling that one cost a whole-list jump
-    /// on every re-issue.
+    /// The provider returns values already in the TRACK's space, so there is no conversion here — and
+    /// the provider only answers for ABSOLUTE properties, which is what makes that true for free. No
+    /// additive property is sampled: its contribution can only be recovered as `presented - the base
+    /// the render tree was committed against`, and by the time a transition installs, the pass has
+    /// already overwritten that base with the new settled one. See the provider in
+    /// `ListAnimationController.init` for the full argument and for the defect it shipped.
     func resumeValue(for owner: ListAnimationOwner,
                      property: ListAnimatedProperty,
                      at time: TimeInterval) -> CGFloat? {
