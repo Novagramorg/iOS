@@ -1211,8 +1211,8 @@ private func layoutBlock(
                              boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                              pathPrefix: pathPrefix, context: &context)
 
-    case let .table(title, rows, bordered, striped):
-        return layoutTable(title: title, rows: rows, bordered: bordered, striped: striped,
+    case let .table(title, rows, bordered, striped, compact):
+        return layoutTable(title: title, rows: rows, bordered: bordered, striped: striped, compact: compact,
                            boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                            context: &context)
 
@@ -1557,13 +1557,14 @@ private func layoutTable(
     rows: [InstantPageTableRow],
     bordered: Bool,
     striped: Bool,
+    compact: Bool,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     // Bound once, before the `finalizeCell` closure below: `context` is `inout` and cannot be
     // captured, and these are the only two table constants that scale with the content.
-    let cellInsets = context.metrics.tableCellInsets
+    let cellInsets = compact ? context.metrics.tableCompactCellInsets : context.metrics.tableCellInsets
     let minCompressedColumnWidth = context.metrics.tableMinCompressedColumnWidth
 
     if rows.isEmpty {

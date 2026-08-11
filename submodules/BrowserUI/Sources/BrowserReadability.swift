@@ -586,7 +586,8 @@ private func parseTable(_ input: [String: Any], _ media: inout [EngineMedia.Id: 
         title: trim(applyAnchor(parseRichText(title), item: input)),
         rows: parseTableRows((input["content"] as? [Any]) ?? [], &media),
         bordered: true,
-        striped: true
+        striped: true,
+        compact: false
     )
 }
 

@@ -269,6 +269,17 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Flips the caret's table between compact and normal cell padding, as ONE undo step. No-op when
+    /// the caret is not in a table.
+    func toggleTableCompact() {
+        guard let a = activeTable() else { return }
+        editing {
+            guard case .table(var t) = a.box.currentBlock() else { return }
+            t.compact.toggle()
+            replaceTable(at: a.index, in: a.stack, with: t, caretRow: a.row, caretCol: a.col)
+        }
+    }
+
     /// Merges the cells covered by the current `.cells` structural selection into one spanning cell — the
     /// content of every covered cell is concatenated into the top-left (anchor) cell (see
     /// `TableBlock.mergingCells`). No-op, registering NO undo step, when the caret isn't in a table, there

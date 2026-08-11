@@ -213,7 +213,7 @@ private func chatInputTable(
         }
         return ChatInputTableRow(height: row.height, cells: cells)
     }
-    return ChatInputTable(columns: columns, rows: rows)
+    return ChatInputTable(columns: columns, rows: rows, compact: table.compact)
 }
 
 /// Flatten a table cell's blocks to a single run list. A paragraph contributes its runs verbatim; any other
@@ -494,7 +494,7 @@ private func tableBlock(
         }
         return Row(id: BlockID.generate(), height: row.height, cells: cells)
     }
-    return TableBlock(id: BlockID.generate(), columns: columns, rows: rows)
+    return TableBlock(id: BlockID.generate(), columns: columns, rows: rows, compact: table.compact)
 }
 
 private func runs(

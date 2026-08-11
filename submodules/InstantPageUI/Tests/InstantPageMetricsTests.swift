@@ -39,6 +39,12 @@ final class InstantPageMetricsTests: XCTestCase {
         XCTAssertEqual(m.numberMarkerTextwardOffset, 5.0)
 
         XCTAssertEqual(m.tableCellInsets, UIEdgeInsets(top: 7.0, left: 13.0, bottom: 7.0, right: 13.0))
+        // Halved, then pixel-snapped by `s(...)` — so the exact value depends on the screen scale
+        // (3.5 at 2x, 3.333… at 3x). The accuracy admits one snapping step.
+        XCTAssertEqual(m.tableCompactCellInsets.top, 3.5, accuracy: 0.5)
+        XCTAssertEqual(m.tableCompactCellInsets.bottom, 3.5, accuracy: 0.5)
+        XCTAssertEqual(m.tableCompactCellInsets.left, 6.5, accuracy: 0.5)
+        XCTAssertEqual(m.tableCompactCellInsets.right, 6.5, accuracy: 0.5)
         XCTAssertEqual(m.tableMinCompressedColumnWidth, 60.0)
 
         XCTAssertEqual(m.detailsMinTitleHeight, 36.0)

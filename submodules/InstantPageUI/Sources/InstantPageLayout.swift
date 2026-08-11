@@ -960,7 +960,7 @@ public func layoutInstantPageBlock(webpage: TelegramMediaWebpage, userLocation: 
             }
             
             return InstantPageLayout(origin: CGPoint(), contentSize: contentSize, items: items)
-        case let .table(title, rows, bordered, striped):
+        case let .table(title, rows, bordered, striped, _):
             var contentSize = CGSize(width: boundingWidth, height: 0.0)
             var items: [InstantPageItem] = []
             

@@ -16593,6 +16593,8 @@ Error: %8$@";
 "RichText.Menu.Table.Delete" = "Delete Table";
 "RichText.Menu.Table.HighlightOn" = "Highlight";
 "RichText.Menu.Table.HighlightOff" = "Remove Highlight";
+"RichText.Menu.Table.CompactOn" = "Compact";
+"RichText.Menu.Table.CompactOff" = "Remove Compact";
 "RichText.PlaceholderBody" = "Type something...";
 "RichText.PlaceholderQuote" = "Type a quote here";
 "RichText.PlaceholderCode" = "Type code here";
