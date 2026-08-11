@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramCore
+import TelegramPresentationData
 import SwiftSignalKit
 import AccountContext
 import ChatMessageBubbleContentNode
@@ -439,6 +440,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 guard enabled else { return false }
                 return policyContext.engine.resources.completedResourcePath(id: EngineMediaResource.Id(file.resource.id)) != nil
             },
+            wallpaperBackgroundNode: { [weak self] in
+                return self?.item?.controllerInteraction.presentationContext.backgroundNode
+            },
             message: messageReference
         )
         let view = InstantPageV2View(renderContext: renderContext)
@@ -448,6 +452,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         self.containerNode.view.addSubview(view)
         if crossfadeIn {
             view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+        }
+        view.unsupportedActionTapped = { [weak self] in
+            guard let item = self?.item else {
+                return
+            }
+            item.controllerInteraction.openAppStorePage()
         }
         view.detailsTapped = { [weak self] index in
             guard let self else { return }
@@ -591,6 +601,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 let isDark = item.presentationData.theme.theme.overallDarkAppearance
                 let isIncoming = item.message.effectivelyIncoming(item.context.account.peerId)
                 let messageTheme = isIncoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
+                // Service-message colours for the unsupported-content pill, so a pill inside this
+                // bubble matches the standalone unsupported bubble rather than the bubble's palette.
+                let serviceColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper)
                 
                 var underlineLinks = true
                 if !messageTheme.primaryTextColor.isEqual(messageTheme.linkTextColor) {
@@ -680,7 +693,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     linkHighlightColor: messageTheme.linkTextColor.withMultipliedAlpha(0.1),
                     markerColor: UIColor(rgb: 0xfef3bc),
                     panelBackgroundColor: messageTheme.accentControlColor.withMultipliedAlpha(0.1),
-                    panelHighlightedBackgroundColor: messageTheme.accentControlColor.withMultipliedAlpha(0.25),
+                    panelHighlightedBackgroundColor: messageTheme.accentControlColor.withMultipliedAlpha(0.8),
                     panelPrimaryColor: messageTheme.primaryTextColor,
                     panelSecondaryColor: messageTheme.secondaryTextColor,
                     panelAccentColor: messageTheme.accentTextColor,
@@ -697,7 +710,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
                     checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor,
                     neutralButtonBackgroundColor: tableHeaderColor,
-                    neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor
+                    neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor,
+                    unsupportedPillFillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper),
+                    unsupportedPillPrimaryColor: serviceColor.primaryText
                 )
                 
                 var hasDraft = false
@@ -2094,6 +2109,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         let topMargin: CGFloat = 8.0
         let adjusted = CGRect(x: rect.minX, y: max(0.0, rect.minY - topMargin), width: rect.width, height: rect.height + topMargin)
         return self.view.convert(adjusted, from: pageView)
+    }
+
+    override public func unsupportedContentAreas() -> [CGRect] {
+        guard let layout = self.currentPageLayout?.layout, let pageView = self.pageView else {
+            return []
+        }
+        // Converting through the view hierarchy rather than re-deriving `pageContentInset` and the
+        // streaming-header offset by hand: those are the layout pass's business, and a second copy
+        // would drift. Safe mid-animation because every `ControlledTransitionAnimator.updateFrame`
+        // writes the model layer's position and bounds synchronously and animates *from* the old
+        // value, so the hierarchy already reports target geometry once apply returns.
+        return unsupportedContentTearZones(in: layout).map { self.view.convert($0, from: pageView) }
     }
 
     override public func reactionTargetView(value: MessageReaction.Reaction) -> UIView? {

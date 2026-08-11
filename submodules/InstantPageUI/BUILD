@@ -41,6 +41,7 @@ swift_library(
         "//third-party/SwiftMath:SwiftMath",
         "//submodules/ComponentFlow:ComponentFlow",
         "//submodules/TelegramUI/Components/ShimmeringMask:ShimmeringMask",
+        "//submodules/TelegramUI/Components/UnsupportedContentPill",
         "//submodules/TelegramUI/Components/TextLoadingEffect:TextLoadingEffect",
     ],
     visibility = [
@@ -59,6 +60,7 @@ swift_library(
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TextFormat:TextFormat",
+        "//submodules/TelegramUI/Components/UnsupportedContentPill",
     ],
 )
 

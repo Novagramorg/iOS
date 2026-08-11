@@ -16,7 +16,7 @@ swift_library(
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/WallpaperBackgroundNode",
-        "//submodules/AppBundle",
+        "//submodules/TelegramUI/Components/UnsupportedContentPill",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageItemCommon",
     ],

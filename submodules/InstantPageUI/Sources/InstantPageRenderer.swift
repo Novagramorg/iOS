@@ -16,6 +16,8 @@ import AnimationCache
 import MultiAnimationRenderer
 import InvisibleInkDustNode
 import ShimmeringMask
+import WallpaperBackgroundNode
+import UnsupportedContentPill
 
 // MARK: - Stable item identity (for view reuse on re-layouts)
 
@@ -36,7 +38,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame, inlineButton, buttonRow
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame, inlineButton, buttonRow, unsupportedContent
 }
 
 // MARK: - Render context
@@ -73,6 +75,14 @@ public final class InstantPageV2RenderContext {
     /// Whether a video file should auto-play inline (energy-usage autoplay setting AND already
     /// downloaded), computed by the host. Default `{ _ in false }` — no inline autoplay.
     public let shouldAutoplayVideo: (TelegramMediaFile) -> Bool
+    /// The host's chat wallpaper, when it has one. The unsupported-content pill asks it for a
+    /// `.free` bubble background so the wallpaper shows through the card.
+    ///
+    /// A closure rather than a stored reference: a message-scoped context must not retain the
+    /// chat's background node, and the host may swap its node without rebuilding the context.
+    /// Bubble backgrounds here are portal views that mirror their source, so nothing else — no
+    /// absolute rect, no scroll offset — has to be threaded through.
+    public let wallpaperBackgroundNode: () -> WallpaperBackgroundNode?
 
     public init(
         context: AccountContext,
@@ -87,6 +97,7 @@ public final class InstantPageV2RenderContext {
         shouldAutoDownloadImage: @escaping (TelegramMediaImage) -> Bool = { _ in false },
         shouldAutoDownloadFile: @escaping (TelegramMediaFile) -> Bool = { _ in false },
         shouldAutoplayVideo: @escaping (TelegramMediaFile) -> Bool = { _ in false },
+        wallpaperBackgroundNode: @escaping () -> WallpaperBackgroundNode? = { nil },
         message: MessageReference?
     ) {
         self.context = context
@@ -102,6 +113,7 @@ public final class InstantPageV2RenderContext {
         self.shouldAutoDownloadImage = shouldAutoDownloadImage
         self.shouldAutoDownloadFile = shouldAutoDownloadFile
         self.shouldAutoplayVideo = shouldAutoplayVideo
+        self.wallpaperBackgroundNode = wallpaperBackgroundNode
     }
 
     /// Update the content-bearing webpage for a later chunk of the SAME message with the SAME
@@ -188,6 +200,10 @@ public final class InstantPageV2View: UIView {
     public var buttonTapped: ((InstantPageButton, Promise<Bool>) -> Void)?
     /// Fires when a `.document` row whose file is already downloaded is tapped.
     public var documentTapped: ((TelegramMediaFile) -> Void)?
+    /// Fired when the Update button on an unsupported-content pill is tapped. Hosts inside a chat
+    /// route this to the App Store page; hosts that leave it nil still render the button (the tap
+    /// is inert) so the pill's width does not change between preview and sent message.
+    public var unsupportedActionTapped: (() -> Void)?
 
     var itemViews: [InstantPageItemView] = []
     private var itemViewStableIds: [InstantPageV2StableItemId] = []
@@ -853,6 +869,15 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2SlideshowView, let rc = self.renderContext else { return nil }
             v.update(item: slideshow, theme: theme, renderContext: rc)
             return v
+        case let .unsupportedContent(unsupported):
+            guard let v = existingView as? InstantPageV2UnsupportedView else { return nil }
+            v.update(item: unsupported, theme: theme, renderContext: self.renderContext)
+            // Re-wire on reuse: the closure captures self, and a reused view may have been created
+            // against a previous InstantPageV2View.
+            v.onActionTapped = { [weak self] in
+                self?.unsupportedActionTapped?()
+            }
+            return v
         }
     }
 
@@ -881,6 +906,7 @@ public final class InstantPageV2View: UIView {
         case .buttonRow:               return .positional(.buttonRow, position)
         case .thinking:                return .thinking(position)
         case .slideshow:               return .positional(.slideshow, position)
+        case .unsupportedContent:      return .positional(.unsupportedContent, position)
         }
     }
 
@@ -1006,6 +1032,12 @@ public final class InstantPageV2View: UIView {
             let view = InstantPageV2ButtonRowView(item: row, theme: theme)
             view.onButtonTapped = { [weak self] button, progress in
                 self?.buttonTapped?(button, progress)
+            }
+            return view
+        case let .unsupportedContent(unsupported):
+            let view = InstantPageV2UnsupportedView(item: unsupported, theme: theme, renderContext: self.renderContext)
+            view.onActionTapped = { [weak self] in
+                self?.unsupportedActionTapped?()
             }
             return view
         case let .thinking(thinking):

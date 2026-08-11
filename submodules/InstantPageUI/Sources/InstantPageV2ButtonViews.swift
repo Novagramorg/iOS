@@ -257,6 +257,7 @@ final class InstantPageV2ButtonPillView: UIView {
         loadingEffectView.frame = effectFrame
         loadingEffectView.update(
             color: colors.label,
+            alpha: colors.label.brightness > 0.6 ? 0.8 : 0.5,
             rect: effectFrame,
             path: UIBezierPath(roundedRect: effectFrame, cornerRadius: effectFrame.height / 2.0).cgPath
         )
