@@ -98,8 +98,7 @@ public struct TableBlock: Codable, Equatable {
     public var id: BlockID
     public var columns: [ColumnSpec]
     public var rows: [Row]
-    /// Render-only: halve every cell's interior padding. Mirrors `pageBlockTable`'s `compact` flag,
-    /// which is where this ends up on the wire.
+    /// `pageBlockTable`'s `compact` flag: cells are laid out with half the usual padding.
     public var compact: Bool
 
     public init(id: BlockID, columns: [ColumnSpec] = [], rows: [Row] = [], compact: Bool = false) {
@@ -111,14 +110,13 @@ public struct TableBlock: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey { case id, columns, rows, compact }
 
-    // Custom decode so documents written before `compact` existed still load (defaults applied).
-    // Encoding stays synthesized.
+    // Hand-written so a draft persisted before `compact` existed still decodes.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(BlockID.self, forKey: .id)
-        columns = try c.decodeIfPresent([ColumnSpec].self, forKey: .columns) ?? []
-        rows = try c.decodeIfPresent([Row].self, forKey: .rows) ?? []
-        compact = try c.decodeIfPresent(Bool.self, forKey: .compact) ?? false
+        self.id = try c.decode(BlockID.self, forKey: .id)
+        self.columns = try c.decodeIfPresent([ColumnSpec].self, forKey: .columns) ?? []
+        self.rows = try c.decodeIfPresent([Row].self, forKey: .rows) ?? []
+        self.compact = try c.decodeIfPresent(Bool.self, forKey: .compact) ?? false
     }
 
     public var columnCount: Int { columns.count }
