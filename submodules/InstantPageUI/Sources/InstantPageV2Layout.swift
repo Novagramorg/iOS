@@ -1211,8 +1211,8 @@ private func layoutBlock(
                              boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                              pathPrefix: pathPrefix, context: &context)
 
-    case let .table(title, rows, bordered, striped):
-        return layoutTable(title: title, rows: rows, bordered: bordered, striped: striped,
+    case let .table(title, rows, bordered, striped, compact):
+        return layoutTable(title: title, rows: rows, bordered: bordered, striped: striped, compact: compact,
                            boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                            context: &context)
 
@@ -1557,13 +1557,14 @@ private func layoutTable(
     rows: [InstantPageTableRow],
     bordered: Bool,
     striped: Bool,
+    compact: Bool,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
     // Bound once, before the `finalizeCell` closure below: `context` is `inout` and cannot be
     // captured, and these are the only two table constants that scale with the content.
-    let cellInsets = context.metrics.tableCellInsets
+    let cellInsets = compact ? context.metrics.tableCompactCellInsets : context.metrics.tableCellInsets
     let minCompressedColumnWidth = context.metrics.tableMinCompressedColumnWidth
 
     if rows.isEmpty {
@@ -3858,7 +3859,32 @@ func layoutTextItem(
     while true {
         var workingLineOrigin = currentLineOrigin
 
-        let currentMaxWidth = boundingWidth - workingLineOrigin.x
+        // An inline pill that BEGINS this line hangs into the page's horizontal inset by its own
+        // horizontal padding, so its LABEL — not its background — lines up with the text edge of the
+        // surrounding paragraph, like hanging punctuation.
+        //
+        // Decided HERE, before the break, and it is knowable here: `lastIndex` is already the first
+        // character of the line we are about to break, settled by the previous iteration. So this is
+        // forward-only — no re-break, no iteration, and it works for a WRAPPED line's leading pill
+        // just as well as for a paragraph's first.
+        //
+        // The hang is added to the break budget so the line reclaims exactly the space it hangs into
+        // and its right edge stays flush; it is then subtracted from the line's FRAME (and only from
+        // the frame — see the invariant at that site) to place it. Budget and frame MUST agree on the
+        // condition: widening the budget for a line that is not then hung would overflow it right by
+        // the padding.
+        //
+        // Gated on `alignment` alone rather than the per-line `isRTL`, which does not exist yet at
+        // this point. A centred / right-aligned paragraph has no shared left text edge to align to,
+        // and an RTL page arrives here as `.right`, so both are excluded.
+        var lineLeadingHang: CGFloat = 0.0
+        if alignment != .center, alignment != .right,
+           lastIndex < string.length,
+           let leadingButton = string.attribute(NSAttributedString.Key(rawValue: InstantPageInlineButtonAttribute), at: lastIndex, effectiveRange: nil) as? InstantPageInlineButtonAttachment {
+            lineLeadingHang = leadingButton.horizontalPadding
+        }
+
+        let currentMaxWidth = boundingWidth - workingLineOrigin.x + lineLeadingHang
         var lineCharacterCount: CFIndex
         var hadIndexOffset = false
         if minimizeWidth {
@@ -4226,7 +4252,19 @@ func layoutTextItem(
             } else {
                 lineCharacterRects = nil
             }
-            let textLine = InstantPageTextLine(line: line, range: lineRange, frame: CGRect(x: workingLineOrigin.x, y: workingLineOrigin.y, width: lineWidth, height: height), strikethroughItems: strikethroughItems, underlineItems: underlineItems, markedItems: markedItems, spoilerItems: spoilerItems, imageItems: lineImageItems, formulaItems: lineFormulaItems, buttonItems: lineButtonItems, emojiItems: lineEmojiItems, anchorItems: anchorItems, isRTL: isRTL, characterRects: lineCharacterRects)
+            // `lineLeadingHang` (computed before the break, at the top of this iteration) is applied
+            // HERE and ONLY here. The line frame positions both the drawn text and — via
+            // `offsetBy(dx: lineFrame.minX …)` at emission — every per-line item, so one subtraction
+            // moves the whole line coherently.
+            //
+            // INVARIANT — per-line item frames are LINE-LOCAL. `workingLineOrigin.x` is always 0.0
+            // (it starts at 0 and is reset to 0 at the end of every iteration), so the
+            // `workingLineOrigin.x + xOffset` in the item loops above is really just `xOffset`, and
+            // each item picks up the line's position later, at emission. Subtracting the hang from
+            // `workingLineOrigin.x` instead would therefore apply it TWICE to every pill, formula and
+            // emoji — once in the item frame, once via `lineFrame.minX` — while the text, drawn from
+            // the line frame alone, moved once. Keep the hang out of `workingLineOrigin`.
+            let textLine = InstantPageTextLine(line: line, range: lineRange, frame: CGRect(x: workingLineOrigin.x - lineLeadingHang, y: workingLineOrigin.y, width: lineWidth, height: height), strikethroughItems: strikethroughItems, underlineItems: underlineItems, markedItems: markedItems, spoilerItems: spoilerItems, imageItems: lineImageItems, formulaItems: lineFormulaItems, buttonItems: lineButtonItems, emojiItems: lineEmojiItems, anchorItems: anchorItems, isRTL: isRTL, characterRects: lineCharacterRects)
 
             lines.append(textLine)
             imageItems.append(contentsOf: lineImageItems)

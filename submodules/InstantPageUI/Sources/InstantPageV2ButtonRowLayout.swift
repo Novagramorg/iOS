@@ -20,13 +20,17 @@ let instantPageBlockButtonsPerRow: Int = 8
 
 /// Room a badge-bearing pill must keep clear on EACH side beyond the ordinary horizontal padding, so
 /// that a centred label cannot run under the top-right type badge. `instantPageInlineButtonAttachment`
-/// already adds `instantPageInlineButtonHorizontalPadding` per side, so only the difference is added
-/// on top of the measured attachment. Buttons without a badge reserve nothing.
+/// already adds `instantPageBlockButtonHorizontalPadding` per side for a row pill, so only the
+/// difference is added on top of the measured attachment. Buttons without a badge reserve nothing.
+///
+/// Since the block padding now exceeds `instantPageBlockButtonIconReserve`, this is 0 in practice —
+/// the padding alone already keeps a centred label clear of the badge. Kept as the subtraction rather
+/// than hard-coded, so it re-arms if either value is retuned.
 private func instantPageBlockButtonExtraSideInset(for button: InstantPageButton) -> CGFloat {
     guard instantPageBlockButtonIconName(for: button.action) != nil else {
         return 0.0
     }
-    return max(0.0, instantPageBlockButtonIconReserve - instantPageInlineButtonHorizontalPadding)
+    return max(0.0, instantPageBlockButtonIconReserve - instantPageBlockButtonHorizontalPadding)
 }
 
 /// Where a row's content starts within the available width, given its leftover space.
@@ -112,7 +116,7 @@ private func instantPageV2LayoutJustifiedButtonRow(
             // internally, so this is ~14pt more conservative, and matching it would move where
             // ellipses appear on already-published pages.
             let iconReserve = instantPageBlockButtonIconName(for: entry.button.action) != nil ? instantPageBlockButtonIconReserve * 2.0 : 0.0
-            let attachment = instantPageInlineButtonAttachment(button: entry.button, labelString: entry.labelString, maxWidth: max(0.0, buttonWidth - iconReserve))
+            let attachment = instantPageInlineButtonAttachment(button: entry.button, labelString: entry.labelString, maxWidth: max(0.0, buttonWidth - iconReserve), horizontalPadding: instantPageBlockButtonHorizontalPadding)
             let column = rtl ? (rowButtons.count - 1 - position) : position
             let x = horizontalInset + CGFloat(column) * (buttonWidth + metrics.blockButtonSpacing)
             entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: metrics.blockButtonHeight)))
@@ -141,7 +145,8 @@ private func instantPageV2LayoutHuggingButtonRow(
         let attachment = instantPageInlineButtonAttachment(
             button: entry.button,
             labelString: entry.labelString,
-            maxWidth: max(0.0, availableWidth - extra * 2.0)
+            maxWidth: max(0.0, availableWidth - extra * 2.0),
+            horizontalPadding: instantPageBlockButtonHorizontalPadding
         )
         return (attachment, min(availableWidth, attachment.size.width + extra * 2.0))
     }

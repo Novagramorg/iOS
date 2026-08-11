@@ -189,6 +189,7 @@ table InstantPageBlock_Table {
     rows:[InstantPageTableRow] (id: 1, required);
     bordered:bool (id: 2);
     striped:bool (id: 3);
+    compact:bool (id: 4);
 }
 
 table InstantPageBlock_Details {

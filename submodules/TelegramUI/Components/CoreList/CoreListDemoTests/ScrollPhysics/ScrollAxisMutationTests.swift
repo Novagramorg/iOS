@@ -11,7 +11,7 @@ final class ScrollAxisMutationTests: XCTestCase {
     func test_setBounds_movesBouncePoint_preservingDynamicState() {
         var axis = makeAxis(offset: 100, min: 0, max: 1000)
         axis.beginDrag()                                   // dragStartOffset = 100
-        axis.drag(translation: -200, recognizerVelocity: -500)  // proposed = 100 - (-200) = 300
+        axis.drag(translation: -200)  // proposed = 100 - (-200) = 300
         XCTAssertEqual(axis.offset, 300, accuracy: 0.001)
         let velBefore = axis.velocity                      // = -(-500) * 0.001 = 0.5
 
@@ -21,7 +21,7 @@ final class ScrollAxisMutationTests: XCTestCase {
         XCTAssertEqual(axis.phase, .dragging, "phase preserved")
 
         // A further drag to the same proposed offset now rubber-bands against the NEW max (250).
-        axis.drag(translation: -200, recognizerVelocity: -500)  // proposed 300, max 250 → resisted
+        axis.drag(translation: -200)  // proposed 300, max 250 → resisted
         XCTAssertLessThan(axis.offset, 300, "rubber-banded below the old free value")
         XCTAssertGreaterThan(axis.offset, 250, "but still past the new max (overscroll)")
     }
@@ -29,23 +29,22 @@ final class ScrollAxisMutationTests: XCTestCase {
     func test_shift_reanchorsDrag_soCumulativeDragStaysContinuous() {
         var axis = makeAxis(offset: 0, min: -10_000_000, max: 10_000_000)
         axis.beginDrag()                                   // dragStartOffset = 0
-        axis.drag(translation: -50, recognizerVelocity: 0)
+        axis.drag(translation: -50)
         XCTAssertEqual(axis.offset, 50, accuracy: 0.001)   // 0 - (-50)
 
         axis.shift(by: 1000)
         XCTAssertEqual(axis.offset, 1050, accuracy: 0.001, "offset moved by the shift")
 
         // The SAME cumulative translation maps to the shifted offset (dragStartOffset moved too).
-        axis.drag(translation: -50, recognizerVelocity: 0)
+        axis.drag(translation: -50)
         XCTAssertEqual(axis.offset, 1050, accuracy: 0.001, "drag stayed continuous across the re-base")
     }
 
     func test_shift_duringDeceleration_movesOffset_leavesVelocity() {
         var axis = makeAxis(offset: 0, min: -10_000_000, max: 10_000_000)
         axis.beginDrag()
-        axis.drag(translation: 0, recognizerVelocity: -3000)
-        axis.drag(translation: 0, recognizerVelocity: -3000)
-        XCTAssertEqual(axis.endDrag(), .decelerate)
+        axis.drag(translation: 0)
+        axis.applyRelease(velocity: 3.0)          // was drag(-3000)×2 + endDrag: 0.75·3 + 0.25·3
         _ = axis.step(dtMs: 16)
         let offsetAfterStep = axis.offset
         let velAfterStep = axis.velocity
@@ -59,9 +58,8 @@ final class ScrollAxisMutationTests: XCTestCase {
         // An axis flung to a known decelerating state.
         var flung = makeAxis(offset: 0, min: -10_000_000, max: 10_000_000)
         flung.beginDrag()
-        flung.drag(translation: 0, recognizerVelocity: -3000)
-        flung.drag(translation: 0, recognizerVelocity: -3000)
-        XCTAssertEqual(flung.endDrag(), .decelerate)
+        flung.drag(translation: 0)
+        flung.applyRelease(velocity: 3.0)         // was drag(-3000)×2 + endDrag: 0.75·3 + 0.25·3
         // Step it forward a few frames to a mid-flight (offset, velocity).
         for _ in 0..<10 { _ = flung.step(dtMs: 1000.0 / 120) }
         let midOffset = flung.offset

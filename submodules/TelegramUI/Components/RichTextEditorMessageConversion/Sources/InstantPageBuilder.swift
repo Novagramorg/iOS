@@ -224,7 +224,7 @@ private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
         }
         return InstantPageTableRow(cells: cells)
     }
-    return .table(title: .empty, rows: rows, bordered: true, striped: false)
+    return .table(title: .empty, rows: rows, bordered: true, striped: false, compact: table.compact)
 }
 
 /// Concatenate a cell's paragraph blocks into one `RichText` (newline-joined). Images in cells dropped.

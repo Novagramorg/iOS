@@ -241,6 +241,27 @@ final class TableControlsTests: XCTestCase {
         XCTAssertTrue((received?.actions.map { $0.kind } ?? []).contains(.addColumnLeft))
     }
 
+    func test_toggleTableCompact_flipsModelAndState_inOneUndoStep() {
+        let v = canvasWithTable()
+        let um = UndoManager(); um.groupsByEvent = false; v.undoManagerOverride = um
+        let t = table(v)
+        v.anchor = t.cellTextStart(row: 1, column: 0)!; v.head = v.anchor
+        XCTAssertFalse(v.currentState().isTableCompact)
+
+        let before = v.undoRegistrationCount
+        um.beginUndoGrouping(); v.toggleTableCompact(); um.endUndoGrouping()
+        XCTAssertEqual(v.undoRegistrationCount - before, 1, "the toggle registers exactly one undo step")
+
+        guard case .table(let out) = v.currentBlocks()[1] else { return XCTFail("expected a table") }
+        XCTAssertTrue(out.compact, "the model flipped")
+        XCTAssertTrue(v.currentState().isTableCompact, "EditorState agrees with the model")
+
+        um.undo()
+        guard case .table(let back) = v.currentBlocks()[1] else { return XCTFail("expected a table") }
+        XCTAssertFalse(back.compact)
+        XCTAssertFalse(v.currentState().isTableCompact)
+    }
+
     // MARK: - Draw helpers (Task 5)
 
     func test_selectionOutlineRect_wrapsColumn() {

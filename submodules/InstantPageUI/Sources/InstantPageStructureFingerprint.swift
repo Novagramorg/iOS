@@ -163,8 +163,8 @@ private func hashStructure(block: InstantPageBlock, into hasher: inout Hasher) {
     case let .thinking(text):
         hasher.combine(28)
         hashStructure(richText: text, into: &hasher)
-    case let .table(title, rows, _, _):
-        // `bordered` and `striped` excluded — presentation payload.
+    case let .table(title, rows, _, _, _):
+        // `bordered`, `striped` and `compact` excluded — presentation payload.
         hasher.combine(29)
         hashStructure(richText: title, into: &hasher)
         hasher.combine(rows.count)

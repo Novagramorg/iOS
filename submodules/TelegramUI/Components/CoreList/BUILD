@@ -14,6 +14,7 @@ swift_library(
             "CoreListDemo/SceneDelegate.swift",
             "CoreListDemo/ViewController.swift",
             "CoreListDemo/PhysicsScrollDemoViewController.swift",
+            "CoreListDemo/ScrollComparisonViewController.swift",
             "CoreListDemo/DemoRow.swift",
             "CoreListDemo/AutoLoadResponseScheduler.swift",
         ],

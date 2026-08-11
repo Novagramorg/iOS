@@ -81,4 +81,28 @@ final class TrajectorySpliceTests: XCTestCase {
         let last = (anim.values?.last as? NSNumber)?.doubleValue ?? .nan
         XCTAssertEqual(last, 0, accuracy: 0.001)   // ends at 0 (resolves to model = finalOffset)
     }
+
+    func test_splicedRetimesTheResetOntoTheNewBegin() throws {
+        var a = ScrollAxis(offset: 0, min: -1_000_000, max: 1_000_000, range: 800,
+                           rate: 0.998, scale: 1, vScale: 4)
+        a.beginDrag()
+        a.applyRelease(velocity: 3.0)
+        let current = Trajectory.build(from: a)
+
+        var b = ScrollAxis(offset: 500, min: -1_000_000, max: 1_000_000, range: 800,
+                           rate: 0.998, scale: 1, vScale: 4)
+        b.beginDrag()
+        b.applyRelease(velocity: 2.0)
+        let future = Trajectory.build(from: b)
+
+        let now: TimeInterval = 0.2
+        let spliced = Trajectory.spliced(current: current, prevBeginTime: 0, now: now,
+                                         future: future, shift: 0)
+
+        // The future path's reset, expressed on the spliced trajectory's own axis.
+        let futureReset = try XCTUnwrap(future.multiplierResetTime)
+        let expected = (now - spliced.beginTime) + futureReset
+        XCTAssertEqual(try XCTUnwrap(spliced.trajectory.multiplierResetTime), expected, accuracy: 1e-9,
+                       "a rebake that lost this leaves the streak armed through a settle")
+    }
 }

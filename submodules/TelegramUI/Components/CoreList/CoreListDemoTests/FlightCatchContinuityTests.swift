@@ -24,7 +24,7 @@ final class FlightCatchContinuityTests: XCTestCase {
         core.beginDrag()
         core.drag(translation: 0, velocity: velocity)
         core.drag(translation: 0, velocity: velocity)
-        _ = core.endDrag()
+        _ = core.endDrag(recognizerVelocity: velocity, at: 0)
         return KeyframeFlight(core: core, startTime: 0)
     }
 

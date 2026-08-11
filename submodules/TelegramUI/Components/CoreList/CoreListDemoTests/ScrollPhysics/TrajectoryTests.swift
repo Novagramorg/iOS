@@ -17,9 +17,8 @@ final class TrajectoryTests: XCTestCase {
                 y: ScrollAxis(offset: 0, min: -10_000_000, max: 10_000_000, range: 800, rate: 0.998, scale: scale))
             p.beginDrag()
             // Two zero-translation frames load endDrag's velocity low-pass without moving the offset.
-            p.drag(translation: .zero, recognizerVelocity: CGPoint(x: 0, y: -700))
-            p.drag(translation: .zero, recognizerVelocity: CGPoint(x: 0, y: -700))
-            _ = p.endDrag()
+            p.drag(translation: .zero)
+            p.applyRelease(velocity: CGPoint(x: 0, y: 0.7))   // was drag(-700)×2 + endDrag
             return Trajectory.build(from: p.y)
         }
         func minNonzeroStep(_ t: Trajectory) -> CGFloat {
@@ -68,9 +67,8 @@ final class TrajectoryTests: XCTestCase {
     private func releasedAxis(offset: CGFloat = 100, velocityPtsPerSec: CGFloat = -2000) -> ScrollAxis {
         var a = ScrollAxis(offset: offset, min: 0, max: 2000, range: 600, rate: 0.998, scale: 2)
         a.beginDrag()
-        a.drag(translation: 0, recognizerVelocity: velocityPtsPerSec)
-        a.drag(translation: 0, recognizerVelocity: velocityPtsPerSec)
-        XCTAssertEqual(a.endDrag(), .decelerate)
+        a.drag(translation: 0)
+        a.applyRelease(velocity: -velocityPtsPerSec * 0.001)  // was drag(v)×2 + endDrag: 0.75·v + 0.25·v
         return a
     }
 
@@ -85,7 +83,7 @@ final class TrajectoryTests: XCTestCase {
         // Every later vertex is ScrollAxis.step's pixel-rounded write, frame-for-frame (exact).
         var ref = axis
         for i in 1..<traj.samples.count {
-            let (written, _) = ref.step(dtMs: 1000.0 / 120.0)
+            let (written, _, _) = ref.step(dtMs: 1000.0 / 120.0)
             XCTAssertEqual(traj.samples[i].offset, written, accuracy: 1e-9)
             XCTAssertEqual(traj.samples[i].t, Double(i) * (1000.0 / 120.0) / 1000.0, accuracy: 1e-9)
         }
@@ -112,7 +110,7 @@ final class TrajectoryTests: XCTestCase {
         var lastWritten = stepped.offset
         var guardCount = 0
         while guardCount < 100_000 {
-            let (written, settled) = stepped.step(dtMs: 1000.0 / 60.0)
+            let (written, settled, _) = stepped.step(dtMs: 1000.0 / 60.0)
             lastWritten = written
             guardCount += 1
             if settled { break }
@@ -141,5 +139,49 @@ final class TrajectoryTests: XCTestCase {
 
         let keyTimes = (anim.keyTimes ?? []).map { $0.doubleValue }
         XCTAssertEqual(keyTimes, [0, 0.5, 1.0])
+    }
+
+    // MARK: - The fast-scroll reset, re-timed onto a baked path
+
+    /// A released axis carrying a fast-scroll multiplier.
+    private func scaledAxis(max: CGFloat, velocity: CGFloat = 3.0, vScale: CGFloat = 4) -> ScrollAxis {
+        var a = ScrollAxis(offset: 0, min: -1_000_000, max: max, range: 800,
+                           rate: 0.998, scale: 1, vScale: vScale)
+        a.beginDrag()
+        a.applyRelease(velocity: velocity)
+        return a
+    }
+
+    func test_buildRecordsWhenTheIntegratorEndedTheDeceleration() throws {
+        let traj = Trajectory.build(from: scaledAxis(max: 1_000_000))
+        let reset = try XCTUnwrap(traj.multiplierResetTime,
+                                  "a free flick settles, and settling clears the multiplier")
+        XCTAssertEqual(reset, traj.duration, accuracy: 1e-9,
+                       "for a free flick the reset IS the settle, at the end of the path")
+    }
+
+    func test_buildRecordsAnEarlyResetWhenThePathHitsAnEdge() throws {
+        let traj = Trajectory.build(from: scaledAxis(max: 200))
+        let reset = try XCTUnwrap(traj.multiplierResetTime)
+        XCTAssertLessThan(reset, traj.duration * 0.5,
+                          "entering the spring resets long before the bounce finishes (0x17a87bc)")
+    }
+
+    func test_truncatedDropsAResetItCutAway() throws {
+        let traj = Trajectory.build(from: scaledAxis(max: 1_000_000))
+        let reset = try XCTUnwrap(traj.multiplierResetTime)
+        let cut = traj.truncated(at: reset * 0.5)
+
+        XCTAssertNil(cut.multiplierResetTime,
+                     "the cut precedes the reset, so the path no longer reaches it")
+    }
+
+    func test_truncatedKeepsAResetItRetains() throws {
+        let traj = Trajectory.build(from: scaledAxis(max: 200))
+        let reset = try XCTUnwrap(traj.multiplierResetTime)
+        let cut = traj.truncated(at: (reset + traj.duration) * 0.5)
+
+        XCTAssertEqual(try XCTUnwrap(cut.multiplierResetTime), reset, accuracy: 1e-12,
+                       "the reset survives a cut after it")
     }
 }

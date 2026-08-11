@@ -13,28 +13,35 @@ struct Deceleration {
     let rate: CGFloat
     let vScale: CGFloat
 
-    private static let velocityFloor: CGFloat = 0.01      // pts/ms (§5/§2)
+    /// Below this the integrator calls a free deceleration finished. Not private: `ScrollAxis.step`
+    /// needs the same threshold to tell a deceleration that was RUNNING from an axis already at rest.
+    static let velocityFloor: CGFloat = 0.01              // pts/ms (§5/§2)
     private static let settleTolerance: CGFloat = 0.5     // px (§2)
     private static let bounceLnRate: CGFloat = -0.01005033585350145 // ln(0.99), fixed spring stiffness (§2)
 
     static func decay(dtMs: CGFloat, rate: CGFloat) -> CGFloat { pow(rate, dtMs) }
 
-    /// Advance one frame. Returns `true` when the scroll has settled (the driver should stop).
-    mutating func step(dtMs: CGFloat) -> Bool {
-        guard dtMs > 0 else { return settled() }
+    /// Advance one frame. `settled` means the scroll has come to rest and the driver should stop.
+    /// `endedDeceleration` means this step entered the bounce spring or settled — the two points at
+    /// which `_getBouncingDecelerationOffset` clears `_fastScrollCount` / `_fastScrollMultiplier`
+    /// (`0x17a87bc` and `0x17a8844`). Every deceleration ends in one of the two, which is why the
+    /// fast-scroll streak only survives into a gesture that starts before the flight finishes.
+    mutating func step(dtMs: CGFloat) -> (settled: Bool, endedDeceleration: Bool) {
+        guard dtMs > 0 else { let s = settled(); return (s, s) }
         let hi = Swift.max(max, min)
         let lo = min
 
         if offset >= lo, offset <= hi {
             // §2-A: in-bounds free deceleration
-            guard velocity != 0 else { return settled() }
+            guard velocity != 0 else { let s = settled(); return (s, s) }
             let decay = Self.decay(dtMs: dtMs, rate: rate)
             let dx = velocity * rate * (1 - decay) / (1 - rate) * vScale
             let proposed = offset + dx
             if proposed >= lo, proposed <= hi {
                 offset = proposed
                 velocity *= decay
-                return settled()
+                let s = settled()
+                return (s, s)
             }
             // crosses an edge mid-frame: integrate to the edge, hand the remainder to the spring
             let edge = proposed > hi ? hi : lo
@@ -44,11 +51,11 @@ struct Deceleration {
             offset += velocity * rate * (1 - decayE) / (1 - rate) * vScale // ≈ edge (frac approximates time, per §2)
             velocity *= decayE
             spring(dtMs: dtMs - timeToBound)
-            return settled()
+            return (settled(), true)
         } else {
             // §2-B: overscrolled — spring toward the crossed edge
             spring(dtMs: dtMs)
-            return settled()
+            return (settled(), true)
         }
     }
 
@@ -59,7 +66,10 @@ struct Deceleration {
         let springK = exp(Self.bounceLnRate * dtMs)         // fixed 0.99/ms stiffness
         let decayRem = Self.decay(dtMs: dtMs, rate: rate)
         offset = edge + springK * (offset - edge)
-        offset += velocity * rate * springK * (1 - decayRem) / (1 - rate) * vScale
+        // NO vScale here. `_getBouncingDecelerationOffset`'s spring term (`0x17a8784`) carries no
+        // `_fastScrollMultiplier`, unlike the free-decel term (`0x17a85f8`) and its to-the-edge
+        // sub-step (`0x17a86a4`). Invisible while vScale == 1, which is how it went unnoticed.
+        offset += velocity * rate * springK * (1 - decayRem) / (1 - rate)
         velocity *= decayRem * springK
     }
 

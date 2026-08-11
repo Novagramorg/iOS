@@ -23,6 +23,9 @@ final class TableBlockBox: CanvasBlock {
     var cellRowspan: [[Int]]
     var cells: [[BlockStack]]
     let mapper: AttributedStringMapper
+    /// Halve every cell's interior padding (the `pageBlockTable` compact flag). Set at build time from
+    /// the model; a toggle rebuilds the box, so it never needs to change in place.
+    let isCompact: Bool
 
     var frame: CGRect = .zero
     var nodeStart: Int = 0
@@ -46,6 +49,11 @@ final class TableBlockBox: CanvasBlock {
     /// explicit cell metric and the cell `BlockStack` carries NO block inset (`verticalInsetBase = 0`), so
     /// this is the cell's sole vertical padding.
     static let cellVerticalPadding: CGFloat = 14
+    /// The padding this table actually lays out with. The `static let`s above stay at the full values —
+    /// they are the non-compact constants, read directly by tests — and these instance properties are
+    /// what every geometry site consumes.
+    var cellPadding: CGFloat { isCompact ? TableBlockBox.cellPadding / 2 : TableBlockBox.cellPadding }
+    var cellVerticalPadding: CGFloat { isCompact ? TableBlockBox.cellVerticalPadding / 2 : TableBlockBox.cellVerticalPadding }
     static let border: CGFloat = 1
     /// Outer-border corner radius (≈8pt, measured from the reference design).
     static let outerCornerRadius: CGFloat = 8
@@ -70,6 +78,7 @@ final class TableBlockBox: CanvasBlock {
         cellVAlign = table.rows.map { $0.cells.map { $0.verticalAlignment } }
         cellColspan = table.rows.map { $0.cells.map { $0.colspan } }
         cellRowspan = table.rows.map { $0.cells.map { $0.rowspan } }
+        isCompact = table.compact
         // Cells render at a smaller base font than the document body (15 vs 17). Derive a cell-scoped
         // mapper once and store it as this table's `mapper`; every cell box built here, in `appendRow`,
         // and in split/merge replacements (which inherit their source box's `mapper`) shares it.
@@ -217,7 +226,7 @@ final class TableBlockBox: CanvasBlock {
         let upper = min(c0 + max(colspan, 1), cols.count)
         guard c0 >= 0, c0 < upper else { return 1 }
         let spanWidth = cols[c0..<upper].reduce(0, +)
-        let width = spanWidth + CGFloat(upper - c0 - 1) * TableBlockBox.border - TableBlockBox.border - TableBlockBox.cellPadding * 2
+        let width = spanWidth + CGFloat(upper - c0 - 1) * TableBlockBox.border - TableBlockBox.border - cellPadding * 2
         return max(width, 1)
     }
 
@@ -234,7 +243,7 @@ final class TableBlockBox: CanvasBlock {
     /// column only; kept for the two dense-only call sites in this file's height/width plumbing (the
     /// SPAN-AWARE cell layout in `recompute()` and the union rect in `cellRect` go through
     /// `cellContentWidth(anchorColumn:colspan:in:)` / `spannedSlotExtent` instead).
-    private func cellContentWidth(_ col: Int) -> CGFloat { max(columnWidths[col] - TableBlockBox.border - TableBlockBox.cellPadding * 2, 1) }
+    private func cellContentWidth(_ col: Int) -> CGFloat { max(columnWidths[col] - TableBlockBox.border - cellPadding * 2, 1) }
 
     /// Σ of `values[start..<start+count]` plus the `(count-1)` interior borders they subsume — the raw
     /// spanned SLOT extent (a frame width/height), as opposed to `cellContentWidth(anchorColumn:colspan:in:)`
@@ -293,7 +302,7 @@ final class TableBlockBox: CanvasBlock {
                 let rowspan = anchor?.rowspan ?? 1
                 let originRow = anchor?.row ?? r
                 let contentWidth = cellContentWidth(anchorColumn: column, colspan: colspan, in: cols)
-                let cellHeight = cells[r][c].measuredHeight(forWidth: contentWidth) + TableBlockBox.cellVerticalPadding * 2
+                let cellHeight = cells[r][c].measuredHeight(forWidth: contentWidth) + cellVerticalPadding * 2
                 if rowspan <= 1 {
                     if heights.indices.contains(r) { heights[r] = max(heights[r], cellHeight) }
                 } else {
@@ -336,7 +345,7 @@ final class TableBlockBox: CanvasBlock {
             rows.append(Row(id: rowIDs[r], height: rowMinHeights[r] > 0 ? Double(rowMinHeights[r]) : nil,
                             cells: outCells))
         }
-        return .table(TableBlock(id: id, columns: columns, rows: rows))
+        return .table(TableBlock(id: id, columns: columns, rows: rows, compact: isCompact))
     }
 
     /// Re-applies the render-only overrides to every cell's display layout: per-cell alignment and,
@@ -425,10 +434,10 @@ final class TableBlockBox: CanvasBlock {
                 // identical to before for a dense (colspan==rowspan==1) cell, where `spannedHeight ==
                 // rowHeights[r]` exactly.
                 let contentH = stack.measuredHeight(forWidth: contentWidth)
-                let free = max(0, (spannedHeight - TableBlockBox.cellVerticalPadding * 2) - contentH)
+                let free = max(0, (spannedHeight - cellVerticalPadding * 2) - contentH)
                 let vFactor: CGFloat = { switch cellVAlign[r][c] { case .top: return 0; case .middle: return 0.5; case .bottom: return 1 } }()
-                let contentOrigin = CGPoint(x: x + TableBlockBox.cellPadding,
-                                            y: y + TableBlockBox.cellVerticalPadding + free * vFactor)
+                let contentOrigin = CGPoint(x: x + cellPadding,
+                                            y: y + cellVerticalPadding + free * vFactor)
                 _ = stack.recompute(baseOffset: pos - 1)   // cell content begins at (cell open) → baseOffset
                 _ = stack.layout(origin: contentOrigin, width: contentWidth)
                 pos += stackTokens(stack)

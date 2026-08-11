@@ -49,7 +49,7 @@ private func markdownString(from block: InstantPageBlock) -> String? {
         return markdownBlockQuote(text)
     case let .list(items, ordered):
         return markdownList(items: items, ordered: ordered, indent: 0)
-    case let .table(_, rows, _, _):
+    case let .table(_, rows, _, _, _):
         return markdownTable(rows: rows)
     case .divider:
         return "---"

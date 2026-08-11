@@ -206,6 +206,8 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         switch lower {
         case .paragraph, .thinking:
             return lowerSpacing.verticalPadding + 2.0
+        case .table:
+            return lowerSpacing.verticalPadding + 7.0
         default:
             break
         }
@@ -215,6 +217,8 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         switch upper {
         case .paragraph, .thinking:
             return upperSpacing.verticalPadding + 2.0
+        case .table:
+            return upperSpacing.verticalPadding + 4.0
         default:
             break
         }

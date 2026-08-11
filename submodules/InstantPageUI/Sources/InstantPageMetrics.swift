@@ -80,6 +80,8 @@ struct InstantPageMetrics {
     // MARK: Tables
 
     let tableCellInsets: UIEdgeInsets
+    /// Halved cell padding for `pageBlockTable`'s `compact` flag.
+    let tableCompactCellInsets: UIEdgeInsets
     let tableMinCompressedColumnWidth: CGFloat
 
     // MARK: Details
@@ -129,6 +131,9 @@ struct InstantPageMetrics {
         self.numberMarkerTextwardOffset = s(instantPageV2NumberMarkerTextwardOffset)
 
         self.tableCellInsets = UIEdgeInsets(top: s(7.0), left: s(13.0), bottom: s(7.0), right: s(13.0))
+        // Halved BEFORE `s(...)` so the result is screen-pixel-snapped like every other metric,
+        // rather than a raw 3.5 that no `floorToScreenPixels` ever touched.
+        self.tableCompactCellInsets = UIEdgeInsets(top: s(3.5), left: s(6.5), bottom: s(3.5), right: s(6.5))
         self.tableMinCompressedColumnWidth = s(60.0)
 
         self.detailsMinTitleHeight = s(36.0)

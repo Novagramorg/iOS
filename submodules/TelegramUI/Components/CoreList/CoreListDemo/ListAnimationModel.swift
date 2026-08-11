@@ -37,6 +37,37 @@ enum ListAnimationOwner: Hashable {
         case .viewport, .exit, .transient, .ghostBlock: return false
         }
     }
+
+    /// Whether a PASS is the only thing that writes this owner's layer position — the precondition for
+    /// `presented − model` to mean "the additive track's contribution" and therefore the precondition
+    /// for `ListAnimationController.capturePresentedPositionOffsets` to sample it at all.
+    ///
+    /// A row qualifies: `render()` writes container-local frames, which are offset-independent, so the
+    /// renders that run outside a pass (a scroll rebalance) rewrite a surviving row's base with the
+    /// value it already had. Nothing else qualifies:
+    ///
+    /// - `.attachment` — `renderAttachments()` rewrites every attachment's frame on EVERY render, and
+    ///   it must: a parked attachment stays parked on screen only by moving its base with the content.
+    ///   So between two frames `presentation()` lags the model by one frame of base movement. Reading
+    ///   that lag as a contribution made a parked date pill snap 57.66pt at the touch-up of an
+    ///   interactive keyboard dismissal — its layer showed `model=573.00 presented=515.33` with no
+    ///   animation on it at all. See `AttachmentResumeBaseTests`.
+    /// - `.exit`, `.transient`, `.ghostBlock` — `shiftExitOverlayChildren` adds a coordinate rebase to
+    ///   every overlay child's `position.y`, and it runs from `render()`, which a scroll rebalance
+    ///   reaches without a pass. Same hazard, same exclusion; no defect has been observed there, but
+    ///   the property this samples is not true of them either.
+    /// - `.viewport` — excluded one level up, by property: see the provider in
+    ///   `ListAnimationController.init`.
+    ///
+    /// Note that "committed" is not the bar and could not be: a base written last turn may not have
+    /// been PRESENTED yet when this turn samples, so a per-frame-written base can never be differenced
+    /// against `presentation()` at all.
+    var hasPassWrittenPositionBase: Bool {
+        switch self {
+        case .live: return true
+        case .attachment, .viewport, .exit, .transient, .ghostBlock: return false
+        }
+    }
 }
 
 enum ListAnimatedProperty: Hashable {
