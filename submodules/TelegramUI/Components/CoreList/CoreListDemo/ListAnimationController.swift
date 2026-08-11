@@ -127,6 +127,11 @@ final class ListAnimationController {
             // `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`) already
             // uses, and it is what `PresentedPositionResumeBaseTests` was written to make safe.
             //
+            // And only for owners whose base a pass owns — the snapshot is empty for the rest, so they
+            // fall back to the analytic value here. Pass entry proves that THIS pass has not moved the
+            // base; it proves nothing about a writer that runs between passes, and `renderAttachments`
+            // is exactly such a writer. See `ListAnimationOwner.hasPassWrittenPositionBase`.
+            //
             // **Why it became necessary.** A property resumed from the model and one resumed from the
             // screen disagree about where "now" is by the commit delay δ, and the user-visible seam
             // between a growing row and the row below it is their SUM: the grower's `.height` (screen)
@@ -170,11 +175,23 @@ final class ListAnimationController {
     func capturePresentedPositionOffsets() {
         passPresentedPositionOffsets.removeAll(keepingCapacity: true)
         for (owner, binding) in bindings {
-            guard let layer = binding.value,
+            // Only owners whose base a PASS owns. `presented − model` is the track's contribution only
+            // while the model still holds the base the render tree was committed against, and pass
+            // entry guarantees that for a row and for nothing else — an attachment's base is rewritten
+            // by every `renderAttachments()`, an overlay child's by every coordinate rebase. See
+            // `ListAnimationOwner.hasPassWrittenPositionBase`.
+            guard owner.hasPassWrittenPositionBase,
+                  let layer = binding.value,
                   let presentation = layer.presentation()
             else { continue }
             passPresentedPositionOffsets[owner] = presentation.position.y - layer.position.y
         }
+    }
+
+    /// What the pass-entry snapshot holds for an owner, or nil when nothing was captured for it. For
+    /// tests: the resume path itself reads `passPresentedPositionOffsets` through the model's provider.
+    func capturedPresentedPositionOffset(owner: ListAnimationOwner) -> CGFloat? {
+        passPresentedPositionOffsets[owner]
     }
 
     func clearPresentedPositionOffsets() {

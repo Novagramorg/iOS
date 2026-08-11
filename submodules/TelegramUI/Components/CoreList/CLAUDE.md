@@ -516,6 +516,26 @@ becomes a compounding drift the moment two do — the chat's hosted item node se
 presented value.** Those are the same quantity in the same space as the model's, so there is nothing to
 convert and no base to be wrong about.
 
+**And `.positionY` is sampled only for owners whose base a PASS writes —
+`ListAnimationOwner.hasPassWrittenPositionBase`, true for `.live` and nothing else.** Pass entry proves
+that *this* pass has not moved the base; it proves nothing about a writer that runs BETWEEN passes, and
+`renderAttachments()` is exactly such a writer — it rewrites every attachment's frame on every render,
+including every user-scroll frame, because a parked attachment stays parked on screen only by moving its
+base with the content. `presentation()` therefore trails an attachment's model by one frame of base
+movement, and reading that as a contribution starts the next animated pass a whole frame of displacement
+away from where the row is drawn. Shipped as a chat whose gutter avatars and date pills snapped, then
+animated into place, at the touch-up of an interactive keyboard dismissal: the parked pill's layer read
+`model=573.00 presented=515.33` **with no animation on it at all**, and it jumped 57.66pt. The
+per-frame passes a drag emits are immediate and settle at once, so the misread costs nothing until the
+one ANIMATED pass at lift inherits it — which is why it looks like a dismissal-only defect.
+`.exit`, `.transient` and `.ghostBlock` are excluded for the same reason (`shiftExitOverlayChildren`
+rebases every overlay child's `position.y` from `render()`, which a scroll rebalance reaches without a
+pass); no defect has been observed there, but the property this samples is not true of them either.
+Note "committed" is not the bar and could not be: a base written last turn may not have been PRESENTED
+when this turn samples, so a per-frame-written base can never be differenced against `presentation()`.
+`AttachmentResumeBaseTests` locks both the seam and the rendered position; it needs a scene-attached
+window, since a windowless fixture resolves no presentation layer and passes vacuously.
+
 **`.positionY` is answered too, but from a snapshot taken at PASS ENTRY, never sampled in the
 provider.** An additive contribution is `presented − the base the render tree was committed against`,
 and the only handle on that base is the layer's model value. A pass overwrites it long before any
