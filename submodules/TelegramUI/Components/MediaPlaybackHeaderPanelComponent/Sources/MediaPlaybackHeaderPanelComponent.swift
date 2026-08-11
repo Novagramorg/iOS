@@ -115,7 +115,7 @@ public final class MediaPlaybackHeaderPanelComponent: Component {
                 let delayedStatus = component.context.sharedContext.mediaManager.globalMediaPlayerState
                 |> mapToSignal { value -> Signal<(Account, SharedMediaPlayerItemPlaybackStateOrLoading, MediaManagerPlayerType)?, NoError> in
                     guard let value = value else {
-                        return .single(nil)
+                        return .complete()
                     }
                     switch value.1 {
                     case .state:

@@ -237,6 +237,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     
     private var tempFile: EngineTempBoxFile?
     private var disposeTrustedDomain: (() -> Void)?
+    private var pendingMainFrameUrl: URL?
     
     init(context: AccountContext, presentationData: PresentationData, url: String, preferredConfiguration: WKWebViewConfiguration? = nil) {
         self.context = context
@@ -334,6 +335,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
         
         self._state = BrowserContentState(title: title, url: url, estimatedProgress: 0.1, readingProgress: 0.0, contentType: .webPage)
         self.statePromise = Promise<BrowserContentState>(self._state)
+        self.pendingMainFrameUrl = request?.url
         
         super.init(frame: .zero)
         
@@ -920,6 +922,13 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
             self.ignoreUpdatesUntilScrollingStopped = true
         }
     }
+
+    private func updatePendingMainFrameUrl(for navigationAction: WKNavigationAction) {
+        guard navigationAction.targetFrame?.isMainFrame == true, let url = navigationAction.request.url, let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
+            return
+        }
+        self.pendingMainFrameUrl = url
+    }
         
     @available(iOS 13.0, *)
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences, decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
@@ -951,10 +960,12 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
                         }
                         self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: true, presentationData: self.presentationData, navigationController: nil, dismissInput: {})
                     } else {
+                        self.updatePendingMainFrameUrl(for: navigationAction)
                         decisionHandler(.allow, preferences)
                     }
                 }
             } else {
+                self.updatePendingMainFrameUrl(for: navigationAction)
                 decisionHandler(.allow, preferences)
             }
         }
@@ -992,9 +1003,11 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
                 self.minimize()
                 self.openAppUrl(url)
             } else {
+                self.updatePendingMainFrameUrl(for: navigationAction)
                 decisionHandler(.allow)
             }
         } else {
+            self.updatePendingMainFrameUrl(for: navigationAction)
             decisionHandler(.allow)
         }
     }
@@ -1077,9 +1090,13 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
             completionHandler(.performDefaultHandling, nil)
             return
         }
+        let topLevelUrl = self.pendingMainFrameUrl ?? webView.url
+        guard browserHTTPAuthChallengeMatchesTopLevelOrigin(topLevelUrl: topLevelUrl, protectionSpace: challenge.protectionSpace) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
         var completed = false
-                
-        let host = webView.url?.host ?? ""
+        let host = challenge.protectionSpace.host
         
         let authController = authController(
             sharedContext: self.context.sharedContext,
@@ -1119,6 +1136,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     private var instantPageResources: [Any]?
     
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        self.pendingMainFrameUrl = nil
         if let _ = self.currentError {
             self.currentError = nil
             if let (size, insets, fullInsets, safeInsets) = self.validLayout {
@@ -1364,6 +1382,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     
     
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        self.pendingMainFrameUrl = nil
         if [-1003, -1100].contains((error as NSError).code) {
             if let url = (error as NSError).userInfo["NSErrorFailingURLKey"] as? URL, url.absoluteString.hasPrefix("itms-appss:") {
             } else {

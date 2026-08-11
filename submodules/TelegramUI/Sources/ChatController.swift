@@ -4363,7 +4363,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     window.rootViewController?.present(controller, animated: true)
                 }
             case .speak:
-                if let speechHolder = speakText(context: self.context, text: text.string) {
+                if let speechHolder = speakText(text: text.string) {
                     speechHolder.completion = { [weak self, weak speechHolder] in
                         if let self, self.currentSpeechHolder == speechHolder {
                             self.currentSpeechHolder = nil

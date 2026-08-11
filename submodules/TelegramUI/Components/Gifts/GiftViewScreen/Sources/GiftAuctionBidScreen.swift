@@ -7,6 +7,7 @@ import ComponentFlow
 import AccountContext
 import ViewControllerComponent
 import TelegramCore
+import TelegramNotices
 import SwiftSignalKit
 import Display
 import MultilineTextComponent
@@ -2050,28 +2051,36 @@ private final class GiftAuctionBidScreenComponent: Component {
                         if !isFirstTime {
                             if let bidPeerId = previousState?.myState.bidPeerId, let controller = self.environment?.controller() {
                                 if let navigationController = controller.navigationController as? NavigationController {
-                                    var controllers = navigationController.viewControllers
-                                    controllers = controllers.filter { !($0 is GiftAuctionBidScreen) && !($0 is GiftSetupScreenProtocol) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
-                                                                        
-                                    var foundController = false
-                                    for controller in controllers.reversed() {
-                                        if let chatController = controller as? ChatController, case .peer(id: bidPeerId) = chatController.chatLocation {
+                                    let navigateToChat = {
+                                        var controllers = navigationController.viewControllers
+                                        controllers = controllers.filter { !($0 is GiftAuctionBidScreen) && !($0 is GiftSetupScreenProtocol) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
+                                                                            
+                                        var foundController = false
+                                        for controller in controllers.reversed() {
+                                            if let chatController = controller as? ChatController, case .peer(id: bidPeerId) = chatController.chatLocation {
+                                                chatController.hintPlayNextOutgoingGift()
+                                                foundController = true
+                                                break
+                                            }
+                                        }
+                                        if !foundController {
+                                            let chatController = component.context.sharedContext.makeChatController(context: component.context, chatLocation: .peer(id: bidPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
                                             chatController.hintPlayNextOutgoingGift()
-                                            foundController = true
-                                            break
+                                            controllers.append(chatController)
+                                        }
+                                        navigationController.setViewControllers(controllers, animated: true)
+                                        
+                                        for controller in controllers {
+                                            if controller is MinimizableController {
+                                                controller.dismiss(animated: true)
+                                            }
                                         }
                                     }
-                                    if !foundController {
-                                        let chatController = component.context.sharedContext.makeChatController(context: component.context, chatLocation: .peer(id: bidPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
-                                        chatController.hintPlayNextOutgoingGift()
-                                        controllers.append(chatController)
-                                    }
-                                    navigationController.setViewControllers(controllers, animated: true)
-                                    
-                                    for controller in controllers {
-                                        if controller is MinimizableController {
-                                            controller.dismiss(animated: true)
-                                        }
+                                    if bidPeerId.namespace == Namespaces.Peer.CloudUser {
+                                        let _ = (ApplicationSpecificNotice.incrementDismissedBirthdayPremiumGiftTip(accountManager: component.context.sharedContext.accountManager, peerId: bidPeerId, timestamp: Int32(Date().timeIntervalSince1970))
+                                        |> deliverOnMainQueue).startStandalone(completed: navigateToChat)
+                                    } else {
+                                        navigateToChat()
                                     }
                                 }
                             } else {

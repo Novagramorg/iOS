@@ -188,10 +188,12 @@ public extension PeerInfoScreenImpl {
                     }
                     return nil
                 },
-                willComplete: { [weak parentController] image, isVideo, commit in
+                willComplete: { [weak parentController] image, isVideo, commit, cancel in
                     if let confirmationAlert, let image {
                         let controller = photoUpdateConfirmationController(context: context, peer: peer, image: image, text: isVideo ? confirmationAlert.videoText : confirmationAlert.photoText, doneTitle: confirmationAlert.action, commit: {
                             commit()
+                        }, onCancel: {
+                            cancel()
                         })
                         parentController?.presentInGlobalOverlay(controller)
                     } else {
@@ -618,10 +620,12 @@ extension PeerInfoScreenImpl {
                         }
                         return nil
                     },
-                    willComplete: { [weak self, weak parentController] image, isVideo, commit in
+                    willComplete: { [weak self, weak parentController] image, isVideo, commit, cancel in
                         if let self, let confirmationAlert, let image {
                             let controller = photoUpdateConfirmationController(context: self.context, peer: peer, image: image, text: isVideo ? confirmationAlert.videoText : confirmationAlert.photoText, doneTitle: confirmationAlert.action, commit: {
                                 commit()
+                            }, onCancel: {
+                                cancel()
                             })
                             parentController?.presentInGlobalOverlay(controller)
                         } else {

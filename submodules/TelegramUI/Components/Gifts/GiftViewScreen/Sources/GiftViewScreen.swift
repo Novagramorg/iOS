@@ -1900,28 +1900,36 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 }
                             })
                         } else {
-                            var controllers = Array(navigationController.viewControllers.prefix(1))
-                            let chatController = context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: recipientPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
-                            chatController.hintPlayNextOutgoingGift()
-                            controllers.append(chatController)
-                            navigationController.setViewControllers(controllers, animated: true)
-                            
-                            Queue.mainQueue().after(0.5, {
-                                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
-                                |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
-                                    if let peer, let lastController = navigationController?.viewControllers.last as? ViewController, let animationFile {
-                                        let resultController = UndoOverlayController(
-                                            presentationData: presentationData,
-                                            content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_Success_Title, text: presentationData.strings.Gift_View_Resale_Success_Text(peer.compactDisplayTitle).string, undoText: nil, customAction: nil),
-                                            elevatedLayout: !(lastController is ChatController),
-                                            action: {  _ in
-                                                return true
-                                            }
-                                        )
-                                        lastController.present(resultController, in: .current)
-                                    }
+                            let navigateToChat = {
+                                var controllers = Array(navigationController.viewControllers.prefix(1))
+                                let chatController = context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: recipientPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
+                                chatController.hintPlayNextOutgoingGift()
+                                controllers.append(chatController)
+                                navigationController.setViewControllers(controllers, animated: true)
+                                
+                                Queue.mainQueue().after(0.5, {
+                                    let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
+                                    |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
+                                        if let peer, let lastController = navigationController?.viewControllers.last as? ViewController, let animationFile {
+                                            let resultController = UndoOverlayController(
+                                                presentationData: presentationData,
+                                                content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_Success_Title, text: presentationData.strings.Gift_View_Resale_Success_Text(peer.compactDisplayTitle).string, undoText: nil, customAction: nil),
+                                                elevatedLayout: !(lastController is ChatController),
+                                                action: {  _ in
+                                                    return true
+                                                }
+                                            )
+                                            lastController.present(resultController, in: .current)
+                                        }
+                                    })
                                 })
-                            })
+                            }
+                            if recipientPeerId.namespace == Namespaces.Peer.CloudUser {
+                                let _ = (ApplicationSpecificNotice.incrementDismissedBirthdayPremiumGiftTip(accountManager: context.sharedContext.accountManager, peerId: recipientPeerId, timestamp: Int32(Date().timeIntervalSince1970))
+                                |> deliverOnMainQueue).startStandalone(completed: navigateToChat)
+                            } else {
+                                navigateToChat()
+                            }
                         }
                     }
                 }

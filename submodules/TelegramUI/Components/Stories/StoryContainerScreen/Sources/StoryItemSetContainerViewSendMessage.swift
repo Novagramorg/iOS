@@ -53,6 +53,7 @@ import ChatSendStarsScreen
 import AnimatedTextComponent
 import ChatSendAsContextMenu
 import ShareWithPeersScreen
+import UrlEscaping
 import AlertComponent
 import ShareController
 
@@ -3694,14 +3695,16 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         case .reaction:
             return
         case let .link(_, url):
+            let concealed = !doesUrlMatchText(url: url, text: url, fullText: url)
+            let displayUrl = URL(string: url)?.absoluteString ?? url
             let action = {
-                let _ = component.context.sharedContext.openUserGeneratedUrl(context: component.context, peerId: component.slice.effectivePeer.id, url: url, webpage: nil, concealed: false, forceConcealed: false, skipUrlAuth: false, skipConcealedAlert: false, forceDark: true, present: { [weak controller] c in
+                let _ = component.context.sharedContext.openUserGeneratedUrl(context: component.context, peerId: component.slice.effectivePeer.id, url: url, webpage: nil, concealed: concealed, forceConcealed: false, skipUrlAuth: false, skipConcealedAlert: false, forceDark: true, present: { [weak controller] c in
                     controller?.present(c, in: .window(.root))
                 }, openResolved: { [weak self, weak view] resolved in
                     guard let self, let view else {
                         return
                     }
-                    self.openResolved(view: view, result: resolved, forceExternal: false, concealed: false)
+                    self.openResolved(view: view, result: resolved, forceExternal: false, concealed: concealed)
                 }, progress: nil, alertDisplayUpdated: { [weak self, weak view] alertController in
                     guard let self, let view else {
                         return
@@ -3714,7 +3717,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                 action()
                 return
             }
-            actions.append(ContextMenuAction(content: .textWithSubtitleAndIcon(title: updatedPresentationData.initial.strings.Story_ViewLink, subtitle: url, icon: generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: .white)), action: {
+            actions.append(ContextMenuAction(content: .textWithSubtitleAndIcon(title: updatedPresentationData.initial.strings.Story_ViewLink, subtitle: displayUrl, icon: generateTintedImage(image: UIImage(bundleImageName: "Settings/TextArrowRight"), color: .white)), action: {
                 action()
             }))
         case .weather:

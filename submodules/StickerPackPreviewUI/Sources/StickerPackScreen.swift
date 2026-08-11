@@ -2117,7 +2117,7 @@ private final class StickerPackContainer: ASDisplayNode {
                             buttonTitle = self.presentationData.strings.Common_Done
                         } else {
                             buttonTitle = self.presentationData.strings.StickerPack_EditStickers
-                            buttonBackgroundColor = self.presentationData.theme.list.itemAccentColor.withAlphaComponent(0.0)
+                            buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor.withAlphaComponent(0.0)
                             buttonForegroundColor = self.presentationData.theme.list.itemAccentColor
                         }
                     } else {
