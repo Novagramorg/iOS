@@ -15,13 +15,19 @@ public final class InstantPageInlineButtonAttachment: NSObject {
     public let size: CGSize
     public let ascent: CGFloat
     public let descent: CGFloat
+    /// The per-side horizontal padding `size` was inflated by — inline pills and block-row pills use
+    /// different values. LOAD-BEARING: `instantPageButtonLabelOrigin` recovers the label's ink width as
+    /// `size.width − 2 × padding`, so reading a global here instead of the value that actually built
+    /// `size` would silently mis-centre the label (and the emoji squares derived from it).
+    public let horizontalPadding: CGFloat
 
-    public init(button: InstantPageButton, labelString: NSAttributedString, size: CGSize, ascent: CGFloat, descent: CGFloat) {
+    public init(button: InstantPageButton, labelString: NSAttributedString, size: CGSize, ascent: CGFloat, descent: CGFloat, horizontalPadding: CGFloat) {
         self.button = button
         self.labelString = labelString
         self.size = size
         self.ascent = ascent
         self.descent = descent
+        self.horizontalPadding = horizontalPadding
     }
 }
 
@@ -30,6 +36,10 @@ public final class InstantPageInlineButtonAttachment: NSObject {
 /// inflation; a button wants noticeably more horizontal room than a highlight.
 public let instantPageInlineButtonHorizontalPadding: CGFloat = 7.0
 public let instantPageInlineButtonVerticalPadding: CGFloat = 1.0
+
+/// A block-row pill is a standalone touch target rather than a word inside a line, so it carries
+/// noticeably more horizontal room than an inline `textButton`.
+public let instantPageBlockButtonHorizontalPadding: CGFloat = 19.0
 
 /// Extra gap between two *directly adjacent* pills — two `textButton`s with no rich text between
 /// them. Without it they touch: each pill's width lives entirely on its placeholder's CTRunDelegate,
@@ -179,8 +189,8 @@ private func instantPageButtonTruncatedLabel(_ labelString: NSAttributedString, 
 /// `maxWidth` caps the whole pill. A pill wider than the line it sits on cannot be moved anywhere by
 /// the line-breaker's re-break (that path requires the line to hold more than the pill), so the label
 /// is truncated with an ellipsis instead of overflowing. Pass nil for no cap.
-public func instantPageInlineButtonAttachment(button: InstantPageButton, labelString: NSAttributedString, maxWidth: CGFloat? = nil) -> InstantPageInlineButtonAttachment {
-    let hPad = instantPageInlineButtonHorizontalPadding
+public func instantPageInlineButtonAttachment(button: InstantPageButton, labelString: NSAttributedString, maxWidth: CGFloat? = nil, horizontalPadding: CGFloat = instantPageInlineButtonHorizontalPadding) -> InstantPageInlineButtonAttachment {
+    let hPad = horizontalPadding
     let vPad = instantPageInlineButtonVerticalPadding
 
     // MUST run before truncation and before measurement: the ellipsis cut and the returned
@@ -199,7 +209,8 @@ public func instantPageInlineButtonAttachment(button: InstantPageButton, labelSt
         labelString: effectiveLabel,
         size: CGSize(width: labelWidth + hPad * 2.0, height: labelAscent + labelDescent + vPad * 2.0),
         ascent: labelAscent + vPad,
-        descent: labelDescent + vPad
+        descent: labelDescent + vPad,
+        horizontalPadding: hPad
     )
 }
 
@@ -259,8 +270,8 @@ func instantPageInlineButtonSpacerString(attributes: [NSAttributedString.Key: An
 func instantPageButtonLabelOrigin(attachment: InstantPageInlineButtonAttachment, pillSize: CGSize) -> CGPoint {
     // Horizontally centre the label: for an inline pill this equals the padding, but a row pill's
     // frame is stretched to an equal column width, so the label must centre within it.
-    let labelWidth = attachment.size.width - instantPageInlineButtonHorizontalPadding * 2.0
-    let x = max(instantPageInlineButtonHorizontalPadding, (pillSize.width - labelWidth) / 2.0)
+    let labelWidth = attachment.size.width - attachment.horizontalPadding * 2.0
+    let x = max(attachment.horizontalPadding, (pillSize.width - labelWidth) / 2.0)
     // Vertically: `attachment.ascent` is the baseline's distance from the pill top for an inline
     // pill. A row pill has a fixed taller height, so centre the label's box instead.
     let labelBoxHeight = attachment.ascent + attachment.descent
