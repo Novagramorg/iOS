@@ -374,7 +374,7 @@ extension ChatControllerImpl {
                 if !premiumGiftOptions.isEmpty {
                     buttons.insert(.gift, at: 1)
                 }
-                buttons.insert(.richText, at: 1)   // rich text is default-on (legacy is the opt-out)
+                buttons.append(.richText)
                 
                 guard let initialButton = initialButton else {
                     if case let .bot(botId, botPayload, botJustInstalled) = subject {

@@ -72,6 +72,9 @@ public class ChatMessageBackground: ASDisplayNode {
     private var imageFrame: CGRect?
     private var imageView: UIImageView?
     private var imageViewImage: UIImage?
+
+    private var tearBands: [BubbleTearBand] = []
+    private var tearMaskView: BubbleTearMaskView?
     
     public var customHighlightColor: UIColor? {
         didSet {
@@ -118,22 +121,67 @@ public class ChatMessageBackground: ASDisplayNode {
             transition.updateFrame(view: imageView, frame: imageFrame)
         }
         transition.updateFrame(node: self.outlineImageNode, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -1.0, dy: -1.0))
+        self.updateTearMask(size: size, animation: .None)
     }
-    
+
     public func updateLayout(size: CGSize, transition: ListViewItemUpdateAnimation) {
         let imageFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: -1.0, dy: -1.0)
         self.imageFrame = imageFrame
         if let imageView = self.imageView {
             transition.animator.updateFrame(layer: imageView.layer, frame: imageFrame, completion: nil)
         }
-        
+
         transition.animator.updateFrame(layer: self.outlineImageNode.layer, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -1.0, dy: -1.0), completion: nil)
+        self.updateTearMask(size: size, animation: transition)
     }
-    
+
     public func setMaskMode(_ maskMode: Bool) {
         if let type = self.type, let hasWallpaper = self.hasWallpaper, let highlighted = self.currentHighlighted, let graphics = self.graphics, let backgroundNode = self.backgroundNode {
             self.setType(type: type, highlighted: highlighted, graphics: graphics, maskMode: maskMode, hasWallpaper: hasWallpaper, transition: .immediate, backgroundNode: backgroundNode)
         }
+    }
+
+    /// Cuts full-width bands out of the bubble. Bands are in this node's own coordinate space and
+    /// must already have been through `resolveBubbleTearBands`.
+    public func setTearBands(_ bands: [BubbleTearBand], animation: ListViewItemUpdateAnimation) {
+        self.tearBands = bands
+        self.updateTearMask(size: self.bounds.size, animation: animation)
+    }
+
+    /// `size` is passed rather than read from `bounds` because the layout passes above set the
+    /// node's own frame afterwards — reading `bounds` here would mask against the previous size.
+    private func updateTearMask(size: CGSize, animation: ListViewItemUpdateAnimation) {
+        if self.tearBands.isEmpty {
+            if let tearMaskView = self.tearMaskView {
+                self.tearMaskView = nil
+                self.view.mask = nil
+                tearMaskView.removeFromSuperview()
+            }
+            return
+        }
+
+        let tearMaskView: BubbleTearMaskView
+        if let current = self.tearMaskView {
+            tearMaskView = current
+        } else if let created = BubbleTearMaskView.make() {
+            tearMaskView = created
+            self.tearMaskView = created
+            self.view.mask = created
+        } else {
+            // No `luminanceToAlpha` on this build: leave the bubble whole rather than mask it with
+            // a surface that cannot punch holes.
+            return
+        }
+
+        // The image view and the outline node are both inset by -1, and a mask layer clips to its
+        // own bounds, so the mask has to cover more than `bounds`.
+        let maskFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: -bubbleTearMaskInset, dy: -bubbleTearMaskInset)
+        tearMaskView.frame = maskFrame
+        tearMaskView.update(
+            bands: self.tearBands.map { $0.offsetBy(dx: -maskFrame.minX, dy: -maskFrame.minY) },
+            tailInsets: BubbleTearTailInsets(type: self.type ?? .none),
+            animation: animation
+        )
     }
     
     public func currentCorners(bubbleCorners: PresentationChatBubbleCorners) -> (topLeftRadius: CGFloat, topRightRadius: CGFloat, bottomLeftRadius: CGFloat, bottomRightRadius: CGFloat, drawTail: Bool)? {
@@ -502,8 +550,16 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
     private var essentialGraphics: PrincipalThemeEssentialGraphics?
     private weak var backgroundNode: WallpaperBackgroundNode?
     
-    public var maskView: UIImageView?
+    // Not a bare `UIImageView` any more: when the bubble is torn this view also carries the
+    // `luminanceToAlpha` filter and the black bands. See `BubbleBackdropMaskView`.
+    //
+    // Still public — `ChatMessageInstantVideoBubbleContentNode` sets `overrideMask` and adds its
+    // own round `BubbleMaskLayer` as a sublayer here. That keeps working: the extra layer lands
+    // above the (now empty) shape image, and an instant-video bubble never carries unsupported
+    // content, so it is never torn and never filtered.
+    public var maskView: BubbleBackdropMaskView?
     private var fixedMaskMode: Bool?
+    private var tearBands: [BubbleTearBand] = []
 
     
     public var overrideMask: Bool = false {
@@ -541,6 +597,27 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
             self.setType(type: currentType, theme: theme, essentialGraphics: essentialGraphics, maskMode: maskMode, backgroundNode: backgroundNode)
         }
     }
+
+    /// Cuts full-width bands out of the wallpaper backdrop. Bands are in this node's own
+    /// coordinate space and must already have been through `resolveBubbleTearBands`.
+    public func setTearBands(_ bands: [BubbleTearBand], animation: ListViewItemUpdateAnimation) {
+        self.tearBands = bands
+        self.updateTearBands(animation: animation)
+    }
+
+    private func updateTearBands(animation: ListViewItemUpdateAnimation) {
+        guard let maskView = self.maskView else {
+            return
+        }
+        // The mask sits at `bounds.insetBy(-maskInset, -maskInset)`, so its origin is a constant
+        // (-1, -1) offset from the node's own space regardless of size.
+        let maskOrigin = maskView.frame.origin
+        maskView.update(
+            bands: self.tearBands.map { $0.offsetBy(dx: -maskOrigin.x, dy: -maskOrigin.y) },
+            tailInsets: BubbleTearTailInsets(type: self.currentType ?? .none),
+            animation: animation
+        )
+    }
         
     public func setType(type: ChatMessageBackgroundType, theme: ChatPresentationThemeData, essentialGraphics: PrincipalThemeEssentialGraphics, maskMode inputMaskMode: Bool, backgroundNode: WallpaperBackgroundNode?) {
         let maskMode = self.fixedMaskMode ?? inputMaskMode
@@ -557,11 +634,11 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
                 self.currentMaskMode = maskMode
                 
                 if maskMode {
-                    let maskView: UIImageView
+                    let maskView: BubbleBackdropMaskView
                     if let current = self.maskView {
                         maskView = current
                     } else {
-                        maskView = UIImageView()
+                        maskView = BubbleBackdropMaskView()
                         maskView.frame = self.bounds.insetBy(dx: -maskInset, dy: -maskInset)
                         self.maskView = maskView
                         self.view.mask = maskView
@@ -605,6 +682,9 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
             if let maskView = self.maskView {
                 maskView.image = self.overrideMask ? nil : bubbleMaskForType(type, graphics: essentialGraphics)
             }
+
+            // A mask created or re-imaged just now has no bands yet.
+            self.updateTearBands(animation: .None)
         }
     }
         

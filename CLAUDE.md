@@ -231,6 +231,14 @@ travel as `inlineButtonMaxWidth`, forwarded through all 31 recursive
 the inline-image clamp. Deferred: markdown-edit data loss, tapping an already-downloaded document,
 and `checkboxFill`/`checkboxForeground` being misnamed (they are the `.primary` button colours).
 
+**Unsupported blocks** — every block this build cannot decode arrives as
+`InstantPageBlock.unsupported`, and V2 now renders it as the shared "please update" pill from
+`submodules/TelegramUI/Components/UnsupportedContentPill`, which the chat's standalone
+unsupported-media bubble also draws (its constants are load-bearing for that bubble's appearance).
+A run of adjacent unsupported blocks collapses to one pill, and the chat wallpaper reaches the
+renderer through `InstantPageV2RenderContext.wallpaperBackgroundNode`. Details in
+[`docs/instantpage-richtext.md`](docs/instantpage-richtext.md) under "Unsupported blocks".
+
 ## Postbox → TelegramEngine refactor (in progress)
 
 A gradual migration is underway to eliminate direct `import Postbox` from consumer submodules in favor of `TelegramEngine`.

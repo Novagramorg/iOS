@@ -926,6 +926,102 @@ related, a fixed radius rather than `height / 2` is the lever.
   only `rootMediaRegistryHost` is pushed down, by `propagateRegistryHost`. Pre-existing; unrelated to
   the loading effect, but it is why a nested button does nothing at all.
 
+## Unsupported blocks (InstantPageBlock.unsupported)
+
+Every block this build cannot decode arrives as `InstantPageBlock.unsupported` — it is the
+`default:` arm of the API-block conversion in `SyncCore_InstantPage.swift`, so a page authored
+against a newer server is a page full of them. V2 renders each as the shared "please update" pill;
+V1 Instant View still skips the block.
+
+The pill is the same component the chat's standalone unsupported-media bubble draws:
+`submodules/TelegramUI/Components/UnsupportedContentPill`. Its constants are a literal port of that
+bubble's geometry and are load-bearing for its appearance — changing one changes every unsupported
+message in the app.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/TelegramUI/Components/UnsupportedContentPill/Sources/UnsupportedContentPill.swift` | `UnsupportedContentPillStrings` / `Colors` / `Layout`, and the single `measureUnsupportedContentPill(...)` both the pure layout pass and the view run. |
+| `.../UnsupportedContentPillView.swift` | The view: badge, text column, action button, and either a `.free` wallpaper bubble background or the static `colors.fill`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedItem.swift` | `InstantPageV2UnsupportedItem`, `redundantUnsupportedBlockIndices(_:)`, `layoutUnsupportedBlock(...)`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedView.swift` | `InstantPageV2UnsupportedView` — the V2 item view wrapping the pill. |
+| `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `unsupportedPillFillColor` / `unsupportedPillPrimaryColor` and the derived `unsupportedPillColors`. |
+
+### Non-obvious invariants
+
+- **A maximal run of adjacent `.unsupported` blocks renders as ONE pill.** `layoutBlockSequence`
+  consults `redundantUnsupportedBlockIndices` in every sequence, nested ones included. It reports
+  indices to **skip** rather than returning a filtered array, because the loop index becomes
+  `pathPrefix + [i]` — the structural path checkbox toggling and anchors address blocks by.
+  Filtering would renumber every block after a collapsed run and silently toggle the wrong checkbox.
+- **The layout value carries geometry only.** `TextNode.asyncLayout(nil)`'s apply creates a *new*
+  node per call and the chat bubble re-lays out on every apply, so the view instead owns its three
+  text nodes and re-derives them through the same measure function. `constrainedWidth` travels on
+  the layout so the view can reproduce the host's measure pass exactly.
+- **Colours travel on `InstantPageTheme` and MUST be listed in `withUpdatedFontStyles`.** That
+  method reconstructs the theme field by field; an omitted field silently reverts to its init
+  default the first time the reader changes Instant View font size. Nothing warns; it compiles.
+- **The wallpaper travels as `InstantPageV2RenderContext.wallpaperBackgroundNode`, a closure.** A
+  closure so a message-scoped context does not retain the chat's background node. No absolute-rect
+  plumbing exists or is needed: `WallpaperBubbleBackgroundNode` is a portal view that mirrors its
+  source, so setting the frame is the whole contract.
+- **The Update button is always rendered.** `InstantPageV2View.unsupportedActionTapped` is nil in
+  the send preview, the text-processing screen and the formula editor, where the tap is inert — the
+  alternative (hiding it) would change the pill's width between preview and sent message.
+- **Reveal cost is `.nonText`.** The pill pops in atomically with its position in the stream, like a
+  button row.
+
+### Tearing the bubble across a pill
+
+In a chat bubble the pill does not sit *on* the bubble — the bubble background is **torn** across
+it: a full-width band is cut out, so the pill's content floats over the chat wallpaper.
+
+The band travels as geometry, not as a flag. `unsupportedContentTearZones(in:)` reads the
+**top-level** `.unsupportedContent` items of a laid-out page and pads each by
+`instantPageUnsupportedTearPadding` (6pt). `ChatMessageRichDataBubbleContentNode` maps them into its
+own space through `ChatMessageBubbleContentNode.unsupportedContentAreas()`, and
+`ChatMessageBubbleItemNode` collects them during its content-node layout loop, resolves them **once**
+with `resolveBubbleTearZones`, and hands the same bands to both `ChatMessageBackground` and
+`ChatMessageBubbleBackdrop`.
+
+Load-bearing details:
+
+- **Top level only, and the flag is what enforces it** — not the non-recursive walk. A blockquote
+  (and a list) lays its children out with `layoutBlock` and appends the resulting items straight
+  into its PARENT's array, offset, so a quoted pill sits in `layout.items` looking exactly like a
+  top-level one. `InstantPageV2UnsupportedItem.isTopLevel` is recorded during layout — the last
+  point that still knows the difference — as `pathPrefix.count == 1`. Depth, not `kind`: a
+  blockquote lays its children out with the *enclosing* sequence's kind, so `kind` cannot tell.
+  Not recursing merely keeps the walk cheap; it excludes only the containers that build a sub-layout
+  of their own (`details`, table cells).
+- **The mask is subtractive via `CALayer.luminanceToAlpha()`**: a **white** surface with **black**
+  bands. The backdrop's existing mask is the **black**-filled `bubbleMaskForType` image, which works
+  only because a `CALayer` mask reads alpha and ignores colour — so it cannot simply be filtered,
+  which would map it to alpha 0 and erase the whole backdrop. `BubbleBackdropMaskView` re-renders it
+  as a white `.alwaysTemplate` image when torn (alpha and stretch caps both survive template
+  rendering) and drops back to the plain image when not, so the filter is never installed on the
+  bubbles that are never torn.
+- **`luminanceToAlpha` is a private `CAFilter` and can be nil.** Then the bubble renders **untorn** —
+  never masked by a surface that would hide it.
+- **A residual run of bubble ≤ 8pt** at the top or bottom is absorbed into the band, so a message
+  whose only content is an unsupported block has no bubble at all. The band merge runs **twice** in
+  `resolveBubbleTearZones` because absorption can pull two bands to the same edge and make them
+  touch when they did not before.
+- **`ChatMessageBackground.updateTearMask` takes the size as a parameter** rather than reading
+  `self.bounds`: the layout passes set the node's own frame *after* calling it.
+- **`ChatMessageShadowNode` and `backgroundHighlightNode` are deliberately NOT torn.** The shadow is
+  only drawn in the context-menu preview; the highlight is the ~0.3s jump-to-message flash and does
+  paint over the gaps briefly.
+- **`ChatMessageBubbleBackdrop.maskView` stays public** and is now a `BubbleBackdropMaskView`.
+  `ChatMessageInstantVideoBubbleContentNode` sets `overrideMask` and hangs its own round
+  `BubbleMaskLayer` on that view's layer; that still works, because the extra layer lands above the
+  now-empty shape image and an instant-video bubble is never torn.
+- **With a patterned or gradient wallpaper the pill's own portal background and the torn gap are the
+  same pixels**, so the pill's card vanishes and only its badge and text read. That is the intended
+  effect and is why the band is full-width. With a plain-colour theme the pill keeps its faint
+  service fill and still reads as a card.
+
 ## InstantPage thinking blocks (InstantPageBlock.thinking)
 
 `InstantPageBlock.thinking(RichText)` renders server-sent reasoning as dimmed, continuously-shimmering text inside rich-data bubbles. V2 renderer only; V1 ignores the block (returns `[]`). The shimmer and fade-in mechanics are deliberately separate from the char-reveal cursor so thinking blocks do not affect the reveal pacing of the answer content that follows them.

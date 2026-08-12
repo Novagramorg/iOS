@@ -5153,6 +5153,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         var shouldClipOnTransitions = true
+        var unsupportedZones: [CGRect] = []
         var contentNodeIndex = 0
         for (relativeFrame, properties, useContentOrigin, apply) in contentNodeFramesPropertiesAndApply {
             apply(animation, synchronousLoads, applyInfo)
@@ -5249,8 +5250,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 contentNode.frame = contentNodeFrame
             }
             
+            // Read after this node's `apply` (called at the top of this iteration) and after its
+            // frame is settled, so both the node's page layout and its position are current.
+            // `contentNodeFrame` is in the item node's own space — `contentOrigin` is derived from
+            // `backgroundFrame.origin` — which is the space `backgroundFrame` is in.
+            for area in contentNode.unsupportedContentAreas() {
+                unsupportedZones.append(area.offsetBy(dx: contentNodeFrame.minX, dy: contentNodeFrame.minY))
+            }
+
             contentNode.visibility = mapVisibility(strongSelf.visibility, boundsSize: layout.contentSize, insets: strongSelf.insets, to: contentNode)
-            
+
             contentNodeIndex += 1
         }
         
@@ -5667,7 +5676,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 strongSelf.updateAbsoluteRect(rect, within: size)
             }
         }
-        
+
+        // Outside both branches on purpose: the animated one only touches the background when the
+        // frame CHANGED, and a tear can move while the bubble does not.
+        strongSelf.updateBackgroundTear(unsupportedZones, backgroundFrame: backgroundFrame, animation: animation)
+
         let previousContextContentFrame = strongSelf.mainContextSourceNode.contentRect
         strongSelf.mainContextSourceNode.contentRect = backgroundFrame.offsetBy(dx: incomingOffset, dy: 0.0)
         strongSelf.mainContainerNode.targetNodeForActivationProgressContentRect = strongSelf.mainContextSourceNode.contentRect
@@ -7266,7 +7279,24 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         rect.origin.y = containerSize.height - rect.maxY + self.insets.top
         self.updateAbsoluteRectInternal(rect, within: containerSize)
     }
-    
+
+    /// Cuts a full-width band out of the bubble background wherever a content node reports content
+    /// it cannot render, so the "please update" pill sits in a gap rather than on top of the
+    /// bubble.
+    ///
+    /// Resolved ONCE here and handed to both surfaces. Exactly one of them draws at a time — the
+    /// image-backed background for plain themes, the wallpaper backdrop for patterned and gradient
+    /// ones — but a `setTearZones` that re-resolved per surface would be a second spelling of the
+    /// policy, free to drift.
+    private func updateBackgroundTear(_ zones: [CGRect], backgroundFrame: CGRect, animation: ListViewItemUpdateAnimation) {
+        let resolved = resolveBubbleTearBands(
+            zones.map { $0.offsetBy(dx: -backgroundFrame.minX, dy: -backgroundFrame.minY) },
+            backgroundSize: backgroundFrame.size
+        )
+        self.backgroundNode.setTearBands(resolved, animation: animation)
+        self.backgroundWallpaperNode.setTearBands(resolved, animation: animation)
+    }
+
     private func updateAbsoluteRectInternal(_ rect: CGRect, within containerSize: CGSize) {
         for contentNode in self.contentNodes {
             contentNode.updateAbsoluteRect(CGRect(origin: CGPoint(x: rect.minX + contentNode.frame.minX, y: rect.minY + contentNode.frame.minY), size: rect.size), within: containerSize)
