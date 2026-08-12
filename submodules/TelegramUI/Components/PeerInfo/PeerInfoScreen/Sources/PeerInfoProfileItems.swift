@@ -1210,7 +1210,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                     }))
                 }
                 
-                if channel.hasPermission(.changeInfo) {
+                if channel.hasPermission(.manageWelcomeMessages) {
                     items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
                         interaction.editingOpenWelcomeMessages()
                     }))
@@ -1535,11 +1535,13 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                         }
                     }
                     
-                    if channel.hasPermission(.changeInfo) {
+                    if channel.hasPermission(.manageWelcomeMessages) {
                         items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
                             interaction.editingOpenWelcomeMessages()
                         }))
+                    }
 
+                    if channel.hasPermission(.changeInfo) {
                         var colors: [PeerNameColors.Colors] = []
                         if let nameColor = channel.nameColor.flatMap({ context.peerNameColors.get($0, dark: presentationData.theme.overallDarkAppearance) }) {
                             colors.append(nameColor)
@@ -1701,10 +1703,9 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
             let ItemWelcomeMessages = 112
             
             var canViewAdminsAndBanned = false
-            var canChangeInfo = false
+            let canManageWelcomeMessages = group.hasPermission(.manageWelcomeMessages)
             
             if case .creator = group.role {
-                canChangeInfo = true
                 if let cachedData = data.cachedData as? CachedGroupData {
                     if cachedData.flags.contains(.canChangeUsername) {
                         items[.peerPublicSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemUsername, label: .text(presentationData.strings.Group_Setup_TypePrivate), text: presentationData.strings.GroupInfo_GroupType, icon: PresentationResourcesSettings.groupType, action: {
@@ -1776,23 +1777,24 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 
                 canViewAdminsAndBanned = true
             } else if case let .admin(rights, _) = group.role {
-                canChangeInfo = rights.rights.contains(.canChangeInfo)
-                let label: String
-                if let cachedData = data.cachedData as? CachedGroupData, case let .known(reactionSettings) = cachedData.reactionSettings {
-                    switch reactionSettings.allowedReactions {
-                    case .all:
-                        label = presentationData.strings.PeerInfo_LabelAllReactions
-                    case .empty:
-                        label = presentationData.strings.PeerInfo_ReactionsDisabled
-                    case let .limited(reactions):
-                        label = "\(reactions.count)"
+                if rights.rights.contains(.canChangeInfo) {
+                    let label: String
+                    if let cachedData = data.cachedData as? CachedGroupData, case let .known(reactionSettings) = cachedData.reactionSettings {
+                        switch reactionSettings.allowedReactions {
+                        case .all:
+                            label = presentationData.strings.PeerInfo_LabelAllReactions
+                        case .empty:
+                            label = presentationData.strings.PeerInfo_ReactionsDisabled
+                        case let .limited(reactions):
+                            label = "\(reactions.count)"
+                        }
+                    } else {
+                        label = ""
                     }
-                } else {
-                    label = ""
+                    items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemReactions, label: .text(label), text: presentationData.strings.PeerInfo_Reactions, icon: PresentationResourcesSettings.reactions, action: {
+                        interaction.editingOpenReactionsSetup()
+                    }))
                 }
-                items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemReactions, label: .text(label), text: presentationData.strings.PeerInfo_Reactions, icon: PresentationResourcesSettings.reactions, action: {
-                    interaction.editingOpenReactionsSetup()
-                }))
                 
                 if rights.rights.contains(.canInviteUsers) {
                     let invitesText: String
@@ -1810,7 +1812,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 canViewAdminsAndBanned = true
             }
 
-            if canChangeInfo {
+            if canManageWelcomeMessages {
                 items[.peerSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemWelcomeMessages, label: welcomeMessagesLabel, text: presentationData.strings.GroupInfo_WelcomeMessages, icon: PresentationResourcesSettings.welcome, action: {
                     interaction.editingOpenWelcomeMessages()
                 }))

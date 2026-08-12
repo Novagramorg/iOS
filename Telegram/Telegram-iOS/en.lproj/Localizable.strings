@@ -8252,7 +8252,8 @@ Sorry for the inconvenience.";
 "ChatList.CloseAction" = "Close";
 
 "Channel.EditAdmin.PermissionManageTopics" = "Manage Topics";
-"Channel.EditAdmin.PermissionManageWelcomeMessages" = "Send Welcome Messages";
+"Channel.EditAdmin.PermissionManageWelcomeMessages" = "Manage Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessages" = "Send Welcome Messages";
 "Channel.EditAdmin.PermissionCreateTopics" = "Create Topics";
 
 "ChatList.Search.FilterTopics" = "Topics";
