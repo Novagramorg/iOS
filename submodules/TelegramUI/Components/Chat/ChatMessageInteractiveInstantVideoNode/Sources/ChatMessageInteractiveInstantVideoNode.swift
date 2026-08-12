@@ -347,6 +347,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             let bubbleContentInsetsLeft: CGFloat = 6.0
             let availableWidth: CGFloat = max(60.0, width - 210.0 - bubbleEdgeInset * 2.0 - bubbleContentInsetsLeft - 20.0)
             let availableContentWidth: CGFloat = width - bubbleEdgeInset * 2.0 - bubbleContentInsetsLeft - 20.0
+            var inlineBotNameString: String?
             
             if !ignoreHeaders {
                 var replyMessage: Message?
@@ -356,7 +357,6 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 var replyStory: StoryId?
                 for attribute in item.message.attributes {
                     if let attribute = attribute as? InlineBotMessageAttribute {
-                        var inlineBotNameString: String?
                         if let peerId = attribute.peerId, let bot = item.message.peers[peerId] as? TelegramUser {
                             inlineBotNameString = bot.addressName
                         } else {
@@ -372,7 +372,9 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             
                             viaBotApply = viaBotLayout(TextNodeLayoutArguments(attributedString: botString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: max(0, availableWidth), height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
                             
-                            ignoreForward = true
+                            if item.message.forwardInfo?.psaType != nil {
+                                ignoreForward = true
+                            }
                         }
                     }
                     
@@ -455,7 +457,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     }
                 }
                 let availableWidth: CGFloat = max(60.0, availableContentWidth - 220.0 + 6.0)
-                forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
+                forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType == nil ? inlineBotNameString : nil, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
             }
             
             var notConsumed = false

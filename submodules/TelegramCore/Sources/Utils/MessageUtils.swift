@@ -8,6 +8,66 @@ public extension MessageFlags {
     }
 }
 
+public struct EphemeralForwardParams {
+    public let botPeerId: PeerId?
+    public let authorId: PeerId?
+    public let sourceId: PeerId?
+    public let sourceMessageId: MessageId?
+    public let inlineBotPeerId: PeerId?
+}
+
+public func ephemeralForwardParams(_ message: Message) -> EphemeralForwardParams? {
+    guard Namespaces.Message.allEphemeral.contains(message.id.namespace) else {
+        return nil
+    }
+
+    var botPeerId: PeerId?
+    if let author = message.author as? TelegramUser, author.botInfo != nil {
+        botPeerId = author.id
+    } else {
+        for attribute in message.attributes {
+            let candidateId: PeerId?
+            if let attribute = attribute as? EphemeralMessageAttribute, attribute.receiverId != 0 {
+                candidateId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(attribute.receiverId))
+            } else if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
+                candidateId = attribute.botPeerId
+            } else {
+                candidateId = nil
+            }
+
+            if let candidateId, let candidate = message.peers[candidateId] as? TelegramUser, candidate.botInfo != nil {
+                botPeerId = candidateId
+                break
+            }
+        }
+    }
+
+    if message.id.namespace == Namespaces.Message.EphemeralLocal {
+        return EphemeralForwardParams(
+            botPeerId: botPeerId,
+            authorId: botPeerId ?? message.author?.id,
+            sourceId: nil,
+            sourceMessageId: nil,
+            inlineBotPeerId: nil
+        )
+    }
+
+    var sourceId: PeerId?
+    var sourceMessageId: MessageId?
+    if let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
+        sourceId = channel.id
+        sourceMessageId = message.id
+    }
+
+    return EphemeralForwardParams(
+        botPeerId: botPeerId,
+        authorId: botPeerId != nil ? (sourceId ?? message.author?.id) : message.author?.id,
+        sourceId: sourceId,
+        sourceMessageId: sourceMessageId,
+        inlineBotPeerId: botPeerId
+    )
+}
+
 public extension Message {
     var activeEphemeralReplacementMessage: Message? {
         for attribute in self.attributes {

@@ -5,6 +5,7 @@ public final class EphemeralMessageAttribute: MessageAttribute {
     public let receiverId: Int64
     public let isWelcomeTemplate: Bool
     public let anchorMessageId: MessageId?
+    public let isForwardingDisabled: Bool
 
     public var associatedPeerIds: [PeerId] {
         if self.receiverId == 0 {
@@ -13,10 +14,11 @@ public final class EphemeralMessageAttribute: MessageAttribute {
         return [PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(self.receiverId))]
     }
 
-    public init(receiverId: Int64, isWelcomeTemplate: Bool = false, anchorMessageId: MessageId? = nil) {
+    public init(receiverId: Int64, isWelcomeTemplate: Bool = false, anchorMessageId: MessageId? = nil, isForwardingDisabled: Bool = false) {
         self.receiverId = receiverId
         self.isWelcomeTemplate = isWelcomeTemplate
         self.anchorMessageId = anchorMessageId
+        self.isForwardingDisabled = isForwardingDisabled
     }
 
     required public init(decoder: PostboxDecoder) {
@@ -27,6 +29,7 @@ public final class EphemeralMessageAttribute: MessageAttribute {
         } else {
             self.anchorMessageId = nil
         }
+        self.isForwardingDisabled = decoder.decodeBoolForKey("nf", orElse: false)
     }
 
     public func encode(_ encoder: PostboxEncoder) {
@@ -41,6 +44,7 @@ public final class EphemeralMessageAttribute: MessageAttribute {
             encoder.encodeNil(forKey: "a.n")
             encoder.encodeNil(forKey: "a.i")
         }
+        encoder.encodeBool(self.isForwardingDisabled, forKey: "nf")
     }
 }
 

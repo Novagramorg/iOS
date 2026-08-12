@@ -581,6 +581,16 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
         }
 
         if let replacementMessage {
+            let isForwardingDisabled = (replacementMessage.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute)?.isForwardingDisabled ?? false
+            if !isForwardingDisabled && !isCopyProtected && !replacementMessage.containsSecretMedia && !replacementMessage.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent }) {
+                actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    interfaceInteraction.forwardMessages([replacementMessage])
+                    f(.dismissWithoutContent)
+                })))
+            }
+
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.contextMenu.primaryColor)
             }, action: { controller, _ in
@@ -2738,6 +2748,11 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                     }
                 }
                 if id.namespace == Namespaces.Message.EphemeralLocal {
+                    let isForwardingDisabled = (message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute)?.isForwardingDisabled ?? false
+                    let isAction = message.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent })
+                    if !isForwardingDisabled && !message.containsSecretMedia && !isAction && !isCopyProtected && !isShareProtected && !(message.flags.isSending || message.flags.contains(.Failed)) {
+                        optionsMap[id]!.insert(.forward)
+                    }
                     optionsMap[id]!.insert(.deleteLocally)
                     if message.flags.contains(.Incoming), message.attributes.contains(where: { $0 is EphemeralMessageAttribute }) {
                         optionsMap[id]!.insert(.report)
