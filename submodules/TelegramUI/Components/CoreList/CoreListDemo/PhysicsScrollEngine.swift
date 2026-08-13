@@ -28,6 +28,14 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     private var beganWasForced = false
     private var trackpadTranslationBaseline: CGFloat = 0
 
+    /// Whether the finger landed on MOVING content. Written by `noteTouchDown` and read by
+    /// `shouldBeginImmediately` one statement later, both inside the recognizer's `touchesBegan`, so it
+    /// cannot go stale between the two. It exists because those two steps now disagree about the
+    /// present: the catch runs first, so a live `flight != nil || core.isDecelerating` re-read in
+    /// `shouldBeginImmediately` would find the motion already stopped and never force the `.began` that
+    /// absorbs the tap.
+    private var caughtMovingContentAtTouchDown = false
+
     /// How a flick/bounce plays out after release. `.stepped` (default) integrates the physics on the
     /// main thread once per frame (the original behaviour); `.keyframe` precomputes the whole path and
     /// plays it as a render-server `CAKeyframeAnimation` on the host's `bounds.origin.y`, driving the
@@ -79,34 +87,32 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         core = PhysicsScrollCore(contentHost: host)
         super.init()
         pan.addTarget(self, action: #selector(handlePan(_:)))
-        // No catch here any more: when content is moving the pan now recognizes immediately
-        // (shouldBeginImmediately below) and the catch runs in handlePan(.began). Catching in
-        // onTouchDown would null the motion BEFORE shouldBeginImmediately reads it → no grab, no absorb.
-        pan.onTouchDown = { [weak self] timestamp in
-            guard let self else { return }
-            self.sawDrag = false
-            // Clear the forced-begin flag at finger-down, which runs BEFORE `shouldBeginImmediately`
-            // is consulted. Clearing it only on `.ended`/`.cancelled` would leak a stale `true` into
-            // the next gesture whenever a forced begin was then denied by `gestureRecognizerShouldBegin`
-            // (a tracking UIControl), and that gesture's natural `.began` would skip its drag sample.
-            self.beganWasForced = false
-            // `-[UIScrollView _beginTrackingWithEvent:]` — the finger landing is a different moment
-            // from the pan beginning, and it is where the repeated-flick streak is carried or
-            // expired. UIKit uses `event.timestamp`, which shares CACurrentMediaTime's timebase.
-            self.core.beginTouchTracking(at: timestamp)
-        }
+        pan.onTouchDown = { [weak self] timestamp in self?.noteTouchDown(at: timestamp) }
         pan.onTouchUp = { [weak self] in self?.handleTouchUp() }
         // Grab the scroll the instant a finger lands on MOVING content (UIScrollView's no-deadzone feel).
-        // The forced .began runs handlePan(.began) → the catch; and because the engine grants no
-        // simultaneity, UIKit's plain exclusion FAILS the content recognizer as the pan begins, so the
-        // stopping tap is absorbed instead of falling through to the row. At rest the closure is
-        // false → normal hysteresis, and the content recognizer wins on its own.
+        // The STOP already happened in `noteTouchDown`; what the forced `.began` adds is absorption —
+        // because the engine grants no simultaneity, UIKit's plain exclusion FAILS the content
+        // recognizer as the pan begins, so the stopping tap does not also fall through to the row. At
+        // rest the closure is false → normal hysteresis, and the content recognizer wins on its own.
+        //
+        // It answers from the flag `noteTouchDown` captured, NOT from live motion state: by the time
+        // UIKit consults this, one statement later, the catch has already nulled the motion.
         pan.shouldBeginImmediately = { [weak self] in
             guard let self else { return false }
-            let moving = self.flight != nil || self.core.isDecelerating
-            if moving { self.beganWasForced = true }   // a catch, not a flick start — see beganWasForced
-            return moving
+            if self.caughtMovingContentAtTouchDown {
+                self.beganWasForced = true             // a catch, not a flick start — see beganWasForced
+            }
+            return self.caughtMovingContentAtTouchDown
         }
+        // `UIScrollView` sets this false on its own pan (measured, iOS 26.2); a freshly constructed
+        // recognizer defaults to TRUE, which withholds every `UITouchPhaseEnded` from the views under
+        // the list until this pan resolves. Row recognizers are unaffected — they receive touches
+        // regardless of where hit-testing settles — but a `UIControl` inside a row reads its touch-up
+        // from the view, and chat's inline bot keyboards put real `UIButton`s in the list
+        // (`ChatMessageActionButtonsNode`); `ListViewImpl` delays none of them. Absorption does not
+        // need it either: that works by failing the content RECOGNIZER through exclusion, and
+        // `cancelsTouchesInView` still cancels the view's touch when this pan recognizes mid-drag.
+        pan.delaysTouchesEnded = false
         pan.delegate = self
         host.addGestureRecognizer(pan)
     }
@@ -146,13 +152,39 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     var decelerationStreakCount: Int { core.decelerationStreakCount }
     var decelerationStreakReset: String { core.decelerationStreakReset }
 
-    /// Touch-down bookkeeping, for a harness that drives this engine from a FOREIGN recognizer. Normal
-    /// operation reaches it through our own `pan.onTouchDown`; the A/B comparison view drives the
-    /// engine from `UIScrollView.panGestureRecognizer`, whose touches never route through that pan.
-    /// Without this the repeated-flick streak neither expires on a pause nor compounds
-    /// (`_fastScrollStartMultiplier` stays 1), so the harness would understate our own multiplier and
-    /// read as a physics difference that does not exist in the app.
-    func noteTouchDown(at timestamp: TimeInterval) { core.beginTouchTracking(at: timestamp) }
+    /// The finger landing — `-[UIScrollView _beginTrackingWithEvent:]`. A different moment from the pan
+    /// beginning: it is where the repeated-flick streak is carried or expired, and where moving content
+    /// is CAUGHT. Production reaches it through our own `pan.onTouchDown`; the A/B comparison view
+    /// drives the engine from `UIScrollView.panGestureRecognizer`, whose touches never route through
+    /// that pan, and calls this directly. Without that hookup the streak neither expires on a pause nor
+    /// compounds (`_fastScrollStartMultiplier` stays 1), so the harness would understate our own
+    /// multiplier and read as a physics difference that does not exist in the app.
+    ///
+    /// **The catch belongs here, in touch DELIVERY, and not in `handlePan(.began)`.** UIScrollView stops
+    /// its deceleration in `_beginTrackingWithEvent:` for the same reason: a recognizer's `.began` is
+    /// subject to gesture ARBITRATION, and this one cannot control who else is arbitrating. Any ancestor
+    /// that declares `shouldBeRequiredToFailBy` for pans HOLDS our forced `.began` until that recognizer
+    /// fails, and `NavigationContainer` declares exactly that for every `UIPanGestureRecognizer`
+    /// (`Display/Source/Navigation/NavigationContainer.swift:202`, and `NavigationModalContainer:147`)
+    /// — our pan IS one. Its `InteractiveTransitionGestureRecognizer` does not fail until the finger has
+    /// travelled ~2pt off-axis, and for a dead-still finger not until it LIFTS, so with the catch on the
+    /// `.began` path a tap on a flinging chat kept flying for the whole finger-down interval and stopped
+    /// at the touch-UP. `onTouchDown`/`onTouchUp` are touch delivery, which arbitration cannot hold.
+    ///
+    /// Order within this method is load-bearing: `beginTouchTracking` decides the streak from the motion
+    /// state, so it must run BEFORE the catch nulls that motion.
+    func noteTouchDown(at timestamp: TimeInterval) {
+        sawDrag = false
+        // Cleared at finger-down, which runs BEFORE `shouldBeginImmediately` is consulted. Clearing it
+        // only on `.ended`/`.cancelled` would leak a stale `true` into the next gesture whenever a
+        // forced begin was then denied by `gestureRecognizerShouldBegin` (a tracking UIControl), and
+        // that gesture's natural `.began` would skip its drag sample.
+        beganWasForced = false
+        // UIKit passes `event.timestamp`, which shares CACurrentMediaTime's timebase.
+        core.beginTouchTracking(at: timestamp)
+        caughtMovingContentAtTouchDown = flight != nil || core.isDecelerating
+        if caughtMovingContentAtTouchDown { catchMotionForFingerRest() }
+    }
 
     func setOffset(_ y: CGFloat) {
         // The list's one-viewport delta-clamp routes here; during a flight, catch first (plain catch —
@@ -580,12 +612,13 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         return Swift.max(now, nextFrame) + frame
     }
 
-    /// Catch an in-flight deceleration when fingers REST on the list. Trackpad delivers no touch-down,
-    /// so `shouldBeginImmediately`/`handlePan(.began)` only fire on the first MOVEMENT, never on a pure
-    /// finger-rest — this is the trackpad finger-rest stop (see `shouldReceive(event:)`). Handles both
-    /// modes: a keyframe flight catches to its live offset; a stepped decel stops its link and idles the
-    /// core, holding the content where it caught (no `onScroll` — nothing moved). The caller gates this
-    /// to `state == .possible`, so it never fires mid-drag.
+    /// Catch an in-flight deceleration when a finger LANDS on (or rests on) the list, without moving it.
+    /// Two callers, one meaning: `noteTouchDown` (touch — see the arbitration note there) and the
+    /// trackpad finger-rest in `shouldReceive(event:)`, which gets no touch-down at all and so would
+    /// otherwise stop only on the first MOVEMENT. Handles both modes: a keyframe flight catches to its
+    /// live offset; a stepped decel stops its link and idles the core, holding the content where it
+    /// caught (no `onScroll` — nothing moved). Both callers reach it only while the gesture is still
+    /// `.possible`, so it never fires mid-drag.
     private func catchMotionForFingerRest() {
         if flight != nil {
             catchFlight(braking: true)      // interactive, same as the touch catch — see `catchFlight`
