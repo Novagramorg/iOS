@@ -610,7 +610,11 @@ private func stringForRight(strings: PresentationStrings, right: TelegramChatAdm
             return strings.Channel_EditAdmin_PermissionInviteSubscribers
         }
     } else if right.contains(.canManageWelcomeMessages) {
-        return isBot ? strings.Channel_EditAdmin_PermissionSendWelcomeMessages : strings.Channel_EditAdmin_PermissionManageWelcomeMessages
+        if isBot {
+            return isGroup ? strings.Channel_EditAdmin_PermissionSendWelcomeMessagesGroup : strings.Channel_EditAdmin_PermissionSendWelcomeMessagesChannel
+        } else {
+            return strings.Channel_EditAdmin_PermissionManageWelcomeMessages
+        }
     } else if right.contains(.canPinMessages) {
         return strings.Channel_EditAdmin_PermissionPinMessages
     } else if right.contains(.canManageRanks) {
