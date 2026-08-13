@@ -16620,5 +16620,10 @@ Error: %8$@";
 
 "Chat.EphemeralMessage.BadgeYou" = "Only visible to you";
 "Chat.EphemeralMessage.Badge" = "Only visible to %@";
+"Chat.EphemeralMessage.AnchoredInfo" = "This version of the message is only visible to you.";
 "Chat.EphemeralMessage.Revert" = "Revert";
 "Chat.EphemeralMessage.RevertInfo" = "Restores the message to it's original content";
+
+"Channel.EditAdmin.PermissionManageWelcomeMessages" = "Manage Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessagesGroup" = "Send Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessagesChannel" = "Send Welcome Messages";

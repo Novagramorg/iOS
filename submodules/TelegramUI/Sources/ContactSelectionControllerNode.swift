@@ -2,6 +2,7 @@ import Display
 import UIKit
 import AsyncDisplayKit
 import TelegramCore
+import TelegramStringFormatting
 import SwiftSignalKit
 import TelegramPresentationData
 import AccountContext
@@ -96,19 +97,23 @@ final class ContactSelectionControllerNode: ASDisplayNode {
                 excludeSelf = false
             }
             if let birthdays {
-                let today = Calendar(identifier: .gregorian).component(.day, from: Date())
+                let currentDate = Date()
+                let currentTimeZone = TimeZone.current
                 var sections: [(String, [EnginePeer.Id], Bool)] = []
                 var todayPeers: [EnginePeer.Id] = []
                 var yesterdayPeers: [EnginePeer.Id] = []
                 var tomorrowPeers: [EnginePeer.Id] = []
                 
                 for (peerId, birthday) in birthdays {
-                    if birthday.day == today {
+                    switch relativeDateForBirthday(birthday, relativeTo: currentDate, timeZone: currentTimeZone) {
+                    case .today:
                         todayPeers.append(peerId)
-                    } else if birthday.day == today - 1 || birthday.day > today + 5 {
+                    case .yesterday:
                         yesterdayPeers.append(peerId)
-                    } else if birthday.day == today + 1 || birthday.day < today + 5 {
+                    case .tomorrow:
                         tomorrowPeers.append(peerId)
+                    case nil:
+                        break
                     }
                 }
                 
