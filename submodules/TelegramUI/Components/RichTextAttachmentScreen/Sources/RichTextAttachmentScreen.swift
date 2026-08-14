@@ -1391,11 +1391,12 @@ final class RichTextAttachmentScreenComponent: Component {
 
                 // Tapping EITHER pill kind opens the property sheet. `completion(nil)` deletes the pill —
                 // and its row, when it was the last one.
-                editor.onEditButtonRequested = { [weak self] button, completion in
+                editor.onEditButtonRequested = { [weak self] button, isBlockPill, completion in
                     guard let self, let component = self.component else {
                         return
                     }
-                    let controller = ButtonEditorScreen(context: component.context, button: button) { [weak self] updated in
+                    let controller = ButtonEditorScreen(context: component.context, button: button,
+                                                        isBlockPill: isBlockPill) { [weak self] updated in
                         completion(updated)
                         DispatchQueue.main.async { [weak self] in
                             self?.editor.becomeFirstResponder()

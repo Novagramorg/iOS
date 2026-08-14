@@ -132,7 +132,7 @@ extension RichText {
             return value.previewAttributedText(strings: strings)
         case .formula:
             return NSAttributedString(
-                string: strings.RichTextPreview_Formula,
+                string: " ",
                 attributes: [ iconAttribute: NSNumber(value: InstantPagePreviewIcon.formula.rawValue) ]
             )
         case let .textCustomEmoji(_, alt):
@@ -202,7 +202,7 @@ extension InstantPageBlock {
             return text.previewAttributedText(strings: strings)
         case .formula:
             return NSAttributedString(
-                string: strings.RichTextPreview_Formula,
+                string: " ",
                 attributes: [ iconAttribute: NSNumber(value: InstantPagePreviewIcon.formula.rawValue) ]
             )
         case .divider:
@@ -264,7 +264,7 @@ extension InstantPageBlock {
             return NSAttributedString()
         case .table:
             return NSAttributedString(
-                string: strings.RichTextPreview_Formula,
+                string: " ",
                 attributes: [ iconAttribute: NSNumber(value: InstantPagePreviewIcon.table.rawValue) ]
             )
         case .map:

@@ -101,8 +101,22 @@ and it is carried by whichever neighbour can own it — preferring the lower, fa
 paragraph above. A framed atom (table / code / quote / details) fills its own frame and has no external
 inset, so giving it the gap leaves **unowned dead space**; the arrow-key escape probe in `+Navigation`
 (`owner.frame.minY − step/2`) then lands in nothing and **the caret cannot leave a table**
-(`CanvasTableNavTests` caught exactly this). Only between two framed atoms is the gap laid down as bare
-space. Side effect to know: a tap in a gap resolves to the block below.
+(`CanvasTableNavTests` caught exactly this). Only where no paragraph can own it — a non-`BlockBox` at a
+sequence edge, or two such neighbours — is the gap laid down as bare space. Side effect to know: a tap in
+a gap resolves to the block below.
+
+**A BARE GAP BELONGS TO NO BOX FRAME, so no height may be summed from box heights.** `BlockStack` owns the
+ownership rule in exactly one place — `bareGapAbove(_:_:)` / `bareTrailingGap(_:)` — read by BOTH `layout`
+and the live `currentHeight`, because the two silently disagreed: `DocumentCanvasView.intrinsicContentSize`
+(what `performLayout` feeds to `scrollView.contentSize`) summed box heights and so under-reported the
+laid-out extent by **4pt per bare gap, accumulating** (36pt for five non-paragraph blocks). The trailing
+blocks then sat outside the scrollable range — unreachable, overlapping the host's bottom inset band. A
+paragraphs-only document has no bare gaps, which is why it stayed hidden; the stateless
+`measuredHeight`/`measuredContentHeight` path was correct all along, so measure and commit disagreed.
+Guarded by the three `RichTextEditorViewTests.test_document*_scrollContentCoversEveryBlock` cases, which
+assert the scroll content EQUALS `root.contentHeight` + margins. Related: every height path calls
+`applyRootSpacingConfig()` rather than inheriting the last one's rhythm state — `intrinsicContentSize` is
+read BEFORE the layout pass, so it cannot assume `layoutContent` ran first.
 
 **Scope.** Only the document's TOP-LEVEL sequence is on V2's rhythm (`BlockStack.spacingModel ==
 .instantPageV2`). Stacks nested in a container — table cells, details, block-quote children — keep the
@@ -316,6 +330,15 @@ The façade is now driven by its host rather than self-laying-out:
   set `scrollView.contentInsetAdjustmentBehavior = .never` and **removed all `UIResponder` keyboard
   observation**. A private `performLayout(size:)` sizes the scroll view/canvas; only `update` writes insets
   (so a system `layoutSubviews` pass can't clobber the parent inset). Caret-follow scrolling stays internal.
+  **A CHANGED TOP inset re-seats a scroll view that is resting at the top** (`contentOffset.y = −insets.top`,
+  applied after `performLayout` so the new content size is in place; gated on the top inset actually changing,
+  so a keyboard-driven bottom inset or a post-edit re-layout never moves a scroll the user owns). UIKit only
+  CLAMPS the offset on an inset change and `contentInsetAdjustmentBehavior` is `.never`, so nothing else does
+  it: a SHORT document is clamped into place for free (the visible-height floor makes `−top` its only valid
+  offset) but a document TALLER than the viewport leaves offset 0 in range — which is why the article editor
+  opened with its first screenful hidden under the navigation bar while the composer looked fine (its top inset
+  is 0). Guarded by `RichTextEditorViewTests.test_update_tallDocument_restsBelowTheTopInset` +
+  `…_doesNotResetAScrolledOffset`.
 - `height(forWidth:contentMargins:) -> CGFloat` — a side-effect-free content-height measure (the Phase-2
   follow-up to the composer's `textHeightForWidth`). Mirrors what `update(...)` returns at that width
   (same `minimumContentHeight` floor + `contentMargins`) but reflows NOTHING live: the per-block
@@ -1504,7 +1527,17 @@ case; the host-tail empty is the general one and lives here in Core, shared by b
 
 **RTF export is hand-rolled and emits real tables (2026-06-25, `RTFConversion.swift`).** iOS has **no `NSTextTable` / `NSParagraphStyle.textBlocks`** (AppKit-only) — confirmed by spike — so `NSAttributedString` cannot represent or round-trip a real RTF table; a genuine table can only be produced by emitting the control words by hand. So `rtfData(from:)` now builds the **entire** RTF document by hand for ALL documents (one path; the old `NSAttributedString` export is gone) via one shared inline-run encoder (`inlineRTF`) + `escapeRTFText` (UTF-16 `\u<signed-16>?` escaping). Tables emit `\trowd`/`\trhdr`/`\cellx<cumulative-twips>`/`\intbl`/`\cell`/`\row` (`tableRTF`), so a Telegram table copied into Word/Pages/Notes becomes a **real table**. Parity kept on export (not added): no list markers, no foreground/theme colors, media-in-cell dropped, cell background colors dropped. Custom emoji ride the `tg://emoji?id=<id>&n=<seq>` hyperlink marker (the `&n=` per-export sequence stops adjacent identical emoji from coalescing). Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-tables-design.md,plans/2026-06-25-richtext-rtf-tables.md}`.
 
-**RTF import is a custom pure-Foundation parser in Core (2026-06-25, `RichTextEditorCore/Serialization/RTFTokenizer.swift` + `RTFImport.swift`).** Because iOS `NSAttributedString` flattens all block structure (no `NSTextTable`/`textLists`), a custom lexer (`RTFTokenizer`: groups, control words, `\'XX` cp1252, `\uN` signed-16 + surrogate + `\uc` skip, escapes) feeds a group-state document builder (`RTFDocumentParser`) that **reconstructs tables / headings / code / lists** + inline runs/links/emoji from third-party RTF (Word/Pages/web). `fragment(fromRTF:)` (UIKit) tries `RTFImport.document(fromRTF:)` **first** and falls back to the old `NSAttributedString` path only on hard failure (not-RTF / zero blocks) — so exotic RTF is never worse than the flatten, and the editor's own export→import now **round-trips structure losslessly** (the `RTFConversionTests` round-trip suite is the parse-compat gate; pure-Foundation parser is `swift test`-able on macOS via `RTFImportTests`/`RTFImportCorpusTests`). Heuristics (text always survives, only block style may differ): heading by font size (`\fsN/2` ≥23→H1/20–22→H2/18–19→H3), all-mono paragraph→code block, best-effort lists (`\ilvl`/`\listtext` marker→`.bullet`/`.ordered`+level). Non-goals: colors, nested tables, full Word list-table fidelity, images, codepage beyond cp1252. Graceful degradation: unknown control words → no-op; unknown/`{\*\…}` destinations consumed to their `}`; never crashes. **Paragraph breaks (load-bearing, fixed 2026-06-26 — the "pasting removes newlines" bug):** Cocoa/AppKit (TextEdit, Notes, Safari, Mail, Pages — i.e. *every* rich-app copy) serializes a paragraph break as a **backslash immediately followed by a literal CR/LF** (`a\⏎b`), which the RTF spec defines as equivalent to `\par` — NOT a literal `\par` (only the editor's own export and hand-written test RTF use literal `\par`, which is why this slipped the original suite). `RTFTokenizer` therefore maps `\`+CR/LF (CRLF collapsed to one) to a `\par` token; without it every cross-app paste glued all paragraphs into one. **Empty paragraphs survive:** an explicit `\par` is a paragraph *terminator*, so `flushParagraph(allowEmpty:)` emits an empty body paragraph for two consecutive `\par` (a blank line); the implicit end-of-document flush passes `allowEmpty:false`, so a doc with no trailing `\par` gains no spurious empty final paragraph. (Raw, un-backslashed CR/LF stays ignored per spec; `\line` is still a soft in-paragraph break.) Regression-guarded by `RTFImportTests.test_backslash*`/`test_*Par*` + `RTFImportCorpusTests.test_cocoaStyle_*`. Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-import-design.md,plans/2026-06-25-richtext-rtf-import.md}`.
+**RTF import is a custom pure-Foundation parser in Core (2026-06-25, `RichTextEditorCore/Serialization/RTFTokenizer.swift` + `RTFImport.swift`).** Because iOS `NSAttributedString` flattens all block structure (no `NSTextTable`/`textLists`), a custom lexer (`RTFTokenizer`: groups, control words, `\'XX` cp1252, `\uN` signed-16 + surrogate + `\uc` skip, escapes) feeds a group-state document builder (`RTFDocumentParser`) that **reconstructs tables / headings / code / lists** + inline runs/links/emoji from third-party RTF (Word/Pages/web). `fragment(fromRTF:)` (UIKit) tries `RTFImport.document(fromRTF:)` **first** and falls back to the old `NSAttributedString` path only on hard failure (not-RTF / zero blocks) — so exotic RTF is never worse than the flatten, and the editor's own export→import now **round-trips structure losslessly** (the `RTFConversionTests` round-trip suite is the parse-compat gate; pure-Foundation parser is `swift test`-able on macOS via `RTFImportTests`/`RTFImportCorpusTests`). Heuristics (text always survives, only block style may differ): heading by font size (`\fsN/2` ≥23→H1/20–22→H2/18–19→H3), all-mono paragraph→code block, best-effort lists (`\ilvl`/`\listtext` marker→`.bullet`/`.ordered`+level). **Imported links whose anchor text IS their own URL are stripped to plain text** — `fragment(fromRTF:)` runs
+`Document.strippingSelfReferentialLinks()` on BOTH the custom-parser and `NSAttributedString`-fallback results.
+A copied web link usually has the URL as its label; carrying it as a link run pins a destination the plain URL
+already gives, and the sent message would become a `textUrl` instead of a plain, auto-detected URL. A genuine
+text link (a label that differs from its target) is kept, as is anything pasted through the private fragment UTI
+(no importer involved). The predicate `linkIsSelfReferential(text:url:)` (Core) tolerates the normalizations a
+producer applies — an added `mailto:` / `http(s)://` scheme (the latter only when the text carries no scheme of
+its own), a percent-encoded path, a trailing `/` — and is a **deliberate duplicate** of `TextFormat`'s
+`chatInputLinkIsSelfReferential` (Core cannot import app modules; keep the two rules in step). The composer's
+markdown-on-paste path applies the same rule host-side — see `docs/richtext-composer.md` §7.
+Non-goals: colors, nested tables, full Word list-table fidelity, images, codepage beyond cp1252. Graceful degradation: unknown control words → no-op; unknown/`{\*\…}` destinations consumed to their `}`; never crashes. **Paragraph breaks (load-bearing, fixed 2026-06-26 — the "pasting removes newlines" bug):** Cocoa/AppKit (TextEdit, Notes, Safari, Mail, Pages — i.e. *every* rich-app copy) serializes a paragraph break as a **backslash immediately followed by a literal CR/LF** (`a\⏎b`), which the RTF spec defines as equivalent to `\par` — NOT a literal `\par` (only the editor's own export and hand-written test RTF use literal `\par`, which is why this slipped the original suite). `RTFTokenizer` therefore maps `\`+CR/LF (CRLF collapsed to one) to a `\par` token; without it every cross-app paste glued all paragraphs into one. **Empty paragraphs survive:** an explicit `\par` is a paragraph *terminator*, so `flushParagraph(allowEmpty:)` emits an empty body paragraph for two consecutive `\par` (a blank line); the implicit end-of-document flush passes `allowEmpty:false`, so a doc with no trailing `\par` gains no spurious empty final paragraph. (Raw, un-backslashed CR/LF stays ignored per spec; `\line` is still a soft in-paragraph break.) Regression-guarded by `RTFImportTests.test_backslash*`/`test_*Par*` + `RTFImportCorpusTests.test_cocoaStyle_*`. Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-import-design.md,plans/2026-06-25-richtext-rtf-import.md}`.
 
 **Other open work:** Phase 5e images toolbar (Photos/Files picker, alignment toggle, interactive drag-resize); Phase 6b new
 paragraph styles (Subtitle / Code) + a Dash list marker (Caption landed 2026-06-13 as a render-only style); Phase 6c floating pill keyboard toolbar

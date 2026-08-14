@@ -327,10 +327,26 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     @discardableResult
     public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero,
                        scrollIndicatorInsets: UIEdgeInsets? = nil) -> CGFloat {
+        // A changed TOP inset must re-seat a scroll view that is resting at the top — UIKit only CLAMPS
+        // `contentOffset` when an inset changes, and with `contentInsetAdjustmentBehavior = .never` nothing
+        // else re-seats it. For a SHORT document the clamp is enough (the visible-height floor in
+        // `performLayout` makes −top the only valid offset), but a document TALLER than the viewport leaves
+        // offset 0 in range, so its first screenful stayed hidden under the top inset band (the article
+        // editor opened scrolled under the navigation bar). Captured BEFORE the inset is written; `<=`
+        // admits a rubber-band overscroll above the top, which is still "at the top".
+        let previousTopInset = scrollView.contentInset.top
+        let wasRestingAtTop = scrollView.contentOffset.y <= -previousTopInset + 0.5
         scrollView.contentInset = insets
         scrollView.verticalScrollIndicatorInsets = scrollIndicatorInsets ?? insets
         canvas.contentMargins = contentMargins
-        return performLayout(size: size)
+        let contentHeight = performLayout(size: size)
+        // After `performLayout`, so the new content size is in place (an offset write can be clamped by it).
+        // Gated on the top inset actually CHANGING, so an update driven by anything else — a keyboard-driven
+        // bottom inset, a re-layout after an edit — never re-seats a scroll the user owns.
+        if abs(insets.top - previousTopInset) > 0.01, wasRestingAtTop {
+            scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: -insets.top)
+        }
+        return contentHeight
     }
 
     /// Sizes the scroll view + canvas to `size` and returns the measured CONTENT height (min 44). The
@@ -558,7 +574,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Asked to present the pill property sheet when a pill is tapped — for BOTH pill kinds. The
     /// completion applies the edit; passing `nil` deletes the pill (and its row, if it was the last).
     /// Mirrors `onEditFormulaRequested`. While unset, tapping a pill just places the caret.
-    public var onEditButtonRequested: ((_ button: ButtonRef, _ completion: @escaping (ButtonRef?) -> Void) -> Void)? {
+    ///
+    /// `isBlockPill` says which kind was tapped (`true` = a `pageBlockButtonRow` pill, `false` = an
+    /// inline `RichText.textButton`) — the same distinction `AttributedStringMapper.buttonAttachment`
+    /// and the renderer's `isInline` draw with. A host offers different properties per kind: the article
+    /// editor drops the link style for a row pill, where a chrome-less button is not something an author
+    /// should create, and keeps it inline (where it IS the plain-link rendering).
+    public var onEditButtonRequested: ((_ button: ButtonRef, _ isBlockPill: Bool, _ completion: @escaping (ButtonRef?) -> Void) -> Void)? {
         didSet { canvas.buttonEditRequested = onEditButtonRequested }
     }
 

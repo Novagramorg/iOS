@@ -74,8 +74,10 @@ final class DocumentCanvasView: UIView {
     /// Host hook for editing a formula atom. The editor supplies current LaTeX and a replacement callback;
     /// the host owns presentation and formula rendering dependencies.
     var formulaEditRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)?
-    /// Asked to present the pill property sheet. The completion applies the edit; `nil` deletes the pill.
-    var buttonEditRequested: ((_ button: ButtonRef, _ completion: @escaping (ButtonRef?) -> Void) -> Void)?
+    /// Asked to present the pill property sheet. `isBlockPill` distinguishes a row pill from an inline
+    /// one (the host offers different properties per kind). The completion applies the edit; `nil`
+    /// deletes the pill.
+    var buttonEditRequested: ((_ button: ButtonRef, _ isBlockPill: Bool, _ completion: @escaping (ButtonRef?) -> Void) -> Void)?
     /// Asked to present a row's alignment/delete menu.
     var buttonRowMenuRequested: ((ButtonRowMenuRequest) -> Void)?
     /// Hosted emoji views, keyed by `EmojiRef.instanceID` so edits/undo reuse (not recreate) them.
@@ -1119,9 +1121,7 @@ final class DocumentCanvasView: UIView {
         // The document's top-level sequence lays out on InstantPage V2's rhythm, so the editor's block
         // spacing matches the rendered message. Its metrics come from the mapper, so a host's
         // `renderMetrics` reaches the rhythm as well as the fonts.
-        root.spacingModel = .instantPageV2
-        root.sequenceKind = .topLevel
-        root.metrics = mapper.styleSheet.metrics
+        applyRootSpacingConfig()
         _ = root.layout(origin: CGPoint(x: contentLeftPad, y: contentMargins.top),
                         width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
@@ -1168,9 +1168,27 @@ final class DocumentCanvasView: UIView {
         }
     }
 
+    /// Points the root stack at the document's rhythm (V2, top-level sequence, the host's metrics).
+    /// EVERY height path states it rather than inheriting what the last one left, because any of them can
+    /// run first: `layoutContent`, `intrinsicContentSize` (read by `performLayout` BEFORE the layout
+    /// pass), and `measuredContentHeight` (a host measuring an unframed editor).
+    func applyRootSpacingConfig() {
+        root.spacingModel = .instantPageV2
+        root.sequenceKind = .topLevel
+        root.metrics = mapper.styleSheet.metrics
+    }
+
+    /// The content height the host sizes the scroll view from. **`root.currentHeight`, not a sum of box
+    /// heights:** under the V2 rhythm a gap next to a block that cannot own it (a button row / table /
+    /// media / code block at a sequence edge, or two such neighbours) is laid down as bare space
+    /// belonging to no box frame, so summing box heights under-reports the laid-out extent — 4pt per
+    /// bare gap, accumulating — and the trailing blocks fell outside the scrollable range: unreachable,
+    /// overlapping the host's bottom inset band. A paragraphs-only document is unaffected (no bare gaps),
+    /// which is why this stayed hidden.
     override var intrinsicContentSize: CGSize {
-        CGSize(width: UIView.noIntrinsicMetric,
-               height: contentMargins.top + boxes.reduce(0) { $0 + $1.height } + contentMargins.bottom)
+        applyRootSpacingConfig()
+        return CGSize(width: UIView.noIntrinsicMetric,
+                      height: contentMargins.top + root.currentHeight + contentMargins.bottom)
     }
 
     /// Stateless content height the document would have at canvas `width` — the measure analogue of
@@ -1196,9 +1214,7 @@ final class DocumentCanvasView: UIView {
         let contentW = max(width - (self.pageMargin + margins.left) - (self.pageMargin + margins.right), 1)
         // Same purity requirement for the RHYTHM: this can run before `layoutContent()` has ever set the
         // root's spacing model, so state it here too rather than inheriting whatever the last layout left.
-        root.spacingModel = .instantPageV2
-        root.sequenceKind = .topLevel
-        root.metrics = mapper.styleSheet.metrics
+        applyRootSpacingConfig()
         return margins.top + root.measuredHeight(forWidth: contentW) + margins.bottom
     }
 

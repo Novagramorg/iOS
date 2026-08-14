@@ -766,6 +766,45 @@ final class InstantPageScrollableTextItem: InstantPageScrollableItem {
     }
 }
 
+/// True when `text` draws nothing but custom emoji (whitespace aside), used to decide whether a
+/// link-styled button gets the automatic link underline.
+///
+/// The recursion covers every wrapper that cannot itself ask for an underline. `.underline` is
+/// deliberately NOT among them: an explicitly underlined label keeps its underline, and answering
+/// `false` there is what preserves it. `.textDate` is excluded because it renders a formatted date
+/// string, not its inner text; `.image` / `.formula` / a nested `.textButton` draw real ink of their
+/// own. The switch is exhaustive on purpose — a new `RichText` case must make this decision rather
+/// than inherit it from a `default:` arm.
+private func richTextIsOnlyCustomEmoji(_ text: RichText) -> Bool {
+    var sawEmoji = false
+    func scan(_ text: RichText) -> Bool {
+        switch text {
+        case .empty:
+            return true
+        case let .plain(string):
+            return string.allSatisfy { $0.isWhitespace }
+        case .textCustomEmoji:
+            sawEmoji = true
+            return true
+        case let .bold(inner), let .italic(inner), let .strikethrough(inner), let .fixed(inner),
+             let .subscript(inner), let .superscript(inner), let .marked(inner):
+            return scan(inner)
+        case let .url(inner, _, _), let .email(inner, _), let .phone(inner, _), let .anchor(inner, _),
+             let .textMentionName(inner, _):
+            return scan(inner)
+        case let .textAutoEmail(inner), let .textAutoPhone(inner), let .textAutoUrl(inner),
+             let .textBankCard(inner), let .textBotCommand(inner), let .textCashtag(inner),
+             let .textHashtag(inner), let .textMention(inner), let .textSpoiler(inner):
+            return scan(inner)
+        case let .concat(texts):
+            return texts.allSatisfy(scan)
+        case .underline, .image, .formula, .textDate, .textButton:
+            return false
+        }
+    }
+    return scan(text) && sawEmoji
+}
+
 /// A `RichText.textButton` whose style carries `link:flags.3` — rendered as an ordinary link rather
 /// than a pill, which means leaving the attachment/pill-view path entirely and joining the text path.
 ///
@@ -816,7 +855,24 @@ private func attributedStringForLinkStyleButton(
     //
     // With no `InstantPageEmojiSizeAttribute` stamped, `InstantPageV2Layout` falls back to the ordinary
     // body size (`A - D + 4 * pointSize / 17`) — which IS the surrounding text's emoji size.
-    let result = laidOutLabel
+    //
+    // A label of nothing but custom emoji drops the underline. The only underline reaching this string
+    // is the automatic one `InstantPageTextStyleStack.textAttributes()` adds when the link colour
+    // equals the body colour — a fallback so a link stays distinguishable in a theme whose accent
+    // matches its text (the chat-bubble themes do exactly that). There is no word to distinguish here:
+    // the rule just draws a stray line under the emoji, wider than the glyph and detached from it. An
+    // explicit `.underline` INSIDE the label survives, because `richTextIsOnlyCustomEmoji` answers
+    // `false` for that node. (An `.underline` wrapping the whole button, or a theme category that
+    // underlines its links, is stripped along with the fallback — an emoji should not be underlined by
+    // any of the three.)
+    let result: NSAttributedString
+    if richTextIsOnlyCustomEmoji(button.text) {
+        let stripped = laidOutLabel.mutableCopy() as! NSMutableAttributedString
+        stripped.removeAttribute(.underlineStyle, range: NSRange(location: 0, length: stripped.length))
+        result = stripped
+    } else {
+        result = laidOutLabel
+    }
 
     if case .url = button.action {
         return result

@@ -610,5 +610,7 @@ public func legacyChatInputAttributedString(fromRTF data: Data) -> NSAttributedS
     }
     guard hasList else { return nil }
     let content = chatInputContent(fromDocument: document, resolveEmoji: { _ in nil }, resolveMedia: { _ in nil })
-    return attributedString(from: content, renderListMarkers: true)
+    // Paste direction: an imported link whose label IS its own URL pastes as plain text (see
+    // `chatInputContentStrippingSelfReferentialLinks`), matching the `chatInputStateStringFromRTF` path.
+    return attributedString(from: chatInputContentStrippingSelfReferentialLinks(content), renderListMarkers: true)
 }

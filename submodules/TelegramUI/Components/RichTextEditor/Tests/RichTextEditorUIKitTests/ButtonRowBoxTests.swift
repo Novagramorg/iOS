@@ -341,7 +341,7 @@ final class ButtonRowBoxTests: XCTestCase {
         let row = makeRow(["A", "B"])
         let view = makeView(with: [.buttonRow(row)])
         var received: ButtonRef?
-        view.onEditButtonRequested = { button, completion in
+        view.onEditButtonRequested = { button, _, completion in
             received = button
             completion(ButtonRef(label: [TextRun(text: "Edited")], action: .url("https://example.com"), color: .success))
         }
@@ -358,10 +358,43 @@ final class ButtonRowBoxTests: XCTestCase {
         XCTAssertEqual(restored.buttons[0].color, .success)
     }
 
+    /// The edit request says WHICH pill kind it is, so a host can offer different properties for each —
+    /// the article editor drops the link style for a block-row pill (a chrome-less row button is not
+    /// authorable) while keeping it for an inline one.
+    func test_editRequest_reportsThePillKind() {
+        // A block-row pill.
+        let rowView = makeView(with: [.buttonRow(makeRow(["A"]))])
+        var rowKind: Bool?
+        rowView.onEditButtonRequested = { _, isBlockPill, _ in rowKind = isBlockPill }
+        guard let box = rowView.canvasForTesting.boxes.compactMap({ $0 as? ButtonRowBox }).first,
+              let rect = box.pillCanvasRect(0) else {
+            return XCTFail("expected a row with a pill rect")
+        }
+        XCTAssertTrue(rowView.canvasForTesting.handleButtonTapIfNeeded(at: CGPoint(x: rect.midX, y: rect.midY)))
+        XCTAssertEqual(rowKind, true, "a row pill reports isBlockPill")
+
+        // An inline pill.
+        var attributes = CharacterAttributes.plain
+        attributes.button = ButtonRef(label: [TextRun(text: "Go")], action: .url("https://telegram.org"))
+        let inlineView = makeView(with: [.paragraph(ParagraphBlock(id: BlockID.generate(), style: .body,
+                                                                  runs: [TextRun(text: "\u{FFFC}", attributes: attributes)]))])
+        var inlineKind: Bool?
+        inlineView.onEditButtonRequested = { _, isBlockPill, _ in inlineKind = isBlockPill }
+        let canvas = inlineView.canvasForTesting
+        guard let region = canvas.allLeafRegions().first,
+              let attachmentBox = region.layout.attachmentBox(at: 0) else {
+            return XCTFail("expected an inline attachment box")
+        }
+        let point = CGPoint(x: attachmentBox.midX + region.canvasOrigin.x,
+                            y: attachmentBox.midY + region.canvasOrigin.y)
+        XCTAssertTrue(canvas.handleButtonTapIfNeeded(at: point))
+        XCTAssertEqual(inlineKind, false, "an inline pill reports the inline kind")
+    }
+
     /// Passing nil from the sheet deletes the pill; deleting the last one removes the row.
     func test_editCompletionWithNil_deletesThePill() {
         let view = makeView(with: [.buttonRow(makeRow(["Only"]))])
-        view.onEditButtonRequested = { _, completion in completion(nil) }
+        view.onEditButtonRequested = { _, _, completion in completion(nil) }
         guard let box = view.canvasForTesting.boxes.compactMap({ $0 as? ButtonRowBox }).first,
               let rect = box.pillCanvasRect(0) else {
             return XCTFail("expected a row with a pill rect")
@@ -449,7 +482,7 @@ final class ButtonRowBoxTests: XCTestCase {
         var request: ButtonRowMenuRequest?
         view.onRequestButtonRowMenu = { request = $0 }
         restamp(view)
-        view.onEditButtonRequested = { _, _ in }   // the sheet opens for the new pill; leave it pending
+        view.onEditButtonRequested = { _, _, _ in }   // the sheet opens for the new pill; leave it pending
         guard let box = view.canvasForTesting.boxes.compactMap({ $0 as? ButtonRowBox }).first else {
             return XCTFail("expected a row")
         }
@@ -486,7 +519,7 @@ final class ButtonRowBoxTests: XCTestCase {
         var menuRequested = false
         var editRequested = false
         view.onRequestButtonRowMenu = { _ in menuRequested = true }
-        view.onEditButtonRequested = { _, _ in editRequested = true }
+        view.onEditButtonRequested = { _, _, _ in editRequested = true }
         guard let box = view.canvasForTesting.boxes.compactMap({ $0 as? ButtonRowBox }).first,
               let rect = box.pillCanvasRect(0) else {
             return XCTFail("expected a pill rect")

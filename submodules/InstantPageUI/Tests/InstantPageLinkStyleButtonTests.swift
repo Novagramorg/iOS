@@ -113,4 +113,102 @@ final class InstantPageLinkStyleButtonTests: XCTestCase {
         XCTAssertEqual(line.emojiItems[0].frame.width, line.emojiItems[1].frame.width, accuracy: 0.01)
     }
 
+    // MARK: - The automatic underline
+
+    /// A style stack whose accent colour IS its text colour — the chat-bubble case, where
+    /// `textAttributes()` falls back to underlining links so they stay distinguishable.
+    private func makeAccentEqualsTextStyleStack() -> InstantPageTextStyleStack {
+        let stack = InstantPageTextStyleStack()
+        stack.push(.textColor(.black))
+        stack.push(.linkColor(.black))
+        stack.push(.fontSize(17.0))
+        return stack
+    }
+
+    private func underlineStyle(_ string: NSAttributedString) -> Int? {
+        guard string.length != 0 else {
+            return nil
+        }
+        return (string.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? NSNumber)?.intValue
+    }
+
+    /// The baseline the next test contrasts with: a worded label keeps the fallback underline.
+    func testWordedLinkButtonKeepsTheAutomaticUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .plain("Open"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertEqual(self.underlineStyle(result), NSUnderlineStyle.single.rawValue)
+    }
+
+    /// An emoji-only label has no word to distinguish from body text, so the fallback underline is
+    /// suppressed — it would draw as a stray rule under the glyph.
+    func testEmojiOnlyLinkButtonDropsTheAutomaticUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .textCustomEmoji(fileId: 1, alt: "x"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertNil(self.underlineStyle(result))
+    }
+
+    /// Same for a `.url` action, which returns before the button attribute is stamped.
+    func testEmojiOnlyUrlLinkButtonDropsTheAutomaticUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .textCustomEmoji(fileId: 1, alt: "x"), action: .url("https://telegram.org"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertNil(self.underlineStyle(result))
+        XCTAssertNotNil(attribute(result, TelegramTextAttributes.URL))
+    }
+
+    /// Several emoji, and the whitespace between them, still count as emoji-only.
+    func testMultipleEmojiWithSpacesCountAsEmojiOnly() {
+        let label = RichText.concat([
+            .textCustomEmoji(fileId: 1, alt: "x"),
+            .plain(" "),
+            .bold(.textCustomEmoji(fileId: 2, alt: "y"))
+        ])
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: label, action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        for index in 0 ..< result.length {
+            XCTAssertNil((result.attribute(.underlineStyle, at: index, effectiveRange: nil) as? NSNumber)?.intValue)
+        }
+    }
+
+    /// One word among the emoji brings the underline back — the label reads as text again.
+    func testMixedLabelKeepsTheAutomaticUnderline() {
+        let label = RichText.concat([.textCustomEmoji(fileId: 1, alt: "x"), .plain(" Open")])
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: label, action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertEqual(self.underlineStyle(result), NSUnderlineStyle.single.rawValue)
+    }
+
+    /// An explicitly underlined emoji label is markup, not the colour fallback, so it survives.
+    func testExplicitlyUnderlinedEmojiLabelKeepsItsUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .underline(.textCustomEmoji(fileId: 1, alt: "x")), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertEqual(self.underlineStyle(result), NSUnderlineStyle.single.rawValue)
+    }
+
+    /// With a distinct accent colour there is no automatic underline to begin with — the suppression
+    /// must not be the thing that removes it, and a worded label must stay clean too.
+    func testDistinctAccentColourNeverUnderlines() {
+        let emoji = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .textCustomEmoji(fileId: 1, alt: "x"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeParagraphStyleStack()
+        )
+        let worded = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .plain("Open"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeParagraphStyleStack()
+        )
+        XCTAssertNil(self.underlineStyle(emoji))
+        XCTAssertNil(self.underlineStyle(worded))
+    }
+
 }

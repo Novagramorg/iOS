@@ -862,6 +862,16 @@ related, a fixed radius rather than `height / 2` is the lever.
   `.callback` is visually indistinguishable from a link-styled `.url`. Note also that the link route
   deliberately does NOT push `.fontSize`/`.medium`: a pill owns its typography, a link inherits the
   paragraph's.
+- **An emoji-only link-button label gets NO underline.** The underline on a link button is never
+  markup: `InstantPageTextStyleStack.textAttributes()` adds it when the link colour equals the
+  surrounding text colour, which is the normal state in the chat-bubble themes and in the
+  caption/credit categories (see `setupStyleStack`). Under a custom emoji it draws as a stray rule —
+  wider than the glyph and detached from it — and there is no word for it to distinguish, so
+  `attributedStringForLinkStyleButton` strips `underlineStyle` when `richTextIsOnlyCustomEmoji(button.text)`.
+  That helper's switch is exhaustive on purpose (a new `RichText` case must decide) and answers `false`
+  for `.underline`, which is how an explicitly underlined label inside the button keeps its underline.
+  Whitespace and non-underlining wrappers (`.bold`, `.url`, `.textSpoiler`, …) still count as
+  emoji-only; one word anywhere in the label brings the underline back.
 - **Only `.url` rides `TelegramTextAttributes.URL`.** That is what buys the long-press menu, the
   concealed-URL confirmation, anchor scrolling and the link-progress shimmer for free.
   `.urlAuth` and `.openWebView` carry URLs but take the button-dispatch route instead, because their

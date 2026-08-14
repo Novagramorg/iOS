@@ -216,7 +216,7 @@ extension DocumentCanvasView {
         }
         guard let buttonEditRequested, row.buttons.indices.contains(appended) else { return }
         let appendedIndex = appended
-        buttonEditRequested(row.buttons[appendedIndex]) { [weak self] updated in
+        buttonEditRequested(row.buttons[appendedIndex], true) { [weak self] updated in
             guard let self, let (stack, i) = self.owningStack(ofBlockID: rowID),
                   let liveRow = stack.boxes[i] as? ButtonRowBox else { return }
             self.editing {
@@ -289,7 +289,7 @@ extension DocumentCanvasView {
             let caret = row.nodeStart + 1 + index
             setCaret(global: caret)
             let rowID = row.id
-            buttonEditRequested(row.buttons[index]) { [weak self] updated in
+            buttonEditRequested(row.buttons[index], true) { [weak self] updated in
                 guard let self, let (stack, i) = self.owningStack(ofBlockID: rowID),
                       let liveRow = stack.boxes[i] as? ButtonRowBox else { return }
                 self.editing {
@@ -310,7 +310,7 @@ extension DocumentCanvasView {
         guard let (attachment, position) = inlineButton(atCanvasPoint: point) else { return false }
         dismissEditMenu()
         setCaret(global: position + 1)
-        buttonEditRequested(attachment.button) { [weak self] updated in
+        buttonEditRequested(attachment.button, false) { [weak self] updated in
             self?.replaceInlineButton(at: position, with: updated)
         }
         return true

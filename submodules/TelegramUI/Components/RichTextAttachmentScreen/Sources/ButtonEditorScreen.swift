@@ -29,15 +29,29 @@ private let buttonURLInputTag = GenericComponentViewTag()
 
 // MARK: - Style
 
-/// The five choices offered. `link` is deliberately NOT a fourth colour: it is a separate bit in the
+/// The choices offered. `link` is deliberately NOT a fourth colour: it is a separate bit in the
 /// schema (`richButtonStyle.link`), and selecting it PRESERVES whatever colour the button already had,
 /// so an incoming `link + danger` still round-trips. The renderer makes link win either way.
+///
+/// **`link` is offered for an INLINE pill only** — see `choices(isBlockPill:)`.
 private enum ButtonStyleChoice: CaseIterable {
     case `default`
     case primary
     case danger
     case success
     case link
+
+    /// The styles authorable for this pill kind. A BLOCK-row pill drops `link`: a link-styled row button
+    /// renders chrome-less (no fill, plain link colour — `instantPageButtonColors`), which is a shape an
+    /// author has no reason to create for a standalone row. Inline it is the whole point of the style —
+    /// the pill becomes plain link text in the flow — so the inline sheet keeps it.
+    ///
+    /// This does NOT strip `isLink` from a button that already carries it (one that arrived through the
+    /// edit round-trip): the bit is only ever cleared by picking another style, so an untouched incoming
+    /// link row button round-trips unchanged. Its style section simply shows no selected row.
+    static func choices(isBlockPill: Bool) -> [ButtonStyleChoice] {
+        isBlockPill ? allCases.filter { $0 != .link } : allCases
+    }
 
     static func from(_ button: ButtonRef) -> ButtonStyleChoice {
         if button.isLink {
@@ -253,13 +267,16 @@ private final class ButtonEditorSheetContent: Component {
 
     let context: AccountContext
     let button: ButtonRef
+    /// Which pill kind is being edited — it selects the authorable style set (see `choices(isBlockPill:)`).
+    let isBlockPill: Bool
     let update: (ButtonRef) -> Void
     let complete: (ButtonRef?) -> Void
 
-    init(context: AccountContext, button: ButtonRef, update: @escaping (ButtonRef) -> Void,
+    init(context: AccountContext, button: ButtonRef, isBlockPill: Bool, update: @escaping (ButtonRef) -> Void,
          complete: @escaping (ButtonRef?) -> Void) {
         self.context = context
         self.button = button
+        self.isBlockPill = isBlockPill
         self.update = update
         self.complete = complete
     }
@@ -267,6 +284,7 @@ private final class ButtonEditorSheetContent: Component {
     static func ==(lhs: ButtonEditorSheetContent, rhs: ButtonEditorSheetContent) -> Bool {
         if lhs.context !== rhs.context { return false }
         if lhs.button != rhs.button { return false }
+        if lhs.isBlockPill != rhs.isBlockPill { return false }
         return true
     }
 
@@ -387,7 +405,7 @@ private final class ButtonEditorSheetContent: Component {
 
             // Style.
             let current = ButtonStyleChoice.from(component.button)
-            let styleItems = ButtonStyleChoice.allCases.map { choice in
+            let styleItems = ButtonStyleChoice.choices(isBlockPill: component.isBlockPill).map { choice in
                 AnyComponentWithIdentity(id: choice.title(strings), component: AnyComponent(
                     ButtonStyleRowComponent(
                         theme: theme,
@@ -545,16 +563,19 @@ private final class ButtonEditorSheetComponent: Component {
 
     let context: AccountContext
     let initialButton: ButtonRef
+    let isBlockPill: Bool
     let completion: (ButtonRef?) -> Void
 
-    init(context: AccountContext, initialButton: ButtonRef, completion: @escaping (ButtonRef?) -> Void) {
+    init(context: AccountContext, initialButton: ButtonRef, isBlockPill: Bool,
+         completion: @escaping (ButtonRef?) -> Void) {
         self.context = context
         self.initialButton = initialButton
+        self.isBlockPill = isBlockPill
         self.completion = completion
     }
 
     static func ==(lhs: ButtonEditorSheetComponent, rhs: ButtonEditorSheetComponent) -> Bool {
-        lhs.context === rhs.context && lhs.initialButton == rhs.initialButton
+        lhs.context === rhs.context && lhs.initialButton == rhs.initialButton && lhs.isBlockPill == rhs.isBlockPill
     }
 
     final class View: UIView {
@@ -606,6 +627,7 @@ private final class ButtonEditorSheetComponent: Component {
                     content: AnyComponent<ViewControllerComponentContainer.Environment>(ButtonEditorSheetContent(
                         context: component.context,
                         button: button,
+                        isBlockPill: component.isBlockPill,
                         update: { [weak self] updated in
                             guard let self else { return }
                             self.button = updated
@@ -690,11 +712,16 @@ private final class ButtonEditorSheetComponent: Component {
 
 /// The pill property sheet. `completion` receives the edited button, or `nil` to delete it (which also
 /// removes its row when it was the last pill). Dismissing without Done makes no change.
+///
+/// `isBlockPill` is the tapped pill's kind, as reported by `RichTextEditorView.onEditButtonRequested`.
+/// It selects the authorable style set — a block-row pill is not offered the link style.
 public final class ButtonEditorScreen: ViewControllerComponentContainer {
-    public init(context: AccountContext, button: ButtonRef, completion: @escaping (ButtonRef?) -> Void) {
+    public init(context: AccountContext, button: ButtonRef, isBlockPill: Bool,
+                completion: @escaping (ButtonRef?) -> Void) {
         super.init(
             context: context,
-            component: ButtonEditorSheetComponent(context: context, initialButton: button, completion: completion),
+            component: ButtonEditorSheetComponent(context: context, initialButton: button,
+                                                  isBlockPill: isBlockPill, completion: completion),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
             theme: .default

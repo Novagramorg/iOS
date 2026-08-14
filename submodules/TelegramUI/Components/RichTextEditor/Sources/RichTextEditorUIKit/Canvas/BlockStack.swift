@@ -124,6 +124,42 @@ final class BlockStack {
         return result
     }
 
+    /// The gap laid down as BARE space above box `i` — space that belongs to no box frame.
+    ///
+    /// **A height summed from box heights alone misses exactly this**, which is why it is a named
+    /// quantity rather than an inline `y +=`: `layout` and `currentHeight` both read it, so the
+    /// ownership rule has ONE expression and the laid-out extent and the reported content height cannot
+    /// disagree. (They did: the scroll content came up short by every bare gap, so a document with
+    /// non-paragraph blocks could not be scrolled to its end — the last block sat below the scrollable
+    /// range, behind the host's bottom inset band.)
+    private func bareGapAbove(_ i: Int, _ g: [CGFloat]) -> CGFloat {
+        switch spacingModel {
+        case .instantPageV2:
+            // A framed block (table / code / quote / details) fills its own frame and has no external
+            // inset to put a gap in, so the gap above it is owned by the PARAGRAPH above (as that box's
+            // `bottomInset`). Only when there is no such paragraph — the sequence edge, or two adjacent
+            // framed atoms — is it laid down as bare space.
+            //
+            // LOAD-BEARING: leaving it unowned in the paragraph case makes the canvas discontiguous, and
+            // the arrow-key escape probe (`owner.frame.minY - step/2` in `+Navigation`) then lands in
+            // dead space and the caret cannot leave a table.
+            guard !(boxes[i] is BlockBox) else { return 0 }
+            return (i == 0 || !(boxes[i - 1] is BlockBox)) ? g[i] : 0
+        case .containerInterior:
+            // Two adjacent framed atoms (code / table / collapsed quote) both fill their whole frames, so
+            // neither's internal padding separates the two fills. The external gap between them matches
+            // the separation a `BlockBox` neighbor reserves toward a framed atom (`facingInset` rule 1).
+            guard i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(boxes[i]) else { return 0 }
+            return self.verticalInsetBase + BlockStack.framedNeighborMargin
+        }
+    }
+
+    /// The bare gap below the LAST box — a trailing framed atom cannot own the bottom edge gap either.
+    private func bareTrailingGap(_ g: [CGFloat]) -> CGFloat {
+        guard spacingModel == .instantPageV2, let last = boxes.last, !(last is BlockBox) else { return 0 }
+        return g[boxes.count]
+    }
+
     /// Lays boxes out top-to-bottom from `origin` at the given content `width`; returns total height.
     @discardableResult
     func layout(origin: CGPoint, width: CGFloat) -> CGFloat {
@@ -131,52 +167,47 @@ final class BlockStack {
         let g = spacingModel == .instantPageV2 ? gaps() : []
         for i in boxes.indices {
             let box = boxes[i]
-            switch spacingModel {
-            case .instantPageV2:
-                if let b = box as? BlockBox {
+            if let b = box as? BlockBox {
+                switch spacingModel {
+                case .instantPageV2:
                     // The gap is ONE quantity, carried by the LOWER block where it can be — so a tap in
                     // the gap lands in the block you are heading toward. The upper contributes nothing
                     // below it, so a gap is never counted twice.
                     b.topInset = g[i]
-                    // The trailing edge gap, plus any gap the NEXT block cannot own itself (see below).
+                    // The trailing edge gap, plus any gap the NEXT block cannot own itself.
                     let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
                     b.bottomInset = next == nil ? g[boxes.count] : (next is BlockBox ? 0 : g[i + 1])
-                } else {
-                    // A framed block (table / code / quote / details) fills its own frame and has no
-                    // external inset to put a gap in, so the gap above it is owned by the PARAGRAPH above
-                    // (handled as that box's `bottomInset`, above). Only when there is no such paragraph —
-                    // the sequence edge, or two adjacent framed atoms — is it laid down as space here.
-                    //
-                    // LOAD-BEARING: leaving it unowned in the paragraph case makes the canvas
-                    // discontiguous, and the arrow-key escape probe (`owner.frame.minY - step/2` in
-                    // `+Navigation`) then lands in dead space and the caret cannot leave a table.
-                    if i == 0 || !(boxes[i - 1] is BlockBox) { y += g[i] }
-                }
-            case .containerInterior:
-                if let b = box as? BlockBox {
+                case .containerInterior:
                     let prev: CanvasBlock? = i > 0 ? boxes[i - 1] : nil
                     let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
                     b.topInset = facingInset(of: b, toward: prev)
                     b.bottomInset = facingInset(of: b, toward: next)
                 }
-                // Two adjacent framed atoms (code / table / collapsed quote) both fill their whole
-                // frames, so neither's internal padding separates the two fills. Insert an external gap
-                // between them — matching the separation a `BlockBox` neighbor reserves toward a framed
-                // atom (`facingInset` rule 1: base + framed margin).
-                if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
-                    y += self.verticalInsetBase + BlockStack.framedNeighborMargin
-                }
             }
+            y += bareGapAbove(i, g)
             box.setWidth(width)
             box.frame = CGRect(x: origin.x, y: y, width: width, height: box.height)
             y += box.height
         }
-        // A trailing framed atom cannot own the bottom edge gap either.
-        if spacingModel == .instantPageV2, !(boxes.last is BlockBox) {
-            y += g[boxes.count]
-        }
+        y += bareTrailingGap(g)
         contentHeight = y - origin.y
         return contentHeight
+    }
+
+    /// The height this stack CURRENTLY occupies: each box's live `height` plus the bare gaps that belong
+    /// to no box frame. The live counterpart of `layout`'s return value — same arithmetic over the same
+    /// helpers — readable BEFORE a layout pass, which is what the canvas needs (it must size its frame
+    /// before it can lay out into it). Distinct from `measuredHeight(forWidth:)`, which re-measures each
+    /// box's content at a hypothetical width instead of reading the laid-out heights.
+    var currentHeight: CGFloat {
+        guard !boxes.isEmpty else { return 0 }
+        let g = spacingModel == .instantPageV2 ? gaps() : []
+        var total: CGFloat = 0
+        for i in boxes.indices {
+            total += bareGapAbove(i, g)
+            total += boxes[i].height
+        }
+        return total + bareTrailingGap(g)
     }
 
     /// Stateless total height at content `width` — the measure analogue of `layout`'s returned height.
