@@ -98,15 +98,16 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
-    /// Per-host tunable text-layout metrics (body/caption line height + paragraph spacing; a growable set).
-    /// Defaults reproduce the editor's built-in document look (`.default` — 1.10 line height, 8pt paragraph
-    /// gap); the compact chat composer assigns `.compact` (natural 1.0 line height, no spacing) so multi-line
-    /// text reads tight like the legacy input. Set before the first `update(...)`/document seed (the
-    /// compact-host knob convention); assigning it after content rebuilds the boxes so the new metrics take
-    /// effect (like `quoteStyle`).
-    public var textLayoutMetrics: TextLayoutMetrics = .default {
+    /// The render metrics the editor lays text out with — fonts, per-style line-spacing factors, and
+    /// the block-rhythm scalars. Defaults to the chat-message look, which is what a rich message
+    /// renders as in a bubble. A host that renders its content through a differently-configured
+    /// InstantPage V2 surface passes that surface's metrics here instead. Set before the first
+    /// `update(...)`/document seed (the compact-host knob convention); assigning it after content
+    /// rebuilds the boxes so the new metrics take effect (like `quoteStyle`).
+    public var renderMetrics: RichTextRenderMetrics = .default {
         didSet {
-            canvas.applyTextLayoutMetrics(textLayoutMetrics)
+            guard renderMetrics != oldValue else { return }
+            canvas.applyRenderMetrics(renderMetrics)
             if bounds.width > 0.0 {
                 canvas.reload(self.document.blocks, width: bounds.width)
             }

@@ -777,15 +777,13 @@ final class DocumentCanvasView: UIView {
         self.quoteCollapseIcons = icons
     }
 
-    /// Applies tunable text-layout metrics: rebuilds the mapper's stylesheet with the line-height/spacing
-    /// fields (preserving the other stylesheet fields + theme/emojiScale/writing-direction — the stylesheet
-    /// is immutable). The caller reloads afterward (mirrors `applyQuoteStyle`). A compact host (the chat
-    /// composer) sets a tight variant so body/caption paragraphs use natural line height and no spacing.
-    func applyTextLayoutMetrics(_ m: TextLayoutMetrics) {
+    /// Applies host-supplied render metrics: rebuilds the mapper's stylesheet around them (preserving
+    /// the other stylesheet fields + theme/emojiScale/writing-direction — the stylesheet is immutable).
+    /// The caller reloads afterward (mirrors `applyQuoteStyle`). A host passes the metrics its
+    /// counterpart InstantPage V2 surface will use, so the editor is WYSIWYG against it.
+    func applyRenderMetrics(_ m: RichTextRenderMetrics) {
         var s = self.mapper.styleSheet
-        s.bodyLineHeightMultiple = m.bodyLineHeightMultiple
-        s.bodyParagraphSpacingBefore = m.bodyParagraphSpacingBefore
-        s.bodyParagraphSpacingAfter = m.bodyParagraphSpacingAfter
+        s.metrics = m
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection,
@@ -1100,7 +1098,12 @@ final class DocumentCanvasView: UIView {
     /// by `layoutSubviews` for any UIKit-driven pass. Idempotent.
     func layoutContent() {
         if bounds.width > 0 { lastLayoutWidth = bounds.width }
-        root.verticalInsetBase = self.blockVerticalInset
+        // The document's top-level sequence lays out on InstantPage V2's rhythm, so the editor's block
+        // spacing matches the rendered message. Its metrics come from the mapper, so a host's
+        // `renderMetrics` reaches the rhythm as well as the fonts.
+        root.spacingModel = .instantPageV2
+        root.sequenceKind = .topLevel
+        root.metrics = mapper.styleSheet.metrics
         _ = root.layout(origin: CGPoint(x: contentLeftPad, y: contentMargins.top),
                         width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
@@ -1172,6 +1175,11 @@ final class DocumentCanvasView: UIView {
         // others keep the live value.
         let margins = explicitMargins ?? self.contentMargins
         let contentW = max(width - (self.pageMargin + margins.left) - (self.pageMargin + margins.right), 1)
+        // Same purity requirement for the RHYTHM: this can run before `layoutContent()` has ever set the
+        // root's spacing model, so state it here too rather than inheriting whatever the last layout left.
+        root.spacingModel = .instantPageV2
+        root.sequenceKind = .topLevel
+        root.metrics = mapper.styleSheet.metrics
         return margins.top + root.measuredHeight(forWidth: contentW) + margins.bottom
     }
 

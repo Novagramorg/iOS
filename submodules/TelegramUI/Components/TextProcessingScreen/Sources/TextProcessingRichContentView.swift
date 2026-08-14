@@ -160,16 +160,9 @@ private func textProcessingInstantPageTheme(theme: PresentationTheme) -> Instant
         codeBlockBackgroundColor = accent.withMultipliedAlpha(0.1)
     }
 
-    let textCategories = InstantPageTextCategories(
-        kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 0.685), color: primary),
-        header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 0.685, weight: .medium), color: primary),
-        subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 0.685, weight: .medium), color: primary),
-        paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 1.0), color: primary),
-        caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: secondary),
-        credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: secondary),
-        table: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: primary),
-        article: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 18.0, lineSpacingFactor: 1.0), color: primary),
-        codeBlock: InstantPageTextAttributes(font: InstantPageFont(style: .monospace, size: 14.0, lineSpacingFactor: 1.0), color: primary)
+    let textCategories = InstantPageTextCategories.chatMessage(
+        primaryText: primary,
+        secondaryText: secondary
     )
     return InstantPageTheme(
         type: isDark ? .dark : .light,

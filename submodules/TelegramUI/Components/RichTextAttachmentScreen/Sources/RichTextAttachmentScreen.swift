@@ -1200,6 +1200,12 @@ final class RichTextAttachmentScreenComponent: Component {
                 // is a no-op on this first pass since `appliedTheme` is now set, and handles later theme
                 // changes when the frame — and a working reload width — exists.)
                 editor.theme = Self.mapEditorTheme(environment.theme)
+                // Lay text out with the exact numbers the recipient's renderer will use. This document is
+                // sent as a rich message, so the counterpart surface is the chat bubble — the same metrics
+                // the composer uses. Set alongside `theme` and BEFORE `editor.document`, per the
+                // host-ordering invariant: the document setter bakes the current mapper into each block's
+                // attributed string.
+                editor.renderMetrics = InstantPageTheme.chatMessageRenderMetrics()
                 self.appliedTheme = environment.theme
                 // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
                 // tune here to diverge from the chat composer.

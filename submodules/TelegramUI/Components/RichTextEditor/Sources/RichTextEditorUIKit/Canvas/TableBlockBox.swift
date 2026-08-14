@@ -98,7 +98,8 @@ final class TableBlockBox: CanvasBlock {
                 })
                 // The cell owns its vertical padding (`cellVerticalPadding`), so its stack adds no
                 // inter-block inset — otherwise the document's 8pt inset would stack on top.
-                stack.verticalInsetBase = 0
+                stack.spacingModel = .containerInterior
+            stack.verticalInsetBase = 0
                 return stack
             }
         }
@@ -189,6 +190,8 @@ final class TableBlockBox: CanvasBlock {
     }
 
     // Token size: cell = stack tokens + 2; row = Σcells + 2; table = Σrows + 2.
+    var spacingKind: RichTextBlockSpacingKind { .table }
+
     var nodeSize: Int {
         var total = 0
         for row in cells {
@@ -570,6 +573,7 @@ final class TableBlockBox: CanvasBlock {
         for _ in 0..<n {
             let para = ParagraphBlock(id: BlockID.generate())
             let stack = BlockStack(boxes: [BlockBox(paragraph: para, mapper: mapper, width: 100)])
+            stack.spacingModel = .containerInterior
             stack.verticalInsetBase = 0   // cell owns its vertical padding (see cellVerticalPadding)
             rowStacks.append(stack)
             ids.append(BlockID.generate()); bgs.append(nil)

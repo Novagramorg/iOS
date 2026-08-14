@@ -60,12 +60,12 @@ public struct AttributedStringMapper {
                                baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer)
     }
 
-    /// A copy that renders body/pull-quote content at `size` base points, PRESERVING this mapper's
+    /// A copy that renders body/pull-quote content at `size` points, PRESERVING this mapper's
     /// stylesheet customizations (quote insets, spacing, metrics), emoji scale, theme, and writing direction.
     /// (Unlike `tableCellVariant()`, which swaps in the fixed `.tableCells` stylesheet.)
-    public func withBodyBaseSize(_ size: CGFloat) -> AttributedStringMapper {
+    public func withBodyFontSize(_ size: CGFloat) -> AttributedStringMapper {
         var s = styleSheet
-        s.bodyBaseSize = size
+        s.metrics.body.size = size
         return AttributedStringMapper(styleSheet: s, emojiScale: emojiScale, theme: theme,
                                       baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer)
     }

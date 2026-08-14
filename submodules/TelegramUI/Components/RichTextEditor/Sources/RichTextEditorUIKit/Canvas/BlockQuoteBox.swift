@@ -86,8 +86,8 @@ final class BlockQuoteBox: CanvasBlock {
         // Derive a 15pt-body mapper for all quote content. This preserves the host's quote insets,
         // spacing, theme, emoji scale, and writing direction (unlike `tableCellVariant()`, which
         // swaps in the fixed `.tableCells` stylesheet). Nested quotes and quotes-in-cells call
-        // withBodyBaseSize(15) on their already-15pt mapper → idempotent; no per-level shrink.
-        let quoteMapper = mapper.withBodyBaseSize(15)
+        // withBodyFontSize(15) on their already-15pt mapper → idempotent; no per-level shrink.
+        let quoteMapper = mapper.withBodyFontSize(15)
         self.id = blockQuote.id
         self.mapper = quoteMapper
         self.quoteStyle = quoteStyle
@@ -111,7 +111,8 @@ final class BlockQuoteBox: CanvasBlock {
         // there too, so the two modes are visually consistent. Inter-child spacing comes from each child's
         // own topInset/bottomInset (via `facingInset`), exactly like table cells whose cell frame owns all
         // vertical padding. The quote's topInset/bottomInset are the sole outer padding.
-        stack.verticalInsetBase = 0
+        stack.spacingModel = .containerInterior
+            stack.verticalInsetBase = 0
         self.children = stack
 
         // The author line uses the same 15pt quote mapper as the children, laid out at the same inner width.
@@ -148,8 +149,13 @@ final class BlockQuoteBox: CanvasBlock {
     private func previewTextWidth(_ width: CGFloat) -> CGFloat {
         max(width - leadingPad - trailingPad, 1)
     }
+    /// One body LINE ADVANCE in this quote's mapper — V2's `linePitch`, not `font.lineHeight`. Used to
+    /// cap the collapsed preview at `maxPreviewLines` and to size the collapsed caret, both of which are
+    /// "how tall are N lines" questions and so must use the pitch.
     private var lineHeight: CGFloat {
-        mapper.styleSheet.font(for: .body, attributes: .plain).lineHeight
+        let sheet = mapper.styleSheet
+        return RichTextRenderMetrics.linePitch(sheet.font(for: .body, attributes: .plain),
+                                               factor: sheet.metrics.body.lineSpacingFactor)
     }
 
     /// Caret rect for the COLLAPSED atom's leading gap (canvas coords): a 2pt bar at the folded preview's
@@ -160,7 +166,11 @@ final class BlockQuoteBox: CanvasBlock {
     }
     private var previewHeight: CGFloat {
         guard let layout = previewLayout else { return 0 }
-        return min(layout.boundingHeight, lineHeight * CGFloat(BlockQuoteBox.maxPreviewLines))
+        // The cap is "N lines worth" in V2 terms too: N pitches, less the last line's box overhang.
+        let capped = lineHeight * CGFloat(BlockQuoteBox.maxPreviewLines)
+            + RichTextRenderMetrics.trailingHeightCorrection(mapper.styleSheet.font(for: .body, attributes: .plain),
+                                                             pinnedLineHeight: lineHeight)
+        return min(layout.correctedBoundingHeight, capped)
     }
 
     /// Whether the collapse control should appear. Only when the quote's content is TALLER than the
@@ -219,6 +229,10 @@ final class BlockQuoteBox: CanvasBlock {
     private var childStackHeight: CGFloat { children.contentHeight }
 
     /// The author line's canvas origin: below the child stack, at the quote's leading text inset.
+    /// NB the author line is placed against the RAW line box, not the V2-corrected height. Author-line
+    /// placement is quote INTERIOR geometry, which has no V2 reference in this cycle (the quote-interior
+    /// cycle owns it) — correcting it here would shift the attribution 1-2pt with nothing to check it
+    /// against. The quote's own HEIGHT is corrected, because that feeds the document's block rhythm.
     private var authorOrigin: CGPoint {
         CGPoint(x: frame.minX + quoteStyle.leadingInset,
                 y: frame.minY + topInset + childStackHeight + quoteStyle.authorSpacing)
@@ -243,6 +257,8 @@ final class BlockQuoteBox: CanvasBlock {
     /// (Σchildren + authorLength + 4), matching `DocumentTree`'s `.blockQuote(id, children + [authorPara])`.
     /// Expanded, author hidden → open + children tokens + close (Σchildren + 2), matching `DocumentTree`'s
     /// `.blockQuote(id, children)` (no trailing author paragraph).
+    var spacingKind: RichTextBlockSpacingKind { .blockQuote }
+
     var nodeSize: Int {
         if collapsed { return 3 }
         let childrenSize = children.boxes.reduce(0) { $0 + $1.nodeSize }
@@ -274,7 +290,7 @@ final class BlockQuoteBox: CanvasBlock {
         if collapsed {
             guard let layout = previewLayout else { return topInset + bottomInset }
             let tw = previewTextWidth(max(width, 1))
-            let h = min(layout.boundingHeight(forWidth: tw),
+            let h = min(layout.correctedBoundingHeight(forWidth: tw),
                         lineHeight * CGFloat(BlockQuoteBox.maxPreviewLines))
             return h + topInset + bottomInset
         }

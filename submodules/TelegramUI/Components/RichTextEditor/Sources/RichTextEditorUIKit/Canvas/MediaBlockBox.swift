@@ -97,6 +97,26 @@ final class MediaBlockBox: CanvasBlock {
     var blockViewFrame: CGRect { frame }
     var textLayout: BlockLayoutEngine { isCaptionless ? emptyLayout : caption }
     var textLength: Int { isCaptionless ? 0 : caption.length }
+    /// `hasCredit` is ALWAYS false: `InstantPageBuilder` maps the editor's single caption to
+    /// `InstantPageCaption.text` and always passes `credit: .empty`. The editor has no credit field — do
+    /// NOT wire the caption here, or every captioned image loses its flush-below gap.
+    /// Raw media is V2's image/video/slideshow/collage/map set; audio and document are not.
+    var spacingKind: RichTextBlockSpacingKind {
+        // A multi-item box (mosaic/slideshow) maps to `.collage`/`.slideshow`, both of which are in V2's
+        // raw-media set, so it is raw regardless of the primary item's kind.
+        let raw: Bool
+        if items.count > 1 {
+            raw = true
+        } else {
+            switch items.first?.kind {
+            case .image, .video, .location: raw = true
+            case .audio, .document:         raw = false
+            case nil:                       raw = true
+            }
+        }
+        return .media(hasCredit: false, isRawMedia: raw)
+    }
+
     var nodeSize: Int { isCaptionless ? 3 : caption.length + 5 }
     var textStart: Int { isCaptionless ? nodeStart : nodeStart + 2 }
     var textRef: TextNodeRef { .caption(id) } // unchanged; unused for audio (leafRegions is empty)
@@ -179,7 +199,7 @@ final class MediaBlockBox: CanvasBlock {
     var height: CGFloat {
         if isCaptionless { return verticalInset + rowHeight + verticalInset }
         return verticalInset + imageAreaHeight + captionGap
-            + max(caption.boundingHeight, captionEmptyLineHeight) + verticalInset
+            + max(caption.correctedBoundingHeight, captionEmptyLineHeight) + verticalInset
     }
 
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
@@ -191,7 +211,7 @@ final class MediaBlockBox: CanvasBlock {
             imageArea = imageDisplaySize(maxWidth: max(width + horizontalBleed * 2, 1)).height
         }
         return verticalInset + imageArea + captionGap
-            + max(caption.boundingHeight(forWidth: max(width, 1)), captionEmptyLineHeight) + verticalInset
+            + max(caption.correctedBoundingHeight(forWidth: max(width, 1)), captionEmptyLineHeight) + verticalInset
     }
 
     var textOrigin: CGPoint {

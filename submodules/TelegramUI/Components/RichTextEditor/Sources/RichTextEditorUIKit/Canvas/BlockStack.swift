@@ -44,13 +44,34 @@ final class BlockStack {
         box is CodeBlockBox || box is TableBlockBox || box is PullQuoteBox || box is BlockQuoteBox || box is DetailsBox
     }
 
+    /// Which vertical-rhythm model this stack lays out with.
+    enum SpacingModel {
+        /// InstantPage V2's pairwise rhythm (`richTextSpacingBetweenBlocks`) — the document's top-level
+        /// sequence, so the editor's block spacing matches the rendered message.
+        case instantPageV2
+        /// The editor's pre-parity facing-inset model, kept VERBATIM for a stack nested inside a
+        /// container (table cell, details, block-quote children). Those interiors have no V2 reference
+        /// yet — the container-interior cycles own them — so this cycle leaves them exactly as they were
+        /// rather than half-migrating them.
+        case containerInterior
+    }
+
+    var spacingModel: SpacingModel = .instantPageV2
+
+    /// Which kind of sequence this stack is, for the V2 rule table. `.cell` mirrors the renderer's own
+    /// (currently unread) `.cell`.
+    var sequenceKind: RichTextBlockSequenceKind = .topLevel
+
+    /// The render metrics the V2 rule table reads. Set from the canvas's mapper so a host's metrics
+    /// reach the rhythm as well as the fonts.
+    var metrics: RichTextRenderMetrics = .default
+
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
     /// insets of two adjacent blocks together make their gap: list items stack tight (0); two body
     /// paragraphs sit at half the default; a block facing a quote or table reserves extra margin;
-    /// otherwise the default.
+    /// otherwise the default. Used only by `.containerInterior`.
     /// The base inter-block vertical inset (each side; two facing insets make a gap). Defaults to the
-    /// document metric (`BlockBox.defaultVerticalInset`, 8pt). A compact host (chat composer) sets the root
-    /// stack's base to 0 so a lone paragraph hugs its text height; nested (table-cell) stacks keep the default.
+    /// document metric (`BlockBox.defaultVerticalInset`, 8pt); nested stacks set 0.
     var verticalInsetBase: CGFloat = BlockBox.defaultVerticalInset
 
     private func facingInset(of box: BlockBox, toward neighbor: CanvasBlock?) -> CGFloat {
@@ -72,47 +93,121 @@ final class BlockStack {
         return base
     }
 
+    /// The gap ABOVE each box, plus the trailing edge gap — `boxes.count + 1` entries. V2 model only.
+    ///
+    /// A run of adjacent list items is collapsed to the single `.list` block the renderer sees, so the
+    /// run's OUTER boundaries classify as `.list` while gaps INSIDE it are computed with `kind: .list`.
+    /// Without the collapse, two bullet items would take the paragraph-to-paragraph 1pt rule and a list
+    /// next to a paragraph would take the wrong arm entirely.
+    func gaps() -> [CGFloat] {
+        guard !boxes.isEmpty else { return [0] }
+        let kinds = boxes.map { $0.spacingKind }
+        /// True when boxes i and i+1 are both members of the same list run.
+        func insideListRun(_ i: Int) -> Bool {
+            return i >= 0 && i + 1 < kinds.count && kinds[i] == .list && kinds[i + 1] == .list
+        }
+        var result: [CGFloat] = []
+        result.reserveCapacity(kinds.count + 1)
+        for i in 0...kinds.count {
+            let upper: RichTextBlockSpacingKind? = i > 0 ? kinds[i - 1] : nil
+            let lower: RichTextBlockSpacingKind? = i < kinds.count ? kinds[i] : nil
+            if insideListRun(i - 1) {
+                // Inside a list run the two neighbours are ITEMS of one block, so they are classified as
+                // the paragraphs they are and measured with the in-list rule.
+                result.append(richTextSpacingBetweenBlocks(upper: .paragraph, lower: .paragraph,
+                                                           kind: .list, metrics: metrics))
+            } else {
+                result.append(richTextSpacingBetweenBlocks(upper: upper, lower: lower,
+                                                           kind: sequenceKind, metrics: metrics))
+            }
+        }
+        return result
+    }
+
     /// Lays boxes out top-to-bottom from `origin` at the given content `width`; returns total height.
     @discardableResult
     func layout(origin: CGPoint, width: CGFloat) -> CGFloat {
         var y = origin.y
+        let g = spacingModel == .instantPageV2 ? gaps() : []
         for i in boxes.indices {
             let box = boxes[i]
-            if let b = box as? BlockBox {
-                let prev: CanvasBlock? = i > 0 ? boxes[i - 1] : nil
-                let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
-                b.topInset = facingInset(of: b, toward: prev)
-                b.bottomInset = facingInset(of: b, toward: next)
+            switch spacingModel {
+            case .instantPageV2:
+                if let b = box as? BlockBox {
+                    // The gap is ONE quantity, carried by the LOWER block where it can be — so a tap in
+                    // the gap lands in the block you are heading toward. The upper contributes nothing
+                    // below it, so a gap is never counted twice.
+                    b.topInset = g[i]
+                    // The trailing edge gap, plus any gap the NEXT block cannot own itself (see below).
+                    let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
+                    b.bottomInset = next == nil ? g[boxes.count] : (next is BlockBox ? 0 : g[i + 1])
+                } else {
+                    // A framed block (table / code / quote / details) fills its own frame and has no
+                    // external inset to put a gap in, so the gap above it is owned by the PARAGRAPH above
+                    // (handled as that box's `bottomInset`, above). Only when there is no such paragraph —
+                    // the sequence edge, or two adjacent framed atoms — is it laid down as space here.
+                    //
+                    // LOAD-BEARING: leaving it unowned in the paragraph case makes the canvas
+                    // discontiguous, and the arrow-key escape probe (`owner.frame.minY - step/2` in
+                    // `+Navigation`) then lands in dead space and the caret cannot leave a table.
+                    if i == 0 || !(boxes[i - 1] is BlockBox) { y += g[i] }
+                }
+            case .containerInterior:
+                if let b = box as? BlockBox {
+                    let prev: CanvasBlock? = i > 0 ? boxes[i - 1] : nil
+                    let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
+                    b.topInset = facingInset(of: b, toward: prev)
+                    b.bottomInset = facingInset(of: b, toward: next)
+                }
+                // Two adjacent framed atoms (code / table / collapsed quote) both fill their whole
+                // frames, so neither's internal padding separates the two fills. Insert an external gap
+                // between them — matching the separation a `BlockBox` neighbor reserves toward a framed
+                // atom (`facingInset` rule 1: base + framed margin).
+                if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
+                    y += self.verticalInsetBase + BlockStack.framedNeighborMargin
+                }
             }
             box.setWidth(width)
-            // Two adjacent framed atoms (code / table / collapsed quote) both fill their whole frames,
-            // so neither's internal padding separates the two fills. Insert an external gap between them
-            // — matching the separation a `BlockBox` neighbor reserves toward a framed atom
-            // (`facingInset` rule 1: base + framed margin), so it scales with the host's block inset.
-            if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
-                y += self.verticalInsetBase + BlockStack.framedNeighborMargin
-            }
             box.frame = CGRect(x: origin.x, y: y, width: width, height: box.height)
             y += box.height
+        }
+        // A trailing framed atom cannot own the bottom edge gap either.
+        if spacingModel == .instantPageV2, !(boxes.last is BlockBox) {
+            y += g[boxes.count]
         }
         contentHeight = y - origin.y
         return contentHeight
     }
 
     /// Stateless total height at content `width` — the measure analogue of `layout`'s returned height.
-    /// Reads each box's structural insets (width-independent); never mutates a box. Reused by the
-    /// document root and by each table cell.
+    /// Never mutates a box.
+    ///
+    /// In the V2 model it computes its own gaps rather than reading the boxes' insets, so it is correct
+    /// BEFORE the first `layout` — a host that sizes its field from a measure taken before the editor is
+    /// framed would otherwise get a height short by every gap.
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        var total: CGFloat = 0
-        for (i, box) in boxes.enumerated() {
-            // Mirror the external gap `layout` inserts between two adjacent framed atoms, so the
-            // stateless measure matches the laid-out height (otherwise the host sizes the field short).
-            if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
-                total += self.verticalInsetBase + BlockStack.framedNeighborMargin
+        guard !boxes.isEmpty else { return 0 }
+        switch spacingModel {
+        case .instantPageV2:
+            let g = gaps()
+            var total: CGFloat = 0
+            for (i, box) in boxes.enumerated() {
+                total += g[i]
+                total += box.measuredContentHeight(forWidth: width)
             }
-            total += box.measuredHeight(forWidth: width)
+            return total + g[boxes.count]
+        case .containerInterior:
+            var total: CGFloat = 0
+            for (i, box) in boxes.enumerated() {
+                // Mirror the external gap `layout` inserts between two adjacent framed atoms, so the
+                // stateless measure matches the laid-out height.
+                if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
+                    total += self.verticalInsetBase + BlockStack.framedNeighborMargin
+                }
+                total += box.measuredHeight(forWidth: width)
+            }
+            return total
         }
-        return total
     }
 
     func leafRegions() -> [LeafTextRegion] { boxes.flatMap { $0.leafRegions() } }

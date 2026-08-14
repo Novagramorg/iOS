@@ -1135,3 +1135,36 @@ var effectiveMedia: [Media] {
 - **`fullInstantPage` is not indexed** (the server doesn't index it either, and it's fetched on demand after store-time). The first media lives in the partial `instantPage` anyway.
 - **Only switch the loop SOURCE, never the per-type branches.** Many swapped loops still contain `TelegramMediaPoll`/`TelegramMediaPaidContent`/`TelegramMediaWebpage` branches that rich messages never match — that's fine and intentional; only the `for … in <msg>.media` source changes.
 - **Build-only completeness gate.** Every swap is type-identical (`[Media]` → `[Media]`), so the only compile risk is a receiver that is neither `Message` nor `EngineMessage`; the full Bazel build is the gate (no per-module build / unit tests). Deferred, NOT done: chat-list/reply/pinned/notification/forward thumbnail **previews** and the "Photo"/"Video" media-kind **labels** (`messageContentKind`/`ChatListItemStrings`) — those are preview surfaces, not blank-cell breakage — and **multi-media** (first-media-only is the current scope).
+
+## The chat-message text categories, and editor layout parity (2026-08-14)
+
+`layoutInstantPageV2` takes its fonts from the caller, so there is **no single V2 look** — and the three
+chat-side callers had each hand-copied their own `InstantPageTextCategories` table, which drifted: the
+bubble carried heading `lineSpacingFactor` 1.0 / body 0.9 while the long-press send preview and the
+TextProcessing screen carried 0.685 / 1.0, so **the send preview did not match the bubble it was
+previewing**. All three now share `InstantPageTextCategories.chatMessage(primaryText:secondaryText:)`
+(`InstantPageChatMessageTheme.swift`) with the bubble's values. That deliberately changed the preview and
+TextProcessing; the bubble's values won because it is the surface the recipient sees.
+
+The same table is what the **rich-text editor lays text out with**, so an author composing a rich message
+sees the message. `InstantPageTheme.richTextRenderMetrics(edgeSpacingReduction:)`
+(`InstantPageRichTextMetricsAdapter.swift`) projects any theme into the editor's `RichTextRenderMetrics`
+contract, and `chatMessageRenderMetrics()` is the convenience both editor hosts call. The heading ladder
+comes from `headingTextAttributes(level:link:)` rather than being restated, so H3–H6's derivation from the
+subheader (and its response to the reader's font-size slider) stays shared. `codeBlock` reports the
+metrics' 15pt, not the theme's nominal 14pt, because `layoutCodeBlock` overrides the category with an
+absolute 15 — 14 is a size the renderer never uses.
+
+**`InstantPageUI` gained a direct dep on `RichTextEditorUIKit`**, which it already had transitively via
+`ChatRichTextEditorComposer`, so there is no cycle. The adapter has to live on this side: the composer
+module cannot import `InstantPageUI` (that direction *is* the cycle), which is why the composer passes
+`RichTextRenderMetrics.default` and a test pins that default equal to the adapted theme.
+
+Two parity test suites live in `//submodules/InstantPageUI:InstantPageUITests`, both calling the
+renderer's own functions so a change on either side that breaks parity fails here:
+`RichTextV2MetricsParityTests` pins the editor's line formulas against `layoutTextItem`, its resolved font
+faces against `InstantPageTextStyleStack`'s family scheme, and the **whole** pairwise gap table against
+`spacingBetweenBlocks`; `RichTextV2FrameParityTests` pins that the editor composes those primitives into
+the same running origin. **Do not change a value in `chatMessage` without expecting the editor to move
+with it** — that coupling is the point. Editor-side detail, and what is deferred, is in
+`submodules/TelegramUI/Components/RichTextEditor/CLAUDE.md`.

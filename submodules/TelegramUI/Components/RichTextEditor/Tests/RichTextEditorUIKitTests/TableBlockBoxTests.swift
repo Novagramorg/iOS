@@ -87,8 +87,12 @@ final class TableBlockBoxTests: XCTestCase {
         XCTAssertEqual(emptyBox.height, filledBox.height, accuracy: 1.0,
                        "an empty cell reserves a real line, matching a single-line filled cell")
         // The cell box carries no block inset (vertical padding is a cell metric applied at the row
-        // level, not on the box), so the box is just the 15pt line (~19.7pt) — a real reserved line.
-        XCTAssertGreaterThan(emptyBox.height, 18, "not collapsed — reserves a real line")
+        // level, not on the box), so the box is exactly one V2 line at the CELL font size (15pt).
+        let cellSheet = StyleSheet.tableCells
+        let cellLine = RichTextRenderMetrics.textHeight(cellSheet.font(for: .body, attributes: .plain),
+                                                       factor: cellSheet.metrics.body.lineSpacingFactor,
+                                                       lineCount: 1)
+        XCTAssertEqual(emptyBox.height, cellLine, accuracy: 0.5, "not collapsed — reserves a real line")
     }
 
     // A wholly-empty row keeps a real line's height (≈ a filled row), not just topInset+bottomInset.
@@ -350,7 +354,10 @@ extension TableBlockBoxTests {
         // Text sits exactly `cellVerticalPadding` below the cell top and above the bottom (symmetric).
         let cr = t.cellRect(row: 1, column: 0)!
         let topGap = box.textOrigin.y - cr.minY
-        let bottomGap = cr.maxY - (box.textOrigin.y + box.layout.boundingHeight)
+        // Against the V2-CORRECTED text height: the raw pinned line box overhangs the last baseline by a
+        // full line box, so measuring from it reads the padding ~2pt short even though the glyphs sit
+        // exactly `cellVerticalPadding` above the cell bottom.
+        let bottomGap = cr.maxY - (box.textOrigin.y + box.layout.correctedBoundingHeight)
         XCTAssertEqual(topGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "top gap == cellVerticalPadding")
         XCTAssertEqual(bottomGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "bottom gap == cellVerticalPadding")
     }
