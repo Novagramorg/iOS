@@ -116,6 +116,7 @@ func makeMediaWrapper(
         emptyColor: emptyColor,
         getPreloadedResource: { _ in nil }
     )
+    imageNode.captureProtected = renderContext.captureProtected
     imageNode.frame = CGRect(origin: .zero, size: frame.size)
     return imageNode
 }
@@ -158,6 +159,7 @@ func handleOpenMediaTap(
         webPage: renderContext.webpage,
         context: renderContext.context,
         userLocation: renderContext.sourceLocation.userLocation,
+        captureProtected: renderContext.captureProtected,
         present: renderContext.present,
         push: renderContext.push,
         openUrl: renderContext.openUrl,
@@ -249,6 +251,9 @@ final class InstantPageV2MediaImageView: UIView, InstantPageItemView {
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        // Re-read on every apply: copy protection can be toggled peer-side while the message is on
+        // screen, which does not rebuild this view (see `InstantPageV2RenderContext.captureProtected`).
+        self.wrappedNode.captureProtected = renderContext.captureProtected
         // On the Local→Cloud send flip the media id changes but the view is reused (see the
         // rich-bubble "Send-time media continuity" doc). Re-point the wrapped node's interactive
         // bindings at the Cloud media so tap-to-open works without a rebuild; the image is not
@@ -301,6 +306,9 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
     private var videoNode: UniversalVideoNode?
     // The media id the current `videoNode` was built for; drives teardown/rebuild on positional reuse.
     private var videoNodeMediaId: EngineMedia.Id?
+    // `captureProtected` baked into the current `videoNode`'s content. `NativeVideoContent` takes it
+    // at construction, so a peer-side copy-protection toggle has to rebuild the player.
+    private var videoNodeCaptureProtected = false
     // Whether the view currently intersects the visibility rect; gates `canAttachContent`.
     private var localIsVisible = false
     // One-shot auto-download fetch (download even when not autoplaying), keyed by media id.
@@ -376,6 +384,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        self.wrappedNode.captureProtected = renderContext.captureProtected
         // See the image view: refresh the poster node's `self.media` identity on the Local→Cloud
         // send flip so the gallery centralIndex match (and transitionNode) use the Cloud media. The
         // inline video node is rebuilt separately below (keyed by media id).
@@ -428,7 +437,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
         let wantAutoplay = renderContext.shouldAutoplayVideo(file) && !spoilerBlocks
 
         if wantAutoplay {
-            if self.videoNode != nil, self.videoNodeMediaId == mediaId {
+            if self.videoNode != nil, self.videoNodeMediaId == mediaId, self.videoNodeCaptureProtected == renderContext.captureProtected {
                 return
             }
             self.tearDownVideoNode()
@@ -452,6 +461,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
                 enableSound: false,
                 fetchAutomatically: true,
                 placeholderColor: .clear,
+                captureProtected: renderContext.captureProtected,
                 storeAfterDownload: nil
             )
             let videoNode = UniversalVideoNode(
@@ -479,6 +489,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
             self.addSubview(videoNode.view)
             self.videoNode = videoNode
             self.videoNodeMediaId = mediaId
+            self.videoNodeCaptureProtected = renderContext.captureProtected
             videoNode.canAttachContent = self.localIsVisible
             self.setNeedsLayout()
         } else {
@@ -492,6 +503,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
             videoNode.view.removeFromSuperview()
             self.videoNode = nil
             self.videoNodeMediaId = nil
+            self.videoNodeCaptureProtected = false
         }
     }
 
@@ -564,6 +576,7 @@ final class InstantPageV2MediaMapView: UIView, InstantPageItemView {
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        self.wrappedNode.captureProtected = renderContext.captureProtected
     }
 
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
@@ -628,6 +641,7 @@ final class InstantPageV2MediaCoverImageView: UIView, InstantPageItemView {
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
+        self.wrappedNode.captureProtected = renderContext.captureProtected
         // See the image view: refresh interactive bindings on the Local→Cloud send media-id flip.
         if item.media.media.id != previousMediaId {
             self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)

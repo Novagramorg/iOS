@@ -77,6 +77,11 @@ public struct RichTextRenderMetrics: Equatable {
     /// back out of the document's outer padding, so blocks keep their absolute positions.
     public var edgeSpacingReduction: CGFloat
 
+    // MARK: Buttons
+
+    /// Pill geometry for inline `textButton`s and `pageBlockButtonRow` members.
+    public var button: RichTextButtonMetrics
+
     public init(
         heading1: RichTextFontSpec,
         heading2: RichTextFontSpec,
@@ -94,7 +99,10 @@ public struct RichTextRenderMetrics: Equatable {
         headingVerticalPadding: CGFloat,
         dividerVerticalPadding: CGFloat,
         detailsAdjacentSpacing: CGFloat,
-        edgeSpacingReduction: CGFloat
+        edgeSpacingReduction: CGFloat,
+        // Defaulted so every existing construction site keeps compiling; the InstantPageUI adapter
+        // passes the renderer's own constants explicitly.
+        button: RichTextButtonMetrics = .default
     ) {
         self.heading1 = heading1
         self.heading2 = heading2
@@ -113,6 +121,7 @@ public struct RichTextRenderMetrics: Equatable {
         self.dividerVerticalPadding = dividerVerticalPadding
         self.detailsAdjacentSpacing = detailsAdjacentSpacing
         self.edgeSpacingReduction = edgeSpacingReduction
+        self.button = button
     }
 
     /// The chat-message look: what a rich message actually renders as in a bubble, which is the

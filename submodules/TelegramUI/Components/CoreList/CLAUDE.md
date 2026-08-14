@@ -295,6 +295,21 @@ but yields `(index, view)` pairs, for hosts that need each row's collection inde
 pass (computing a visible range, say) without counting iterations — array position equals collection
 index only while the window still starts at 0.
 
+`animateInsertedBlock(identities:origin:transition:)` slides a run of rows in from just beyond one edge
+of where they settled, as one rigid block — every named row takes the same offset, so the run keeps its
+spacing for the whole travel. **The host names the EDGE (`CoreListBlockOrigin`, stated in content order,
+not on screen — a rotated host reads the cases the other way round) and this view measures the
+DISTANCE** (the block's own total settled height, reserved space included), because the heights come
+from the very pass the call follows. Unloaded rows are skipped: no layer, and nothing to see. It exists
+because an entering row otherwise appears in place, which is correct for the model and wrong for a chat;
+`CoreListChatHistoryBackend` calls it for messages arriving at the newest edge. **It is list-owned
+deliberately** — a host installing its own additive position animation would have it read back as a
+CoreList track by `capturePresentedPositionOffsets()` at the next pass (see the granular-animation
+contract), and going through `transitionPosition` is also what lets an overlapping arrival compose with
+the slide already in flight. Safe to call straight after `applyChanges`: it defers onto the same
+scheduler behind a pass that was itself deferred for re-entrancy, which a synchronous window read could
+not survive.
+
 **Row geometry is a pair, and picking the wrong half is silent.** `presentedFrame(of:)` is where a row
 IS — the default, and what a host must use instead of `convert(_:from:)` (see the
 `contentHost.bounds.origin.y` gotcha below). `settledFrame(of:)` is where it WILL BE once the

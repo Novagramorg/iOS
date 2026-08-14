@@ -220,6 +220,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         /// True when the caret/selection is inside a table whose `compact` flag is set (halved cell
         /// padding). False when not in a table at all, so a host needs no optional handling.
         public let isTableCompact: Bool
+        /// Whether the caret's table draws its grid. `true` when the caret isn't in a table.
+        public let isTableBordered: Bool
         /// True when a non-empty selection touches only paragraph text — no media or table block, and
         /// neither endpoint is inside a table cell. A list marker can only be meaningfully applied to
         /// paragraph blocks, so a host toolbar uses this to gate a per-selection List action. False for
@@ -442,6 +444,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Flips the caret's table between compact (halved cell padding) and normal, as one undo step.
     /// No-op when the caret is not in a table.
     public func toggleTableCompact() { canvas.toggleTableCompact() }
+
+    /// Shows / hides the caret table's grid. An unbordered table also lays out flush (zero-width
+    /// borders), matching how the sent message renders it.
+    public func toggleTableBordered() { canvas.toggleTableBordered() }
     /// Copies the caret's current table to the pasteboard (app fragment + RTF table + plain-text flatten). No-op outside a table.
     public func copyCurrentTable() { canvas.copyCurrentTable() }
     /// Replaces the caret's current table with body paragraphs (one per row, cells space-joined), one undo step. No-op outside a table.
@@ -505,6 +511,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// registered renderer, invalid/unrenderable formula content degrades to visible raw LaTeX.
     public func insertFormula(latex: String) { canvas.insertFormula(latex: latex) }
 
+    /// Inserts a button row (one default pill) at the caret. Top-level only: a row inside a table or a
+    /// block quote is preserved and rendered if it arrives via the edit round-trip, but not created.
+    public func insertButtonRow() { canvas.insertButtonRow() }
+
+    /// Converts the current selection into ONE inline pill whose label is the selected text — the Link
+    /// flow's analogue. No-op with a collapsed caret or an empty selection.
+    public func makeSelectionInlineButton() { canvas.makeSelectionInlineButton() }
+
     /// Deletes one unit before the caret (drives a custom keyboard's backspace key).
     public func deleteBackward() { canvas.deleteBackward() }
 
@@ -541,6 +555,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     /// Called when the user taps an existing formula atom. The host presents UI and invokes `completion`
     /// with the replacement LaTeX.
+    /// Asked to present the pill property sheet when a pill is tapped — for BOTH pill kinds. The
+    /// completion applies the edit; passing `nil` deletes the pill (and its row, if it was the last).
+    /// Mirrors `onEditFormulaRequested`. While unset, tapping a pill just places the caret.
+    public var onEditButtonRequested: ((_ button: ButtonRef, _ completion: @escaping (ButtonRef?) -> Void) -> Void)? {
+        didSet { canvas.buttonEditRequested = onEditButtonRequested }
+    }
+
+    /// Asked to present a button row's alignment/delete menu. Mirrors `onRequestTableStructuralMenu`.
+    public var onRequestButtonRowMenu: ((ButtonRowMenuRequest) -> Void)? {
+        didSet { canvas.buttonRowMenuRequested = onRequestButtonRowMenu }
+    }
+
     public var onEditFormulaRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)? {
         get { canvas.formulaEditRequested }
         set { canvas.formulaEditRequested = newValue }

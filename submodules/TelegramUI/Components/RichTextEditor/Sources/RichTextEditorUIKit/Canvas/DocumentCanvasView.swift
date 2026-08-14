@@ -49,6 +49,7 @@ func makeBox(for block: Block, mapper: AttributedStringMapper,
                                                    quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
                                                    expandImage: expandImage,
                                                    collapseImage: collapseImage, width: width)
+    case .buttonRow(let r):      return ButtonRowBox(row: r, mapper: mapper, width: width)
     }
 }
 
@@ -73,6 +74,10 @@ final class DocumentCanvasView: UIView {
     /// Host hook for editing a formula atom. The editor supplies current LaTeX and a replacement callback;
     /// the host owns presentation and formula rendering dependencies.
     var formulaEditRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)?
+    /// Asked to present the pill property sheet. The completion applies the edit; `nil` deletes the pill.
+    var buttonEditRequested: ((_ button: ButtonRef, _ completion: @escaping (ButtonRef?) -> Void) -> Void)?
+    /// Asked to present a row's alignment/delete menu.
+    var buttonRowMenuRequested: ((ButtonRowMenuRequest) -> Void)?
     /// Hosted emoji views, keyed by `EmojiRef.instanceID` so edits/undo reuse (not recreate) them.
     /// Plain `internal` (NOT `private(set)`): the reconciler in `DocumentCanvasView+Emoji.swift` mutates it.
     var emojiViews: [String: HostedEmoji] = [:]
@@ -136,6 +141,9 @@ final class DocumentCanvasView: UIView {
     var blockViewOverscan: CGFloat = -1
     /// Persistent block-view subviews, keyed by BlockID so edits/undo reuse (not recreate) them.
     private(set) var blockViews: [BlockID: BlockBackingView] = [:]
+    /// Hosted INLINE button pills, keyed by global position (see `syncButtonPillViews`). A block row's
+    /// pills are not here — they are subviews of the row's own `ButtonRowBackingView`.
+    var buttonPillViews: [Int: HostedButtonPill] = [:]
     /// Bounded reuse queue of free PARAGRAPH/IMAGE backing views (both plain `BlockBackingView`). A culled
     /// view is detached + dropped from `blockViews` and pushed here; a newly-realized paragraph/image pops
     /// it and rebinds. Tables (`TableBackingView`) are heavyweight + few, so they are created/destroyed,
@@ -916,6 +924,13 @@ final class DocumentCanvasView: UIView {
                     t.pendingOffsetRestore = true                       // restore saved H-scroll on first layout
                     view = t
                     createdFreshTable = true
+                } else if box is ButtonRowBox {
+                    // Hosts a ButtonPillView per pill rather than drawing into its backing store, so a
+                    // pill label can carry a live custom emoji. Not recycled through the plain-view pool:
+                    // a recycled plain view would draw nothing and a recycled row view would keep stale
+                    // pill subviews.
+                    let r = ButtonRowBackingView(); r.canvas = self
+                    view = r
                 } else {
                     view = dequeueRecycledView()                        // reuse (or create) a plain backing view
                 }
@@ -946,7 +961,10 @@ final class DocumentCanvasView: UIView {
         for (id, view) in blockViews where !wantedIDs.contains(id) {
             view.removeFromSuperview()
             blockViews[id] = nil
-            if !(view is TableBackingView) {
+            // A ButtonRowBackingView is excluded for the same reason a TableBackingView is: it is a
+            // subclass with its own subviews and an empty `draw(_:)`, so recycling it for a paragraph
+            // would render that paragraph blank.
+            if !(view is TableBackingView), !(view is ButtonRowBackingView) {
                 view.box = nil                                          // drop the strong ref to the old box
                 view.lastRenderedSignature = nil
                 if recycleQueue.count < recycleQueueCap { recycleQueue.append(view) }
@@ -967,7 +985,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         // A freshly re-realized table has a brand-new (empty) content view; re-host emoji so its cell
         // emoji migrate back into it. Otherwise the cheap hide/show cull suffices (frames unchanged).
-        if realizedFreshTable { syncEmojiViews(); syncChecklistMarkerViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
+        if realizedFreshTable { syncEmojiViews(); syncButtonPillViews(); syncChecklistMarkerViews(); syncMediaItemViews() } else { cullEmojiViews(); cullButtonPillViews(); cullMediaItemViews() }
         refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
     }
@@ -1120,6 +1138,7 @@ final class DocumentCanvasView: UIView {
         pullQuoteMarksView.sync(marks: pullQuoteMarkRects())
         emojiOverlay.frame = bounds
         syncEmojiViews()
+        syncButtonPillViews()
         syncChecklistMarkerViews()
         mediaOverlay.frame = bounds
         syncMediaItemViews()

@@ -35,13 +35,17 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             // Regenerate the table AND its nested row/cell/inner-block IDs — a pasted "Copy Table" carries the
             // source table's IDs verbatim, and block views are keyed by BlockID, so a duplicate-ID paste would
             // steal the original table's view and make the original disappear.
+            // Only the IDENTITIES are regenerated — every table/cell ATTRIBUTE is forwarded. Omitting one
+            // silently changes the pasted table: `compact`/`bordered` reset to their defaults (a copied
+            // unbordered table pastes back bordered) and `colspan`/`rowspan` reset to 1, splitting merged
+            // cells apart.
             return .table(TableBlock(id: .generate(), columns: t.columns, rows: t.rows.map { row in
                 Row(id: .generate(), height: row.height, cells: row.cells.map { cell in
                     Cell(id: .generate(), blocks: regeneratingIDs(cell.blocks), background: cell.background,
                          horizontalAlignment: cell.horizontalAlignment, verticalAlignment: cell.verticalAlignment,
-                         isHeader: cell.isHeader)
+                         isHeader: cell.isHeader, colspan: cell.colspan, rowspan: cell.rowspan)
                 })
-            }))
+            }, compact: t.compact, bordered: t.bordered))
         case .media(let m):
             // Regenerate the block id only; `mediaID` is the host's content key (may legitimately repeat across
             // blocks), and the caption is inline `[TextRun]` with no nested BlockID. Use the container init and
@@ -50,6 +54,10 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             // fix in DocumentCanvasView+Editing.swift, which hit the same legacy-single-item-init trap).
             return .media(MediaBlock(id: .generate(), items: m.items,
                                      displayWidth: m.displayWidth, alignment: m.alignment, caption: m.caption))
+        case .buttonRow(let r):
+            // Regenerate the row id only. A `ButtonRef` carries no `BlockID` of its own (a pill is
+            // identified positionally, by its index in the row), so the buttons pass through wholesale.
+            return .buttonRow(ButtonRowBlock(id: .generate(), buttons: r.buttons, alignment: r.alignment))
         }
     }
 }
@@ -444,7 +452,7 @@ extension Document {
                     out.append(.details(DetailsBlock(id: .generate(), title: d.title,
                                                      children: regeneratingIDs(d.children), expanded: d.expanded)))
                 }
-            case .media, .table:
+            case .media, .table, .buttonRow:
                 // Carried only for the AI-edit path, and only when the selection FULLY covers the block's
                 // span [cursor, cursor+size) — mirrors the `.blockQuote` full-coverage rule above. After the
                 // caller's range expansion these are always fully covered. `regeneratingIDs` gives fresh IDs.

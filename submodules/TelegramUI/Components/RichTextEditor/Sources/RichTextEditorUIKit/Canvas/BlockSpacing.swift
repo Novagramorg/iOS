@@ -19,6 +19,8 @@ enum RichTextBlockSpacingKind: Equatable {
     case details
     case table
     case formula
+    /// A `pageBlockButtonRow`.
+    case buttonRow
     /// `isRawMedia` is true for image/video/slideshow/collage/map and false for audio/document —
     /// the distinction that decides whether the 1pt "media strip" rule applies.
     case media(hasCredit: Bool, isRawMedia: Bool)
@@ -89,6 +91,10 @@ func richTextSpacingBetweenBlocks(
         let sum = upperPadding.verticalPadding + lowerPadding.verticalPadding
 
         if upperIsRaw && lowerIsRaw { return 1.0 }
+
+        // ORDER IS LOAD-BEARING: this sits BEFORE the `.list` checks, mirroring
+        // `InstantPageLayoutSpacings.spacingBetweenBlocks`.
+        if case .buttonRow = upper, case .buttonRow = lower { return sum }
 
         if case .list = kind { return sum }
 

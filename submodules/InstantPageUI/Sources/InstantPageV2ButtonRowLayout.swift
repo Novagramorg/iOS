@@ -18,19 +18,67 @@ let instantPageBlockButtonSpacing: CGFloat = 6.0
 /// The schema's own cap.
 let instantPageBlockButtonsPerRow: Int = 8
 
-/// Room a badge-bearing pill must keep clear on EACH side beyond the ordinary horizontal padding, so
-/// that a centred label cannot run under the top-right type badge. `instantPageInlineButtonAttachment`
-/// already adds `instantPageBlockButtonHorizontalPadding` per side for a row pill, so only the
-/// difference is added on top of the measured attachment. Buttons without a badge reserve nothing.
+/// Per-side horizontal padding for a row pill. A LINK-styled button is chrome-less — no fill — so it
+/// takes no inner padding either and its label sits flush, reading as a link rather than a pill. The
+/// inline path reaches the same result differently, by rendering plain link text instead of a pill.
+func instantPageBlockButtonPadding(for button: InstantPageButton) -> CGFloat {
+    return button.isLink ? 0.0 : instantPageBlockButtonHorizontalPadding
+}
+
+/// The padding to retry at when the label did not fit at the comfortable value. `min` rather than the
+/// constant, so a link button (0) can never be given MORE room by the fallback than it started with.
+private func instantPageBlockButtonMinimumPadding(for button: InstantPageButton) -> CGFloat {
+    return min(instantPageBlockButtonPadding(for: button), instantPageBlockButtonMinimumHorizontalPadding)
+}
+
+/// Room a badge-bearing pill must keep clear on EACH side beyond `padding`, so that a centred label
+/// cannot run under the top-right type badge. `instantPageInlineButtonAttachment` already subtracts
+/// `padding` per side from the cap it is handed, so only the difference is taken off on top of it —
+/// making the total clearance `max(padding, reserve)`, not their sum. Buttons without a badge reserve
+/// nothing.
 ///
-/// Since the block padding now exceeds `instantPageBlockButtonIconReserve`, this is 0 in practice —
-/// the padding alone already keeps a centred label clear of the badge. Kept as the subtraction rather
-/// than hard-coded, so it re-arms if either value is retuned.
-private func instantPageBlockButtonExtraSideInset(for button: InstantPageButton) -> CGFloat {
+/// At the comfortable padding (19) this is 0: the padding alone already exceeds the badge's reserve
+/// (18). It arms only in the tight fallback, where the padding drops below the reserve and the badge
+/// becomes the binding constraint.
+private func instantPageBlockButtonExtraSideInset(for button: InstantPageButton, padding: CGFloat) -> CGFloat {
     guard instantPageBlockButtonIconName(for: button.action) != nil else {
         return 0.0
     }
-    return max(0.0, instantPageBlockButtonIconReserve - instantPageBlockButtonHorizontalPadding)
+    return max(0.0, instantPageBlockButtonIconReserve - padding)
+}
+
+/// Measures one row pill against the width its frame will occupy, choosing its padding: comfortable
+/// when the label fits there, tight when it does not.
+///
+/// **A pill's inner padding is a preference, not a constraint.** Once a label has to be cut, the
+/// padding is holding room that the label needs more, so it gives it back — per button, so a row's
+/// short labels are untouched. The two-try shape is deliberate over solving for the padding directly:
+/// truncation is decided by the typesetter's cluster break, not by a width formula we could invert.
+///
+/// Returns the per-side `extraSideInset` the chosen padding implies alongside the attachment; the
+/// hugging path adds it to the pill's frame width (the justified path's frame is the column, fixed).
+private func instantPageBlockButtonMeasure(
+    button: InstantPageButton,
+    labelString: NSAttributedString,
+    pillWidth: CGFloat
+) -> (attachment: InstantPageInlineButtonAttachment, extraSideInset: CGFloat) {
+    func measure(padding: CGFloat) -> (attachment: InstantPageInlineButtonAttachment, extraSideInset: CGFloat) {
+        let extra = instantPageBlockButtonExtraSideInset(for: button, padding: padding)
+        let attachment = instantPageInlineButtonAttachment(
+            button: button,
+            labelString: labelString,
+            maxWidth: max(0.0, pillWidth - extra * 2.0),
+            horizontalPadding: padding
+        )
+        return (attachment, extra)
+    }
+    let comfortable = instantPageBlockButtonPadding(for: button)
+    let minimum = instantPageBlockButtonMinimumPadding(for: button)
+    let result = measure(padding: comfortable)
+    guard result.attachment.isTruncated, minimum < comfortable else {
+        return result
+    }
+    return measure(padding: minimum)
 }
 
 /// Where a row's content starts within the available width, given its leftover space.
@@ -108,15 +156,14 @@ private func instantPageV2LayoutJustifiedButtonRow(
         let buttonWidth = max(0.0, (availableWidth - totalSpacing) / CGFloat(rowButtons.count))
         for (position, entry) in rowButtons.enumerated() {
             // Cap the label at the column it will be stretched to. The pill centres its label, so the
-            // reserve is taken off BOTH sides — otherwise a long label, centred, would run under the
+            // clearance is kept on BOTH sides — otherwise a long label, centred, would run under the
             // top-right type badge.
             //
-            // Deliberately kept as the shipped `columnWidth − 2·iconReserve` rather than the hug
-            // path's tighter formula: `instantPageInlineButtonAttachment` subtracts 2·hPad again
-            // internally, so this is ~14pt more conservative, and matching it would move where
-            // ellipses appear on already-published pages.
-            let iconReserve = instantPageBlockButtonIconName(for: entry.button.action) != nil ? instantPageBlockButtonIconReserve * 2.0 : 0.0
-            let attachment = instantPageInlineButtonAttachment(button: entry.button, labelString: entry.labelString, maxWidth: max(0.0, buttonWidth - iconReserve), horizontalPadding: instantPageBlockButtonHorizontalPadding)
+            // This path used to take the reserve off the column AND let the attachment subtract the
+            // padding again, clearing `padding + reserve` (37pt per side) where only `max` of the two
+            // is occupied. In a 3-button row that phantom inset cost the label ~36pt of its ~60pt of
+            // ink, so short labels ellipsised for no reason.
+            let (attachment, _) = instantPageBlockButtonMeasure(button: entry.button, labelString: entry.labelString, pillWidth: buttonWidth)
             let column = rtl ? (rowButtons.count - 1 - position) : position
             let x = horizontalInset + CGFloat(column) * (buttonWidth + metrics.blockButtonSpacing)
             entries.append((attachment, CGRect(x: x, y: y, width: buttonWidth, height: metrics.blockButtonHeight)))
@@ -138,16 +185,12 @@ private func instantPageV2LayoutHuggingButtonRow(
     metrics: InstantPageMetrics
 ) -> (entries: [(attachment: InstantPageInlineButtonAttachment, frame: CGRect)], totalHeight: CGFloat) {
     // Pass 1 — measure each pill at its natural width, capped so that even the longest label fits
-    // `availableWidth` on its own (the attachment builder ellipsises past the cap). Pass 2 depends on
-    // that: a row can then never overflow, and an over-long single label truncates instead.
+    // `availableWidth` on its own (the attachment builder ellipsises past the cap, having first
+    // retried at the tight padding). Pass 2 depends on that: a row can then never overflow, and an
+    // over-long single label truncates instead.
     let measured: [(attachment: InstantPageInlineButtonAttachment, width: CGFloat)] = labelledButtons.map { entry in
-        let extra = instantPageBlockButtonExtraSideInset(for: entry.button)
-        let attachment = instantPageInlineButtonAttachment(
-            button: entry.button,
-            labelString: entry.labelString,
-            maxWidth: max(0.0, availableWidth - extra * 2.0),
-            horizontalPadding: instantPageBlockButtonHorizontalPadding
-        )
+        let (attachment, extra) = instantPageBlockButtonMeasure(
+            button: entry.button, labelString: entry.labelString, pillWidth: availableWidth)
         return (attachment, min(availableWidth, attachment.size.width + extra * 2.0))
     }
 

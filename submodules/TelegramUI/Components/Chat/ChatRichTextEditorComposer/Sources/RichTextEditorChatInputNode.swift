@@ -387,7 +387,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case let .paragraph(p): return p.text.isEmpty
         case let .code(c): return c.text.isEmpty
         case let .pullQuote(pq): return pq.text.isEmpty
-        case .media, .table, .blockQuote, .details: return false
+        case .media, .table, .blockQuote, .details, .buttonRow: return false
         }
     }
     public var inputContentIsEmptyWhitespaceTrimmed: Bool {
@@ -396,7 +396,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             case let .paragraph(p): return p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .code(c): return c.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq): return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote, .details: return false
+            case .media, .table, .blockQuote, .details, .buttonRow: return false
             }
         }
     }

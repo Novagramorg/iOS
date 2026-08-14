@@ -116,6 +116,19 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             for (id, m) in innerPage.media { pageMedia[id] = m }
             pageBlocks.append(.details(title: richText(from: d.title), blocks: innerPage.blocks, expanded: d.expanded))
             index += 1
+        case let .buttonRow(row):
+            pageBlocks.append(.buttonRow(
+                alignment: instantPageRowAlignment(from: row.alignment),
+                buttons: row.buttons.map {
+                    InstantPageButton(
+                        text: richText(from: $0.label),
+                        action: replyMarkupButtonAction(from: $0.action),
+                        color: replyMarkupColor(from: $0.color),
+                        isLink: $0.isLink
+                    )
+                }
+            ))
+            index += 1
         }
     }
     return InstantPage(blocks: pageBlocks, media: pageMedia, isComplete: true, rtl: false, url: "", views: nil)
@@ -224,7 +237,7 @@ private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
         }
         return InstantPageTableRow(cells: cells)
     }
-    return .table(title: .empty, rows: rows, bordered: true, striped: false, compact: table.compact)
+    return .table(title: .empty, rows: rows, bordered: table.bordered, striped: false, compact: table.compact)
 }
 
 /// Concatenate a cell's paragraph blocks into one `RichText` (newline-joined). Images in cells dropped.

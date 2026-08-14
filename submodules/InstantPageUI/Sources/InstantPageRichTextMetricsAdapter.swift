@@ -54,7 +54,24 @@ public extension InstantPageTheme {
             headingVerticalPadding: m.headingVerticalPadding,
             dividerVerticalPadding: m.dividerVerticalPadding,
             detailsAdjacentSpacing: m.detailsAdjacentSpacing,
-            edgeSpacingReduction: edgeSpacingReduction
+            edgeSpacingReduction: edgeSpacingReduction,
+            // Sourced from the renderer's OWN constants rather than from `RichTextButtonMetrics.default`,
+            // so the article editor cannot drift from what it will render as. The composer, which cannot
+            // import this module, gets the pinned default instead — `RichTextV2ButtonParityTests` asserts
+            // the two are equal.
+            button: RichTextButtonMetrics(
+                inlineFontSize: instantPageInlineButtonFontSize,
+                blockFontSize: instantPageBlockButtonFontSize,
+                inlineHorizontalPadding: instantPageInlineButtonHorizontalPadding,
+                blockHorizontalPadding: instantPageBlockButtonHorizontalPadding,
+                blockMinimumHorizontalPadding: instantPageBlockButtonMinimumHorizontalPadding,
+                verticalPadding: instantPageInlineButtonVerticalPadding,
+                adjacentSpacing: instantPageInlineButtonAdjacentSpacing,
+                blockRowHeight: instantPageBlockButtonHeight,
+                blockSpacing: instantPageBlockButtonSpacing,
+                blockIconReserve: instantPageBlockButtonIconReserve,
+                maximumButtonsPerRow: instantPageBlockButtonsPerRow
+            )
         )
     }
 

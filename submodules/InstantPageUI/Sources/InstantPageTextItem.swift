@@ -784,7 +784,7 @@ private func attributedStringForLinkStyleButton(
     // out, and a link-coloured span that does nothing is worse than plain text — so render the label
     // as ordinary text, with neither link styling nor a tap attribute.
     if case .disabled = button.action {
-        return instantPageButtonLabelWithFittedEmoji(attributedStringForRichText(button.text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate))
+        return attributedStringForRichText(button.text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
     }
 
     // A `.url` action IS a link, so it rides the ordinary URL attribute that the `.plain` arm
@@ -807,11 +807,16 @@ private func attributedStringForLinkStyleButton(
     let laidOutLabel = attributedStringForRichText(button.text, styleStack: styleStack, url: effectiveUrl, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
     styleStack.pop()
 
-    // Same emoji sizing a pill uses, for a different reason: the chat bubble's paragraph has a 22pt
-    // line-to-line advance, and a body-sized emoji (24.3pt at 17pt) is taller than the whole row —
-    // it overlaps the lines above and below and reads as an inflated, shoved line. See
-    // `instantPageButtonLabelEmojiSide`.
-    let result = instantPageButtonLabelWithFittedEmoji(laidOutLabel)
+    // Deliberately NOT `instantPageButtonLabelWithFittedEmoji`. That rewrite exists for a PILL, whose
+    // `clipsToBounds` capsule would shave a body-sized emoji; a link button is ordinary text in the
+    // paragraph and has no such box. Shrinking it here made a link button's emoji smaller than the very
+    // same emoji sitting beside it in the same paragraph — an inconsistency, not a fix: a body emoji
+    // already overhangs the chat bubble's 22pt row by exactly as much, so the special case never
+    // addressed the overlap it cited, it only made link buttons look different.
+    //
+    // With no `InstantPageEmojiSizeAttribute` stamped, `InstantPageV2Layout` falls back to the ordinary
+    // body size (`A - D + 4 * pointSize / 17`) — which IS the surrounding text's emoji size.
+    let result = laidOutLabel
 
     if case .url = button.action {
         return result

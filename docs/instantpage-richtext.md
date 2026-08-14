@@ -337,6 +337,58 @@ Plan: [`docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-auto
 - **Collage cells inherit this for free** — `.collage` flattens into ordinary `.mediaVideo` items, so
   each cell is an `InstantPageV2MediaVideoView` with no collage-specific code.
 
+## Copy protection (screenshot-protected rich-message media & secure gallery)
+
+Media in a **rich message** honors the chat's copy protection the way regular media does
+(`ChatMessageInteractiveMediaNode`'s `captureProtected`): every rendered image/video/thumbnail layer
+is excluded from screenshots and screen recordings via `setLayerDisableScreenshots`, and tapping one
+opens a **secure** `InstantPageGalleryController` — protected content, no share / save-to-camera-roll.
+V1 Instant View and web IV are untouched (their pages are public web content), and so is the send
+preview.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2RenderContext.captureProtected` (default `false`) + `updateCaptureProtected(_:)`. `updateInlineImages()` seeds and refreshes each `InstantPageV2InlineImageView`. |
+| `…/Chat/ChatMessageRichDataBubbleContentNode/…` | `isCaptureProtected(item:)` = `associatedData.isCopyProtectionEnabled \|\| message.isCopyProtected()`; passed to the render-context initializer and refreshed at the top of `ensurePageView` on every apply. |
+| `submodules/InstantPageUI/Sources/InstantPageImageNode.swift` | `captureProtected` drives the inner `TransformImageNode` and the (weakly tracked) spoiler blur node; `transitionNode(media:)` does the protected-snapshot dance. |
+| `submodules/InstantPageUI/Sources/InstantPageV2MediaViews.swift` | `makeMediaWrapper` seeds it; the image/video/map/cover views re-read it in `update(item:theme:renderContext:)`; the inline autoplay `NativeVideoContent` takes `captureProtected:`; `handleOpenMediaTap` forwards it to the gallery. |
+| `InstantPageV2SlideshowView.swift`, `InstantPageV2DocumentContentNode.swift`, `InstantPageV2InlineImageView.swift` | Slideshow pages, the document row's thumbnail, and inline `RichText.image` cells. |
+| `InstantPageMediaOpen.swift` → `InstantPageGalleryController.swift` → `InstantImageGalleryItem.swift` | `captureProtected` threads to each gallery entry: protected zoomable image node, `NativeVideoContent(captureProtected:)`, and `setShareMedia(nil)` to withhold the footer action button. |
+
+### Non-obvious invariants
+
+- **The flag is mutable state on the render context, not a constructor snapshot.**
+  `isCopyProtectionEnabled` is a *peer* setting that can be toggled while the message is on screen.
+  That changes neither the webpage nor the page layout, so nothing rebuilds the V2View — the bubble
+  refreshes the context up front in `ensurePageView` (ahead of every reuse branch, including the two
+  early returns) and each media view re-reads it in its own `update(…)`. Seeding it only at
+  construction leaves an on-screen message unprotected until it is scroll-recycled.
+- **A capture-protected layer is excluded from `snapshotContentTree` too.** So the gallery
+  open/close animation would fly a blank rect. `InstantPageImageNode.transitionNode(media:)` mirrors
+  `ChatMessageInteractiveMediaNode.transitionNode(adjustRect:)`: add an **unprotected** `UIImageView`
+  copy of `imageNode.image` over the protected node, snapshot, remove the stand-in, then
+  `setLayerDisableScreenshots` the resulting snapshot so the transition itself stays uncapturable.
+- **A concealed spoiler must be protected as well.** The blur cover is a sibling `TransformImageNode`
+  the enclosing view owns (`makeSpoilerBlurredNode()`), not a child of the sharp node, so protecting
+  the sharp node alone leaves a screenshot of the blurred cover — enough to read the media's shape.
+  `InstantPageImageNode` keeps a weak reference to the node it vends and keeps the two in sync.
+- **`NativeVideoContent` takes `captureProtected` at construction**, so a toggle has to *rebuild* the
+  inline player. `InstantPageV2MediaVideoView` therefore tracks `videoNodeCaptureProtected` alongside
+  `videoNodeMediaId` and includes it in the "player is still current" early-out.
+- **The video gallery's footer needs no gating.** `InstantPageGalleryEntry.item` passes
+  `originData: nil`, and `ChatItemGalleryFooterContentNode.setup(origin:caption:)` zeroes its whole
+  `buttonsState` when origin is nil — so no share button exists on that path to begin with. Only the
+  image path (`InstantPageGalleryFooterContentNode`) needed `setShareMedia(nil)`.
+- **Document blocks were already covered.** Tapping one routes through
+  `openMessage(…, mediaSubject: .richTextMedia(fileId))` → the chat's `GalleryController`, which
+  derives protection from the message itself. Only the row's *thumbnail* is protected in the bubble;
+  the file name/size text is metadata, and the regular chat file bubble does not protect its label
+  either.
+- **`InstantPageUI` gained a direct `UIKitRuntimeUtils` dep** (for `setLayerDisableScreenshots`);
+  everything else reaches protection through `TransformImageNode.captureProtected`.
+
 ## InstantPage V2 text item height (true font line box)
 
 `layoutTextItem` (`InstantPageV2Layout.swift`) sizes a `.text` item to the **true font line height**, not the cap box. A single-line item measures exactly `fontAscent + fontDescentBelowBaseline` (`A + D`); the old behavior was the cap box `fontLineHeight = floor(fontAscent + fontDescent)` (`A − D`).

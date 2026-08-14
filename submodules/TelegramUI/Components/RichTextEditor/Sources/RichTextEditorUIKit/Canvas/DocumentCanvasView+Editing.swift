@@ -252,6 +252,10 @@ extension DocumentCanvasView {
     /// exact-content-span branch in `applySelectionReplace` (Task 5), which uses the box's full `leafRegions()`.
     func coverableContentEnd(_ box: CanvasBlock) -> Int {
         if let m = box as? MediaBlockBox, m.isCaptionless { return box.nodeStart + 1 }
+        // A button row is text-free, so `textStart + textLength` collapses to `nodeStart` and every
+        // selection would read as fully covering it. Its content is the atom span: one atom per pill,
+        // minimum one (matching `nodeSize`), so the last content position is `nodeStart + atomCount`.
+        if let r = box as? ButtonRowBox { return box.nodeStart + max(1, r.buttons.count) }
         return box.textStart + box.textLength
     }
 

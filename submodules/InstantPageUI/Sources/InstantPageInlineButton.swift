@@ -20,14 +20,19 @@ public final class InstantPageInlineButtonAttachment: NSObject {
     /// `size.width − 2 × padding`, so reading a global here instead of the value that actually built
     /// `size` would silently mis-centre the label (and the emoji squares derived from it).
     public let horizontalPadding: CGFloat
+    /// True when `maxWidth` forced an ellipsis — i.e. the label did NOT fit at this padding. The row
+    /// layout re-measures such a pill at `instantPageBlockButtonMinimumHorizontalPadding` to win the
+    /// difference back as label room; see `instantPageBlockButtonMeasure`.
+    public let isTruncated: Bool
 
-    public init(button: InstantPageButton, labelString: NSAttributedString, size: CGSize, ascent: CGFloat, descent: CGFloat, horizontalPadding: CGFloat) {
+    public init(button: InstantPageButton, labelString: NSAttributedString, size: CGSize, ascent: CGFloat, descent: CGFloat, horizontalPadding: CGFloat, isTruncated: Bool = false) {
         self.button = button
         self.labelString = labelString
         self.size = size
         self.ascent = ascent
         self.descent = descent
         self.horizontalPadding = horizontalPadding
+        self.isTruncated = isTruncated
     }
 }
 
@@ -40,6 +45,16 @@ public let instantPageInlineButtonVerticalPadding: CGFloat = 1.0
 /// A block-row pill is a standalone touch target rather than a word inside a line, so it carries
 /// noticeably more horizontal room than an inline `textButton`.
 public let instantPageBlockButtonHorizontalPadding: CGFloat = 19.0
+
+/// The padding a row pill falls back to when its label does NOT fit at the comfortable value above.
+/// Comfort is worth less than legibility: an ellipsis loses words, whereas a tighter pill only looks
+/// tighter. Applied per button, so a row's short labels keep the full padding.
+///
+/// Bounded below by the capsule rather than by taste: a 40pt pill has a 20pt corner radius, whose arc
+/// intrudes ~2.6pt at the top and bottom of the label's box, so this leaves ~3.4pt of visible margin
+/// at the label's tightest corner. Going much lower would have the label touch the arc before it
+/// touches the nominal edge.
+public let instantPageBlockButtonMinimumHorizontalPadding: CGFloat = 6.0
 
 /// Extra gap between two *directly adjacent* pills — two `textButton`s with no rich text between
 /// them. Without it they touch: each pill's width lives entirely on its placeholder's CTRunDelegate,
@@ -151,13 +166,18 @@ func instantPageButtonLabelWithFittedEmoji(_ labelString: NSAttributedString) ->
 
 /// Truncates `labelString` with a tail ellipsis so its ink fits `availableWidth`. Returns the input
 /// unchanged when it already fits.
-private func instantPageButtonTruncatedLabel(_ labelString: NSAttributedString, availableWidth: CGFloat) -> NSAttributedString {
+///
+/// `truncated` is reported rather than inferred from the returned string: a one-character label
+/// replaced by a bare ellipsis keeps the same length, so a length comparison would miss exactly the
+/// case that is cut hardest.
+private func instantPageButtonTruncatedLabel(_ labelString: NSAttributedString, availableWidth: CGFloat) -> (label: NSAttributedString, truncated: Bool) {
     guard labelString.length != 0, availableWidth > 0.0 else {
-        return labelString
+        // A zero (or negative) budget cannot fit a non-empty label; an empty one has nothing to cut.
+        return (labelString, labelString.length != 0)
     }
     let fullWidth = CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(labelString), nil, nil, nil))
     if fullWidth <= availableWidth {
-        return labelString
+        return (labelString, false)
     }
 
     // Inherit the label's own attributes (font, weight) so the ellipsis matches the text it replaces.
@@ -168,18 +188,18 @@ private func instantPageButtonTruncatedLabel(_ labelString: NSAttributedString, 
     // Not enough room for even one character plus the ellipsis: show the ellipsis alone.
     let widthForText = availableWidth - ellipsisWidth
     guard widthForText > 0.0 else {
-        return ellipsis
+        return (ellipsis, true)
     }
 
     let typesetter = CTTypesetterCreateWithAttributedString(labelString)
     let fittingCount = CTTypesetterSuggestClusterBreak(typesetter, 0, Double(widthForText))
     guard fittingCount > 0 else {
-        return ellipsis
+        return (ellipsis, true)
     }
 
     let result = NSMutableAttributedString(attributedString: labelString.attributedSubstring(from: NSRange(location: 0, length: min(fittingCount, labelString.length))))
     result.append(ellipsis)
-    return result
+    return (result, true)
 }
 
 /// Measures `labelString` and inflates it by the pill padding. The single construction path for both
@@ -196,8 +216,9 @@ public func instantPageInlineButtonAttachment(button: InstantPageButton, labelSt
     // MUST run before truncation and before measurement: the ellipsis cut and the returned
     // size/ascent/descent are all computed against the rewritten delegates.
     var effectiveLabel = instantPageButtonLabelWithFittedEmoji(labelString)
+    var truncated = false
     if let maxWidth {
-        effectiveLabel = instantPageButtonTruncatedLabel(effectiveLabel, availableWidth: max(0.0, maxWidth - hPad * 2.0))
+        (effectiveLabel, truncated) = instantPageButtonTruncatedLabel(effectiveLabel, availableWidth: max(0.0, maxWidth - hPad * 2.0))
     }
 
     let line = CTLineCreateWithAttributedString(effectiveLabel)
@@ -210,7 +231,8 @@ public func instantPageInlineButtonAttachment(button: InstantPageButton, labelSt
         size: CGSize(width: labelWidth + hPad * 2.0, height: labelAscent + labelDescent + vPad * 2.0),
         ascent: labelAscent + vPad,
         descent: labelDescent + vPad,
-        horizontalPadding: hPad
+        horizontalPadding: hPad,
+        isTruncated: truncated
     )
 }
 
@@ -336,12 +358,21 @@ func instantPageButtonEmojiPlacements(
 /// `pageBlockButtonRow` pill. Both currently resolve to the same colours — the parameter is the seam
 /// for giving them different treatments (an inline pill sits inside a paragraph and may want a lighter
 /// fill than a standalone row button).
+/// `isLink` is the `richButtonStyle.link` bit. A link-styled ROW button is chrome-less: no fill, and the
+/// page's ordinary link colour for the label — the same treatment the INLINE path gives it by rendering
+/// plain link text instead of a pill (`attributedStringForLinkStyleButton`). It wins over the background
+/// bits, matching the documented `link > bg_primary > bg_danger > bg_success` precedence.
 public func instantPageButtonColors(
     _ color: ReplyMarkupButton.Style.Color?,
     theme: InstantPageTheme,
     isInline: Bool,
-    isDisabled: Bool
+    isDisabled: Bool,
+    isLink: Bool = false
 ) -> (fill: UIColor, label: UIColor) {
+    if isLink {
+        let label = theme.linkColor
+        return (.clear, isDisabled ? label.withMultipliedAlpha(0.4) : label)
+    }
     let fill: UIColor
     let label: UIColor
     switch color {

@@ -8,6 +8,7 @@ public enum Block: Equatable {
     case pullQuote(PullQuote)
     case blockQuote(BlockQuote)
     case details(DetailsBlock)
+    case buttonRow(ButtonRowBlock)
 
     public var id: BlockID {
         switch self {
@@ -18,12 +19,13 @@ public enum Block: Equatable {
         case .pullQuote(let q): return q.id
         case .blockQuote(let q): return q.id
         case .details(let d): return d.id
+        case .buttonRow(let r): return r.id
         }
     }
 }
 
 extension Block: Codable {
-    private enum Kind: String, Codable { case paragraph, media, table, code, pullQuote, blockQuote, details }
+    private enum Kind: String, Codable { case paragraph, media, table, code, pullQuote, blockQuote, details, buttonRow }
     private enum CodingKeys: String, CodingKey { case type, value }
 
     public init(from decoder: Decoder) throws {
@@ -36,6 +38,7 @@ extension Block: Codable {
         case .pullQuote: self = .pullQuote(try c.decode(PullQuote.self, forKey: .value))
         case .blockQuote: self = .blockQuote(try c.decode(BlockQuote.self, forKey: .value))
         case .details: self = .details(try c.decode(DetailsBlock.self, forKey: .value))
+        case .buttonRow: self = .buttonRow(try c.decode(ButtonRowBlock.self, forKey: .value))
         }
     }
 
@@ -63,6 +66,9 @@ extension Block: Codable {
         case .details(let d):
             try c.encode(Kind.details, forKey: .type)
             try c.encode(d, forKey: .value)
+        case .buttonRow(let r):
+            try c.encode(Kind.buttonRow, forKey: .type)
+            try c.encode(r, forKey: .value)
         }
     }
 }
