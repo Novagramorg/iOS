@@ -16,6 +16,7 @@ final class ChatGiftPreviewItem: ListViewItem, ItemListItem, ListItemComponentAd
     enum Subject: Equatable {
         case premium(months: Int32, amount: Int64, currency: String)
         case starGift(gift: StarGift.Gift)
+        case uniqueGift(gift: StarGift.UniqueGift, nameHidden: Bool)
     }
     let context: AccountContext
     let theme: PresentationTheme
@@ -36,6 +37,9 @@ final class ChatGiftPreviewItem: ListViewItem, ItemListItem, ListItemComponentAd
     let upgradeStars: Int64?
     let chargeStars: Int64?
     let bottomInset: CGFloat
+    let contentHeight: CGFloat
+    let maximumBubbleBottom: CGFloat?
+    let action: (() -> Void)?
     
     init(
         context: AccountContext,
@@ -55,7 +59,10 @@ final class ChatGiftPreviewItem: ListViewItem, ItemListItem, ListItemComponentAd
         entities: [MessageTextEntity],
         upgradeStars: Int64?,
         chargeStars: Int64?,
-        bottomInset: CGFloat = 0.0
+        bottomInset: CGFloat = 0.0,
+        contentHeight: CGFloat = 370.0,
+        maximumBubbleBottom: CGFloat? = nil,
+        action: (() -> Void)? = nil
     ) {
         self.context = context
         self.theme = theme
@@ -75,6 +82,9 @@ final class ChatGiftPreviewItem: ListViewItem, ItemListItem, ListItemComponentAd
         self.upgradeStars = upgradeStars
         self.chargeStars = chargeStars
         self.bottomInset = bottomInset
+        self.contentHeight = contentHeight
+        self.maximumBubbleBottom = maximumBubbleBottom
+        self.action = action
     }
     
     func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -148,6 +158,9 @@ final class ChatGiftPreviewItem: ListViewItem, ItemListItem, ListItemComponentAd
         if lhs.subject != rhs.subject {
             return false
         }
+        if lhs.chatPeerId != rhs.chatPeerId {
+            return false
+        }
         if lhs.text != rhs.text {
             return false
         }
@@ -157,7 +170,19 @@ final class ChatGiftPreviewItem: ListViewItem, ItemListItem, ListItemComponentAd
         if lhs.upgradeStars != rhs.upgradeStars {
             return false
         }
+        if lhs.chargeStars != rhs.chargeStars {
+            return false
+        }
         if lhs.bottomInset != rhs.bottomInset {
+            return false
+        }
+        if lhs.contentHeight != rhs.contentHeight {
+            return false
+        }
+        if lhs.maximumBubbleBottom != rhs.maximumBubbleBottom {
+            return false
+        }
+        if (lhs.action == nil) != (rhs.action == nil) {
             return false
         }
         return true
@@ -247,10 +272,47 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                             action: .starGift(gift: .generic(gift), convertStars: gift.convertStars, text: item.text, entities: item.entities, nameHidden: false, savedToProfile: false, converted: false, upgraded: false, canUpgrade: gift.upgradeStars != nil, upgradeStars: item.upgradeStars, isRefunded: false, isPrepaidUpgrade: false, upgradeMessageId: nil, peerId: nil, senderId: nil, savedId: nil, prepaidUpgradeHash: nil, giftMessageId: nil, upgradeSeparate: false, isAuctionAcquired: false, toPeerId: nil, number: nil)
                         )
                     ]
+                case let .uniqueGift(gift, nameHidden):
+                    media = [
+                        TelegramMediaAction(
+                            action: .starGiftUnique(
+                                gift: .unique(gift),
+                                isUpgrade: false,
+                                isTransferred: false,
+                                savedToProfile: false,
+                                canExportDate: nil,
+                                transferStars: nil,
+                                isRefunded: false,
+                                isPrepaidUpgrade: false,
+                                peerId: chatPeerId,
+                                senderId: authorPeerId,
+                                savedId: nil,
+                                resaleAmount: nil,
+                                canTransferDate: nil,
+                                canResaleDate: nil,
+                                dropOriginalDetailsStars: nil,
+                                assigned: false,
+                                fromOffer: false,
+                                canCraftAt: nil,
+                                isCrafted: false,
+                                text: item.text.isEmpty ? nil : item.text,
+                                entities: item.entities.isEmpty ? nil : item.entities,
+                                nameHidden: nameHidden
+                            )
+                        )
+                    ]
                 }
                 
-                let message = EngineRawMessage(stableId: 1, stableVersion: 0, id: EngineMessage.Id(peerId: chatPeerId, namespace: 0, id: 1), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 66000, flags: [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: peers[authorPeerId], text: "", attributes: [], media: media, peers: peers, associatedMessages: messages, associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
-                items.append(item.context.sharedContext.makeChatMessagePreviewItem(context: item.context, messages: [message], theme: item.componentTheme, strings: item.strings, wallpaper: item.wallpaper, fontSize: item.fontSize, chatBubbleCorners: item.chatBubbleCorners, dateTimeFormat: item.dateTimeFormat, nameOrder: item.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: currentBackgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil))
+                let messageFlags: EngineMessage.Flags
+                if case .uniqueGift = item.subject {
+                    messageFlags = []
+                } else {
+                    messageFlags = [.Incoming]
+                }
+                let message = EngineRawMessage(stableId: 1, stableVersion: 0, id: EngineMessage.Id(peerId: chatPeerId, namespace: 0, id: 1), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 66000, flags: messageFlags, tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: peers[authorPeerId], text: "", attributes: [], media: media, peers: peers, associatedMessages: messages, associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
+                items.append(item.context.sharedContext.makeChatMessagePreviewItem(context: item.context, messages: [message], theme: item.componentTheme, strings: item.strings, wallpaper: item.wallpaper, fontSize: item.fontSize, chatBubbleCorners: item.chatBubbleCorners, dateTimeFormat: item.dateTimeFormat, nameOrder: item.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: item.action.map { action in
+                    return { _ in action() }
+                }, clickThroughMessage: nil, backgroundNode: currentBackgroundNode, availableReactions: nil, accountPeer: item.action == nil ? nil : peers[authorPeerId], isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil, isGiftMessageComposerPreview: item.action != nil))
             }
             
             var nodes: [ListViewItemNode] = []
@@ -273,7 +335,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                         itemNode.bounds = CGRect(origin: .zero, size: layout.size)
                         itemNode.contentSize = layout.contentSize
                         itemNode.insets = layout.insets
-                        itemNode.isUserInteractionEnabled = false
+                        itemNode.isUserInteractionEnabled = item.action != nil
                         itemNode.visibility = .visible(1.0, .infinite)
                         
                         apply(ListViewItemApply())
@@ -287,7 +349,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                         itemNode = node
                         apply().1(ListViewItemApply())
                     })
-                    itemNode!.isUserInteractionEnabled = false
+                    itemNode!.isUserInteractionEnabled = item.action != nil
                     itemNode!.visibility = .visible(1.0, .infinite)
                     messageNodes.append(itemNode!)
                     
@@ -298,7 +360,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                 nodes = messageNodes
             }
             
-            let baseContentHeight: CGFloat = 370.0
+            let baseContentHeight: CGFloat = item.contentHeight
             var contentSize = CGSize(width: params.width, height: 4.0 + 4.0)
             contentSize.height = baseContentHeight + item.bottomInset
             insets = itemListNeighborsGroupedInsets(neighbors, params)
@@ -312,6 +374,7 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
             return (layout, { [weak self] in
                 if let strongSelf = self {
                     strongSelf.item = item
+                    strongSelf.isUserInteractionEnabled = item.action != nil
                     
                     if let currentBackgroundNode {
                         currentBackgroundNode.update(wallpaper: item.wallpaper, animated: false)
@@ -332,8 +395,11 @@ final class ChatGiftPreviewItemNode: ListViewItemNode {
                         totalHeight += bubbleHeight
                     }
                     
-                    var originY: CGFloat = floor((baseContentHeight - totalHeight) / 2.0)
-                    originY = contentSize.height - originY - totalHeight
+                    var visualOriginY: CGFloat = floor((baseContentHeight - totalHeight) / 2.0)
+                    if let maximumBubbleBottom = item.maximumBubbleBottom {
+                        visualOriginY = min(visualOriginY, maximumBubbleBottom - totalHeight)
+                    }
+                    var originY = contentSize.height - visualOriginY - totalHeight
                     for node in nodes {
                         if node.supernode == nil {
                             strongSelf.containerNode.addSubnode(node)

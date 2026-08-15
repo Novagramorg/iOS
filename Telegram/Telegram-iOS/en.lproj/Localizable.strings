@@ -16627,3 +16627,13 @@ Error: %8$@";
 "Channel.EditAdmin.PermissionManageWelcomeMessages" = "Manage Welcome Messages";
 "Channel.EditAdmin.PermissionSendWelcomeMessagesGroup" = "Send Welcome Messages";
 "Channel.EditAdmin.PermissionSendWelcomeMessagesChannel" = "Send Welcome Messages";
+
+"Notification.JoinedGroupViaCommunity" = "%@ joined the group via community";
+"Notification.JoinedGroupViaCommunityYou" = "You joined the group via community";
+"Gift.Message.InputPlaceholder" = "Add message…";
+"Gift.Message.MakePublic" = "Make message public";
+"Gift.Message.PreviewInChat" = "Preview in chat";
+"Gift.Message.SendNow" = "Send Now";
+"Gift.Message.ToastText" = "You can add a message for **%@** or send **%@** right away.";
+"Gift.Message.ToastTitle" = "Add Message";
+"Gift.Message.YourMessage" = "Your message...";
