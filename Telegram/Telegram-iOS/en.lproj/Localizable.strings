@@ -16653,3 +16653,13 @@ Error: %8$@";
 "RichText.ButtonRowAdd" = "Add Button";
 "RichText.Menu.Table.BordersOn" = "Show Borders";
 "RichText.Menu.Table.BordersOff" = "Hide Borders";
+
+"Notification.JoinedGroupViaCommunity" = "%@ joined the group via community";
+"Notification.JoinedGroupViaCommunityYou" = "You joined the group via community";
+"Gift.Message.InputPlaceholder" = "Add message…";
+"Gift.Message.MakePublic" = "Make message public";
+"Gift.Message.PreviewInChat" = "Preview in chat";
+"Gift.Message.SendNow" = "Send Now";
+"Gift.Message.ToastText" = "You can add a message for **%@** or send **%@** right away.";
+"Gift.Message.ToastTitle" = "Add Message";
+"Gift.Message.YourMessage" = "Your message...";

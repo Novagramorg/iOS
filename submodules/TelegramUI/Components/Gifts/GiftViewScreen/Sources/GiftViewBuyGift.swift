@@ -7,6 +7,7 @@ import AccountContext
 import PresentationDataUtils
 import TelegramStringFormatting
 import BalanceNeededScreen
+import GiftSetupScreen
 
 public func buyStarGiftImpl(
     context: AccountContext,
@@ -15,8 +16,9 @@ public func buyStarGiftImpl(
     showAttributes: Bool,
     acceptedPrice: CurrencyAmount? = nil,
     skipConfirmation: Bool = false,
+    message: GiftMessageScreen.Result? = nil,
     starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>,
-    buyGift: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)?,
+    buyGift: ((String, EnginePeer.Id, CurrencyAmount?, Bool, String?, [MessageTextEntity]?) -> Signal<Never, BuyStarGiftError>)?,
     getController: @escaping () -> ViewController?,
     updateProgress: @escaping (Bool) -> Void,
     updateIsBalanceVisible: @escaping (Bool) -> Void,
@@ -24,7 +26,7 @@ public func buyStarGiftImpl(
 ) {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                     
-    let action: (CurrencyAmount.Currency, @escaping () -> Void) -> Void = { currency, beforeCompletion in
+    let action: (CurrencyAmount.Currency, GiftMessageScreen.Result, @escaping () -> Void) -> Void = { currency, message, beforeCompletion in
         guard let resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == currency }) else {
             guard let controller = getController() else {
                 return
@@ -45,19 +47,19 @@ public func buyStarGiftImpl(
         let proceed: () -> Void = {
             updateProgress(true)
             
-            let buyGiftImpl: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)
+            let buyGiftImpl: ((String, EnginePeer.Id, CurrencyAmount?, Bool, String?, [MessageTextEntity]?) -> Signal<Never, BuyStarGiftError>)
             if let buyGift {
-                buyGiftImpl = { slug, peerId, price in
-                    return buyGift(slug, peerId, price)
+                buyGiftImpl = { slug, peerId, price, hideName, text, entities in
+                    return buyGift(slug, peerId, price, hideName, text, entities)
                 }
             } else {
-                buyGiftImpl = { slug, peerId, price in
-                    return context.engine.payments.buyStarGift(slug: slug, peerId: peerId, price: price)
+                buyGiftImpl = { slug, peerId, price, hideName, text, entities in
+                    return context.engine.payments.buyStarGift(slug: slug, peerId: peerId, price: price, hideName: hideName, text: text, entities: entities)
                 }
             }
             
             let finalPrice = acceptedPrice ?? resellAmount
-            let _ = (buyGiftImpl(uniqueGift.slug, recipientPeerId, finalPrice)
+            let _ = (buyGiftImpl(uniqueGift.slug, recipientPeerId, finalPrice, message.hideName, message.text, message.entities)
             |> deliverOnMainQueue).start(error: { error in
                 guard let controller = getController() else {
                     return
@@ -106,6 +108,7 @@ public func buyStarGiftImpl(
                                     showAttributes: showAttributes,
                                     acceptedPrice: newPrice,
                                     skipConfirmation: true,
+                                    message: message,
                                     starsTopUpOptions: starsTopUpOptions,
                                     buyGift: buyGift,
                                     getController: getController,
@@ -176,7 +179,9 @@ public func buyStarGiftImpl(
                                         recipientPeerId: recipientPeerId,
                                         uniqueGift: uniqueGift,
                                         showAttributes: showAttributes,
+                                        acceptedPrice: acceptedPrice,
                                         skipConfirmation: true,
+                                        message: message,
                                         starsTopUpOptions: starsTopUpOptions,
                                         buyGift: buyGift,
                                         getController: getController,
@@ -217,7 +222,7 @@ public func buyStarGiftImpl(
     }
     
     if skipConfirmation {
-        action(acceptedPrice?.currency ?? .stars, {})
+        action(acceptedPrice?.currency ?? .stars, message ?? GiftMessageScreen.Result(hideName: true, text: nil, entities: nil), {})
     } else {
         let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
         |> deliverOnMainQueue).start(next: { peer in
@@ -231,12 +236,28 @@ public func buyStarGiftImpl(
                 showAttributes: showAttributes,
                 peer: peer,
                 animateBalanceOverlay: showAttributes,
-                autoDismissOnCommit: !showAttributes,
+                autoDismissOnCommit: false,
                 navigationController: controller.navigationController as? NavigationController,
                 commit: { currency in
-                    action(currency, {
-                        dismissImpl?()
-                    })
+                    dismissImpl?()
+
+                    if recipientPeerId == context.account.peerId {
+                        action(currency, GiftMessageScreen.Result(hideName: true, text: nil, entities: nil), {})
+                        return
+                    }
+                    
+                    guard let controller = getController() else {
+                        return
+                    }
+                    let messageController = GiftMessageScreen(
+                        context: context,
+                        peer: peer,
+                        gift: uniqueGift,
+                        completion: { message in
+                            action(currency, message, {})
+                        }
+                    )
+                    controller.push(messageController)
                 },
                 dismissed: {
                     updateIsBalanceVisible(true)

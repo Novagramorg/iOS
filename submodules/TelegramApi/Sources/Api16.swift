@@ -1300,7 +1300,8 @@ public extension Api {
             public var canResellAt: Int32?
             public var dropOriginalDetailsStars: Int64?
             public var canCraftAt: Int32?
-            public init(flags: Int32, gift: Api.StarGift, canExportAt: Int32?, transferStars: Int64?, fromId: Api.Peer?, peer: Api.Peer?, savedId: Int64?, resaleAmount: Api.StarsAmount?, canTransferAt: Int32?, canResellAt: Int32?, dropOriginalDetailsStars: Int64?, canCraftAt: Int32?) {
+            public var message: Api.TextWithEntities?
+            public init(flags: Int32, gift: Api.StarGift, canExportAt: Int32?, transferStars: Int64?, fromId: Api.Peer?, peer: Api.Peer?, savedId: Int64?, resaleAmount: Api.StarsAmount?, canTransferAt: Int32?, canResellAt: Int32?, dropOriginalDetailsStars: Int64?, canCraftAt: Int32?, message: Api.TextWithEntities?) {
                 self.flags = flags
                 self.gift = gift
                 self.canExportAt = canExportAt
@@ -1313,9 +1314,10 @@ public extension Api {
                 self.canResellAt = canResellAt
                 self.dropOriginalDetailsStars = dropOriginalDetailsStars
                 self.canCraftAt = canCraftAt
+                self.message = message
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("messageActionStarGiftUnique", [("flags", ConstructorParameterDescription(self.flags)), ("gift", ConstructorParameterDescription(self.gift)), ("canExportAt", ConstructorParameterDescription(self.canExportAt)), ("transferStars", ConstructorParameterDescription(self.transferStars)), ("fromId", ConstructorParameterDescription(self.fromId)), ("peer", ConstructorParameterDescription(self.peer)), ("savedId", ConstructorParameterDescription(self.savedId)), ("resaleAmount", ConstructorParameterDescription(self.resaleAmount)), ("canTransferAt", ConstructorParameterDescription(self.canTransferAt)), ("canResellAt", ConstructorParameterDescription(self.canResellAt)), ("dropOriginalDetailsStars", ConstructorParameterDescription(self.dropOriginalDetailsStars)), ("canCraftAt", ConstructorParameterDescription(self.canCraftAt))])
+                return ("messageActionStarGiftUnique", [("flags", ConstructorParameterDescription(self.flags)), ("gift", ConstructorParameterDescription(self.gift)), ("canExportAt", ConstructorParameterDescription(self.canExportAt)), ("transferStars", ConstructorParameterDescription(self.transferStars)), ("fromId", ConstructorParameterDescription(self.fromId)), ("peer", ConstructorParameterDescription(self.peer)), ("savedId", ConstructorParameterDescription(self.savedId)), ("resaleAmount", ConstructorParameterDescription(self.resaleAmount)), ("canTransferAt", ConstructorParameterDescription(self.canTransferAt)), ("canResellAt", ConstructorParameterDescription(self.canResellAt)), ("dropOriginalDetailsStars", ConstructorParameterDescription(self.dropOriginalDetailsStars)), ("canCraftAt", ConstructorParameterDescription(self.canCraftAt)), ("message", ConstructorParameterDescription(self.message))])
             }
         }
         public class Cons_messageActionSuggestBirthday: TypeConstructorDescription {
@@ -2049,7 +2051,7 @@ public extension Api {
                 break
             case .messageActionStarGiftUnique(let _data):
                 if boxed {
-                    buffer.appendInt32(-423422686)
+                    buffer.appendInt32(2115768711)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 _data.gift.serialize(buffer, true)
@@ -2082,6 +2084,9 @@ public extension Api {
                 }
                 if Int(_data.flags) & Int(1 << 15) != 0 {
                     serializeInt32(_data.canCraftAt!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 18) != 0 {
+                    _data.message!.serialize(buffer, true)
                 }
                 break
             case .messageActionSuggestBirthday(let _data):
@@ -2308,7 +2313,7 @@ public extension Api {
             case .messageActionStarGiftPurchaseOfferDeclined(let _data):
                 return ("messageActionStarGiftPurchaseOfferDeclined", [("flags", ConstructorParameterDescription(_data.flags)), ("gift", ConstructorParameterDescription(_data.gift)), ("price", ConstructorParameterDescription(_data.price))])
             case .messageActionStarGiftUnique(let _data):
-                return ("messageActionStarGiftUnique", [("flags", ConstructorParameterDescription(_data.flags)), ("gift", ConstructorParameterDescription(_data.gift)), ("canExportAt", ConstructorParameterDescription(_data.canExportAt)), ("transferStars", ConstructorParameterDescription(_data.transferStars)), ("fromId", ConstructorParameterDescription(_data.fromId)), ("peer", ConstructorParameterDescription(_data.peer)), ("savedId", ConstructorParameterDescription(_data.savedId)), ("resaleAmount", ConstructorParameterDescription(_data.resaleAmount)), ("canTransferAt", ConstructorParameterDescription(_data.canTransferAt)), ("canResellAt", ConstructorParameterDescription(_data.canResellAt)), ("dropOriginalDetailsStars", ConstructorParameterDescription(_data.dropOriginalDetailsStars)), ("canCraftAt", ConstructorParameterDescription(_data.canCraftAt))])
+                return ("messageActionStarGiftUnique", [("flags", ConstructorParameterDescription(_data.flags)), ("gift", ConstructorParameterDescription(_data.gift)), ("canExportAt", ConstructorParameterDescription(_data.canExportAt)), ("transferStars", ConstructorParameterDescription(_data.transferStars)), ("fromId", ConstructorParameterDescription(_data.fromId)), ("peer", ConstructorParameterDescription(_data.peer)), ("savedId", ConstructorParameterDescription(_data.savedId)), ("resaleAmount", ConstructorParameterDescription(_data.resaleAmount)), ("canTransferAt", ConstructorParameterDescription(_data.canTransferAt)), ("canResellAt", ConstructorParameterDescription(_data.canResellAt)), ("dropOriginalDetailsStars", ConstructorParameterDescription(_data.dropOriginalDetailsStars)), ("canCraftAt", ConstructorParameterDescription(_data.canCraftAt)), ("message", ConstructorParameterDescription(_data.message))])
             case .messageActionSuggestBirthday(let _data):
                 return ("messageActionSuggestBirthday", [("birthday", ConstructorParameterDescription(_data.birthday))])
             case .messageActionSuggestProfilePhoto(let _data):
@@ -3393,6 +3398,12 @@ public extension Api {
             if Int(_1 ?? 0) & Int(1 << 15) != 0 {
                 _12 = reader.readInt32()
             }
+            var _13: Api.TextWithEntities?
+            if Int(_1 ?? 0) & Int(1 << 18) != 0 {
+                if let signature = reader.readInt32() {
+                    _13 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+                }
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _3 != nil
@@ -3405,8 +3416,9 @@ public extension Api {
             let _c10 = (Int(_1 ?? 0) & Int(1 << 10) == 0) || _10 != nil
             let _c11 = (Int(_1 ?? 0) & Int(1 << 12) == 0) || _11 != nil
             let _c12 = (Int(_1 ?? 0) & Int(1 << 15) == 0) || _12 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 {
-                return Api.MessageAction.messageActionStarGiftUnique(Cons_messageActionStarGiftUnique(flags: _1!, gift: _2!, canExportAt: _3, transferStars: _4, fromId: _5, peer: _6, savedId: _7, resaleAmount: _8, canTransferAt: _9, canResellAt: _10, dropOriginalDetailsStars: _11, canCraftAt: _12))
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _13 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 {
+                return Api.MessageAction.messageActionStarGiftUnique(Cons_messageActionStarGiftUnique(flags: _1!, gift: _2!, canExportAt: _3, transferStars: _4, fromId: _5, peer: _6, savedId: _7, resaleAmount: _8, canTransferAt: _9, canResellAt: _10, dropOriginalDetailsStars: _11, canCraftAt: _12, message: _13))
             }
             else {
                 return nil

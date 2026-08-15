@@ -498,7 +498,7 @@ final class GiftsListView: UIView {
                     }
                 case let .unique(gift):
                     subject = .uniqueGift(gift: gift, price: nil)
-                    peer = nil
+                    peer = product.fromPeer.flatMap { .peer($0) }
                     resellAmount = gift.resellAmounts?.first(where: { $0.currency == .stars })
                     
                     if !(gift.resellAmounts ?? []).isEmpty {
@@ -632,11 +632,11 @@ final class GiftsListView: UIView {
                                             }
                                             return self.profileGifts.upgradeStarGift(formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)
                                         },
-                                        buyGift: { [weak self] slug, peerId, price in
+                                        buyGift: { [weak self] slug, peerId, price, hideName, text, entities in
                                             guard let self else {
                                                 return .never()
                                             }
-                                            return self.profileGifts.buyStarGift(slug: slug, peerId: peerId, price: price)
+                                            return self.profileGifts.buyStarGift(slug: slug, peerId: peerId, price: price, hideName: hideName, text: text, entities: entities)
                                         },
                                         updateResellStars: { [weak self] reference, price in
                                             guard let self else {

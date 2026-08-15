@@ -455,13 +455,15 @@ public extension Api {
             public var flags: Int32
             public var slug: String
             public var toId: Api.InputPeer
-            public init(flags: Int32, slug: String, toId: Api.InputPeer) {
+            public var message: Api.TextWithEntities?
+            public init(flags: Int32, slug: String, toId: Api.InputPeer, message: Api.TextWithEntities?) {
                 self.flags = flags
                 self.slug = slug
                 self.toId = toId
+                self.message = message
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputInvoiceStarGiftResale", [("flags", ConstructorParameterDescription(self.flags)), ("slug", ConstructorParameterDescription(self.slug)), ("toId", ConstructorParameterDescription(self.toId))])
+                return ("inputInvoiceStarGiftResale", [("flags", ConstructorParameterDescription(self.flags)), ("slug", ConstructorParameterDescription(self.slug)), ("toId", ConstructorParameterDescription(self.toId)), ("message", ConstructorParameterDescription(self.message))])
             }
         }
         public class Cons_inputInvoiceStarGiftTransfer: TypeConstructorDescription {
@@ -603,11 +605,14 @@ public extension Api {
                 break
             case .inputInvoiceStarGiftResale(let _data):
                 if boxed {
-                    buffer.appendInt32(-1012968668)
+                    buffer.appendInt32(-374290856)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeString(_data.slug, buffer: buffer, boxed: false)
                 _data.toId.serialize(buffer, true)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    _data.message!.serialize(buffer, true)
+                }
                 break
             case .inputInvoiceStarGiftTransfer(let _data):
                 if boxed {
@@ -657,7 +662,7 @@ public extension Api {
             case .inputInvoiceStarGiftPrepaidUpgrade(let _data):
                 return ("inputInvoiceStarGiftPrepaidUpgrade", [("peer", ConstructorParameterDescription(_data.peer)), ("hash", ConstructorParameterDescription(_data.hash))])
             case .inputInvoiceStarGiftResale(let _data):
-                return ("inputInvoiceStarGiftResale", [("flags", ConstructorParameterDescription(_data.flags)), ("slug", ConstructorParameterDescription(_data.slug)), ("toId", ConstructorParameterDescription(_data.toId))])
+                return ("inputInvoiceStarGiftResale", [("flags", ConstructorParameterDescription(_data.flags)), ("slug", ConstructorParameterDescription(_data.slug)), ("toId", ConstructorParameterDescription(_data.toId)), ("message", ConstructorParameterDescription(_data.message))])
             case .inputInvoiceStarGiftTransfer(let _data):
                 return ("inputInvoiceStarGiftTransfer", [("stargift", ConstructorParameterDescription(_data.stargift)), ("toId", ConstructorParameterDescription(_data.toId))])
             case .inputInvoiceStarGiftUpgrade(let _data):
@@ -873,11 +878,18 @@ public extension Api {
             if let signature = reader.readInt32() {
                 _3 = Api.parse(reader, signature: signature) as? Api.InputPeer
             }
+            var _4: Api.TextWithEntities?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                if let signature = reader.readInt32() {
+                    _4 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+                }
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.InputInvoice.inputInvoiceStarGiftResale(Cons_inputInvoiceStarGiftResale(flags: _1!, slug: _2!, toId: _3!))
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.InputInvoice.inputInvoiceStarGiftResale(Cons_inputInvoiceStarGiftResale(flags: _1!, slug: _2!, toId: _3!, message: _4))
             }
             else {
                 return nil

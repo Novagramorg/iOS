@@ -1430,7 +1430,7 @@ public protocol SharedAccountContext: AnyObject {
         mode: ChatHistoryListMode
     ) -> ChatHistoryListNode
     func subscribeChatListData(context: AccountContext, location: ChatListControllerLocation) -> Signal<EngineChatList, NoError>
-    func makeChatMessagePreviewItem(context: AccountContext, messages: [EngineRawMessage], theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder, forcedResourceStatus: FileMediaResourceStatus?, tapMessage: ((EngineRawMessage) -> Void)?, clickThroughMessage: ((UIView?, CGPoint?) -> Void)?, backgroundNode: ASDisplayNode?, availableReactions: AvailableReactions?, accountPeer: EngineRawPeer?, isCentered: Bool, isPreview: Bool, isStandalone: Bool, rank: String?, rankRole: ChatRankInfoScreenRole?) -> ListViewItem
+    func makeChatMessagePreviewItem(context: AccountContext, messages: [EngineRawMessage], theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder, forcedResourceStatus: FileMediaResourceStatus?, tapMessage: ((EngineRawMessage) -> Void)?, clickThroughMessage: ((UIView?, CGPoint?) -> Void)?, backgroundNode: ASDisplayNode?, availableReactions: AvailableReactions?, accountPeer: EngineRawPeer?, isCentered: Bool, isPreview: Bool, isStandalone: Bool, rank: String?, rankRole: ChatRankInfoScreenRole?, isGiftMessageComposerPreview: Bool) -> ListViewItem
     func makeChatMessageDateHeaderItem(context: AccountContext, timestamp: Int32, theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder) -> ListViewItemHeader
     func makeChatMessageAvatarHeaderItem(context: AccountContext, timestamp: Int32, peer: EngineRawPeer, message: EngineRawMessage, theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder) -> ListViewItemHeader
     func makePeerSharedMediaController(context: AccountContext, peerId: EnginePeer.Id) -> ViewController?
@@ -2069,6 +2069,36 @@ public struct TranslationConfiguration {
                 autoValue = "disabled"
             }
             return TranslationConfiguration(manual: TranslationAvailability(string: manualValue), auto: TranslationAvailability(string: autoValue))
+        } else {
+            return .defaultValue
+        }
+    }
+}
+
+public struct GiftConfiguration {
+    static var defaultValue: GiftConfiguration {
+        return GiftConfiguration(maxCaptionLength: 255, convertToStarsPeriod: 90 * 86400)
+    }
+    
+    public let maxCaptionLength: Int32
+    public let convertToStarsPeriod: Int32
+    
+    fileprivate init(maxCaptionLength: Int32, convertToStarsPeriod: Int32) {
+        self.maxCaptionLength = maxCaptionLength
+        self.convertToStarsPeriod = convertToStarsPeriod
+    }
+    
+    public static func with(appConfiguration: AppConfiguration) -> GiftConfiguration {
+        if let data = appConfiguration.data {
+            var maxCaptionLength: Int32?
+            if let value = data["stargifts_message_length_max"] as? Double {
+                maxCaptionLength = Int32(value)
+            }
+            var convertToStarsPeriod: Int32?
+            if let value = data["stargifts_convert_period_max"] as? Double {
+                convertToStarsPeriod = Int32(value)
+            }
+            return GiftConfiguration(maxCaptionLength: maxCaptionLength ?? GiftConfiguration.defaultValue.maxCaptionLength, convertToStarsPeriod: convertToStarsPeriod ?? GiftConfiguration.defaultValue.convertToStarsPeriod)
         } else {
             return .defaultValue
         }

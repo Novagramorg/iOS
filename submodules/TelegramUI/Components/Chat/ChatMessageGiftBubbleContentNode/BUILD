@@ -25,6 +25,7 @@ swift_library(
         "//submodules/ReactionSelectionNode",
         "//submodules/AnimatedStickerNode",
         "//submodules/TelegramAnimatedStickerNode",
+        "//submodules/AvatarNode",
         "//submodules/TelegramUI/Components/ChatControllerInteraction",
         "//submodules/ShimmerEffect",
         "//submodules/Markdown",
