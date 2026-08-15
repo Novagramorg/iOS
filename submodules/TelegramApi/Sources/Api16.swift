@@ -776,6 +776,15 @@ public extension Api {
                 return ("messageActionChatJoinedByLink", [("inviterId", ConstructorParameterDescription(self.inviterId))])
             }
         }
+        public class Cons_messageActionChatJoinedViaCommunity: TypeConstructorDescription {
+            public var communityId: Int64
+            public init(communityId: Int64) {
+                self.communityId = communityId
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("messageActionChatJoinedViaCommunity", [("communityId", ConstructorParameterDescription(self.communityId))])
+            }
+        }
         public class Cons_messageActionChatMigrateTo: TypeConstructorDescription {
             public var channelId: Int64
             public init(channelId: Int64) {
@@ -1457,6 +1466,7 @@ public extension Api {
         case messageActionChatEditTitle(Cons_messageActionChatEditTitle)
         case messageActionChatJoinedByLink(Cons_messageActionChatJoinedByLink)
         case messageActionChatJoinedByRequest
+        case messageActionChatJoinedViaCommunity(Cons_messageActionChatJoinedViaCommunity)
         case messageActionChatMigrateTo(Cons_messageActionChatMigrateTo)
         case messageActionConferenceCall(Cons_messageActionConferenceCall)
         case messageActionContactSignUp
@@ -1614,6 +1624,12 @@ public extension Api {
                 if boxed {
                     buffer.appendInt32(-339958837)
                 }
+                break
+            case .messageActionChatJoinedViaCommunity(let _data):
+                if boxed {
+                    buffer.appendInt32(1250688640)
+                }
+                serializeInt64(_data.communityId, buffer: buffer, boxed: false)
                 break
             case .messageActionChatMigrateTo(let _data):
                 if boxed {
@@ -2228,6 +2244,8 @@ public extension Api {
                 return ("messageActionChatJoinedByLink", [("inviterId", ConstructorParameterDescription(_data.inviterId))])
             case .messageActionChatJoinedByRequest:
                 return ("messageActionChatJoinedByRequest", [])
+            case .messageActionChatJoinedViaCommunity(let _data):
+                return ("messageActionChatJoinedViaCommunity", [("communityId", ConstructorParameterDescription(_data.communityId))])
             case .messageActionChatMigrateTo(let _data):
                 return ("messageActionChatMigrateTo", [("channelId", ConstructorParameterDescription(_data.channelId))])
             case .messageActionConferenceCall(let _data):
@@ -2505,6 +2523,17 @@ public extension Api {
         }
         public static func parse_messageActionChatJoinedByRequest(_ reader: BufferReader) -> MessageAction? {
             return Api.MessageAction.messageActionChatJoinedByRequest
+        }
+        public static func parse_messageActionChatJoinedViaCommunity(_ reader: BufferReader) -> MessageAction? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.MessageAction.messageActionChatJoinedViaCommunity(Cons_messageActionChatJoinedViaCommunity(communityId: _1!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_messageActionChatMigrateTo(_ reader: BufferReader) -> MessageAction? {
             var _1: Int64?

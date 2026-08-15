@@ -633,6 +633,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1247687078] = { return Api.MessageAction.parse_messageActionChatEditTitle($0) }
     dict[51520707] = { return Api.MessageAction.parse_messageActionChatJoinedByLink($0) }
     dict[-339958837] = { return Api.MessageAction.parse_messageActionChatJoinedByRequest($0) }
+    dict[1250688640] = { return Api.MessageAction.parse_messageActionChatJoinedViaCommunity($0) }
     dict[-519864430] = { return Api.MessageAction.parse_messageActionChatMigrateTo($0) }
     dict[805187450] = { return Api.MessageAction.parse_messageActionConferenceCall($0) }
     dict[-202219658] = { return Api.MessageAction.parse_messageActionContactSignUp($0) }
