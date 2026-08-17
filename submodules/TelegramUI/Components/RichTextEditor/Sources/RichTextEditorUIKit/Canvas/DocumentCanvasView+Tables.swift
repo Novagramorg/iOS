@@ -280,6 +280,23 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Shows / hides the table's grid. Not merely a paint toggle: an unbordered table lays out with
+    /// zero-width borders, so the cells butt together — mirroring V2's
+    /// `bordered ? v2TableBorderWidth : 0.0`.
+    ///
+    /// The mirror is of the RULE, not of absolute pixels: the two surfaces' table constants already
+    /// differ (border 1 vs `UIScreenPixel * 2`, cell insets 6/14 vs 13/7, corner radius 8 vs 10), so
+    /// this removes the largest visual delta — a whole border per boundary — rather than achieving
+    /// exact parity. Unlike the button pills, table geometry has no parity test pinning it.
+    func toggleTableBordered() {
+        guard let a = activeTable() else { return }
+        editing {
+            guard case .table(var t) = a.box.currentBlock() else { return }
+            t.bordered.toggle()
+            replaceTable(at: a.index, in: a.stack, with: t, caretRow: a.row, caretCol: a.col)
+        }
+    }
+
     /// Merges the cells covered by the current `.cells` structural selection into one spanning cell — the
     /// content of every covered cell is concatenated into the top-left (anchor) cell (see
     /// `TableBlock.mergingCells`). No-op, registering NO undo step, when the caret isn't in a table, there

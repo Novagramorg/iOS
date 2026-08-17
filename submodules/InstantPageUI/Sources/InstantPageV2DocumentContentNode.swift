@@ -65,6 +65,17 @@ final class InstantPageV2DocumentContentNode: ASDisplayNode {
     /// Invoked when the row is tapped while the file is already local. Wired only in message mode.
     var openDocument: () -> Void = {}
 
+    /// Excludes the row's thumbnail from screenshots — see `InstantPageV2RenderContext.captureProtected`.
+    /// Only the artwork is protected: the file name/size text is metadata, and the regular chat file
+    /// bubble does not protect its label either.
+    var captureProtected: Bool = false {
+        didSet {
+            if self.captureProtected != oldValue {
+                self.iconNode?.captureProtected = self.captureProtected
+            }
+        }
+    }
+
     private var resourceStatusDisposable: Disposable?
     private var fetchStatus: EngineMediaResourceStatus?
     /// The message this row's status is currently bound to, so `bindStatus` can no-op on an unchanged
@@ -361,6 +372,7 @@ final class InstantPageV2DocumentView: UIView, InstantPageItemView {
         self.backgroundColor = .clear
         self.addSubview(self.documentNode.view)
 
+        self.documentNode.captureProtected = renderContext.captureProtected
         self.bindToMessage(renderContext: renderContext)
     }
 
@@ -416,6 +428,7 @@ final class InstantPageV2DocumentView: UIView, InstantPageItemView {
         if self.boundMessage != renderContext.message {
             self.bindToMessage(renderContext: renderContext)
         }
+        self.documentNode.captureProtected = renderContext.captureProtected
         self.documentNode.updateLayout(width: self.bounds.width)
     }
 

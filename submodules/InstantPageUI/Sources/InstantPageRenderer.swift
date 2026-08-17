@@ -83,6 +83,16 @@ public final class InstantPageV2RenderContext {
     /// Bubble backgrounds here are portal views that mirror their source, so nothing else — no
     /// absolute rect, no scroll offset — has to be threaded through.
     public let wallpaperBackgroundNode: () -> WallpaperBackgroundNode?
+    /// Whether the media on this page must be excluded from screenshots and screen recordings
+    /// (`setLayerDisableScreenshots`), and denied the gallery's share/save affordances. Set by the
+    /// chat bubble from the message's copy-protection state; `false` for V1 Instant View, web IV
+    /// and the send preview, which have no protected content.
+    ///
+    /// Mutable because copy protection is a *peer* setting that can be toggled while a message is
+    /// on screen: that changes neither the webpage nor the page layout, so the V2View — and with it
+    /// this context — is not rebuilt. The host refreshes the flag before each `update(layout:…)`
+    /// and every media view re-reads it from the context in its own `update(…)`.
+    public private(set) var captureProtected: Bool
 
     public init(
         context: AccountContext,
@@ -98,6 +108,7 @@ public final class InstantPageV2RenderContext {
         shouldAutoDownloadFile: @escaping (TelegramMediaFile) -> Bool = { _ in false },
         shouldAutoplayVideo: @escaping (TelegramMediaFile) -> Bool = { _ in false },
         wallpaperBackgroundNode: @escaping () -> WallpaperBackgroundNode? = { nil },
+        captureProtected: Bool = false,
         message: MessageReference?
     ) {
         self.context = context
@@ -114,6 +125,14 @@ public final class InstantPageV2RenderContext {
         self.shouldAutoDownloadFile = shouldAutoDownloadFile
         self.shouldAutoplayVideo = shouldAutoplayVideo
         self.wallpaperBackgroundNode = wallpaperBackgroundNode
+        self.captureProtected = captureProtected
+    }
+
+    /// Refresh the copy-protection state. See `captureProtected`; the host calls this before each
+    /// `InstantPageV2View.update(layout:theme:animation:)` so reused media views pick the new value
+    /// up in their own `update(…)`.
+    public func updateCaptureProtected(_ captureProtected: Bool) {
+        self.captureProtected = captureProtected
     }
 
     /// Update the content-bearing webpage for a later chunk of the SAME message with the SAME
@@ -580,7 +599,8 @@ public final class InstantPageV2View: UIView {
                             frame: itemFrame,
                             context: context,
                             userLocation: .other,
-                            theme: theme
+                            theme: theme,
+                            captureProtected: renderContext.captureProtected
                         )
                         // Image starts hidden; updateImageReveal pops it in when the streaming
                         // cursor crosses its char-index. For non-streaming pages (no
@@ -593,6 +613,7 @@ public final class InstantPageV2View: UIView {
                     }
 
                     data.view.frame = itemFrame
+                    data.view.captureProtected = renderContext.captureProtected
                     data.textView = textView
                     data.charIndexInItem = imageItem.range.location
                 }

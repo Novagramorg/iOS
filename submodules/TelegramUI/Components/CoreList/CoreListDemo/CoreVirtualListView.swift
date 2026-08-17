@@ -164,6 +164,19 @@ public enum CoreListLoadedEdge: Hashable {
     case bottom
 }
 
+/// Which side of its settled span a rigid block of rows travels in from — see
+/// `CoreVirtualListView.animateInsertedBlock(identities:origin:transition:)`.
+///
+/// Stated in CONTENT ORDER, not on screen: `.beforeBlock` is the low-index side. A host whose view is
+/// rotated (the chat history is) renders that at the visual bottom, and picking the case by what the
+/// user sees is how the sign gets inverted.
+public enum CoreListBlockOrigin: Hashable {
+    /// The block starts one block-height toward index 0 and travels forward into place.
+    case beforeBlock
+    /// The block starts one block-height away from index 0 and travels back into place.
+    case afterBlock
+}
+
 public final class CoreVirtualListView: UIView {
     struct Window {
         struct Item {
@@ -2111,6 +2124,91 @@ public final class CoreVirtualListView: UIView {
                                            transition: transition,
                                            transactionTime: transactionTime)
             }
+        }
+    }
+
+    /// Slides a run of rows in from just beyond one edge of where they settled, as one rigid block:
+    /// every named row gets the SAME offset, so their spacing is preserved for the whole travel and
+    /// they arrive together.
+    ///
+    /// The host names the EDGE and this view measures the DISTANCE. The distance is the block's own
+    /// total settled height, which is what puts the block exactly out of the way of its final
+    /// position at the start of the travel; the host cannot compute it, because the heights come from
+    /// the very pass this call follows. Which edge is host policy — a rotated host reads them the
+    /// other way round — and `origin` is in CoreList's content order, not screen space.
+    ///
+    /// **Why this is a list-owned track and not something a host can install itself.** Position tracks
+    /// here are additive offsets decaying to zero, and `capturePresentedPositionOffsets()` reads
+    /// `presented − model` on every bound live layer at the start of the NEXT pass to recover exactly
+    /// that quantity. A raw `CAAnimation` a host added would be indistinguishable from a track this
+    /// model owns, so a second pass landing mid-slide would resume against a displacement the model
+    /// never issued. Going through `transitionPosition` also means an overlapping slide composes with
+    /// the one in flight (`transitionPositionOffset` folds in `currentOffset`) rather than fighting it.
+    ///
+    /// Rows not currently loaded are skipped: an unloaded row has no layer, and it is off-screen, so
+    /// there is nothing to see travel.
+    ///
+    /// Safe to call immediately after `applyChanges`. If that pass was deferred for re-entrancy this
+    /// call defers onto the same scheduler behind it, so it always reads the window the pass built —
+    /// reading it synchronously would find the PREVIOUS window and displace the wrong rows.
+    public func animateInsertedBlock(identities: [AnyHashable],
+                                     origin: CoreListBlockOrigin,
+                                     transition: CoreListTransition) {
+        guard !identities.isEmpty, !transition.isImmediate else {
+            return
+        }
+        if isApplyingChanges {
+            scheduler.schedule { [weak self] in
+                self?.animateInsertedBlock(identities: identities,
+                                           origin: origin,
+                                           transition: transition)
+            }
+            return
+        }
+
+        let wanted = Set(identities)
+        let members = activeWindow.items.filter { item in
+            guard _items.indices.contains(item.index) else {
+                return false
+            }
+            return wanted.contains(_items[item.index].identity)
+        }
+        guard !members.isEmpty else {
+            return
+        }
+
+        // Reserved space is between rows rather than part of one, so a block entering from beyond its
+        // own edge has to clear it too — otherwise a run carrying a date header starts that much
+        // short and the header is already half-arrived when the rows begin to move.
+        let blockHeight = members.reduce(CGFloat(0.0)) { total, item in
+            total + item.frame.height + item.reservedTop + item.reservedBottom
+        }
+        guard blockHeight > 0.0 else {
+            return
+        }
+        let displacement: CGFloat
+        switch origin {
+        case .beforeBlock:
+            displacement = -blockHeight
+        case .afterBlock:
+            displacement = blockHeight
+        }
+
+        // One clock for the whole block, for the same reason a pass captures one: sampling per row
+        // would stagger the starts of an animation whose entire point is that the rows move rigidly.
+        let transactionTime = animationController.now()
+        for item in members {
+            let identity = _items[item.index].identity
+            // `render()` has already written the settled frame, so the layer's model position IS the
+            // settled endpoint. Passing it back as `newSettledY` is a no-op write; the pair only has
+            // to differ by `displacement` for the track to carry it.
+            let settledY = item.view.layer.position.y
+            animationController.transitionPosition(identity: identity,
+                                                   layer: item.view.layer,
+                                                   oldSettledY: settledY + displacement,
+                                                   newSettledY: settledY,
+                                                   transition: transition,
+                                                   transactionTime: transactionTime)
         }
     }
 

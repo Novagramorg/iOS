@@ -202,7 +202,7 @@ extension DocumentCanvasView {
                     let nr = regions[j]
                     let lineH = max(nr.layout.caretRect(atOffset: 0).height, 16)
                     let probeY = down ? nr.canvasOrigin.y + lineH / 2
-                                      : nr.canvasOrigin.y + max(nr.layout.boundingHeight, lineH) - lineH / 2
+                                      : nr.canvasOrigin.y + max(nr.layout.correctedBoundingHeight, lineH) - lineH / 2
                     let stepped = closestGlobalPosition(to: CGPoint(x: caret.midX - off, y: probeY))
                     if stepped != pos { return stepped }
                 }

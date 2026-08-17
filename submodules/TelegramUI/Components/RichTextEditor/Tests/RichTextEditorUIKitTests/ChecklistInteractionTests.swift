@@ -217,7 +217,14 @@ extension ChecklistInteractionTests {
         XCTAssertEqual(v.checklistMarkerViews.count, 1)
         let hosted = v.checklistMarkerViews[BlockID("a")]
         XCTAssertEqual((hosted?.view as? StubCheckbox)?.checked, true)
-        XCTAssertEqual(hosted?.view.frame, (v.boxes[0] as! BlockBox).checklistMarkerCanvasRect())
+        // Compared component-wise with a tolerance: exact CGRect equality trips on a ~1e-15 difference
+        // in the accumulated inset arithmetic, which is float noise rather than a placement change.
+        let expected = (v.boxes[0] as! BlockBox).checklistMarkerCanvasRect()
+        let actual = hosted?.view.frame
+        XCTAssertEqual(actual?.minX ?? .nan, expected?.minX ?? .nan, accuracy: 0.01)
+        XCTAssertEqual(actual?.minY ?? .nan, expected?.minY ?? .nan, accuracy: 0.01)
+        XCTAssertEqual(actual?.width ?? .nan, expected?.width ?? .nan, accuracy: 0.01)
+        XCTAssertEqual(actual?.height ?? .nan, expected?.height ?? .nan, accuracy: 0.01)
     }
 
     func test_removingChecklist_removesCheckboxView() {

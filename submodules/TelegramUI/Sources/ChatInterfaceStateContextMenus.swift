@@ -539,6 +539,11 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
         }
 
         var actions: [ContextMenuItem] = []
+
+        let noAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+        actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Chat_EphemeralMessage_AnchoredInfo, textFont: .small, icon: { _ in return nil }, action: noAction)))
+        actions.append(.separator)
+        
         let hasCopyableContent = !message.text.isEmpty || richMessageInstantPage != nil || diceEmoji != nil || (resourceAvailable && imageResource != nil)
         if hasCopyableContent && !isCopyProtected && !isExpired && !isPoll {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy, icon: { theme in
@@ -1310,7 +1315,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             let sendGiftTitle: String
             var isIncoming = message.effectivelyIncoming(context.account.peerId)
             for media in message.media {
-                if let action = media as? TelegramMediaAction, case let .starGiftUnique(_, isUpgrade, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action {
+                if let action = media as? TelegramMediaAction, case let .starGiftUnique(_, isUpgrade, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action {
                     if isUpgrade && message.author?.id == context.account.peerId {
                         isIncoming = true
                     }

@@ -8252,8 +8252,6 @@ Sorry for the inconvenience.";
 "ChatList.CloseAction" = "Close";
 
 "Channel.EditAdmin.PermissionManageTopics" = "Manage Topics";
-"Channel.EditAdmin.PermissionManageWelcomeMessages" = "Manage Welcome Messages";
-"Channel.EditAdmin.PermissionSendWelcomeMessages" = "Send Welcome Messages";
 "Channel.EditAdmin.PermissionCreateTopics" = "Create Topics";
 
 "ChatList.Search.FilterTopics" = "Topics";
@@ -16622,5 +16620,46 @@ Error: %8$@";
 
 "Chat.EphemeralMessage.BadgeYou" = "Only visible to you";
 "Chat.EphemeralMessage.Badge" = "Only visible to %@";
+"Chat.EphemeralMessage.AnchoredInfo" = "This version of the message is only visible to you.";
 "Chat.EphemeralMessage.Revert" = "Revert";
 "Chat.EphemeralMessage.RevertInfo" = "Restores the message to it's original content";
+
+"Channel.EditAdmin.PermissionManageWelcomeMessages" = "Manage Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessagesGroup" = "Send Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessagesChannel" = "Send Welcome Messages";
+
+"RichText.ButtonEditorTitle" = "Button";
+"RichText.ButtonLabelPlaceholder" = "Label";
+"RichText.ButtonURLPlaceholder" = "URL";
+"RichText.ButtonSectionContent" = "CONTENT";
+"RichText.ButtonSectionStyle" = "STYLE";
+"RichText.ButtonDelete" = "Delete Button";
+"RichText.ButtonStyleDefault" = "Default";
+"RichText.ButtonStylePrimary" = "Primary";
+"RichText.ButtonStyleDanger" = "Danger";
+"RichText.ButtonStyleSuccess" = "Success";
+"RichText.ButtonStyleLink" = "Link";
+"RichText.ButtonActionCopy" = "Copies text";
+"RichText.ButtonActionDisabled" = "Disabled";
+"RichText.ButtonActionNotEditable" = "This button's action can't be edited";
+"RichText.MenuInlineButton" = "Button";
+"RichText.MenuButtonRow" = "Button Row";
+"RichText.ButtonRowAlignment" = "Alignment";
+"RichText.ButtonRowAlignJustify" = "Justify";
+"RichText.ButtonRowAlignLeft" = "Left";
+"RichText.ButtonRowAlignCenter" = "Center";
+"RichText.ButtonRowAlignRight" = "Right";
+"RichText.ButtonRowDelete" = "Delete Row";
+"RichText.ButtonRowAdd" = "Add Button";
+"RichText.Menu.Table.BordersOn" = "Show Borders";
+"RichText.Menu.Table.BordersOff" = "Hide Borders";
+
+"Notification.JoinedGroupViaCommunity" = "%@ joined the group via community";
+"Notification.JoinedGroupViaCommunityYou" = "You joined the group via community";
+"Gift.Message.InputPlaceholder" = "Add message…";
+"Gift.Message.MakePublic" = "Make message public";
+"Gift.Message.PreviewInChat" = "Preview in chat";
+"Gift.Message.SendNow" = "Send Now";
+"Gift.Message.ToastText" = "You can add a message for **%@** or send **%@** right away.";
+"Gift.Message.ToastTitle" = "Add Message";
+"Gift.Message.YourMessage" = "Your message...";

@@ -220,6 +220,88 @@ final class PhysicsScrollEngineTests: XCTestCase {
         XCTAssertTrue(f.engine.gestureRecognizerShouldBegin(unrelated),
                       "the engine gates only its own pan")
     }
+
+    // MARK: - Touch delivery
+
+    func test_thePanDoesNotWithholdTouchUpFromTheViewsUnderIt() {
+        // A fresh recognizer defaults to `delaysTouchesEnded == true`, which suspends every
+        // `UITouchPhaseEnded` to the hit view until the pan resolves. `ListViewImpl` scrolls on
+        // `UIScrollView.panGestureRecognizer`, where UIKit itself opts out — so keeping the default
+        // here silently delays touch-up for `UIControl`s inside rows (chat's inline bot keyboards are
+        // real `UIButton`s) relative to the backend this replaces.
+        let f = makeArbitrationFixture()
+        XCTAssertFalse(f.pan.delaysTouchesEnded,
+                       "the list's pan must not delay touch-up to the views under it")
+
+        // Control: the parity claim above, stated as an assertion rather than a comment. If UIKit ever
+        // changes its own answer, this fails and the decision gets re-made instead of drifting.
+        XCTAssertFalse(UIScrollView().panGestureRecognizer.delaysTouchesEnded,
+                       "UIScrollView's own pan opts out; that is what makes this parity")
+    }
+
+    // MARK: - Touch-down catch
+
+    /// An engine with a live `.stepped` deceleration and no window (so no link callbacks fire and the
+    /// motion stays pending until something explicitly stops it).
+    private func makeDeceleratingEngine() -> PhysicsScrollEngine {
+        let engine = PhysicsScrollEngine()
+        engine.contentHost.bounds.size = CGSize(width: 390, height: 844)
+        engine.decelerationMode = .stepped
+        engine.setEdges(min: nil, max: nil)
+        engine.applyPanUpdate(state: .began, translation: CGPoint(x: 0, y: -40),
+                              velocity: CGPoint(x: 0, y: -3000), forced: false, isIndirect: false)
+        engine.applyPanUpdate(state: .ended, translation: CGPoint(x: 0, y: -40),
+                              velocity: CGPoint(x: 0, y: -3000), forced: false, isIndirect: false)
+        precondition(engine.isDecelerating, "fixture: the release must leave motion to catch")
+        return engine
+    }
+
+    func test_touchDownCatchesMovingContent_withoutWaitingForTheRecognizerToBegin() {
+        // The stop must not ride on `.began`. A recognizer's `.began` is arbitrated, and
+        // `NavigationContainer` declares its interactive-pop pan "required to fail by" every other
+        // `UIPanGestureRecognizer` — ours included — so the forced `.began` is held until that
+        // recognizer fails, which for a dead-still finger is not until it LIFTS. Touch delivery cannot
+        // be held, which is why the catch lives here and why UIScrollView catches in
+        // `_beginTrackingWithEvent:` too.
+        let engine = makeDeceleratingEngine()
+
+        engine.noteTouchDown(at: CACurrentMediaTime())
+
+        XCTAssertFalse(engine.isDecelerating,
+                       "the finger landing stops the content, with no gesture state change involved")
+    }
+
+    func test_touchDownStillForcesTheImmediateBegin_afterItHasCaughtTheMotion() {
+        // The trap that kept the catch on the `.began` path: `shouldBeginImmediately` used to re-read
+        // live motion state, and by the time UIKit consults it the catch has already nulled that
+        // motion — so a naive move of the catch reports "not moving", skips the forced begin, and loses
+        // absorption (the tap falls through to the row as well as stopping the scroll). The captured
+        // flag is what keeps both halves.
+        let engine = makeDeceleratingEngine()
+        let pan = (engine.contentHost.gestureRecognizers ?? []).first as? PhysicsPanGestureRecognizer
+        XCTAssertNotNil(pan, "fixture: the engine attaches its own PhysicsPanGestureRecognizer")
+
+        engine.noteTouchDown(at: CACurrentMediaTime())
+
+        XCTAssertFalse(engine.isDecelerating, "precondition: the catch has already run")
+        XCTAssertEqual(pan?.shouldBeginImmediately?(), true,
+                       "a finger that landed on moving content still grabs the scroll, so the tap is absorbed")
+    }
+
+    func test_touchDownOnStillContentLeavesTheNormalHysteresisIntact() {
+        // Non-vacuity control for the pair above: at rest the closure must answer false, or every tap
+        // anywhere in the list would force a begin and fail the row's own recognizer by exclusion.
+        let engine = PhysicsScrollEngine()
+        engine.contentHost.bounds.size = CGSize(width: 390, height: 844)
+        engine.setEdges(min: nil, max: nil)
+        let pan = (engine.contentHost.gestureRecognizers ?? []).first as? PhysicsPanGestureRecognizer
+
+        engine.noteTouchDown(at: CACurrentMediaTime())
+
+        XCTAssertFalse(engine.isDecelerating, "fixture: nothing was moving")
+        XCTAssertEqual(pan?.shouldBeginImmediately?(), false,
+                       "content at rest keeps the ~10pt pan hysteresis, so taps pass through to rows")
+    }
 }
 
 /// A `UIControl` whose tracking state can be set, standing in for a chat inline-keyboard button

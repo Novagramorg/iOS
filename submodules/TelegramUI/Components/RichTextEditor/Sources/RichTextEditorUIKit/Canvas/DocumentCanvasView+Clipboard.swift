@@ -110,7 +110,13 @@ extension DocumentCanvasView {
     /// Deletes any selection and splices `fragment` at the caret, returning the inserted global range
     /// `[start, end)`. MUST be called inside an `editing { }` block — the caller owns the undo step.
     @discardableResult
-    func spliceFragmentInEditing(_ fragment: Document) -> (start: Int, end: Int) {
+    func spliceFragmentInEditing(_ rawFragment: Document) -> (start: Int, end: Int) {
+        // A pasted button cannot carry an opaque action: a callback payload / web-app / payment binding
+        // belongs to the message it arrived in and can never work anywhere else, and the editor can
+        // neither show nor edit it. Downgrade to `.disabled`, which is what the wire itself uses for a
+        // stripped action. The EDIT round-trip is unaffected — that goes through the `document` setter,
+        // not a fragment splice, so reopening a message still preserves its actions verbatim.
+        let fragment = rawFragment.convertingUnsupportedButtonActions()
         // 1. delete the selection (grapheme-safe, cross-region) → collapsed caret at selFrom.
         if selFrom < selTo {
             applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "")

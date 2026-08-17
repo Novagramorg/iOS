@@ -517,6 +517,14 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         imageObjectDeletePending = nil
+        // A button row is TEXT-FREE, so `prevTextPosition` skips back over an entire RUN of adjacent
+        // rows and iOS's object-replacement range spans all of them — the generic selection-replace
+        // below then drops every one at once. Delete exactly ONE pill (and the row with its last pill)
+        // so repeated Backspaces walk through them one by one. Must run BEFORE the media/quote arms:
+        // those collapse a range to a caret, which would strand this one mid-run.
+        if deleteButtonPillIfNeeded() {
+            return
+        }
         // iOS may deliver Backspace at a NON-tap-selected media block's leading gap as an object-
         // replacement RANGE running from the previous block's text end to the gap ([prevEnd … gap]),
         // NOT a collapsed caret. Left as a range it falls to the generic selection-replace below, which

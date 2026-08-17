@@ -210,6 +210,7 @@ final class CanvasClipboardTests: XCTestCase {
             case .pullQuote(let pq): out += pq.runs.map(\.text)
             case .blockQuote(let bq): out += allRunTexts(bq.children)
             case .details(let d): out += d.title.map(\.text); out += allRunTexts(d.children)
+            case .buttonRow: break   // a pill label is not a document run
             }
         }
         return out

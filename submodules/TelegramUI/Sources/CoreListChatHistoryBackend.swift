@@ -621,6 +621,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         }
 
         let structurallyChanged = !deleteIndices.isEmpty || !insertIndicesAndItems.isEmpty || !updateIndicesAndItems.isEmpty
+        // Read before the mutation below rewrites `self.entries`. `deleteIndices` are indices into the
+        // OLD array, so `arrivingBlockStableIds` cannot say where they fall without it.
+        let previousEntryCount = self.entries.count
         if structurallyChanged {
             var updated = self.entries
             // Deletes: apply in descending index order so earlier removals don't shift later ones.
@@ -837,6 +840,33 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             )
         }
 
+        // Messages arriving at the newest edge slide in from beyond it, rather than fading into place
+        // where they will sit. This is `ListViewImpl`'s behaviour, though not by its mechanism:
+        // `ChatMessageItemView.animateInsertion` (ChatMessageItemView.swift:712) does it by displacing
+        // the node's own `transitionOffset`, and BOTH halves of that are inert here — the setter
+        // early-outs under `hostOwnsFrame` (ListViewItemNode.swift:275), which `rebuild` sets on every
+        // hosted node, and `addTransitionOffsetAnimation` is advanced only by `ListViewImpl`'s display
+        // link (ListView.swift:4823), which CoreList has no equivalent of. Calling `animateInsertion`
+        // here would compile, run, and animate nothing.
+        //
+        // So it is a CoreList track instead, and it must be one: an additive position animation added
+        // to the row's layer directly would be read back as a CoreList track by
+        // `capturePresentedPositionOffsets()` at the next pass, and a second message landing mid-slide
+        // would resume against a displacement the model never issued.
+        if let arrivingStableIds = self.arrivingBlockStableIds(
+            deleteIndices: deleteIndices,
+            insertIndicesAndItems: insertIndicesAndItems,
+            previousEntryCount: previousEntryCount,
+            options: options
+        ) {
+            // `.beforeBlock` is content order, not screen: index 0 is the NEWEST message and sits at
+            // the start of CoreList's content, which the wrapper's π renders at the visual bottom. So
+            // travelling forward from before index 0 is the block rising from under the input panel.
+            self.coreList.animateInsertedBlock(identities: arrivingStableIds,
+                                               origin: .beforeBlock,
+                                               transition: transition)
+        }
+
         // Transaction end is where programmatic movement is reported: setOffset / applyShift /
         // setEdges are isProgrammatic-guarded in UIKitScrollEngine so a scrollTo fires no onScroll, and
         // the additive viewport track moves content with no engine offset change at all. Structural and
@@ -865,6 +895,60 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         self.updateVisibleContentOffset(transition: offsetTransition, geometry: .settled)
         self.pushHeaderFlashingState(animated: false)
         completion(self.displayedItemRange)
+    }
+
+    /// The stable ids of a transaction that is a plain arrival at the newest edge, or nil when it is
+    /// anything else. Feeds the entering-block slide above.
+    ///
+    /// Positional rather than by message direction: a bot's reply, a message from another peer and one
+    /// you sent from a second device all land the same way, and the backend deals in stableIds and
+    /// `ListViewItem`s rather than in message semantics. The one arrival it must NOT claim is the local
+    /// fast send, which is what `.RequestItemInsertionAnimations` names — there the send morph is
+    /// already carrying the bubble out of the input field, and it is the same flag that suppresses
+    /// `animatesInsertions` a few lines above, for the same reason.
+    private func arrivingBlockStableIds(
+        deleteIndices: [ListViewDeleteItem],
+        insertIndicesAndItems: [ChatHistoryListViewInsertItem],
+        previousEntryCount: Int,
+        options: ListViewDeleteAndInsertOptions
+    ) -> [AnyHashable]? {
+        guard !insertIndicesAndItems.isEmpty else {
+            return nil
+        }
+        // **An arrival normally DOES delete something.** The history view is a sliding window of
+        // bounded size, so a message landing at the newest edge pushes the oldest one out of the view
+        // in the same transaction — and `entries[0]` is the newest, so that departure is at the far
+        // END of the old array. Requiring no deletes at all rejects nearly every real arrival; what
+        // disqualifies one is a departure ANYWHERE ELSE, which is a message being removed rather than
+        // the window sliding.
+        //
+        // Updates are not disqualifying either, and that is the load-bearing half of the same point: a
+        // message from the author who sent the one before it changes that bubble's merge state, so the
+        // commonest arrival of all carries an update alongside its insert.
+        let deletedIndices = deleteIndices.map { $0.index }.sorted()
+        guard deletedIndices.count <= previousEntryCount else {
+            return nil
+        }
+        guard deletedIndices == Array((previousEntryCount - deletedIndices.count) ..< previousEntryCount) else {
+            return nil
+        }
+        guard !options.contains(.RequestItemInsertionAnimations) else {
+            return nil
+        }
+        // Everything arriving at once is a population — opening a chat, a hole reload — not messages
+        // coming in. Those passes are immediate today, so this is a belt on top of the transition
+        // check inside `animateInsertedBlock`, but a full replace should never slide even if one
+        // acquires a curve.
+        guard insertIndicesAndItems.count < self.entries.count else {
+            return nil
+        }
+        // Contiguous and anchored at the newest edge. An insert further in is history being filled in
+        // around what is already there.
+        let indices = insertIndicesAndItems.map { $0.index }.sorted()
+        guard indices == Array(0 ..< insertIndicesAndItems.count) else {
+            return nil
+        }
+        return Array(insertIndicesAndItems.reversed().map { AnyHashable($0.stableId) })
     }
 
     // Parity with ListViewImpl.immediateDisplayedItemRange (ListView.swift:4683). loadedRange is the

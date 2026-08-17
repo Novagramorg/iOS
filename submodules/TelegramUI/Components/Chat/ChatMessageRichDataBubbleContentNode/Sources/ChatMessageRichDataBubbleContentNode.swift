@@ -313,6 +313,15 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         )
     }
 
+    /// Whether this message's media must be screenshot-protected, matching
+    /// `ChatMessageInteractiveMediaNode`'s rule for regular media messages (its third disjunct,
+    /// extended/paid media, cannot occur inside a rich message). Recomputed on every apply rather
+    /// than captured once: `isCopyProtectionEnabled` is a peer setting that can flip while the
+    /// bubble is on screen.
+    private static func isCaptureProtected(item: ChatMessageBubbleContentItem) -> Bool {
+        return item.associatedData.isCopyProtectionEnabled || item.message.isCopyProtected()
+    }
+
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
     /// the existing view, updating only the webpage content in place. The view is rebuilt when the
     /// bubble is recycled with a genuinely different message (different `stableId`), and — since
@@ -332,6 +341,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // still be in flight when a scroll recycle rebuilds for a different message, which would
         // fade the recycled bubble in for no reason.
         var crossfadeIn = false
+
+        // Copy protection is a peer setting that can flip without any of the keys below changing,
+        // so refresh it up front — ahead of every reuse branch, including the early returns. The
+        // rebuild path picks the same value up through the render context's initializer.
+        self.pageView?.renderContext?.updateCaptureProtected(ChatMessageRichDataBubbleContentNode.isCaptureProtected(item: item))
+
         let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded, structure: structure)
         if let existing = self.pageView, let current = self.pageViewMessageKey, current.stableId == key.stableId {
             if current.stableVersion == key.stableVersion && current.messageId == key.messageId && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
@@ -443,6 +458,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             wallpaperBackgroundNode: { [weak self] in
                 return self?.item?.controllerInteraction.presentationContext.backgroundNode
             },
+            captureProtected: ChatMessageRichDataBubbleContentNode.isCaptureProtected(item: item),
             message: messageReference
         )
         let view = InstantPageV2View(renderContext: renderContext)
@@ -670,16 +686,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 let _ = codeBlockTitleColor
                 let _ = codeBlockAccentColor
                 
-                let textCategories = InstantPageTextCategories(
-                    kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
-                    header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 1.0, weight: .medium), color: messageTheme.primaryTextColor),
-                    subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 1.0, weight: .medium), color: messageTheme.primaryTextColor),
-                    paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 0.9), color: messageTheme.primaryTextColor),
-                    caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.secondaryTextColor),
-                    credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: messageTheme.secondaryTextColor),
-                    table: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
-                    article: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 18.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
-                    codeBlock: InstantPageTextAttributes(font: InstantPageFont(style: .monospace, size: 14.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
+                let textCategories = InstantPageTextCategories.chatMessage(
+                    primaryText: messageTheme.primaryTextColor,
+                    secondaryText: messageTheme.secondaryTextColor
                 )
                 let tableHeaderColor = isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.1) : UIColor(white: 0.0, alpha: 0.05)
                 let pageTheme = InstantPageTheme(

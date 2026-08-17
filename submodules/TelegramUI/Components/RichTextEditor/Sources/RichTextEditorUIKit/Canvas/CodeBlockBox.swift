@@ -50,6 +50,8 @@ final class CodeBlockBox {
                                       width: max(width - mapper.styleSheet.quoteIndent - mapper.styleSheet.quoteTrailingInset, 1))
     }
 
+    var spacingKind: RichTextBlockSpacingKind { .preformatted }
+
     var length: Int { layout.length }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: frame.minY + topInset) }
 
@@ -78,9 +80,9 @@ extension CodeBlockBox: CanvasBlock {
     var textStart: Int { globalStart }
     var textLength: Int { length }
     var textRef: TextNodeRef { .code(id) }
-    var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
+    var height: CGFloat { max(layout.correctedBoundingHeight, emptyLineHeight) + topInset + bottomInset }
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        max(layout.boundingHeight(forWidth: max(width - leftInset - rightInset, 1)), emptyLineHeight) + topInset + bottomInset
+        max(layout.correctedBoundingHeight(forWidth: max(width - leftInset - rightInset, 1)), emptyLineHeight) + topInset + bottomInset
     }
     func setWidth(_ width: CGFloat) { layout.setWidth(max(width - leftInset - rightInset, 1)) }
     func currentBlock() -> Block { .code(currentCode()) }

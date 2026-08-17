@@ -337,6 +337,58 @@ Plan: [`docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-auto
 - **Collage cells inherit this for free** — `.collage` flattens into ordinary `.mediaVideo` items, so
   each cell is an `InstantPageV2MediaVideoView` with no collage-specific code.
 
+## Copy protection (screenshot-protected rich-message media & secure gallery)
+
+Media in a **rich message** honors the chat's copy protection the way regular media does
+(`ChatMessageInteractiveMediaNode`'s `captureProtected`): every rendered image/video/thumbnail layer
+is excluded from screenshots and screen recordings via `setLayerDisableScreenshots`, and tapping one
+opens a **secure** `InstantPageGalleryController` — protected content, no share / save-to-camera-roll.
+V1 Instant View and web IV are untouched (their pages are public web content), and so is the send
+preview.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2RenderContext.captureProtected` (default `false`) + `updateCaptureProtected(_:)`. `updateInlineImages()` seeds and refreshes each `InstantPageV2InlineImageView`. |
+| `…/Chat/ChatMessageRichDataBubbleContentNode/…` | `isCaptureProtected(item:)` = `associatedData.isCopyProtectionEnabled \|\| message.isCopyProtected()`; passed to the render-context initializer and refreshed at the top of `ensurePageView` on every apply. |
+| `submodules/InstantPageUI/Sources/InstantPageImageNode.swift` | `captureProtected` drives the inner `TransformImageNode` and the (weakly tracked) spoiler blur node; `transitionNode(media:)` does the protected-snapshot dance. |
+| `submodules/InstantPageUI/Sources/InstantPageV2MediaViews.swift` | `makeMediaWrapper` seeds it; the image/video/map/cover views re-read it in `update(item:theme:renderContext:)`; the inline autoplay `NativeVideoContent` takes `captureProtected:`; `handleOpenMediaTap` forwards it to the gallery. |
+| `InstantPageV2SlideshowView.swift`, `InstantPageV2DocumentContentNode.swift`, `InstantPageV2InlineImageView.swift` | Slideshow pages, the document row's thumbnail, and inline `RichText.image` cells. |
+| `InstantPageMediaOpen.swift` → `InstantPageGalleryController.swift` → `InstantImageGalleryItem.swift` | `captureProtected` threads to each gallery entry: protected zoomable image node, `NativeVideoContent(captureProtected:)`, and `setShareMedia(nil)` to withhold the footer action button. |
+
+### Non-obvious invariants
+
+- **The flag is mutable state on the render context, not a constructor snapshot.**
+  `isCopyProtectionEnabled` is a *peer* setting that can be toggled while the message is on screen.
+  That changes neither the webpage nor the page layout, so nothing rebuilds the V2View — the bubble
+  refreshes the context up front in `ensurePageView` (ahead of every reuse branch, including the two
+  early returns) and each media view re-reads it in its own `update(…)`. Seeding it only at
+  construction leaves an on-screen message unprotected until it is scroll-recycled.
+- **A capture-protected layer is excluded from `snapshotContentTree` too.** So the gallery
+  open/close animation would fly a blank rect. `InstantPageImageNode.transitionNode(media:)` mirrors
+  `ChatMessageInteractiveMediaNode.transitionNode(adjustRect:)`: add an **unprotected** `UIImageView`
+  copy of `imageNode.image` over the protected node, snapshot, remove the stand-in, then
+  `setLayerDisableScreenshots` the resulting snapshot so the transition itself stays uncapturable.
+- **A concealed spoiler must be protected as well.** The blur cover is a sibling `TransformImageNode`
+  the enclosing view owns (`makeSpoilerBlurredNode()`), not a child of the sharp node, so protecting
+  the sharp node alone leaves a screenshot of the blurred cover — enough to read the media's shape.
+  `InstantPageImageNode` keeps a weak reference to the node it vends and keeps the two in sync.
+- **`NativeVideoContent` takes `captureProtected` at construction**, so a toggle has to *rebuild* the
+  inline player. `InstantPageV2MediaVideoView` therefore tracks `videoNodeCaptureProtected` alongside
+  `videoNodeMediaId` and includes it in the "player is still current" early-out.
+- **The video gallery's footer needs no gating.** `InstantPageGalleryEntry.item` passes
+  `originData: nil`, and `ChatItemGalleryFooterContentNode.setup(origin:caption:)` zeroes its whole
+  `buttonsState` when origin is nil — so no share button exists on that path to begin with. Only the
+  image path (`InstantPageGalleryFooterContentNode`) needed `setShareMedia(nil)`.
+- **Document blocks were already covered.** Tapping one routes through
+  `openMessage(…, mediaSubject: .richTextMedia(fileId))` → the chat's `GalleryController`, which
+  derives protection from the message itself. Only the row's *thumbnail* is protected in the bubble;
+  the file name/size text is metadata, and the regular chat file bubble does not protect its label
+  either.
+- **`InstantPageUI` gained a direct `UIKitRuntimeUtils` dep** (for `setLayerDisableScreenshots`);
+  everything else reaches protection through `TransformImageNode.captureProtected`.
+
 ## InstantPage V2 text item height (true font line box)
 
 `layoutTextItem` (`InstantPageV2Layout.swift`) sizes a `.text` item to the **true font line height**, not the cap box. A single-line item measures exactly `fontAscent + fontDescentBelowBaseline` (`A + D`); the old behavior was the cap box `fontLineHeight = floor(fontAscent + fontDescent)` (`A − D`).
@@ -810,6 +862,16 @@ related, a fixed radius rather than `height / 2` is the lever.
   `.callback` is visually indistinguishable from a link-styled `.url`. Note also that the link route
   deliberately does NOT push `.fontSize`/`.medium`: a pill owns its typography, a link inherits the
   paragraph's.
+- **An emoji-only link-button label gets NO underline.** The underline on a link button is never
+  markup: `InstantPageTextStyleStack.textAttributes()` adds it when the link colour equals the
+  surrounding text colour, which is the normal state in the chat-bubble themes and in the
+  caption/credit categories (see `setupStyleStack`). Under a custom emoji it draws as a stray rule —
+  wider than the glyph and detached from it — and there is no word for it to distinguish, so
+  `attributedStringForLinkStyleButton` strips `underlineStyle` when `richTextIsOnlyCustomEmoji(button.text)`.
+  That helper's switch is exhaustive on purpose (a new `RichText` case must decide) and answers `false`
+  for `.underline`, which is how an explicitly underlined label inside the button keeps its underline.
+  Whitespace and non-underlining wrappers (`.bold`, `.url`, `.textSpoiler`, …) still count as
+  emoji-only; one word anywhere in the label brings the underline back.
 - **Only `.url` rides `TelegramTextAttributes.URL`.** That is what buys the long-press menu, the
   concealed-URL confirmation, anchor scrolling and the link-progress shimmer for free.
   `.urlAuth` and `.openWebView` carry URLs but take the button-dispatch route instead, because their
@@ -1135,3 +1197,36 @@ var effectiveMedia: [Media] {
 - **`fullInstantPage` is not indexed** (the server doesn't index it either, and it's fetched on demand after store-time). The first media lives in the partial `instantPage` anyway.
 - **Only switch the loop SOURCE, never the per-type branches.** Many swapped loops still contain `TelegramMediaPoll`/`TelegramMediaPaidContent`/`TelegramMediaWebpage` branches that rich messages never match — that's fine and intentional; only the `for … in <msg>.media` source changes.
 - **Build-only completeness gate.** Every swap is type-identical (`[Media]` → `[Media]`), so the only compile risk is a receiver that is neither `Message` nor `EngineMessage`; the full Bazel build is the gate (no per-module build / unit tests). Deferred, NOT done: chat-list/reply/pinned/notification/forward thumbnail **previews** and the "Photo"/"Video" media-kind **labels** (`messageContentKind`/`ChatListItemStrings`) — those are preview surfaces, not blank-cell breakage — and **multi-media** (first-media-only is the current scope).
+
+## The chat-message text categories, and editor layout parity (2026-08-14)
+
+`layoutInstantPageV2` takes its fonts from the caller, so there is **no single V2 look** — and the three
+chat-side callers had each hand-copied their own `InstantPageTextCategories` table, which drifted: the
+bubble carried heading `lineSpacingFactor` 1.0 / body 0.9 while the long-press send preview and the
+TextProcessing screen carried 0.685 / 1.0, so **the send preview did not match the bubble it was
+previewing**. All three now share `InstantPageTextCategories.chatMessage(primaryText:secondaryText:)`
+(`InstantPageChatMessageTheme.swift`) with the bubble's values. That deliberately changed the preview and
+TextProcessing; the bubble's values won because it is the surface the recipient sees.
+
+The same table is what the **rich-text editor lays text out with**, so an author composing a rich message
+sees the message. `InstantPageTheme.richTextRenderMetrics(edgeSpacingReduction:)`
+(`InstantPageRichTextMetricsAdapter.swift`) projects any theme into the editor's `RichTextRenderMetrics`
+contract, and `chatMessageRenderMetrics()` is the convenience both editor hosts call. The heading ladder
+comes from `headingTextAttributes(level:link:)` rather than being restated, so H3–H6's derivation from the
+subheader (and its response to the reader's font-size slider) stays shared. `codeBlock` reports the
+metrics' 15pt, not the theme's nominal 14pt, because `layoutCodeBlock` overrides the category with an
+absolute 15 — 14 is a size the renderer never uses.
+
+**`InstantPageUI` gained a direct dep on `RichTextEditorUIKit`**, which it already had transitively via
+`ChatRichTextEditorComposer`, so there is no cycle. The adapter has to live on this side: the composer
+module cannot import `InstantPageUI` (that direction *is* the cycle), which is why the composer passes
+`RichTextRenderMetrics.default` and a test pins that default equal to the adapted theme.
+
+Two parity test suites live in `//submodules/InstantPageUI:InstantPageUITests`, both calling the
+renderer's own functions so a change on either side that breaks parity fails here:
+`RichTextV2MetricsParityTests` pins the editor's line formulas against `layoutTextItem`, its resolved font
+faces against `InstantPageTextStyleStack`'s family scheme, and the **whole** pairwise gap table against
+`spacingBetweenBlocks`; `RichTextV2FrameParityTests` pins that the editor composes those primitives into
+the same running origin. **Do not change a value in `chatMessage` without expecting the editor to move
+with it** — that coupling is the point. Editor-side detail, and what is deferred, is in
+`submodules/TelegramUI/Components/RichTextEditor/CLAUDE.md`.

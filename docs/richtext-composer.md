@@ -498,6 +498,27 @@ with default options) → `InstantPage` → `chatInputContent(fromInstantPage:)`
 is nothing but unformatted `.body` paragraphs, so ordinary text (incl. multi-line) falls through to the default
 plain paste; CommonMark's paired-delimiter rules mean a stray `*`/`-` never triggers.
 
+**Self-referential links are stripped BEFORE that gate (load-bearing — a pasted URL must stay plain).** Apple's
+`NSAttributedString(markdown:)` applies the **GFM autolink extension**, so a bare `https://…` — and also a bare
+`www.…` host or an email address, each of which the parser *rewrites* into `http://www.…` / `mailto:…` — comes
+back as a LINK run whose label is the URL itself. That entity alone made the gate answer "richer than plain", so
+pasting a plain URL latched the field to the native editor and landed the URL as a **text link** (`textUrl`),
+pinning a destination the plain URL already carries. `chatInputContentStrippingSelfReferentialLinks(_:)`
+(`TextFormat/SelfReferentialLinks.swift`) clears every `.url` entity whose covered text IS its own URL, so a
+URL-only paste now falls through to plain paste and the recipient's client detects the URL itself. A genuine
+text link (`[label](url)`, a label that differs from its target) is untouched and still classifies as rich, as is
+anything pasted from Telegram's own `private.telegramtext` / editor-fragment representations — those never go
+through an importer. The predicate `chatInputLinkIsSelfReferential(text:url:)` tolerates exactly the
+normalizations a producer applies (added `mailto:` / `http(s)://` scheme — the latter only when the text carries
+no scheme of its own — percent-encoded path, trailing `/`); a `tg://` mention/date marker never matches its own
+label, so those entities are unaffected. **The same rule is applied on the other import paths, not just markdown**:
+`chatInputStateStringFromRTF` (legacy field, RTF/HTML paste — via the `NSAttributedString` form
+`chatInputTextStrippingSelfReferentialLinks`), `legacyChatInputAttributedString(fromRTF:)`, and the editor's own
+`RTFConversion.fragment(fromRTF:)` (which uses a **duplicate** of the predicate, `linkIsSelfReferential`, in
+`RichTextEditorCore` — Core cannot import `TextFormat`; keep the two in step). The **copy** direction
+(`storeAttributedTextInPasteboard`) is deliberately NOT touched: it keeps whatever entities the source message
+carried.
+
 **Why the monolith owns the parse.** `BrowserUI` already depends on `ChatRichTextEditorComposer`, so neither the
 panel, the attachment screen, nor the `RichTextEditor` package may import it (cycle). The parse therefore lives in
 the `TelegramUI` monolith (the one layer that can import `BrowserUI` + `AccountContext`) and is **injected downward
@@ -577,6 +598,7 @@ when the message is sent — a separate send-path change.
 | panel (GET/SET, node select) | `Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` |
 | markdown-on-paste parse (monolith) | `TelegramUI/Sources/PastedMarkdownConversion.swift` |
 | markdown-on-paste gate | `TextFormat/Sources/PastedMarkdownGate.swift` (`+ Tests/PastedMarkdownGateTests.swift`) |
+| self-referential-link strip (paste) | `TextFormat/Sources/SelfReferentialLinks.swift` (`+ Tests/SelfReferentialLinkTests.swift`); editor-side duplicate `RichTextEditorCore/Model/SelfReferentialLinks.swift` |
 | CommonMark → InstantPage (send + paste) | `BrowserUI/Sources/BrowserMarkdown.swift` (`inputRichTextAttributeFromText`) |
 | two-step paste + neutral transformer hook | `RichTextEditor/.../Canvas/DocumentCanvasView+Clipboard.swift` (`pasteMarkdownTwoStep`), `DocumentCanvasView.swift` (`plainTextFragmentTransformer`, `suppressHostChangeNotification`) |
 | state value-equality | `AccountContext/Sources/ChatController.swift` |
