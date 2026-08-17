@@ -266,7 +266,7 @@ public func buyStarGiftImpl(
             controller.present(alertController, in: .window(.root))
             
             dismissImpl = { [weak alertController] in
-                alertController?.dismiss(animated: true)
+                alertController?.dismiss(completion: nil)
             }
             
             updateIsBalanceVisible(false)

@@ -455,7 +455,7 @@ private final class GiftMessageScreenComponent: Component {
                     updatedInputData: self.inputMediaNodeDataPromise.get(),
                     defaultToEmojiTab: true,
                     opaqueTopPanelBackground: false,
-                    useOpaqueTheme: true,
+                    useOpaqueTheme: false,
                     interaction: self.inputMediaInteraction,
                     chatPeerId: nil,
                     stateContext: self.inputMediaNodeStateContext,
@@ -916,6 +916,20 @@ public final class GiftMessageScreen: ViewControllerComponentContainer {
         )
         self.present(controller, in: .current)
     }
+    
+    fileprivate func dismissAllTooltips() {
+        self.window?.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+        })
+        self.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+            return true
+        })
+    }
 
     override public func dismiss(completion: (() -> Void)? = nil) {
         guard !self.isDismissed else {
@@ -931,5 +945,6 @@ public final class GiftMessageScreen: ViewControllerComponentContainer {
             completion?()
             self.dismiss(animated: false)
         }
+        self.dismissAllTooltips()
     }
 }
