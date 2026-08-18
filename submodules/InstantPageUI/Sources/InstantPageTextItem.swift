@@ -1239,28 +1239,35 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
             }
             return mutable
         case let .textDate(text, date, format):
-            if let format, let formatDate {
-                let formatted = formatDate(date, format)
-                // Link-styled, matching a `FormattedDate` entity in a regular text message
-                // (`StringWithAppliedEntities` paints the range in `linkColor`). The `TelegramTextAttributes.Date`
-                // stamp below already makes it TAPPABLE — without the colour it was an invisible hot zone.
-                // `.link(false)` is colour-only (no underline), the same push the mention / hashtag /
-                // bank-card arms above use.
-                //
-                // Only this arm — the one the V2 renderer takes, since it always supplies `formatDate`. The
-                // fallback below is the V1 reader, which renders the server's literal text and is left
-                // untouched rather than turning every reader date blue.
-                styleStack.push(.link(false))
-                let result = attributedStringForRichText(.plain(formatted), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
-                styleStack.pop()
-                let mutable = result.mutableCopy() as! NSMutableAttributedString
-                if mutable.length != 0 {
-                    mutable.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.Date), value: date, range: NSRange(location: 0, length: mutable.length))
-                }
-                return mutable
-            } else {
+            guard let formatDate else {
+                // The V1 reader supplies no formatter: it renders the server's literal text and is
+                // deliberately left in body colour rather than turning every reader date blue.
                 return attributedStringForRichText(text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
             }
+            // Link colour AND the `TelegramTextAttributes.Date` tap stamp are applied REGARDLESS of
+            // `format`, matching a `FormattedDate` entity in a regular text message: the reference
+            // implementation (`StringWithAppliedEntities`) paints the range in `linkColor` and stamps it
+            // unconditionally, and consults the format only to decide whether the displayed text is
+            // REPLACED by an autoformatted one.
+            //
+            // Gating the styling on `format` too made every format-less date dead — plain body colour,
+            // no tap — and that is the common case, not an edge case:
+            // `ChatInputContentInstantPage.richText(from:)` emits `format: nil` for every
+            // client-composed rich message (`ChatInputInlineEntity.date` carries only the timestamp,
+            // as does the `tg://timestamp` Document marker and `GenerateTextEntities`), and the wire
+            // maps `flags == 0` to nil as well.
+            //
+            // `.link(false)` is colour-only (no underline), the same push the mention / hashtag /
+            // bank-card arms above use.
+            styleStack.push(.link(false))
+            let displayedText: RichText = format.map { RichText.plain(formatDate(date, $0)) } ?? text
+            let result = attributedStringForRichText(displayedText, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+            styleStack.pop()
+            let mutable = result.mutableCopy() as! NSMutableAttributedString
+            if mutable.length != 0 {
+                mutable.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.Date), value: date, range: NSRange(location: 0, length: mutable.length))
+            }
+            return mutable
         case let .textButton(button):
             // `richButtonStyle`'s link bit takes a completely different path: ordinary text, no
             // attachment, no pill view. Everything below is the pill path and is unchanged.

@@ -45,6 +45,22 @@ final class InstantPageDateEntityTests: XCTestCase {
                        1_776_000_000, "the timestamp drives the tap action")
     }
 
+    /// A date with **no** `format` must still read and behave as a link. Every client-composed rich
+    /// message produces one — `ChatInputContentInstantPage.richText(from:)` hard-codes `format: nil`
+    /// because `ChatInputInlineEntity.date` carries only the timestamp — and the wire maps `flags == 0`
+    /// to nil as well. `StringWithAppliedEntities` colours and stamps a `FormattedDate` entity
+    /// regardless of its format (the format only decides whether the displayed text is substituted),
+    /// so a rich bubble must not silently demote the same entity to plain body text.
+    func test_formattedDate_withoutAFormat_isStillALink() {
+        let dateText = RichText.textDate(text: .plain("2026-08-17"), date: 1_776_000_000, format: nil)
+        let (text, attributes) = self.attributes(dateText, formatDate: self.format)
+        XCTAssertEqual(text, "2026-08-17", "with no format there is nothing to autoformat: the literal text stands")
+        XCTAssertEqual(attributes[.foregroundColor] as? UIColor, self.linkColor,
+                       "a format-less date is still a link, exactly as in a plain text message")
+        XCTAssertEqual(attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Date)] as? Int32,
+                       1_776_000_000, "the timestamp must still drive the tap action")
+    }
+
     /// No underline: `.link(false)` is colour-only, matching the entity path's default
     /// (`underlineLinks && underlineAllLinks` is off for chat text).
     func test_formattedDate_isNotUnderlined() {
