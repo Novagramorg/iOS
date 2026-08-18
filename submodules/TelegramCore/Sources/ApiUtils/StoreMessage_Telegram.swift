@@ -496,8 +496,8 @@ extension StoreMessage {
                 return nil
             }
             let peerId = apiPeerId.peerId
-            let authorId = fromId.peerId
             let isWelcomeTemplate = (flags & (1 << 5)) != 0
+            let authorId = isWelcomeTemplate ? peerId : fromId.peerId
             let isForwardingDisabled = (flags & (1 << 12)) != 0
             let anchorMessageId = anchorMsgId.flatMap { id -> MessageId? in
                 guard !isWelcomeTemplate else {
@@ -585,7 +585,7 @@ extension StoreMessage {
 
             var date = messageData.date
             var storeFlags = StoreMessageFlags()
-            if (flags & (1 << 0)) == 0 {
+            if isWelcomeTemplate || (flags & (1 << 0)) == 0 {
                 storeFlags.insert(.Incoming)
                 date += 1
             }
