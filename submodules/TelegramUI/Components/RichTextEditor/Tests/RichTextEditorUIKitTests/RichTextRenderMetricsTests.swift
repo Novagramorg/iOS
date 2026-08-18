@@ -79,7 +79,10 @@ final class RichTextRenderMetricsTests: XCTestCase {
         XCTAssertEqual(m.table.size, 15)
         XCTAssertEqual(m.codeBlock.size, 15)          // V2 overrides the theme's 14pt with 15pt
         XCTAssertEqual(m.codeBlock.style, .monospace)
-        XCTAssertEqual(m.codeBlockLanguageFontSize, 11)
+        // The language line carries no font of its own — both surfaces derive it from `body` + bold,
+        // the way the quote author is derived. What the contract carries is the block's geometry.
+        XCTAssertEqual(m.code.verticalInset, 14)
+        XCTAssertEqual(m.code.languageSpacing, 3)
     }
 
     /// The heading ladder, serif medium at V2's sizes.

@@ -2474,16 +2474,13 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2CodeBlockItem
     var itemFrame: CGRect { return self.item.frame }
 
-    private let backgroundImageView: UIImageView
-    private let languageLabel: UILabel
+    private var languageView: InstantPageV2TextView?
     let textView: InstantPageV2TextView
 
     init(item: InstantPageV2CodeBlockItem, theme: InstantPageTheme) {
         self.item = item
-        self.backgroundImageView = UIImageView()
-        self.languageLabel = UILabel()
 
-        // item.textItem.frame is already in code-block content-area coords (x=leadingInset, y=verticalInset).
+        // item.textItem.frame is already in block-local coordinates.
         let innerV2TextItem = InstantPageV2TextItem(
             frame: item.textItem.frame,
             textItem: item.textItem
@@ -2491,9 +2488,6 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
         self.textView = InstantPageV2TextView(item: innerV2TextItem, theme: theme)
 
         super.init(frame: item.frame)
-        self.backgroundColor = .clear
-        self.addSubview(self.backgroundImageView)
-        self.addSubview(self.languageLabel)
         self.addSubview(self.textView)
         self.update(item: item, theme: theme)
     }
@@ -2504,22 +2498,25 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
     func update(item: InstantPageV2CodeBlockItem, theme: InstantPageTheme) {
         self.item = item
 
-        self.backgroundImageView.image = instantPageV2QuoteFillImage(accent: item.accentColor, barWidth: item.barWidth, cornerRadius: item.cornerRadius, fillAlpha: item.fillAlpha)
-        self.backgroundImageView.frame = CGRect(origin: .zero, size: item.frame.size)
-        self.backgroundImageView.transform = item.barOnTrailing ? CGAffineTransform(scaleX: -1.0, y: 1.0) : .identity
+        // A plain band. No fill image, no bar, no corner radius: a code block reads as a highlighted
+        // table row. Corners at a bubble edge are clipped by the rounded container the page sits in,
+        // exactly as they are for full-width media.
+        self.backgroundColor = item.backgroundColor
 
-        if let language = item.language, !language.isEmpty {
-            self.languageLabel.isHidden = false
-            self.languageLabel.attributedText = NSAttributedString(string: language, attributes: [
-                .font: UIFont(name: "Menlo", size: item.languageFontSize) ?? Font.regular(item.languageFontSize),
-                .foregroundColor: item.languageLabelColor
-            ])
-            self.languageLabel.sizeToFit()
-            let labelWidth = self.languageLabel.bounds.width
-            let labelHeight = self.languageLabel.bounds.height
-            self.languageLabel.frame = CGRect(x: item.frame.width - 8.0 - labelWidth, y: 2.0, width: labelWidth, height: labelHeight)
-        } else {
-            self.languageLabel.isHidden = true
+        if let languageItem = item.languageItem {
+            let inner = InstantPageV2TextItem(frame: languageItem.frame, textItem: languageItem)
+            if let existing = self.languageView {
+                existing.update(item: inner, theme: theme)
+                existing.frame = self.textViewFrame(for: languageItem)
+            } else {
+                let view = InstantPageV2TextView(item: inner, theme: theme)
+                view.frame = self.textViewFrame(for: languageItem)
+                self.addSubview(view)
+                self.languageView = view
+            }
+        } else if let existing = self.languageView {
+            existing.removeFromSuperview()
+            self.languageView = nil
         }
 
         let innerV2TextItem = InstantPageV2TextItem(
@@ -2527,6 +2524,15 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
             textItem: item.textItem
         )
         self.textView.update(item: innerV2TextItem, theme: theme)
+        self.textView.frame = self.textViewFrame(for: item.textItem)
+    }
+
+    /// `InstantPageV2TextView` sizes itself from its item's frame ONLY in `init` (and lays its inner
+    /// containers out from the item on every update) — so the PARENT owns its frame across updates.
+    /// This block's two children can both move when a language line appears or disappears, so both
+    /// are re-framed here rather than relying on their construction-time size.
+    private func textViewFrame(for textItem: InstantPageTextItem) -> CGRect {
+        return textItem.frame.insetBy(dx: -v2TextViewClippingInset, dy: -v2TextViewClippingInset)
     }
 }
 

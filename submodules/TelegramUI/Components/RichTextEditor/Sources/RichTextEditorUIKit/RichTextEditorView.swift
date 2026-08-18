@@ -60,6 +60,20 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host code-block geometry (vertical inset, language-line gap). Both fields default to nil,
+    /// meaning "use the shared render metrics" — so an unset host matches the InstantPage V2 renderer.
+    /// Side padding is deliberately not a knob: it is the paragraph inset at the block's nesting level.
+    public var codeStyle: CodeStyle = .default {
+        didSet {
+            guard codeStyle != oldValue else { return }
+            canvas.applyCodeStyle(codeStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
     /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
     /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob

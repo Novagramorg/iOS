@@ -182,17 +182,15 @@ public struct InstantPageV2TextItem {
 
 public struct InstantPageV2CodeBlockItem {
     public var frame: CGRect
-    public let accentColor: UIColor
-    public let barWidth: CGFloat
-    public let cornerRadius: CGFloat
-    public let fillAlpha: CGFloat
-    public let barOnTrailing: Bool
+    /// Plain, flat band fill. Sourced from `InstantPageTheme.codeBlockBackgroundColor`, which the
+    /// message hosts set to the same value they give `tableHeaderColor` — a code block reads as a
+    /// highlighted table row, not as an accent-tinted quote.
+    public let backgroundColor: UIColor
     public let language: String?
-    public let languageLabelColor: UIColor
-    /// Point size for the language label the VIEW builds at render time. It has to travel on the
-    /// item because it is the only font in the V2 renderer not baked into an attributed string at
-    /// layout time — so it is the only place the content scale could leak past the layout.
-    public let languageFontSize: CGFloat
+    /// The language line, laid out at LAYOUT time in block-local coordinates. It used to be built by
+    /// the view from a bare point size, which made it the only font in the V2 renderer that could
+    /// leak past the layout's content scale.
+    public let languageItem: InstantPageTextItem?
     public let textItem: InstantPageTextItem
     public let inset: UIEdgeInsets
 }
@@ -717,6 +715,10 @@ private struct LayoutContext {
     var theme: InstantPageTheme
     /// Geometry constants for the CURRENT content scale. Swapped alongside `theme`.
     var metrics: InstantPageMetrics
+    /// How far a full-bleed child may extend past its content column to reach THIS container's
+    /// interior edges. Set and restored by each container, exactly like `theme` and `metrics` above.
+    /// `layoutCodeBlock` is the only consumer today.
+    var childBleed: InstantPageV2ChildBleed = .none
     /// The theme and metrics quoted content uses, computed ONCE for the page.
     ///
     /// Precomputed rather than derived on entry so that nesting is idempotent by construction: a
@@ -761,6 +763,17 @@ private func layoutBlockSequence(
     var detailsIndices: [Int] = []
     var contentHeight: CGFloat = 0.0
     var previousBlock: InstantPageBlock?
+
+    // A top-level block's container is the page itself, so a full-bleed child may give back exactly
+    // the page inset on each side. Every OTHER sequence — a table cell, a table title, a details
+    // body — is a band inside a container that has not opted in, and must therefore RESET the bleed
+    // rather than inherit it: an inherited page-level bleed would send a code band punching out
+    // through the container's own edge. Restored on exit so this never leaks upward either.
+    let savedChildBleed = context.childBleed
+    defer { context.childBleed = savedChildBleed }
+    context.childBleed = kind == .topLevel
+        ? InstantPageV2ChildBleed(minXSide: horizontalInset, maxXSide: horizontalInset)
+        : .none
 
     // One pill per run of undecodable blocks, everywhere a sequence is laid out. Indices are
     // skipped rather than filtered out of `blocks`, so `i` below still addresses the original
@@ -823,11 +836,21 @@ private func layoutBlockSequence(
         // reserves a right margin equal to the left inset. Without this, the longest text item's
         // right edge equals contentSize.width, and the bubble's containerNode (sized to
         // boundingSize.width - 2) clips the last 2pt of text.
+        //
+        // A code band contributes its INNER content rather than its own frame: the band is as wide as
+        // its container by construction, so its frame would clamp every page containing one to the
+        // full bounding width. Its text is nested inside the item rather than sitting in `items`, so
+        // dropping the band outright would drop the code text from the shrink too — and a message
+        // whose widest content is its code would get a bubble narrower than the width that text was
+        // laid out against, clipping it. See `instantPageV2FitWidthMaxX`.
         var maxX: CGFloat = 0.0
         for item in items {
-            maxX = max(maxX, ceil(item.frame.maxX) + horizontalInset)
+            maxX = max(maxX, ceil(instantPageV2FitWidthMaxX(item)) + horizontalInset)
         }
         contentSize.width = min(maxX, boundingWidth)
+        // Then re-widen the bands to the width that SURVIVED the shrink — the same reason
+        // `centerBlockFormulas` below runs after `contentSize` rather than before it.
+        instantPageV2StretchCodeBands(in: &items, contentWidth: contentSize.width)
     }
 
     centerBlockFormulas(in: &items, contentWidth: contentSize.width, horizontalInset: horizontalInset)
@@ -2708,6 +2731,16 @@ private func layoutDivider(
 
 // MARK: - Code block layout (ported from V1 InstantPageLayout.swift lines 329–351)
 
+/// Lowercased display form of a code block's language, or nil when there is nothing to show.
+/// Lowercasing happens here rather than in the view so the model's casing ("Swift", "SWIFT") cannot
+/// reach the screen.
+func instantPageV2CodeLanguageDisplayText(_ language: String?) -> String? {
+    guard let language = language, !language.isEmpty else {
+        return nil
+    }
+    return language.lowercased()
+}
+
 private func layoutCodeBlock(
     _ text: RichText,
     language: String?,
@@ -2715,11 +2748,12 @@ private func layoutCodeBlock(
     horizontalInset: CGFloat,
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
-    // Editor parity: plain monospace 15pt (NO syntax highlighting), accent bar + accent-tinted fill,
-    // inset to the content column; leading text inset 16 / trailing 22 / vertical 8.
+    // A plain band spanning the container's interior, with the code text at the paragraph inset of
+    // this nesting level — so the band's interior side padding IS the paragraph inset, never a
+    // code-block constant of its own. See
+    // docs/superpowers/specs/2026-08-18-code-block-edge-to-edge-design.md.
     let verticalInset = context.metrics.codeBlockVerticalInset
-    let leadingInset = context.metrics.codeBlockHorizontalInset
-    let trailingInset = context.metrics.codeBlockHorizontalInset
+    let bleed = context.childBleed
 
     let styleStack = InstantPageTextStyleStack()
     setupStyleStack(styleStack, theme: context.theme, category: .codeBlock, link: false)
@@ -2729,7 +2763,37 @@ private func layoutCodeBlock(
     styleStack.push(.fontSize(context.metrics.codeBlockFontSize))
     let attributedString = attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
 
-    let innerWidth = boundingWidth - horizontalInset * 2.0 - leadingInset - trailingInset
+    // The text measure is the paragraph measure at this level — the same width a sibling paragraph
+    // gets, which is what makes the two align on BOTH edges.
+    let innerWidth = boundingWidth - horizontalInset * 2.0
+
+    // The bold language line, when present. It mirrors the QUOTE AUTHOR's derivation — the caption
+    // category's family and colour, pushed to bold at the paragraph size — rather than carrying a
+    // font of its own, so the editor's copy of it cannot be set to something different.
+    var languageItem: InstantPageTextItem?
+    var languageHeight: CGFloat = 0.0
+    var languageOverheadTop: CGFloat = 0.0
+    var hasLanguageLine = false
+    if let display = instantPageV2CodeLanguageDisplayText(language) {
+        let languageStack = InstantPageTextStyleStack()
+        setupStyleStack(languageStack, theme: context.theme, category: .caption, link: false)
+        languageStack.push(.bold)
+        languageStack.push(.fontSize(context.theme.textCategories.paragraph.font.size))
+        let string = attributedStringForRichText(.plain(display), styleStack: languageStack, formatDate: context.formatDate)
+        languageOverheadTop = instantPageV2TextBoxOverheads(string).top
+        let (item, _, size) = layoutTextItem(
+            string,
+            boundingWidth: innerWidth,
+            alignment: context.rtl ? .right : .natural,
+            offset: CGPoint(x: 0.0, y: 0.0),
+            fitToWidth: context.fitToWidth,
+            computeRevealCharacterRects: context.computeRevealCharacterRects
+        )
+        languageItem = item
+        languageHeight = size.height
+        hasLanguageLine = item != nil
+    }
+
     let (textItem, _, textSize) = layoutTextItem(
         attributedString,
         boundingWidth: innerWidth,
@@ -2740,34 +2804,38 @@ private func layoutCodeBlock(
     )
     guard let textItem = textItem else { return [] }
     textItem.markdownContext = InstantPageMarkdownBlockContext(kind: .code(language: language))
-    // The text item is the true font line box (ascent headroom above the caps + descent below the
-    // last baseline). Subtract that overhead so the VISIBLE gap from the fill to the glyphs equals
-    // `verticalInset` (6pt) on top and bottom (the 9pt horizontal inset reads heavier vertically).
-    let overheads = instantPageV2TextBoxOverheads(attributedString)
-    let topPad = max(0.0, verticalInset - overheads.top)
-    let bottomPad = max(0.0, verticalInset - overheads.bottom)
-    textItem.frame = CGRect(
-        x: context.rtl ? trailingInset : leadingInset,
-        y: topPad,
-        width: textItem.frame.width,
-        height: textItem.frame.height
-    )
 
-    let blockHeight = topPad + textSize.height + bottomPad
-    let blockFrame = CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: blockHeight)
+    // The text items are true font line boxes (ascent headroom above the caps, descent below the
+    // last baseline). Subtract that overhead so the VISIBLE gap from the band to the glyphs equals
+    // `verticalInset` on both edges. The TOP overhead belongs to whichever line is first.
+    let codeOverheads = instantPageV2TextBoxOverheads(attributedString)
+    let topPad = max(0.0, verticalInset - (hasLanguageLine ? languageOverheadTop : codeOverheads.top))
+    let bottomPad = max(0.0, verticalInset - codeOverheads.bottom)
+
+    // The code text's x is the PARAGRAPH inset measured from the band's leading edge, which the
+    // bleed moved outward. Both text items are in block-local coordinates.
+    let bandFrame = instantPageV2CodeBandFrame(boundingWidth: boundingWidth, horizontalInset: horizontalInset,
+                                               bleed: bleed, height: 0.0)
+    let localTextX = horizontalInset - bandFrame.minX
+
+    var y = topPad
+    if let item = languageItem {
+        item.frame = CGRect(x: localTextX, y: y, width: item.frame.width, height: item.frame.height)
+        y += languageHeight + context.metrics.codeBlockLanguageSpacing
+    }
+    textItem.frame = CGRect(x: localTextX, y: y, width: textItem.frame.width, height: textItem.frame.height)
+    y += textSize.height
+
+    let blockHeight = y + bottomPad
+    let blockFrame = CGRect(x: bandFrame.minX, y: 0.0, width: bandFrame.width, height: blockHeight)
 
     return [.codeBlock(InstantPageV2CodeBlockItem(
         frame: blockFrame,
-        accentColor: context.theme.quoteAccentColor,
-        barWidth: 3.0,
-        cornerRadius: 6.0,
-        fillAlpha: 0.10,
-        barOnTrailing: context.rtl,
+        backgroundColor: context.theme.codeBlockBackgroundColor,
         language: language,
-        languageLabelColor: context.theme.textCategories.caption.color,
-        languageFontSize: context.metrics.codeBlockLanguageFontSize,
+        languageItem: languageItem,
         textItem: textItem,
-        inset: UIEdgeInsets(top: topPad, left: leadingInset, bottom: bottomPad, right: trailingInset)
+        inset: UIEdgeInsets(top: topPad, left: localTextX, bottom: bottomPad, right: localTextX)
     ))]
 }
 
@@ -2845,10 +2913,10 @@ private func layoutBlockQuote(
 ) -> [InstantPageV2LaidOutItem] {
     // Quoted content lays out one typographic step below body. Assign, never multiply: a nested
     // quote takes the same precomputed values rather than compounding (see `LayoutContext`).
-    let savedTheme = context.theme, savedMetrics = context.metrics
+    let savedTheme = context.theme, savedMetrics = context.metrics, savedChildBleed = context.childBleed
     context.theme = context.quoteTheme
     context.metrics = context.quoteMetrics
-    defer { context.theme = savedTheme; context.metrics = savedMetrics }
+    defer { context.theme = savedTheme; context.metrics = savedMetrics; context.childBleed = savedChildBleed }
 
     // These are the QUOTE's own insets, and they read the already-swapped metrics on purpose: a
     // 15pt quote carrying 17pt-tuned padding is the mismatch this scale exists to remove.
@@ -2878,6 +2946,20 @@ private func layoutBlockQuote(
     // both sides), and `bandX` reproduces its old origin, so this moves no text by even a fraction.
     let bandWidth = innerBoundingWidth - innerHorizontalInset * 2.0
     let bandX = innerHorizontalInset + bandOffsetX
+
+    // The quote's interior, expressed as how far a full-bleed child may reach past the child band.
+    // GEOMETRIC sides: in RTL the bar moves to the max-x edge, so the two swap. The quote's own fill
+    // spans [horizontalInset, boundingWidth - horizontalInset] and its bar is `quoteBarWidth` wide on
+    // the leading side; a child bleeds to just INSIDE the bar so the bar stays continuous down the
+    // whole quote rather than being interrupted for the child's height.
+    let quoteFillMinX = horizontalInset
+    let quoteFillMaxX = boundingWidth - horizontalInset
+    let bandMaxX = bandX + bandWidth
+    context.childBleed = context.rtl
+        ? InstantPageV2ChildBleed(minXSide: bandX - quoteFillMinX,
+                                  maxXSide: (quoteFillMaxX - instantPageV2QuoteBarWidth) - bandMaxX)
+        : InstantPageV2ChildBleed(minXSide: bandX - (quoteFillMinX + instantPageV2QuoteBarWidth),
+                                  maxXSide: quoteFillMaxX - bandMaxX)
 
     var result: [InstantPageV2LaidOutItem] = []
     // Two running heights, equal except inside a COLLAPSED quote: `contentHeight` is what the quote
@@ -3070,7 +3152,7 @@ private func layoutBlockQuote(
     // Accent bar + accent-tinted rounded fill spanning the whole quote band (behind child content).
     let frameItem = InstantPageV2QuoteFrameItem(
         frame: CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight),
-        accentColor: context.theme.quoteAccentColor, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
+        accentColor: context.theme.quoteAccentColor, barWidth: instantPageV2QuoteBarWidth, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
         collapseState: collapseState,
         path: pathPrefix)
     result.insert(.quoteFrame(frameItem), at: 0)
@@ -3229,7 +3311,7 @@ private func layoutQuoteText(
         // `layoutBlockQuote`, which is where the collapse budget lives.
         let frameItem = InstantPageV2QuoteFrameItem(
             frame: CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight),
-            accentColor: accent, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
+            accentColor: accent, barWidth: instantPageV2QuoteBarWidth, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
             collapseState: .notCollapsible, path: [])
         result.insert(.quoteFrame(frameItem), at: 0)
         result.append(instantPageV2BlockQuoteIcon(boundingWidth: boundingWidth, horizontalInset: horizontalInset, color: accent, rtl: context.rtl))
@@ -3263,6 +3345,15 @@ private func layoutList(
     pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
+    // A list item's sub-blocks lay out against a band of their own (`layoutBlock` with
+    // `horizontalInset: 0`), reached WITHOUT going through `layoutBlockSequence` — so the reset
+    // that function performs never runs for them and has to happen here. Conservative for this
+    // cycle: a full-bleed child stays in its content column rather than bleeding under the marker
+    // gutter. Restored on exit.
+    let savedChildBleed = context.childBleed
+    defer { context.childBleed = savedChildBleed }
+    context.childBleed = .none
+
     // Determine marker characteristics.
     var maxIndexWidth: CGFloat = 0.0
     // hasNums: at least one ordered item carries an explicit `num` — in which case items

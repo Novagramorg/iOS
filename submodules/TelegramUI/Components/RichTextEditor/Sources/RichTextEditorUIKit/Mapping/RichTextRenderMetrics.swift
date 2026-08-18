@@ -34,6 +34,33 @@ public struct RichTextFontSpec: Equatable {
     }
 }
 
+/// Code-block geometry, shared with the InstantPage V2 renderer.
+///
+/// There is deliberately NO language-line font here: both surfaces derive it the way they already
+/// derive a quote's author line — the body spec plus bold — so the two cannot be set to disagree.
+/// That is also why the renderer's old absolute `codeBlockLanguageFontSize` was deleted rather than
+/// retyped into this struct.
+///
+/// The bleed is deliberately absent too: it is a property of the HOST's container geometry (canvas
+/// margins, bubble insets), not of the shared type scale, so each surface computes its own.
+@available(iOS 13.0, *)
+public struct RichTextCodeMetrics: Equatable {
+    /// Gap from the band's top/bottom edge to the glyphs. The renderer subtracts the font-box
+    /// overhead before applying it (`instantPageV2TextBoxOverheads`), so the value here is the
+    /// VISIBLE gap rather than a layout inset that would render several points larger.
+    public var verticalInset: CGFloat
+    /// Gap between the bold language line and the first code line.
+    public var languageSpacing: CGFloat
+
+    public init(verticalInset: CGFloat, languageSpacing: CGFloat) {
+        self.verticalInset = verticalInset
+        self.languageSpacing = languageSpacing
+    }
+
+    /// V2's own values at page scale (`InstantPageMetrics.unscaled`).
+    public static let `default` = RichTextCodeMetrics(verticalInset: 14, languageSpacing: 3)
+}
+
 /// The editor's render metrics, shaped so a host can hand over the exact numbers the InstantPage V2
 /// renderer will use for the same content.
 ///
@@ -62,8 +89,8 @@ public struct RichTextRenderMetrics: Equatable {
     /// V2's `layoutCodeBlock` overrides the theme's 14pt `codeBlock` category with an absolute 15pt,
     /// so this carries 15 and not the theme's nominal size.
     public var codeBlock: RichTextFontSpec
-    /// The code-block language label, built at render time rather than baked into a string.
-    public var codeBlockLanguageFontSize: CGFloat
+    /// Code-block geometry (the fonts stay in `codeBlock` above).
+    public var code: RichTextCodeMetrics
 
     // MARK: Block rhythm (mirrors the same-named fields of `InstantPageMetrics`)
 
@@ -93,7 +120,6 @@ public struct RichTextRenderMetrics: Equatable {
         caption: RichTextFontSpec,
         table: RichTextFontSpec,
         codeBlock: RichTextFontSpec,
-        codeBlockLanguageFontSize: CGFloat,
         baseBlockSpacing: CGFloat,
         blockVerticalPadding: CGFloat,
         headingVerticalPadding: CGFloat,
@@ -102,6 +128,7 @@ public struct RichTextRenderMetrics: Equatable {
         edgeSpacingReduction: CGFloat,
         // Defaulted so every existing construction site keeps compiling; the InstantPageUI adapter
         // passes the renderer's own constants explicitly.
+        code: RichTextCodeMetrics = .default,
         button: RichTextButtonMetrics = .default
     ) {
         self.heading1 = heading1
@@ -114,7 +141,7 @@ public struct RichTextRenderMetrics: Equatable {
         self.caption = caption
         self.table = table
         self.codeBlock = codeBlock
-        self.codeBlockLanguageFontSize = codeBlockLanguageFontSize
+        self.code = code
         self.baseBlockSpacing = baseBlockSpacing
         self.blockVerticalPadding = blockVerticalPadding
         self.headingVerticalPadding = headingVerticalPadding
@@ -138,13 +165,13 @@ public struct RichTextRenderMetrics: Equatable {
         caption: RichTextFontSpec(style: .sans, size: 15, lineSpacingFactor: 1.0),
         table: RichTextFontSpec(style: .sans, size: 15, lineSpacingFactor: 1.0),
         codeBlock: RichTextFontSpec(style: .monospace, size: 15, lineSpacingFactor: 1.0),
-        codeBlockLanguageFontSize: 11,
         baseBlockSpacing: 8,
         blockVerticalPadding: 4,
         headingVerticalPadding: 8,
         dividerVerticalPadding: 4,
         detailsAdjacentSpacing: 4,
-        edgeSpacingReduction: 0
+        edgeSpacingReduction: 0,
+        code: .default
     )
 
     /// `.pullQuote` resolves to the body category at V2's quote scale. Parity for quote INTERIORS is

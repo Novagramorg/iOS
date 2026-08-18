@@ -143,9 +143,9 @@ unconditional. **Runtime-checked in the chat composer**, which is what surfaced 
 problem the `edgeSpacingReduction` trim above fixes — a reminder that measured parity against the
 renderer's functions does not by itself mean a host's field reads right. **Still unverified on screen:**
 the composer-vs-sent-bubble and article-editor-vs-sent-message side-by-side comparisons. If you have the
-`mcp__XcodeBuildMCP__*` tools, those are the two screenshots worth taking; also expect a code block NOT
-to match (see the deferred list — the editor draws `monospacedSystemFont` where the renderer uses Menlo,
-and nothing reads `metrics.codeBlock` yet).
+`mcp__XcodeBuildMCP__*` tools, those are the two screenshots worth taking; a code block still will not
+match exactly (the editor draws `monospacedSystemFont` where the renderer uses Menlo, and nothing reads
+`metrics.codeBlock` yet) — though its GEOMETRY is now shared, via `metrics.code` (see below).
 
 So **the UIKit target is gated `@available(iOS 13.0, *)`** (`RichTextEditorCore` is pure-Foundation,
 always-available), with only genuine higher-OS APIs kept at their real floor: the TK2 `BlockLayout` type + the
@@ -273,7 +273,9 @@ it via `ChatRichTextInputNode.applyRichTextTheme`, which `RichTextEditorChatInpu
   the table-control resize knobs, the selection-outline stroke, and the active-handle pill fill.
 - `tableBorder` (default the prior dynamic grid color) / `tableHeaderBackground` (default `white 0.5/0.1`) — the
   table grid stroke and header-row fill (the former `TableBlockBox.gridColor`/`headerRowBackground` statics).
-- `codeBackground` (default prior dynamic color) — code-block background fill.
+- `codeBackground` (default prior dynamic color) — the code band's plain fill, painted by `CodeBlockBox`
+  itself. Both hosts set it to the same value as `tableHeaderBackground`, so a code block reads as a
+  highlighted table row. (Declared but unread until 2026-08-18.)
 - `listMarker` (default `.label`) — list bullet/number marker color.
 - `inlineCodeBackground` (default `.systemGray5`) — inline-code run background pill.
 - `markedTextUnderline` (default `.label`) — IME marked-text (composing) underline.
@@ -446,11 +448,9 @@ timestamp-creation UI yet).
 **Composer code blocks — first-class `Block.code` (added 2026-06-19, `feature/richtext-code-block`).** A
 multi-line code block is now a first-class `Block.code(CodeBlock)` (`Core/Model/CodeBlock.swift`: `id` +
 `language: String?` + plain `runs` whose text may contain interior `"\n"`), rendered by a new
-`CodeBlockBox: CanvasBlock` (`Canvas/CodeBlockBox.swift`) — a monospace `BlockLayoutEngine` over the **same
-quote background**: the shared `BlockquoteUnderlay` (accent bar + accent-tinted fill + corner radius) via a
-`CodeBlockBox` case in `blockquoteDecorations()`, with quote-matched text insets (`quoteIndent` /
-`quoteTrailingInset` / `quoteTopInset` / `quoteBottomInset`) and an optional language label (2026-06-30). The
-box draws no fill itself; `RichTextEditorTheme.codeBackground` is retained but unused (a dormant seam). **It reuses the
+`CodeBlockBox: CanvasBlock` (`Canvas/CodeBlockBox.swift`) — a monospace `BlockLayoutEngine` inside a band the
+box paints ITSELF (see the edge-to-edge note below; it shared the quote's `BlockquoteUnderlay` until
+2026-08-18). **It reuses the
 existing position model unchanged:** `Block.code` maps to a `.paragraph` `DocNode` carrying a `TextNodeRef.code`
 leaf, sized `content + 2` exactly like a wrap-heavy paragraph — multi-line interior `"\n"`s need **no** new
 position/selection/tokenizer machinery (they're a linear UTF-16 range TextKit wraps). `currentBlock()` reads
@@ -1480,6 +1480,46 @@ Three fixes to the selection-handle ("knob") drag, runtime-verified in the chat 
   in-editor interaction while editing). **Compiler-invisible:** the per-knob flag is consulted only when the knob
   is the window hit-test result, so the handle MUST stay hit-testable and its hit area MUST track the caret —
   verified on device (the hit test lands on `SelectionHandleView`).
+
+**Code blocks are edge-to-edge plain bands (2026-08-18, `feature/code-block-edge-to-edge`).** A code block
+stopped being a quote variant: no accent bar, no tint, no corner radius. Its band is a plain
+`RichTextEditorTheme.codeBackground` rectangle spanning its container's interior edge to edge, and its code
+text — plus a **bold, lowercased language line above it** — sits at exactly the x a paragraph occupies at
+that nesting level. So the band's interior side padding IS the paragraph inset; it is no longer a constant.
+
+- **`CodeBlockBox` paints its own fill** and left `blockquoteDecorations()`, which was deleted with its
+  struct (the code case was its only producer). That is also the FIX for a live bug: the quote underlay's
+  feed walks top-level boxes only, so a code block inside a quote or a table cell previously had **no fill
+  at all**.
+- **`blockViewFrame` outsets `frame` by `horizontalBleed`** — geometric sides (`minXSide` is the smaller-x
+  edge), mirroring the renderer's `InstantPageV2ChildBleed`. `BlockBackingView` clips to `blockViewFrame`, so
+  a bleed missing there renders as a band clipped back to the text column. It is assigned by
+  `BlockStack.layout(origin:width:codeBleed:)` at LAYOUT time, not at construction: it moves with the host's
+  content margins while the box does not. Root → the canvas edge by default, or `CodeStyle.horizontalBleed`
+  when a host sets one; block quote → just inside the accent bar, so the bar stays continuous; details /
+  table cells / list items → none, conservatively.
+- **A COMPACT host bleeds NOTHING and indents the text instead.** The composer's canvas sits INSIDE the
+  input field's rounded background (inset by the panel's `textInputViewInternalInsets`, 12 left / 11 right)
+  and its right `contentMargins` additionally reserves the accessory + send button strip — so any outward
+  bleed reads as spilling past what the field shows. The composer therefore sets
+  `CodeStyle(horizontalBleed: 0, horizontalInset: 8, cornerRadius: 4)`: the band spans exactly the text
+  column, and `horizontalInset` moves the code IN from its edges — the inward counterpart of the outward
+  bleed. **`horizontalBleed` and `horizontalInset` are alternatives**; a host sets one or the other, never
+  both to non-zero. The inset narrows the text MEASURE as well as its origin (`setWidth` /
+  `measuredHeight(forWidth:)` / the init layout all subtract it twice), or the code would wrap at the
+  band's full width and overrun its trailing edge. **Deliberately NOT WYSIWYG** against the sent bubble
+  (full-bleed, square) — a compact field is a different container shape from a message bubble, the same
+  reason the composer zeroes `mediaBlockStyle.horizontalBleed`.
+- **`CodeStyle` (host knob) + `StyleSheet.codeVerticalInset` / `codeLanguageSpacing`** replaced the borrowed
+  `quoteIndent` / `quoteTrailingInset` / `quoteTopInset` / `quoteBottomInset`. Both fields are optional and
+  resolve against `RichTextRenderMetrics.code` (`RichTextCodeMetrics`), so an unset host renders the
+  renderer's own numbers. `applyRenderMetrics` MUST re-resolve them — `metrics.code` is the fallback, so a
+  host setting `renderMetrics` after `codeStyle` would otherwise keep stale defaults.
+- This closed two real parity breaks: interior padding was 9/**22** here (it read `quoteTrailingInset`)
+  against the renderer's 9/9, and vertical padding a raw 3pt against its font-box-corrected 6pt.
+
+Renderer side + the design record: `docs/superpowers/specs/2026-08-18-code-block-edge-to-edge-design.md`.
+
 
 ## Status
 

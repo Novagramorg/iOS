@@ -194,6 +194,17 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             topInset: 3.0,
             bottomInset: 3.0
         )
+        // Code-block geometry for the compact composer. The band does NOT bleed at all here: the
+        // editor sits inside the input field's rounded background (inset by the panel's
+        // `textInputViewInternalInsets`, 12 left / 11 right) and its right content margin also
+        // reserves room for the accessory + send buttons, so ANY outward bleed reads as spilling past
+        // what the field shows. The band therefore spans exactly the text column, and the code is
+        // indented within it instead — the inward counterpart of the renderer's outward bleed. A
+        // small radius keeps the band from fighting the field's own rounding.
+        //
+        // Deliberately NOT WYSIWYG against the sent bubble, which is full-bleed and square: a compact
+        // field is a different container shape from a message bubble.
+        self.editorView.codeStyle = CodeStyle(horizontalBleed: 0.0, horizontalInset: 8.0, cornerRadius: 4.0)
         // Media (image/video/location/audio) insets like the text paragraphs in the compact composer
         // (the document/article editor keeps the default edge-to-edge bleed).
         self.editorView.mediaBlockStyle = MediaBlockStyle(horizontalBleed: 0.0)
@@ -565,7 +576,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             accent: colors.accent,
             tableBorder: colors.tableBorder,
             tableHeaderBackground: colors.tableHeaderBackground,
-            codeBackground: colors.tableHeaderBackground,  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
+            codeBackground: colors.tableHeaderBackground,  // a code band reads as a highlighted table row — the same fill, deliberately
             containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8),
             shadowCursor: colors.shadowCursor,
             quoteAuthorText: colors.quoteAuthorText,

@@ -649,7 +649,6 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     nameColors = nil
                 }
                 
-                let codeBlockBackgroundColor: UIColor
                 let codeBlockTitleColor: UIColor
                 let codeBlockAccentColor: UIColor
                 if !isIncoming {
@@ -668,8 +667,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                         codeBlockTitleColor = mainColor
                         codeBlockAccentColor = mainColor
                     }
-                    
-                    codeBlockBackgroundColor = mainColor.withMultipliedAlpha(0.1)
+
                 } else {
                     let authorNameColor = nameColors?.main
                     secondaryColor = nameColors?.secondary
@@ -683,8 +681,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     
                     codeBlockTitleColor = mainColor
                     codeBlockAccentColor = mainColor
-                    
-                    codeBlockBackgroundColor = mainColor.withMultipliedAlpha(0.1)
+
                 }
                 
                 let _ = secondaryColor
@@ -703,7 +700,10 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     pageBackgroundColor: .clear,
                     textCategories: textCategories,
                     serif: false,
-                    codeBlockBackgroundColor: codeBlockBackgroundColor,
+                    // A code block reads as a highlighted table row, not as an accent-tinted quote
+                    // — the same fill a filled table cell gets. (V1 Instant View still reads this
+                    // field for its own gray box; only the value THIS host passes changes.)
+                    codeBlockBackgroundColor: tableHeaderColor,
                     linkColor: messageTheme.linkTextColor,
                     textHighlightColor: messageTheme.accentTextColor.withMultipliedAlpha(0.1),
                     linkHighlightColor: messageTheme.linkTextColor.withMultipliedAlpha(0.1),

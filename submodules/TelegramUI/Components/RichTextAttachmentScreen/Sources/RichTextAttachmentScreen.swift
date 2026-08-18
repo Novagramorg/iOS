@@ -1159,6 +1159,11 @@ final class RichTextAttachmentScreenComponent: Component {
         /// screen's surface is `list.plainBackgroundColor`.
         private static func mapEditorTheme(_ theme: PresentationTheme) -> RichTextEditorTheme {
             let codeFill = theme.list.itemAccentColor.withMultipliedAlpha(0.1)
+            // A code BLOCK's band takes the highlighted-table-cell fill, not an accent tint — one
+            // local so the two cannot drift (the renderer binds them the same way, via
+            // `tableHeaderColor`). Inline code keeps `codeFill`: a run-level pill inside body text
+            // is a different surface from a full-width block band.
+            let tableHighlightFill = theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
             
             let shadowCursorColor: UIColor
             if theme.overallDarkAppearance {
@@ -1173,8 +1178,8 @@ final class RichTextAttachmentScreenComponent: Component {
                 placeholder: theme.list.itemPlaceholderTextColor,
                 accent: theme.list.itemAccentColor,
                 tableBorder: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.1),
-                tableHeaderBackground: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05),
-                codeBackground: codeFill,
+                tableHeaderBackground: tableHighlightFill,
+                codeBackground: tableHighlightFill,
                 listMarker: theme.list.itemPrimaryTextColor,
                 inlineCodeBackground: codeFill,
                 markedTextUnderline: theme.list.itemPrimaryTextColor,
