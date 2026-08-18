@@ -82,12 +82,12 @@ final class RichTextRenderMetricsTests: XCTestCase {
         XCTAssertEqual(m.codeBlockLanguageFontSize, 11)
     }
 
-    /// The heading ladder, which the editor was off by a point per level on, and by a whole weight.
+    /// The heading ladder, serif medium at V2's sizes.
     func test_defaultMetrics_headingLadderIsSerifMediumAtV2Sizes() {
         let m = RichTextRenderMetrics.default
         let expected: [(ParagraphStyleName, CGFloat)] = [
-            (.heading1, 24), (.heading2, 22), (.heading3, 20),
-            (.heading4, 19), (.heading5, 18), (.heading6, 17)
+            (.heading1, 22), (.heading2, 20), (.heading3, 18),
+            (.heading4, 17), (.heading5, 16), (.heading6, 15)
         ]
         for (style, size) in expected {
             let spec = m.spec(for: style)

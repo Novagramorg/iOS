@@ -26,7 +26,7 @@ public extension InstantPageTheme {
     /// content.
     ///
     /// The heading ladder comes from `headingTextAttributes(level:link:)` rather than being restated,
-    /// so H3–H6's derivation from the subheader (and its response to the reader's font-size slider) is
+    /// so H1–H6's derivation from the subheader (and its response to the reader's font-size slider) is
     /// shared rather than duplicated. The block scalars come from `InstantPageMetrics.unscaled`, the
     /// same source the renderer reads at page scale.
     ///

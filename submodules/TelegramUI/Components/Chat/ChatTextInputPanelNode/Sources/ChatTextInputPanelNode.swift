@@ -5534,6 +5534,32 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
 
+        // Markdown-on-paste: plain clipboard text that parses as markdown with formatting/structure is
+        // inserted as rich content. ANY markdown (inline or structural) latches the field to the native
+        // editor, which re-reads the same pasteboard text through its own plainTextFragmentTransformer and
+        // performs a two-step paste (insert plain → replace with rich) so undo reverts rich→plain. Only
+        // taken when the parser actually classifies the text as rich; plain text falls through.
+        var pastedMarkdownContent: ChatInputContent?
+        if attributedString == nil, let plainText = pasteboard.string, let context = self.context {
+            pastedMarkdownContent = self.pastedMarkdownParser?(context, plainText)
+        }
+
+        // STRUCTURAL markdown must be claimed BEFORE the emoji-marker reattach below. A text selection
+        // copied out of a rich-message bubble is markdown that can carry BOTH structure (`# `, `> `, `- `)
+        // AND `[<alt>](tg://emoji?id=…)` emoji markers; with the reattach first it claimed every such
+        // paste, producing live emoji beside LITERAL `#`/`>` characters — the headings and quotes silently
+        // lost. The markdown parser decodes the emoji markers itself (`BrowserMarkdown` maps them to
+        // `RichText.textCustomEmoji`), so it is strictly the more faithful reader for that text.
+        //
+        // Gated on `!isEntityExpressible()` — i.e. only content the LEGACY field genuinely cannot hold — so
+        // an inline-only paste (bold, a link, a lone custom emoji) keeps its existing route and does not
+        // trip the one-way native latch just for arriving via the clipboard. Anything that IS
+        // entity-expressible still reaches the markdown branch further down, unchanged.
+        if let pastedMarkdownContent, !pastedMarkdownContent.isEntityExpressible() {
+            self.pasteRichFragmentFromPasteboard()
+            return false
+        }
+
         // Rich-message markdown copied to the clipboard is plain text containing
         // `[<alt>](tg://emoji?id=<fileId>)` emoji markers (no RTF/private type).
         // Reattach those markers as live custom-emoji attributes so the field
@@ -5547,15 +5573,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
 
-        // Markdown-on-paste: plain clipboard text that parses as markdown with formatting/structure is
-        // inserted as rich content. ANY markdown (inline or structural) latches the field to the native
-        // editor, which re-reads the same pasteboard text through its own plainTextFragmentTransformer and
-        // performs a two-step paste (insert plain → replace with rich) so undo reverts rich→plain. Only
-        // taken when the parser actually classifies the text as rich; plain text falls through.
-        if attributedString == nil,
-           let plainText = pasteboard.string,
-           let context = self.context,
-           self.pastedMarkdownParser?(context, plainText) != nil {
+        if attributedString == nil, pastedMarkdownContent != nil {
             self.pasteRichFragmentFromPasteboard()
             return false
         }

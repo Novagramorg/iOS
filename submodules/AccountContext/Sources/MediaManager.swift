@@ -22,6 +22,34 @@ public enum PeerMessagesMediaPlaylistId: Equatable, SharedMediaPlaylistId {
     }
 }
     
+/// Where an `InstantPageMediaPlaylist` came from: an Instant View page, or — when `messageId` is
+/// non-nil — the `RichTextMessageAttribute` of that chat message.
+///
+/// It lives HERE rather than beside the playlist in `InstantPageUI` because the shared media
+/// accessory panel (`MediaPlaybackHeaderPanelComponent`) has to recognise it, and both modules
+/// already depend on `AccountContext`; routing the panel through `InstantPageUI` instead would drag
+/// the whole Instant View renderer into the chat-list header.
+///
+/// `messageId` is what makes the panel actionable: tapping the mini player opens the full music
+/// player for that message. An Instant View page (`messageId == nil`) has no message to open, so the
+/// panel tap stays inert there, as it always was.
+public struct InstantPagePlaylistLocation: Equatable, SharedMediaPlaylistLocation {
+    public let webpageId: EngineMedia.Id
+    public let messageId: EngineMessage.Id?
+
+    public init(webpageId: EngineMedia.Id, messageId: EngineMessage.Id?) {
+        self.webpageId = webpageId
+        self.messageId = messageId
+    }
+
+    public func isEqual(to: SharedMediaPlaylistLocation) -> Bool {
+        guard let to = to as? InstantPagePlaylistLocation else {
+            return false
+        }
+        return self == to
+    }
+}
+
 public enum PeerMessagesPlaylistLocation: Equatable, SharedMediaPlaylistLocation {
     case messages(chatLocation: ChatLocation, tagMask: EngineMessage.Tags, at: EngineMessage.Id)
     case singleMessage(EngineMessage.Id)

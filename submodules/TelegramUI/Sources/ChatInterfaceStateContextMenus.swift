@@ -1526,7 +1526,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                                             |> deliverOnMainQueue).startStandalone(next: { data in
                                                 if data.isComplete, let imageData = try? Data(contentsOf: URL(fileURLWithPath: data.path)) {
                                                     if let image = UIImage(data: imageData) {
-                                                        if !messageText.isEmpty {
+                                                        // A rich message is sent with `text: ""`, so `messageText` is
+                                                        // empty even when the bubble is full of content — copying the
+                                                        // bare image would throw the whole document away. Treat a rich
+                                                        // page like non-empty text (`copyTextWithEntities` short-circuits
+                                                        // to the rich clipboard formats). Matches the sibling Copy action
+                                                        // in `chatAnchoredMessageContextMenuItems`, which already gates on
+                                                        // `richMessageInstantPage == nil`.
+                                                        if !messageText.isEmpty || richMessageInstantPage != nil {
                                                             copyTextWithEntities()
                                                         } else {
                                                             UIPasteboard.general.image = image

@@ -78,12 +78,93 @@ extension InstantPageBlock {
     }
 }
 
-/// The vertical gap between two adjacent blocks, or at a sequence edge when one side is nil.
+/// The **V1 (Instant View reader)** vertical rhythm — the original, pre-V2 pairwise table, restored
+/// verbatim as its own function.
+///
+/// V1 and V2 are two different typographic designs, not two callers of one design. The V2 rhythm
+/// below is built out of per-block `verticalPadding` scaled by `InstantPageMetrics`, tuned against
+/// the chat bubble's 15/17pt type; V1's is a flat table of absolute point gaps (20 / 25 / 27 / 31 /
+/// 32 / 34) tuned against the reader's much larger page type. Feeding V1 the V2 table collapsed the
+/// reader's spacing — which is why this is a SEPARATE function rather than a `kind`/`metrics`
+/// parameter on one: the two tables share no rule, so any shared body would be a switch on which
+/// renderer is asking.
+///
+/// **Do not "unify" these.** A change to the chat rhythm must not reach the reader, and vice versa.
+/// The six V1 call sites are all in `InstantPageLayout.swift`; every other caller is V2.
+func spacingBetweenBlocksV1(upper: InstantPageBlock?, lower: InstantPageBlock?) -> CGFloat {
+    if let upper = upper, let lower = lower {
+        switch (upper, lower) {
+            // The original also listed `(.relatedArticles, nil)` here. That pattern was DEAD — `lower`
+            // is non-optional inside this branch — and modern Swift rejects it outright. Dropping it
+            // is behaviour-preserving; the live trailing-edge rule for `.relatedArticles` is in the
+            // `else if let upper` arm at the bottom.
+            case (_, .cover), (_, .channelBanner), (.details, .details), (_, .anchor):
+                return 0.0
+            case (.divider, _), (_, .divider):
+                return 25.0
+            case (_, .blockQuote), (.blockQuote, _), (_, .pullQuote), (.pullQuote, _):
+                return 27.0
+            case (.kicker, .title), (.cover, .title):
+                return 16.0
+            case (_, .title):
+                return 20.0
+            case (.title, .authorDate), (.subtitle, .authorDate):
+                return 18.0
+            case (_, .authorDate):
+                return 20.0
+            case (.title, .paragraph), (.authorDate, .paragraph):
+                return 34.0
+            case (.header, .paragraph), (.subheader, .paragraph):
+                return 25.0
+            case (.list, .paragraph):
+                return 31.0
+            case (.preformatted, .paragraph):
+                return 19.0
+            case (.paragraph, .paragraph):
+                return 25.0
+            case (_, .paragraph):
+                return 20.0
+            case (.title, .list), (.authorDate, .list):
+                return 34.0
+            case (.header, .list), (.subheader, .list):
+                return 31.0
+            case (.preformatted, .list):
+                return 19.0
+            case (_, .list):
+                return 25.0
+            case (.paragraph, .preformatted):
+                return 19.0
+            case (_, .preformatted):
+                return 20.0
+            case (_, .header), (_, .subheader):
+                return 32.0
+            default:
+                return 20.0
+        }
+    } else if let lower = lower {
+        switch lower {
+            case .cover, .channelBanner, .details, .anchor:
+                return 0.0
+            default:
+                return 25.0
+        }
+    } else {
+        if let upper = upper, case .relatedArticles = upper {
+            return 0.0
+        } else {
+            return 25.0
+        }
+    }
+}
+
+/// The **V2** vertical gap between two adjacent blocks, or at a sequence edge when one side is nil.
 ///
 /// Three rules, in order: a flush side wins and yields 0; two `.paragraph` (body) blocks have no gap
 /// at all, neither the base nor either block's padding; otherwise the gap is
 /// `upper.verticalPadding + instantPageBaseBlockSpacing + lower.verticalPadding`. At an edge only the
 /// one present block contributes — the base is strictly a *between two blocks* quantity.
+///
+/// V1 does NOT call this — see `spacingBetweenBlocksV1` above for why the reader keeps its own table.
 ///
 /// `kind` is currently unread. It is kept because container-specific spacing (denser table cells,
 /// tighter list sub-blocks) is expected to return; do not delete it as dead, and do not read its
@@ -91,7 +172,7 @@ extension InstantPageBlock {
 ///
 /// `metrics` is REQUIRED rather than defaulted to `.unscaled`. A default would let a new V2 call
 /// site silently get page-scale spacing inside a quote — the failure mode this whole scale design
-/// is built to prevent — and it costs only the six V1 call sites, which always pass `.unscaled`.
+/// is built to prevent.
 func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, kind: BlockSequenceKind, metrics: InstantPageMetrics) -> CGFloat {
     if let upper, let lower {
         var upperSpacing = upper.spacing(metrics: metrics)
@@ -206,6 +287,8 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
     } else if let lower {
         let lowerSpacing = lower.spacing(metrics: metrics)
         switch lower {
+        case .heading:
+            return max(0.0, lowerSpacing.verticalPadding - 1.0)
         case .paragraph, .thinking:
             return lowerSpacing.verticalPadding + 2.0
         case .table:

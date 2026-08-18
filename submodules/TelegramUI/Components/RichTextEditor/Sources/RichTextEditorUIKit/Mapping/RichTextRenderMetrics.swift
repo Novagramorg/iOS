@@ -128,12 +128,12 @@ public struct RichTextRenderMetrics: Equatable {
     /// counterpart surface for BOTH editor hosts (the article editor sends into a chat too).
     /// Kept in sync with the extracted `InstantPageTextCategories.chatMessage` factory by a test.
     public static let `default` = RichTextRenderMetrics(
-        heading1: RichTextFontSpec(style: .serif, size: 24, lineSpacingFactor: 1.0, weight: .medium),
-        heading2: RichTextFontSpec(style: .serif, size: 22, lineSpacingFactor: 1.0, weight: .medium),
-        heading3: RichTextFontSpec(style: .serif, size: 20, lineSpacingFactor: 1.0, weight: .medium),
-        heading4: RichTextFontSpec(style: .serif, size: 19, lineSpacingFactor: 1.0, weight: .medium),
-        heading5: RichTextFontSpec(style: .serif, size: 18, lineSpacingFactor: 1.0, weight: .medium),
-        heading6: RichTextFontSpec(style: .serif, size: 17, lineSpacingFactor: 1.0, weight: .medium),
+        heading1: RichTextFontSpec(style: .serif, size: 22, lineSpacingFactor: 1.0, weight: .medium),
+        heading2: RichTextFontSpec(style: .serif, size: 20, lineSpacingFactor: 1.0, weight: .medium),
+        heading3: RichTextFontSpec(style: .serif, size: 18, lineSpacingFactor: 1.0, weight: .medium),
+        heading4: RichTextFontSpec(style: .serif, size: 17, lineSpacingFactor: 1.0, weight: .medium),
+        heading5: RichTextFontSpec(style: .serif, size: 16, lineSpacingFactor: 1.0, weight: .medium),
+        heading6: RichTextFontSpec(style: .serif, size: 15, lineSpacingFactor: 1.0, weight: .medium),
         body: RichTextFontSpec(style: .sans, size: 17, lineSpacingFactor: 0.9),
         caption: RichTextFontSpec(style: .sans, size: 15, lineSpacingFactor: 1.0),
         table: RichTextFontSpec(style: .sans, size: 15, lineSpacingFactor: 1.0),

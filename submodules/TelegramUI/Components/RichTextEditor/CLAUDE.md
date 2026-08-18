@@ -44,8 +44,10 @@ firstBaseline(F) = F.ascender
 textHeight(F,f,n) = ceil(A + |D|) + (n−1)·pitch
 ```
 
-`StyleSheet` is a projection of it (`metrics`), so the heading ladder is V2's **24 / 22 / 20 / 19 / 18 /
-17 serif medium**. `RichTextRenderMetrics.default` is the chat-message look; hosts set
+`StyleSheet` is a projection of it (`metrics`), so the heading ladder is V2's **22 / 20 / 18 / 17 / 16 /
+15 serif medium** (retuned 2026-08-17 from 24 / 22 / 20 / 19 / 18 / 17; see the note under
+`InstantPageTheme.headingTextAttributes` on why H1/H2 no longer borrow the `header` / `subheader`
+categories). `RichTextRenderMetrics.default` is the chat-message look; hosts set
 `RichTextEditorView.renderMetrics`. This retired `TextLayoutMetrics`/`textLayoutMetrics`,
 `blockVerticalInset`, and `StyleSheet.bodyBaseSize` (now `metrics.body.size`;
 `AttributedStringMapper.withBodyBaseSize` → `withBodyFontSize`).
@@ -590,8 +592,8 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
 - **Type scale + `Title` removed.** `ParagraphStyleName` is now `heading1, heading2, heading3, body, caption,
   quote` (no `title`; no backwards-compat decode shim — a persisted `"title"` simply fails to decode). Sizes
   (`StyleSheet`, as of 2026-06-13): H1 24 / H2 21 / H3 19 **serif**, Body 17 sans, Caption 15 sans, Quote 17
-  sans — **superseded 2026-08-14 by V2 parity** (H1 24 / H2 22 / H3 20 / H4 19 / H5 18 / H6 17 serif MEDIUM,
-  from `RichTextRenderMetrics`; see the layout-parity note near the top). **`caption`
+  sans — **superseded 2026-08-14 by V2 parity, retuned 2026-08-17** (H1 22 / H2 20 / H3 18 / H4 17 / H5 16 /
+  H6 15 serif MEDIUM, from `RichTextRenderMetrics`; see the layout-parity note near the top). **`caption`
   is a render-only style** (media-block captions, 15pt) — never offered in the picker, never persists as a
   paragraph style (a caption serializes as the MediaBlock's runs); `MediaBlockBox` lays the caption out as
   `.caption`. Exhaustive `switch ParagraphStyleName` sites (StyleSheet ×2, conversion ×2) all carry `.caption`.
@@ -1510,9 +1512,25 @@ detect; `plainTextFragment` per-line detect). The in-app private fragment round-
 (`blockPlainText` / `text(in:)` stay marker-free). Accepted limitation: a paragraph the user literally typed
 starting with `✅ `/`⬜ ` is read as a checklist on external paste.
 
+**Inline-merging a pasted paragraph is DIRECTIONAL — it keeps the HOST's style, so it must not swallow a
+heading (`isInlineMergeable`, fixed 2026-08-17).** The predicate accepted every heading level, so a fragment
+whose first (or only) block was a heading folded into the split half of the host paragraph and came out
+retyped as the host's style. In the chat composer the host is always a body paragraph, so **pasting a copied
+rich message silently lost its headings** — the reported "headings are not pasted". The two directions are not
+symmetric and the predicate now takes the host style:
+- a plain **body** fragment paragraph carries no block structure, so folding it loses nothing → always folds.
+  This one MUST keep folding: pasting text into a heading has to stay in the heading.
+- a **heading** fragment paragraph loses its level when folded → folds only into a host of that same style
+  (`# X` pasted inside an H1 must not shatter it into three blocks). Anywhere else it stands as its own block,
+  and the split-and-assemble path below places it — including mid-paragraph, which now splits the host rather
+  than dissolving the heading into it.
+
+`Document.replacingRange` delegates its splice to `insertingFragment`, so the markdown-on-paste two-step path
+inherits the same rule. Guarded by `DocumentFragmentHeadingPasteTests` (Core).
+
 **Paste never leaves a spurious empty paragraph (load-bearing, `Document.insertingFragment`).** The multi-block
 splice assembles `[headBlock] + middle + [tailPara]`, where head/tail are the host paragraph split at the caret;
-it inline-merges a fragment block into a split half ONLY when that block is body/heading (`isInlineMergeable`).
+it inline-merges a fragment block into a split half only per the directional rule above (`isInlineMergeable`).
 Pasting a NON-inline-mergeable LAST block — a **list item (checklists), quote, or code block** — at a paragraph
 END (empty tail) would otherwise leave the empty host tail as a trailing empty paragraph (symmetric leading case at
 a paragraph start). It now drops an empty OUTERMOST split-half (`headBlock`/`tailPara` only — keyed on

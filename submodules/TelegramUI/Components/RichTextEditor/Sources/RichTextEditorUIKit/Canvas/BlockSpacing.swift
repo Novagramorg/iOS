@@ -141,6 +141,10 @@ func richTextSpacingBetweenBlocks(
     } else if let lower {
         let p = padding(lower, m)
         switch lower {
+        // Mirrors the renderer's `.heading` arm in `spacingBetweenBlocks`: a heading opening the
+        // document sits 1pt tighter to the top edge than its own padding. Transcribed here because
+        // nothing links the two files at compile time — `RichTextV2MetricsParityTests` is the check.
+        case .heading:   return trimmedEdge(max(0.0, p.verticalPadding - 1.0))
         case .paragraph: return trimmedEdge(p.verticalPadding + 2.0)
         case .table:     return trimmedEdge(p.verticalPadding + 7.0)
         default:         break

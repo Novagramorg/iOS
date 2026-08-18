@@ -141,25 +141,17 @@ public enum InstantPageMediaPlaylistId: Equatable, SharedMediaPlaylistId {
     }
 }
 
-struct InstantPagePlaylistLocation: Equatable, SharedMediaPlaylistLocation {
-    let webpageId: EngineMedia.Id
-    
-    func isEqual(to: SharedMediaPlaylistLocation) -> Bool {
-        guard let to = to as? InstantPagePlaylistLocation else {
-            return false
-        }
-        return self.webpageId == to.webpageId
-    }
-}
-
 public final class InstantPageMediaPlaylist: SharedMediaPlaylist {
     private let webPage: TelegramMediaWebpage
     private let messageReference: MessageReference?
     private let items: [InstantPageMedia]
     private let initialItemIndex: Int
     
+    /// Carries the originating message id when this playlist is a rich message's own InstantPage, so
+    /// the shared media accessory panel can open the music player for it (see
+    /// `InstantPagePlaylistLocation` in AccountContext). Nil for the Instant View reader.
     public var location: SharedMediaPlaylistLocation {
-        return InstantPagePlaylistLocation(webpageId: self.webPage.webpageId)
+        return InstantPagePlaylistLocation(webpageId: self.webPage.webpageId, messageId: self.messageReference?.id)
     }
     
     public var currentItemDisappeared: (() -> Void)?
