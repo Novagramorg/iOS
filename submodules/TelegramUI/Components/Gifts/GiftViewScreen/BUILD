@@ -71,6 +71,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AlertComponent/AlertTableComponent",
         "//submodules/TelegramUI/Components/AlertComponent/AlertInputFieldComponent",
         "//submodules/TelegramUI/Components/GlassControls",
+        "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/Components/ResizableSheetComponent",
     ],
     visibility = [
