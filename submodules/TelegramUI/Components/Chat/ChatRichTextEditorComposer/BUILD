@@ -44,8 +44,18 @@ swift_library(
         ":ChatRichTextEditorComposer",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/Postbox:Postbox",
+        # ChatTextInputStateReplaceRangeTests exercises ChatTextInputState (AccountContext) through the
+        # chat attribute vocabulary (TextFormat). This is the one small target that can import both.
+        "//submodules/AccountContext",
+        "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
         "//submodules/TelegramUI/Components/RichTextEditorMessageConversion",
+    ],
+    # Read at runtime by ComposerFlatRebuildGuardTests, which scans them for the flat-rebuild
+    # anti-pattern. A sandboxed XCTest sees only declared files, hence `data` rather than a glob.
+    data = [
+        "//submodules/TelegramUI:composer_state_writer_sources",
+        "//submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode:composer_state_writer_sources",
     ],
 )
 

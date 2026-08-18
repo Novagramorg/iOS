@@ -290,35 +290,60 @@ public func entityPreservingFallbackAttributedString(
 /// runs → two `.blockQuote` blocks. (Parsing per-"\n" instead discarded that run boundary and fragmented every
 /// multi-line quote into one block per line, so a save/restore of the persisted `content` split one quote into
 /// several.)
+/// The inline runs for a range of an `NSAttributedString`, reading the chat attribute vocabulary.
+///
+/// Extracted from `chatInputContent(from:)` (which calls it per paragraph) so the vocabulary is
+/// defined in exactly one place: `ChatTextInputState.replacingFlatRange` needs the same conversion for
+/// the small replacement fragments the composer splices in.
+///
+/// Block-level attributes are deliberately NOT read here — the block kind is decided by the caller
+/// that owns the range. A `"\n"` is carried inside a run; splitting it into blocks belongs to the
+/// splice, which is the only thing that knows whether the host paragraph splits or not.
+///
+/// Named `fromAttributedString:` rather than `from:` because TelegramCore already vends a
+/// `chatInputRuns(fromRichText:)`; a bare `from:` beside it reads as the same conversion.
+public func chatInputRuns(fromAttributedString attributedText: NSAttributedString, in range: NSRange) -> [ChatInputRun] {
+    var runs: [ChatInputRun] = []
+    guard range.length > 0 else {
+        return runs
+    }
+    let full = attributedText.string as NSString
+    attributedText.enumerateAttributes(in: range, options: []) { dict, r, _ in
+        var a = ChatInputInlineAttributes()
+        if dict[ChatTextInputAttributes.bold] != nil { a.bold = true }
+        if dict[ChatTextInputAttributes.italic] != nil { a.italic = true }
+        if dict[ChatTextInputAttributes.monospace] != nil { a.monospace = true }
+        if dict[ChatTextInputAttributes.strikethrough] != nil { a.strikethrough = true }
+        if dict[ChatTextInputAttributes.underline] != nil { a.underline = true }
+        if dict[ChatTextInputAttributes.spoiler] != nil { a.spoiler = true }
+        if let m = dict[ChatTextInputAttributes.textMention] as? ChatTextInputTextMentionAttribute {
+            a.entity = .mention(m.peerId)
+        } else if let d = dict[ChatTextInputAttributes.date] as? ChatTextInputTextDateAttribute {
+            a.entity = .date(d.date)
+        } else if let e = dict[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
+            a.entity = .customEmoji(fileId: e.fileId, file: e.file, enableAnimation: e.enableAnimation)
+        } else if let u = dict[ChatTextInputAttributes.textUrl] as? ChatTextInputTextUrlAttribute {
+            a.entity = .url(u.url)
+        }
+        runs.append(ChatInputRun(text: full.substring(with: r), attributes: a))
+    }
+    return runs
+}
+
+/// Whole-string convenience over `chatInputRuns(fromAttributedString:in:)`.
+public func chatInputRuns(fromAttributedString attributedText: NSAttributedString) -> [ChatInputRun] {
+    return chatInputRuns(fromAttributedString: attributedText,
+                         in: NSRange(location: 0, length: attributedText.length))
+}
+
 public func chatInputContent(from attributedText: NSAttributedString) -> ChatInputContent {
     let full = attributedText.string as NSString
     var blocks: [ChatInputBlock] = []
 
-    // Build the inline runs for a single paragraph range. Block-level attributes (`.block`/`.collapsedBlock`)
-    // are NOT read here — the block kind is decided by the carve that owns the range, so gaps are always plain.
+    // Block-level attributes (`.block`/`.collapsedBlock`) are NOT read by the run conversion — the block
+    // kind is decided by the carve that owns the range, so gaps are always plain.
     func paragraphRuns(in pr: NSRange) -> [ChatInputRun] {
-        var runs: [ChatInputRun] = []
-        guard pr.length > 0 else { return runs }
-        attributedText.enumerateAttributes(in: pr, options: []) { dict, r, _ in
-            var a = ChatInputInlineAttributes()
-            if dict[ChatTextInputAttributes.bold] != nil { a.bold = true }
-            if dict[ChatTextInputAttributes.italic] != nil { a.italic = true }
-            if dict[ChatTextInputAttributes.monospace] != nil { a.monospace = true }
-            if dict[ChatTextInputAttributes.strikethrough] != nil { a.strikethrough = true }
-            if dict[ChatTextInputAttributes.underline] != nil { a.underline = true }
-            if dict[ChatTextInputAttributes.spoiler] != nil { a.spoiler = true }
-            if let m = dict[ChatTextInputAttributes.textMention] as? ChatTextInputTextMentionAttribute {
-                a.entity = .mention(m.peerId)
-            } else if let d = dict[ChatTextInputAttributes.date] as? ChatTextInputTextDateAttribute {
-                a.entity = .date(d.date)
-            } else if let e = dict[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
-                a.entity = .customEmoji(fileId: e.fileId, file: e.file, enableAnimation: e.enableAnimation)
-            } else if let u = dict[ChatTextInputAttributes.textUrl] as? ChatTextInputTextUrlAttribute {
-                a.entity = .url(u.url)
-            }
-            runs.append(ChatInputRun(text: full.substring(with: r), attributes: a))
-        }
-        return runs
+        return chatInputRuns(fromAttributedString: attributedText, in: pr)
     }
 
     // Split a range into plain `.paragraph` blocks by interior "\n" (one paragraph per line, empty lines kept).

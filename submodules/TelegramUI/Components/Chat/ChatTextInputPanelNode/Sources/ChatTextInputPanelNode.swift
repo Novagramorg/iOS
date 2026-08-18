@@ -454,23 +454,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return
         }
         
-        let inputText = NSMutableAttributedString(attributedString: textInputState.inputText)
-        
         let range = textInputState.selectionRange
-        
-        let updatedText = NSMutableAttributedString(attributedString: text)
-        if range.lowerBound < inputText.length {
-            if let quote = inputText.attribute(ChatTextInputAttributes.block, at: range.lowerBound, effectiveRange: nil) {
-                updatedText.addAttribute(ChatTextInputAttributes.block, value: quote, range: NSRange(location: 0, length: updatedText.length))
-            }
-        }
-        inputText.replaceCharacters(in: NSMakeRange(range.lowerBound, range.count), with: updatedText)
-        
-        let selectionPosition = range.lowerBound + (updatedText.string as NSString).length
-        let updatedState = ChatTextInputState(inputText: inputText, selectionRange: selectionPosition ..< selectionPosition)
 
-        // Pass the model content DIRECTLY (not via `updatedState.inputText`, which would flatten structural
-        // blocks through `NSAttributedString`) — see `inputTextState`. Flat for the legacy node, lossless for native.
+        // The quote (`.block`) attribute used to be copied from the character at the range start onto the
+        // replacement so inserted text inherited the quote. `replacingFlatRange` splices into the quote's
+        // own content, so that is now automatic — see
+        // `ChatInputContentInsertIntoQuoteTests.test_insertingInsideAQuote_staysQuotedWithoutAnyAttributeCopying`.
+        let updatedState = textInputState.replacingFlatRange(
+            NSRange(location: range.lowerBound, length: range.count),
+            with: text
+        )
         let content = updatedState.content
         // An inserted fragment can be legacy-non-representable (e.g. a collapsed quote). Convert the field to the
         // native backend BEFORE handing it the content: the legacy node lossily filters inside `setInputContent`,
@@ -4205,8 +4198,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         AudioServicesPlaySystemSound(0x450)
                         
                         interfaceInteraction.updateTextInputStateAndMode { textInputState, inputMode in
-                            let inputText = NSMutableAttributedString(attributedString: textInputState.inputText)
-                            
                             var text: String?
                             var emojiAttribute: ChatTextInputTextCustomEmojiAttribute?
                             loop: for attribute in file.attributes {
@@ -4224,30 +4215,43 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                                 let replacementText = NSAttributedString(string: text, attributes: [ChatTextInputAttributes.customEmoji: emojiAttribute])
                                 
                                 let range = currentEmojiSuggestion.position.range
-                                let previousText = inputText.attributedSubstring(from: range)
-                                inputText.replaceCharacters(in: range, with: replacementText)
-                                
+                                let previousText = (textInputState.content.plainText as NSString).substring(with: range)
+                                let previousLength = (previousText as NSString).length
+
+                                var state = textInputState.replacingFlatRange(range, with: replacementText)
+
+                                // Then every EARLIER occurrence of the same shortcode, walking backward so
+                                // each replacement sits below the offsets already visited. Threads an
+                                // immutable state instead of mutating a string, and searches its plainText.
                                 var replacedUpperBound = range.lowerBound
-                                while true {
-                                    if inputText.attributedSubstring(from: NSRange(location: 0, length: replacedUpperBound)).string.hasSuffix(previousText.string) {
-                                        let replaceRange = NSRange(location: replacedUpperBound - previousText.length, length: previousText.length)
-                                        if replaceRange.location < 0 {
-                                            break
-                                        }
-                                        let adjacentString = inputText.attributedSubstring(from: replaceRange)
-                                        if adjacentString.string != previousText.string || adjacentString.attribute(ChatTextInputAttributes.customEmoji, at: 0, effectiveRange: nil) != nil {
-                                            break
-                                        }
-                                        inputText.replaceCharacters(in: replaceRange, with: NSAttributedString(string: text, attributes: [ChatTextInputAttributes.customEmoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: emojiAttribute.interactivelySelectedFromPackId, fileId: emojiAttribute.fileId, file: emojiAttribute.file)]))
-                                        replacedUpperBound = replaceRange.lowerBound
-                                    } else {
+                                while previousLength > 0 {
+                                    let flat = state.content.plainText as NSString
+                                    let prefix = flat.substring(to: min(replacedUpperBound, flat.length))
+                                    guard prefix.hasSuffix(previousText) else {
                                         break
                                     }
+                                    let replaceRange = NSRange(location: replacedUpperBound - previousLength, length: previousLength)
+                                    guard replaceRange.location >= 0 else {
+                                        break
+                                    }
+                                    // The original stopped at an occurrence that was already an emoji.
+                                    // Preserve that: a replaced occurrence carries the entity, and if the
+                                    // emoji's displayText equals the shortcode the plain-text search would
+                                    // otherwise walk over it forever.
+                                    if case .customEmoji = state.content.entityAt(flatOffset: replaceRange.location) {
+                                        break
+                                    }
+                                    state = state.replacingFlatRange(replaceRange, with: NSAttributedString(string: text, attributes: [ChatTextInputAttributes.customEmoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: emojiAttribute.interactivelySelectedFromPackId, fileId: emojiAttribute.fileId, file: emojiAttribute.file)]))
+                                    replacedUpperBound = replaceRange.lowerBound
                                 }
-                                
+
+                                // Caret preserved verbatim from the pre-existing behaviour: computed from
+                                // the ORIGINAL range.lowerBound, so earlier replacements of a different
+                                // length already drift it. That drift is pre-existing and deliberately not
+                                // fixed inside a structural refactor.
                                 let selectionPosition = range.lowerBound + (replacementText.string as NSString).length
-                                
-                                return (ChatTextInputState(inputText: inputText, selectionRange: selectionPosition ..< selectionPosition), inputMode)
+
+                                return (ChatTextInputState(content: state.content, selectionRange: selectionPosition ..< selectionPosition), inputMode)
                             }
                             
                             return (textInputState, inputMode)
@@ -5284,11 +5288,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 return
             }
             self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-                if let inputText = current.inputText.mutableCopy() as? NSMutableAttributedString {
-                    inputText.replaceCharacters(in: NSMakeRange(current.selectionRange.lowerBound, current.selectionRange.count), with: attributedString)
-                    let updatedRange = current.selectionRange.lowerBound + attributedString.length
-                    return (ChatTextInputState(inputText: inputText, selectionRange: updatedRange ..< updatedRange), .text)
+                if !current.selectionRange.isEmpty {
+                    let range = NSRange(location: current.selectionRange.lowerBound, length: current.selectionRange.count)
+                    return (current.replacingFlatRange(range, with: attributedString), .text)
                 } else {
+                    // No selection: the whole composer is replaced by newly translated text. Building a
+                    // fresh state is correct here — there is no existing structure to preserve, and
+                    // mapping one blob of translation back onto blocks is not well defined.
                     return (ChatTextInputState(inputText: attributedString), inputMode)
                 }
             }
@@ -5580,13 +5586,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         if let attributedString = attributedString {
             self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
-                if let inputText = current.inputText.mutableCopy() as? NSMutableAttributedString {
-                    inputText.replaceCharacters(in: NSMakeRange(current.selectionRange.lowerBound, current.selectionRange.count), with: attributedString)
-                    let updatedRange = current.selectionRange.lowerBound + attributedString.length
-                    return (ChatTextInputState(inputText: inputText, selectionRange: updatedRange ..< updatedRange), inputMode)
-                } else {
-                    return (ChatTextInputState(inputText: attributedString), inputMode)
-                }
+                // An empty selection is an insertion at the caret, which is what a paste with no
+                // selection means — so this needs no separate branch (the old `else` was unreachable
+                // anyway: `mutableCopy()` of an `NSAttributedString` never fails).
+                let range = NSRange(location: current.selectionRange.lowerBound, length: current.selectionRange.count)
+                return (current.replacingFlatRange(range, with: attributedString), inputMode)
             }
             return false
         }
@@ -5724,14 +5728,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     }
                 }
                 if let mentionQueryRange = mentionQueryRange, mentionQueryRange.length > 0 {
-                    let inputText = NSMutableAttributedString(attributedString: textInputState.inputText)
-                    
-                    let rangeLower = mentionQueryRange.lowerBound
-                    let rangeUpper = mentionQueryRange.upperBound
-                    
-                    inputText.replaceCharacters(in: NSRange(location: rangeLower, length: rangeUpper - rangeLower), with: "")
-                    
-                    return (ChatTextInputState(inputText: inputText), inputMode)
+                    // Caret change worth knowing: this used to build the state via
+                    // `ChatTextInputState(inputText:)`, which parks the caret at the very end. The
+                    // primitive leaves it at the deletion point, matching every other site.
+                    return (textInputState.replacingFlatRange(mentionQueryRange, with: ""), inputMode)
                 } else {
                     return (ChatTextInputState(inputText: NSAttributedString(string: "")), inputMode)
                 }
