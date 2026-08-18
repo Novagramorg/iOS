@@ -105,12 +105,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     private var currentPageLayout: (boundingWidth: CGFloat,
                                     presentationThemeIdentity: ObjectIdentifier,
                                     expandedDetails: [Int: Bool],
+                                    expandedQuotePaths: Set<[Int]>,
                                     messageStableVersion: UInt32,
                                     pendingEditKey: ObjectIdentifier?,
                                     richPageKey: ResolvedRichDataPageKey,
                                     showMoreExpanded: Bool,
                                     layout: InstantPageV2Layout)?
     private var currentExpandedDetails: [Int: Bool] = [:]
+    /// Quotes the reader expanded, keyed by structural block path. Lives on the content node, so
+    /// scrolling away and back re-collapses — matching ChatMessageTextBubbleContentNode's
+    /// `expandedBlockIds`. Path-keyed rather than ordinal: AI streaming appends blocks, which would
+    /// shift ordinals under the state.
+    private var currentExpandedQuotePaths: Set<[Int]> = Set()
     // Intra-message anchor scroll that is waiting on a collapsed <details> to expand + relayout.
     private var pendingScrollAnchor: String?
     // Progress guard: the details index expanded on the previous pending pass.
@@ -548,6 +554,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         let previousItem = self.item
         let currentPageLayout = self.currentPageLayout
         let currentExpandedDetails = self.currentExpandedDetails
+        let currentExpandedQuotePaths = self.currentExpandedQuotePaths
         let showMoreExpandedState = self.showMoreExpanded
         let statusLayout = ChatMessageDateAndStatusNode.asyncLayout(self.statusNode)
         let showMoreTextLayout = TextNode.asyncLayout(self.showMoreTextNode)
@@ -779,6 +786,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                        current.boundingWidth == suggestedBoundingWidth,
                        current.presentationThemeIdentity == presentationThemeIdentity,
                        current.expandedDetails == currentExpandedDetails,
+                       current.expandedQuotePaths == currentExpandedQuotePaths,
                        current.showMoreExpanded == showMoreExpanded,
                        current.messageStableVersion == currentMessageStableVersion,
                        current.pendingEditKey == currentPendingEditKey,
@@ -803,6 +811,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             dateTimeFormat: item.presentationData.dateTimeFormat,
                             cachedMessageSyntaxHighlight: nil,
                             expandedDetails: currentExpandedDetails,
+                            expandedQuotePaths: currentExpandedQuotePaths,
                             fitToWidth: true,
                             computeRevealCharacterRects: hasDraft || hadDraft,
                             edgeSpacingReduction: pageContentInset
@@ -1225,6 +1234,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 suggestedBoundingWidth,
                                 ObjectIdentifier(item.presentationData.theme.theme),
                                 self.currentExpandedDetails,
+                                self.currentExpandedQuotePaths,
                                 item.message.stableVersion,
                                 (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }),
                                 resolvedContent.key,
@@ -1746,6 +1756,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     )
                 }
             }
+            if let action = self.collapsibleQuoteTapAction(point) {
+                return action
+            }
             return ChatMessageBubbleContentTapAction(content: .none)
         }
 
@@ -1789,6 +1802,30 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 activate: self.makeActivate(item: urlHit.item, parentOffset: urlHit.parentOffset, localPoint: urlHit.localPoint)
             )
         }
+    }
+
+    /// Toggling a collapsed quote, resolved LAST in `tapActionAtPoint`: a URL, button or entity inside
+    /// the visible three lines wins over the expand toggle. `.custom` is the content case for an action
+    /// with no chat-level meaning of its own — the same one a link-styled page button uses.
+    private func collapsibleQuoteTapAction(_ point: CGPoint) -> ChatMessageBubbleContentTapAction? {
+        guard let pageView = self.pageView else {
+            return nil
+        }
+        let local = self.view.convert(point, to: pageView)
+        guard let path = pageView.collapsibleQuoteAt(point: local) else {
+            return nil
+        }
+        return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
+            guard let self, let item = self.item else {
+                return
+            }
+            if self.currentExpandedQuotePaths.contains(path) {
+                self.currentExpandedQuotePaths.remove(path)
+            } else {
+                self.currentExpandedQuotePaths.insert(path)
+            }
+            item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+        }))
     }
 
     private func textItemAtLocation(_ location: CGPoint) -> (item: InstantPageTextItem, parentOffset: CGPoint)? {

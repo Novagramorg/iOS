@@ -169,6 +169,15 @@ public enum InstantPageV2LaidOutItem {
 public struct InstantPageV2TextItem {
     public var frame: CGRect
     public let textItem: InstantPageTextItem   // V1 type reused as payload
+    /// Height DRAWN below `frame` that the layout does not reserve — normally zero.
+    ///
+    /// A collapsed quote sets it so the lines past its three-line preview stay rendered while
+    /// contributing nothing to the quote's height. Nothing outside the quote may see them, and
+    /// nothing does: the only producer is `instantPageV2QuoteBudgetedItems`, which sets it solely for
+    /// the item sitting at a collapsed quote's bottom edge — the item the fade mask covers. The mask
+    /// is what clips the overflow, and because the mask ANIMATES, collapsing sweeps those lines away
+    /// instead of blinking them out. See `InstantPageV2QuoteCollapse.swift`.
+    public var overflowHeight: CGFloat = 0.0
 }
 
 public struct InstantPageV2CodeBlockItem {
@@ -246,6 +255,13 @@ public struct InstantPageV2QuoteFrameItem {
     public let cornerRadius: CGFloat
     public let fillAlpha: CGFloat
     public let barOnTrailing: Bool   // RTL: bar on the trailing (right) edge → mirror the fill
+    /// Whether this quote shows an expand control, and which way it points. `.notCollapsible` means the
+    /// author did not mark it collapsed, or it is not longer than its own preview.
+    let collapseState: InstantPageV2QuoteCollapseState
+    /// The quote's structural block path — the identity its expanded/collapsed state is keyed by, and
+    /// the same addressing `checkboxTapped` uses. Deliberately NOT an ordinal: blocks are appended
+    /// during AI streaming, which would shift ordinals under the state.
+    let path: [Int]
 }
 
 public enum InstantPageV2ShapeKind {
@@ -490,6 +506,9 @@ public func layoutInstantPageV2(
     dateTimeFormat: PresentationDateTimeFormat,
     cachedMessageSyntaxHighlight: CachedMessageSyntaxHighlight?,
     expandedDetails: [Int: Bool],
+    /// Quotes the reader has expanded. Defaulted so the four non-chat V2 call sites are unchanged: a
+    /// preview surface renders the author's collapsed state and offers no way to expand it.
+    expandedQuotePaths: Set<[Int]> = [],
     fitToWidth: Bool,
     computeRevealCharacterRects: Bool = false,
     /// Points trimmed from the TOP-LEVEL sequence's leading and trailing spacing (clamped at 0).
@@ -556,7 +575,8 @@ public func layoutInstantPageV2(
         edgeSpacingReduction: edgeSpacingReduction,
         mediaIndexCounter: 0,
         detailsIndexCounter: 0,
-        expandedDetails: expandedDetails
+        expandedDetails: expandedDetails,
+        expandedQuotePaths: expandedQuotePaths
     )
 
     var result = layoutBlockSequence(
@@ -722,6 +742,9 @@ private struct LayoutContext {
     var detailsIndexCounter: Int = 0
 
     let expandedDetails: [Int: Bool]
+    /// Quotes the reader has expanded, keyed by structural block path. Mirrors `expandedDetails`, which
+    /// is the same idea keyed by the details block's ordinal index.
+    let expandedQuotePaths: Set<[Int]>
 }
 
 // MARK: - Driver
@@ -932,8 +955,10 @@ private func layoutBlock(
         return layoutCodeBlock(text, language: language, boundingWidth: boundingWidth,
                                horizontalInset: horizontalInset, context: &context)
 
-    case let .blockQuote(blocks, caption, _):
-        return layoutBlockQuote(blocks: blocks, caption: caption,
+    case let .blockQuote(blocks, caption, collapsed):
+        // `collapsed` is optional on the model: nil means the wire form carried no flag, which is
+        // "not collapsed".
+        return layoutBlockQuote(blocks: blocks, caption: caption, authorCollapsed: collapsed == true,
                                 boundingWidth: boundingWidth, horizontalInset: horizontalInset, kind: kind,
                                 isLast: isLast, pathPrefix: pathPrefix, context: &context)
     case let .pullQuote(text, caption):
@@ -2797,6 +2822,7 @@ private func layoutThinking(
 private func layoutBlockQuote(
     blocks: [InstantPageBlock],
     caption: RichText,
+    authorCollapsed: Bool,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
     kind: BlockSequenceKind,
@@ -2841,7 +2867,12 @@ private func layoutBlockQuote(
     let bandX = innerHorizontalInset + bandOffsetX
 
     var result: [InstantPageV2LaidOutItem] = []
+    // Two running heights, equal except inside a COLLAPSED quote: `contentHeight` is what the quote
+    // reserves (and therefore how tall it is), `drawnHeight` is where the next child is positioned.
+    // They diverge past the three-line cut, where children are still painted — for the mask to sweep
+    // away — but no longer counted. See `instantPageV2QuoteBudgetedItems`.
     var contentHeight: CGFloat = verticalInset
+    var drawnHeight: CGFloat = verticalInset
 
     // A quote's children are spaced by the page's own rhythm, like every other block sequence
     // (`layoutBlockSequence`, details bodies, table cells, list sub-blocks): a quote is a container,
@@ -2861,6 +2892,28 @@ private func layoutBlockQuote(
     // `previousBlock` advances only when a child actually contributed height, mirroring
     // `layoutBlockSequence` — a zero-height child (an anchor, an unresolvable medium) has to stay
     // transparent to spacing rather than open a gap against nothing.
+    // A collapsed quote previews the first `instantPageV2CollapsedQuoteLineBudget` text lines. The
+    // budget is applied AS children are laid out, not as a post-pass: the siblings after a truncated
+    // item do not exist yet, so nothing needs re-positioning and `contentHeight` is right by
+    // construction.
+    //
+    // `totalTextLines` keeps counting past the budget because the collapsible decision needs the
+    // UNtruncated total — a quote no longer than its own preview shows no control. `linesEmitted`
+    // counts only what survived.
+    let quoteIsExpanded = context.expandedQuotePaths.contains(pathPrefix)
+    let applyBudget = authorCollapsed && !quoteIsExpanded
+    // Whether the cut lines may stay DRAWN below the truncated item, for the animated mask to sweep
+    // away as the quote closes. Safe only when nothing follows them inside the quote: once the budget
+    // is exhausted every later child is dropped, so the one thing that can still sit underneath is
+    // the caption, which is emitted below and is not budgeted.
+    var keepQuoteOverflow = false
+    if case .empty = caption {
+        keepQuoteOverflow = true
+    }
+    var totalTextLines = 0
+    var linesEmitted = 0
+    var budgetExhausted = false
+
     var previousBlock: InstantPageBlock?
     for (i, child) in blocks.enumerated() {
         let spacing: CGFloat = previousBlock == nil
@@ -2877,17 +2930,53 @@ private func layoutBlockQuote(
             pathPrefix: pathPrefix + [i],
             context: &context
         )
-        let dy = contentHeight + spacing
-        let offsetItems = childItems.map { $0.offsetBy(CGPoint(x: bandX, y: dy)) }
-        var childMaxY: CGFloat = 0.0
-        for item in offsetItems {
-            if item.frame.maxY > childMaxY {
-                childMaxY = item.frame.maxY
+        for item in childItems {
+            totalTextLines += instantPageV2TextLineCount(item)
+        }
+        // `reservedCount` splits this child's items into the ones the quote takes height for and the
+        // ones that are merely drawn. Everything is drawn at its natural position either way, so a
+        // child's coordinates do not move when the reader toggles the quote — only the quote's own
+        // height and its mask do. That is what stops a medium below the cut from being torn down and
+        // rebuilt (a blink) rather than swept away by the closing fade.
+        var effectiveChildItems = childItems
+        var reservedCount = childItems.count
+        if applyBudget {
+            if budgetExhausted {
+                effectiveChildItems = keepQuoteOverflow ? childItems : []
+                reservedCount = 0
+            } else {
+                let budgeted = instantPageV2QuoteBudgetedItems(
+                    childItems,
+                    remainingLines: instantPageV2CollapsedQuoteLineBudget - linesEmitted,
+                    keepingOverflow: keepQuoteOverflow
+                )
+                effectiveChildItems = budgeted.reserved + budgeted.overflow
+                reservedCount = budgeted.reserved.count
+                linesEmitted += budgeted.linesConsumed
+                if linesEmitted >= instantPageV2CollapsedQuoteLineBudget || budgeted.reserved.count + budgeted.overflow.count < childItems.count {
+                    budgetExhausted = true
+                }
             }
         }
-        if childMaxY > contentHeight {
-            contentHeight = childMaxY
+
+        // Positioned from `drawnHeight`, which advances over everything painted; the quote's own
+        // height (`contentHeight`) advances only over what is reserved.
+        let dy = drawnHeight + spacing
+        let offsetItems = effectiveChildItems.map { $0.offsetBy(CGPoint(x: bandX, y: dy)) }
+        var childDrawnMaxY: CGFloat = 0.0
+        var childReservedMaxY: CGFloat = 0.0
+        for (index, item) in offsetItems.enumerated() {
+            childDrawnMaxY = max(childDrawnMaxY, instantPageV2DrawnMaxY(item))
+            if index < reservedCount {
+                childReservedMaxY = max(childReservedMaxY, item.frame.maxY)
+            }
+        }
+        if childDrawnMaxY > drawnHeight {
+            drawnHeight = childDrawnMaxY
             previousBlock = child
+        }
+        if childReservedMaxY > contentHeight {
+            contentHeight = childReservedMaxY
         }
         result.append(contentsOf: offsetItems)
     }
@@ -2938,10 +3027,39 @@ private func layoutBlockQuote(
 
     contentHeight += verticalInset
 
+    let collapseState = instantPageV2QuoteCollapseState(totalTextLines: totalTextLines,
+                                                        authorCollapsed: authorCollapsed,
+                                                        isExpanded: quoteIsExpanded)
+
+    // Room for the EXPANDED chevron. A COLLAPSED quote needs none — its bottom fade already clears
+    // the corner the arrow sits in — but an expanded one would otherwise draw the arrow straight over
+    // whatever its last row put there. `InteractiveTextComponent` widens the last line first and only
+    // grows the block if that does not fit; a V2 quote's width is the band's and cannot stretch, so
+    // only the grow branch survives the port.
+    if collapseState == .expanded {
+        let quoteFrame = CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight)
+        let lastRowTop = contentHeight - verticalInset - instantPageV2QuoteChevronClearance
+        var chevronCornerOccupied = false
+        for item in result {
+            guard item.frame.maxY > lastRowTop else {
+                continue
+            }
+            if instantPageV2QuoteChevronSideInset(item, quoteFrame: quoteFrame, rtl: context.rtl) < instantPageV2QuoteChevronClearance {
+                chevronCornerOccupied = true
+                break
+            }
+        }
+        if chevronCornerOccupied {
+            contentHeight += instantPageV2QuoteChevronExtraHeight
+        }
+    }
+
     // Accent bar + accent-tinted rounded fill spanning the whole quote band (behind child content).
     let frameItem = InstantPageV2QuoteFrameItem(
         frame: CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight),
-        accentColor: context.theme.quoteAccentColor, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl)
+        accentColor: context.theme.quoteAccentColor, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
+        collapseState: collapseState,
+        path: pathPrefix)
     result.insert(.quoteFrame(frameItem), at: 0)
     result.append(instantPageV2BlockQuoteIcon(boundingWidth: boundingWidth, horizontalInset: horizontalInset, color: context.theme.quoteAccentColor, rtl: context.rtl))
 
@@ -3093,9 +3211,13 @@ private func layoutQuoteText(
             imageName: "RichText/QuoteClose", color: accent, rotated: false)))
     } else {
         // Accent bar + accent-tinted rounded fill spanning the whole quote band (behind the text).
+        // Never collapsible: this function serves `.pullQuote`, which carries no `collapsed` in the
+        // model. Every `.blockQuote` — including a single-paragraph one — goes through
+        // `layoutBlockQuote`, which is where the collapse budget lives.
         let frameItem = InstantPageV2QuoteFrameItem(
             frame: CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight),
-            accentColor: accent, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl)
+            accentColor: accent, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
+            collapseState: .notCollapsible, path: [])
         result.insert(.quoteFrame(frameItem), at: 0)
         result.append(instantPageV2BlockQuoteIcon(boundingWidth: boundingWidth, horizontalInset: horizontalInset, color: accent, rtl: context.rtl))
     }

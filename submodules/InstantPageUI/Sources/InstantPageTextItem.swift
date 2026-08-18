@@ -118,8 +118,19 @@ public final class InstantPageTextLine {
     public let anchorItems: [InstantPageTextAnchorItem]
     let isRTL: Bool
     public let characterRects: [CGRect]?   // line-local, one rect per character in `range`; nil = not computed
+    /// A token drawn immediately AFTER this line's own glyphs, on the same baseline — today only the
+    /// "…" a collapsed quote puts on its last visible line.
+    ///
+    /// Appended rather than folded into `line` (which is what `CTLineCreateTruncatedLine` would do)
+    /// so nothing else about the line moves: `range`, the per-line attachment/spoiler/underline item
+    /// frames and the character rects all still describe the untruncated text, and hit-testing,
+    /// inline emoji placement and the streaming reveal keep working unchanged. Same reason
+    /// `InteractiveTextComponent` carries its truncation token as `additionalTrailingLine`.
+    ///
+    /// Drawn only by the V2 renderer; V1 has no collapsed quotes.
+    let additionalTrailingLine: CTLine?
 
-    init(line: CTLine, range: NSRange, frame: CGRect, strikethroughItems: [InstantPageTextStrikethroughItem], underlineItems: [InstantPageTextUnderlineItem], markedItems: [InstantPageTextMarkedItem], spoilerItems: [InstantPageTextSpoilerItem] = [], imageItems: [InstantPageTextImageItem], formulaItems: [InstantPageTextFormulaRun], buttonItems: [InstantPageTextButtonRun] = [], emojiItems: [InstantPageTextEmojiItem] = [], anchorItems: [InstantPageTextAnchorItem], isRTL: Bool, characterRects: [CGRect]? = nil) {
+    init(line: CTLine, range: NSRange, frame: CGRect, strikethroughItems: [InstantPageTextStrikethroughItem], underlineItems: [InstantPageTextUnderlineItem], markedItems: [InstantPageTextMarkedItem], spoilerItems: [InstantPageTextSpoilerItem] = [], imageItems: [InstantPageTextImageItem], formulaItems: [InstantPageTextFormulaRun], buttonItems: [InstantPageTextButtonRun] = [], emojiItems: [InstantPageTextEmojiItem] = [], anchorItems: [InstantPageTextAnchorItem], isRTL: Bool, characterRects: [CGRect]? = nil, additionalTrailingLine: CTLine? = nil) {
         self.line = line
         self.range = range
         self.frame = frame
@@ -134,6 +145,29 @@ public final class InstantPageTextLine {
         self.anchorItems = anchorItems
         self.isRTL = isRTL
         self.characterRects = characterRects
+        self.additionalTrailingLine = additionalTrailingLine
+    }
+
+    /// This line with `trailing` appended after its glyphs. Everything else is carried over
+    /// unchanged — see `additionalTrailingLine`.
+    func withAdditionalTrailingLine(_ trailing: CTLine) -> InstantPageTextLine {
+        return InstantPageTextLine(
+            line: self.line,
+            range: self.range,
+            frame: self.frame,
+            strikethroughItems: self.strikethroughItems,
+            underlineItems: self.underlineItems,
+            markedItems: self.markedItems,
+            spoilerItems: self.spoilerItems,
+            imageItems: self.imageItems,
+            formulaItems: self.formulaItems,
+            buttonItems: self.buttonItems,
+            emojiItems: self.emojiItems,
+            anchorItems: self.anchorItems,
+            isRTL: self.isRTL,
+            characterRects: self.characterRects,
+            additionalTrailingLine: trailing
+        )
     }
 }
 
