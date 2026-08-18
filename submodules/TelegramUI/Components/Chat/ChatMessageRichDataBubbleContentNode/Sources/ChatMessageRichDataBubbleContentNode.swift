@@ -1701,6 +1701,19 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             }
         }
 
+        // Resolved FIRST, and for every gesture: an unsupported pill's Update button is a real
+        // `UIButton` inside the page view, and unless the bubble steps aside here its tap recognizer
+        // claims the touch and cancels the button's tracking, so `touchUpInside` never fires — the
+        // button highlights and then does nothing. `.ignore` is what makes the recognizer fail
+        // (ChatMessageBubbleItemNode:1355), which is also how the standalone
+        // `ChatMessageUnsupportedBubbleContentNode` keeps the same button alive.
+        //
+        // Before the collapsible-quote toggle in particular: a pill inside a collapsed quote must
+        // still hand its button the tap rather than expanding the quote under it.
+        if self.unsupportedActionContains(point) {
+            return ChatMessageBubbleContentTapAction(content: .ignore)
+        }
+
         if case .tap = gesture, let showMoreTextNode = self.showMoreTextNode, showMoreTextNode.frame.contains(point) {
             // Highlight rect in containerNode-local coords (the highlight overlay lives inside
             // containerNode, which sits at self (1, 1); the text node is on self).
@@ -1802,6 +1815,17 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 activate: self.makeActivate(item: urlHit.item, parentOffset: urlHit.parentOffset, localPoint: urlHit.localPoint)
             )
         }
+    }
+
+    /// True when `point` (this node's coords) is inside the Update button of an unsupported-content
+    /// pill in the rendered page. The page answers from its LAYOUT — during touch arbitration there
+    /// is no useful way to ask the pill view, and a nested pill (details body, table cell) must be
+    /// found too.
+    private func unsupportedActionContains(_ point: CGPoint) -> Bool {
+        guard let pageView = self.pageView else {
+            return false
+        }
+        return pageView.unsupportedActionFrame(at: self.view.convert(point, to: pageView)) != nil
     }
 
     /// Toggling a collapsed quote, resolved LAST in `tapActionAtPoint`: a URL, button or entity inside

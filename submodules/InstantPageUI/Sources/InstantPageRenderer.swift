@@ -2794,6 +2794,19 @@ public extension InstantPageV2View {
         return best?.path
     }
 
+    /// The frame (this view's coords) of the unsupported pill's Update button containing `point`,
+    /// or nil.
+    ///
+    /// A host whose surface arbitrates its own touches must consult this BEFORE claiming a tap: the
+    /// pill's button is a real `UIButton`, and a surrounding tap recognizer that claims the touch
+    /// cancels the button's tracking, so `touchUpInside` never fires. In a chat bubble that is
+    /// `tapActionAtPoint` returning `.ignore` for this rect (see
+    /// `ChatMessageRichDataBubbleContentNode`).
+    func unsupportedActionFrame(at point: CGPoint) -> CGRect? {
+        guard let layout = self.currentLayout else { return nil }
+        return InstantPageUI.unsupportedActionFrame(in: layout, containing: point)
+    }
+
     func urlItemAt(point: CGPoint) -> (urlItem: InstantPageUrlItem, item: InstantPageTextItem,
                                        parentOffset: CGPoint, localPoint: CGPoint)? {
         guard let hit = self.textItemAt(point: point) else { return nil }

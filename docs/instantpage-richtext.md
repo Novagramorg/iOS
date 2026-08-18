@@ -232,6 +232,12 @@ web Instant View articles and by editor-authored slideshow albums. Design + plan
 
 - **Collage is a flatten, not a container.** `layoutCollage` computes the mosaic, then emits each cell as an ordinary top-level `.mediaImage`/`.mediaVideo` item (cornerRadius 0) into the parent layout — exactly as V1 does (`flattenedItemsWithOrigin`). Consequence: gallery enumeration (`allMedias`), the media registry, hidden-media, the reveal-cost map, and view reuse all handle collage cells **for free**, with no collage-specific code in any of those subsystems. There is **no** `.collage` laid-out item or view.
 - **Right-edge collage cells bleed 4pt** (`instantPageV2MediaEdgeBleed`, applied only to `MosaicItemPosition.right` cells) for the same bubble-rounded-clip reason as full-width single media; interior gaps are the mosaic's 1pt spacing; outer corners are rounded by the bubble's `containerNode`.
+- **A collage with an undecodable item is not laid out as a collage at all** (2026-08-18). The
+  `.collage` arm of `layoutBlock` checks `blockRendersAsUnsupported(_:)` first and returns the
+  "please update" pill for the whole block, caption included — a mosaic reserves a slot per inner
+  block but emits a cell only per *resolvable* one, so an `.unsupported` item would leave a hole and
+  shift the remaining tiles. `.slideshow` is deliberately excluded (it degrades quietly instead).
+  See "Unsupported blocks" below for the predicate and its other two readers.
 - **Slideshow IS a container** (it's swipeable), so it gets its own laid-out item + view, unlike collage. Adding the `.slideshow` case to `InstantPageV2LaidOutItem` forces a `.slideshow` arm in every no-`default` switch over it: `frame`, `offsetBy`, `stableId`, `reuse`, `makeItemView`, and the reveal-cost `computeEntries` (plus `collectMedias`, which has a `default` but needs the arm to enumerate slideshow medias for the gallery).
 - **Slideshow pages are created eagerly, deviating from V1's lazy central±1 paging.** In a chat bubble a slideshow is a handful of images, so eager creation avoids V1's index bookkeeping and makes the gallery transition source available for **every** page (even off-screen). Height = the tallest image `fitted(boundingWidth × 1200)`; only `.image` inner blocks render (matches V1 — videos become empty pages).
 - **The slideshow registers under EVERY contained media index, and re-registers on an in-window rebuild.** Its stableId is positional (`.positional(.slideshow, position)`, not `.media(index)` like the static media views), so it can be reused for a *different* slideshow at the same block position; `rebuildPages()` re-runs `registerMedias()` (guarded by `window != nil`) so the new indices land in the registry. The gallery hooks iterate the live page nodes and match by `InstantPageMedia` identity, so registering one view under N indices is idempotent.
@@ -1055,14 +1061,27 @@ message in the app.
 |---|---|
 | `submodules/TelegramUI/Components/UnsupportedContentPill/Sources/UnsupportedContentPill.swift` | `UnsupportedContentPillStrings` / `Colors` / `Layout`, and the single `measureUnsupportedContentPill(...)` both the pure layout pass and the view run. |
 | `.../UnsupportedContentPillView.swift` | The view: badge, text column, action button, and either a `.free` wallpaper bubble background or the static `colors.fill`. |
-| `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedItem.swift` | `InstantPageV2UnsupportedItem`, `redundantUnsupportedBlockIndices(_:)`, `layoutUnsupportedBlock(...)`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedItem.swift` | `InstantPageV2UnsupportedItem`, `redundantUnsupportedBlockIndices(_:)`, `layoutUnsupportedBlock(...)`, `unsupportedContentTearZones(in:)`, `unsupportedActionFrame(in:containing:)` (tap arbitration). |
 | `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedView.swift` | `InstantPageV2UnsupportedView` — the V2 item view wrapping the pill. |
 | `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `unsupportedPillFillColor` / `unsupportedPillPrimaryColor` and the derived `unsupportedPillColors`. |
 
 ### Non-obvious invariants
 
+- **A `.collage` carrying an `.unsupported` item is unsupported as a whole** (2026-08-18). The
+  mosaic reserves a slot for every inner block and emits a cell only for the ones it can resolve, so
+  an undecodable item leaves a *hole* and pushes the surrounding tiles into the wrong geometry —
+  visibly wrong rather than visibly missing. One pill replaces the entire block, caption included.
+  The rule lives in `blockRendersAsUnsupported(_:)`, which is what every reader asking "is this
+  block unsupported" must call instead of matching `case .unsupported`: the `.collage` arm of
+  `layoutBlock`, the run collapsing below, and `InstantPageBlock.spacing(metrics:)` (where the guard
+  sits **ahead of** the switch, or the media arm would hand the pill a full-bleed block's
+  flush-both-sides rhythm). Deliberately **not** extended to `.slideshow`, whose failure is
+  different — it drops an undecodable item silently, one page fewer, and still renders the rest —
+  and only one level deep, since a collage's items are flat media blocks. V1 is unchanged.
 - **A maximal run of adjacent `.unsupported` blocks renders as ONE pill.** `layoutBlockSequence`
-  consults `redundantUnsupportedBlockIndices` in every sequence, nested ones included. It reports
+  consults `redundantUnsupportedBlockIndices` in every sequence, nested ones included — and a
+  collage-turned-pill counts as part of a run, so it never stacks a second pill on a neighbour's.
+  It reports
   indices to **skip** rather than returning a filtered array, because the loop index becomes
   `pathPrefix + [i]` — the structural path checkbox toggling and anchors address blocks by.
   Filtering would renumber every block after a collapsed run and silently toggle the wrong checkbox.
@@ -1080,6 +1099,30 @@ message in the app.
 - **The Update button is always rendered.** `InstantPageV2View.unsupportedActionTapped` is nil in
   the send preview, the text-processing screen and the formula editor, where the tap is inert — the
   alternative (hiding it) would change the pill's width between preview and sent message.
+- **The Update button only works if the host steps out of the way — twice.** The button is a real
+  `UIButton` inside the page view, but a chat bubble arbitrates every touch over its content: unless
+  `tapActionAtPoint` returns `.ignore` for the button's rect, the bubble's
+  `TapLongTapOrDoubleTapGestureRecognizer` claims the touch and cancels the button's tracking, so it
+  highlights and then does nothing. `ChatMessageRichDataBubbleContentNode` resolves that rect
+  **first**, before the collapsible-quote toggle, through
+  `InstantPageV2View.unsupportedActionFrame(at:)` → `unsupportedActionFrame(in:containing:)`, which
+  works off the **layout** (mid-touch there is no useful way to ask a pill view) and, unlike
+  `unsupportedContentTearZones`, **does** recurse into `details` bodies and table cells.
+  `ChatMessageUnsupportedBubbleContentNode` answers the same question for the standalone bubble via
+  the pill view's `actionContains`. The recognizer has its own escape hatch — it fails when the
+  hit-test result *is* a `UIButton` — and the second half is what lets that fire: the button's label
+  is a `TextNode`, whose view is interactive by default and would otherwise be the deepest hit,
+  so `UnsupportedContentPillView` sets `isUserInteractionEnabled = false` on it. Only the button's
+  rect is claimed; the rest of the card stays ordinary bubble content, so the message's own tap and
+  long-press survive. (Fixed 2026-08-18; the rich bubble had neither half and its button was dead.)
+- **`UnsupportedContentPillLayout.actionFrame(in:)` is the one source for where the button lands.**
+  The view positions its button there and layout-only hosts test against it; `in size:` rather than
+  the layout's own `size` because a host may stretch the pill wider and the button is pinned to the
+  trailing edge.
+- **A pill nested in a `<details>` body or a table cell still has an inert button.** Tap arbitration
+  finds it, but nested `InstantPageV2View`s only get `detailsTapped` forwarded — `unsupportedActionTapped`
+  (like `checkboxTapped`, `buttonTapped` and `documentTapped`) is not propagated into sub-layout
+  views, so the closure is nil there. Pre-existing, and not specific to the pill.
 - **Reveal cost is `.nonText`.** The pill pops in atomically with its position in the stream, like a
   button row.
 

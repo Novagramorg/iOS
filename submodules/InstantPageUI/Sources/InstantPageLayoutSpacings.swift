@@ -34,6 +34,10 @@ struct InstantPageBlockSpacing {
 /// The gap between any two adjacent blocks, before either block's padding is added.
 let instantPageBaseBlockSpacing: CGFloat = 8.0
 
+/// The rhythm of the "please update" pill. A fixed padding rather than a scaled one: the pill is a
+/// fixed-size card that does not participate in the page's type scale.
+private let instantPageUnsupportedBlockSpacing = InstantPageBlockSpacing(verticalPadding: 8.0)
+
 extension InstantPageBlock {
     /// Resolved from the whole block value, not just its case, so a rule may depend on the payload
     /// (e.g. a checklist reading differently from a bullet list) without widening the model.
@@ -46,6 +50,13 @@ extension InstantPageBlock {
     /// literal here: `InstantPageBlockSpacing.verticalPadding` deliberately lost its `= 4.0`
     /// default, because a defaulted padding is a literal that silently ignores the scale.
     func spacing(metrics: InstantPageMetrics) -> InstantPageBlockSpacing {
+        // Ahead of the switch because spacing follows the RENDERING, not the case: a collage
+        // carrying a block this build cannot decode is drawn as the pill, and the media arm below
+        // would otherwise give it a media block's flush-both-sides rhythm — leaving the pill butted
+        // against its neighbours like a full-bleed image.
+        if blockRendersAsUnsupported(self) {
+            return instantPageUnsupportedBlockSpacing
+        }
         switch self {
         case .anchor:
             // A zero-height invisible marker: transparent to spacing on both sides. The padding is
@@ -71,7 +82,9 @@ extension InstantPageBlock {
                 return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true, flushBelow: true)
             }
         case .unsupported:
-            return InstantPageBlockSpacing(verticalPadding: 8.0)
+            // Unreachable — the guard above answers for it — but kept so the rhythm is still
+            // written where a reader looks for it.
+            return instantPageUnsupportedBlockSpacing
         default:
             return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding)
         }

@@ -1158,6 +1158,19 @@ private func layoutBlock(
             horizontalInset: horizontalInset, context: &context)
 
     case let .collage(items, caption):
+        // A collage carrying a block this build cannot decode is unsupported as a whole: the mosaic
+        // reserves a slot for it and draws nothing there, so the tiles that DO resolve are laid out
+        // around a hole. One pill replaces the entire block, caption included — the caption
+        // describes content that is not being shown.
+        if blockRendersAsUnsupported(block) {
+            return layoutUnsupportedBlock(
+                boundingWidth: boundingWidth,
+                horizontalInset: horizontalInset,
+                strings: UnsupportedContentPillStrings(strings: context.strings),
+                colors: context.theme.unsupportedPillColors,
+                isTopLevel: pathPrefix.count == 1
+            )
+        }
         return layoutCollage(items: items, caption: caption, isCover: isCover,
                              boundingWidth: boundingWidth, horizontalInset: horizontalInset, context: &context)
 
