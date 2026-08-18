@@ -641,6 +641,7 @@ final class ComposeTodoScreenComponent: Component {
                         hasStickers: false,
                         hasGifs: false,
                         hideBackground: true,
+                        maskEdge: .clip,
                         sendGif: nil
                     )
                 )

@@ -1356,7 +1356,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 let attributes: [Int: MarkdownAttributeSet] = [0: boldAttributes]
                                 let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: dateTimeFormat))"
                                 attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Assigned(giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
-                            } else if nameHidden && senderId != accountPeerId && message.author?.id != accountPeerId {
+                            } else if !"".isEmpty, nameHidden && senderId != accountPeerId && message.author?.id != accountPeerId {
                                 attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)
                             } else if message.id.peerId.isTelegramNotifications && senderId == nil {
                                 attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)

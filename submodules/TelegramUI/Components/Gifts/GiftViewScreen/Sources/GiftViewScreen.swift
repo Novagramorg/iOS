@@ -2766,6 +2766,9 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             var originY: CGFloat = 0.0
+            let displaysHeaderButtons = isMyOwnedUniqueGift || isMyHostedUniqueGift || isChannelGift
+            let headerButtonHeight: CGFloat = 58.0
+            let headerButtonsBottomInset: CGFloat = 16.0
                         
             let headerHeight: CGFloat
             let headerSubject: GiftCompositionComponent.Subject?
@@ -2774,9 +2777,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                 if showWearPreview {
                     headerHeight = 200.0
                 } else if hasGiftMessage {
-                    headerHeight = giftMessageHeaderHeight ?? 302.0
-                } else if isMyOwnedUniqueGift || isMyHostedUniqueGift || isChannelGift {
-                    headerHeight = 314.0
+                    headerHeight = (giftMessageHeaderHeight ?? 302.0) + (displaysHeaderButtons ? headerButtonHeight + headerButtonsBottomInset : 0.0)
+                } else if displaysHeaderButtons {
+                    headerHeight = 240.0 + headerButtonHeight + headerButtonsBottomInset
                 } else {
                     headerHeight = 240.0
                 }
@@ -4129,7 +4132,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 
                 if let uniqueGift {
-                    if isMyOwnedUniqueGift || isMyHostedUniqueGift || isChannelGift {
+                    if displaysHeaderButtons {
                         var canTransfer = true
                         var canResell = true
                         
@@ -4152,7 +4155,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         
                         let buttonSpacing: CGFloat = 10.0
                         let buttonWidth = floor(context.availableSize.width - sideInset * 2.0 - buttonSpacing * CGFloat(buttonsCount - 1)) / CGFloat(buttonsCount)
-                        let buttonHeight: CGFloat = 58.0
+                        let buttonHeight = headerButtonHeight
                         
                         var buttonColor: UIColor = UIColor(rgb: 0xffffff, alpha: 0.1)
                         if case let .color(color) = buttonsBackground {
@@ -4178,7 +4181,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             let buttonPosition = buttonOriginX + buttonWidth / 2.0
                             headerComponents.append({
                                 context.add(transferButton
-                                    .position(CGPoint(x: buttonPosition, y: headerHeight - buttonHeight / 2.0 - 16.0))
+                                    .position(CGPoint(x: buttonPosition, y: headerHeight - buttonHeight / 2.0 - headerButtonsBottomInset))
                                     .appear(.default(scale: true, alpha: true))
                                     .disappear(.default(scale: true, alpha: true))
                                 )
@@ -4237,7 +4240,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         let buttonPosition = buttonOriginX + buttonWidth / 2.0
                         headerComponents.append({
                             context.add(wearButton
-                                .position(CGPoint(x: buttonPosition, y: headerHeight - buttonHeight / 2.0 - 16.0))
+                                .position(CGPoint(x: buttonPosition, y: headerHeight - buttonHeight / 2.0 - headerButtonsBottomInset))
                                 .appear(.default(scale: true, alpha: true))
                                 .disappear(.default(scale: true, alpha: true))
                             )
@@ -4262,7 +4265,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             let buttonPosition = buttonOriginX + buttonWidth / 2.0
                             headerComponents.append({
                                 context.add(resellButton
-                                    .position(CGPoint(x: buttonPosition, y: headerHeight - buttonHeight / 2.0 - 16.0))
+                                    .position(CGPoint(x: buttonPosition, y: headerHeight - buttonHeight / 2.0 - headerButtonsBottomInset))
                                     .appear(.default(scale: true, alpha: true))
                                     .disappear(.default(scale: true, alpha: true))
                                 )
