@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import RichTextEditorUIKit
+import RichTextButtonIcons
 
 private func richTextFontSpec(_ attributes: InstantPageTextAttributes) -> RichTextFontSpec {
     let style: RichTextFontStyle
@@ -69,7 +70,9 @@ public extension InstantPageTheme {
                 adjacentSpacing: instantPageInlineButtonAdjacentSpacing,
                 blockRowHeight: instantPageBlockButtonHeight,
                 blockSpacing: instantPageBlockButtonSpacing,
-                blockIconReserve: instantPageBlockButtonIconReserve,
+                blockIconReserve: richTextBlockButtonIconReserve,
+                inlineIconReserve: richTextInlineButtonIconReserve,
+                blockIconInset: richTextBlockButtonIconInset,
                 maximumButtonsPerRow: instantPageBlockButtonsPerRow
             )
         )

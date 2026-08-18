@@ -44,6 +44,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ShimmeringMask:ShimmeringMask",
         "//submodules/TelegramUI/Components/UnsupportedContentPill",
         "//submodules/TelegramUI/Components/TextLoadingEffect:TextLoadingEffect",
+        "//submodules/TelegramUI/Components/RichTextButtonIcons",
     ],
     visibility = [
         "//visibility:public",
@@ -65,6 +66,8 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TextFormat:TextFormat",
         "//submodules/TelegramUI/Components/UnsupportedContentPill",
+        "//submodules/TelegramUI/Components/RichTextButtonIcons",
+        "//submodules/TelegramUI/Components/RichTextEditorMessageConversion",
     ],
 )
 

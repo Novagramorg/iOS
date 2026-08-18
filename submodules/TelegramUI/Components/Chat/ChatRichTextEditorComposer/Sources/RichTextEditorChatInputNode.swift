@@ -8,6 +8,7 @@ import TextFormat
 import TelegramCore
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextButtonIcons
 import ChatInputTextNode
 import CheckNode
 import TelegramPresentationData
@@ -150,6 +151,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         }
     }
 
+    /// A button pill's type icon. Registered unconditionally rather than proxied through a host hook
+    /// like the formula renderer: the mapping is a pure function of the action, and it is GEOMETRY —
+    /// an inline pill grows by `inlineIconReserve` to hold its icon, so a composer that skipped it
+    /// would wrap a paragraph differently from the message it sends.
+    private func updateButtonIconProvider() {
+        self.editorView.registerButtonIconProvider(richTextEditorButtonIcon)
+    }
+
     public override func didLoad() {
         super.didLoad()
         // Model A: this node is the wrapper (the panel frames `asNode` to fill the clipping container);
@@ -287,6 +296,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Formula rendering is owned by the chat host; math-rendering dependencies live above this module.
         // Reinstalling when the provider arrives after `didLoad` reloads already-present formula atoms.
         self.updateFormulaRenderer()
+
+        self.updateButtonIconProvider()
 
         // Media rendering. The editor hosts each `.media` block via this provider, asking by the opaque host
         // `mediaID` (the node's own key, recorded in `mediaByID` by `registerMediaValue`). Resolve it back to

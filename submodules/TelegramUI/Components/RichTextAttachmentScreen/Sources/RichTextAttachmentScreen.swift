@@ -14,6 +14,7 @@ import MultilineTextComponent
 import EdgeEffect
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextButtonIcons
 import RichTextEditorMediaView
 import InstantPageUI
 import ContextUI
@@ -1376,6 +1377,10 @@ final class RichTextAttachmentScreenComponent: Component {
                         descent: attachment.rendered.descent
                     )
                 }
+
+                // A pill's type icon is also its geometry — an inline pill grows to hold it — so this
+                // must be registered before the first reload, alongside the other providers.
+                editor.registerButtonIconProvider(richTextEditorButtonIcon)
 
                 editor.onEditFormulaRequested = { [weak self] latex, completion in
                     guard let self, let component = self.component else {

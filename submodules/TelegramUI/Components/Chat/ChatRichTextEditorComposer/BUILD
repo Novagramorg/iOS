@@ -22,6 +22,7 @@ swift_library(
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
+        "//submodules/TelegramUI/Components/RichTextButtonIcons",
         "//submodules/TelegramUI/Components/Chat/ChatInputTextNode",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/Components/BundleIconComponent",

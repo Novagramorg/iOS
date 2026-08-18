@@ -30,10 +30,22 @@ final class ButtonTextAttachment: NSTextAttachment {
     /// Resolved at construction from the theme + the button's colour role, and kept so a row box can
     /// re-render the same pill at its stretched column width without re-deriving them.
     let colors: (fill: UIColor, label: UIColor)
+    /// The type icon, or nil when the action has none. Resolved here, alongside the width held for it,
+    /// so what is drawn and what was measured cannot disagree. The ink itself is produced at draw time,
+    /// where the tint is known — see `RichTextButtonIcon`.
+    let icon: RichTextButtonIcon?
+    /// Trailing width inside `size` held for `icon` on an INLINE pill; 0 when there is no icon and for
+    /// every block pill, whose badge is a corner overlay. Mirrors
+    /// `InstantPageInlineButtonAttachment.iconReserve`.
+    let iconReserve: CGFloat
+    /// Which placement `icon` is drawn at. Fixed at construction: a pill is built by exactly one kind
+    /// of owner and never changes kind.
+    let isBlockPill: Bool
 
     init(button: ButtonRef, labelString: NSAttributedString, size: CGSize, ascent: CGFloat,
          descent: CGFloat, horizontalPadding: CGFloat, isTruncated: Bool = false,
-         colors: (fill: UIColor, label: UIColor)) {
+         colors: (fill: UIColor, label: UIColor), icon: RichTextButtonIcon? = nil, iconReserve: CGFloat = 0.0,
+         isBlockPill: Bool = false) {
         self.button = button
         self.labelString = labelString
         self.size = size
@@ -42,6 +54,9 @@ final class ButtonTextAttachment: NSTextAttachment {
         self.horizontalPadding = horizontalPadding
         self.isTruncated = isTruncated
         self.colors = colors
+        self.icon = icon
+        self.iconReserve = iconReserve
+        self.isBlockPill = isBlockPill
         super.init(data: nil, ofType: nil)
         // A 1x1 clear spacer, exactly as `EmojiTextAttachment` uses: it makes TextKit call
         // `attachmentBounds` and reserve the pill's box, while the VISIBLE pill is a hosted

@@ -569,6 +569,22 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Registers a host-provided button type icon. The icon depends on the button's ACTION, and this
+    /// package's Telegram-free model carries every action it cannot name as an opaque blob — only the
+    /// host can decode that back into the action its InstantPage V2 counterpart resolves an icon from.
+    ///
+    /// It is geometry as much as decoration: an inline pill grows by `inlineIconReserve` to hold its
+    /// icon, so registering (or not) moves the line break of any paragraph holding a button. Register it
+    /// alongside the other providers, before the first reload, exactly as with the formula renderer.
+    public func registerButtonIconProvider(_ provider: @escaping (ButtonAction) -> RichTextButtonIcon?) {
+        canvas.mapper.buttonIconProvider = provider
+        let blocks = canvas.currentBlocks()
+        if !blocks.isEmpty {
+            canvas.reload(blocks, width: canvas.effectiveWidth)
+            performLayout(size: bounds.size)
+        }
+    }
+
     /// Called when the user taps an existing formula atom. The host presents UI and invokes `completion`
     /// with the replacement LaTeX.
     /// Asked to present the pill property sheet when a pill is tapped — for BOTH pill kinds. The

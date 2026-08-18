@@ -720,7 +720,8 @@ model layer from the V2 rendering built on top of it.
 | `submodules/TelegramCore/Sources/SyncCore/SyncCore_InstantPage.swift` | `case buttonRow` (tag **31**), `case document` (tag **32**), codecs, and the `allMedia(mediaDict:)` arm. |
 | `submodules/TextFormat/Tests/` | `InstantPageButtonModelTests`, `RichTextButtonTests`, `InstantPageBlockNewCasesTests` — 24 tests over both codecs. |
 | `submodules/InstantPageUI/Sources/InstantPageInlineButton.swift` | `InstantPageInlineButtonAttachment` (the measured payload) + `instantPageInlineButtonAttachment(button:labelString:maxWidth:)`, the **single** construction path for both inline and row pills, incl. the ellipsis truncation + `instantPageButtonColors(_:theme:isInline:isDisabled:)` + the padding and font-size constants. |
-| `submodules/InstantPageUI/Sources/InstantPageV2ButtonViews.swift` | `InstantPageV2ButtonPillView` (one pill: `backgroundColor` fill + press state + label recolour + the `TextLoadingEffectView` shimmer and its `Promise<Bool>` subscription), `InstantPageV2ButtonPillContentView` (draws the label + badge), `InstantPageV2InlineButtonView`, `InstantPageV2ButtonRowView`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2ButtonViews.swift` | `InstantPageV2ButtonPillView` (one pill: `backgroundColor` fill + press state + label recolour + the `TextLoadingEffectView` shimmer and its `Promise<Bool>` subscription), `InstantPageV2ButtonPillContentView` (draws the label + type icon, at whichever placement its `isInline` selects), `InstantPageV2InlineButtonView`, `InstantPageV2ButtonRowView`. |
+| `submodules/TelegramUI/Components/RichTextButtonIcons/` | The action → icon mapping, its sizes/insets, and the `richTextEditorButtonIcon` bridge the editor hosts register. A leaf module because both the renderer and the editor need it — see "The type icon". |
 | `submodules/InstantPageUI/Sources/InstantPageV2DocumentContentNode.swift` | `InstantPageV2DocumentContentNode` (file row) + `InstantPageV2DocumentView` (item view). |
 | `submodules/InstantPageUI/Sources/InstantPageTextStyleStack.swift` | `.semibold` / `.medium` baseline weights (button labels are semibold regardless of the surrounding paragraph) + the `InstantPageInlineButtonAttribute` key. |
 | `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `buttonDangerColor`, `buttonSuccessColor`, `checkboxFill`, `checkboxForeground` — all defaulted, all threaded through `withUpdatedFontStyles`. |
@@ -734,12 +735,52 @@ model layer from the V2 rendering built on top of it.
 | Vertical inner padding | 1pt | implied by the fixed height |
 | Height | derived: label ink + 2·vPad | fixed **40pt** (a touch target) |
 | Corner radius | `bounds.height / 2` (capsule) | `bounds.height / 2` → 20pt |
-| Width | label ink + 2·hPad, capped at the line width | justify: equal share of the row, wrapping at 8; left/center/right: label ink + 2·(badge ? 18 : 7), greedy wrap |
+| Width | label ink + 2·hPad + (icon ? 14 : 0), capped at the line width | justify: equal share of the row, wrapping at 8; left/center/right: label ink + 2·(badge ? 18 : 7), greedy wrap |
+| Type icon | trailing the label: 4pt gap + a 10×10 box, centred on the label's **cap** box | 10×10 badge inset 8/6 from the top-right corner |
 
 Font sizes are **fixed**, not scaled by the Instant View font-size setting — the chat bubble's own text
 categories are hardcoded too. The two pill shapes therefore read differently side by side: a block pill
 is much taller than an inline one, and its radius is correspondingly larger. If they ever need to look
 related, a fixed radius rather than `height / 2` is the lever.
+
+### The type icon
+
+Both pill kinds carry the bot-keyboard type icon for their action, from the one mapping in
+`submodules/TelegramUI/Components/RichTextButtonIcons` (`richTextButtonIconName(for:)`). The
+**placement differs by kind, and that is forced, not stylistic**: an inline pill is the label's ink box
+plus 2pt of padding — about 20pt tall — so a corner badge has nowhere to sit without being shaved by
+the capsule clip. An inline icon therefore trails the label on the same optical line and the pill is
+measured `richTextInlineButtonIconReserve` (14pt) wider to hold it.
+
+That module exists as its own leaf rather than living in `InstantPageUI` because **both** the V2
+renderer and the rich-text editor draw these, and the editor's composer host cannot import
+`InstantPageUI` — `InstantPageUI` already depends on `ChatRichTextEditorComposer`, so that edge would
+be a cycle.
+
+- **The inline reserve is unconditional width, so it moves line breaks.** Unlike the block badge's
+  side inset (which only binds in the row layout's tight-padding fallback), it widens every
+  icon-bearing inline pill, and therefore re-wraps the paragraph the pill sits in. This is why the
+  editor must reserve the identical amount even where it draws nothing — `RichTextButtonMetrics`
+  carries `inlineIconReserve`, pinned to the renderer's constant by `RichTextV2ButtonParityTests`.
+- **The reserve belongs to the label+icon GROUP, not to the label.** `instantPageButtonLabelOrigin`
+  recovers the label's ink width as `size.width − 2·padding − iconReserve` and centres the whole
+  group. Omitting either subtraction slides the label right by half the reserve — and drags the
+  custom-emoji squares with it, since they are derived from that same origin.
+- **The icon centres on the label's cap box, not the pill box** (`baseline − capHeight/2`). The pill's
+  box is asymmetric around the text because it also holds the descender, so pill-centring sits the icon
+  visibly low against the letters it follows. The two differ by ~0.6pt at 15pt.
+- **Whether there is an icon is a separate question from whether its image loaded.** The editor's seam
+  (`RichTextButtonIcon`) answers existence from the pure action → name lookup and produces the ink
+  lazily through a tint closure. A bare `UIImage?` would conflate the two: an asset that fails to load
+  (an unbundled unit test, a renamed file) would silently re-flow every paragraph holding a button, and
+  only in the editor — the renderer decides the same question from the name and would keep reserving.
+  The closure also lets the row packer ask the question per padding attempt without rasterising.
+- **The editor's icon must be resolved through `ButtonActionCodec`, not from `ButtonAction` directly.**
+  `RichTextEditorCore` can name only `url` / `copyText` / `disabled`; every other action travels as an
+  opaque `.unsupported(kind:payload:)`. `richTextEditorButtonIcon` decodes it back so a
+  `.openUserProfile` button draws the profile icon in the composer, and — the case that actually bites
+  — so an iconless `.callback` reserves nothing on either side. `richTextButtonHasBadge` remains as the
+  coarse fallback for an editor with no provider registered, and is wrong for exactly that case.
 
 ### Non-obvious invariants
 

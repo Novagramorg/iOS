@@ -760,7 +760,8 @@ final class DocumentCanvasView: UIView {
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection,
-                                             formulaRenderer: self.mapper.formulaRenderer)
+                                             formulaRenderer: self.mapper.formulaRenderer,
+                                             buttonIconProvider: self.mapper.buttonIconProvider)
         self.blockquoteUnderlay.barWidth = q.barWidth
         self.blockquoteUnderlay.cornerRadius = q.cornerRadius
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
@@ -797,7 +798,8 @@ final class DocumentCanvasView: UIView {
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection,
-                                             formulaRenderer: self.mapper.formulaRenderer)
+                                             formulaRenderer: self.mapper.formulaRenderer,
+                                             buttonIconProvider: self.mapper.buttonIconProvider)
     }
 
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose

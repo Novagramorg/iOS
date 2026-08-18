@@ -4,6 +4,8 @@ import TelegramCore
 import RichTextEditorCore
 @testable import InstantPageUI
 @testable import RichTextEditorUIKit
+import RichTextButtonIcons
+import RichTextEditorMessageConversion
 
 /// The editor cannot import `InstantPageUI` — that edge is a dependency cycle, since this very test
 /// target imports `RichTextEditorUIKit`. So the editor's pill geometry is a host-supplied contract
@@ -23,7 +25,9 @@ final class RichTextV2ButtonParityTests: XCTestCase {
         XCTAssertEqual(m.blockRowHeight, instantPageBlockButtonHeight)
         XCTAssertEqual(m.maximumButtonsPerRow, instantPageBlockButtonsPerRow)
         XCTAssertEqual(m.blockSpacing, instantPageBlockButtonSpacing)
-        XCTAssertEqual(m.blockIconReserve, instantPageBlockButtonIconReserve)
+        XCTAssertEqual(m.blockIconReserve, richTextBlockButtonIconReserve)
+        XCTAssertEqual(m.inlineIconReserve, richTextInlineButtonIconReserve)
+        XCTAssertEqual(m.blockIconInset, richTextBlockButtonIconInset)
     }
 
     /// The article editor sources its metrics from the renderer's constants via the theme adapter, so
@@ -69,6 +73,7 @@ final class RichTextV2ButtonParityTests: XCTestCase {
         let packed = richTextPackButtonRow(
             buttons: buttons, alignment: alignment, availableWidth: width,
             metrics: .default, isRTL: rtl,
+            hasIcon: { mapper.buttonHasIcon($0.action) },
             measure: { mapper.buttonAttachment(button: $0, isBlockPill: true, maxWidth: $1, horizontalPadding: $2) })
         return (packed.frames, packed.totalHeight)
     }
@@ -95,6 +100,7 @@ final class RichTextV2ButtonParityTests: XCTestCase {
         let buttons = labels.map { ButtonRef(label: [TextRun(text: $0)], action: action) }
         let packed = richTextPackButtonRow(
             buttons: buttons, alignment: alignment, availableWidth: width, metrics: .default, isRTL: false,
+            hasIcon: { mapper.buttonHasIcon($0.action) },
             measure: { mapper.buttonAttachment(button: $0, isBlockPill: true, maxWidth: $1, horizontalPadding: $2) })
         return packed.attachments.map { $0.labelString.string }
     }
@@ -234,5 +240,82 @@ final class RichTextV2ButtonParityTests: XCTestCase {
         let editorColors = RichTextEditorTheme.default.resolvedButtonColors(color: nil, isDisabled: false, isLink: true)
         XCTAssertEqual(editorColors.fill, .clear)
     }
-}
 
+    // MARK: - The inline type icon
+
+    /// An inline pill's icon reserve is UNCONDITIONAL width, unlike the block badge's side inset, so a
+    /// disagreement here moves the line break of every paragraph holding a button — the composer would
+    /// wrap differently from the message it sends.
+    private func rendererInlineWidth(action: ReplyMarkupButtonAction) -> CGFloat {
+        // See `rendererEntries`: the `.textButton` arm's style stack resolves to exactly this face.
+        let font = UIFont.systemFont(ofSize: instantPageInlineButtonFontSize, weight: .semibold)
+        return instantPageInlineButtonAttachment(
+            button: InstantPageButton(text: .plain("Open"), action: action, color: nil),
+            labelString: NSAttributedString(string: "Open", attributes: [.font: font])
+        ).size.width
+    }
+
+    private func editorInlineWidth(action: ButtonAction) -> CGFloat {
+        var mapper = AttributedStringMapper()
+        mapper.buttonIconProvider = richTextEditorButtonIcon
+        return mapper.buttonAttachment(
+            button: ButtonRef(label: [TextRun(text: "Open")], action: action),
+            isBlockPill: false, maxWidth: nil
+        ).size.width
+    }
+
+    func testInlinePillWidthMatchesTheRendererWithAndWithoutAnIcon() {
+        XCTAssertEqual(self.editorInlineWidth(action: .url("https://telegram.org")),
+                       self.rendererInlineWidth(action: .url("https://telegram.org")),
+                       accuracy: 0.5, "icon-bearing")
+        XCTAssertEqual(self.editorInlineWidth(action: .disabled),
+                       self.rendererInlineWidth(action: .disabled),
+                       accuracy: 0.5, "iconless")
+    }
+
+    /// And that the difference is the reserve itself on BOTH sides — two equal widths could also mean
+    /// neither side reserved anything.
+    func testBothSidesChargeTheIconReserveToTheSamePill() {
+        XCTAssertEqual(self.rendererInlineWidth(action: .url("https://telegram.org"))
+                        - self.rendererInlineWidth(action: .disabled),
+                       richTextInlineButtonIconReserve, accuracy: 0.01)
+        XCTAssertEqual(self.editorInlineWidth(action: .url("https://telegram.org"))
+                        - self.editorInlineWidth(action: .disabled),
+                       richTextInlineButtonIconReserve, accuracy: 0.01)
+    }
+
+    /// The BLOCK badge's side inset must be exact too, not "anything unsupported probably has one".
+    /// `.callback` is iconless in the renderer, so it reserves nothing and keeps more of its label;
+    /// a coarse editor rule takes 18pt per side off the same pill and ellipsises it earlier.
+    ///
+    /// Asserted on the rendered labels rather than the frames: in the justified path every frame is the
+    /// column width no matter how much of the label survived.
+    func testTheBlockBadgeReserveIsExactForAnActionTheEditorCannotName() {
+        let labels = ["Subscribe now", "Open the website", "Read more", "Contact us"]
+        let callbackAction = ReplyMarkupButtonAction.callback(requiresPassword: false,
+                                                             data: EngineMemoryBuffer(data: Data([0x01, 0x02])))
+        var mapper = AttributedStringMapper()
+        mapper.buttonIconProvider = richTextEditorButtonIcon
+        let buttons = labels.map { ButtonRef(label: [TextRun(text: $0)], action: buttonAction(from: callbackAction)) }
+        let packed = richTextPackButtonRow(
+            buttons: buttons, alignment: .justify, availableWidth: 320.0, metrics: .default, isRTL: false,
+            hasIcon: { mapper.buttonHasIcon($0.action) },
+            measure: { mapper.buttonAttachment(button: $0, isBlockPill: true, maxWidth: $1, horizontalPadding: $2) })
+
+        XCTAssertEqual(packed.attachments.map { $0.labelString.string },
+                       self.rendererLabels(labels: labels, alignment: .justify, width: 320.0, action: callbackAction))
+    }
+
+    /// An action the editor cannot NAME is still resolved to the renderer's icon decision, by decoding
+    /// the opaque blob back through `ButtonActionCodec`. `.callback` is the case that matters: it is
+    /// iconless in the renderer, and a coarse "unsupported means it has one" rule would reserve 14pt
+    /// the sent message does not.
+    func testAnUnsupportedCallbackActionReservesNothingOnEitherSide() {
+        let callback = buttonAction(from: .callback(requiresPassword: false, data: EngineMemoryBuffer(data: Data([0x01, 0x02]))))
+        guard case .unsupported = callback else {
+            return XCTFail("a callback action should travel as .unsupported")
+        }
+        XCTAssertEqual(self.editorInlineWidth(action: callback),
+                       self.rendererInlineWidth(action: .disabled), accuracy: 0.5)
+    }
+}
