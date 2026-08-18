@@ -323,6 +323,7 @@ private final class GiftMessageScreenComponent: Component {
                     hasStickers: false,
                     hasGifs: false,
                     hideBackground: true,
+                    maskEdge: .clip,
                     forceHasPremium: true,
                     sendGif: nil
                 )

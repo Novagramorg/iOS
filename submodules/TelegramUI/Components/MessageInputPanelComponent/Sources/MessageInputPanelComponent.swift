@@ -1242,6 +1242,8 @@ public final class MessageInputPanelComponent: Component {
             }
             
             let baseFieldHeight: CGFloat = 40.0
+            let giftSendButtonContainerSize = CGSize(width: 40.0, height: 40.0)
+            let giftSendButtonRightInset: CGFloat = 2.0
             
             var transition = transition
             let previousComponent = self.component
@@ -1879,7 +1881,10 @@ public final class MessageInputPanelComponent: Component {
                     containerSize: availableTextFieldSize
                 )
                 var counterFrame = CGRect(origin: CGPoint(x: availableSize.width - insets.right + floorToScreenPixels((insets.right - counterSize.width) * 0.5), y: size.height - insets.bottom - baseFieldHeight - counterSize.height - 5.0), size: counterSize)
-                if case .videoChat = component.style {
+                if component.style == .gift && component.displayGiftSendButton {
+                    let giftSendButtonCenterX = fieldBackgroundFrame.maxX - giftSendButtonRightInset - giftSendButtonContainerSize.width * 0.5
+                    counterFrame.origin.x = floorToScreenPixels(giftSendButtonCenterX - counterSize.width * 0.5)
+                } else if case .videoChat = component.style {
                     counterFrame.origin.x -= 7.0
                 }
                 if let counterView = self.counter.view {
@@ -2063,7 +2068,7 @@ public final class MessageInputPanelComponent: Component {
                 inputActionButtonAlpha = component.displayGiftSendButton ? 1.0 : 0.0
                 inputActionButtonMode = component.displayGiftSendButton ? .send : .apply
                 if component.displayGiftSendButton {
-                    inputActionButtonAvailableSize = CGSize(width: 40.0, height: 40.0)
+                    inputActionButtonAvailableSize = giftSendButtonContainerSize
                 }
             } else if case .editor = component.style {
                 if isEditing {
@@ -2240,7 +2245,7 @@ public final class MessageInputPanelComponent: Component {
                 }
             } else {
                 if component.style == .gift && component.displayGiftSendButton {
-                    inputActionButtonOriginX = fieldBackgroundFrame.maxX - inputActionButtonSize.width - 2.0
+                    inputActionButtonOriginX = fieldBackgroundFrame.maxX - inputActionButtonSize.width - giftSendButtonRightInset
                 } else if component.setMediaRecordingActive != nil || isEditing || component.style == .videoChat {
                     switch component.style {
                     case .videoChat:

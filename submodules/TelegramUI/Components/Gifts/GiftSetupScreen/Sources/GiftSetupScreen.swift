@@ -1003,6 +1003,7 @@ private final class GiftSetupScreenComponent: Component {
                         hasStickers: false,
                         hasGifs: false,
                         hideBackground: true,
+                        maskEdge: .clip,
                         forceHasPremium: true,
                         sendGif: nil
                     )
