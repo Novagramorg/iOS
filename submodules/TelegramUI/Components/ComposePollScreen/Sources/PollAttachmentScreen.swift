@@ -92,7 +92,7 @@ public func presentPollAttachmentScreen(
                 hasStickers: true,
                 hasGifs: false,
                 hideBackground: true,
-                maskEdge: .fade,
+                maskEdge: .clip,
                 sendGif: nil
             )
             |> map(Optional.init)

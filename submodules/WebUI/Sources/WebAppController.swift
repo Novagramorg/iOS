@@ -3520,7 +3520,9 @@ public final class WebAppController: ViewController, AttachmentContainable {
                                             elevatedLayout: true,
                                             action: { action in
                                                 if case .undo = action {
-                                                    
+                                                    let _ = updateWebAppPermissionsStateInteractively(context: context, peerId: botId) { current in
+                                                        return WebAppPermissionsState(location: WebAppPermissionsState.Location(isRequested: true, isAllowed: false), emojiStatus: current?.emojiStatus)
+                                                    }.startStandalone()
                                                 }
                                                 return true
                                             }

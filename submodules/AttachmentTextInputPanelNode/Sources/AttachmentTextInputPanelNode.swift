@@ -552,6 +552,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
                 hasTrending: false,
                 hasStickers: false,
                 hasGifs: false,
+                maskEdge: .clip,
                 sendGif: nil
             )
         )

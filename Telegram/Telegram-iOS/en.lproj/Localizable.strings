@@ -16615,7 +16615,7 @@ Error: %8$@";
 "WelcomeMessages.ServiceHeader1" = "New members will see this message when they join";
 "WelcomeMessages.ServiceHeader2" = "Touch and hold it to delete it";
 "WelcomeMessages.MessageLimitReachedText_1" = "Limit of %@ message reached";
-"WelcomeMessages.MessageLimitReachedText_aby" = "Limit of %@ messages reached";
+"WelcomeMessages.MessageLimitReachedText_any" = "Limit of %@ messages reached";
 "Chat.Placeholder.WelcomeMessage" = "Add a message...";
 
 "Chat.EphemeralMessage.BadgeYou" = "Only visible to you";
@@ -16653,3 +16653,13 @@ Error: %8$@";
 "RichText.ButtonRowAdd" = "Add Button";
 "RichText.Menu.Table.BordersOn" = "Show Borders";
 "RichText.Menu.Table.BordersOff" = "Hide Borders";
+
+"Notification.JoinedGroupViaCommunity" = "%@ joined the group via community";
+"Notification.JoinedGroupViaCommunityYou" = "You joined the group via community";
+"Gift.Message.InputPlaceholder" = "Add message…";
+"Gift.Message.MakePublic" = "Make message public";
+"Gift.Message.PreviewInChat" = "Preview in chat";
+"Gift.Message.SendNow" = "Send Now";
+"Gift.Message.ToastText" = "You can add a message for **%@** or send **%@** right away.";
+"Gift.Message.ToastTitle" = "Add Message";
+"Gift.Message.YourMessage" = "Your message...";

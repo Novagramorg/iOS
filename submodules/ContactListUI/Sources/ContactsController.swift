@@ -213,7 +213,7 @@ public class ContactsController: ViewController {
             |> deliverOnMainQueue).start(next: { [weak self] status, suppressedAndSortOrder in
                 if let strongSelf = self {
                     let (suppressed, sortOrder) = suppressedAndSortOrder
-                    strongSelf.tabBarItem.badgeValue = status != .allowed && !suppressed ? "!" : nil
+                    strongSelf.tabBarItem.badgeValue = ![.allowed, .limited].contains(status) && !suppressed ? "!" : nil
                     strongSelf.sortOrderPromise.set(.single(sortOrder))
                 }
             }).strict()

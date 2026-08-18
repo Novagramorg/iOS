@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/AsyncDisplayKit",
+        "//submodules/CheckNode",
         "//submodules/Display",
         "//submodules/Postbox",
         "//submodules/TelegramCore",
@@ -53,6 +54,7 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/TelegramUI/Components/MessageInputPanelComponent",
         "//submodules/TelegramUI/Components/Gifts/GiftRemainingCountComponent",
+        "//submodules/UndoUI",
     ],
     visibility = [
         "//visibility:public",
