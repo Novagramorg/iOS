@@ -34,8 +34,30 @@ public func attributedString(from content: ChatInputContent, renderListMarkers: 
         isFirst = false
     }
 
-    func appendRuns(_ paragraph: ChatInputParagraph) {
-        for run in paragraph.runs {
+    /// Marks everything appended since `start` as a quote — except where a `.block` attribute is
+    /// already set. The recursed content of a quote can carry its own block attributes (a code block,
+    /// a nested quote); legacy cannot express the nesting either way, and the inner one is the more
+    /// specific of the two, so it wins. Ranges are collected before being written so the enumeration
+    /// is not mutating what it walks.
+    func applyQuoteBlockAttribute(from start: Int) {
+        let length = result.length - start
+        guard length > 0 else {
+            return
+        }
+        var unattributed: [NSRange] = []
+        result.enumerateAttribute(ChatTextInputAttributes.block, in: NSRange(location: start, length: length), options: []) { value, range, _ in
+            if value == nil {
+                unattributed.append(range)
+            }
+        }
+        let quoteAttribute = ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false)
+        for range in unattributed {
+            result.addAttribute(ChatTextInputAttributes.block, value: quoteAttribute, range: range)
+        }
+    }
+
+    func appendRuns(_ runs: [ChatInputRun]) {
+        for run in runs {
             let piece = NSMutableAttributedString(string: run.text)
             let r = NSRange(location: 0, length: piece.length)
             let a = run.attributes
@@ -97,24 +119,19 @@ public func attributedString(from content: ChatInputContent, renderListMarkers: 
                     orderedCounters.removeAll()   // a non-list paragraph ends any ordered run
                 }
             }
-            appendRuns(paragraph)
+            appendRuns(paragraph.runs)
         case let .pullQuote(pq):
             // Legacy UITextView projection: render pull-quote text as a quote-attributed block, mirroring `.code`.
             // The native Document ↔ ChatInputContent bridge bypasses this path for pull-quote blocks entirely.
             appendSeparatorIfNeeded()
             let start = result.length
-            result.append(NSAttributedString(string: pq.text))
-            let len = result.length - start
-            if len > 0 {
-                result.addAttribute(ChatTextInputAttributes.block,
-                    value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
-                    range: NSRange(location: start, length: len))
-            }
+            appendRuns(pq.runs)
+            applyQuoteBlockAttribute(from: start)
         case let .blockQuote(bq):
             // Legacy UITextView projection for the structured blockQuote. The native Document ↔ ChatInputContent
             // bridge bypasses this path entirely (like `.pullQuote`). For the flat view:
             // - collapsed → " " placeholder with `.collapsedBlock`
-            // - expanded → inner plain text with `.block` / `.quote` attribute (mirrors quote paragraphs)
+            // - expanded → inner content with `.block` / `.quote` attribute (mirrors quote paragraphs)
             appendSeparatorIfNeeded()
             if bq.collapsed {
                 result.append(NSAttributedString(string: " ", attributes: [
@@ -122,13 +139,15 @@ public func attributedString(from content: ChatInputContent, renderListMarkers: 
                 ]))
             } else {
                 let start = result.length
-                result.append(NSAttributedString(string: bq.content.plainText))
-                let len = result.length - start
-                if len > 0 {
-                    result.addAttribute(ChatTextInputAttributes.block,
-                        value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
-                        range: NSRange(location: start, length: len))
-                }
+                // Recursed, NOT `bq.content.plainText`. A bare string throws away every inline attribute
+                // inside the quote — custom emoji, bold, links, mentions, spoilers — and this projection
+                // is what the send path serialises (`expandedInputStateAttributedString(inputText)`), so
+                // the loss reached the wire: a custom emoji in a quote arrived as its `alt` text.
+                // The recursion emits the same characters (`plainText` for a quote IS its content's
+                // `plainText`, and the default `renderListMarkers: false` adds none of its own), so the
+                // flat axis every selection offset is measured against does not move.
+                result.append(attributedString(from: bq.content, renderListMarkers: renderListMarkers))
+                applyQuoteBlockAttribute(from: start)
             }
         case .media, .table, .details, .buttonRow:
             // INTENTIONAL render-only filter (not deferred): the legacy `UITextView` composer cannot represent a
