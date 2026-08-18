@@ -470,8 +470,9 @@ final class CanvasPullQuoteEditTests: XCTestCase {
                              "block above the pull quote must reserve the extra framed-neighbor margin")
         XCTAssertGreaterThan(below.topInset, BlockBox.defaultVerticalInset,
                              "block below the pull quote must reserve the extra framed-neighbor margin")
-        XCTAssertEqual(above.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5,
-                       "far side (away from the pull quote) must be unaffected")
+        XCTAssertEqual(above.topInset,
+                       richTextSpacingBetweenBlocks(upper: nil, lower: .paragraph, kind: .topLevel, metrics: .default),
+                       accuracy: 0.01, "far side (away from the pull quote) is the document edge gap")
     }
 
     // MARK: - composerSelectedRange flat-axis coverage

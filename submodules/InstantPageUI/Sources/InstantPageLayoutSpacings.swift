@@ -70,6 +70,8 @@ extension InstantPageBlock {
             } else {
                 return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true, flushBelow: true)
             }
+        case .unsupported:
+            return InstantPageBlockSpacing(verticalPadding: 8.0)
         default:
             return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding)
         }

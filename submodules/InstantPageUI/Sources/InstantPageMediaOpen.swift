@@ -28,12 +28,16 @@ import LocationUI
 ///     the swipe-back animation; return `nil` if the source view is not on screen.
 ///   - hiddenMediaCallback: invoked while the gallery is foregrounded so callers can hide the
 ///     source so the gallery's transitioning image isn't double-visible.
+///   - captureProtected: open a SECURE gallery — screenshot-excluded content, no share/save. Passed
+///     through by the chat bubble for a copy-protected rich message; defaults to `false` for V1
+///     Instant View and web IV, whose pages are public web content.
 public func openInstantPageMedia(
     media: InstantPageMedia,
     allMedias: [InstantPageMedia],
     webPage: TelegramMediaWebpage,
     context: AccountContext,
     userLocation: MediaResourceUserLocation,
+    captureProtected: Bool = false,
     present: (ViewController, Any?) -> Void,
     push: (ViewController) -> Void,
     openUrl: @escaping (InstantPageUrlItem) -> Void,
@@ -93,7 +97,7 @@ public func openInstantPageMedia(
     }
 
     if let centralIndex = centralIndex {
-        let controller = InstantPageGalleryController(context: context, userLocation: userLocation, webPage: webPage, entries: entries, centralIndex: centralIndex, fromPlayingVideo: fromPlayingVideo, replaceRootController: { _, _ in
+        let controller = InstantPageGalleryController(context: context, userLocation: userLocation, webPage: webPage, entries: entries, centralIndex: centralIndex, fromPlayingVideo: fromPlayingVideo, captureProtected: captureProtected, replaceRootController: { _, _ in
         }, baseNavigationController: baseNavigationController())
         let hiddenMediaDisposable = MetaDisposable()
         hiddenMediaDisposable.set((controller.hiddenMedia |> deliverOnMainQueue).start(next: { entry in

@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramCore
+import TelegramPresentationData
 import SwiftSignalKit
 import AccountContext
 import ChatMessageBubbleContentNode
@@ -312,6 +313,15 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         )
     }
 
+    /// Whether this message's media must be screenshot-protected, matching
+    /// `ChatMessageInteractiveMediaNode`'s rule for regular media messages (its third disjunct,
+    /// extended/paid media, cannot occur inside a rich message). Recomputed on every apply rather
+    /// than captured once: `isCopyProtectionEnabled` is a peer setting that can flip while the
+    /// bubble is on screen.
+    private static func isCaptureProtected(item: ChatMessageBubbleContentItem) -> Bool {
+        return item.associatedData.isCopyProtectionEnabled || item.message.isCopyProtected()
+    }
+
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse
     /// the existing view, updating only the webpage content in place. The view is rebuilt when the
     /// bubble is recycled with a genuinely different message (different `stableId`), and — since
@@ -331,6 +341,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // still be in flight when a scroll recycle rebuilds for a different message, which would
         // fade the recycled bubble in for no reason.
         var crossfadeIn = false
+
+        // Copy protection is a peer setting that can flip without any of the keys below changing,
+        // so refresh it up front — ahead of every reuse branch, including the early returns. The
+        // rebuild path picks the same value up through the render context's initializer.
+        self.pageView?.renderContext?.updateCaptureProtected(ChatMessageRichDataBubbleContentNode.isCaptureProtected(item: item))
+
         let key = (stableId: item.message.stableId, messageId: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), richPageKey: richPageKey, showMoreExpanded: showMoreExpanded, structure: structure)
         if let existing = self.pageView, let current = self.pageViewMessageKey, current.stableId == key.stableId {
             if current.stableVersion == key.stableVersion && current.messageId == key.messageId && current.pendingEditKey == key.pendingEditKey && current.richPageKey == key.richPageKey && current.showMoreExpanded == key.showMoreExpanded {
@@ -439,6 +455,10 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 guard enabled else { return false }
                 return policyContext.engine.resources.completedResourcePath(id: EngineMediaResource.Id(file.resource.id)) != nil
             },
+            wallpaperBackgroundNode: { [weak self] in
+                return self?.item?.controllerInteraction.presentationContext.backgroundNode
+            },
+            captureProtected: ChatMessageRichDataBubbleContentNode.isCaptureProtected(item: item),
             message: messageReference
         )
         let view = InstantPageV2View(renderContext: renderContext)
@@ -448,6 +468,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         self.containerNode.view.addSubview(view)
         if crossfadeIn {
             view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
+        }
+        view.unsupportedActionTapped = { [weak self] in
+            guard let item = self?.item else {
+                return
+            }
+            item.controllerInteraction.openAppStorePage()
         }
         view.detailsTapped = { [weak self] index in
             guard let self else { return }
@@ -591,6 +617,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 let isDark = item.presentationData.theme.theme.overallDarkAppearance
                 let isIncoming = item.message.effectivelyIncoming(item.context.account.peerId)
                 let messageTheme = isIncoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
+                // Service-message colours for the unsupported-content pill, so a pill inside this
+                // bubble matches the standalone unsupported bubble rather than the bubble's palette.
+                let serviceColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper)
                 
                 var underlineLinks = true
                 if !messageTheme.primaryTextColor.isEqual(messageTheme.linkTextColor) {
@@ -657,16 +686,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 let _ = codeBlockTitleColor
                 let _ = codeBlockAccentColor
                 
-                let textCategories = InstantPageTextCategories(
-                    kicker: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
-                    header: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 24.0, lineSpacingFactor: 1.0, weight: .medium), color: messageTheme.primaryTextColor),
-                    subheader: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: instantPageNominalSubheaderFontSize, lineSpacingFactor: 1.0, weight: .medium), color: messageTheme.primaryTextColor),
-                    paragraph: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 17.0, lineSpacingFactor: 0.9), color: messageTheme.primaryTextColor),
-                    caption: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.secondaryTextColor),
-                    credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: messageTheme.secondaryTextColor),
-                    table: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
-                    article: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 18.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
-                    codeBlock: InstantPageTextAttributes(font: InstantPageFont(style: .monospace, size: 14.0, lineSpacingFactor: 1.0), color: messageTheme.primaryTextColor),
+                let textCategories = InstantPageTextCategories.chatMessage(
+                    primaryText: messageTheme.primaryTextColor,
+                    secondaryText: messageTheme.secondaryTextColor
                 )
                 let tableHeaderColor = isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.1) : UIColor(white: 0.0, alpha: 0.05)
                 let pageTheme = InstantPageTheme(
@@ -680,7 +702,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     linkHighlightColor: messageTheme.linkTextColor.withMultipliedAlpha(0.1),
                     markerColor: UIColor(rgb: 0xfef3bc),
                     panelBackgroundColor: messageTheme.accentControlColor.withMultipliedAlpha(0.1),
-                    panelHighlightedBackgroundColor: messageTheme.accentControlColor.withMultipliedAlpha(0.25),
+                    panelHighlightedBackgroundColor: messageTheme.accentControlColor.withMultipliedAlpha(0.8),
                     panelPrimaryColor: messageTheme.primaryTextColor,
                     panelSecondaryColor: messageTheme.secondaryTextColor,
                     panelAccentColor: messageTheme.accentTextColor,
@@ -697,7 +719,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
                     checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor,
                     neutralButtonBackgroundColor: tableHeaderColor,
-                    neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor
+                    neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor,
+                    unsupportedPillFillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper),
+                    unsupportedPillPrimaryColor: serviceColor.primaryText
                 )
                 
                 var hasDraft = false
@@ -2094,6 +2118,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         let topMargin: CGFloat = 8.0
         let adjusted = CGRect(x: rect.minX, y: max(0.0, rect.minY - topMargin), width: rect.width, height: rect.height + topMargin)
         return self.view.convert(adjusted, from: pageView)
+    }
+
+    override public func unsupportedContentAreas() -> [CGRect] {
+        guard let layout = self.currentPageLayout?.layout, let pageView = self.pageView else {
+            return []
+        }
+        // Converting through the view hierarchy rather than re-deriving `pageContentInset` and the
+        // streaming-header offset by hand: those are the layout pass's business, and a second copy
+        // would drift. Safe mid-animation because every `ControlledTransitionAnimator.updateFrame`
+        // writes the model layer's position and bounds synchronously and animates *from* the old
+        // value, so the hierarchy already reports target geometry once apply returns.
+        return unsupportedContentTearZones(in: layout).map { self.view.convert($0, from: pageView) }
     }
 
     override public func reactionTargetView(value: MessageReaction.Reaction) -> UIView? {

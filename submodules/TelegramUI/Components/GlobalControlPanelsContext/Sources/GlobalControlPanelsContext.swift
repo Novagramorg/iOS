@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import SwiftSignalKit
 import TelegramCore
+import TelegramStringFormatting
 import AccountContext
 import TelegramUIPreferences
 import TelegramCallsUI
@@ -376,10 +377,11 @@ public final class GlobalControlPanelsContext {
                         }
                     }
                     
-                    let today = Calendar(identifier: .gregorian).component(.day, from: Date())
+                    let currentDate = Date()
+                    let currentTimeZone = TimeZone.current
                     var todayBirthdayPeerIds: [EnginePeer.Id] = []
                     for (peerId, birthday) in birthdays {
-                        if birthday.day == today {
+                        if relativeDateForBirthday(birthday, relativeTo: currentDate, timeZone: currentTimeZone) == .today {
                             todayBirthdayPeerIds.append(peerId)
                         }
                     }

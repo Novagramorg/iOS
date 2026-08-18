@@ -114,6 +114,13 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
         
         var avatarHeader: ChatMessageAvatarHeader?
         let incoming = content.effectivelyIncoming(self.context.account.peerId)
+        let isEphemeralMessage = Namespaces.Message.allEphemeral.contains(content.firstMessage.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(content.firstMessage.id.namespace)
+        let isEphemeralBroadcastMessage: Bool
+        if isEphemeralMessage, let channel = content.firstMessage.peers[content.firstMessage.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
+            isEphemeralBroadcastMessage = true
+        } else {
+            isEphemeralBroadcastMessage = false
+        }
         
         var effectiveAuthor: EngineRawPeer?
         var displayAuthorInfo: Bool
@@ -234,7 +241,7 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
             }
             
             var hasAvatar = false
-            if !hasActionMedia {
+            if !hasActionMedia && !isEphemeralBroadcastMessage {
                 if !isBroadcastChannel {
                     if let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.isMonoForum, chatLocation.threadId != nil {
                     } else {

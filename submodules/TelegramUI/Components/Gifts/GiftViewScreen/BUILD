@@ -61,6 +61,7 @@ swift_library(
         "//submodules/BotPaymentsUI",
         "//submodules/TelegramUI/Components/SegmentControlComponent",
         "//submodules/TelegramUI/Components/Gifts/GiftRemainingCountComponent",
+        "//submodules/TelegramUI/Components/Gifts/GiftSetupScreen",
         "//submodules/TelegramUI/Components/Gifts/InfoParagraphComponent",
         "//submodules/TelegramUI/Components/Gifts/TableComponent",
         "//submodules/TelegramUI/Components/Gifts/PeerTableCellComponent",

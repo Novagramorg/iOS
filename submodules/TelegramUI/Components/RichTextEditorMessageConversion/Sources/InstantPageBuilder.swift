@@ -12,7 +12,7 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
         let block = blocks[index]
         switch block {
         case let .paragraph(paragraph):
-            if let latex = standaloneFormulaLatex(from: paragraph) {
+            if let latex = paragraph.standaloneFormulaLatex {
                 pageBlocks.append(.formula(latex: latex))
                 index += 1
             } else if paragraph.list != nil {
@@ -116,6 +116,19 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             for (id, m) in innerPage.media { pageMedia[id] = m }
             pageBlocks.append(.details(title: richText(from: d.title), blocks: innerPage.blocks, expanded: d.expanded))
             index += 1
+        case let .buttonRow(row):
+            pageBlocks.append(.buttonRow(
+                alignment: instantPageRowAlignment(from: row.alignment),
+                buttons: row.buttons.map {
+                    InstantPageButton(
+                        text: richText(from: $0.label),
+                        action: replyMarkupButtonAction(from: $0.action),
+                        color: replyMarkupColor(from: $0.color),
+                        isLink: $0.isLink
+                    )
+                }
+            ))
+            index += 1
         }
     }
     return InstantPage(blocks: pageBlocks, media: pageMedia, isComplete: true, rtl: false, url: "", views: nil)
@@ -132,7 +145,7 @@ private func authorCaption(_ author: [TextRun], italic: Bool = false) -> RichTex
 
 /// A non-list, non-quote paragraph → a heading or a paragraph block.
 private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPageBlock {
-    if let latex = standaloneFormulaLatex(from: paragraph) {
+    if let latex = paragraph.standaloneFormulaLatex {
         return .formula(latex: latex)
     }
     let text = richText(from: paragraph.runs)
@@ -224,7 +237,7 @@ private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
         }
         return InstantPageTableRow(cells: cells)
     }
-    return .table(title: .empty, rows: rows, bordered: true, striped: false, compact: table.compact)
+    return .table(title: .empty, rows: rows, bordered: table.bordered, striped: false, compact: table.compact)
 }
 
 /// Concatenate a cell's paragraph blocks into one `RichText` (newline-joined). Images in cells dropped.
@@ -249,14 +262,4 @@ private func cellRichText(_ cell: Cell) -> RichText {
         joined.append(text)
     }
     return .concat(joined)
-}
-
-private func standaloneFormulaLatex(from paragraph: ParagraphBlock) -> String? {
-    guard paragraph.style == .body, paragraph.list == nil, paragraph.runs.count == 1 else {
-        return nil
-    }
-    guard let latex = paragraph.runs[0].attributes.formula, !latex.isEmpty else {
-        return nil
-    }
-    return latex
 }

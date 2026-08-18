@@ -498,6 +498,7 @@ extension StoreMessage {
             let peerId = apiPeerId.peerId
             let authorId = fromId.peerId
             let isWelcomeTemplate = (flags & (1 << 5)) != 0
+            let isForwardingDisabled = (flags & (1 << 12)) != 0
             let anchorMessageId = anchorMsgId.flatMap { id -> MessageId? in
                 guard !isWelcomeTemplate else {
                     return nil
@@ -506,7 +507,7 @@ extension StoreMessage {
             }
 
             var attributes: [MessageAttribute] = [
-                EphemeralMessageAttribute(receiverId: receiverId, isWelcomeTemplate: isWelcomeTemplate, anchorMessageId: anchorMessageId)
+                EphemeralMessageAttribute(receiverId: receiverId, isWelcomeTemplate: isWelcomeTemplate, anchorMessageId: anchorMessageId, isForwardingDisabled: isForwardingDisabled)
             ]
             var medias: [Media] = []
 

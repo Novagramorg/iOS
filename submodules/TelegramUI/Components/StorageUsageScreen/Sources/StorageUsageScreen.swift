@@ -7,6 +7,7 @@ import SwiftSignalKit
 import ViewControllerComponent
 import ComponentDisplayAdapters
 import TelegramPresentationData
+import PresentationDataUtils
 import AccountContext
 import TelegramCore
 import MultilineTextComponent
@@ -2879,9 +2880,7 @@ final class StorageUsageScreenComponent: Component {
                 return
             }
             let context = component.context
-            
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let actionSheet = ActionSheetController(presentationData: presentationData)
             
             let clearTitle: String
             if let _ = aggregatedData.peerId {
@@ -2893,20 +2892,19 @@ final class StorageUsageScreenComponent: Component {
                     clearTitle = presentationData.strings.StorageManagement_ClearSelected
                 }
             }
-            
-            actionSheet.setItemGroups([ActionSheetItemGroup(items: [
-                ActionSheetTextItem(title: presentationData.strings.StorageManagement_ClearConfirmationText, parseMarkdown: true),
-                ActionSheetButtonItem(title: clearTitle, color: .destructive, action: { [weak self, weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                    
-                    self?.commitClear(fromCategories: fromCategories)
-                })
-            ]), ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                })
-            ])])
-            self.controller?()?.present(actionSheet, in: .window(.root))
+            let alertController = textAlertController(
+                context: context,
+                title: presentationData.strings.StorageManagement_ClearConfirmationTitle,
+                text: presentationData.strings.StorageManagement_ClearConfirmationText,
+                actions: [
+                    TextAlertAction(type: .defaultAction, title: clearTitle, action: { [weak self] in
+                        self?.commitClear(fromCategories: fromCategories)
+                    }),
+                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
+                ],
+                actionLayout: .vertical
+            )
+            self.controller?()?.present(alertController, in: .window(.root))
         }
         
         private func commitClear(fromCategories: Bool) {

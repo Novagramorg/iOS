@@ -49,6 +49,7 @@ func makeBox(for block: Block, mapper: AttributedStringMapper,
                                                    quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
                                                    expandImage: expandImage,
                                                    collapseImage: collapseImage, width: width)
+    case .buttonRow(let r):      return ButtonRowBox(row: r, mapper: mapper, width: width)
     }
 }
 
@@ -73,6 +74,12 @@ final class DocumentCanvasView: UIView {
     /// Host hook for editing a formula atom. The editor supplies current LaTeX and a replacement callback;
     /// the host owns presentation and formula rendering dependencies.
     var formulaEditRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)?
+    /// Asked to present the pill property sheet. `isBlockPill` distinguishes a row pill from an inline
+    /// one (the host offers different properties per kind). The completion applies the edit; `nil`
+    /// deletes the pill.
+    var buttonEditRequested: ((_ button: ButtonRef, _ isBlockPill: Bool, _ completion: @escaping (ButtonRef?) -> Void) -> Void)?
+    /// Asked to present a row's alignment/delete menu.
+    var buttonRowMenuRequested: ((ButtonRowMenuRequest) -> Void)?
     /// Hosted emoji views, keyed by `EmojiRef.instanceID` so edits/undo reuse (not recreate) them.
     /// Plain `internal` (NOT `private(set)`): the reconciler in `DocumentCanvasView+Emoji.swift` mutates it.
     var emojiViews: [String: HostedEmoji] = [:]
@@ -136,6 +143,9 @@ final class DocumentCanvasView: UIView {
     var blockViewOverscan: CGFloat = -1
     /// Persistent block-view subviews, keyed by BlockID so edits/undo reuse (not recreate) them.
     private(set) var blockViews: [BlockID: BlockBackingView] = [:]
+    /// Hosted INLINE button pills, keyed by global position (see `syncButtonPillViews`). A block row's
+    /// pills are not here — they are subviews of the row's own `ButtonRowBackingView`.
+    var buttonPillViews: [Int: HostedButtonPill] = [:]
     /// Bounded reuse queue of free PARAGRAPH/IMAGE backing views (both plain `BlockBackingView`). A culled
     /// view is detached + dropped from `blockViews` and pushed here; a newly-realized paragraph/image pops
     /// it and rebinds. Tables (`TableBackingView`) are heavyweight + few, so they are created/destroyed,
@@ -777,15 +787,13 @@ final class DocumentCanvasView: UIView {
         self.quoteCollapseIcons = icons
     }
 
-    /// Applies tunable text-layout metrics: rebuilds the mapper's stylesheet with the line-height/spacing
-    /// fields (preserving the other stylesheet fields + theme/emojiScale/writing-direction — the stylesheet
-    /// is immutable). The caller reloads afterward (mirrors `applyQuoteStyle`). A compact host (the chat
-    /// composer) sets a tight variant so body/caption paragraphs use natural line height and no spacing.
-    func applyTextLayoutMetrics(_ m: TextLayoutMetrics) {
+    /// Applies host-supplied render metrics: rebuilds the mapper's stylesheet around them (preserving
+    /// the other stylesheet fields + theme/emojiScale/writing-direction — the stylesheet is immutable).
+    /// The caller reloads afterward (mirrors `applyQuoteStyle`). A host passes the metrics its
+    /// counterpart InstantPage V2 surface will use, so the editor is WYSIWYG against it.
+    func applyRenderMetrics(_ m: RichTextRenderMetrics) {
         var s = self.mapper.styleSheet
-        s.bodyLineHeightMultiple = m.bodyLineHeightMultiple
-        s.bodyParagraphSpacingBefore = m.bodyParagraphSpacingBefore
-        s.bodyParagraphSpacingAfter = m.bodyParagraphSpacingAfter
+        s.metrics = m
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection,
@@ -918,6 +926,13 @@ final class DocumentCanvasView: UIView {
                     t.pendingOffsetRestore = true                       // restore saved H-scroll on first layout
                     view = t
                     createdFreshTable = true
+                } else if box is ButtonRowBox {
+                    // Hosts a ButtonPillView per pill rather than drawing into its backing store, so a
+                    // pill label can carry a live custom emoji. Not recycled through the plain-view pool:
+                    // a recycled plain view would draw nothing and a recycled row view would keep stale
+                    // pill subviews.
+                    let r = ButtonRowBackingView(); r.canvas = self
+                    view = r
                 } else {
                     view = dequeueRecycledView()                        // reuse (or create) a plain backing view
                 }
@@ -948,7 +963,10 @@ final class DocumentCanvasView: UIView {
         for (id, view) in blockViews where !wantedIDs.contains(id) {
             view.removeFromSuperview()
             blockViews[id] = nil
-            if !(view is TableBackingView) {
+            // A ButtonRowBackingView is excluded for the same reason a TableBackingView is: it is a
+            // subclass with its own subviews and an empty `draw(_:)`, so recycling it for a paragraph
+            // would render that paragraph blank.
+            if !(view is TableBackingView), !(view is ButtonRowBackingView) {
                 view.box = nil                                          // drop the strong ref to the old box
                 view.lastRenderedSignature = nil
                 if recycleQueue.count < recycleQueueCap { recycleQueue.append(view) }
@@ -969,7 +987,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         // A freshly re-realized table has a brand-new (empty) content view; re-host emoji so its cell
         // emoji migrate back into it. Otherwise the cheap hide/show cull suffices (frames unchanged).
-        if realizedFreshTable { syncEmojiViews(); syncChecklistMarkerViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
+        if realizedFreshTable { syncEmojiViews(); syncButtonPillViews(); syncChecklistMarkerViews(); syncMediaItemViews() } else { cullEmojiViews(); cullButtonPillViews(); cullMediaItemViews() }
         refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
     }
@@ -1100,7 +1118,10 @@ final class DocumentCanvasView: UIView {
     /// by `layoutSubviews` for any UIKit-driven pass. Idempotent.
     func layoutContent() {
         if bounds.width > 0 { lastLayoutWidth = bounds.width }
-        root.verticalInsetBase = self.blockVerticalInset
+        // The document's top-level sequence lays out on InstantPage V2's rhythm, so the editor's block
+        // spacing matches the rendered message. Its metrics come from the mapper, so a host's
+        // `renderMetrics` reaches the rhythm as well as the fonts.
+        applyRootSpacingConfig()
         _ = root.layout(origin: CGPoint(x: contentLeftPad, y: contentMargins.top),
                         width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
@@ -1117,6 +1138,7 @@ final class DocumentCanvasView: UIView {
         pullQuoteMarksView.sync(marks: pullQuoteMarkRects())
         emojiOverlay.frame = bounds
         syncEmojiViews()
+        syncButtonPillViews()
         syncChecklistMarkerViews()
         mediaOverlay.frame = bounds
         syncMediaItemViews()
@@ -1146,9 +1168,27 @@ final class DocumentCanvasView: UIView {
         }
     }
 
+    /// Points the root stack at the document's rhythm (V2, top-level sequence, the host's metrics).
+    /// EVERY height path states it rather than inheriting what the last one left, because any of them can
+    /// run first: `layoutContent`, `intrinsicContentSize` (read by `performLayout` BEFORE the layout
+    /// pass), and `measuredContentHeight` (a host measuring an unframed editor).
+    func applyRootSpacingConfig() {
+        root.spacingModel = .instantPageV2
+        root.sequenceKind = .topLevel
+        root.metrics = mapper.styleSheet.metrics
+    }
+
+    /// The content height the host sizes the scroll view from. **`root.currentHeight`, not a sum of box
+    /// heights:** under the V2 rhythm a gap next to a block that cannot own it (a button row / table /
+    /// media / code block at a sequence edge, or two such neighbours) is laid down as bare space
+    /// belonging to no box frame, so summing box heights under-reports the laid-out extent — 4pt per
+    /// bare gap, accumulating — and the trailing blocks fell outside the scrollable range: unreachable,
+    /// overlapping the host's bottom inset band. A paragraphs-only document is unaffected (no bare gaps),
+    /// which is why this stayed hidden.
     override var intrinsicContentSize: CGSize {
-        CGSize(width: UIView.noIntrinsicMetric,
-               height: contentMargins.top + boxes.reduce(0) { $0 + $1.height } + contentMargins.bottom)
+        applyRootSpacingConfig()
+        return CGSize(width: UIView.noIntrinsicMetric,
+                      height: contentMargins.top + root.currentHeight + contentMargins.bottom)
     }
 
     /// Stateless content height the document would have at canvas `width` — the measure analogue of
@@ -1172,6 +1212,9 @@ final class DocumentCanvasView: UIView {
         // others keep the live value.
         let margins = explicitMargins ?? self.contentMargins
         let contentW = max(width - (self.pageMargin + margins.left) - (self.pageMargin + margins.right), 1)
+        // Same purity requirement for the RHYTHM: this can run before `layoutContent()` has ever set the
+        // root's spacing model, so state it here too rather than inheriting whatever the last layout left.
+        applyRootSpacingConfig()
         return margins.top + root.measuredHeight(forWidth: contentW) + margins.bottom
     }
 

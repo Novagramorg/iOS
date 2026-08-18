@@ -1003,6 +1003,7 @@ private final class GiftSetupScreenComponent: Component {
                         hasStickers: false,
                         hasGifs: false,
                         hideBackground: true,
+                        maskEdge: .clip,
                         forceHasPremium: true,
                         sendGif: nil
                     )
@@ -2186,30 +2187,6 @@ public class GiftSetupScreen: ViewControllerComponentContainer, GiftSetupScreenP
             } else {
                 self.dismiss(animated: false)
             }
-        }
-    }
-}
-
-private struct GiftConfiguration {
-    static var defaultValue: GiftConfiguration {
-        return GiftConfiguration(maxCaptionLength: 255)
-    }
-    
-    let maxCaptionLength: Int32
-    
-    fileprivate init(maxCaptionLength: Int32) {
-        self.maxCaptionLength = maxCaptionLength
-    }
-    
-    static func with(appConfiguration: AppConfiguration) -> GiftConfiguration {
-        if let data = appConfiguration.data {
-            var maxCaptionLength: Int32?
-            if let value = data["stargifts_message_length_max"] as? Double {
-                maxCaptionLength = Int32(value)
-            }
-            return GiftConfiguration(maxCaptionLength: maxCaptionLength ?? GiftConfiguration.defaultValue.maxCaptionLength)
-        } else {
-            return .defaultValue
         }
     }
 }

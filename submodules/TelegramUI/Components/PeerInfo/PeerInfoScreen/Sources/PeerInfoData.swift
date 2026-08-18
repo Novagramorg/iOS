@@ -1880,7 +1880,7 @@ func peerInfoScreenData(
             |> mapToSignal { peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannelAndFirstWelcomeMessageText -> Signal<PeerInfoScreenData, NoError> in
                 let (personalChannel, firstWelcomeMessageText) = personalChannelAndFirstWelcomeMessageText
 
-                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, case .group = channel.info, channel.hasPermission(.changeInfo) {
+                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, channel.hasPermission(.manageWelcomeMessages) {
                     let wasRefreshed = didRefreshWelcomeMessages.swap(true)
                     if !wasRefreshed {
                         let _ = context.engine.messages.refreshWelcomeMessages(peerId: peerId).startStandalone()
@@ -2260,13 +2260,7 @@ func peerInfoScreenData(
                 let (starsRevenueContextAndState, firstWelcomeMessageText) = starsRevenueContextAndStateAndFirstWelcomeMessageText
 
                 if let group = peerViewMainPeer(peerView) as? TelegramGroup {
-                    var canManageWelcomeMessages = false
-                    if case .creator = group.role {
-                        canManageWelcomeMessages = true
-                    } else if case let .admin(rights, _) = group.role {
-                        canManageWelcomeMessages = rights.rights.contains(.canChangeInfo)
-                    }
-                    if canManageWelcomeMessages {
+                    if group.hasPermission(.manageWelcomeMessages) {
                         let wasRefreshed = didRefreshWelcomeMessages.swap(true)
                         if !wasRefreshed {
                             let _ = context.engine.messages.refreshWelcomeMessages(peerId: groupId).startStandalone()
@@ -2468,8 +2462,10 @@ func canEditPeerInfo(context: AccountContext, peer: EnginePeer?, chatLocation: C
         }
     } else if case let .legacyGroup(group) = peer {
         switch group.role {
-        case .admin, .creator:
+        case .creator:
             return true
+        case let .admin(rights, _):
+            return rights.rights.contains(.canChangeInfo)
         case .member:
             break
         }
@@ -2801,7 +2797,7 @@ func peerInfoCanEdit(peer: EnginePeer?, chatLocation: ChatLocation, threadData: 
         if case .creator = peer.role {
             return true
         } else if case let .admin(rights, _) = peer.role {
-            if rights.rights.contains(.canAddAdmins) || rights.rights.contains(.canBanUsers) || rights.rights.contains(.canChangeInfo) || rights.rights.contains(.canInviteUsers) {
+            if rights.rights.contains(.canAddAdmins) || rights.rights.contains(.canBanUsers) || rights.rights.contains(.canChangeInfo) || rights.rights.contains(.canInviteUsers) || rights.rights.contains(.canManageWelcomeMessages) {
                 return true
             }
             return false

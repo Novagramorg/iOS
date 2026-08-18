@@ -232,6 +232,9 @@ public func stringForMessageTimestampStatus(
             }
         }
     }
+    if (Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)), let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
+        authorTitle = nil
+    }
     
     if let subject = associatedData.subject, case let .messageOptions(_, _, info) = subject, case .forward = info {
         authorTitle = nil

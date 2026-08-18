@@ -141,12 +141,13 @@ final class InstantPageV2ButtonPillView: UIView {
             self.attachment.button.color,
             theme: self.theme,
             isInline: self.isInline,
-            isDisabled: self.isDisabled
+            isDisabled: self.isDisabled,
+            isLink: self.attachment.button.isLink
         ).label
     }
 
     private func applyColors() {
-        let colors = instantPageButtonColors(self.attachment.button.color, theme: self.theme, isInline: self.isInline, isDisabled: self.isDisabled)
+        let colors = instantPageButtonColors(self.attachment.button.color, theme: self.theme, isInline: self.isInline, isDisabled: self.isDisabled, isLink: self.attachment.button.isLink)
         self.backgroundColor = self.isPressed ? self.theme.panelHighlightedBackgroundColor : colors.fill
 
         let mutableLabel = self.attachment.labelString.mutableCopy() as! NSMutableAttributedString
@@ -252,11 +253,12 @@ final class InstantPageV2ButtonPillView: UIView {
         guard let loadingEffectView = self.loadingEffectView, self.bounds.width > 0.0, self.bounds.height > 0.0 else {
             return
         }
-        let colors = instantPageButtonColors(self.attachment.button.color, theme: self.theme, isInline: self.isInline, isDisabled: self.isDisabled)
+        let colors = instantPageButtonColors(self.attachment.button.color, theme: self.theme, isInline: self.isInline, isDisabled: self.isDisabled, isLink: self.attachment.button.isLink)
         let effectFrame = CGRect(origin: CGPoint(), size: self.bounds.size)
         loadingEffectView.frame = effectFrame
         loadingEffectView.update(
             color: colors.label,
+            alpha: colors.label.brightness > 0.6 ? 0.8 : 0.5,
             rect: effectFrame,
             path: UIBezierPath(roundedRect: effectFrame, cornerRadius: effectFrame.height / 2.0).cgPath
         )

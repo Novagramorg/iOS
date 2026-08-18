@@ -274,6 +274,16 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
         return nil
     }
 
+    /// Rects, in this node's own coordinate space, that the host bubble should tear out of its
+    /// background — so that content this node cannot render sits in a gap rather than on top of a
+    /// bubble. Read after this node's apply closure has run.
+    ///
+    /// Plural because one message can hold two runs of unsupported blocks separated by supported
+    /// content: a run collapses to one pill, but two runs stay two pills.
+    open func unsupportedContentAreas() -> [CGRect] {
+        return []
+    }
+
     open func updateHiddenMedia(_ media: [EngineRawMedia]?) -> Bool {
         return false
     }

@@ -54,11 +54,17 @@ final class PullQuoteBox {
             width: max(width - pullQuoteStyle.horizontalPadding - pullQuoteStyle.horizontalPadding, 1))
     }
 
+    var spacingKind: RichTextBlockSpacingKind { .pullQuote }
+
     var length: Int { layout.length }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: frame.minY + topInset) }
 
     var authorLength: Int { authorLayout.length }
     /// The author line sits below the pull text, inside the same horizontal padding.
+    /// NB the author line is placed against the RAW line box, not the V2-corrected height. Author-line
+    /// placement is quote INTERIOR geometry, which has no V2 reference in this cycle (the quote-interior
+    /// cycle owns it) — correcting it here would shift the attribution 1-2pt with nothing to check it
+    /// against. The quote's own HEIGHT is corrected, because that feeds the document's block rhythm.
     var authorOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: textOrigin.y + max(layout.boundingHeight, emptyLineHeight) + pullQuoteStyle.authorSpacing) }
 
     private var authorEmptyLineHeight: CGFloat {
@@ -168,11 +174,11 @@ extension PullQuoteBox: CanvasBlock {
     /// Used to bracket the pull-quote corner marks around the QUOTE TEXT only (the pill background still
     /// spans the full `height`, author included).
     var quoteOnlyHeight: CGFloat {
-        topInset + max(layout.boundingHeight, emptyLineHeight) + bottomInset
+        topInset + max(layout.correctedBoundingHeight, emptyLineHeight) + bottomInset
     }
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
         let inner = max(width - leftInset - rightInset, 1)
-        let base = max(layout.boundingHeight(forWidth: inner), emptyLineHeight) + topInset + bottomInset
+        let base = max(layout.correctedBoundingHeight(forWidth: inner), emptyLineHeight) + topInset + bottomInset
         guard shouldShowAuthor else { return base }
         return base + pullQuoteStyle.authorSpacing + max(authorLayout.boundingHeight(forWidth: inner), authorEmptyLineHeight)
     }

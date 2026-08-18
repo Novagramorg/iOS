@@ -87,8 +87,12 @@ final class TableBlockBoxTests: XCTestCase {
         XCTAssertEqual(emptyBox.height, filledBox.height, accuracy: 1.0,
                        "an empty cell reserves a real line, matching a single-line filled cell")
         // The cell box carries no block inset (vertical padding is a cell metric applied at the row
-        // level, not on the box), so the box is just the 15pt line (~19.7pt) — a real reserved line.
-        XCTAssertGreaterThan(emptyBox.height, 18, "not collapsed — reserves a real line")
+        // level, not on the box), so the box is exactly one V2 line at the CELL font size (15pt).
+        let cellSheet = StyleSheet.tableCells
+        let cellLine = RichTextRenderMetrics.textHeight(cellSheet.font(for: .body, attributes: .plain),
+                                                       factor: cellSheet.metrics.body.lineSpacingFactor,
+                                                       lineCount: 1)
+        XCTAssertEqual(emptyBox.height, cellLine, accuracy: 0.5, "not collapsed — reserves a real line")
     }
 
     // A wholly-empty row keeps a real line's height (≈ a filled row), not just topInset+bottomInset.
@@ -350,7 +354,10 @@ extension TableBlockBoxTests {
         // Text sits exactly `cellVerticalPadding` below the cell top and above the bottom (symmetric).
         let cr = t.cellRect(row: 1, column: 0)!
         let topGap = box.textOrigin.y - cr.minY
-        let bottomGap = cr.maxY - (box.textOrigin.y + box.layout.boundingHeight)
+        // Against the V2-CORRECTED text height: the raw pinned line box overhangs the last baseline by a
+        // full line box, so measuring from it reads the padding ~2pt short even though the glyphs sit
+        // exactly `cellVerticalPadding` above the cell bottom.
+        let bottomGap = cr.maxY - (box.textOrigin.y + box.layout.correctedBoundingHeight)
         XCTAssertEqual(topGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "top gap == cellVerticalPadding")
         XCTAssertEqual(bottomGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "bottom gap == cellVerticalPadding")
     }
@@ -418,6 +425,77 @@ extension TableBlockBoxTests {
         let font = typed?.layout.attributedString.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
         XCTAssertEqual(font?.pointSize ?? 0, 15, accuracy: 0.5,
                        "a cell line created by an in-cell split inherits the cell's 15pt base font")
+    }
+
+    // MARK: - Borders
+
+    /// A table is bordered by default — every table authored before the flag existed drew its grid, and
+    /// the forward converter hard-coded `bordered: true`.
+    func test_table_isBorderedByDefault() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(table2x2())], width: 320)
+        XCTAssertTrue(box(v).isBordered)
+        XCTAssertEqual(box(v).borderWidth, TableBlockBox.border)
+    }
+
+    /// Hiding borders is NOT just a paint toggle: the border WIDTH goes to zero, so the cells butt
+    /// together — mirroring V2's `bordered ? v2TableBorderWidth : 0.0`. Without this the editor's table
+    /// would be wider than the one in the sent message by one border per boundary.
+    func test_unborderedTable_collapsesTheCellGaps() {
+        let v = DocumentCanvasView()
+        var model = table2x2()
+        model.bordered = false
+        v.setBlocks([.table(model)], width: 320)
+        let t = box(v)
+        XCTAssertFalse(t.isBordered)
+        XCTAssertEqual(t.borderWidth, 0.0)
+
+        // Two columns side by side: with no border between them the second starts exactly where the
+        // first ends.
+        guard let left = t.cellRect(row: 0, column: 0), let right = t.cellRect(row: 0, column: 1) else {
+            return XCTFail("expected two cell rects")
+        }
+        XCTAssertEqual(right.minX, left.maxX, accuracy: 0.01, "an unbordered table has no gap between cells")
+    }
+
+    /// And the bordered case still leaves exactly one border between them.
+    func test_borderedTable_keepsOneBorderBetweenCells() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(table2x2())], width: 320)
+        let t = box(v)
+        guard let left = t.cellRect(row: 0, column: 0), let right = t.cellRect(row: 0, column: 1) else {
+            return XCTFail("expected two cell rects")
+        }
+        XCTAssertEqual(right.minX - left.maxX, TableBlockBox.border, accuracy: 0.01)
+    }
+
+    /// The flag round-trips through the canvas, so a toggle survives read-back and reaches the wire.
+    func test_borderedFlag_roundTripsThroughTheCanvas() {
+        let v = DocumentCanvasView()
+        var model = table2x2()
+        model.bordered = false
+        v.setBlocks([.table(model)], width: 320)
+        guard case let .table(restored) = v.currentBlocks().first else {
+            return XCTFail("expected a table")
+        }
+        XCTAssertFalse(restored.bordered)
+    }
+
+    /// The toggle flips it as one undo step and re-lays-out.
+    func test_toggleTableBordered_flipsTheFlag() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(table2x2())], width: 320)
+        // `activeTable()` needs a caret in a CELL; `cellTextStart` is how the table tests express that.
+        guard let caret = box(v).cellTextStart(row: 0, column: 0) else {
+            return XCTFail("expected a first-cell text start")
+        }
+        v.anchor = caret; v.head = caret
+        v.toggleTableBordered()
+        guard case let .table(restored) = v.currentBlocks().first else {
+            return XCTFail("expected a table")
+        }
+        XCTAssertFalse(restored.bordered)
+        XCTAssertEqual(box(v).borderWidth, 0.0)
     }
 }
 #endif

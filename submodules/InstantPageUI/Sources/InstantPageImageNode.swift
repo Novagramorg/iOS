@@ -16,6 +16,7 @@ import AppBundle
 import TelegramUIPreferences
 import ContextUI
 import Tuples
+import UIKitRuntimeUtils
 
 private struct FetchControls {
     let fetch: (Bool) -> Void
@@ -101,7 +102,25 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     // separate node also gives an instant reveal (remove it → the always-sharp `imageNode` shows). The
     // enclosing V2 media view drives the dust cover + reveal timing. Default off (no effect on web IV).
     private var contentBlurredSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>?
-    
+
+    /// Excludes the rendered media from screenshots and screen recordings, matching what
+    /// `ChatMessageInteractiveMediaNode` does for a copy-protected regular media message. Driven by
+    /// the enclosing V2 media view from `InstantPageV2RenderContext.captureProtected`; default off,
+    /// so web IV and V1 Instant View are unaffected.
+    ///
+    /// The spoiler blur node is a sibling the caller owns (see `makeSpoilerBlurredNode`), so it is
+    /// tracked weakly here and kept in sync — a concealed spoiler must be protected too, otherwise
+    /// a screenshot of a blurred-but-unprotected cover still reveals the shape of the media.
+    var captureProtected: Bool = false {
+        didSet {
+            if self.captureProtected != oldValue {
+                self.imageNode.captureProtected = self.captureProtected
+                self.spoilerBlurredNode?.captureProtected = self.captureProtected
+            }
+        }
+    }
+    private weak var spoilerBlurredNode: TransformImageNode?
+
     init(context: AccountContext, sourceLocation: InstantPageSourceLocation, theme: InstantPageTheme, webPage: TelegramMediaWebpage, media: InstantPageMedia, attributes: [InstantPageImageAttribute], interactive: Bool, roundCorners: Bool, fit: Bool, openMedia: @escaping (InstantPageMedia) -> Void, longPressMedia: @escaping (InstantPageMedia) -> Void, activatePinchPreview: ((PinchSourceContainerNode) -> Void)?, pinchPreviewFinished: ((InstantPageNode) -> Void)?, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)? = nil, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)? = nil, autoDownloadImage: ((TelegramMediaImage) -> Bool)? = nil, autoDownloadFile: ((TelegramMediaFile) -> Bool)? = nil, emptyColor: UIColor? = nil, getPreloadedResource: @escaping (String) -> Data?) {
         self.context = context
         self.theme = theme
@@ -251,7 +270,9 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         }
         let node = TransformImageNode()
         node.contentAnimations = []
+        node.captureProtected = self.captureProtected
         node.setSignal(contentBlurredSignal)
+        self.spoilerBlurredNode = node
         return node
     }
 
@@ -519,7 +540,31 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         if instantPageMediaMatchesNodeIdentity(media, self.media) {
             let imageNode = self.imageNode
             return (self.imageNode, self.imageNode.bounds, { [weak imageNode] in
-                return (imageNode?.view.snapshotContentTree(unhide: true), nil)
+                guard let imageNode else {
+                    return (nil, nil)
+                }
+                guard imageNode.captureProtected else {
+                    return (imageNode.view.snapshotContentTree(unhide: true), nil)
+                }
+                // A capture-protected layer is excluded from snapshots too, so snapshotting it
+                // directly yields an empty view and the gallery open/close animation flies a blank
+                // rect. Mirror `ChatMessageInteractiveMediaNode.transitionNode(adjustRect:)`: stand an
+                // UNPROTECTED copy of the image in front of the protected node, snapshot that, then
+                // protect the resulting snapshot so the transition itself stays uncapturable.
+                let standInView = UIImageView()
+                standInView.contentMode = .scaleToFill
+                standInView.image = imageNode.image
+                standInView.frame = imageNode.bounds
+                if standInView.layer.contents == nil {
+                    standInView.layer.contents = standInView.image?.cgImage
+                }
+                imageNode.view.addSubview(standInView)
+                let view = imageNode.view.snapshotContentTree(unhide: true)
+                standInView.removeFromSuperview()
+                if let view {
+                    setLayerDisableScreenshots(view.layer, true)
+                }
+                return (view, nil)
             })
         } else {
             return nil

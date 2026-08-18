@@ -57,6 +57,9 @@ extension DocumentCanvasView {
                 } else if let bq = b as? BlockQuoteBox {
                     bq.placeholders = self.placeholders
                     if !bq.collapsed { stamp(bq.children.boxes, topLevel: false) }
+                } else if let r = b as? ButtonRowBox {
+                    // Same shape as `hostsChecklistCheckbox`: a host CAPABILITY, not a style choice.
+                    r.showsMenuAffordance = (self.buttonRowMenuRequested != nil)
                 } else if let d = b as? DetailsBox {
                     d.placeholders = self.placeholders; d.chevronImage = self.detailsChevronImage
                     stamp(d.children.boxes, topLevel: false)

@@ -76,17 +76,15 @@ final class InstantPageLinkStyleButtonTests: XCTestCase {
         XCTAssertEqual(linkFont, plainFont)
     }
 
-    /// The chat rich bubble's paragraph is 17pt with `lineSpacingFactor` 0.9
-    /// (`ChatMessageRichDataBubbleContentNode`), giving a 12pt line box and a 22pt line-to-line
-    /// advance. A body-sized emoji is 24.29pt — **taller than the whole row** — so it overlaps the
-    /// lines above and below and reads as an inflated, shoved line. A link button's label emoji must
-    /// therefore fit inside the advance.
+    /// A link button is ORDINARY TEXT in the paragraph, not a pill, so its label emoji must be exactly
+    /// the size of the same emoji sitting beside it in that paragraph.
     ///
-    /// The requirement is the row, not a particular constant, so that is what this asserts. Both
-    /// alternatives were tried against real content and rejected: body sizing (24.29pt) inflates the
-    /// row, and the bare line box (`floor(A + D)`, 12pt) fits but renders at 49% of a neighbouring
-    /// emoji, reading as a shrunken glyph.
-    func testLinkButtonEmojiFitsTheProductionRow() {
+    /// This reverses an earlier rule that shrank it to `A - D` to fit the chat bubble's 22pt
+    /// line-to-line advance. That never solved the overlap it cited — an ordinary body emoji in the
+    /// same paragraph overhangs the row by exactly as much — it only made link buttons inconsistent
+    /// with the text around them. The pill rewrite (`instantPageButtonLabelWithFittedEmoji`) stays,
+    /// because a pill really does clip its label with `clipsToBounds`.
+    func testLinkButtonEmojiMatchesBodyEmojiSize() {
         let stack = InstantPageTextStyleStack()
         stack.push(.textColor(.black))
         stack.push(.linkColor(.blue))
@@ -94,69 +92,123 @@ final class InstantPageLinkStyleButtonTests: XCTestCase {
         stack.push(.lineSpacingFactor(0.9))
 
         let emoji = RichText.textCustomEmoji(fileId: 1, alt: "x")
+        // A plain emoji and a link-button emoji on the SAME line, so the comparison is like-for-like.
         let string = attributedStringForRichText(
             .concat([
-                .plain("Hello there "),
+                .plain("a "),
+                emoji,
+                .plain(" b "),
                 .textButton(InstantPageButton(text: emoji, action: .copyText(payload: "p"), color: nil, isLink: true)),
-                .plain(" and some more words here too")
+                .plain(" c")
             ]),
             styleStack: stack
         )
-        let (item, _, _) = layoutTextItem(string, boundingWidth: 200.0, offset: CGPoint())
-        let lines = item?.lines ?? []
-
-        guard lines.count > 1, let emojiItem = lines[0].emojiItems.first else {
-            XCTFail("expected a wrapped paragraph with one emoji on the first line")
+        let (item, _, _) = layoutTextItem(string, boundingWidth: 400.0, offset: CGPoint())
+        guard let line = item?.lines.first, line.emojiItems.count == 2 else {
+            XCTFail("expected both emoji on one line, got \(item?.lines.first?.emojiItems.count ?? -1)")
             return
         }
-        let advance = lines[1].frame.minY - lines[0].frame.minY
-        XCTAssertLessThanOrEqual(
-            emojiItem.frame.height, advance,
-            "emoji is taller than the line-to-line advance, so it collides with adjacent rows"
-        )
-        // And it must not have shrunk to the bare line box, which reads as a half-size glyph.
-        XCTAssertGreaterThan(emojiItem.frame.height, lines[0].frame.height * 1.5)
+        XCTAssertEqual(line.emojiItems[0].frame.height, line.emojiItems[1].frame.height, accuracy: 0.01,
+                       "a link button's emoji must match the body emoji beside it")
+        XCTAssertEqual(line.emojiItems[0].frame.width, line.emojiItems[1].frame.width, accuracy: 0.01)
     }
 
-    /// The tap/progress highlight must cover the WHOLE label, not the one attribute run under the
-    /// finger. A button label of text + emoji is at least two runs — the emoji placeholder carries a
-    /// run delegate and the custom-emoji attribute that the text does not — and
-    /// `attribute(_:at:effectiveRange:)` is explicitly NOT required to return the maximal range, so
-    /// it hands back just that run. Touching the text and touching the emoji must therefore produce
-    /// the same rects.
-    func testHighlightRectsCoverTheWholeLabelNotOneRun() {
-        let emoji = RichText.textCustomEmoji(fileId: 1, alt: "x")
-        let string = attributedStringForRichText(
-            .textButton(InstantPageButton(
-                text: .concat([.plain("Open"), emoji]),
-                action: .copyText(payload: "p"),
-                color: nil,
-                isLink: true
-            )),
+    // MARK: - The automatic underline
+
+    /// A style stack whose accent colour IS its text colour — the chat-bubble case, where
+    /// `textAttributes()` falls back to underlining links so they stay distinguishable.
+    private func makeAccentEqualsTextStyleStack() -> InstantPageTextStyleStack {
+        let stack = InstantPageTextStyleStack()
+        stack.push(.textColor(.black))
+        stack.push(.linkColor(.black))
+        stack.push(.fontSize(17.0))
+        return stack
+    }
+
+    private func underlineStyle(_ string: NSAttributedString) -> Int? {
+        guard string.length != 0 else {
+            return nil
+        }
+        return (string.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? NSNumber)?.intValue
+    }
+
+    /// The baseline the next test contrasts with: a worded label keeps the fallback underline.
+    func testWordedLinkButtonKeepsTheAutomaticUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .plain("Open"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertEqual(self.underlineStyle(result), NSUnderlineStyle.single.rawValue)
+    }
+
+    /// An emoji-only label has no word to distinguish from body text, so the fallback underline is
+    /// suppressed — it would draw as a stray rule under the glyph.
+    func testEmojiOnlyLinkButtonDropsTheAutomaticUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .textCustomEmoji(fileId: 1, alt: "x"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertNil(self.underlineStyle(result))
+    }
+
+    /// Same for a `.url` action, which returns before the button attribute is stamped.
+    func testEmojiOnlyUrlLinkButtonDropsTheAutomaticUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .textCustomEmoji(fileId: 1, alt: "x"), action: .url("https://telegram.org"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertNil(self.underlineStyle(result))
+        XCTAssertNotNil(attribute(result, TelegramTextAttributes.URL))
+    }
+
+    /// Several emoji, and the whitespace between them, still count as emoji-only.
+    func testMultipleEmojiWithSpacesCountAsEmojiOnly() {
+        let label = RichText.concat([
+            .textCustomEmoji(fileId: 1, alt: "x"),
+            .plain(" "),
+            .bold(.textCustomEmoji(fileId: 2, alt: "y"))
+        ])
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: label, action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        for index in 0 ..< result.length {
+            XCTAssertNil((result.attribute(.underlineStyle, at: index, effectiveRange: nil) as? NSNumber)?.intValue)
+        }
+    }
+
+    /// One word among the emoji brings the underline back — the label reads as text again.
+    func testMixedLabelKeepsTheAutomaticUnderline() {
+        let label = RichText.concat([.textCustomEmoji(fileId: 1, alt: "x"), .plain(" Open")])
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: label, action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertEqual(self.underlineStyle(result), NSUnderlineStyle.single.rawValue)
+    }
+
+    /// An explicitly underlined emoji label is markup, not the colour fallback, so it survives.
+    func testExplicitlyUnderlinedEmojiLabelKeepsItsUnderline() {
+        let result = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .underline(.textCustomEmoji(fileId: 1, alt: "x")), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeAccentEqualsTextStyleStack()
+        )
+        XCTAssertEqual(self.underlineStyle(result), NSUnderlineStyle.single.rawValue)
+    }
+
+    /// With a distinct accent colour there is no automatic underline to begin with — the suppression
+    /// must not be the thing that removes it, and a worded label must stay clean too.
+    func testDistinctAccentColourNeverUnderlines() {
+        let emoji = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .textCustomEmoji(fileId: 1, alt: "x"), action: .copyText(payload: "p"), color: nil, isLink: true)),
             styleStack: makeParagraphStyleStack()
         )
-        let (item, _, _) = layoutTextItem(string, boundingWidth: 300.0, offset: CGPoint())
-
-        guard let item, let line = item.lines.first, let emojiItem = line.emojiItems.first else {
-            XCTFail("expected a laid-out line with an emoji")
-            return
-        }
-        let overText = item.linkSelectionRects(at: CGPoint(x: line.frame.minX + 2.0, y: line.frame.midY))
-        let overEmoji = item.linkSelectionRects(at: CGPoint(x: emojiItem.frame.midX, y: line.frame.midY))
-
-        XCTAssertFalse(overText.isEmpty, "no highlight rects over the label's text")
-        XCTAssertEqual(overText, overEmoji, "highlight differs depending on which run is touched")
-        // And it genuinely spans the label rather than coinciding on one narrow run.
-        let widest = overText.map({ $0.width }).max() ?? 0.0
-        XCTAssertGreaterThan(widest, emojiItem.frame.width * 1.5)
+        let worded = attributedStringForRichText(
+            .textButton(InstantPageButton(text: .plain("Open"), action: .copyText(payload: "p"), color: nil, isLink: true)),
+            styleStack: makeParagraphStyleStack()
+        )
+        XCTAssertNil(self.underlineStyle(emoji))
+        XCTAssertNil(self.underlineStyle(worded))
     }
 
-    /// Regression guard: a button WITHOUT the bit must still take the pill path untouched.
-    func testNonLinkButtonStillBuildsAPill() {
-        let button = RichText.textButton(InstantPageButton(text: .plain("Open"), action: .url("https://telegram.org"), color: nil))
-        let result = attributedStringForRichText(button, styleStack: makeParagraphStyleStack())
-
-        XCTAssertNotNil(attribute(result, InstantPageInlineButtonAttribute) as? InstantPageInlineButtonAttachment)
-        XCTAssertNil(attribute(result, InstantPageButtonActionAttribute))
-    }
 }

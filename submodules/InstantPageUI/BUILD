@@ -16,9 +16,9 @@ swift_library(
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/CheckNode:CheckNode",
         "//submodules/Display:Display",
+        "//submodules/UIKitRuntimeUtils:UIKitRuntimeUtils",
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
-        "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/TextFormat:TextFormat",
         "//submodules/InvisibleInkDustNode:InvisibleInkDustNode",
@@ -37,10 +37,12 @@ swift_library(
         "//submodules/TranslateUI:TranslateUI",
         "//submodules/Pasteboard",
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/Tuples:Tuples",
         "//third-party/SwiftMath:SwiftMath",
         "//submodules/ComponentFlow:ComponentFlow",
         "//submodules/TelegramUI/Components/ShimmeringMask:ShimmeringMask",
+        "//submodules/TelegramUI/Components/UnsupportedContentPill",
         "//submodules/TelegramUI/Components/TextLoadingEffect:TextLoadingEffect",
     ],
     visibility = [
@@ -56,9 +58,13 @@ swift_library(
     ]),
     deps = [
         ":InstantPageUI",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TextFormat:TextFormat",
+        "//submodules/TelegramUI/Components/UnsupportedContentPill",
     ],
 )
 

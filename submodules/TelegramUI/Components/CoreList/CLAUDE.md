@@ -82,10 +82,13 @@ interval only**: neither fires for momentum, bounce or programmatic writes, so a
   `UIScrollView`. It owns the private 10,000,000-point virtual canvas and prevents programmatic
   offset writes from re-entering the user-scroll callback.
 - `PhysicsScrollEngine` is an additive selectable backend with `.stepped` and `.keyframe`
-  deceleration. A finger on moving content grabs the scroll and absorbs the stopping tap. Absorption
-  is plain UIKit gesture exclusion: the engine grants NO simultaneity to any recognizer, so a pan
-  force-begun on moving content fails the content recognizer at touch-down. There is deliberately no
-  `shouldBeRequiredToFailBy` counterpart; see the gotcha below before adding either.
+  deceleration. A finger on moving content grabs the scroll and absorbs the stopping tap. **Those are
+  two mechanisms on two different clocks, and only one of them is under this engine's control.** The
+  STOP is `noteTouchDown` — touch delivery, which nothing can hold; the ABSORB is the forced `.began`
+  (`shouldBeginImmediately`), which is plain UIKit gesture exclusion: the engine grants NO
+  simultaneity to any recognizer, so a pan force-begun on moving content fails the content recognizer.
+  There is deliberately no `shouldBeRequiredToFailBy` counterpart; see the arbitration gotcha below
+  before adding either, or before moving anything onto the `.began` path.
 - Both physics modes use `PhysicsScrollCore`. The keyframe mode renders deceleration through
   `KeyframeFlight`; coordinate-only rebases update its persistent shift without restarting the
   flight, while a true edge or trajectory-shape change rebakes with a seamless splice. A real edge
@@ -291,6 +294,21 @@ inferred from `loadedIndexRange`. `loadedItemEntries` is the same in-place walk 
 but yields `(index, view)` pairs, for hosts that need each row's collection index during a full-window
 pass (computing a visible range, say) without counting iterations — array position equals collection
 index only while the window still starts at 0.
+
+`animateInsertedBlock(identities:origin:transition:)` slides a run of rows in from just beyond one edge
+of where they settled, as one rigid block — every named row takes the same offset, so the run keeps its
+spacing for the whole travel. **The host names the EDGE (`CoreListBlockOrigin`, stated in content order,
+not on screen — a rotated host reads the cases the other way round) and this view measures the
+DISTANCE** (the block's own total settled height, reserved space included), because the heights come
+from the very pass the call follows. Unloaded rows are skipped: no layer, and nothing to see. It exists
+because an entering row otherwise appears in place, which is correct for the model and wrong for a chat;
+`CoreListChatHistoryBackend` calls it for messages arriving at the newest edge. **It is list-owned
+deliberately** — a host installing its own additive position animation would have it read back as a
+CoreList track by `capturePresentedPositionOffsets()` at the next pass (see the granular-animation
+contract), and going through `transitionPosition` is also what lets an overlapping arrival compose with
+the slide already in flight. Safe to call straight after `applyChanges`: it defers onto the same
+scheduler behind a pass that was itself deferred for re-entrancy, which a synchronous window read could
+not survive.
 
 **Row geometry is a pair, and picking the wrong half is silent.** `presentedFrame(of:)` is where a row
 IS — the default, and what a host must use instead of `convert(_:from:)` (see the
@@ -1229,6 +1247,37 @@ Animation an authority.
   dependency anywhere, letting plain exclusion both absorb the stopping tap and cancel a pending
   press. Taps are nearly immune to the dependency form (they recognize on lift, the same instant the
   pan fails), so the demo's tap-only rows cannot catch a regression here.
+  - **The mirror half: ANCESTORS declare it about us, so nothing time-critical may ride the forced
+    `.began`.** `NavigationContainer` returns `shouldBeRequiredToFailBy == true` for every
+    `UIPanGestureRecognizer` (`Display/Source/Navigation/NavigationContainer.swift:202`;
+    `NavigationModalContainer:147` likewise), and our pan IS one — so the list's pan cannot RECOGNIZE
+    until the interactive-pop `InteractiveTransitionGestureRecognizer` fails. That recognizer fails on
+    ~2pt of off-axis travel, and for a dead-still finger not until it LIFTS (it overrides no
+    `touchesEnded`, so the default pan failure at lift is what resolves it). A real drag is unaffected
+    — it crosses 2pt long before our ~10pt hysteresis — but the forced `.began` is written at
+    `touchesBegan` with ZERO translation, precisely the moment the dependency is guaranteed unresolved.
+    With the flight catch on that path, the stop would therefore wait for the finger to move or lift,
+    while `onTouchDown`/`onTouchUp` (touch delivery, unholdable) fire on time — leaving `handleTouchUp`
+    to run with `sawDrag` still false and possibly launch a bounce before the held `.began` arrives to
+    `beginDrag` on it. **This consequence is DERIVED, not observed** — the dependency and the pop pan's
+    failure timing are both read off the source, and no device repro was captured (the investigation
+    that found this was chasing a different symptom, which turned out not to involve this pan at all).
+    The catch nevertheless belongs in `noteTouchDown` on its own merits: that is where
+    `-[UIScrollView _beginTrackingWithEvent:]` stops its own deceleration, and it takes the stop off a
+    path this engine does not control. `.began` keeps an idempotent catch for trackpad, which gets no
+    touch-down at all. Absorption still rides arbitration and would still degrade while the pop pan is
+    unresolved; the candidate cure (returning `true` from
+    `disablesInteractiveTransitionGestureRecognizerNow` on the list's view while content moves, which
+    makes `hasHorizontalGestures` `.strict` and fails the pop pan in its own `touchesBegan`) also kills
+    the edge swipe for the duration of a fling and needs a device pass. The one thing NOT to do is
+    answer it from this engine's own delegate.
+  - **`delaysTouchesEnded` must stay `false`.** A freshly constructed recognizer defaults to `true`,
+    and `UIScrollView.panGestureRecognizer` — what `ListViewImpl` scrolls on — is `false` (measured on
+    iOS 26.2, and asserted as a control in `PhysicsScrollEngineTests`). Left at the default, the list's
+    pan withholds every `UITouchPhaseEnded` from the views beneath it until it resolves. Row
+    recognizers never notice (they receive touches regardless of hit-testing), which is what makes it
+    invisible; a `UIControl` inside a row reads touch-up from the view, and chat's inline bot keyboards
+    are real `UIButton`s.
 - **Every view in the attachment chain must be a passthrough, and each level fails independently.**
   `AttachmentContainerView` spans the whole content area and is the topmost sibling in `contentHost`,
   and an attachment host typically spans the full content width — so any point one of them claims and

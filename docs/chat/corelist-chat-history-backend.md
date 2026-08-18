@@ -1091,6 +1091,72 @@ Related: a send that happens while the bottom-edge pin is held takes no `scrollT
 went down the `scrollToItem` path — `ListViewImpl` at the bottom of a chat took the pin-to-edge path
 instead and never scrolled.
 
+## Arriving messages slide in as a block
+
+A message arriving at the newest edge enters from beyond that edge and slides into place, rather than
+fading in where it will sit. `ListViewImpl` produces the same movement, and **not by a mechanism this
+backend can reuse** — which is the whole reason this is a CoreList track:
+
+- `ChatMessageItemView.animateInsertion` (`ChatMessageItemView.swift:712`) is the slide. It sets
+  `transitionOffset = -bounds.height * 1.6` and animates it back to zero.
+- `transitionOffset`'s `didSet` early-returns under `hostOwnsFrame` (`ListViewItemNode.swift:275`),
+  which `CoreListNodeHostView.rebuild` sets on every hosted node. The write reaches nothing. The
+  comment at `ListViewItemNode.swift:226` states the assumption outright: *"`transitionOffset` is
+  written only by `ListViewImpl` … neither of which runs under a host that sets this."*
+- `addTransitionOffsetAnimation` parks a `ListViewAnimation` that only `ListViewItemNode.animate(timestamp:)`
+  advances, and its sole caller is `ListViewImpl`'s display link (`ListView.swift:4823`).
+
+So calling `animateInsertion` from here would compile, run, and animate nothing — twice over. (Its
+other half, `ChatMessageBubbleItemNode`'s per-subnode alpha, *would* work, but that only duplicates the
+host-layer fade CoreList already installs.)
+
+**The track must be list-owned, not a raw CA animation on the row's layer.** Position tracks in
+`ListAnimationModel` are additive offsets decaying to zero, and `capturePresentedPositionOffsets()`
+reads `presented − model` on every bound live layer at the START of the next pass to recover exactly
+that quantity. An animation the backend added itself is indistinguishable from a track the model owns,
+so a second message landing mid-slide would resume against a displacement the model never issued —
+the same class of double-count that shipped once as every row snapping a whole growth backwards (see
+"Granular animation contract" in the CoreList `CLAUDE.md`). Going through
+`CoreVirtualListView.animateInsertedBlock(identities:origin:transition:)` also makes an overlapping
+arrival compose: `transitionPositionOffset` folds the in-flight `currentOffset` into the new track.
+
+**The block, not the row, is the unit.** Every named row takes the SAME offset — the run's total
+settled height, reserved space included — so a run arriving together keeps its spacing for the whole
+travel and lands as one piece. Per-row displacement would fan them out.
+
+**The host names the edge; the list measures the distance.** The backend cannot compute the height:
+it comes from the very pass the call follows. `origin` is in CoreList's **content order**, and the
+chat passes `.beforeBlock` — index 0 is the newest message and sits at the start of CoreList's
+content, which the wrapper's π renders at the visual bottom. Reading the case off the screen instead
+is how the sign gets inverted.
+
+**Which passes qualify** (`arrivingBlockStableIds`): a non-empty insert run that is contiguous and
+anchored at index 0, not covering the whole collection, without `.RequestItemInsertionAnimations`, and
+whose deletes — if any — form a contiguous run at the far END of the old array. Positional rather than
+by message direction, so a bot reply, a message from another peer and one sent from a second device
+all qualify by the same rule, and the backend needs no message semantics.
+
+**Neither deletes nor updates disqualify an arrival, and assuming either does breaks the commonest
+case.** Both were wrong in the first draft of this predicate:
+
+- **The history view is a sliding window of bounded size**, so a message landing at the newest edge
+  pushes the oldest one out of the view in the same transaction. `entries[0]` is the newest, so that
+  departure sits at the far end of the old array. `deleteIndices.isEmpty` therefore rejects nearly
+  every real arrival — the animation would appear only in a chat short enough not to have filled its
+  window yet. What actually disqualifies a pass is a departure anywhere *else*, which is a message
+  being removed rather than the window sliding. Note `deleteIndices` indexes the OLD array, so the
+  predicate needs `previousEntryCount`, captured before the transaction rewrites `self.entries`.
+- **A message from the author who sent the one before it changes that bubble's merge state**, which
+  arrives as an `updateIndicesAndItems` entry beside the insert.
+
+Like `animatesInsertions`, the call must survive `applyChanges`'s re-entrancy deferral — but here the
+danger is sharper, because the caller reads the window rather than passing a flag: `applyChanges`
+landing inside another pass re-dispatches itself and **returns having done nothing**, so a synchronous
+read afterwards would find the previous window and displace the wrong rows. `animateInsertedBlock`
+defers itself onto the same FIFO scheduler, behind the deferred pass. `InsertedBlockSlideTests` pins
+the geometry, the rigidity, the direction, the unloaded-row skip, the deferral, and the mid-slide
+composition, each with its own non-vacuity control.
+
 ## Deferred items / known limitations
 
 These are accepted for the PoC and are the follow-ups before the CoreList backend could be a real
@@ -1098,8 +1164,14 @@ option:
 
 1. **Per-item animation selectivity.** The pass transition is now derived from `scrollToItem` /
    `updateSizeAndInsets` / `options` (see Transaction flow), but it applies to the pass as a whole:
-   `options` distinctions finer than "does this animate, and on what curve" — per-index insertion
-   animations, `.AnimateCrossfade`, `.AnimateTopItemPosition` — still have no analogue.
+   `options` distinctions finer than "does this animate, and on what curve" — `.AnimateCrossfade`,
+   `.AnimateTopItemPosition` — still have no analogue.
+
+   **Insertion animations are now selective**, though not by per-index membership: the entering rows
+   of an arrival at the newest edge get their own position track (see "Arriving messages slide in as a
+   block"), which is the one place `ListViewImpl`'s per-index insertion animation was visible in the
+   chat. What is still missing is the general form — `requestItemInsertionAnimationsIndices` naming an
+   arbitrary subset, rather than the contiguous-run-at-index-0 case the chat actually produces.
 2. **Fine-grained transaction features ignored.** `stationaryItemRange` is mapped only by its
    nil-ness (to `anchorMode`): the range's actual bounds are discarded, so a transaction asking to
    hold a *specific* index range stationary gets CoreList's general visible-content preservation

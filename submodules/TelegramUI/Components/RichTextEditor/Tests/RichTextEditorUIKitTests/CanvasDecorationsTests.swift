@@ -60,33 +60,41 @@ final class CanvasDecorationsTests: XCTestCase {
 
     func test_placeholder_baselineMatchesRealFirstLineBaseline() {
         // The placeholder must sit on the paragraph's real first-line baseline (where the first typed glyph
-        // lands), not float above OR below it. Real text's first baseline is pushed down by the multiple's
-        // extra leading (body = 1.10) MINUS the render centering that raises the glyphs by HALF of it
-        // (BlockLayout.centeringDelta) — i.e. HALF the extra leading. (Using the full leading, as before the
-        // 2026-06-26 centering landed, left the ghost ~1pt below where typing actually appears.)
+        // lands), not float above OR below it. Under the pinned-box model that baseline is the font's
+        // ascender measured from the text origin, so the placeholder draws at `textOrigin` with NO shift.
+        // (Under the previous `lineHeightMultiple` model this needed half the multiple's extra leading.)
+        // Asserted against a REAL typed paragraph's baseline rather than a formula, so the two cannot drift.
         let v = canvas([.paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: []))])
         let box = v.boxes[0] as! BlockBox
         let draw = v.placeholderDraws().first!
         let font = StyleSheet.default.font(for: .body, attributes: .plain)
-        let ps = StyleSheet.default.paragraphStyle(for: .body, attributes: ParagraphAttributes(), list: nil)
-        let expectedShift = (ps.lineHeightMultiple - 1) * font.lineHeight / 2     // centered: half the extra leading
-        XCTAssertGreaterThan(expectedShift, 0.5)                                  // body shift is ~1pt
-        XCTAssertEqual(draw.origin.y, box.textOrigin.y + expectedShift, accuracy: 0.5)
+        XCTAssertEqual(draw.origin.y, box.textOrigin.y, accuracy: 0.5)
         XCTAssertEqual(draw.origin.x, box.textOrigin.x, accuracy: 0.5)            // horizontal unchanged
+
+        // The ghost's baseline (origin + ascender) is where a typed glyph's baseline actually lands.
+        let typed = canvas([.paragraph(ParagraphBlock(id: BlockID("t"), style: .body,
+                                                     runs: [TextRun(text: "A")]))])
+        let typedBox = typed.boxes[0] as! BlockBox
+        let typedBaseline = typedBox.textOrigin.y + (typedBox.layout.firstLineBaselineFromTop ?? -1)
+        XCTAssertEqual(draw.origin.y + font.ascender - box.textOrigin.y,
+                       typedBaseline - typedBox.textOrigin.y, accuracy: 0.5,
+                       "the ghost must share the baseline the first typed glyph gets")
     }
 
     func test_emptyParagraph_caretRectSpansTheLineHeight() {
-        // An empty line's caret must span the real line height (font.lineHeight × lineHeightMultiple), not the
-        // fixed 20pt fallback BlockLayout returns when there's no laid-out fragment — so it aligns with the
-        // placeholder and with a typed line.
+        // An empty line's caret must span a REAL line, not the fixed 20pt fallback BlockLayout returns
+        // when there's no laid-out fragment — so it aligns with the placeholder and with a typed line.
+        // Pinned to V2's one-line height exactly: at body size that is 20.29pt, which a loose
+        // "greater than 20.5" check could not distinguish from the 20pt fallback it is guarding against.
         let v = canvas([.paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: []))])
         let box = v.boxes[0] as! BlockBox
         let caret = v.caretRect(for: DocumentTextPosition(box.textStart))
         let font = StyleSheet.default.font(for: .body, attributes: .plain)
-        let ps = StyleSheet.default.paragraphStyle(for: .body, attributes: ParagraphAttributes(), list: nil)
-        let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
-        XCTAssertEqual(caret.height, font.lineHeight * mult, accuracy: 0.5)
-        XCTAssertGreaterThan(caret.height, 20.5)                                  // taller than the fixed-20 fallback
+        let factor = StyleSheet.default.metrics.body.lineSpacingFactor
+        XCTAssertEqual(caret.height,
+                       RichTextRenderMetrics.textHeight(font, factor: factor, lineCount: 1),
+                       accuracy: 0.01)
+        XCTAssertNotEqual(caret.height, 20.0, accuracy: 0.05, "not the fixed-20 fallback")
     }
 
     func test_placeholder_listItem_isInsetByHeadIndent() {

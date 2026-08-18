@@ -128,7 +128,8 @@ public final class ChatSendContactMessageContextPreview: UIView, ChatSendMessage
                 isPreview: true,
                 isStandalone: true,
                 rank: nil,
-                rankRole: nil
+                rankRole: nil,
+                isGiftMessageComposerPreview: false
             )
             items.append(item)
         }
@@ -283,7 +284,8 @@ public final class ChatSendAudioMessageContextPreview: UIView, ChatSendMessageCo
             isPreview: true,
             isStandalone: true,
             rank: nil,
-            rankRole: nil
+            rankRole: nil,
+            isGiftMessageComposerPreview: false
         )
         let items = [item]
         

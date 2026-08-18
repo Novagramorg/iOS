@@ -119,15 +119,29 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// The compact-composer layout knobs that affect measured text height. Applied to the live editor in
     /// `didLoad` AND to the throwaway probe in `measuredTextFieldHeight`, so the probe's height matches the
     /// live field's. (Height-irrelevant knobs — placeholders, theme, quote style — are NOT included.)
+    /// The composer lays text out with V2's chat-message metrics, so what you type reads like the
+    /// message you are about to send. It uses `RichTextRenderMetrics.default` rather than
+    /// `InstantPageTheme.chatMessageRenderMetrics()` because this module cannot import `InstantPageUI` —
+    /// that edge is a cycle (`InstantPageUI` depends on this module). The two are pinned equal by
+    /// `RichTextV2MetricsParityTests.test_editorDefaultMetrics_equalTheAdaptedChatMessageTheme`.
+    ///
+    /// **`edgeSpacingReduction` trims the field's outer padding to nothing.** V2 gives a top-level
+    /// paragraph `blockVerticalPadding + 2` = 6pt at each SEQUENCE EDGE (not to be confused with the
+    /// inter-paragraph gap, which is 1pt), so an untrimmed one-line field measures 33pt against the
+    /// text's own 21pt. In a page that padding is the page's margin; in the composer the input panel
+    /// already owns the padding around the field, which is why the pre-parity config zeroed the block
+    /// inset for the same reason. Trimming here is V2's own mechanism for a host that insets the whole
+    /// page — the chat bubble passes 1.0 for it — and it affects ONLY the edges, so the interior rhythm
+    /// stays V2-exact (guarded by `BlockSpacingTests.test_edgeSpacingReduction_trimsEdgesOnlyAndClampsAtZero`).
+    /// Measured: 33pt → 21pt for one line; it clamps at 0, so 6 is "remove it entirely".
+    private static let composerEdgeSpacingReduction: CGFloat = 6.0
+
     private static func applyComposerLayoutMetrics(to editor: RichTextEditorView) {
         editor.contentPageMargin = 0.0
         editor.minimumContentHeight = 0.0
-        editor.blockVerticalInset = 0.0
-        editor.textLayoutMetrics = TextLayoutMetrics(
-            bodyLineHeightMultiple: 1.0,       // line spacing (1.0 = natural/tight; 1.10 = document)
-            bodyParagraphSpacingBefore: 0,     // gap above each paragraph
-            bodyParagraphSpacingAfter: 0       // inter-paragraph gap (Enter-separated lines)
-        )
+        var metrics = RichTextRenderMetrics.default
+        metrics.edgeSpacingReduction = composerEdgeSpacingReduction
+        editor.renderMetrics = metrics
     }
 
     private func updateFormulaRenderer() {
@@ -373,7 +387,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case let .paragraph(p): return p.text.isEmpty
         case let .code(c): return c.text.isEmpty
         case let .pullQuote(pq): return pq.text.isEmpty
-        case .media, .table, .blockQuote, .details: return false
+        case .media, .table, .blockQuote, .details, .buttonRow: return false
         }
     }
     public var inputContentIsEmptyWhitespaceTrimmed: Bool {
@@ -382,7 +396,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             case let .paragraph(p): return p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .code(c): return c.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq): return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote, .details: return false
+            case .media, .table, .blockQuote, .details, .buttonRow: return false
             }
         }
     }

@@ -7,6 +7,7 @@ import TelegramUIPreferences
 import TextFormat
 import TelegramStringFormatting
 import MosaicLayout
+import UnsupportedContentPill
 
 // MARK: - Public layout data types
 
@@ -101,6 +102,7 @@ public enum InstantPageV2LaidOutItem {
     case thinking(InstantPageV2ThinkingItem)
     case slideshow(InstantPageV2SlideshowItem)
     case quoteFrame(InstantPageV2QuoteFrameItem)
+    case unsupportedContent(InstantPageV2UnsupportedItem)
 
     public var frame: CGRect {
         switch self {
@@ -127,6 +129,7 @@ public enum InstantPageV2LaidOutItem {
         case let .thinking(item):          return item.frame
         case let .slideshow(item):         return item.frame
         case let .quoteFrame(item):        return item.frame
+        case let .unsupportedContent(item): return item.frame
         }
     }
 
@@ -158,6 +161,7 @@ public enum InstantPageV2LaidOutItem {
         case var .thinking(item):         item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .thinking(item)
         case var .slideshow(item):        item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .slideshow(item)
         case var .quoteFrame(item):       item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .quoteFrame(item)
+        case var .unsupportedContent(item): item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .unsupportedContent(item)
         }
     }
 }
@@ -735,7 +739,15 @@ private func layoutBlockSequence(
     var contentHeight: CGFloat = 0.0
     var previousBlock: InstantPageBlock?
 
+    // One pill per run of undecodable blocks, everywhere a sequence is laid out. Indices are
+    // skipped rather than filtered out of `blocks`, so `i` below still addresses the original
+    // block positions that `pathPrefix + [i]` turns into structural paths.
+    let skippedBlockIndices = redundantUnsupportedBlockIndices(blocks)
+
     for (i, block) in blocks.enumerated() {
+        if skippedBlockIndices.contains(i) {
+            continue
+        }
         var spacing = spacingBetweenBlocks(upper: previousBlock, lower: block, kind: kind, metrics: context.metrics)
         // Leading page edge: give back the inset the host applied around the whole page. Clamped at
         // 0 — a flush first block (cover, anchor) has no padding here to give.
@@ -1275,7 +1287,17 @@ private func layoutBlock(
         result.append(contentsOf: captionItems)
         return result
     case .unsupported:
-        return []
+        return layoutUnsupportedBlock(
+            boundingWidth: boundingWidth,
+            horizontalInset: horizontalInset,
+            strings: UnsupportedContentPillStrings(strings: context.strings),
+            colors: context.theme.unsupportedPillColors,
+            // Depth, not `kind`: the top-level sequence starts from an empty prefix and every
+            // nesting step appends, so a direct child of the page — and only that — has a
+            // one-element path. `kind` cannot tell, because a blockquote lays its children out with
+            // the ENCLOSING sequence's kind.
+            isTopLevel: pathPrefix.count == 1
+        )
     }
 }
 

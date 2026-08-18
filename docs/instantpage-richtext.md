@@ -337,6 +337,58 @@ Plan: [`docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-auto
 - **Collage cells inherit this for free** — `.collage` flattens into ordinary `.mediaVideo` items, so
   each cell is an `InstantPageV2MediaVideoView` with no collage-specific code.
 
+## Copy protection (screenshot-protected rich-message media & secure gallery)
+
+Media in a **rich message** honors the chat's copy protection the way regular media does
+(`ChatMessageInteractiveMediaNode`'s `captureProtected`): every rendered image/video/thumbnail layer
+is excluded from screenshots and screen recordings via `setLayerDisableScreenshots`, and tapping one
+opens a **secure** `InstantPageGalleryController` — protected content, no share / save-to-camera-roll.
+V1 Instant View and web IV are untouched (their pages are public web content), and so is the send
+preview.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/InstantPageUI/Sources/InstantPageRenderer.swift` | `InstantPageV2RenderContext.captureProtected` (default `false`) + `updateCaptureProtected(_:)`. `updateInlineImages()` seeds and refreshes each `InstantPageV2InlineImageView`. |
+| `…/Chat/ChatMessageRichDataBubbleContentNode/…` | `isCaptureProtected(item:)` = `associatedData.isCopyProtectionEnabled \|\| message.isCopyProtected()`; passed to the render-context initializer and refreshed at the top of `ensurePageView` on every apply. |
+| `submodules/InstantPageUI/Sources/InstantPageImageNode.swift` | `captureProtected` drives the inner `TransformImageNode` and the (weakly tracked) spoiler blur node; `transitionNode(media:)` does the protected-snapshot dance. |
+| `submodules/InstantPageUI/Sources/InstantPageV2MediaViews.swift` | `makeMediaWrapper` seeds it; the image/video/map/cover views re-read it in `update(item:theme:renderContext:)`; the inline autoplay `NativeVideoContent` takes `captureProtected:`; `handleOpenMediaTap` forwards it to the gallery. |
+| `InstantPageV2SlideshowView.swift`, `InstantPageV2DocumentContentNode.swift`, `InstantPageV2InlineImageView.swift` | Slideshow pages, the document row's thumbnail, and inline `RichText.image` cells. |
+| `InstantPageMediaOpen.swift` → `InstantPageGalleryController.swift` → `InstantImageGalleryItem.swift` | `captureProtected` threads to each gallery entry: protected zoomable image node, `NativeVideoContent(captureProtected:)`, and `setShareMedia(nil)` to withhold the footer action button. |
+
+### Non-obvious invariants
+
+- **The flag is mutable state on the render context, not a constructor snapshot.**
+  `isCopyProtectionEnabled` is a *peer* setting that can be toggled while the message is on screen.
+  That changes neither the webpage nor the page layout, so nothing rebuilds the V2View — the bubble
+  refreshes the context up front in `ensurePageView` (ahead of every reuse branch, including the two
+  early returns) and each media view re-reads it in its own `update(…)`. Seeding it only at
+  construction leaves an on-screen message unprotected until it is scroll-recycled.
+- **A capture-protected layer is excluded from `snapshotContentTree` too.** So the gallery
+  open/close animation would fly a blank rect. `InstantPageImageNode.transitionNode(media:)` mirrors
+  `ChatMessageInteractiveMediaNode.transitionNode(adjustRect:)`: add an **unprotected** `UIImageView`
+  copy of `imageNode.image` over the protected node, snapshot, remove the stand-in, then
+  `setLayerDisableScreenshots` the resulting snapshot so the transition itself stays uncapturable.
+- **A concealed spoiler must be protected as well.** The blur cover is a sibling `TransformImageNode`
+  the enclosing view owns (`makeSpoilerBlurredNode()`), not a child of the sharp node, so protecting
+  the sharp node alone leaves a screenshot of the blurred cover — enough to read the media's shape.
+  `InstantPageImageNode` keeps a weak reference to the node it vends and keeps the two in sync.
+- **`NativeVideoContent` takes `captureProtected` at construction**, so a toggle has to *rebuild* the
+  inline player. `InstantPageV2MediaVideoView` therefore tracks `videoNodeCaptureProtected` alongside
+  `videoNodeMediaId` and includes it in the "player is still current" early-out.
+- **The video gallery's footer needs no gating.** `InstantPageGalleryEntry.item` passes
+  `originData: nil`, and `ChatItemGalleryFooterContentNode.setup(origin:caption:)` zeroes its whole
+  `buttonsState` when origin is nil — so no share button exists on that path to begin with. Only the
+  image path (`InstantPageGalleryFooterContentNode`) needed `setShareMedia(nil)`.
+- **Document blocks were already covered.** Tapping one routes through
+  `openMessage(…, mediaSubject: .richTextMedia(fileId))` → the chat's `GalleryController`, which
+  derives protection from the message itself. Only the row's *thumbnail* is protected in the bubble;
+  the file name/size text is metadata, and the regular chat file bubble does not protect its label
+  either.
+- **`InstantPageUI` gained a direct `UIKitRuntimeUtils` dep** (for `setLayerDisableScreenshots`);
+  everything else reaches protection through `TransformImageNode.captureProtected`.
+
 ## InstantPage V2 text item height (true font line box)
 
 `layoutTextItem` (`InstantPageV2Layout.swift`) sizes a `.text` item to the **true font line height**, not the cap box. A single-line item measures exactly `fontAscent + fontDescentBelowBaseline` (`A + D`); the old behavior was the cap box `fontLineHeight = floor(fontAscent + fontDescent)` (`A − D`).
@@ -810,6 +862,16 @@ related, a fixed radius rather than `height / 2` is the lever.
   `.callback` is visually indistinguishable from a link-styled `.url`. Note also that the link route
   deliberately does NOT push `.fontSize`/`.medium`: a pill owns its typography, a link inherits the
   paragraph's.
+- **An emoji-only link-button label gets NO underline.** The underline on a link button is never
+  markup: `InstantPageTextStyleStack.textAttributes()` adds it when the link colour equals the
+  surrounding text colour, which is the normal state in the chat-bubble themes and in the
+  caption/credit categories (see `setupStyleStack`). Under a custom emoji it draws as a stray rule —
+  wider than the glyph and detached from it — and there is no word for it to distinguish, so
+  `attributedStringForLinkStyleButton` strips `underlineStyle` when `richTextIsOnlyCustomEmoji(button.text)`.
+  That helper's switch is exhaustive on purpose (a new `RichText` case must decide) and answers `false`
+  for `.underline`, which is how an explicitly underlined label inside the button keeps its underline.
+  Whitespace and non-underlining wrappers (`.bold`, `.url`, `.textSpoiler`, …) still count as
+  emoji-only; one word anywhere in the label brings the underline back.
 - **Only `.url` rides `TelegramTextAttributes.URL`.** That is what buys the long-press menu, the
   concealed-URL confirmation, anchor scrolling and the link-progress shimmer for free.
   `.urlAuth` and `.openWebView` carry URLs but take the button-dispatch route instead, because their
@@ -926,6 +988,102 @@ related, a fixed radius rather than `height / 2` is the lever.
   only `rootMediaRegistryHost` is pushed down, by `propagateRegistryHost`. Pre-existing; unrelated to
   the loading effect, but it is why a nested button does nothing at all.
 
+## Unsupported blocks (InstantPageBlock.unsupported)
+
+Every block this build cannot decode arrives as `InstantPageBlock.unsupported` — it is the
+`default:` arm of the API-block conversion in `SyncCore_InstantPage.swift`, so a page authored
+against a newer server is a page full of them. V2 renders each as the shared "please update" pill;
+V1 Instant View still skips the block.
+
+The pill is the same component the chat's standalone unsupported-media bubble draws:
+`submodules/TelegramUI/Components/UnsupportedContentPill`. Its constants are a literal port of that
+bubble's geometry and are load-bearing for its appearance — changing one changes every unsupported
+message in the app.
+
+### Where things live
+
+| File | Responsibility |
+|---|---|
+| `submodules/TelegramUI/Components/UnsupportedContentPill/Sources/UnsupportedContentPill.swift` | `UnsupportedContentPillStrings` / `Colors` / `Layout`, and the single `measureUnsupportedContentPill(...)` both the pure layout pass and the view run. |
+| `.../UnsupportedContentPillView.swift` | The view: badge, text column, action button, and either a `.free` wallpaper bubble background or the static `colors.fill`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedItem.swift` | `InstantPageV2UnsupportedItem`, `redundantUnsupportedBlockIndices(_:)`, `layoutUnsupportedBlock(...)`. |
+| `submodules/InstantPageUI/Sources/InstantPageV2UnsupportedView.swift` | `InstantPageV2UnsupportedView` — the V2 item view wrapping the pill. |
+| `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `unsupportedPillFillColor` / `unsupportedPillPrimaryColor` and the derived `unsupportedPillColors`. |
+
+### Non-obvious invariants
+
+- **A maximal run of adjacent `.unsupported` blocks renders as ONE pill.** `layoutBlockSequence`
+  consults `redundantUnsupportedBlockIndices` in every sequence, nested ones included. It reports
+  indices to **skip** rather than returning a filtered array, because the loop index becomes
+  `pathPrefix + [i]` — the structural path checkbox toggling and anchors address blocks by.
+  Filtering would renumber every block after a collapsed run and silently toggle the wrong checkbox.
+- **The layout value carries geometry only.** `TextNode.asyncLayout(nil)`'s apply creates a *new*
+  node per call and the chat bubble re-lays out on every apply, so the view instead owns its three
+  text nodes and re-derives them through the same measure function. `constrainedWidth` travels on
+  the layout so the view can reproduce the host's measure pass exactly.
+- **Colours travel on `InstantPageTheme` and MUST be listed in `withUpdatedFontStyles`.** That
+  method reconstructs the theme field by field; an omitted field silently reverts to its init
+  default the first time the reader changes Instant View font size. Nothing warns; it compiles.
+- **The wallpaper travels as `InstantPageV2RenderContext.wallpaperBackgroundNode`, a closure.** A
+  closure so a message-scoped context does not retain the chat's background node. No absolute-rect
+  plumbing exists or is needed: `WallpaperBubbleBackgroundNode` is a portal view that mirrors its
+  source, so setting the frame is the whole contract.
+- **The Update button is always rendered.** `InstantPageV2View.unsupportedActionTapped` is nil in
+  the send preview, the text-processing screen and the formula editor, where the tap is inert — the
+  alternative (hiding it) would change the pill's width between preview and sent message.
+- **Reveal cost is `.nonText`.** The pill pops in atomically with its position in the stream, like a
+  button row.
+
+### Tearing the bubble across a pill
+
+In a chat bubble the pill does not sit *on* the bubble — the bubble background is **torn** across
+it: a full-width band is cut out, so the pill's content floats over the chat wallpaper.
+
+The band travels as geometry, not as a flag. `unsupportedContentTearZones(in:)` reads the
+**top-level** `.unsupportedContent` items of a laid-out page and pads each by
+`instantPageUnsupportedTearPadding` (6pt). `ChatMessageRichDataBubbleContentNode` maps them into its
+own space through `ChatMessageBubbleContentNode.unsupportedContentAreas()`, and
+`ChatMessageBubbleItemNode` collects them during its content-node layout loop, resolves them **once**
+with `resolveBubbleTearZones`, and hands the same bands to both `ChatMessageBackground` and
+`ChatMessageBubbleBackdrop`.
+
+Load-bearing details:
+
+- **Top level only, and the flag is what enforces it** — not the non-recursive walk. A blockquote
+  (and a list) lays its children out with `layoutBlock` and appends the resulting items straight
+  into its PARENT's array, offset, so a quoted pill sits in `layout.items` looking exactly like a
+  top-level one. `InstantPageV2UnsupportedItem.isTopLevel` is recorded during layout — the last
+  point that still knows the difference — as `pathPrefix.count == 1`. Depth, not `kind`: a
+  blockquote lays its children out with the *enclosing* sequence's kind, so `kind` cannot tell.
+  Not recursing merely keeps the walk cheap; it excludes only the containers that build a sub-layout
+  of their own (`details`, table cells).
+- **The mask is subtractive via `CALayer.luminanceToAlpha()`**: a **white** surface with **black**
+  bands. The backdrop's existing mask is the **black**-filled `bubbleMaskForType` image, which works
+  only because a `CALayer` mask reads alpha and ignores colour — so it cannot simply be filtered,
+  which would map it to alpha 0 and erase the whole backdrop. `BubbleBackdropMaskView` re-renders it
+  as a white `.alwaysTemplate` image when torn (alpha and stretch caps both survive template
+  rendering) and drops back to the plain image when not, so the filter is never installed on the
+  bubbles that are never torn.
+- **`luminanceToAlpha` is a private `CAFilter` and can be nil.** Then the bubble renders **untorn** —
+  never masked by a surface that would hide it.
+- **A residual run of bubble ≤ 8pt** at the top or bottom is absorbed into the band, so a message
+  whose only content is an unsupported block has no bubble at all. The band merge runs **twice** in
+  `resolveBubbleTearZones` because absorption can pull two bands to the same edge and make them
+  touch when they did not before.
+- **`ChatMessageBackground.updateTearMask` takes the size as a parameter** rather than reading
+  `self.bounds`: the layout passes set the node's own frame *after* calling it.
+- **`ChatMessageShadowNode` and `backgroundHighlightNode` are deliberately NOT torn.** The shadow is
+  only drawn in the context-menu preview; the highlight is the ~0.3s jump-to-message flash and does
+  paint over the gaps briefly.
+- **`ChatMessageBubbleBackdrop.maskView` stays public** and is now a `BubbleBackdropMaskView`.
+  `ChatMessageInstantVideoBubbleContentNode` sets `overrideMask` and hangs its own round
+  `BubbleMaskLayer` on that view's layer; that still works, because the extra layer lands above the
+  now-empty shape image and an instant-video bubble is never torn.
+- **With a patterned or gradient wallpaper the pill's own portal background and the torn gap are the
+  same pixels**, so the pill's card vanishes and only its badge and text read. That is the intended
+  effect and is why the band is full-width. With a plain-colour theme the pill keeps its faint
+  service fill and still reads as a card.
+
 ## InstantPage thinking blocks (InstantPageBlock.thinking)
 
 `InstantPageBlock.thinking(RichText)` renders server-sent reasoning as dimmed, continuously-shimmering text inside rich-data bubbles. V2 renderer only; V1 ignores the block (returns `[]`). The shimmer and fade-in mechanics are deliberately separate from the char-reveal cursor so thinking blocks do not affect the reveal pacing of the answer content that follows them.
@@ -1039,3 +1197,36 @@ var effectiveMedia: [Media] {
 - **`fullInstantPage` is not indexed** (the server doesn't index it either, and it's fetched on demand after store-time). The first media lives in the partial `instantPage` anyway.
 - **Only switch the loop SOURCE, never the per-type branches.** Many swapped loops still contain `TelegramMediaPoll`/`TelegramMediaPaidContent`/`TelegramMediaWebpage` branches that rich messages never match — that's fine and intentional; only the `for … in <msg>.media` source changes.
 - **Build-only completeness gate.** Every swap is type-identical (`[Media]` → `[Media]`), so the only compile risk is a receiver that is neither `Message` nor `EngineMessage`; the full Bazel build is the gate (no per-module build / unit tests). Deferred, NOT done: chat-list/reply/pinned/notification/forward thumbnail **previews** and the "Photo"/"Video" media-kind **labels** (`messageContentKind`/`ChatListItemStrings`) — those are preview surfaces, not blank-cell breakage — and **multi-media** (first-media-only is the current scope).
+
+## The chat-message text categories, and editor layout parity (2026-08-14)
+
+`layoutInstantPageV2` takes its fonts from the caller, so there is **no single V2 look** — and the three
+chat-side callers had each hand-copied their own `InstantPageTextCategories` table, which drifted: the
+bubble carried heading `lineSpacingFactor` 1.0 / body 0.9 while the long-press send preview and the
+TextProcessing screen carried 0.685 / 1.0, so **the send preview did not match the bubble it was
+previewing**. All three now share `InstantPageTextCategories.chatMessage(primaryText:secondaryText:)`
+(`InstantPageChatMessageTheme.swift`) with the bubble's values. That deliberately changed the preview and
+TextProcessing; the bubble's values won because it is the surface the recipient sees.
+
+The same table is what the **rich-text editor lays text out with**, so an author composing a rich message
+sees the message. `InstantPageTheme.richTextRenderMetrics(edgeSpacingReduction:)`
+(`InstantPageRichTextMetricsAdapter.swift`) projects any theme into the editor's `RichTextRenderMetrics`
+contract, and `chatMessageRenderMetrics()` is the convenience both editor hosts call. The heading ladder
+comes from `headingTextAttributes(level:link:)` rather than being restated, so H3–H6's derivation from the
+subheader (and its response to the reader's font-size slider) stays shared. `codeBlock` reports the
+metrics' 15pt, not the theme's nominal 14pt, because `layoutCodeBlock` overrides the category with an
+absolute 15 — 14 is a size the renderer never uses.
+
+**`InstantPageUI` gained a direct dep on `RichTextEditorUIKit`**, which it already had transitively via
+`ChatRichTextEditorComposer`, so there is no cycle. The adapter has to live on this side: the composer
+module cannot import `InstantPageUI` (that direction *is* the cycle), which is why the composer passes
+`RichTextRenderMetrics.default` and a test pins that default equal to the adapted theme.
+
+Two parity test suites live in `//submodules/InstantPageUI:InstantPageUITests`, both calling the
+renderer's own functions so a change on either side that breaks parity fails here:
+`RichTextV2MetricsParityTests` pins the editor's line formulas against `layoutTextItem`, its resolved font
+faces against `InstantPageTextStyleStack`'s family scheme, and the **whole** pairwise gap table against
+`spacingBetweenBlocks`; `RichTextV2FrameParityTests` pins that the editor composes those primitives into
+the same running origin. **Do not change a value in `chatMessage` without expecting the editor to move
+with it** — that coupling is the point. Editor-side detail, and what is deferred, is in
+`submodules/TelegramUI/Components/RichTextEditor/CLAUDE.md`.

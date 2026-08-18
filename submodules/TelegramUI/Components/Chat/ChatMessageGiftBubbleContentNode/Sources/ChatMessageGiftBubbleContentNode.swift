@@ -16,6 +16,7 @@ import WallpaperBackgroundNode
 import ReactionSelectionNode
 import AnimatedStickerNode
 import TelegramAnimatedStickerNode
+import AvatarNode
 import ChatControllerInteraction
 import ShimmerEffect
 import Markdown
@@ -44,6 +45,11 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     private var spoilerSubtitleNode: TextNodeWithEntities?
     private let textClippingNode: ASDisplayNode
     private var dustNode: InvisibleInkDustNode?
+    private let giftMessageBackgroundNode: ASImageNode
+    private let giftMessageAvatarNode: AvatarNode
+    private let giftMessageTextNode: TextNodeWithEntities
+    private var giftMessageSpoilerTextNode: TextNodeWithEntities?
+    private var giftMessageDustNode: InvisibleInkDustNode?
     private let placeholderNode: StickerShimmerEffectNode
     private let animationNode: AnimatedStickerNode
     private let giftIcon = ComponentView<Empty>()
@@ -101,11 +107,15 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 switch self.visibility {
                 case .none:
                     self.subtitleNode.visibilityRect = nil
+                    self.giftMessageTextNode.visibilityRect = nil
+                    self.giftMessageSpoilerTextNode?.visibilityRect = nil
                 case let .visible(_, subRect):
                     var subRect = subRect
                     subRect.origin.x = 0.0
                     subRect.size.width = 10000.0
                     self.subtitleNode.visibilityRect = subRect
+                    self.giftMessageTextNode.visibilityRect = subRect
+                    self.giftMessageSpoilerTextNode?.visibilityRect = subRect
                 }
             }
         }
@@ -123,6 +133,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     private var setupTimestamp: Double?
     
     private var cachedTonImage: (UIImage, UIColor)?
+    private var cachedGiftMessageBackgroundImage: (UIColor, CGSize, UIImage)?
     
     required public init() {
         self.labelNode = TextNode()
@@ -143,6 +154,23 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         
         self.textClippingNode = ASDisplayNode()
         self.textClippingNode.clipsToBounds = true
+
+        self.giftMessageBackgroundNode = ASImageNode()
+        self.giftMessageBackgroundNode.isLayerBacked = true
+        self.giftMessageBackgroundNode.displayWithoutProcessing = true
+        self.giftMessageBackgroundNode.displaysAsynchronously = false
+        self.giftMessageBackgroundNode.isUserInteractionEnabled = false
+        self.giftMessageBackgroundNode.isHidden = true
+
+        self.giftMessageAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 12.0))
+        self.giftMessageAvatarNode.frame = CGRect(origin: .zero, size: CGSize(width: 22.0, height: 22.0))
+        self.giftMessageAvatarNode.isUserInteractionEnabled = false
+        self.giftMessageAvatarNode.isHidden = true
+
+        self.giftMessageTextNode = TextNodeWithEntities()
+        self.giftMessageTextNode.textNode.isUserInteractionEnabled = false
+        self.giftMessageTextNode.textNode.displaysAsynchronously = false
+        self.giftMessageTextNode.textNode.isHidden = true
         
         self.modelTitleTextNode = TextNode()
         self.modelTitleTextNode.isUserInteractionEnabled = false
@@ -206,6 +234,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         self.addSubnode(self.titleNode)
         self.addSubnode(self.textClippingNode)
         self.textClippingNode.addSubnode(self.subtitleNode.textNode)
+        self.addSubnode(self.giftMessageBackgroundNode)
+        self.addSubnode(self.giftMessageAvatarNode)
+        self.addSubnode(self.giftMessageTextNode.textNode)
         self.addSubnode(self.placeholderNode)
         self.addSubnode(self.animationNode)
         self.addSubnode(self.moreTextNode)
@@ -282,7 +313,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 switch action.action {
                 case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
-                case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     releasedBy = gift.releasedBy
                 default:
                     break
@@ -382,6 +413,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let makeSubtitleLayout = TextNodeWithEntities.asyncLayout(self.subtitleNode)
         let makeSpoilerSubtitleLayout = TextNodeWithEntities.asyncLayout(self.spoilerSubtitleNode)
+        let makeGiftMessageLayout = TextNodeWithEntities.asyncLayout(self.giftMessageTextNode)
+        let makeGiftMessageSpoilerLayout = TextNodeWithEntities.asyncLayout(self.giftMessageSpoilerTextNode)
         let makeButtonTitleLayout = TextNode.asyncLayout(self.buttonTitleNode)
         let makeRibbonTextLayout = TextNode.asyncLayout(self.ribbonTextNode)
         let makeMeasureTextLayout = TextNode.asyncLayout(nil)
@@ -401,6 +434,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         let currentIsExpanded = self.isExpanded
         
         let cachedTonImage = self.cachedTonImage
+        let cachedGiftMessageBackgroundImage = self.cachedGiftMessageBackgroundImage
         
         return { item, layoutConstants, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: true, headerSpacing: 0.0, hidesBackground: .always, forceFullCorners: false, forceAlignment: .center)
@@ -415,7 +449,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     incoming = item.message.effectivelyIncoming(item.context.account.peerId)
                 }
                 
-                let attributedString = attributedServiceMessageString(theme: item.presentationData.theme, strings: item.presentationData.strings, nameDisplayOrder: item.presentationData.nameDisplayOrder, dateTimeFormat: item.presentationData.dateTimeFormat, message: EngineMessage(item.message), accountPeerId: item.context.account.peerId)
+                var attributedString = attributedServiceMessageString(theme: item.presentationData.theme, strings: item.presentationData.strings, nameDisplayOrder: item.presentationData.nameDisplayOrder, dateTimeFormat: item.presentationData.dateTimeFormat, message: EngineMessage(item.message), accountPeerId: item.context.account.peerId)
             
                 var primaryTextColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper).primaryText
                                 
@@ -427,6 +461,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 var text = ""
                 var subtitleColor = primaryTextColor
                 var entities: [MessageTextEntity] = []
+                var giftMessageText: String?
+                var giftMessageEntities: [MessageTextEntity]?
+                var giftMessagePeer: EnginePeer?
+                var giftMessageIsPlaceholder = false
                 var buttonTitle = item.presentationData.strings.Notification_PremiumGift_View
                 var buttonIcon: String?
                 var ribbonTitle = ""
@@ -690,9 +728,19 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     }
                                 }
                             }
-                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _, _, _, fromOffer, _, isCrafted):
-                            if case let .unique(uniqueGift) = gift {
+                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, senderId, _, _, _, _, _, _, fromOffer, _, isCrafted, giftText, giftEntities, _):
+                            if case let .unique(uniqueGiftValue) = gift {
                                 isStarGift = true
+                                giftMessageText = giftText
+                                giftMessageEntities = giftEntities
+                                
+                                if let senderId, let peer = item.message.peers[senderId] {
+                                    giftMessagePeer = EnginePeer(peer)
+                                } else if let author = item.message.author {
+                                    giftMessagePeer = EnginePeer(author)
+                                } else if !incoming {
+                                    giftMessagePeer = item.associatedData.accountPeer ?? item.message.peers[item.context.account.peerId].flatMap { EnginePeer($0) }
+                                }
                                 
                                 if let releasedBy = gift.releasedBy, let peer = item.message.peers[releasedBy], let addressName = peer.addressName {
                                     creatorButtonTitle = item.presentationData.strings.Notification_StarGift_ReleasedBy("**@\(addressName)**").string
@@ -709,8 +757,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else {
                                     authorName = item.message.author.flatMap { EnginePeer($0) }?.compactDisplayTitle ?? ""
                                 }
+                                let _ = authorName
                                 if isStoryEntity {
-                                    title = uniqueGift.title
+                                    title = uniqueGiftValue.title
                                 } else if isSelfGift {
                                     if isCrafted {
                                         title = item.presentationData.strings.Notification_StarGift_Crafted_Title
@@ -721,10 +770,12 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     }
                                 } else if item.message.id.peerId.isTelegramNotifications {
                                     title = item.presentationData.strings.Notification_StarGift_TitleShort
+                                } else if let giftMessagePeer {
+                                    title = item.presentationData.strings.Notification_StarGift_Title(giftMessagePeer.compactDisplayTitle).string
                                 } else {
-                                    title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
-                                }    
-                                text = isStoryEntity ? "**\(item.presentationData.strings.Notification_StarGift_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**" : "**\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: item.presentationData.dateTimeFormat))**"
+                                    title = item.presentationData.strings.Notification_StarGift_TitleShort
+                                }
+                                text = isStoryEntity ? "**\(item.presentationData.strings.Notification_StarGift_Collectible) #\(formatCollectibleNumber(uniqueGiftValue.number, dateTimeFormat: item.presentationData.dateTimeFormat))**" : "**\(uniqueGiftValue.title) #\(formatCollectibleNumber(uniqueGiftValue.number, dateTimeFormat: item.presentationData.dateTimeFormat))**"
                                 if fromOffer {
                                     ribbonTitle = incoming ? "" : item.presentationData.strings.Notification_StarGift_Sold
                                     customRibbonColors = [UIColor(rgb: 0xd9433a), UIColor(rgb: 0xff645b)]
@@ -737,13 +788,13 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 backdropTitle = item.presentationData.strings.Notification_StarGift_Backdrop
                                 symbolTitle = item.presentationData.strings.Notification_StarGift_Symbol
                                 
-                                if uniqueGift.flags.contains(.isBurned) {
+                                if uniqueGiftValue.flags.contains(.isBurned) {
                                     ribbonTitle = item.presentationData.strings.Notification_StarGift_Burned
                                     customRibbonColors = [UIColor(rgb: 0xd9433a), UIColor(rgb: 0xff645b)]
                                     buttonTitle = ""
                                 }
                                 
-                                for attribute in uniqueGift.attributes {
+                                for attribute in uniqueGiftValue.attributes {
                                     switch attribute {
                                     case let .model(name, file, _, _):
                                         modelValue = name
@@ -805,6 +856,23 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 default:
                     animationName = "Gift3"
                 }
+
+                let isGiftMessageComposerPreview = item.attributes.isGiftMessageComposerPreview
+                if isGiftMessageComposerPreview {
+                    hasServiceMessage = true
+                    attributedString = NSAttributedString(
+                        string: item.presentationData.strings.Gift_Message_PreviewInChat,
+                        font: Font.regular(13.0),
+                        textColor: primaryTextColor,
+                        paragraphAlignment: .center
+                    )
+                    buttonTitle = item.presentationData.strings.Gift_Message_SendNow
+                    if giftMessageText?.isEmpty != false {
+                        giftMessageText = item.presentationData.strings.Gift_Message_YourMessage
+                        giftMessageEntities = nil
+                        giftMessageIsPlaceholder = true
+                    }
+                }
                 
                 let (labelLayout, labelApply) = makeLabelLayout(TextNodeLayoutArguments(attributedString: attributedString, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedSize.width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 
@@ -855,6 +923,53 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 
                 let (_, spoilerSubtitleApply) = makeSpoilerSubtitleLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets(), displaySpoilers: true))
+
+                let hasGiftMessage = giftMessageText?.isEmpty == false
+                let giftMessageTextColor = giftMessageIsPlaceholder ? primaryTextColor.withAlphaComponent(0.65) : primaryTextColor
+                let attributedGiftMessageText: NSAttributedString
+                if let giftMessageText {
+                    if let giftMessageEntities, !giftMessageEntities.isEmpty {
+                        attributedGiftMessageText = stringWithAppliedEntities(giftMessageText, entities: giftMessageEntities, baseColor: giftMessageTextColor, linkColor: giftMessageTextColor, baseFont: Font.regular(13.0), linkFont: Font.regular(13.0), boldFont: Font.semibold(13.0), italicFont: Font.italic(13.0), boldItalicFont: Font.semiboldItalic(13.0), fixedFont: Font.monospace(13.0), blockQuoteFont: Font.regular(13.0), message: item.message, paragraphAlignment: .left)
+                    } else {
+                        attributedGiftMessageText = NSAttributedString(string: giftMessageText, font: Font.regular(13.0), textColor: giftMessageTextColor, paragraphAlignment: .left)
+                    }
+                } else {
+                    attributedGiftMessageText = NSAttributedString()
+                }
+                let giftMessageTextConstrainedSize = CGSize(width: giftSize.width - 88.0, height: CGFloat.greatestFiniteMagnitude)
+                let (giftMessageTextLayout, giftMessageTextApply) = makeGiftMessageLayout(TextNodeLayoutArguments(attributedString: attributedGiftMessageText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: giftMessageTextConstrainedSize, alignment: .left, cutout: nil, insets: UIEdgeInsets()))
+                let (_, giftMessageSpoilerApply) = makeGiftMessageSpoilerLayout(TextNodeLayoutArguments(attributedString: attributedGiftMessageText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: giftMessageTextConstrainedSize, alignment: .left, cutout: nil, insets: UIEdgeInsets(), displaySpoilers: true))
+
+                var updatedCachedGiftMessageBackgroundImage = cachedGiftMessageBackgroundImage
+                var giftMessageBackgroundImage: UIImage?
+                var giftMessageBubbleSize: CGSize?
+                if hasGiftMessage {
+                    let fillColor: UIColor
+                    if let uniqueBackgroundColor {
+                        fillColor = subtitleColor.mixedWith(uniqueBackgroundColor, alpha: 0.55)
+                    } else {
+                        fillColor = subtitleColor.withAlphaComponent(0.3)
+                    }
+                    let updatedGiftMessageBubbleSize = CGSize(
+                        width: giftMessageTextLayout.size.width + 34.0,
+                        height: max(giftMessageTextLayout.size.height + 14.0, 35.0)
+                    )
+                    if updatedCachedGiftMessageBackgroundImage?.0.isEqual(fillColor) != true || updatedCachedGiftMessageBackgroundImage?.1 != updatedGiftMessageBubbleSize {
+                        if let image = generateGiftMessageBubbleBackgroundImage(
+                            fillColor: fillColor,
+                            wallpaper: item.presentationData.theme.wallpaper,
+                            size: updatedGiftMessageBubbleSize
+                        ) {
+                            updatedCachedGiftMessageBackgroundImage = (fillColor, updatedGiftMessageBubbleSize, image)
+                        } else {
+                            updatedCachedGiftMessageBackgroundImage = nil
+                        }
+                    }
+                    if let image = updatedCachedGiftMessageBackgroundImage?.2 {
+                        giftMessageBackgroundImage = image
+                        giftMessageBubbleSize = updatedGiftMessageBubbleSize
+                    }
+                }
                 
                 var canExpand = false
                 var clippedTextHeight: CGFloat = subtitleLayout.size.height
@@ -868,39 +983,39 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 let infoConstrainedSize = CGSize(width: (giftSize.width - 32.0) * 0.7, height: CGFloat.greatestFiniteMagnitude)
                 let modelTitleLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-                if let modelTitle {
+                if !hasGiftMessage, let modelTitle {
                     modelTitleLayoutAndApply = makeModelTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: modelTitle, font: Font.regular(13.0), textColor: subtitleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: infoConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 } else {
                     modelTitleLayoutAndApply = nil
                 }
                 let modelValueLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-                if let modelValue {
+                if !hasGiftMessage, let modelValue {
                     modelValueLayoutAndApply = makeModelValueLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: modelValue, font: Font.semibold(13.0), textColor: primaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: infoConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 } else {
                     modelValueLayoutAndApply = nil
                 }
                 
                 let backdropTitleLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-                if let backdropTitle {
+                if !hasGiftMessage, let backdropTitle {
                     backdropTitleLayoutAndApply = makeBackdropTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: backdropTitle, font: Font.regular(13.0), textColor: subtitleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: infoConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 } else {
                     backdropTitleLayoutAndApply = nil
                 }
                 let backdropValueLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-                if let backdropValue {
+                if !hasGiftMessage, let backdropValue {
                     backdropValueLayoutAndApply = makeBackdropValueLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: backdropValue, font: Font.semibold(13.0), textColor: primaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: infoConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 } else {
                     backdropValueLayoutAndApply = nil
                 }
                 
                 let symbolTitleLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-                if let symbolTitle {
+                if !hasGiftMessage, let symbolTitle {
                     symbolTitleLayoutAndApply = makeSymbolTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: symbolTitle, font: Font.regular(13.0), textColor: subtitleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: infoConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 } else {
                     symbolTitleLayoutAndApply = nil
                 }
                 let symbolValueLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-                if let symbolValue {
+                if !hasGiftMessage, let symbolValue {
                     symbolValueLayoutAndApply = makeSymbolValueLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: symbolValue, font: Font.semibold(13.0), textColor: primaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: infoConstrainedSize, alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 } else {
                     symbolValueLayoutAndApply = nil
@@ -927,7 +1042,13 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 giftSize.height = titleLayout.size.height + textSpacing + clippedTextHeight + 164.0
                 
-                if let _ = modelTitle {
+                if let giftMessageBubbleSize {
+                    giftSize.height += giftMessageBubbleSize.height + 26.0
+
+                    if !creatorButtonTitle.isEmpty {
+                        giftSize.height += creatorButtonTitleLayout.size.height + 13.0
+                    }
+                } else if let _ = modelTitle {
                     giftSize.height += 70.0
                     
                     if !creatorButtonTitle.isEmpty {
@@ -1017,7 +1138,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.animationNode.isHidden = isStoryEntity
                             
                             strongSelf.buttonNode.isHidden = buttonTitle.isEmpty
-                            strongSelf.buttonNode.isUserInteractionEnabled = !item.presentationData.isPreview
+                            strongSelf.buttonNode.isUserInteractionEnabled = !item.presentationData.isPreview || isGiftMessageComposerPreview
                             strongSelf.buttonTitleNode.isHidden = buttonTitle.isEmpty
                             
                             strongSelf.creatorButtonNode.isHidden = creatorButtonTitle.isEmpty
@@ -1068,10 +1189,18 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.placeholderNode.frame = animationFrame
                             
                             strongSelf.cachedTonImage = updatedCachedTonImage
+                            strongSelf.cachedGiftMessageBackgroundImage = updatedCachedGiftMessageBackgroundImage
                             
                             let _ = labelApply()
                             let _ = titleApply()
                             let _ = subtitleApply(TextNodeWithEntities.Arguments(
+                                context: item.context,
+                                cache: item.controllerInteraction.presentationContext.animationCache,
+                                renderer: item.controllerInteraction.presentationContext.animationRenderer,
+                                placeholderColor: item.presentationData.theme.theme.chat.message.freeform.withWallpaper.reactionInactiveBackground,
+                                attemptSynchronous: synchronousLoads
+                            ))
+                            let _ = giftMessageTextApply(TextNodeWithEntities.Arguments(
                                 context: item.context,
                                 cache: item.controllerInteraction.presentationContext.animationCache,
                                 renderer: item.controllerInteraction.presentationContext.animationRenderer,
@@ -1140,6 +1269,86 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 animation.animator.updateFrame(layer: maskOverlayView.layer, frame: CGRect(origin: .zero, size: CGSize(width: clippingTextFrame.width, height: clippingTextFrame.height)), completion: nil)
                             }
                             animation.animator.updateFrame(layer: strongSelf.moreTextNode.layer, frame: CGRect(origin: CGPoint(x: clippingTextFrame.maxX - moreLayout.size.width, y: clippingTextFrame.maxY - moreLayout.size.height), size: moreLayout.size), completion: nil)
+
+                            if let giftMessageBubbleSize, let giftMessageBackgroundImage {
+                                strongSelf.giftMessageBackgroundNode.isHidden = false
+                                strongSelf.giftMessageAvatarNode.isHidden = false
+                                strongSelf.giftMessageTextNode.textNode.isHidden = false
+                                strongSelf.giftMessageBackgroundNode.image = giftMessageBackgroundImage
+
+                                let avatarSize = CGSize(width: 22.0, height: 22.0)
+                                let rowWidth = avatarSize.width + giftMessageBubbleSize.width
+                                let rowOriginX = mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - rowWidth) / 2.0)
+                                let giftMessageBubbleFrame = CGRect(
+                                    origin: CGPoint(x: rowOriginX + avatarSize.width, y: clippingTextFrame.maxY + attributesOffsetY + 15.0),
+                                    size: giftMessageBubbleSize
+                                )
+                                let giftMessageBackgroundFrame = giftMessageBubbleFrame.offsetBy(dx: -3.0, dy: 0.0)
+                                let giftMessageTextFrame = CGRect(
+                                    origin: CGPoint(
+                                        x: giftMessageBubbleFrame.minX + floorToScreenPixels((giftMessageBubbleFrame.width - giftMessageTextLayout.size.width) / 2.0),
+                                        y: giftMessageBubbleFrame.minY + floorToScreenPixels((giftMessageBubbleFrame.height - giftMessageTextLayout.size.height) / 2.0)
+                                    ),
+                                    size: giftMessageTextLayout.size
+                                )
+                                let giftMessageAvatarFrame = CGRect(
+                                    origin: CGPoint(x: rowOriginX + 1.0, y: giftMessageBubbleFrame.maxY - avatarSize.height - 2.0),
+                                    size: avatarSize
+                                )
+
+                                animation.animator.updateFrame(layer: strongSelf.giftMessageBackgroundNode.layer, frame: giftMessageBackgroundFrame, completion: nil)
+                                animation.animator.updatePosition(layer: strongSelf.giftMessageTextNode.textNode.layer, position: giftMessageTextFrame.center, completion: nil)
+                                strongSelf.giftMessageTextNode.textNode.bounds = CGRect(origin: .zero, size: giftMessageTextFrame.size)
+                                animation.animator.updateFrame(layer: strongSelf.giftMessageAvatarNode.layer, frame: giftMessageAvatarFrame, completion: nil)
+
+                                strongSelf.giftMessageAvatarNode.setPeer(
+                                    context: item.context,
+                                    theme: item.presentationData.theme.theme,
+                                    peer: giftMessagePeer,
+                                    overrideImage: nil,
+                                    synchronousLoad: synchronousLoads,
+                                    displayDimensions: avatarSize
+                                )
+
+                                if !giftMessageTextLayout.spoilers.isEmpty {
+                                    let giftMessageSpoilerTextNode = giftMessageSpoilerApply(TextNodeWithEntities.Arguments(
+                                        context: item.context,
+                                        cache: item.controllerInteraction.presentationContext.animationCache,
+                                        renderer: item.controllerInteraction.presentationContext.animationRenderer,
+                                        placeholderColor: item.presentationData.theme.theme.chat.message.freeform.withWallpaper.reactionInactiveBackground,
+                                        attemptSynchronous: synchronousLoads
+                                    ))
+                                    if strongSelf.giftMessageSpoilerTextNode == nil {
+                                        giftMessageSpoilerTextNode.textNode.alpha = 0.0
+                                        giftMessageSpoilerTextNode.textNode.isUserInteractionEnabled = false
+                                        strongSelf.giftMessageSpoilerTextNode = giftMessageSpoilerTextNode
+                                        strongSelf.insertSubnode(giftMessageSpoilerTextNode.textNode, aboveSubnode: strongSelf.giftMessageTextNode.textNode)
+                                    }
+                                    giftMessageSpoilerTextNode.textNode.frame = giftMessageTextFrame
+
+                                    let giftMessageDustNode: InvisibleInkDustNode
+                                    if let current = strongSelf.giftMessageDustNode {
+                                        giftMessageDustNode = current
+                                    } else {
+                                        giftMessageDustNode = InvisibleInkDustNode(textNode: giftMessageSpoilerTextNode.textNode, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
+                                        strongSelf.giftMessageDustNode = giftMessageDustNode
+                                        strongSelf.insertSubnode(giftMessageDustNode, aboveSubnode: giftMessageSpoilerTextNode.textNode)
+                                    }
+                                    giftMessageDustNode.frame = giftMessageTextFrame.insetBy(dx: -3.0, dy: -3.0).offsetBy(dx: 0.0, dy: 1.0)
+                                    giftMessageDustNode.update(size: giftMessageDustNode.frame.size, color: primaryTextColor, textColor: primaryTextColor, rects: giftMessageTextLayout.spoilers.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 1.0, dy: 1.0) }, wordRects: giftMessageTextLayout.spoilerWords.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 1.0, dy: 1.0) })
+                                } else if let giftMessageDustNode = strongSelf.giftMessageDustNode {
+                                    giftMessageDustNode.removeFromSupernode()
+                                    strongSelf.giftMessageDustNode = nil
+                                }
+                            } else {
+                                strongSelf.giftMessageBackgroundNode.isHidden = true
+                                strongSelf.giftMessageAvatarNode.isHidden = true
+                                strongSelf.giftMessageTextNode.textNode.isHidden = true
+                                if let giftMessageDustNode = strongSelf.giftMessageDustNode {
+                                    giftMessageDustNode.removeFromSupernode()
+                                    strongSelf.giftMessageDustNode = nil
+                                }
+                            }
                             
                             if !subtitleLayout.spoilers.isEmpty {
                                 let spoilerSubtitleNode = spoilerSubtitleApply(TextNodeWithEntities.Arguments(
@@ -1178,6 +1387,13 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             let attributeSpacing: CGFloat = 6.0
                             let attributeVerticalSpacing: CGFloat = 22.0
                             var attributeMidpoints: [CGFloat] = []
+
+                            strongSelf.modelTitleTextNode.isHidden = modelTitleLayoutAndApply == nil
+                            strongSelf.modelValueTextNode.isHidden = modelValueLayoutAndApply == nil
+                            strongSelf.backdropTitleTextNode.isHidden = backdropTitleLayoutAndApply == nil
+                            strongSelf.backdropValueTextNode.isHidden = backdropValueLayoutAndApply == nil
+                            strongSelf.symbolTitleTextNode.isHidden = symbolTitleLayoutAndApply == nil
+                            strongSelf.symbolValueTextNode.isHidden = symbolValueLayoutAndApply == nil
                             
                             func appendAttributeMidpoint(titleLayout: TextNodeLayout?, valueLayout: TextNodeLayout?) {
                                 if let titleLayout, let valueLayout {
@@ -1249,7 +1465,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
  
                             var buttonSize = CGSize(width: buttonTitleLayout.size.width + 38.0, height: 34.0)
                             var buttonOriginY = clippingTextFrame.maxY + 10.0
-                            if modelTitleLayoutAndApply != nil {
+                            if let giftMessageBubbleSize {
+                                buttonOriginY = clippingTextFrame.maxY + attributesOffsetY + 15.0 + giftMessageBubbleSize.height + 18.0
+                            } else if modelTitleLayoutAndApply != nil {
                                 buttonOriginY = clippingTextFrame.maxY + attributesOffsetY + 80.0
                             }
                             strongSelf.buttonTitleNode.frame = CGRect(origin: CGPoint(x: 19.0, y: 8.0), size: buttonTitleLayout.size)
@@ -1473,11 +1691,13 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             switch strongSelf.visibility {
                             case .none:
                                 strongSelf.subtitleNode.visibilityRect = nil
+                                strongSelf.giftMessageTextNode.visibilityRect = nil
                             case let .visible(_, subRect):
                                 var subRect = subRect
                                 subRect.origin.x = 0.0
                                 subRect.size.width = 10000.0
                                 strongSelf.subtitleNode.visibilityRect = subRect
+                                strongSelf.giftMessageTextNode.visibilityRect = subRect
                             }
                         }
                     })
@@ -1575,6 +1795,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
             return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
                 self?.expandPressed()
             }))
+        } else if self.item?.attributes.isGiftMessageComposerPreview == true {
+            return ChatMessageBubbleContentTapAction(content: .ignore)
         } else if let backgroundNode = self.backgroundNode, backgroundNode.frame.contains(point) {
             return ChatMessageBubbleContentTapAction(content: .openMessage)
         } else if self.mediaBackgroundContent?.frame.contains(point) == true {

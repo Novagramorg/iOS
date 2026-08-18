@@ -558,7 +558,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             }
                             return true
                         })
-                        
+
                         var messageText = message.text
                         var messageMedia = message.media
                         var hasDice = false
@@ -581,12 +581,22 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 }
                             }
                         }
+
+                        let ephemeralParams = ephemeralForwardParams(message)
+                        if ephemeralParams != nil {
+                            if message.id.namespace == Namespaces.Message.EphemeralLocal || (hideNames && !hasDice) {
+                                attributes.removeAll(where: { $0 is InlineBotMessageAttribute })
+                            } else if let inlineBotPeerId = ephemeralParams?.inlineBotPeerId, !attributes.contains(where: { $0 is InlineBotMessageAttribute }) {
+                                attributes.append(InlineBotMessageAttribute(peerId: inlineBotPeerId, title: nil))
+                            }
+                        }
                         
                         var forwardInfo: MessageForwardInfo?
-                        if let existingForwardInfo = message.forwardInfo {
+                        if let ephemeralParams {
+                            forwardInfo = MessageForwardInfo(author: ephemeralParams.authorId.flatMap { message.peers[$0] }, source: ephemeralParams.sourceId.flatMap { message.peers[$0] }, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
+                        } else if let existingForwardInfo = message.forwardInfo {
                             forwardInfo = MessageForwardInfo(author: existingForwardInfo.author, source: existingForwardInfo.source, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
-                        }
-                        else {
+                        } else {
                             forwardInfo = MessageForwardInfo(author: message.author, source: nil, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
                         }
                         if hideNames && !hasDice {
