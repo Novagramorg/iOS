@@ -3150,7 +3150,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     )
                 } else {
                     giftMessageAttributedText = NSAttributedString(
-                        string: giftMessageText + giftMessageText + giftMessageText,
+                        string: giftMessageText,
                         font: Font.regular(13.0),
                         textColor: .white,
                         paragraphAlignment: .left
