@@ -283,6 +283,7 @@ public final class TextSelectionNode: ASDisplayNode {
     public var enableLookup: Bool = true
     public var enableQuote: Bool = false
     public var enableTranslate: Bool = true
+    public var enableSpeak: Bool = false
     public var enableShare: Bool = true
     
     public var menuSkipCoordnateConversion: Bool = false
@@ -793,6 +794,12 @@ public final class TextSelectionNode: ASDisplayNode {
                     self?.cancelSelection()
                 }))
             }
+        }
+        if self.enableSpeak {
+            actions.append(ContextMenuAction(content: .text(title: self.strings.Conversation_ContextMenuSpeak, accessibilityLabel: self.strings.Conversation_ContextMenuSpeak), action: { [weak self] in
+                self?.performAction(string, .speak)
+                self?.cancelSelection()
+            }))
         }
         
         let realFullRange = NSRange(location: 0, length: attributedString.length)

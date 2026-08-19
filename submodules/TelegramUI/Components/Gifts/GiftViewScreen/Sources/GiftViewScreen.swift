@@ -47,8 +47,265 @@ import GlassControls
 import GlassBarButtonComponent
 import GlassBackgroundComponent
 import EdgeEffect
+import TextSelectionNode
+import Pasteboard
+import Speak
+import TranslateUI
+import TelegramUIPreferences
 
 private let giftViewTopOverscrollBackgroundHeight: CGFloat = 250.0
+
+private final class SelectableGiftMessageTextComponent: Component {
+    let context: AccountContext
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let text: NSAttributedString
+    let selectionControlColor: UIColor
+    let canCopy: Bool
+    let controller: () -> ViewController?
+    let performAction: (NSAttributedString, TextSelectionAction) -> Void
+
+    init(
+        context: AccountContext,
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        text: NSAttributedString,
+        selectionControlColor: UIColor,
+        canCopy: Bool,
+        controller: @escaping () -> ViewController?,
+        performAction: @escaping (NSAttributedString, TextSelectionAction) -> Void
+    ) {
+        self.context = context
+        self.theme = theme
+        self.strings = strings
+        self.text = text
+        self.selectionControlColor = selectionControlColor
+        self.canCopy = canCopy
+        self.controller = controller
+        self.performAction = performAction
+    }
+
+    static func ==(lhs: SelectableGiftMessageTextComponent, rhs: SelectableGiftMessageTextComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if !lhs.selectionControlColor.isEqual(rhs.selectionControlColor) {
+            return false
+        }
+        if lhs.canCopy != rhs.canCopy {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let text = ComponentView<Empty>()
+        private var textSelectionNode: TextSelectionNode?
+        private weak var selectionTheme: PresentationTheme?
+        private weak var selectionStrings: PresentationStrings?
+        private var didRevealSpoilersForSelection = false
+        private var component: SelectableGiftMessageTextComponent?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            self.clipsToBounds = false
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if self.bounds.contains(point) {
+                return true
+            }
+            if let textSelectionNode {
+                let localPoint = self.convert(point, to: textSelectionNode.view)
+                return textSelectionNode.view.hitTest(localPoint, with: event) != nil
+            }
+            return false
+        }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if let textSelectionNode {
+                let localPoint = self.convert(point, to: textSelectionNode.view)
+                if let result = textSelectionNode.view.hitTest(localPoint, with: event) {
+                    return result
+                }
+            }
+            return super.hitTest(point, with: event)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil {
+                self.removeTextSelectionNode()
+            }
+        }
+
+        private func restoreSpoilersRevealedForSelection() {
+            guard self.didRevealSpoilersForSelection else {
+                return
+            }
+            self.didRevealSpoilersForSelection = false
+            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View {
+                textView.textNode.dustNode?.update(revealed: false)
+            }
+        }
+
+        private func removeTextSelectionNode() {
+            guard let textSelectionNode = self.textSelectionNode else {
+                return
+            }
+            self.textSelectionNode = nil
+            textSelectionNode.cancelSelection()
+            textSelectionNode.highlightAreaNode.view.removeFromSuperview()
+            textSelectionNode.view.removeFromSuperview()
+            self.restoreSpoilersRevealedForSelection()
+        }
+
+        private func ensureTextSelectionNode(textView: MultilineTextWithEntitiesComponent.View) {
+            guard let component = self.component else {
+                return
+            }
+
+            if self.selectionTheme !== component.theme || self.selectionStrings !== component.strings {
+                self.removeTextSelectionNode()
+            }
+            self.selectionTheme = component.theme
+            self.selectionStrings = component.strings
+
+            let textSelectionNode: TextSelectionNode
+            if let current = self.textSelectionNode {
+                textSelectionNode = current
+            } else {
+                textSelectionNode = TextSelectionNode(
+                    theme: TextSelectionTheme(selection: UIColor.white.withAlphaComponent(0.4), knob: component.selectionControlColor, isDark: true),
+                    strings: component.strings,
+                    textNodeOrView: .node(textView.textNode),
+                    updateIsActive: { [weak self] value in
+                        if !value {
+                            self?.restoreSpoilersRevealedForSelection()
+                        }
+                    },
+                    present: { [weak self] controller, arguments in
+                        self?.component?.controller()?.presentInGlobalOverlay(controller, with: arguments)
+                    },
+                    rootView: { [weak self] in
+                        return self?.component?.controller()?.displayNode.view
+                    },
+                    performAction: { [weak self] text, action in
+                        self?.component?.performAction(text, action)
+                    }
+                )
+                textSelectionNode.enableQuote = false
+                textSelectionNode.updateRange = { [weak self, weak textView] selectionRange in
+                    guard let self, !self.didRevealSpoilersForSelection, let textView, let selectionRange, let dustNode = textView.textNode.dustNode, !dustNode.isRevealed, let textLayout = textView.textNode.cachedLayout else {
+                        return
+                    }
+                    for (spoilerRange, _) in textLayout.spoilers {
+                        if let intersection = selectionRange.intersection(spoilerRange), intersection.length > 0 {
+                            self.didRevealSpoilersForSelection = true
+                            dustNode.update(revealed: true)
+                            return
+                        }
+                    }
+                }
+
+                self.textSelectionNode = textSelectionNode
+                self.insertSubview(textSelectionNode.highlightAreaNode.view, belowSubview: textView)
+                self.addSubview(textSelectionNode.view)
+
+                let tapRecognizer = TapLongTapOrDoubleTapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:)))
+                tapRecognizer.tapActionAtPoint = { _ in
+                    return .waitForSingleTap
+                }
+                textSelectionNode.view.addGestureRecognizer(tapRecognizer)
+            }
+
+            textSelectionNode.enableCopy = component.canCopy
+            textSelectionNode.enableSpeak = isSpeakSelectionEnabled()
+            textSelectionNode.enableShare = component.canCopy
+        }
+
+        @objc private func tapGesture(_ recognizer: TapLongTapOrDoubleTapGestureRecognizer) {
+            if self.textSelectionNode?.didRecognizeTap == true {
+                return
+            }
+            guard case .ended = recognizer.state, let (gesture, location) = recognizer.lastRecognizedGestureAndLocation, case .tap = gesture, let textSelectionNode = self.textSelectionNode, let textView = self.text.view as? MultilineTextWithEntitiesComponent.View else {
+                return
+            }
+
+            let textPoint = textSelectionNode.view.convert(location, to: textView.textNode.view)
+            guard let (_, attributes) = textView.textNode.attributesAtPoint(textPoint), attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)] != nil, let dustNode = textView.textNode.dustNode, !dustNode.isRevealed else {
+                return
+            }
+            let dustPoint = textSelectionNode.view.convert(location, to: dustNode.view)
+            dustNode.revealAtLocation(dustPoint)
+        }
+
+        func update(component: SelectableGiftMessageTextComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            if let previousComponent = self.component {
+                if previousComponent.text != component.text || !previousComponent.selectionControlColor.isEqual(component.selectionControlColor) {
+                    self.removeTextSelectionNode()
+                }
+            }
+            self.component = component
+
+            let textSize = self.text.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextWithEntitiesComponent(
+                    context: component.context,
+                    animationCache: component.context.animationCache,
+                    animationRenderer: component.context.animationRenderer,
+                    placeholderColor: .white,
+                    text: .plain(component.text),
+                    horizontalAlignment: .left,
+                    maximumNumberOfLines: 0,
+                    handleSpoilers: true
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+
+            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View {
+                if textView.superview == nil {
+                    self.addSubview(textView)
+                }
+                textView.frame = CGRect(origin: .zero, size: textSize)
+
+                self.ensureTextSelectionNode(textView: textView)
+                if let textSelectionNode = self.textSelectionNode {
+                    let shouldUpdateLayout = textSelectionNode.frame.size != textSize
+                    textSelectionNode.frame = CGRect(origin: .zero, size: textSize)
+                    textSelectionNode.highlightAreaNode.frame = textSelectionNode.frame
+                    if shouldUpdateLayout {
+                        textSelectionNode.updateLayout()
+                    }
+                }
+            }
+
+            return textSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -130,6 +387,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         var cachedSubtitleStarImage: (UIImage, PresentationTheme)?
         var cachedTonImage: (UIImage, PresentationTheme)?
         var cachedGiftMessageBackgroundImage: (UIColor, CGSize, UIImage)?
+        var currentSpeechHolder: SpeechSynthesizerHolder?
         
         var cachedChevronImage: (UIImage, PresentationTheme)?
         var cachedSmallChevronImage: (UIImage, PresentationTheme)?
@@ -515,6 +773,132 @@ private final class GiftViewSheetContent: CombinedComponent {
             )
             
             HapticFeedback().tap()
+        }
+
+        func performGiftMessageTextSelectionAction(text: NSAttributedString, action: TextSelectionAction, canCopy: Bool) {
+            guard let controller = self.getController() else {
+                return
+            }
+
+            switch action {
+            case .copy:
+                guard canCopy else {
+                    return
+                }
+                storeAttributedTextInPasteboard(text)
+
+                let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                controller.present(
+                    UndoOverlayController(
+                        presentationData: presentationData,
+                        content: .copy(text: presentationData.strings.Conversation_TextCopied),
+                        position: .bottom,
+                        action: { _ in return true }
+                    ),
+                    in: .current
+                )
+            case .share:
+                guard canCopy else {
+                    return
+                }
+                let shareController = self.context.sharedContext.makeShareController(
+                    context: self.context,
+                    params: ShareControllerParams(
+                        subject: .text(text.string),
+                        externalShare: true,
+                        immediateExternalShare: false
+                    )
+                )
+                controller.present(shareController, in: .window(.root))
+            case .lookup:
+                let lookupController = UIReferenceLibraryViewController(term: text.string)
+                if let window = controller.view.window {
+                    lookupController.popoverPresentationController?.sourceView = window
+                    lookupController.popoverPresentationController?.sourceRect = CGRect(origin: CGPoint(x: window.bounds.width / 2.0, y: window.bounds.height - 1.0), size: CGSize(width: 1.0, height: 1.0))
+                    window.rootViewController?.present(lookupController, animated: true)
+                }
+            case .speak:
+                if let speechHolder = speakText(text: text.string) {
+                    speechHolder.completion = { [weak self, weak speechHolder] in
+                        guard let self else {
+                            return
+                        }
+                        if self.currentSpeechHolder === speechHolder {
+                            self.currentSpeechHolder = nil
+                        }
+                    }
+                    self.currentSpeechHolder = speechHolder
+                }
+            case .translate:
+                let _ = (self.context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.translationSettings])
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] sharedData in
+                    guard let self else {
+                        return
+                    }
+
+                    let translationSettings: TranslationSettings
+                    if let current = sharedData.entries[ApplicationSpecificSharedDataKeys.translationSettings]?.get(TranslationSettings.self) {
+                        translationSettings = current
+                    } else {
+                        translationSettings = TranslationSettings.defaultSettings
+                    }
+
+                    let (_, language) = canTranslateText(
+                        context: self.context,
+                        text: text.string,
+                        showTranslate: translationSettings.showTranslate,
+                        showTranslateIfTopical: false,
+                        ignoredLanguages: translationSettings.ignoredLanguages
+                    )
+                    let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: self.context.sharedContext.accountManager, timestamp: Int32(Date().timeIntervalSince1970)).startStandalone()
+
+                    Task { @MainActor [weak self] in
+                        guard let self, let controller = self.getController() else {
+                            return
+                        }
+                        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                        let copyResult: ((ComposedRichMessage) -> Void)?
+                        if canCopy {
+                            copyResult = { [weak controller] result in
+                                guard let controller else {
+                                    return
+                                }
+                                switch result {
+                                case let .plain(text, entities):
+                                    storeMessageTextInPasteboard(text, entities: entities)
+                                case .rich(_), .empty:
+                                    return
+                                }
+                                controller.present(
+                                    UndoOverlayController(
+                                        presentationData: presentationData,
+                                        content: .copy(text: presentationData.strings.Conversation_TextCopied),
+                                        elevatedLayout: true,
+                                        animateInAsReplacement: false,
+                                        action: { _ in return false }
+                                    ),
+                                    in: .window(.root)
+                                )
+                            }
+                        } else {
+                            copyResult = nil
+                        }
+
+                        let translationController = await self.context.sharedContext.makeTextProcessingScreen(
+                            context: self.context,
+                            theme: nil,
+                            mode: .translate(fromLanguage: language, applyResult: nil),
+                            inputText: .plain(text: text.string, entities: []),
+                            copyResult: copyResult,
+                            translateChat: nil
+                        )
+                        controller.present(translationController, in: .window(.root))
+                    }
+                })
+            case .quote:
+                break
+            }
         }
         
         func updateSavedToProfile(_ added: Bool) {
@@ -2506,7 +2890,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         let description = Child(MultilineTextComponent.self)
         let animatedDescription = Child(HStack<Empty>.self)
         let giftMessageBackground = Child(Image.self)
-        let giftMessageTextComponent = Child(MultilineTextWithEntitiesComponent.self)
+        let giftMessageTextComponent = Child(SelectableGiftMessageTextComponent.self)
         let giftMessageAvatar = Child(AvatarComponent.self)
         
         let transferButton = Child(HeaderButtonComponent.self)
@@ -2549,6 +2933,13 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             let state = context.state
             let subject = state.subject
+
+            let canCopyGiftMessageText: Bool
+            if case let .message(message) = subject {
+                canCopyGiftMessageText = !message._asMessage().isCopyProtected()
+            } else {
+                canCopyGiftMessageText = true
+            }
             
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
             
@@ -2720,6 +3111,16 @@ private final class GiftViewSheetContent: CombinedComponent {
                 showWearPreview = true
             }
 
+            var giftMessageSelectionControlColor = theme.actionSheet.controlAccentColor
+            if let uniqueGift {
+                for attribute in uniqueGift.attributes {
+                    if case let .backdrop(_, _, _, outerColor, _, _, _) = attribute {
+                        giftMessageSelectionControlColor = UIColor(rgb: UInt32(bitPattern: outerColor))
+                        break
+                    }
+                }
+            }
+
             var giftMessageTextChild: _UpdatedChildComponent?
             var giftMessageTextIsDisplayed = false
             var giftMessageHeaderHeight: CGFloat?
@@ -2749,7 +3150,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     )
                 } else {
                     giftMessageAttributedText = NSAttributedString(
-                        string: giftMessageText,
+                        string: giftMessageText + giftMessageText + giftMessageText,
                         font: Font.regular(13.0),
                         textColor: .white,
                         paragraphAlignment: .left
@@ -2758,15 +3159,17 @@ private final class GiftViewSheetContent: CombinedComponent {
 
                 let giftMessageTextMaxWidth = max(1.0, context.availableSize.width - sideInset * 2.0 - 22.0 - 34.0)
                 let updatedGiftMessageTextChild = giftMessageTextComponent.update(
-                    component: MultilineTextWithEntitiesComponent(
+                    component: SelectableGiftMessageTextComponent(
                         context: component.context,
-                        animationCache: component.context.animationCache,
-                        animationRenderer: component.context.animationRenderer,
-                        placeholderColor: .white,
-                        text: .plain(giftMessageAttributedText),
-                        horizontalAlignment: .left,
-                        maximumNumberOfLines: 0,
-                        handleSpoilers: true
+                        theme: theme,
+                        strings: strings,
+                        text: giftMessageAttributedText,
+                        selectionControlColor: giftMessageSelectionControlColor,
+                        canCopy: canCopyGiftMessageText,
+                        controller: component.getController,
+                        performAction: { [weak state] text, action in
+                            state?.performGiftMessageTextSelectionAction(text: text, action: action, canCopy: canCopyGiftMessageText)
+                        }
                     ),
                     availableSize: CGSize(width: giftMessageTextMaxWidth, height: CGFloat.greatestFiniteMagnitude),
                     transition: context.transition
