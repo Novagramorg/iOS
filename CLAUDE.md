@@ -224,7 +224,10 @@ FlatBuffers tables must live in `RichText.fbs` (include cycle); `ReplyMarkupButt
 and therefore wider than the schema permits; two media sites fail *silently* for `.document`; and
 `InstantPageAnchorPath` must NOT recurse into `.buttonRow`. On the rendering side: a pill needs
 `clipsToBounds` or `cornerRadius` is drawn and then covered by the `draw(_:)` background bitmap
-(it renders as a rect); `attachment.ascent` is a *full* font ascent and must not be compared directly
+(it renders as a rect); an inline pill's **type icon trails the label** rather than sitting in the
+corner (the pill is ~20pt tall, so a badge would be shaved by the capsule) and the pill is measured
+14pt wider to hold it — unconditional width, so it moves line breaks and the editor must reserve the
+identical amount; `attachment.ascent` is a *full* font ascent and must not be compared directly
 against `lineAscent`, which is the *reduced* `floor(ascender + descender)` box; and a width cap must
 travel as `inlineButtonMaxWidth`, forwarded through all 31 recursive
 `attributedStringForRichText` calls — `boundingWidth` is nil on the paragraph path and also drives

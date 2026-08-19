@@ -161,8 +161,14 @@ final class BlockStack {
     }
 
     /// Lays boxes out top-to-bottom from `origin` at the given content `width`; returns total height.
+    ///
+    /// - Parameter codeBleed: How far a full-bleed child (today: only `CodeBlockBox`) may extend past
+    ///   this stack's content column to reach the enclosing container's interior edges. GEOMETRIC
+    ///   sides, mirroring the renderer's `InstantPageV2ChildBleed`. Defaults to none, so a container
+    ///   that has not opted in keeps its children inside it.
     @discardableResult
-    func layout(origin: CGPoint, width: CGFloat) -> CGFloat {
+    func layout(origin: CGPoint, width: CGFloat,
+                codeBleed: (minXSide: CGFloat, maxXSide: CGFloat) = (0, 0)) -> CGFloat {
         var y = origin.y
         let g = spacingModel == .instantPageV2 ? gaps() : []
         for i in boxes.indices {
@@ -184,6 +190,7 @@ final class BlockStack {
                     b.bottomInset = facingInset(of: b, toward: next)
                 }
             }
+            if let code = box as? CodeBlockBox { code.horizontalBleed = codeBleed }
             y += bareGapAbove(i, g)
             box.setWidth(width)
             box.frame = CGRect(x: origin.x, y: y, width: width, height: box.height)

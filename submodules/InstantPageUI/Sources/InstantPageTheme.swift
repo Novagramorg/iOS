@@ -133,9 +133,9 @@ public struct InstantPageTextCategories {
 /// The nominal `subheader` size every `InstantPageTextCategories` declares.
 ///
 /// `InstantPageTheme.headingTextAttributes` divides the live subheader size by this to derive the
-/// H3–H6 scale, so the two MUST agree. When they do, the multiplier is exactly 1.0 in the default
+/// H1–H6 scale, so the two MUST agree. When they do, the multiplier is exactly 1.0 in the default
 /// case and the `baseSize` literals in that function ARE the rendered default sizes. When they
-/// drift, every H3–H6 silently renders at a size no literal in this file mentions — which is what
+/// drift, every H1–H6 silently renders at a size no literal in this file mentions — which is what
 /// happened when the subheader moved off 18pt and this divisor did not follow. Reference this at
 /// the category construction sites rather than repeating `22.0`, so disagreement requires
 /// deliberately opting out.
@@ -248,35 +248,36 @@ public final class InstantPageTheme {
         return InstantPageTheme(type: type, pageBackgroundColor: pageBackgroundColor, textCategories: self.textCategories.withUpdatedFontStyles(sizeMultiplier: sizeMultiplier, lineSpacingFactor: lineSpacingFactor, forceSerif: forceSerif), serif: forceSerif, codeBlockBackgroundColor: codeBlockBackgroundColor, linkColor: linkColor, textHighlightColor: textHighlightColor, linkHighlightColor: linkHighlightColor, markerColor: markerColor, panelBackgroundColor: panelBackgroundColor, panelHighlightedBackgroundColor: panelHighlightedBackgroundColor, panelPrimaryColor: panelPrimaryColor, panelSecondaryColor: panelSecondaryColor, panelAccentColor: panelAccentColor, tableBorderColor: tableBorderColor, tableHeaderColor: tableHeaderColor, controlColor: controlColor, imageTintColor: imageTintColor, overlayPanelColor: overlayPanelColor, separatorColor: separatorColor, secondaryControlColor: secondaryControlColor, quoteAccentColor: quoteAccentColor, buttonDangerColor: buttonDangerColor, buttonSuccessColor: buttonSuccessColor, checkboxFill: checkboxFill, checkboxForeground: checkboxForeground, neutralButtonBackgroundColor: neutralButtonBackgroundColor, neutralButtonForegroundColor: neutralButtonForegroundColor, unsupportedPillFillColor: unsupportedPillFillColor, unsupportedPillPrimaryColor: unsupportedPillPrimaryColor)
     }
 
+    /// The H1–H6 ladder: **22 / 20 / 18 / 17 / 16 / 15**, serif medium.
+    ///
+    /// Every level carries its own base size here. H1 and H2 deliberately do NOT reuse the `header` /
+    /// `subheader` categories — those stay at 24 / 22 for what they actually style: the page title and
+    /// subtitle, and the `pageBlockHeader` / `pageBlockSubheader` blocks. A heading is a different
+    /// thing from a page header, and while the two shared a size, resizing the heading ladder also
+    /// resized the title. Colour, line spacing and underline still come from `subheader`, so a heading
+    /// keeps the theme's big-text look and only its size is its own.
+    ///
+    /// `sizeMultiplier` is exactly 1.0 in the default case, so the base sizes below ARE the rendered
+    /// default sizes; it departs from 1.0 only when the reader's font-size slider has scaled the
+    /// categories, and then the whole ladder scales proportionally.
     func headingTextAttributes(level: Int32, link: Bool) -> InstantPageTextAttributes {
         let clampedLevel = max(Int32(1), min(level, Int32(6)))
 
-        // H1/H2 reuse the theme's existing big-text categories verbatim, so they
-        // pick up the theme color, line-spacing, and any dynamic-type scaling.
-        switch clampedLevel {
-        case 1:
-            return self.textCategories.header.withUnderline(link)
-        case 2:
-            return self.textCategories.subheader.withUnderline(link)
-        default:
-            break
-        }
-
-        // H3–H6: serif at a per-level base size. `sizeMultiplier` is exactly 1.0 in the default
-        // case, so these base sizes are the rendered default sizes; it departs from 1.0 only when
-        // the reader's font-size slider has scaled the categories, and then the whole ladder
-        // scales proportionally.
         let subheaderAttributes = self.textCategories.subheader
         let baseSize: CGFloat
         switch clampedLevel {
-        case 3:
+        case 1:
+            baseSize = 22.0
+        case 2:
             baseSize = 20.0
-        case 4:
-            baseSize = 19.0
-        case 5:
+        case 3:
             baseSize = 18.0
-        default:
+        case 4:
             baseSize = 17.0
+        case 5:
+            baseSize = 16.0
+        default:
+            baseSize = 15.0
         }
 
         let sizeMultiplier = subheaderAttributes.font.size / instantPageNominalSubheaderFontSize

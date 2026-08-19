@@ -118,8 +118,19 @@ public final class InstantPageTextLine {
     public let anchorItems: [InstantPageTextAnchorItem]
     let isRTL: Bool
     public let characterRects: [CGRect]?   // line-local, one rect per character in `range`; nil = not computed
+    /// A token drawn immediately AFTER this line's own glyphs, on the same baseline — today only the
+    /// "…" a collapsed quote puts on its last visible line.
+    ///
+    /// Appended rather than folded into `line` (which is what `CTLineCreateTruncatedLine` would do)
+    /// so nothing else about the line moves: `range`, the per-line attachment/spoiler/underline item
+    /// frames and the character rects all still describe the untruncated text, and hit-testing,
+    /// inline emoji placement and the streaming reveal keep working unchanged. Same reason
+    /// `InteractiveTextComponent` carries its truncation token as `additionalTrailingLine`.
+    ///
+    /// Drawn only by the V2 renderer; V1 has no collapsed quotes.
+    let additionalTrailingLine: CTLine?
 
-    init(line: CTLine, range: NSRange, frame: CGRect, strikethroughItems: [InstantPageTextStrikethroughItem], underlineItems: [InstantPageTextUnderlineItem], markedItems: [InstantPageTextMarkedItem], spoilerItems: [InstantPageTextSpoilerItem] = [], imageItems: [InstantPageTextImageItem], formulaItems: [InstantPageTextFormulaRun], buttonItems: [InstantPageTextButtonRun] = [], emojiItems: [InstantPageTextEmojiItem] = [], anchorItems: [InstantPageTextAnchorItem], isRTL: Bool, characterRects: [CGRect]? = nil) {
+    init(line: CTLine, range: NSRange, frame: CGRect, strikethroughItems: [InstantPageTextStrikethroughItem], underlineItems: [InstantPageTextUnderlineItem], markedItems: [InstantPageTextMarkedItem], spoilerItems: [InstantPageTextSpoilerItem] = [], imageItems: [InstantPageTextImageItem], formulaItems: [InstantPageTextFormulaRun], buttonItems: [InstantPageTextButtonRun] = [], emojiItems: [InstantPageTextEmojiItem] = [], anchorItems: [InstantPageTextAnchorItem], isRTL: Bool, characterRects: [CGRect]? = nil, additionalTrailingLine: CTLine? = nil) {
         self.line = line
         self.range = range
         self.frame = frame
@@ -134,6 +145,29 @@ public final class InstantPageTextLine {
         self.anchorItems = anchorItems
         self.isRTL = isRTL
         self.characterRects = characterRects
+        self.additionalTrailingLine = additionalTrailingLine
+    }
+
+    /// This line with `trailing` appended after its glyphs. Everything else is carried over
+    /// unchanged — see `additionalTrailingLine`.
+    func withAdditionalTrailingLine(_ trailing: CTLine) -> InstantPageTextLine {
+        return InstantPageTextLine(
+            line: self.line,
+            range: self.range,
+            frame: self.frame,
+            strikethroughItems: self.strikethroughItems,
+            underlineItems: self.underlineItems,
+            markedItems: self.markedItems,
+            spoilerItems: self.spoilerItems,
+            imageItems: self.imageItems,
+            formulaItems: self.formulaItems,
+            buttonItems: self.buttonItems,
+            emojiItems: self.emojiItems,
+            anchorItems: self.anchorItems,
+            isRTL: self.isRTL,
+            characterRects: self.characterRects,
+            additionalTrailingLine: trailing
+        )
     }
 }
 
@@ -323,6 +357,14 @@ public final class InstantPageTextItem: InstantPageItem {
             if glyphRuns.count != 0 {
                 for run in glyphRuns {
                     let run = run as! CTRun
+                    // Every inline attachment — emoji, image, formula, button pill — is a separate view or
+                    // item drawn over an `instantPageInlineAttachmentPlaceholder` (`U+FFFC`) cell, so drawing
+                    // the run itself would paint a `.notdef` box underneath. Skipping is positionally safe:
+                    // CTRun glyph positions are line-relative, so the runs after it land exactly where they
+                    // would have. Mirrors `InteractiveTextComponent`'s `Attribute__EmbeddedItem` skip.
+                    if instantPageRunIsInlineAttachment(run) {
+                        continue
+                    }
                     let glyphCount = CTRunGetGlyphCount(run)
                     CTRunDraw(run, context, CFRangeMake(0, glyphCount))
                 }
@@ -888,6 +930,42 @@ private func attributedStringForLinkStyleButton(
     return mutable
 }
 
+/// The single character that stands in for an INLINE ATTACHMENT in the laid-out string — a custom
+/// emoji, an inline image, an inline formula, or a button pill. The real content is a separate view
+/// or laid-out item positioned over this cell; the character only has to reserve the advance the
+/// `CTRunDelegate` reports.
+///
+/// **It MUST NOT be a space** (all four were, until 2026-08-17). CoreText's line breaker lets TRAILING
+/// WHITESPACE hang past the container's right edge — that is correct for real spaces, but a
+/// run-delegate space is up to 24pt of *ink*, so an attachment ending a line was allowed to overflow
+/// the bubble instead of wrapping onto the next line. `U+FFFC` is line-break class **CB**, which takes
+/// a break opportunity on either side and whose width is charged to the line, so an attachment wraps
+/// like any other atom.
+///
+/// A no-break space (`U+00A0`) does NOT work: class **GL** suppresses breaks on both sides, so an
+/// attachment would fuse to its neighbouring words and a sentence carrying several would become one
+/// unbreakable run.
+///
+/// It has no glyph of its own to draw: `InstantPageTextLine.drawInTile` SKIPS the run (see
+/// `instantPageRunIsInlineAttachment`), the way `InteractiveTextComponent` skips its
+/// `Attribute__EmbeddedItem` runs. Leaving it drawn would paint a `.notdef` box under the attachment.
+///
+/// The pill-to-pill gap (`instantPageInlineButtonSpacerString`) deliberately stays a real space: it is
+/// genuinely whitespace, and a gap that hangs at a line end is the correct behaviour for it.
+let instantPageInlineAttachmentPlaceholder = "\u{FFFC}"
+
+/// Whether a laid-out run is an inline-attachment placeholder cell rather than real text, i.e. whether
+/// something else draws over it. Keyed on the attachment ATTRIBUTES, not on the placeholder character:
+/// the attribute is what the rest of the layout already keys on, and a run of ordinary text that
+/// happened to contain `U+FFFC` must still be drawn.
+func instantPageRunIsInlineAttachment(_ run: CTRun) -> Bool {
+    let attributes = CTRunGetAttributes(run) as NSDictionary
+    return attributes[ChatTextInputAttributes.customEmoji.rawValue] != nil
+        || attributes[InstantPageMediaIdAttribute] != nil
+        || attributes[InstantPageFormulaAttribute] != nil
+        || attributes[InstantPageInlineButtonAttribute] != nil
+}
+
 func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextStyleStack, url: InstantPageUrlItem? = nil, boundingWidth: CGFloat? = nil, inlineButtonMaxWidth: CGFloat? = nil, formatDate: ((Int32, MessageTextEntityType.DateTimeFormat) -> String)? = nil) -> NSAttributedString {
     switch text {
         case .empty:
@@ -995,7 +1073,7 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
             })
             let delegate = CTRunDelegateCreate(&callbacks, extentBuffer)
             let attrDictionaryDelegate = [(kCTRunDelegateAttributeName as NSAttributedString.Key): (delegate as Any), NSAttributedString.Key(rawValue: InstantPageMediaIdAttribute): id.id, NSAttributedString.Key(rawValue: InstantPageMediaDimensionsAttribute): dimensions]
-            let mutableAttributedString = attributedStringForRichText(.plain(" "), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
+            let mutableAttributedString = attributedStringForRichText(.plain(instantPageInlineAttachmentPlaceholder), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
             mutableAttributedString.addAttributes(attrDictionaryDelegate, range: NSMakeRange(0, mutableAttributedString.length))
             return mutableAttributedString
         case let .formula(latex):
@@ -1030,7 +1108,7 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
                 return data.pointee.width
             })
             let delegate = CTRunDelegateCreate(&callbacks, extentBuffer)
-            let mutableAttributedString = attributedStringForRichText(.plain(" "), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
+            let mutableAttributedString = attributedStringForRichText(.plain(instantPageInlineAttachmentPlaceholder), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
             mutableAttributedString.addAttributes([
                 kCTRunDelegateAttributeName as NSAttributedString.Key: delegate as Any,
                 NSAttributedString.Key(rawValue: InstantPageFormulaAttribute): attachment
@@ -1147,7 +1225,7 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
             })
             let delegate = CTRunDelegateCreate(&callbacks, extentBuffer)
             let emojiAttribute = ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil)
-            let mutableAttributedString = attributedStringForRichText(.plain(" "), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
+            let mutableAttributedString = attributedStringForRichText(.plain(instantPageInlineAttachmentPlaceholder), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
             mutableAttributedString.addAttributes([
                 kCTRunDelegateAttributeName as NSAttributedString.Key: delegate as Any,
                 ChatTextInputAttributes.customEmoji: emojiAttribute
@@ -1161,17 +1239,35 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
             }
             return mutable
         case let .textDate(text, date, format):
-            if let format, let formatDate {
-                let formatted = formatDate(date, format)
-                let result = attributedStringForRichText(.plain(formatted), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
-                let mutable = result.mutableCopy() as! NSMutableAttributedString
-                if mutable.length != 0 {
-                    mutable.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.Date), value: date, range: NSRange(location: 0, length: mutable.length))
-                }
-                return mutable
-            } else {
+            guard let formatDate else {
+                // The V1 reader supplies no formatter: it renders the server's literal text and is
+                // deliberately left in body colour rather than turning every reader date blue.
                 return attributedStringForRichText(text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
             }
+            // Link colour AND the `TelegramTextAttributes.Date` tap stamp are applied REGARDLESS of
+            // `format`, matching a `FormattedDate` entity in a regular text message: the reference
+            // implementation (`StringWithAppliedEntities`) paints the range in `linkColor` and stamps it
+            // unconditionally, and consults the format only to decide whether the displayed text is
+            // REPLACED by an autoformatted one.
+            //
+            // Gating the styling on `format` too made every format-less date dead — plain body colour,
+            // no tap — and that is the common case, not an edge case:
+            // `ChatInputContentInstantPage.richText(from:)` emits `format: nil` for every
+            // client-composed rich message (`ChatInputInlineEntity.date` carries only the timestamp,
+            // as does the `tg://timestamp` Document marker and `GenerateTextEntities`), and the wire
+            // maps `flags == 0` to nil as well.
+            //
+            // `.link(false)` is colour-only (no underline), the same push the mention / hashtag /
+            // bank-card arms above use.
+            styleStack.push(.link(false))
+            let displayedText: RichText = format.map { RichText.plain(formatDate(date, $0)) } ?? text
+            let result = attributedStringForRichText(displayedText, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+            styleStack.pop()
+            let mutable = result.mutableCopy() as! NSMutableAttributedString
+            if mutable.length != 0 {
+                mutable.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.Date), value: date, range: NSRange(location: 0, length: mutable.length))
+            }
+            return mutable
         case let .textButton(button):
             // `richButtonStyle`'s link bit takes a completely different path: ordinary text, no
             // attachment, no pill view. Everything below is the pill path and is unchanged.
@@ -1214,7 +1310,7 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
                 return pointer.assumingMemoryBound(to: RunStruct.self).pointee.width
             })
             let delegate = CTRunDelegateCreate(&callbacks, extentBuffer)
-            let mutableAttributedString = attributedStringForRichText(.plain(" "), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
+            let mutableAttributedString = attributedStringForRichText(.plain(instantPageInlineAttachmentPlaceholder), styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate).mutableCopy() as! NSMutableAttributedString
             mutableAttributedString.addAttributes([
                 kCTRunDelegateAttributeName as NSAttributedString.Key: delegate as Any,
                 NSAttributedString.Key(rawValue: InstantPageInlineButtonAttribute): attachment

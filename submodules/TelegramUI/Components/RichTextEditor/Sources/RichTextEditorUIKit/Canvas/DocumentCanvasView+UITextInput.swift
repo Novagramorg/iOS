@@ -76,7 +76,7 @@ extension DocumentCanvasView: UITextInput {
             }
             // An empty code block types the monospace code attributes, not the body default — without this the
             // first character typed into a just-created (empty) code block lands non-monospace at body size.
-            if case .code = region.ref { return CodeBlockBox.codeAttributes() }
+            if case .code = region.ref { return CodeBlockBox.codeAttributes(textColor: self.mapper.theme.primaryText) }
             // An empty pull quote types the italic/centered pull-quote attributes — without this the first
             // character typed into an empty pull quote lands body-upright-left instead of italic/centered.
             if case .pullQuote = region.ref { return PullQuoteBox.pullQuoteTypingAttributes(mapper) }

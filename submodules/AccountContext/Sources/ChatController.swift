@@ -417,6 +417,11 @@ public struct ChatTextInputState: Codable, Equatable {
 
     /// Derived transitional compat view — the chat `NSAttributedString` currency. Readers keep working
     /// unchanged; the model is the storage. (Removed only once all readers move off it — Option B.)
+    ///
+    /// **Reading this, mutating the copy, and reconstructing a state from it destroys block structure.**
+    /// `chatInputContent(from:)` cannot express a heading, list, quote, table or medium, so the
+    /// reconstruction retypes every block as a body paragraph. To change part of the text, use
+    /// `replacingFlatRange(_:with:)`.
     public var inputText: NSAttributedString {
         return attributedString(from: self.content)
     }
@@ -446,6 +451,9 @@ public struct ChatTextInputState: Codable, Equatable {
         self.selection = ChatInputSelection(nsRange: NSRange(location: 0, length: 0), in: self.content)
     }
 
+    /// Builds a state from an `NSAttributedString`. Correct for text constructed from scratch (a URL, a
+    /// command, an empty string); **wrong for text derived from an existing state** — see the note on
+    /// `inputText`. Mutating an existing state's text belongs in `replacingFlatRange(_:with:)`.
     public init(inputText: NSAttributedString, selectionRange: Range<Int>) {
         self.content = chatInputContent(from: inputText)
         self.selection = ChatInputSelection(nsRange: NSRange(location: selectionRange.lowerBound, length: selectionRange.upperBound - selectionRange.lowerBound), in: self.content)
@@ -463,6 +471,23 @@ public struct ChatTextInputState: Codable, Equatable {
     public init(content: ChatInputContent, selectionRange: Range<Int>) {
         self.content = content
         self.selection = ChatInputSelection(nsRange: NSRange(location: selectionRange.lowerBound, length: selectionRange.upperBound - selectionRange.lowerBound), in: self.content)
+    }
+
+    /// Replaces the flat (`inputText`) UTF-16 range with `replacement`, preserving every block outside
+    /// it, and leaves a collapsed caret just past the inserted text.
+    ///
+    /// **This is what to use instead of mutating `inputText` and reconstructing the state.** That
+    /// round-trip goes through `chatInputContent(from:)`, which has no vocabulary for headings, lists,
+    /// quotes, tables or media and so retypes every block as a body paragraph — changing a few
+    /// characters would destroy the structure of the whole composer.
+    public func replacingFlatRange(_ range: NSRange, with replacement: NSAttributedString) -> ChatTextInputState {
+        let (content, caret) = self.content.replacingFlatRange(range, with: chatInputRuns(fromAttributedString: replacement))
+        return ChatTextInputState(content: content, selectionRange: caret ..< caret)
+    }
+
+    /// Plain-text overload of `replacingFlatRange(_:with:)` — most composer sites replace with plain text.
+    public func replacingFlatRange(_ range: NSRange, with replacement: String) -> ChatTextInputState {
+        return self.replacingFlatRange(range, with: NSAttributedString(string: replacement))
     }
 
     public init(from decoder: Decoder) throws {

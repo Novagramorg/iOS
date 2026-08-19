@@ -28,7 +28,7 @@ func makeBodyTextEmojiPlaceholder(font: UIFont, fileId: Int64) -> NSAttributedSt
         return pointer.assumingMemoryBound(to: RunStruct.self).pointee.width
     })
     let delegate = CTRunDelegateCreate(&callbacks, extentBuffer)!
-    let result = NSMutableAttributedString(string: " ", attributes: [
+    let result = NSMutableAttributedString(string: instantPageInlineAttachmentPlaceholder, attributes: [
         .font: font,
         .foregroundColor: UIColor.black
     ])

@@ -183,7 +183,7 @@ final class BlockViewVirtualizationTests: XCTestCase {
         ], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: v.intrinsicContentSize.height); v.layoutIfNeeded()
         // Every run is on-screen via the bounds band.
-        XCTAssertEqual(v.visibleBlockquoteFills(band: v.viewportBand()).count, v.blockquoteDecorations().count,
+        XCTAssertEqual(v.visibleBlockquoteFills(band: v.viewportBand()).count, v.blockQuoteFillRects().count,
                        "no scroll host ⇒ every run kept (invariance)")
     }
 

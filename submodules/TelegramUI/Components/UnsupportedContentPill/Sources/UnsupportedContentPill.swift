@@ -86,6 +86,28 @@ public struct UnsupportedContentPillLayout: Equatable {
     let textColumnSize: CGSize
 }
 
+public extension UnsupportedContentPillLayout {
+    /// The action button's frame inside a pill rendered at `size`, in pill-local coordinates.
+    ///
+    /// The single source of truth for where the button lands: the view positions its button here,
+    /// and a host that arbitrates taps itself derives the same rect from the LAYOUT alone — the
+    /// InstantPage V2 renderer has no pill view to ask while a chat bubble's `tapActionAtPoint` is
+    /// resolving a touch, only the laid-out item.
+    ///
+    /// `size` rather than `self.size` because a host may render the pill wider than its intrinsic
+    /// width (the chat bubble stretches it to the bubble), and the button is pinned to the trailing
+    /// edge.
+    func actionFrame(in size: CGSize) -> CGRect {
+        return CGRect(
+            origin: CGPoint(
+                x: size.width - pillContentInsets.right - self.buttonSize.width,
+                y: floorToScreenPixels((size.height - self.buttonSize.height) / 2.0)
+            ),
+            size: self.buttonSize
+        )
+    }
+}
+
 /// The apply half of a measure pass. Each closure returns the `TextNode` carrying that piece of
 /// text — the same node that was passed in, when one was.
 struct UnsupportedContentPillTextApply {

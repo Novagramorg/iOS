@@ -4,6 +4,7 @@ import Display
 import SwiftSignalKit
 import TelegramCore
 import TextLoadingEffect
+import RichTextButtonIcons
 
 /// Draws a pill's label and type badge. Split out of `InstantPageV2ButtonPillView` so a loading
 /// shimmer can be inserted *below* the label: a view's own `draw(_:)` output lands in its layer's
@@ -19,13 +20,17 @@ private final class InstantPageV2ButtonPillContentView: UIView {
     /// has no `InstantPageTheme` to resolve a button colour with — so the recolour happens in the
     /// pill, where the theme is available, and lands here.
     var displayLabelString: NSAttributedString
-    /// The action's type badge, tinted to match the label. nil for an inline pill (too small to carry
-    /// one) and for the actions that have no badge — see `instantPageBlockButtonIconName`.
+    /// The action's type icon, tinted to match the label, or nil for the actions that have none — see
+    /// `richTextButtonIconName`.
     var iconImage: UIImage?
+    /// Which placement `iconImage` is drawn at: trailing the label on an inline pill, a corner badge on
+    /// a block one. Fixed at init, like the owning pill's own `isInline`.
+    private let isInline: Bool
 
-    init(attachment: InstantPageInlineButtonAttachment) {
+    init(attachment: InstantPageInlineButtonAttachment, isInline: Bool) {
         self.attachment = attachment
         self.displayLabelString = attachment.labelString
+        self.isInline = isInline
         super.init(frame: CGRect())
 
         self.isOpaque = false
@@ -47,17 +52,25 @@ private final class InstantPageV2ButtonPillContentView: UIView {
         let line = CTLineCreateWithAttributedString(self.displayLabelString)
         CTLineDraw(line, context)
 
-        // Top-right type badge, as on a bot keyboard button. Drawn after the label so a pill too
-        // narrow for both shows the badge rather than losing it under the text — the layout reserves
-        // room for it, but a stretched row column can still be tight.
+        // The type icon, as on a bot keyboard button. Drawn after the label so a pill too narrow for
+        // both shows the icon rather than losing it under the text — the layout reserves room for it,
+        // but a stretched row column can still be tight.
         if let iconImage = self.iconImage {
-            let iconFrame = CGRect(
-                origin: CGPoint(
-                    x: self.bounds.width - instantPageBlockButtonIconInset.x - instantPageBlockButtonIconSize.width,
-                    y: instantPageBlockButtonIconInset.y
-                ),
-                size: instantPageBlockButtonIconSize
-            )
+            let iconFrame: CGRect
+            if self.isInline {
+                // Trailing the label. An inline pill is the label's ink box plus 2pt, so a corner badge
+                // has nowhere to sit; the pill was measured wider to hold this instead.
+                iconFrame = instantPageInlineButtonIconFrame(attachment: self.attachment, pillSize: self.bounds.size)
+            } else {
+                // Top-right badge, overlaying the fill of a 40pt row pill.
+                iconFrame = CGRect(
+                    origin: CGPoint(
+                        x: self.bounds.width - richTextBlockButtonIconInset.x - richTextButtonIconSize.width,
+                        y: richTextBlockButtonIconInset.y
+                    ),
+                    size: richTextButtonIconSize
+                )
+            }
             iconImage.draw(in: iconFrame)
         }
     }
@@ -104,7 +117,7 @@ final class InstantPageV2ButtonPillView: UIView {
         self.theme = theme
         self.isInline = isInline
         self.isDisabled = attachment.button.action == .disabled
-        self.contentView = InstantPageV2ButtonPillContentView(attachment: attachment)
+        self.contentView = InstantPageV2ButtonPillContentView(attachment: attachment, isInline: isInline)
         super.init(frame: CGRect())
 
         self.isOpaque = false
@@ -157,8 +170,8 @@ final class InstantPageV2ButtonPillView: UIView {
         self.contentView.attachment = self.attachment
         self.contentView.displayLabelString = mutableLabel
 
-        // Same colour as the label, so a disabled button's badge dims with its text.
-        self.contentView.iconImage = self.isInline ? nil : instantPageBlockButtonIcon(for: self.attachment.button.action, color: colors.label)
+        // Same colour as the label, so a disabled button's icon dims with its text.
+        self.contentView.iconImage = richTextButtonIcon(for: self.attachment.button.action, color: colors.label)
         self.contentView.setNeedsDisplay()
 
         self.updateLoadingEffectLayout()

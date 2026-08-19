@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import TelegramCore
+import RichTextButtonIcons
 
 /// Geometry for a block-level `pageBlockButtonRow`.
 ///
@@ -41,10 +42,10 @@ private func instantPageBlockButtonMinimumPadding(for button: InstantPageButton)
 /// (18). It arms only in the tight fallback, where the padding drops below the reserve and the badge
 /// becomes the binding constraint.
 private func instantPageBlockButtonExtraSideInset(for button: InstantPageButton, padding: CGFloat) -> CGFloat {
-    guard instantPageBlockButtonIconName(for: button.action) != nil else {
+    guard richTextButtonIconName(for: button.action) != nil else {
         return 0.0
     }
-    return max(0.0, instantPageBlockButtonIconReserve - padding)
+    return max(0.0, richTextBlockButtonIconReserve - padding)
 }
 
 /// Measures one row pill against the width its frame will occupy, choosing its padding: comfortable
@@ -68,7 +69,8 @@ private func instantPageBlockButtonMeasure(
             button: button,
             labelString: labelString,
             maxWidth: max(0.0, pillWidth - extra * 2.0),
-            horizontalPadding: padding
+            horizontalPadding: padding,
+            iconPlacement: .blockBadge
         )
         return (attachment, extra)
     }

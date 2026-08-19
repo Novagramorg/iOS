@@ -60,6 +60,20 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host code-block geometry (vertical inset, language-line gap). Both fields default to nil,
+    /// meaning "use the shared render metrics" — so an unset host matches the InstantPage V2 renderer.
+    /// Side padding is deliberately not a knob: it is the paragraph inset at the block's nesting level.
+    public var codeStyle: CodeStyle = .default {
+        didSet {
+            guard codeStyle != oldValue else { return }
+            canvas.applyCodeStyle(codeStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
     /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
     /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob
@@ -562,6 +576,22 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// and drawing stay outside this package.
     public func registerFormulaRenderer(_ provider: @escaping (RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?) {
         canvas.mapper.formulaRenderer = provider
+        let blocks = canvas.currentBlocks()
+        if !blocks.isEmpty {
+            canvas.reload(blocks, width: canvas.effectiveWidth)
+            performLayout(size: bounds.size)
+        }
+    }
+
+    /// Registers a host-provided button type icon. The icon depends on the button's ACTION, and this
+    /// package's Telegram-free model carries every action it cannot name as an opaque blob — only the
+    /// host can decode that back into the action its InstantPage V2 counterpart resolves an icon from.
+    ///
+    /// It is geometry as much as decoration: an inline pill grows by `inlineIconReserve` to hold its
+    /// icon, so registering (or not) moves the line break of any paragraph holding a button. Register it
+    /// alongside the other providers, before the first reload, exactly as with the formula renderer.
+    public func registerButtonIconProvider(_ provider: @escaping (ButtonAction) -> RichTextButtonIcon?) {
+        canvas.mapper.buttonIconProvider = provider
         let blocks = canvas.currentBlocks()
         if !blocks.isEmpty {
             canvas.reload(blocks, width: canvas.effectiveWidth)
