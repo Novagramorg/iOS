@@ -26,6 +26,7 @@ import TextNodeWithEntities
 import InvisibleInkDustNode
 import PeerInfoCoverComponent
 import GiftItemComponent
+import TextSelectionNode
 
 private func attributedServiceMessageString(theme: ChatPresentationThemeData, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder, dateTimeFormat: PresentationDateTimeFormat, message: EngineMessage, accountPeerId: EnginePeer.Id) -> NSAttributedString? {
     return universalServiceMessageString(presentationData: (theme.theme, theme.wallpaper), strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, message: message, accountPeerId: accountPeerId, forChatList: false, forForumOverview: false, forAdditionalServiceMessage: true)
@@ -50,6 +51,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     private let giftMessageTextNode: TextNodeWithEntities
     private var giftMessageSpoilerTextNode: TextNodeWithEntities?
     private var giftMessageDustNode: InvisibleInkDustNode?
+    private var giftMessageTextSelectionNode: TextSelectionNode?
+    private var didRevealGiftMessageSpoilersForSelection = false
+    private var giftMessageSelectionControlColor: UIColor?
     private let placeholderNode: StickerShimmerEffectNode
     private let animationNode: AnimatedStickerNode
     private let giftIcon = ComponentView<Empty>()
@@ -340,6 +344,104 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
             return
         }
         let _ = item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+    }
+
+    private func removeGiftMessageTextSelection(animated: Bool) {
+        guard let textSelectionNode = self.giftMessageTextSelectionNode else {
+            return
+        }
+        self.giftMessageTextSelectionNode = nil
+        self.updateIsTextSelectionActive?(false)
+        self.restoreGiftMessageSpoilersRevealedForSelection()
+
+        if animated {
+            textSelectionNode.highlightAreaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
+            textSelectionNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak textSelectionNode] _ in
+                textSelectionNode?.highlightAreaNode.removeFromSupernode()
+                textSelectionNode?.removeFromSupernode()
+            })
+        } else {
+            textSelectionNode.highlightAreaNode.removeFromSupernode()
+            textSelectionNode.removeFromSupernode()
+        }
+    }
+
+    private func restoreGiftMessageSpoilersRevealedForSelection() {
+        guard self.didRevealGiftMessageSpoilersForSelection else {
+            return
+        }
+        self.didRevealGiftMessageSpoilersForSelection = false
+        self.giftMessageDustNode?.update(revealed: false)
+    }
+
+    override public func willUpdateIsExtractedToContextPreview(_ value: Bool) {
+        if !value {
+            self.removeGiftMessageTextSelection(animated: true)
+        }
+    }
+
+    override public func updateIsExtractedToContextPreview(_ value: Bool) {
+        if value {
+            guard self.giftMessageTextSelectionNode == nil, let item = self.item, !item.attributes.isGiftMessageComposerPreview, !self.giftMessageTextNode.textNode.isHidden, let attributedText = self.giftMessageTextNode.textNode.cachedLayout?.attributedString, attributedText.length > 0, let rootNode = item.controllerInteraction.chatControllerNode() else {
+                return
+            }
+
+            let selectionColor = UIColor.white.withAlphaComponent(0.4)
+            let knobColor: UIColor
+            if item.message.effectivelyIncoming(item.context.account.peerId) {
+                knobColor = self.giftMessageSelectionControlColor ?? item.presentationData.theme.theme.chat.message.incoming.textSelectionKnobColor
+            } else {
+                knobColor = self.giftMessageSelectionControlColor ?? item.presentationData.theme.theme.chat.message.outgoing.textSelectionKnobColor
+            }
+
+            let canCopy = !item.associatedData.isCopyProtectionEnabled && !item.message.isCopyProtected()
+            let textSelectionNode = TextSelectionNode(
+                theme: TextSelectionTheme(selection: selectionColor, knob: knobColor, isDark: item.presentationData.theme.theme.overallDarkAppearance),
+                strings: item.presentationData.strings,
+                textNodeOrView: .node(self.giftMessageTextNode.textNode),
+                updateIsActive: { [weak self] value in
+                    self?.updateIsTextSelectionActive?(value)
+                    if !value {
+                        self?.restoreGiftMessageSpoilersRevealedForSelection()
+                    }
+                },
+                present: { [weak self] controller, arguments in
+                    self?.item?.controllerInteraction.presentGlobalOverlayController(controller, arguments)
+                },
+                rootView: { [weak rootNode] in
+                    return rootNode?.view
+                },
+                performAction: { [weak self] text, action in
+                    guard let self, let item = self.item else {
+                        return
+                    }
+                    item.controllerInteraction.performTextSelectionAction(item.message, canCopy, text, nil, action)
+                }
+            )
+            textSelectionNode.enableCopy = canCopy
+            textSelectionNode.enableQuote = false
+            textSelectionNode.enableShare = canCopy
+            textSelectionNode.updateRange = { [weak self] selectionRange in
+                guard let self, !self.didRevealGiftMessageSpoilersForSelection, let selectionRange, let dustNode = self.giftMessageDustNode, !dustNode.isRevealed, let textLayout = self.giftMessageTextNode.textNode.cachedLayout else {
+                    return
+                }
+                for (spoilerRange, _) in textLayout.spoilers {
+                    if let intersection = selectionRange.intersection(spoilerRange), intersection.length > 0 {
+                        self.didRevealGiftMessageSpoilersForSelection = true
+                        dustNode.update(revealed: true)
+                        return
+                    }
+                }
+            }
+
+            self.giftMessageTextSelectionNode = textSelectionNode
+            self.addSubnode(textSelectionNode)
+            self.insertSubnode(textSelectionNode.highlightAreaNode, belowSubnode: self.giftMessageTextNode.textNode)
+            textSelectionNode.frame = self.giftMessageTextNode.textNode.frame
+            textSelectionNode.highlightAreaNode.frame = textSelectionNode.frame
+        } else {
+            self.removeGiftMessageTextSelection(animated: true)
+        }
     }
     
     private func makeProgress() -> Promise<Bool> {
@@ -1176,6 +1278,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     strongSelf.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: animationName), width: 384, height: 384, playbackMode: .still(.end), mode: .direct(cachePathPrefix: nil))
                                 }
                             }
+                            strongSelf.giftMessageSelectionControlColor = uniqueBackgroundColor
                             strongSelf.item = item
                             strongSelf.isStarGift = isStarGift
                             
@@ -1301,6 +1404,15 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 strongSelf.giftMessageTextNode.textNode.bounds = CGRect(origin: .zero, size: giftMessageTextFrame.size)
                                 animation.animator.updateFrame(layer: strongSelf.giftMessageAvatarNode.layer, frame: giftMessageAvatarFrame, completion: nil)
 
+                                if let textSelectionNode = strongSelf.giftMessageTextSelectionNode {
+                                    let shouldUpdateLayout = textSelectionNode.frame.size != giftMessageTextFrame.size
+                                    textSelectionNode.frame = giftMessageTextFrame
+                                    textSelectionNode.highlightAreaNode.frame = giftMessageTextFrame
+                                    if shouldUpdateLayout {
+                                        textSelectionNode.updateLayout()
+                                    }
+                                }
+
                                 strongSelf.giftMessageAvatarNode.setPeer(
                                     context: item.context,
                                     theme: item.presentationData.theme.theme,
@@ -1341,6 +1453,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     strongSelf.giftMessageDustNode = nil
                                 }
                             } else {
+                                strongSelf.removeGiftMessageTextSelection(animated: false)
                                 strongSelf.giftMessageBackgroundNode.isHidden = true
                                 strongSelf.giftMessageAvatarNode.isHidden = true
                                 strongSelf.giftMessageTextNode.textNode.isHidden = true
@@ -1709,9 +1822,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
         self.absoluteRect = (rect, containerSize)
         
-        
         self.placeholderNode.updateAbsoluteRect(CGRect(origin: CGPoint(x: rect.minX + self.placeholderNode.frame.minX, y: rect.minY + self.placeholderNode.frame.minY), size: self.placeholderNode.frame.size), within: containerSize)
-
     }
 
     override public func updateTouchesAtPoint(_ point: CGPoint?) {

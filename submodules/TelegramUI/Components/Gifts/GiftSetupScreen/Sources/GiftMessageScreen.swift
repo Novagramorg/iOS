@@ -198,22 +198,25 @@ private final class GiftMessageScreenComponent: Component {
     let context: AccountContext
     let peer: EnginePeer
     let gift: StarGift.UniqueGift
+    let dismissOnCompletion: Bool
     let completion: (GiftMessageScreen.Result) -> Void
 
     init(
         context: AccountContext,
         peer: EnginePeer,
         gift: StarGift.UniqueGift,
+        dismissOnCompletion: Bool,
         completion: @escaping (GiftMessageScreen.Result) -> Void
     ) {
         self.context = context
         self.peer = peer
         self.gift = gift
+        self.dismissOnCompletion = dismissOnCompletion
         self.completion = completion
     }
 
     static func ==(lhs: GiftMessageScreenComponent, rhs: GiftMessageScreenComponent) -> Bool {
-        return lhs.context === rhs.context && lhs.peer == rhs.peer && lhs.gift == rhs.gift
+        return lhs.context === rhs.context && lhs.peer == rhs.peer && lhs.gift == rhs.gift && lhs.dismissOnCompletion == rhs.dismissOnCompletion
     }
 
     final class View: UIView {
@@ -403,9 +406,17 @@ private final class GiftMessageScreenComponent: Component {
                 )
             }
 
-            controller.dismiss(completion: {
+            if component.dismissOnCompletion {
+                controller.dismiss(completion: {
+                    component.completion(result)
+                })
+            } else {
+                if let inputPanelView = self.inputPanel.view as? MessageInputPanelComponent.View {
+                    inputPanelView.deactivateInput(force: true)
+                }
+                self.isCommitted = false
                 component.completion(result)
-            })
+            }
         }
 
         private func activateInput() {
@@ -851,6 +862,7 @@ public final class GiftMessageScreen: ViewControllerComponentContainer {
         context: AccountContext,
         peer: EnginePeer,
         gift: StarGift.UniqueGift,
+        dismissOnCompletion: Bool = true,
         completion: @escaping (Result) -> Void
     ) {
         self.accountContext = context
@@ -859,7 +871,7 @@ public final class GiftMessageScreen: ViewControllerComponentContainer {
 
         super.init(
             context: context,
-            component: GiftMessageScreenComponent(context: context, peer: peer, gift: gift, completion: completion),
+            component: GiftMessageScreenComponent(context: context, peer: peer, gift: gift, dismissOnCompletion: dismissOnCompletion, completion: completion),
             navigationBarAppearance: .none,
             theme: .default
         )
