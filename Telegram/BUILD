@@ -1245,7 +1245,11 @@ ios_extension(
         ":AppNameInfoPlist",
     ],
     minimum_os_version = minimum_os_version, # maintain the same minimum OS version across extensions
-    ipa_post_processor = ":SetMinOsVersionWidgetExtension",
+    # Deliberately NOT patched down: this used to stamp MinimumOSVersion=14.0 so a WidgetKit
+    # extension could ship while the app min was 13.0. Now that the app min is >= 14, stamping
+    # a plist minimum *below* the binary's minos makes App Store validation reject the bundle
+    # (error 90208). Same reason the other extensions' patches are commented out.
+    #ipa_post_processor = ":SetMinOsVersionWidgetExtension",
     #provides_main = True,
     provisioning_profile = select({
         ":disableProvisioningProfilesSetting": None,
