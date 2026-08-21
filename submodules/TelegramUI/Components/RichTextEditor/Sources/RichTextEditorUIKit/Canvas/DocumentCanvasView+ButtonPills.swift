@@ -42,7 +42,7 @@ extension DocumentCanvasView {
                     hosted = HostedButtonPill(view: view, canvasFrame: canvasRect)
                     buttonPillViews[key] = hosted
                 }
-                hosted.view.configure(attachment: attachment)
+                hosted.view.configure(attachment: attachment, metrics: self.mapper.styleSheet.metrics.button)
                 buttonPillViews[key]?.canvasFrame = canvasRect
                 placeButtonPill(hosted, canvasRect: canvasRect, regionStart: region.globalStart)
                 hosted.view.syncEmoji(provider: self.emojiViewProvider,

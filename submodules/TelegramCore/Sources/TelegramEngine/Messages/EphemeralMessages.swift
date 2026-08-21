@@ -595,12 +595,25 @@ func _internal_refreshWelcomeMessages(account: Account, peerId: PeerId) -> Signa
                     currentIds.append(id)
                     return true
                 })
+                var currentStableIds: [MessageId: UInt32] = [:]
+                for id in currentIds {
+                    if let message = transaction.getMessage(id) {
+                        currentStableIds[id] = message.stableId
+                    }
+                }
                 if !currentIds.isEmpty {
                     transaction.deleteMessages(currentIds, forEachMedia: nil)
                 }
 
-                let messages = data.messages.compactMap { message in
-                    return StoreMessage(apiEphemeralMessage: message)
+                let messages = data.messages.compactMap { message -> StoreMessage? in
+                    guard let message = StoreMessage(apiEphemeralMessage: message) else {
+                        return nil
+                    }
+                    if case let .Id(id) = message.id, let stableId = currentStableIds[id] {
+                        return message.withUpdatedCustomStableId(stableId)
+                    } else {
+                        return message
+                    }
                 }
                 if !messages.isEmpty {
                     let _ = transaction.addMessages(messages, location: .Random)

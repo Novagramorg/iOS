@@ -229,47 +229,58 @@ public func buyStarGiftImpl(
             guard let peer, let controller = getController() else {
                 return
             }
-            var dismissImpl: (() -> Void)?
-            let alertController = giftPurchaseAlertController(
-                context: context,
-                gift: uniqueGift,
-                showAttributes: showAttributes,
-                peer: peer,
-                animateBalanceOverlay: showAttributes,
-                autoDismissOnCommit: false,
-                navigationController: controller.navigationController as? NavigationController,
-                commit: { currency in
-                    dismissImpl?()
-
-                    if recipientPeerId == context.account.peerId {
-                        action(currency, GiftMessageScreen.Result(hideName: true, text: nil, entities: nil), {})
-                        return
-                    }
-                    
-                    guard let controller = getController() else {
-                        return
-                    }
-                    let messageController = GiftMessageScreen(
-                        context: context,
-                        peer: peer,
-                        gift: uniqueGift,
-                        completion: { message in
+            let presentConfirmation: (GiftMessageScreen.Result, GiftMessageScreen?) -> Void = { message, messageController in
+                var dismissImpl: (() -> Void)?
+                let alertController = giftPurchaseAlertController(
+                    context: context,
+                    gift: uniqueGift,
+                    showAttributes: showAttributes,
+                    peer: peer,
+                    animateBalanceOverlay: showAttributes,
+                    autoDismissOnCommit: false,
+                    navigationController: controller.navigationController as? NavigationController,
+                    commit: { currency in
+                        dismissImpl?()
+                        if let messageController {
+                            messageController.dismiss(completion: {
+                                action(currency, message, {})
+                            })
+                        } else {
                             action(currency, message, {})
                         }
-                    )
-                    controller.push(messageController)
-                },
-                dismissed: {
-                    updateIsBalanceVisible(true)
+                    },
+                    dismissed: {
+                        updateIsBalanceVisible(true)
+                    }
+                )
+                controller.present(alertController, in: .window(.root))
+
+                dismissImpl = { [weak alertController] in
+                    alertController?.dismiss(completion: nil)
                 }
-            )
-            controller.present(alertController, in: .window(.root))
-            
-            dismissImpl = { [weak alertController] in
-                alertController?.dismiss(completion: nil)
+
+                updateIsBalanceVisible(false)
             }
-            
-            updateIsBalanceVisible(false)
+
+            if recipientPeerId == context.account.peerId {
+                presentConfirmation(GiftMessageScreen.Result(hideName: true, text: nil, entities: nil), nil)
+            } else {
+                weak var messageController: GiftMessageScreen?
+                let messageScreen = GiftMessageScreen(
+                    context: context,
+                    peer: peer,
+                    gift: uniqueGift,
+                    dismissOnCompletion: false,
+                    completion: { message in
+                        guard let messageController else {
+                            return
+                        }
+                        presentConfirmation(message, messageController)
+                    }
+                )
+                messageController = messageScreen
+                controller.push(messageScreen)
+            }
         })
     }
 }

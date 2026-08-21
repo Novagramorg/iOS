@@ -119,6 +119,14 @@ public final class UnsupportedContentPillView: UIView {
         if buttonTitleNode !== self.buttonTitleNode {
             self.buttonTitleNode?.view.removeFromSuperview()
             self.buttonTitleNode = buttonTitleNode
+            // LOAD-BEARING for the tap, not just a tidiness flag. An `ASDisplayNode`'s view is
+            // interactive by default, so an interactive label would be the deepest hit-test result
+            // inside the button — and Telegram's bubble-wide tap recognizer only steps aside when
+            // the hit-test result IS a `UIButton`
+            // (`TapLongTapOrDoubleTapGestureRecognizer.touchesBegan`). With the label winning the
+            // hit test the recognizer claims the touch instead and cancels the button's tracking,
+            // so `touchUpInside` never fires and the pill reads as dead.
+            buttonTitleNode.isUserInteractionEnabled = false
             self.buttonNode.addSubview(buttonTitleNode.view)
         }
 
@@ -173,13 +181,7 @@ public final class UnsupportedContentPillView: UIView {
         let subtitleFrame = CGRect(origin: CGPoint(x: textColumnX, y: titleFrame.maxY + pillTitleSubtitleSpacing), size: layout.subtitleSize)
         animation.animator.updateFrame(layer: subtitleNode.layer, frame: subtitleFrame, completion: nil)
 
-        let buttonFrame = CGRect(
-            origin: CGPoint(
-                x: size.width - pillContentInsets.right - layout.buttonSize.width,
-                y: floorToScreenPixels((size.height - layout.buttonSize.height) / 2.0)
-            ),
-            size: layout.buttonSize
-        )
+        let buttonFrame = layout.actionFrame(in: size)
         self.buttonFrame = buttonFrame
         animation.animator.updateFrame(layer: self.buttonNode.layer, frame: buttonFrame, completion: nil)
 

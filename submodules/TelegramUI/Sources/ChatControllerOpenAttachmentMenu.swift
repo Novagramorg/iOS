@@ -182,6 +182,9 @@ extension ChatControllerImpl {
             
             var canSendPolls = true
             var canSendTodos = true
+            if case let .customChatContents(customChatContents) = self.presentationInterfaceState.subject, case .welcomeMessages = customChatContents.kind {
+                canSendTodos = false
+            }
             if let peer = self.presentationInterfaceState.renderedPeer?.peer {
                 if let peer = peer as? TelegramUser {
                     if peer.botInfo == nil && peer.id != self.context.account.peerId {

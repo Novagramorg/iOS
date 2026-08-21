@@ -14,6 +14,7 @@ import MultilineTextComponent
 import EdgeEffect
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextButtonIcons
 import RichTextEditorMediaView
 import InstantPageUI
 import ContextUI
@@ -1158,6 +1159,11 @@ final class RichTextAttachmentScreenComponent: Component {
         /// screen's surface is `list.plainBackgroundColor`.
         private static func mapEditorTheme(_ theme: PresentationTheme) -> RichTextEditorTheme {
             let codeFill = theme.list.itemAccentColor.withMultipliedAlpha(0.1)
+            // A code BLOCK's band takes the highlighted-table-cell fill, not an accent tint — one
+            // local so the two cannot drift (the renderer binds them the same way, via
+            // `tableHeaderColor`). Inline code keeps `codeFill`: a run-level pill inside body text
+            // is a different surface from a full-width block band.
+            let tableHighlightFill = theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05)
             
             let shadowCursorColor: UIColor
             if theme.overallDarkAppearance {
@@ -1172,8 +1178,8 @@ final class RichTextAttachmentScreenComponent: Component {
                 placeholder: theme.list.itemPlaceholderTextColor,
                 accent: theme.list.itemAccentColor,
                 tableBorder: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.1),
-                tableHeaderBackground: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05),
-                codeBackground: codeFill,
+                tableHeaderBackground: tableHighlightFill,
+                codeBackground: tableHighlightFill,
                 listMarker: theme.list.itemPrimaryTextColor,
                 inlineCodeBackground: codeFill,
                 markedTextUnderline: theme.list.itemPrimaryTextColor,
@@ -1376,6 +1382,10 @@ final class RichTextAttachmentScreenComponent: Component {
                         descent: attachment.rendered.descent
                     )
                 }
+
+                // A pill's type icon is also its geometry — an inline pill grows to hold it — so this
+                // must be registered before the first reload, alongside the other providers.
+                editor.registerButtonIconProvider(richTextEditorButtonIcon)
 
                 editor.onEditFormulaRequested = { [weak self] latex, completion in
                     guard let self, let component = self.component else {

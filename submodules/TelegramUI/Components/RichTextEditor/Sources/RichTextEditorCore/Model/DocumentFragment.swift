@@ -2,12 +2,27 @@ import Foundation
 
 // MARK: - Task 3: insertingFragment helpers
 
-/// True for a fragment block that pastes by folding its runs INLINE into the host paragraph
-/// (plain body / headings, not a list item). Quotes, list items, and code blocks paste as own block.
-public func isInlineMergeable(_ block: Block) -> Bool {
-    guard case .paragraph(let p) = block else { return false }
+/// True for a fragment block that pastes by folding its runs INLINE into the host paragraph, which
+/// keeps the HOST's paragraph style. Quotes, list items, and code blocks always paste as their own
+/// block.
+///
+/// **The two directions are not symmetric, and treating them as one destroys headings.** Folding
+/// discards the fragment paragraph's own style, so it is lossless only when the fragment has no style
+/// to lose:
+///   - a plain BODY paragraph carries no block structure → always folds. This is the case that MUST
+///     keep folding: pasting text into a heading has to stay in the heading.
+///   - a HEADING paragraph loses its level when folded → folds only into a host that is already that
+///     same style (`# X` pasted inside an H1 should not shatter it into three blocks). Anywhere else
+///     it stands as its own block, and the caller's split-and-assemble path places it.
+///
+/// This used to accept every heading level unconditionally, so a fragment beginning (or ending) with a
+/// heading folded into the body paragraph it was pasted into — the reported "pasting a copied rich
+/// message loses its headings", since the chat composer's host paragraph is always body.
+public func isInlineMergeable(_ block: Block, intoHostStyle hostStyle: ParagraphStyleName) -> Bool {
+    guard case .paragraph(let p) = block, p.list == nil else { return false }
     switch p.style {
-    case .body, .heading1, .heading2, .heading3, .heading4, .heading5, .heading6: return p.list == nil
+    case .body: return true
+    case .heading1, .heading2, .heading3, .heading4, .heading5, .heading6: return p.style == hostStyle
     case .caption, .pullQuote: return false
     }
 }
@@ -90,7 +105,7 @@ extension Document {
         let (headHalf, tailHalf) = host.split(at: locus.local, newID: .generate())
 
         // Single inline-mergeable paragraph → fold its runs into the host paragraph.
-        if frag.count == 1, isInlineMergeable(frag[0]), case .paragraph(let only) = frag[0] {
+        if frag.count == 1, isInlineMergeable(frag[0], intoHostStyle: host.style), case .paragraph(let only) = frag[0] {
             let merged = ParagraphBlock(id: host.id, style: host.style, paragraph: host.paragraph,
                                         list: host.list, runs: headHalf.runs + only.runs + tailHalf.runs)
             newBlocks[locus.index] = .paragraph(merged)
@@ -104,11 +119,12 @@ extension Document {
                                       list: host.list, runs: tailHalf.runs)
         var caretInTail = 0
 
-        if let first = middle.first, isInlineMergeable(first), case .paragraph(let fp) = first {
+        // Both split halves carry the host's style, so both ends test against it.
+        if let first = middle.first, isInlineMergeable(first, intoHostStyle: host.style), case .paragraph(let fp) = first {
             headBlock = .paragraph(headHalf.merging(fp))
             middle.removeFirst()
         }
-        if let last = middle.last, isInlineMergeable(last), case .paragraph(let lp) = last {
+        if let last = middle.last, isInlineMergeable(last, intoHostStyle: host.style), case .paragraph(let lp) = last {
             tailPara = ParagraphBlock(id: tailPara.id, style: tailPara.style, paragraph: tailPara.paragraph,
                                       list: tailPara.list, runs: lp.runs + tailPara.runs)
             caretInTail = lp.utf16Count

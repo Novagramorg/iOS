@@ -46,25 +46,299 @@ import AvatarComponent
 import GlassControls
 import GlassBarButtonComponent
 import GlassBackgroundComponent
+import EdgeEffect
+import TextSelectionNode
+import Pasteboard
+import Speak
+import TranslateUI
+import TelegramUIPreferences
+
+private let giftViewTopOverscrollBackgroundHeight: CGFloat = 250.0
+
+private final class SelectableGiftMessageTextComponent: Component {
+    let context: AccountContext
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let text: NSAttributedString
+    let selectionControlColor: UIColor
+    let canCopy: Bool
+    let controller: () -> ViewController?
+    let performAction: (NSAttributedString, TextSelectionAction) -> Void
+
+    init(
+        context: AccountContext,
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        text: NSAttributedString,
+        selectionControlColor: UIColor,
+        canCopy: Bool,
+        controller: @escaping () -> ViewController?,
+        performAction: @escaping (NSAttributedString, TextSelectionAction) -> Void
+    ) {
+        self.context = context
+        self.theme = theme
+        self.strings = strings
+        self.text = text
+        self.selectionControlColor = selectionControlColor
+        self.canCopy = canCopy
+        self.controller = controller
+        self.performAction = performAction
+    }
+
+    static func ==(lhs: SelectableGiftMessageTextComponent, rhs: SelectableGiftMessageTextComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if !lhs.selectionControlColor.isEqual(rhs.selectionControlColor) {
+            return false
+        }
+        if lhs.canCopy != rhs.canCopy {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let text = ComponentView<Empty>()
+        private var textSelectionNode: TextSelectionNode?
+        private weak var selectionTheme: PresentationTheme?
+        private weak var selectionStrings: PresentationStrings?
+        private var didRevealSpoilersForSelection = false
+        private var component: SelectableGiftMessageTextComponent?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            self.clipsToBounds = false
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if self.bounds.contains(point) {
+                return true
+            }
+            if let textSelectionNode {
+                let localPoint = self.convert(point, to: textSelectionNode.view)
+                return textSelectionNode.view.hitTest(localPoint, with: event) != nil
+            }
+            return false
+        }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if let textSelectionNode {
+                let localPoint = self.convert(point, to: textSelectionNode.view)
+                if let result = textSelectionNode.view.hitTest(localPoint, with: event) {
+                    return result
+                }
+            }
+            return super.hitTest(point, with: event)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil {
+                self.removeTextSelectionNode()
+            }
+        }
+
+        private func restoreSpoilersRevealedForSelection() {
+            guard self.didRevealSpoilersForSelection else {
+                return
+            }
+            self.didRevealSpoilersForSelection = false
+            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View {
+                textView.textNode.dustNode?.update(revealed: false)
+            }
+        }
+
+        private func removeTextSelectionNode() {
+            guard let textSelectionNode = self.textSelectionNode else {
+                return
+            }
+            self.textSelectionNode = nil
+            textSelectionNode.cancelSelection()
+            textSelectionNode.highlightAreaNode.view.removeFromSuperview()
+            textSelectionNode.view.removeFromSuperview()
+            self.restoreSpoilersRevealedForSelection()
+        }
+
+        private func ensureTextSelectionNode(textView: MultilineTextWithEntitiesComponent.View) {
+            guard let component = self.component else {
+                return
+            }
+
+            if self.selectionTheme !== component.theme || self.selectionStrings !== component.strings {
+                self.removeTextSelectionNode()
+            }
+            self.selectionTheme = component.theme
+            self.selectionStrings = component.strings
+
+            let textSelectionNode: TextSelectionNode
+            if let current = self.textSelectionNode {
+                textSelectionNode = current
+            } else {
+                textSelectionNode = TextSelectionNode(
+                    theme: TextSelectionTheme(selection: UIColor.white.withAlphaComponent(0.4), knob: component.selectionControlColor, isDark: true),
+                    strings: component.strings,
+                    textNodeOrView: .node(textView.textNode),
+                    updateIsActive: { [weak self] value in
+                        if !value {
+                            self?.restoreSpoilersRevealedForSelection()
+                        }
+                    },
+                    present: { [weak self] controller, arguments in
+                        self?.component?.controller()?.presentInGlobalOverlay(controller, with: arguments)
+                    },
+                    rootView: { [weak self] in
+                        return self?.component?.controller()?.displayNode.view
+                    },
+                    performAction: { [weak self] text, action in
+                        self?.component?.performAction(text, action)
+                    }
+                )
+                textSelectionNode.enableQuote = false
+                textSelectionNode.updateRange = { [weak self, weak textView] selectionRange in
+                    guard let self, !self.didRevealSpoilersForSelection, let textView, let selectionRange, let dustNode = textView.textNode.dustNode, !dustNode.isRevealed, let textLayout = textView.textNode.cachedLayout else {
+                        return
+                    }
+                    for (spoilerRange, _) in textLayout.spoilers {
+                        if let intersection = selectionRange.intersection(spoilerRange), intersection.length > 0 {
+                            self.didRevealSpoilersForSelection = true
+                            dustNode.update(revealed: true)
+                            return
+                        }
+                    }
+                }
+
+                self.textSelectionNode = textSelectionNode
+                self.insertSubview(textSelectionNode.highlightAreaNode.view, belowSubview: textView)
+                self.addSubview(textSelectionNode.view)
+
+                let tapRecognizer = TapLongTapOrDoubleTapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:)))
+                tapRecognizer.tapActionAtPoint = { _ in
+                    return .waitForSingleTap
+                }
+                textSelectionNode.view.addGestureRecognizer(tapRecognizer)
+            }
+
+            textSelectionNode.enableCopy = component.canCopy
+            textSelectionNode.enableSpeak = isSpeakSelectionEnabled()
+            textSelectionNode.enableShare = component.canCopy
+        }
+
+        @objc private func tapGesture(_ recognizer: TapLongTapOrDoubleTapGestureRecognizer) {
+            if self.textSelectionNode?.didRecognizeTap == true {
+                return
+            }
+            guard case .ended = recognizer.state, let (gesture, location) = recognizer.lastRecognizedGestureAndLocation, case .tap = gesture, let textSelectionNode = self.textSelectionNode, let textView = self.text.view as? MultilineTextWithEntitiesComponent.View else {
+                return
+            }
+
+            let textPoint = textSelectionNode.view.convert(location, to: textView.textNode.view)
+            guard let (_, attributes) = textView.textNode.attributesAtPoint(textPoint), attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)] != nil, let dustNode = textView.textNode.dustNode, !dustNode.isRevealed else {
+                return
+            }
+            let dustPoint = textSelectionNode.view.convert(location, to: dustNode.view)
+            dustNode.revealAtLocation(dustPoint)
+        }
+
+        func update(component: SelectableGiftMessageTextComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            if let previousComponent = self.component {
+                if previousComponent.text != component.text || !previousComponent.selectionControlColor.isEqual(component.selectionControlColor) {
+                    self.removeTextSelectionNode()
+                }
+            }
+            self.component = component
+
+            let textSize = self.text.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextWithEntitiesComponent(
+                    context: component.context,
+                    animationCache: component.context.animationCache,
+                    animationRenderer: component.context.animationRenderer,
+                    placeholderColor: .white,
+                    text: .plain(component.text),
+                    horizontalAlignment: .left,
+                    maximumNumberOfLines: 0,
+                    handleSpoilers: true
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+
+            if let textView = self.text.view as? MultilineTextWithEntitiesComponent.View {
+                if textView.superview == nil {
+                    self.addSubview(textView)
+                }
+                textView.frame = CGRect(origin: .zero, size: textSize)
+
+                self.ensureTextSelectionNode(textView: textView)
+                if let textSelectionNode = self.textSelectionNode {
+                    let shouldUpdateLayout = textSelectionNode.frame.size != textSize
+                    textSelectionNode.frame = CGRect(origin: .zero, size: textSize)
+                    textSelectionNode.highlightAreaNode.frame = textSelectionNode.frame
+                    if shouldUpdateLayout {
+                        textSelectionNode.updateLayout()
+                    }
+                }
+            }
+
+            return textSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    final class ExternalState {
+        fileprivate var topOverscrollBackgroundColor: UIColor?
+        fileprivate var topOverscrollBackgroundTransition: ComponentTransition = .immediate
+        fileprivate var controlPanel: GlassControlPanelComponent?
+        fileprivate var controlPanelTransition: ComponentTransition = .immediate
+        fileprivate var button: ButtonComponent?
+        fileprivate var buttonTransition: ComponentTransition = .immediate
+        fileprivate var upgradeNextButton: PlainButtonComponent?
+        fileprivate var upgradePriceButton: PlainButtonComponent?
+    }
     
     let context: AccountContext
     let subject: GiftViewScreen.Subject
     let animateOut: ActionSlot<Action<()>>
     let getController: () -> ViewController?
+    let externalState: ExternalState
     
     init(
         context: AccountContext,
         subject: GiftViewScreen.Subject,
         animateOut: ActionSlot<Action<()>>,
-        getController: @escaping () -> ViewController?
+        getController: @escaping () -> ViewController?,
+        externalState: ExternalState
     ) {
         self.context = context
         self.subject = subject
         self.animateOut = animateOut
         self.getController = getController
+        self.externalState = externalState
     }
     
     static func ==(lhs: GiftViewSheetContent, rhs: GiftViewSheetContent) -> Bool {
@@ -72,6 +346,9 @@ private final class GiftViewSheetContent: CombinedComponent {
             return false
         }
         if lhs.subject != rhs.subject {
+            return false
+        }
+        if lhs.externalState !== rhs.externalState {
             return false
         }
         return true
@@ -110,6 +387,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         var cachedSubtitleStarImage: (UIImage, PresentationTheme)?
         var cachedTonImage: (UIImage, PresentationTheme)?
         var cachedGiftMessageBackgroundImage: (UIColor, CGSize, UIImage)?
+        var currentSpeechHolder: SpeechSynthesizerHolder?
         
         var cachedChevronImage: (UIImage, PresentationTheme)?
         var cachedSmallChevronImage: (UIImage, PresentationTheme)?
@@ -495,6 +773,132 @@ private final class GiftViewSheetContent: CombinedComponent {
             )
             
             HapticFeedback().tap()
+        }
+
+        func performGiftMessageTextSelectionAction(text: NSAttributedString, action: TextSelectionAction, canCopy: Bool) {
+            guard let controller = self.getController() else {
+                return
+            }
+
+            switch action {
+            case .copy:
+                guard canCopy else {
+                    return
+                }
+                storeAttributedTextInPasteboard(text)
+
+                let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                controller.present(
+                    UndoOverlayController(
+                        presentationData: presentationData,
+                        content: .copy(text: presentationData.strings.Conversation_TextCopied),
+                        position: .bottom,
+                        action: { _ in return true }
+                    ),
+                    in: .current
+                )
+            case .share:
+                guard canCopy else {
+                    return
+                }
+                let shareController = self.context.sharedContext.makeShareController(
+                    context: self.context,
+                    params: ShareControllerParams(
+                        subject: .text(text.string),
+                        externalShare: true,
+                        immediateExternalShare: false
+                    )
+                )
+                controller.present(shareController, in: .window(.root))
+            case .lookup:
+                let lookupController = UIReferenceLibraryViewController(term: text.string)
+                if let window = controller.view.window {
+                    lookupController.popoverPresentationController?.sourceView = window
+                    lookupController.popoverPresentationController?.sourceRect = CGRect(origin: CGPoint(x: window.bounds.width / 2.0, y: window.bounds.height - 1.0), size: CGSize(width: 1.0, height: 1.0))
+                    window.rootViewController?.present(lookupController, animated: true)
+                }
+            case .speak:
+                if let speechHolder = speakText(text: text.string) {
+                    speechHolder.completion = { [weak self, weak speechHolder] in
+                        guard let self else {
+                            return
+                        }
+                        if self.currentSpeechHolder === speechHolder {
+                            self.currentSpeechHolder = nil
+                        }
+                    }
+                    self.currentSpeechHolder = speechHolder
+                }
+            case .translate:
+                let _ = (self.context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.translationSettings])
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] sharedData in
+                    guard let self else {
+                        return
+                    }
+
+                    let translationSettings: TranslationSettings
+                    if let current = sharedData.entries[ApplicationSpecificSharedDataKeys.translationSettings]?.get(TranslationSettings.self) {
+                        translationSettings = current
+                    } else {
+                        translationSettings = TranslationSettings.defaultSettings
+                    }
+
+                    let (_, language) = canTranslateText(
+                        context: self.context,
+                        text: text.string,
+                        showTranslate: translationSettings.showTranslate,
+                        showTranslateIfTopical: false,
+                        ignoredLanguages: translationSettings.ignoredLanguages
+                    )
+                    let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: self.context.sharedContext.accountManager, timestamp: Int32(Date().timeIntervalSince1970)).startStandalone()
+
+                    Task { @MainActor [weak self] in
+                        guard let self, let controller = self.getController() else {
+                            return
+                        }
+                        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                        let copyResult: ((ComposedRichMessage) -> Void)?
+                        if canCopy {
+                            copyResult = { [weak controller] result in
+                                guard let controller else {
+                                    return
+                                }
+                                switch result {
+                                case let .plain(text, entities):
+                                    storeMessageTextInPasteboard(text, entities: entities)
+                                case .rich(_), .empty:
+                                    return
+                                }
+                                controller.present(
+                                    UndoOverlayController(
+                                        presentationData: presentationData,
+                                        content: .copy(text: presentationData.strings.Conversation_TextCopied),
+                                        elevatedLayout: true,
+                                        animateInAsReplacement: false,
+                                        action: { _ in return false }
+                                    ),
+                                    in: .window(.root)
+                                )
+                            }
+                        } else {
+                            copyResult = nil
+                        }
+
+                        let translationController = await self.context.sharedContext.makeTextProcessingScreen(
+                            context: self.context,
+                            theme: nil,
+                            mode: .translate(fromLanguage: language, applyResult: nil),
+                            inputText: .plain(text: text.string, entities: []),
+                            copyResult: copyResult,
+                            translateChat: nil
+                        )
+                        controller.present(translationController, in: .window(.root))
+                    }
+                })
+            case .quote:
+                break
+            }
         }
         
         func updateSavedToProfile(_ added: Bool) {
@@ -2478,7 +2882,6 @@ private final class GiftViewSheetContent: CombinedComponent {
     }
     
     static var body: Body {
-        let buttons = Child(GlassControlPanelComponent.self)
         let animation = Child(GiftCompositionComponent.self)
         let title = Child(MultilineTextComponent.self)
         let subtitle = Child(MultilineTextComponent.self)
@@ -2487,7 +2890,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         let description = Child(MultilineTextComponent.self)
         let animatedDescription = Child(HStack<Empty>.self)
         let giftMessageBackground = Child(Image.self)
-        let giftMessageTextComponent = Child(MultilineTextWithEntitiesComponent.self)
+        let giftMessageTextComponent = Child(SelectableGiftMessageTextComponent.self)
         let giftMessageAvatar = Child(AvatarComponent.self)
         
         let transferButton = Child(HeaderButtonComponent.self)
@@ -2504,14 +2907,11 @@ private final class GiftViewSheetContent: CombinedComponent {
         let hiddenText = Child(MultilineTextComponent.self)
         let table = Child(TableComponent.self)
         let additionalText = Child(MultilineTextComponent.self)
-        let button = Child(ButtonComponent.self)
-        let upgradeNextButton = Child(PlainButtonComponent.self)
         
         let upgradeTitle = Child(MultilineTextComponent.self)
         let upgradeDescription = Child(GlassBarButtonComponent.self)
         let upgradePerks = Child(List<Empty>.self)
         let upgradeKeepName = Child(PlainButtonComponent.self)
-        let upgradePriceButton = Child(PlainButtonComponent.self)
         let upgradeDescriptionMeasure = Child(MultilineTextComponent.self)
         
         let priceButtonMeasure = Child(MultilineTextWithEntitiesComponent.self)
@@ -2533,6 +2933,13 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             let state = context.state
             let subject = state.subject
+
+            let canCopyGiftMessageText: Bool
+            if case let .message(message) = subject {
+                canCopyGiftMessageText = !message._asMessage().isCopyProtected()
+            } else {
+                canCopyGiftMessageText = true
+            }
             
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
             
@@ -2690,9 +3097,34 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             let hasGiftMessage = uniqueGift != nil && (giftMessageNameHidden || giftMessagePeer != nil) && giftMessageText?.isEmpty == false
 
+            var showUpgradePreview = false
+            if state.inUpgradePreview, let _ = state.upgradePreview {
+                showUpgradePreview = true
+            } else if case .upgradePreview = component.subject {
+                showUpgradePreview = true
+            }
+
+            var showWearPreview = false
+            if state.inWearPreview {
+                showWearPreview = true
+            } else if case .wearPreview = component.subject {
+                showWearPreview = true
+            }
+
+            var giftMessageSelectionControlColor = theme.actionSheet.controlAccentColor
+            if let uniqueGift {
+                for attribute in uniqueGift.attributes {
+                    if case let .backdrop(_, _, _, outerColor, _, _, _) = attribute {
+                        giftMessageSelectionControlColor = UIColor(rgb: UInt32(bitPattern: outerColor))
+                        break
+                    }
+                }
+            }
+
             var giftMessageTextChild: _UpdatedChildComponent?
+            var giftMessageTextIsDisplayed = false
             var giftMessageHeaderHeight: CGFloat?
-            if hasGiftMessage, let giftMessageText {
+            if !showUpgradePreview && !showWearPreview, hasGiftMessage, let giftMessageText {
                 let giftMessageAttributedText: NSAttributedString
                 if let giftMessageEntities, !giftMessageEntities.isEmpty {
                     let sourceMessage: EngineRawMessage?
@@ -2727,15 +3159,17 @@ private final class GiftViewSheetContent: CombinedComponent {
 
                 let giftMessageTextMaxWidth = max(1.0, context.availableSize.width - sideInset * 2.0 - 22.0 - 34.0)
                 let updatedGiftMessageTextChild = giftMessageTextComponent.update(
-                    component: MultilineTextWithEntitiesComponent(
+                    component: SelectableGiftMessageTextComponent(
                         context: component.context,
-                        animationCache: component.context.animationCache,
-                        animationRenderer: component.context.animationRenderer,
-                        placeholderColor: .white,
-                        text: .plain(giftMessageAttributedText),
-                        horizontalAlignment: .left,
-                        maximumNumberOfLines: 0,
-                        handleSpoilers: true
+                        theme: theme,
+                        strings: strings,
+                        text: giftMessageAttributedText,
+                        selectionControlColor: giftMessageSelectionControlColor,
+                        canCopy: canCopyGiftMessageText,
+                        controller: component.getController,
+                        performAction: { [weak state] text, action in
+                            state?.performGiftMessageTextSelectionAction(text: text, action: action, canCopy: canCopyGiftMessageText)
+                        }
                     ),
                     availableSize: CGSize(width: giftMessageTextMaxWidth, height: CGFloat.greatestFiniteMagnitude),
                     transition: context.transition
@@ -2751,20 +3185,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 canUpgrade = true
             }
                                     
-            var showUpgradePreview = false
-            if state.inUpgradePreview, let _ = state.upgradePreview {
-                showUpgradePreview = true
-            } else if case .upgradePreview = component.subject {
-                showUpgradePreview = true
-            }
-            
-            var showWearPreview = false
-            if state.inWearPreview {
-                showWearPreview = true
-            } else if case .wearPreview = component.subject {
-                showWearPreview = true
-            }
-            
             var originY: CGFloat = 0.0
             let displaysHeaderButtons = isMyOwnedUniqueGift || isMyHostedUniqueGift || isChannelGift
             let headerButtonHeight: CGFloat = 58.0
@@ -2946,6 +3366,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         animationOffset: animationOffset,
                         animationScale: animationScale,
                         displayAnimationStars: showWearPreview,
+                        topBackgroundExtension: giftViewTopOverscrollBackgroundHeight,
                         revealedAttributes: state.revealedAttributes,
                         externalState: giftCompositionExternalState,
                         requestUpdate: { [weak state] transition in
@@ -3790,6 +4211,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         }
 
                         if let giftMessageBackgroundImage = state.cachedGiftMessageBackgroundImage?.2 {
+                            giftMessageTextIsDisplayed = true
                             let giftMessageBackground = giftMessageBackground.update(
                                 component: Image(image: giftMessageBackgroundImage),
                                 availableSize: giftMessageBubbleSize,
@@ -4802,6 +5224,11 @@ private final class GiftViewSheetContent: CombinedComponent {
             for component in headerComponents {
                 component()
             }
+            if let giftMessageTextChild, !giftMessageTextIsDisplayed {
+                context.add(giftMessageTextChild
+                    .position(CGPoint(x: -10000.0, y: -10000.0))
+                )
+            }
                         
             var isChatTheme = false
             if let controller = controller() as? GiftViewScreen, controller.openChatTheme != nil {
@@ -4908,8 +5335,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += 16.0
             }
             
-            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
-            let buttonSize = CGSize(width: context.availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
             let buttonBackground = ButtonComponent.Background(
                 style: .glass,
                 color: theme.list.itemCheckColors.fillColor,
@@ -4917,10 +5342,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
             )
                         
-            let buttonChild: _UpdatedChildComponent
+            let buttonComponent: ButtonComponent
+            var buttonTransition = context.transition
             if let controller = controller() as? GiftViewScreen, let customAction = controller.customAction {
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("custom"),
@@ -4933,13 +5358,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 customAction.action()
                                 state.dismiss(animated: true)
                             }
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             } else if state.canSkip {
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("skip"),
@@ -4951,10 +5372,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             if let state {
                                 state.skipAnimation()
                             }
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             } else if showWearPreview, let uniqueGift {
                 let buttonContent: AnyComponentWithIdentity<Empty>
                 
@@ -5007,8 +5425,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     )
                 }
                 
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: buttonContent,
                         isEnabled: true,
@@ -5072,10 +5489,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     }
                                 }
                             }
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             } else if state.inUpgradePreview {
                 if state.cachedStarImage == nil || state.cachedStarImage?.1 !== theme {
                     state.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
@@ -5226,8 +5640,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     buttonTitleItems.append(AnyComponentWithIdentity(id: "static_label", component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedString)))))
                 }
                 
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("upgrade"),
@@ -5241,10 +5654,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                             } else {
                                 state?.commitUpgrade()
                             }
-                        }),
-                    availableSize: buttonSize,
-                    transition: .spring(duration: 0.2)
-                )
+                        })
+                buttonTransition = .spring(duration: 0.2)
             } else if upgraded, let arguments = subject.arguments, let upgradeMessageIdId = arguments.upgradeMessageId, let originalMessageId = arguments.messageId, !arguments.upgradeSeparate {
                 var delay = false
                 var peerId: EnginePeer.Id = originalMessageId.peerId
@@ -5255,8 +5666,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let upgradeMessageId = EngineMessage.Id(peerId: peerId, namespace: originalMessageId.namespace, id: upgradeMessageIdId)
                 let buttonTitle = strings.Gift_View_ViewUpgraded
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("button"),
@@ -5267,10 +5677,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         action: { [weak state] in
                             state?.dismiss(animated: true)
                             state?.viewUpgradedGift(messageId: upgradeMessageId, delay: delay)
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             } else if (incoming && !converted && !upgraded && canUpgrade) || canGiftUpgrade {
                 let buttonTitle: String
                 if canGiftUpgrade {
@@ -5280,8 +5687,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else {
                     buttonTitle = strings.Gift_View_Upgrade
                 }
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground.withIsShimmering(true),
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("previewUpgrade"),
@@ -5305,14 +5711,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                         action: { [weak state] in
                             state?.requestUpgradePreview()
                         }
-                    ),
-                    availableSize: buttonSize,
-                    transition: context.transition
                 )
             } else if incoming && !converted && !savedToProfile && !isDismantled {
                 let buttonTitle = isChannelGift ? strings.Gift_View_Display_Channel : strings.Gift_View_Display
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("button"),
@@ -5322,10 +5724,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         displaysProgress: state.inProgress,
                         action: { [weak state] in
                             state?.updateSavedToProfile(!savedToProfile)
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             } else if !incoming, let resellAmount, !isMyOwnedUniqueGift {
                 if state.cachedStarImage == nil || state.cachedStarImage?.1 !== theme {
                     state.cachedStarImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/PremiumIcon"), color: theme.list.itemCheckColors.foregroundColor)!, theme)
@@ -5386,8 +5785,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     items.append(AnyComponentWithIdentity(id: AnyHashable(1), component: AnyComponent(MultilineTextComponent(text: .plain(buttonAttributedSubtitleString)))))
                 }
                 
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("buy"),
@@ -5397,13 +5795,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                         displaysProgress: state.inProgress,
                         action: { [weak state] in
                             state?.commitBuy()
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             } else {
-                buttonChild = button.update(
-                    component: ButtonComponent(
+                buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("ok"),
@@ -5415,62 +5809,37 @@ private final class GiftViewSheetContent: CombinedComponent {
                             if let state {
                                 state.dismiss(animated: true)
                             }
-                        }),
-                    availableSize: buttonSize,
-                    transition: context.transition
-                )
+                        })
             }
-            let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: originY), size: buttonChild.size)
-            
-            var buttonAlpha: CGFloat = 1.0
+            var upgradeNextButtonComponent: PlainButtonComponent?
             if let nextGiftToUpgrade = state.nextGiftToUpgrade, case let .generic(gift) = nextGiftToUpgrade.gift, !state.canSkip {
-                buttonAlpha = 0.0
-                
-                let upgradeNextButton = upgradeNextButton.update(
-                    component: PlainButtonComponent(
-                        content: AnyComponent(
-                            HStack([
-                                AnyComponentWithIdentity(id: "label", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_UpgradeNext, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
-                                )),
-                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(
-                                    GiftItemComponent(
-                                        context: component.context,
-                                        theme: theme,
-                                        strings: strings,
-                                        peer: nil,
-                                        subject: .starGift(gift: gift, price: ""),
-                                        mode: .buttonIcon
-                                    )
-                                )),
-                            ], spacing: 5.0)
-                        ),
-                        action: { [weak state] in
-                            state?.switchToNextUpgradable()
-                        },
-                        animateScale: false
+                upgradeNextButtonComponent = PlainButtonComponent(
+                    content: AnyComponent(
+                        HStack([
+                            AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                                MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_UpgradeNext, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)))
+                            )),
+                            AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                GiftItemComponent(
+                                    context: component.context,
+                                    theme: theme,
+                                    strings: strings,
+                                    peer: nil,
+                                    subject: .starGift(gift: gift, price: ""),
+                                    mode: .buttonIcon
+                                )
+                            )),
+                        ], spacing: 5.0)
                     ),
-                    environment: {},
-                    availableSize: buttonChild.size,
-                    transition: .immediate
-                )
-                context.add(upgradeNextButton
-                    .position(CGPoint(x: buttonFrame.midX, y: buttonFrame.midY))
-                    .appear(.default(scale: true, alpha: true))
-                    .disappear(.default(scale: true, alpha: true))
+                    action: { [weak state] in
+                        state?.switchToNextUpgradable()
+                    },
+                    animateScale: false
                 )
             }
             
-            context.add(buttonChild
-                .position(CGPoint(x: buttonFrame.midX, y: buttonFrame.midY))
-                .opacity(buttonAlpha)
-            )
-            originY += buttonChild.size.height
-            originY += 7.0
-            
+            var upgradePriceButtonComponent: PlainButtonComponent?
             if showUpgradePreview, let _ = state.nextUpgradePrice {
-                originY += 20.0
-                
                 if state.cachedSmallChevronImage == nil || state.cachedSmallChevronImage?.1 !== environment.theme {
                     state.cachedSmallChevronImage = (generateTintedImage(image: UIImage(bundleImageName: "Item List/InlineTextRightArrow"), color: theme.actionSheet.controlAccentColor)!, theme)
                 }
@@ -5479,27 +5848,21 @@ private final class GiftViewSheetContent: CombinedComponent {
                     attributedString.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedString.string))
                 }
                 
-                let upgradePriceButton = upgradePriceButton.update(
-                    component: PlainButtonComponent(
-                        content: AnyComponent(
-                            MultilineTextComponent(text: .plain(attributedString))
-                        ),
-                        action: { [weak state] in
-                            state?.openUpgradePricePreview()
-                        },
-                        animateScale: false
+                upgradePriceButtonComponent = PlainButtonComponent(
+                    content: AnyComponent(
+                        MultilineTextComponent(text: .plain(attributedString))
                     ),
-                    environment: {},
-                    availableSize: buttonChild.size,
-                    transition: .immediate
+                    action: { [weak state] in
+                        state?.openUpgradePricePreview()
+                    },
+                    animateScale: false
                 )
-                context.add(upgradePriceButton
-                    .position(CGPoint(x: buttonFrame.midX, y: originY))
-                    .appear(.default(scale: true, alpha: true))
-                    .disappear(.default(scale: true, alpha: true))
-                )
-                originY += upgradePriceButton.size.height
             }
+
+            component.externalState.button = buttonComponent
+            component.externalState.buttonTransition = buttonTransition
+            component.externalState.upgradeNextButton = upgradeNextButtonComponent
+            component.externalState.upgradePriceButton = upgradePriceButtonComponent
                         
             var isBackButton = false
             if state.inWearPreview || state.inUpgradePreview {
@@ -5559,32 +5922,341 @@ private final class GiftViewSheetContent: CombinedComponent {
                 buttonsIsDark = true
             }
             
-            let buttons = buttons.update(
-                component: GlassControlPanelComponent(
-                    theme: theme,
-                    leftItem: GlassControlPanelComponent.Item(
-                        items: leftControlItems,
-                        background: buttonsBackground
-                    ),
-                    centralItem: nil,
-                    rightItem: rightControlItems.isEmpty ? nil : GlassControlPanelComponent.Item(
-                        items: rightControlItems,
-                        background: buttonsBackground
-                    ),
-                    centerAlignmentIfPossible: true,
-                    isDark: buttonsIsDark,
-                    tag: state.controlButtonsTag
+            component.externalState.controlPanel = GlassControlPanelComponent(
+                theme: theme,
+                leftItem: GlassControlPanelComponent.Item(
+                    items: leftControlItems,
+                    background: buttonsBackground
                 ),
-                availableSize: CGSize(width: context.availableSize.width - 16.0 * 2.0, height: 44.0),
-                transition: context.transition
+                centralItem: nil,
+                rightItem: rightControlItems.isEmpty ? nil : GlassControlPanelComponent.Item(
+                    items: rightControlItems,
+                    background: buttonsBackground
+                ),
+                centerAlignmentIfPossible: true,
+                isDark: buttonsIsDark,
+                tag: state.controlButtonsTag
             )
-            context.add(buttons
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: 16.0 + buttons.size.height / 2.0))
-            )
-            
-            let effectiveBottomInset: CGFloat = environment.metrics.isTablet ? 0.0 : environment.safeInsets.bottom
-            return CGSize(width: context.availableSize.width, height: originY + 5.0 + effectiveBottomInset)
+            component.externalState.controlPanelTransition = context.transition
+            component.externalState.topOverscrollBackgroundColor = giftCompositionExternalState.backgroundColor ?? theme.actionSheet.opaqueItemBackgroundColor
+            component.externalState.topOverscrollBackgroundTransition = context.transition
+
+            return CGSize(width: context.availableSize.width, height: originY)
         }
+    }
+}
+
+private final class GiftViewSheetContentContainer: Component {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let subject: GiftViewScreen.Subject
+    let animateOut: ActionSlot<Action<()>>
+    let getController: () -> ViewController?
+    let maximumHeight: CGFloat
+
+    init(
+        context: AccountContext,
+        subject: GiftViewScreen.Subject,
+        animateOut: ActionSlot<Action<()>>,
+        getController: @escaping () -> ViewController?,
+        maximumHeight: CGFloat
+    ) {
+        self.context = context
+        self.subject = subject
+        self.animateOut = animateOut
+        self.getController = getController
+        self.maximumHeight = maximumHeight
+    }
+
+    static func ==(lhs: GiftViewSheetContentContainer, rhs: GiftViewSheetContentContainer) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.subject != rhs.subject {
+            return false
+        }
+        if lhs.maximumHeight != rhs.maximumHeight {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private final class ScrollView: UIScrollView {
+            override func touchesShouldCancel(in view: UIView) -> Bool {
+                return true
+            }
+        }
+
+        private let scrollView: ScrollView
+        private let topOverscrollBackgroundView: UIView
+        private let content = ComponentView<EnvironmentType>()
+        private let bottomEdgeEffectView: EdgeEffectView
+        private let controlPanel = ComponentView<Empty>()
+        private let button = ComponentView<Empty>()
+        private let upgradeNextButton = ComponentView<Empty>()
+        private let upgradePriceButton = ComponentView<Empty>()
+        private let contentExternalState = GiftViewSheetContent.ExternalState()
+
+        override init(frame: CGRect) {
+            self.scrollView = ScrollView()
+            self.topOverscrollBackgroundView = UIView()
+            self.bottomEdgeEffectView = EdgeEffectView()
+
+            super.init(frame: frame)
+
+            self.clipsToBounds = true
+
+            self.scrollView.delaysContentTouches = false
+            self.scrollView.canCancelContentTouches = true
+            self.scrollView.showsVerticalScrollIndicator = false
+            self.scrollView.showsHorizontalScrollIndicator = false
+            self.scrollView.alwaysBounceHorizontal = false
+            self.scrollView.alwaysBounceVertical = false
+            self.scrollView.scrollsToTop = false
+            self.scrollView.contentInsetAdjustmentBehavior = .never
+            self.addSubview(self.scrollView)
+
+            self.topOverscrollBackgroundView.isUserInteractionEnabled = false
+            self.scrollView.addSubview(self.topOverscrollBackgroundView)
+
+            self.bottomEdgeEffectView.isUserInteractionEnabled = false
+            self.addSubview(self.bottomEdgeEffectView)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func layoutOptionalButton(
+            componentView: ComponentView<Empty>,
+            frame: CGRect?,
+            transition: ComponentTransition
+        ) {
+            guard let frame else {
+                if let view = componentView.view, view.superview != nil {
+                    transition.setAlpha(view: view, alpha: 0.0, completion: { finished in
+                        if finished {
+                            view.removeFromSuperview()
+                            view.alpha = 1.0
+                            view.layer.transform = CATransform3DIdentity
+                        }
+                    })
+                    transition.setScale(layer: view.layer, scale: 0.001)
+                }
+                return
+            }
+            guard let view = componentView.view else {
+                return
+            }
+            let animateIn = view.superview == nil
+            if animateIn {
+                view.alpha = 0.0
+                view.layer.transform = CATransform3DMakeScale(0.001, 0.001, 1.0)
+                self.addSubview(view)
+            }
+            transition.setFrame(view: view, frame: frame)
+            transition.setAlpha(view: view, alpha: 1.0)
+            transition.setScale(layer: view.layer, scale: 1.0)
+        }
+
+        func update(
+            component: GiftViewSheetContentContainer,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let environmentValue = environment[EnvironmentType.self].value
+
+            self.content.parentState = state
+            let contentSize = self.content.update(
+                transition: transition,
+                component: AnyComponent(GiftViewSheetContent(
+                    context: component.context,
+                    subject: component.subject,
+                    animateOut: component.animateOut,
+                    getController: component.getController,
+                    externalState: self.contentExternalState
+                )),
+                environment: {
+                    environment[EnvironmentType.self]
+                },
+                containerSize: CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
+            )
+            if let contentView = self.content.view {
+                if contentView.superview == nil {
+                    self.scrollView.addSubview(contentView)
+                }
+                transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: contentSize))
+            }
+
+            transition.setFrame(
+                view: self.topOverscrollBackgroundView,
+                frame: CGRect(x: 0.0, y: -giftViewTopOverscrollBackgroundHeight, width: availableSize.width, height: giftViewTopOverscrollBackgroundHeight + UIScreenPixel)
+            )
+            self.contentExternalState.topOverscrollBackgroundTransition.setBackgroundColor(
+                view: self.topOverscrollBackgroundView,
+                color: self.contentExternalState.topOverscrollBackgroundColor ?? environmentValue.theme.actionSheet.opaqueItemBackgroundColor
+            )
+
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environmentValue.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
+            let buttonAvailableSize = CGSize(width: availableSize.width - buttonInsets.left - buttonInsets.right, height: 52.0)
+            var buttonSize = buttonAvailableSize
+            if let buttonComponent = self.contentExternalState.button {
+                buttonSize = self.button.update(
+                    transition: self.contentExternalState.buttonTransition,
+                    component: AnyComponent(buttonComponent),
+                    environment: {},
+                    containerSize: buttonAvailableSize
+                )
+            }
+
+            var footerContentHeight = buttonSize.height + 7.0
+            var upgradePriceButtonSize: CGSize?
+            if let upgradePriceButtonComponent = self.contentExternalState.upgradePriceButton {
+                footerContentHeight += 20.0
+                upgradePriceButtonSize = self.upgradePriceButton.update(
+                    transition: .immediate,
+                    component: AnyComponent(upgradePriceButtonComponent),
+                    environment: {},
+                    containerSize: buttonSize
+                )
+                if let upgradePriceButtonSize {
+                    footerContentHeight += upgradePriceButtonSize.height
+                }
+            }
+            let effectiveBottomInset: CGFloat = environmentValue.metrics.isTablet ? 0.0 : environmentValue.safeInsets.bottom
+            let footerHeight = footerContentHeight + 5.0 + effectiveBottomInset
+
+            let intrinsicHeight = contentSize.height + footerHeight
+            let visibleHeight = min(intrinsicHeight, max(0.0, component.maximumHeight))
+            let needsScrolling = intrinsicHeight > visibleHeight + UIScreenPixel
+
+            let scrollFrame = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: visibleHeight))
+            transition.setFrame(view: self.scrollView, frame: scrollFrame)
+            let scrollContentSize = CGSize(width: availableSize.width, height: intrinsicHeight)
+            let scrollContentSizeChanged = self.scrollView.contentSize != scrollContentSize
+            if scrollContentSizeChanged {
+                self.scrollView.contentSize = scrollContentSize
+            }
+            self.scrollView.isScrollEnabled = needsScrolling
+
+            let maximumContentOffset = max(0.0, intrinsicHeight - visibleHeight)
+            if !needsScrolling {
+                if self.scrollView.contentOffset != .zero {
+                    self.scrollView.contentOffset = .zero
+                }
+            } else if scrollContentSizeChanged || (!self.scrollView.isDragging && !self.scrollView.isDecelerating) {
+                let clampedOffset = max(0.0, min(maximumContentOffset, self.scrollView.contentOffset.y))
+                if self.scrollView.contentOffset.y != clampedOffset {
+                    self.scrollView.contentOffset = CGPoint(x: 0.0, y: clampedOffset)
+                }
+            }
+
+            let footerOriginY = visibleHeight - footerHeight
+            let footerFrame = CGRect(origin: CGPoint(x: 0.0, y: footerOriginY), size: CGSize(width: availableSize.width, height: footerHeight))
+            transition.setFrame(view: self.bottomEdgeEffectView, frame: footerFrame)
+            self.bottomEdgeEffectView.update(
+                content: environmentValue.theme.actionSheet.opaqueItemBackgroundColor,
+                blur: true,
+                alpha: 1.0,
+                rect: footerFrame,
+                edge: .bottom,
+                edgeSize: footerHeight,
+                transition: transition
+            )
+
+            let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: footerOriginY), size: buttonSize)
+            if let buttonView = self.button.view {
+                if buttonView.superview == nil {
+                    self.addSubview(buttonView)
+                }
+                transition.setFrame(view: buttonView, frame: buttonFrame)
+                transition.setAlpha(view: buttonView, alpha: self.contentExternalState.upgradeNextButton == nil ? 1.0 : 0.0)
+            }
+
+            if let upgradeNextButtonComponent = self.contentExternalState.upgradeNextButton {
+                let upgradeNextButtonSize = self.upgradeNextButton.update(
+                    transition: .immediate,
+                    component: AnyComponent(upgradeNextButtonComponent),
+                    environment: {},
+                    containerSize: buttonSize
+                )
+                let upgradeNextButtonFrame = CGRect(
+                    origin: CGPoint(x: floorToScreenPixels((availableSize.width - upgradeNextButtonSize.width) * 0.5), y: floorToScreenPixels(buttonFrame.midY - upgradeNextButtonSize.height * 0.5)),
+                    size: upgradeNextButtonSize
+                )
+                self.layoutOptionalButton(
+                    componentView: self.upgradeNextButton,
+                    frame: upgradeNextButtonFrame,
+                    transition: transition
+                )
+            } else {
+                self.layoutOptionalButton(
+                    componentView: self.upgradeNextButton,
+                    frame: nil,
+                    transition: transition
+                )
+            }
+
+            if self.contentExternalState.upgradePriceButton != nil, let upgradePriceButtonSize {
+                let upgradePriceButtonCenterY = buttonFrame.maxY + 7.0 + 20.0
+                let upgradePriceButtonFrame = CGRect(
+                    origin: CGPoint(x: floorToScreenPixels((availableSize.width - upgradePriceButtonSize.width) * 0.5), y: floorToScreenPixels(upgradePriceButtonCenterY - upgradePriceButtonSize.height * 0.5)),
+                    size: upgradePriceButtonSize
+                )
+                self.layoutOptionalButton(
+                    componentView: self.upgradePriceButton,
+                    frame: upgradePriceButtonFrame,
+                    transition: transition
+                )
+            } else {
+                self.layoutOptionalButton(
+                    componentView: self.upgradePriceButton,
+                    frame: nil,
+                    transition: transition
+                )
+            }
+
+            if let controlPanelComponent = self.contentExternalState.controlPanel {
+                let controlPanelSize = self.controlPanel.update(
+                    transition: self.contentExternalState.controlPanelTransition,
+                    component: AnyComponent(controlPanelComponent),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - 16.0 * 2.0, height: 44.0)
+                )
+                if let controlPanelView = self.controlPanel.view {
+                    if controlPanelView.superview == nil {
+                        self.addSubview(controlPanelView)
+                    }
+                    transition.setFrame(
+                        view: controlPanelView,
+                        frame: CGRect(
+                            origin: CGPoint(x: floorToScreenPixels((availableSize.width - controlPanelSize.width) * 0.5), y: 16.0),
+                            size: controlPanelSize
+                        )
+                    )
+                }
+            }
+
+            return CGSize(width: availableSize.width, height: visibleHeight)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<EnvironmentType>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 
@@ -5669,14 +6341,22 @@ final class GiftViewSheetComponent: CombinedComponent {
                     )
                 }
             }
+
+            let maximumContentHeight: CGFloat
+            if environment.metrics.widthClass == .regular {
+                maximumContentHeight = max(0.0, min(900.0, context.availableSize.height - 88.0))
+            } else {
+                maximumContentHeight = max(0.0, context.availableSize.height - environment.statusBarHeight - 10.0)
+            }
             
             let sheet = sheet.update(
                 component: SheetComponent<EnvironmentType>(
-                    content: AnyComponent<EnvironmentType>(GiftViewSheetContent(
+                    content: AnyComponent<EnvironmentType>(GiftViewSheetContentContainer(
                         context: context.component.context,
                         subject: context.component.subject,
                         animateOut: animateOut,
-                        getController: controller
+                        getController: controller,
+                        maximumHeight: maximumContentHeight
                     )),
                     headerContent: headerContent,
                     style: .glass,

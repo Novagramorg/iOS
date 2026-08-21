@@ -57,7 +57,7 @@ final class StyleSheetTests: XCTestCase {
         let sheet = StyleSheet.tableCells
         XCTAssertEqual(sheet.font(for: .body, attributes: .plain).pointSize, 15, accuracy: 0.5,
                        "table-cell body base is 15pt")
-        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 24, accuracy: 0.5,
+        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 22, accuracy: 0.5,
                        "headings keep their fixed size in cells")
         // The document body sheet is untouched.
         XCTAssertEqual(StyleSheet.default.font(for: .body, attributes: .plain).pointSize, 17, accuracy: 0.5)
@@ -69,13 +69,13 @@ final class StyleSheetTests: XCTestCase {
                        "an explicit run size overrides the cell base")
     }
 
-    /// The ladder is V2's (24/22/20/…), not the editor's former 24/21/19 — see
-    /// `test_fontSizes_comeFromTheRenderMetrics` below for the full set.
+    /// The ladder is V2's (22/20/18/…) — see `test_fontSizes_comeFromTheRenderMetrics` below for the
+    /// full set.
     func test_headingSizes_matchTypeScale() {
         let sheet = StyleSheet.default
-        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 24, accuracy: 0.5)
-        XCTAssertEqual(sheet.font(for: .heading2, attributes: .plain).pointSize, 22, accuracy: 0.5)
-        XCTAssertEqual(sheet.font(for: .heading3, attributes: .plain).pointSize, 20, accuracy: 0.5)
+        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 22, accuracy: 0.5)
+        XCTAssertEqual(sheet.font(for: .heading2, attributes: .plain).pointSize, 20, accuracy: 0.5)
+        XCTAssertEqual(sheet.font(for: .heading3, attributes: .plain).pointSize, 18, accuracy: 0.5)
     }
 
     // The former `test_perStyleSpacing_applied`, `test_textLayoutMetrics_*` and `test_compactMetrics_*`
@@ -90,12 +90,12 @@ final class StyleSheetTests: XCTestCase {
     /// V2's numbers — the editor's own ladder was a point short per level and a whole weight light.
     func test_fontSizes_comeFromTheRenderMetrics() {
         let sheet = StyleSheet.default
-        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 24)
-        XCTAssertEqual(sheet.font(for: .heading2, attributes: .plain).pointSize, 22)
-        XCTAssertEqual(sheet.font(for: .heading3, attributes: .plain).pointSize, 20)
-        XCTAssertEqual(sheet.font(for: .heading4, attributes: .plain).pointSize, 19)
-        XCTAssertEqual(sheet.font(for: .heading5, attributes: .plain).pointSize, 18)
-        XCTAssertEqual(sheet.font(for: .heading6, attributes: .plain).pointSize, 17)
+        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 22)
+        XCTAssertEqual(sheet.font(for: .heading2, attributes: .plain).pointSize, 20)
+        XCTAssertEqual(sheet.font(for: .heading3, attributes: .plain).pointSize, 18)
+        XCTAssertEqual(sheet.font(for: .heading4, attributes: .plain).pointSize, 17)
+        XCTAssertEqual(sheet.font(for: .heading5, attributes: .plain).pointSize, 16)
+        XCTAssertEqual(sheet.font(for: .heading6, attributes: .plain).pointSize, 15)
         XCTAssertEqual(sheet.font(for: .body, attributes: .plain).pointSize, 17)
         XCTAssertEqual(sheet.font(for: .caption, attributes: .plain).pointSize, 15)
     }
@@ -141,7 +141,7 @@ final class StyleSheetTests: XCTestCase {
     func test_tableCellsVariant_rendersBodyAtTheTableSize() {
         let cells = StyleSheet.tableCells
         XCTAssertEqual(cells.font(for: .body, attributes: .plain).pointSize, 15)
-        XCTAssertEqual(cells.font(for: .heading1, attributes: .plain).pointSize, 24)
+        XCTAssertEqual(cells.font(for: .heading1, attributes: .plain).pointSize, 22)
     }
 
     /// Host-supplied metrics flow through, so a host can hand over its renderer's exact numbers.

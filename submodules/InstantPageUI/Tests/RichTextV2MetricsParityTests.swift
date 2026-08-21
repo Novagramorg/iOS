@@ -208,4 +208,18 @@ final class RichTextV2MetricsParityTests: XCTestCase {
     func test_adapter_carriesEdgeSpacingReduction() {
         XCTAssertEqual(InstantPageTheme.chatMessageRenderMetrics(edgeSpacingReduction: 1.0).edgeSpacingReduction, 1.0)
     }
+
+    /// The editor must lay code blocks out with the renderer's own numbers. These lived in two places
+    /// before — `InstantPageMetrics` and the editor's `QuoteStyle` — which is exactly why the two
+    /// surfaces shipped with 9/22 against 9/9 interior padding and 3pt against 6pt vertical.
+    ///
+    /// The pinned default is covered by `test_editorDefaultMetrics_equalTheAdaptedChatMessageTheme`
+    /// above, which compares the whole struct; this pins the adapter against its source.
+    func test_codeMetrics_crossTheContractUnchanged() {
+        let m = InstantPageMetrics.unscaled
+        let contract = InstantPageTheme.chatMessageRenderMetrics()
+
+        XCTAssertEqual(contract.code.verticalInset, m.codeBlockVerticalInset, accuracy: 0.01)
+        XCTAssertEqual(contract.code.languageSpacing, m.codeBlockLanguageSpacing, accuracy: 0.01)
+    }
 }

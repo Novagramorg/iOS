@@ -1148,7 +1148,7 @@ public extension ChatInputContent {
     /// do (they contribute text / a " " placeholder + an inter-block "\n"); `.media`/`.table` do NOT (off-axis
     /// — no character, no separator), so a non-text block has no flat-text/caret position. Mirrors which blocks
     /// `attributedString(from:)` emits and the editor's `composerParagraphs()` keeps.
-    private func blockIsFlatParticipating(_ block: ChatInputBlock) -> Bool {
+    func blockIsFlatParticipating(_ block: ChatInputBlock) -> Bool {
         switch block {
         case .paragraph, .code, .pullQuote, .blockQuote:
             return true

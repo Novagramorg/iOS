@@ -35,6 +35,7 @@ swift_library(
         "//submodules/InvisibleInkDustNode",
         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoCoverComponent",
         "//submodules/TelegramUI/Components/Gifts/GiftItemComponent",
+        "//submodules/TextSelectionNode",
     ],
     visibility = [
         "//visibility:public",

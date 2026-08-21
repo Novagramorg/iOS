@@ -35,6 +35,18 @@ private func makeLayout(_ items: [InstantPageV2LaidOutItem]) -> InstantPageV2Lay
 /// line is the fix.
 private let expectedTearPadding: CGFloat = 6.0
 
+/// A resolvable-looking image block. Only its *case* matters to the predicate under test — the
+/// media id is never dereferenced here.
+private func makeImageBlock() -> InstantPageBlock {
+    return .image(
+        id: EngineMedia.Id(namespace: 0, id: 1),
+        caption: InstantPageCaption(text: .empty, credit: .empty),
+        url: nil,
+        webpageId: nil,
+        spoiler: false
+    )
+}
+
 final class InstantPageV2UnsupportedBlockTests: XCTestCase {
     /// A page from a newer server can contain a whole run of blocks this build cannot decode. One
     /// "update your app" card is the message; five stacked copies is noise. The helper reports
@@ -174,5 +186,166 @@ final class InstantPageV2UnsupportedBlockTests: XCTestCase {
     /// The overwhelmingly common case: an ordinary page tears nothing.
     func testPagesWithoutUnsupportedBlocksProduceNoZones() {
         XCTAssertTrue(unsupportedContentTearZones(in: makeLayout([])).isEmpty)
+    }
+
+    // MARK: - Tap arbitration
+
+    /// The pill's Update button is a `UIButton` living inside the page view, but the chat bubble
+    /// arbitrates every touch over its content: unless `tapActionAtPoint` reports that the point
+    /// belongs to something interactive, the bubble's tap recognizer claims the touch and cancels
+    /// the button's tracking, so `touchUpInside` never fires. The bubble resolves that from the
+    /// LAYOUT — it has no pill view to ask mid-touch — so the region has to be derivable here.
+    func testTheActionRegionIsFoundOnATopLevelPill() {
+        let item = makeUnsupportedItem(y: 40.0)
+        guard case let .unsupportedContent(pill) = item else {
+            return XCTFail("expected an .unsupportedContent item")
+        }
+        let layout = makeLayout([item])
+        let expected = pill.layout.actionFrame(in: pill.frame.size).offsetBy(dx: pill.frame.minX, dy: pill.frame.minY)
+
+        XCTAssertEqual(unsupportedActionFrame(in: layout, containing: CGPoint(x: expected.midX, y: expected.midY)), expected)
+    }
+
+    /// Only the button, not the whole card: the rest of the pill is ordinary bubble content, and
+    /// claiming it would kill the message's own tap and long-press.
+    func testTheRestOfThePillIsNotPartOfTheActionRegion() {
+        let item = makeUnsupportedItem(y: 40.0)
+        guard case let .unsupportedContent(pill) = item else {
+            return XCTFail("expected an .unsupportedContent item")
+        }
+        let layout = makeLayout([item])
+
+        // The badge, at the leading inset.
+        XCTAssertNil(unsupportedActionFrame(in: layout, containing: CGPoint(x: pill.frame.minX + 20.0, y: pill.frame.midY)))
+        // Just above the pill.
+        XCTAssertNil(unsupportedActionFrame(in: layout, containing: CGPoint(x: pill.frame.maxX - 30.0, y: pill.frame.minY - 4.0)))
+    }
+
+    /// A page with no pill at all reports nothing — this runs on every touch over every rich
+    /// message, so the common case must be a clean miss.
+    func testPagesWithoutPillsHaveNoActionRegion() {
+        XCTAssertNil(unsupportedActionFrame(in: makeLayout([]), containing: CGPoint(x: 10.0, y: 10.0)))
+    }
+
+    /// Unlike the tear zones — which are top-level only, because only a full-width pill may cut a
+    /// band through the bubble's background — tap arbitration must reach nested pills too: a pill
+    /// inside a `<details>` body or a table cell has exactly the same dead button without it.
+    func testTheActionRegionIsFoundOnAPillNestedInATableCell() {
+        let inner = InstantPageV2Layout(
+            contentSize: CGSize(width: 200.0, height: 100.0),
+            items: [makeUnsupportedItem(y: 0.0, isTopLevel: false)],
+            detailsIndices: []
+        )
+        guard case let .unsupportedContent(pill) = inner.items[0] else {
+            return XCTFail("expected an .unsupportedContent item")
+        }
+        let cellFrame = CGRect(x: 0.0, y: 10.0, width: 300.0, height: 100.0)
+        let table = InstantPageV2TableItem(
+            frame: CGRect(x: 0.0, y: 30.0, width: 320.0, height: 120.0),
+            titleSubLayout: nil,
+            titleFrame: nil,
+            contentSize: CGSize(width: 320.0, height: 120.0),
+            contentInset: 17.0,
+            cells: [InstantPageV2TableCell(
+                frame: cellFrame,
+                isHeader: false,
+                horizontalAlignment: .natural,
+                verticalAlignment: .top,
+                backgroundColor: nil,
+                subLayout: inner
+            )],
+            horizontalLines: [],
+            verticalLines: [],
+            bordered: false,
+            striped: false,
+            borderColor: .clear
+        )
+
+        let cellOrigin = CGPoint(x: 0.0 + 17.0 + cellFrame.minX, y: 30.0 + cellFrame.minY)
+        let expected = pill.layout.actionFrame(in: pill.frame.size)
+            .offsetBy(dx: cellOrigin.x + pill.frame.minX, dy: cellOrigin.y + pill.frame.minY)
+
+        XCTAssertEqual(
+            unsupportedActionFrame(in: makeLayout([.table(table)]), containing: CGPoint(x: expected.midX, y: expected.midY)),
+            expected
+        )
+    }
+
+    // MARK: - A collage this build cannot fully decode
+
+    /// A collage carrying a block this build cannot decode is unsupported *as a whole*. Rendering it
+    /// as a mosaic is worse than not rendering it: `layoutCollage` reserves a zero-size mosaic slot
+    /// for the undecodable item and then draws nothing in it, so the tiles that DO decode are laid
+    /// out around a hole and the mosaic geometry is wrong.
+    func testACollageContainingAnUnsupportedBlockRendersAsAPill() {
+        let collage = InstantPageBlock.collage(
+            items: [makeImageBlock(), .unsupported],
+            caption: InstantPageCaption(text: .empty, credit: .empty)
+        )
+
+        XCTAssertTrue(blockRendersAsUnsupported(collage))
+    }
+
+    /// The overwhelmingly common collage is untouched — this predicate runs over every block of
+    /// every page.
+    func testAFullyDecodableCollageIsNotUnsupported() {
+        let collage = InstantPageBlock.collage(
+            items: [makeImageBlock(), makeImageBlock()],
+            caption: InstantPageCaption(text: .empty, credit: .empty)
+        )
+
+        XCTAssertFalse(blockRendersAsUnsupported(collage))
+        XCTAssertFalse(blockRendersAsUnsupported(InstantPageBlock.collage(items: [], caption: InstantPageCaption(text: .empty, credit: .empty))))
+        XCTAssertFalse(blockRendersAsUnsupported(.paragraph(.plain("a"))))
+        XCTAssertTrue(blockRendersAsUnsupported(.unsupported))
+    }
+
+    /// Deliberately NOT extended to `.slideshow`: it drops an undecodable item silently (a page
+    /// fewer) rather than leaving a hole, and it keeps rendering the items it does understand.
+    func testASlideshowIsNotCoveredByTheRule() {
+        let slideshow = InstantPageBlock.slideshow(
+            items: [makeImageBlock(), .unsupported],
+            caption: InstantPageCaption(text: .empty, credit: .empty)
+        )
+
+        XCTAssertFalse(blockRendersAsUnsupported(slideshow))
+    }
+
+    /// A collage-turned-pill next to a real `.unsupported` block is ONE pill, not two stacked ones —
+    /// the same "a maximal run collapses" rule, which is why the run finder tests the predicate
+    /// rather than the `.unsupported` case.
+    func testACollagePillCollapsesIntoAnAdjacentUnsupportedRun() {
+        let brokenCollage = InstantPageBlock.collage(
+            items: [.unsupported],
+            caption: InstantPageCaption(text: .empty, credit: .empty)
+        )
+
+        XCTAssertEqual(redundantUnsupportedBlockIndices([.unsupported, brokenCollage]), Set([1]))
+        XCTAssertEqual(redundantUnsupportedBlockIndices([brokenCollage, .unsupported]), Set([1]))
+        // A collage that renders normally still breaks a run in two.
+        let goodCollage = InstantPageBlock.collage(
+            items: [makeImageBlock()],
+            caption: InstantPageCaption(text: .empty, credit: .empty)
+        )
+        XCTAssertTrue(redundantUnsupportedBlockIndices([.unsupported, goodCollage, .unsupported]).isEmpty)
+    }
+
+    /// Spacing follows the rendering, not the case: the pill takes its own 8pt padding rather than
+    /// the media block's flush-both-sides rhythm, or it butts against its neighbours like a
+    /// full-bleed image.
+    func testACollagePillTakesThePillsSpacing() {
+        let brokenCollage = InstantPageBlock.collage(
+            items: [makeImageBlock(), .unsupported],
+            caption: InstantPageCaption(text: .empty, credit: .empty)
+        )
+        let metrics = InstantPageMetrics.unscaled
+
+        let spacing = brokenCollage.spacing(metrics: metrics)
+        let pillSpacing = InstantPageBlock.unsupported.spacing(metrics: metrics)
+
+        XCTAssertEqual(spacing.verticalPadding, pillSpacing.verticalPadding)
+        XCTAssertEqual(spacing.flushAbove, pillSpacing.flushAbove)
+        XCTAssertEqual(spacing.flushBelow, pillSpacing.flushBelow)
+        XCTAssertFalse(spacing.flushAbove)
     }
 }
