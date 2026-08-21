@@ -848,12 +848,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 return false
             }
         }, getTopWindow: {
-            for window in application.windows.reversed() {
+            for window in application.allWindowSceneWindows.reversed() {
                 if window === self.window || window === statusBarHost.keyboardWindow {
                     return window
                 }
             }
-            return application.windows.last
+            return application.allWindowSceneWindows.last
         }, displayNotification: { text in
         }, applicationInForeground: self.isInForegroundPromise.get(),
            applicationIsActive: self.isActivePromise.get(),
