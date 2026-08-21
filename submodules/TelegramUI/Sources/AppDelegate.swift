@@ -75,12 +75,18 @@ private func isKeyboardView(view: NSObject) -> Bool {
     if typeName.hasPrefix("UI") && typeName.hasSuffix("InputSetHostView") {
         return true
     }
+    if typeName.hasPrefix("UI") && typeName.hasSuffix("KeyboardItemContainerView") {
+        return true
+    }
     return false
 }
 
 private func isKeyboardViewContainer(view: NSObject) -> Bool {
     let typeName = NSStringFromClass(type(of: view))
     if typeName.hasPrefix("UI") && typeName.hasSuffix("InputSetContainerView") {
+        return true
+    }
+    if typeName.hasPrefix("UI") && typeName.hasSuffix("TrackingWindowView") {
         return true
     }
     return false
@@ -119,11 +125,15 @@ private class ApplicationStatusBarHost: StatusBarHost {
     }
     
     var keyboardWindow: UIWindow? {
-        if #available(iOS 16.0, *) {
-            return UIApplication.shared.internalGetKeyboard()
+        // The keyboard window belongs to an internal keyboard scene, so it is not enumerable through
+        // any public API; it is reached through our own window scene's keyboard scene delegate.
+        if let window = UIApplication.shared.internalGetKeyboard(for: self.scene) {
+            return window
         }
-        
-        for window in UIApplication.shared.windows {
+
+        // Pre-iOS-16 the keyboard window was not flagged as internal and did show up in the scene's
+        // window list, so this remains as a fallback for those releases.
+        for window in UIApplication.shared.allWindowSceneWindows {
             if isKeyboardWindow(window: window) {
                 return window
             }
