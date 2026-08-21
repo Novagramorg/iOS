@@ -591,7 +591,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             externalRequestVerificationStream: self.firebaseRequestVerificationSecretStream.get(),
             externalRecaptchaRequestVerification: { method, siteKey in
                 return Signal<String?, NoError> { subscriber in
-                    let recaptchaClient: Promise<RecaptchaClient>
+                    // Recaptcha.fetchClient's completion is @Sendable, so it does not inherit this
+                    // closure's inferred main-actor isolation: from inside it neither the Promise (a
+                    // lock-based pre-concurrency class, so not Sendable) nor self's mutable state may
+                    // be touched. Both spellings are diagnosed, and Xcode 26's compiler raises them to
+                    // errors under -warnings-as-errors (Xcode 27's leaves them as warnings). The
+                    // promise is in fact only ever set on the main queue, which Queue.mainQueue()
+                    // guarantees and the compiler cannot see - hence the explicit opt-out.
+                    nonisolated(unsafe) let recaptchaClient: Promise<RecaptchaClient>
                     if let current = self.recaptchaClientsBySiteKey[siteKey] {
                         recaptchaClient = current
                     } else {
@@ -604,7 +611,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                     Logger.shared.log("App \(self.episodeId)", "RecaptchaClient creation error: \(String(describing: error)).")
                                     return
                                 }
-                                self.recaptchaClientsBySiteKey[siteKey]?.set(.single(client))
+                                recaptchaClient.set(.single(client))
                             }
                         }
                     }
