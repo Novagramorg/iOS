@@ -604,7 +604,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                     Logger.shared.log("App \(self.episodeId)", "RecaptchaClient creation error: \(String(describing: error)).")
                                     return
                                 }
-                                recaptchaClient.set(.single(client))
+                                self.recaptchaClientsBySiteKey[siteKey]?.set(.single(client))
                             }
                         }
                     }
