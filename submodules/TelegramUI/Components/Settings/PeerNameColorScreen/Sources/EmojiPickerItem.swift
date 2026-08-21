@@ -109,7 +109,7 @@ final class EmojiPickerItemNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: EmojiPickerItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let insets: UIEdgeInsets
             let separatorHeight = UIScreenPixel
             

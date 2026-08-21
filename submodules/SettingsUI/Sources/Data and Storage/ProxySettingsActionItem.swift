@@ -151,7 +151,7 @@ private final class ProxySettingsActionItemNode: ListViewItemNode, ItemListItemN
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updatedTheme: PresentationTheme?
             
             let titleFont = Font.regular(item.presentationData.fontSize.itemListBaseFontSize)

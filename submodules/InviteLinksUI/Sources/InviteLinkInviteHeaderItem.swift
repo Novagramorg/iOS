@@ -99,7 +99,7 @@ class InviteLinkInviteHeaderItemNode: ListViewItemNode {
         let makeTextLayout = TextNode.asyncLayout(self.textNode)
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset: CGFloat = 40.0 + params.leftInset
             let topInset: CGFloat = 98.0
             let spacing: CGFloat = 10.0

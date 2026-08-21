@@ -104,7 +104,7 @@ class ChannelDiscussionGroupSetupHeaderItemNode: ListViewItemNode {
         let currentItem = self.item
         let currentIconImage = self.imageNode.image
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let topInset: CGFloat = 30.0
             let bottomInset: CGFloat = 0.0
             let iconSpacing: CGFloat = 21.0

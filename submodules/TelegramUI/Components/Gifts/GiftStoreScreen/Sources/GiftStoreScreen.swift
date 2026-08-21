@@ -1279,7 +1279,7 @@ final class GiftStoreScreenComponent: Component {
                 tonContext.state
             )
             |> take(1)
-            |> map { starsState, tonState -> [ContextMenuItem] in
+            |> map { [weak self] starsState, tonState -> [ContextMenuItem] in
                 let starsBalance = starsState?.balance ?? .zero
                 let tonBalance = tonState?.balance.value ?? 0
                 

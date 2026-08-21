@@ -42,10 +42,10 @@ public final class ChatMessageUnsupportedBubbleContentNode: ChatMessageBubbleCon
     }
 
     override public func asyncLayoutContent() -> (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))) {
-        return { item, layoutConstants, _, _, constrainedSize, _ in
+        return { [weak self] item, layoutConstants, _, _, constrainedSize, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: true, headerSpacing: 0.0, hidesBackground: .always, forceFullCorners: false, forceAlignment: .none)
 
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, position in
                 let presentationData = item.presentationData
                 let serviceColor = serviceMessageColorComponents(theme: presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper)
 
@@ -57,7 +57,7 @@ public final class ChatMessageUnsupportedBubbleContentNode: ChatMessageBubbleCon
                 )
                 let pillLayout = UnsupportedContentPill.layout(strings: strings, colors: colors, constrainedWidth: constrainedSize.width)
 
-                return (pillLayout.size.width, { boundingWidth in
+                return (pillLayout.size.width, { [weak self] boundingWidth in
                     let backgroundSize = CGSize(width: boundingWidth, height: pillLayout.size.height)
 
                     return (backgroundSize, { [weak self] animation, _, _ in

@@ -105,7 +105,7 @@ public class ItemListPlaceholderItemNode: ListViewItemNode, ItemListItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updatedTheme: PresentationTheme?
             if currentItem?.theme !== item.theme {
                 updatedTheme = item.theme

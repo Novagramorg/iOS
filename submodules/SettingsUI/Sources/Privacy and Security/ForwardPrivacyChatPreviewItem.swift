@@ -131,7 +131,7 @@ class ForwardPrivacyChatPreviewItemNode: ListViewItemNode {
 
         var currentBackgroundNode = self.backgroundNode
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             if currentBackgroundNode == nil {
                 currentBackgroundNode = createWallpaperBackgroundNode(context: item.context, forChatDisplay: false)
                 currentBackgroundNode?.update(wallpaper: item.wallpaper, animated: false)

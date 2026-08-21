@@ -176,7 +176,7 @@ public class ItemListSectionHeaderItemNode: ListViewItemNode, ItemListItemNode {
         
         let previousItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset: CGFloat = 15.0 + params.leftInset
             
             let titleFont = Font.regular(item.presentationData.fontSize.itemListBaseHeaderFontSize)

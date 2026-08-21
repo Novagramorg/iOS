@@ -174,7 +174,7 @@ final class BusinessIntroSetupScreenComponent: Component {
             let mainController = context.sharedContext.makeStickerMediaPickerScreen(
                 context: context,
                 getSourceRect: { return .zero },
-                completion: { result, transitionView, transitionRect, transitionImage, fromCamera, completion, cancelled in
+                completion: { [weak self] result, transitionView, transitionRect, transitionImage, fromCamera, completion, cancelled in
                     let editorController = context.sharedContext.makeStickerEditorScreen(
                         context: context,
                         source: result,

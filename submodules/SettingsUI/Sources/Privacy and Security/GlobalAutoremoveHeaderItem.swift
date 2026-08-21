@@ -74,7 +74,7 @@ class GlobalAutoremoveHeaderItemNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: GlobalAutoremoveHeaderItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             //let leftInset: CGFloat = 32.0 + params.leftInset
             let topInset: CGFloat = 110.0
             

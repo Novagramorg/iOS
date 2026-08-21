@@ -145,7 +145,7 @@ class BotCheckoutPriceItemNode: ListViewItemNode {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let makeLabelLayout = TextNode.asyncLayout(self.labelNode)
         
-        return { item, params, neighbors, listNeighbors in
+        return { [weak self] item, params, neighbors, listNeighbors in
             let rightInset: CGFloat = 16.0 + params.rightInset
 
             let naturalContentHeight: CGFloat

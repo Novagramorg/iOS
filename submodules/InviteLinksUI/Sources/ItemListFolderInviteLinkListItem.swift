@@ -271,7 +271,7 @@ public class ItemListFolderInviteLinkListItemNode: ItemListRevealOptionsItemNode
         
         let currentItem = self.layoutParams?.0
                 
-        return { item, params, neighbors, firstWithHeader, last in
+        return { [weak self] item, params, neighbors, firstWithHeader, last in
             var updatedTheme: PresentationTheme?
         
             let titleFont = Font.regular(item.presentationData.fontSize.itemListBaseFontSize)
