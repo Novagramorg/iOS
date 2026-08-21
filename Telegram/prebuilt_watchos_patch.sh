@@ -1,38 +1,38 @@
 #!/usr/bin/env bash
-# Worker for the apple_prebuilt_watchos_application Bazel rule.
+# Patch + sign worker for the apple_prebuilt_watchos_application Bazel rule (action 2 of 2).
 #
-# Builds the tgwatch watch app via xcodebuild (device, Release, UNSIGNED), then
-# — if a provisioning profile is supplied — codesigns the app and its nested
-# frameworks with the watchkitapp provisioning profile and a matching identity,
-# and finally zips the .app into the rule's output archive.
+# Takes the unsigned, placeholder-version watch .app archive produced by
+# prebuilt_watchos_compile.sh, rewrites the two per-build Info.plist version keys
+# (CFBundleShortVersionString, CFBundleVersion) — neither of which affects the compiled
+# binary — then, if a provisioning profile is supplied, codesigns the app and its nested
+# frameworks with the watchkitapp provisioning profile and a matching identity, and
+# finally zips the .app into the rule's output archive.
+#
+# Only the version is patched here. The api credentials and the bundle id are baked by
+# xcodebuild in the compile action (the Info.plist derives WKCompanionAppBundleIdentifier
+# from PRODUCT_BUNDLE_IDENTIFIER via $(...:base), so there is no bundle-id plist
+# mutation) — they are stable per host configuration, so they can sit in the cacheable
+# action. The version is not: it changes on every build, and keeping it out of the
+# compile is what lets Bazel reuse the (expensive, ~4-min) xcodebuild result.
+#
+# The signing inputs — the absolute provisioning-profile path and the keychain identity —
+# are machine-specific, which is the other reason this step is a separate action: it is
+# marked local + no-remote so its results are never shared across machines.
 #
 # The host ios_application embeds this archive under Watch/ and re-seals the host;
 # it does NOT re-sign the watch app, so the watch signing must happen here.
 #
 # Args:
-#   $1 source_path  Execroot-relative path to the committed in-repo snapshot
-#                   (Telegram/WatchApp), which contains tgwatch.xcodeproj.
-#   $2 output_zip   Path (declared by Bazel) to write the .app archive to
-#   $3 api_id       TG_API_ID build setting
-#   $4 api_hash     TG_API_HASH build setting
-#   $5 identity     Codesigning identity (SHA1 hash); empty => derived from $6's cert
-#   $6 profile      Path to the watchkitapp .mobileprovision; empty => unsigned build
-#   $7 infoplist    Path (declared by Bazel) to copy the built Info.plist to
-#   $8 versions_json versions.json (key 'app' => CFBundleShortVersionString)
-#   $9 build_number CFBundleVersion
-#   $10 watch_bundle_id  PRODUCT_BUNDLE_IDENTIFIER for xcodebuild (the watch app id,
-#                   "<host>.watchkitapp"); empty => keep the project default. xcodebuild
-#                   bakes it into CFBundleIdentifier (and signs with it); the Info.plist
-#                   derives WKCompanionAppBundleIdentifier from it via
-#                   $(PRODUCT_BUNDLE_IDENTIFIER:base), so no post-build plist patching.
+#   $1 input_zip     Compiled (unsigned, placeholder-version) .app archive from action 1
+#   $2 output_zip    Path (declared by Bazel) to write the final .app archive to
+#   $3 identity      Codesigning identity (SHA1 hash); empty => derived from $4's cert
+#   $4 profile       Path to the watchkitapp .mobileprovision; empty => unsigned build
+#   $5 infoplist_out Path (declared by Bazel) to copy the patched Info.plist to
+#   $6 versions_json versions.json (key 'app' => CFBundleShortVersionString)
+#   $7 build_number  CFBundleVersion
 set -euo pipefail
 
-SRC="$1"; OUT_ZIP="$2"; API_ID="$3"; API_HASH="$4"; IDENTITY="${5:-}"; PROFILE="${6:-}"; INFOPLIST_OUT="${7:-}"; VERSIONS_JSON="${8:-}"; BUILD_NUMBER="${9:-1}"; WATCH_BUNDLE_ID="${10:-}"
-
-if [ ! -e "$SRC/tgwatch.xcodeproj" ]; then
-  echo "error: no tgwatch.xcodeproj at $SRC (re-sync the Telegram/WatchApp snapshot via tgwatch/tools/export-sources.sh)" >&2
-  exit 1
-fi
+IN_ZIP="$1"; OUT_ZIP="$2"; IDENTITY="${3:-}"; PROFILE="${4:-}"; INFOPLIST_OUT="${5:-}"; VERSIONS_JSON="${6:-}"; BUILD_NUMBER="${7:-1}"
 
 # Match the host app's version (rules_apple requires the embedded watch app's
 # CFBundleShortVersionString/CFBundleVersion to equal the parent's).
@@ -44,36 +44,29 @@ fi
 DD="$(mktemp -d)"
 trap 'rm -rf "$DD"' EXIT
 
-# Build from a writable copy so xcodebuild/SwiftPM never write into the (possibly
-# in-repo, read-only) source tree — e.g. SwiftPM's Package.resolved or the workspace.
-# The tree is small (~12M); a plain cp on each (uncached) build is acceptable.
-WORKSRC="$DD/src"
-mkdir -p "$WORKSRC"
-cp -R "$SRC/." "$WORKSRC/"
-
-xcodebuild \
-  -project "$WORKSRC/tgwatch.xcodeproj" \
-  -scheme "tgwatch Watch App" \
-  -configuration Release \
-  -destination 'generic/platform=watchOS' \
-  -derivedDataPath "$DD" \
-  -quiet \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-  TG_API_ID="$API_ID" TG_API_HASH="$API_HASH" \
-  MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-  ${WATCH_BUNDLE_ID:+PRODUCT_BUNDLE_IDENTIFIER="$WATCH_BUNDLE_ID"} \
-  build 1>&2
-
-APP="$(find "$DD/Build/Products" -maxdepth 2 -name 'tgwatch Watch App.app' -type d | head -1)"
+/usr/bin/ditto -x -k "$IN_ZIP" "$DD"
+APP="$(find "$DD" -maxdepth 2 -name 'tgwatch Watch App.app' -type d | head -1)"
 if [ -z "$APP" ]; then
-  echo "error: built watch .app not found under $DD/Build/Products" >&2
+  echo "error: compiled watch .app not found inside $IN_ZIP" >&2
   exit 1
 fi
 
-# Expose the watch app's Info.plist (the host reads it to verify the companion
-# bundle-id linkage). Codesigning does not alter Info.plist content, so capture it now.
+# Overwrite the placeholder versions baked in at compile time. Both keys already exist
+# in the compiled (binary-format) Info.plist, so PlistBuddy Set preserves their (string)
+# type — matching what $(...) substitution produced.
+PLIST="$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $MARKETING_VERSION" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
+# PlistBuddy writes XML back, but xcodebuild emitted a binary plist for Release. Restore
+# the binary encoding so the shipped bundle stays byte-shaped like a plain Xcode build
+# (both encodings are legal, but there is no reason for the split to change this).
+/usr/bin/plutil -convert binary1 "$PLIST"
+
+# Expose the patched watch Info.plist (the host reads it to verify the companion
+# bundle-id linkage and the child version). Codesigning does not alter Info.plist
+# content, so capture it now.
 if [ -n "$INFOPLIST_OUT" ]; then
-  cp "$APP/Info.plist" "$INFOPLIST_OUT"
+  cp "$PLIST" "$INFOPLIST_OUT"
 fi
 
 if [ -n "$IDENTITY" ] && [ -z "$PROFILE" ]; then
@@ -131,7 +124,7 @@ else
 fi
 
 # $OUT_ZIP is execroot-relative; the action's cwd is the execroot, so do NOT cd
-# (that would resolve $OUT_ZIP against the DerivedData dir). --keepParent makes the
-# archive root the .app itself even when $APP is an absolute path.
+# (that would resolve $OUT_ZIP against the temp dir). --keepParent makes the archive
+# root the .app itself even when $APP is an absolute path.
 rm -f "$OUT_ZIP"
 /usr/bin/ditto -c -k --keepParent "$APP" "$OUT_ZIP"
