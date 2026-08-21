@@ -529,7 +529,7 @@ extension PeerInfoScreenImpl {
             var dismissImpl: (() -> Void)?
             let (mainController, pickerHolder) = self.context.sharedContext.makeAvatarMediaPickerScreen(context: self.context, peerType: PeerType.getType(for: peer), getSourceRect: { return nil }, canDelete: hasDeleteButton, performDelete: { [weak self] in
                 self?.openAvatarRemoval(mode: mode, peer: peer, item: item)
-            }, completion: { [weak self] result, transitionView, transitionRect, transitionImage, fromCamera, transitionOut, cancelled in
+            }, completion: { [weak self, parentController] result, transitionView, transitionRect, transitionImage, fromCamera, transitionOut, cancelled in
                 guard let self else {
                     return
                 }
@@ -975,8 +975,8 @@ extension PeerInfoScreenImpl {
             if let exportSubject {
                 videoResource = exportSubject
                 |> castError(UploadPeerPhotoError.self)
-                |> mapToSignal { exportSubject, duration in
-                    return Signal<TelegramMediaResource?, UploadPeerPhotoError> { subscriber in
+                |> mapToSignal { [weak self] exportSubject, duration in
+                    return Signal<TelegramMediaResource?, UploadPeerPhotoError> { [weak self] subscriber in
                         let configuration = recommendedVideoExportConfiguration(values: values, duration: duration, forceFullHd: true, frameRate: 60.0, isAvatar: true)
                         let tempFile = EngineTempBox.shared.tempFile(fileName: "video.mp4")
                         let videoExport = MediaEditorVideoExport(postbox: context.account.postbox, subject: exportSubject, configuration: configuration, outputPath: tempFile.path, textScale: 2.0)

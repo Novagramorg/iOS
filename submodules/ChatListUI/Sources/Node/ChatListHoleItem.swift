@@ -70,7 +70,7 @@ class ChatListHoleItemNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: ChatListHoleItem, _ params: ListViewItemLayoutParams, _ first: Bool, _ last: Bool) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, first, last in
+        return { [weak self] item, params, first, last in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: 0.0), insets: UIEdgeInsets())
             
             return (layout, { [weak self] in

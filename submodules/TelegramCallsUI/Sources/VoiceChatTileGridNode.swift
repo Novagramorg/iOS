@@ -290,7 +290,7 @@ final class VoiceChatTilesGridItemNode: ListViewItemNode {
         let currentItem = self.item
         let makeLabelLayout = TextNode.asyncLayout(self.limitLabel)
         
-        return { item, params in
+        return { [weak self] item, params in
             let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
             let (textLayout, textApply) = makeLabelLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: presentationData.strings.VoiceChat_VideoParticipantsLimitExceededExtended(String(item.videoLimit)).string, font: Font.regular(13.0), textColor: UIColor(rgb: 0x8e8e93), paragraphAlignment: .center), maximumNumberOfLines: 3, truncationType: .end, constrainedSize: CGSize(width: params.width - 32.0, height: CGFloat.greatestFiniteMagnitude), lineSpacing: 0.25))
 

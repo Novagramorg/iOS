@@ -207,7 +207,7 @@ class ChatListArchiveInfoItemNode: ListViewItemNode, ASScrollViewDelegate {
         
         let makeInfoPageLayouts = self.infoPageNodes.map({ $0.asyncLayout() })
         
-        return { item, params, last in
+        return { [weak self] item, params, last in
             let baseWidth = params.width - params.leftInset - params.rightInset
             let bottomInset: CGFloat = 22.0 + 28.0
             

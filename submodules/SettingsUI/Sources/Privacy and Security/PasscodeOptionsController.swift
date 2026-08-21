@@ -261,7 +261,7 @@ func passcodeOptionsController(context: AccountContext, focusOnItemTag: Passcode
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let actionSheet = ActionSheetController(presentationData: presentationData)
         actionSheet.setItemGroups([ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, color: .destructive, action: { [weak actionSheet] in
+            ActionSheetButtonItem(title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, color: .destructive, action: { [weak actionSheet, passcodeOptionsDataPromise] in
                 actionSheet?.dismissAnimated()
                 
                 let challenge = PostboxAccessChallengeData.none
@@ -339,7 +339,7 @@ func passcodeOptionsController(context: AccountContext, focusOnItemTag: Passcode
         })
     }, changePasscodeTimeout: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let setAction: (Int32?) -> Void = { value in
+        let setAction: (Int32?) -> Void = { [passcodeOptionsDataPromise] value in
             let _ = (passcodeOptionsDataPromise.get()
             |> take(1)).start(next: { [weak passcodeOptionsDataPromise] data in
                 passcodeOptionsDataPromise?.set(.single(data.withUpdatedPresentationSettings(data.presentationSettings.withUpdatedAutolockTimeout(value))))
@@ -388,7 +388,7 @@ func passcodeOptionsController(context: AccountContext, focusOnItemTag: Passcode
             sourceNode?.updateHasContextMenu(hasContextMenu: false)
         }
         presentInGlobalOverlayImpl?(contextController)
-    }, changeTouchId: { value in
+    }, changeTouchId: { [passcodeOptionsDataPromise] value in
         let _ = (passcodeOptionsDataPromise.get() |> take(1)).start(next: { [weak passcodeOptionsDataPromise] data in
             passcodeOptionsDataPromise?.set(.single(data.withUpdatedPresentationSettings(data.presentationSettings.withUpdatedEnableBiometrics(value))))
             

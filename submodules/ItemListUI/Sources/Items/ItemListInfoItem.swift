@@ -232,7 +232,7 @@ public class InfoItemNode: ListViewItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset: CGFloat = 16.0 + params.leftInset
             let rightInset: CGFloat = 16.0 + params.rightInset
             

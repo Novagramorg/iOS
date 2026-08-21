@@ -229,7 +229,7 @@ final class ChatListFilterPresetListItemNode: ItemListRevealOptionsItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updatedTheme: PresentationTheme?
             var updateArrowImage: UIImage?
             var updatedSharedIconImage: UIImage?

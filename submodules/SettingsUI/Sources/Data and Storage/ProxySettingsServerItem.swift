@@ -216,7 +216,7 @@ private final class ProxySettingsServerItemNode: ItemListRevealOptionsItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updateInfoIconImage: UIImage?
             var updateCheckImage: UIImage?
             var updatedTheme: PresentationTheme?

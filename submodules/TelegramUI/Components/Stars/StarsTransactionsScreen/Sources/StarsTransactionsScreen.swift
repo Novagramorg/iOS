@@ -1467,7 +1467,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                                 navigationController.setViewControllers(controllers, animated: true)
                             }
                             
-                            Queue.mainQueue().after(2.0) {
+                            Queue.mainQueue().after(2.0) { [weak self] in
                                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                                 let resultController = UndoOverlayController(
                                     presentationData: presentationData,
@@ -1482,7 +1482,11 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                                     ),
                                     elevatedLayout: false,
                                     action: { [weak self] action in
-                                        if case .undo = action, let navigationController = self?.navigationController as? NavigationController {
+                                        guard let self else {
+                                            return false
+                                        }
+
+                                        if case .undo = action, let navigationController = self.navigationController as? NavigationController {
                                             let _ = (context.engine.data.get(
                                                 TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                                             )
@@ -1495,7 +1499,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
                                         }
                                         return true
                                     })
-                                self.present(resultController, in: .window(.root))
+                                self?.present(resultController, in: .window(.root))
                             }
                         }
                     )

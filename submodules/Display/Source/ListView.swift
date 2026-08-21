@@ -2172,7 +2172,7 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
                 updateIndices.subtract(explicitelyUpdateIndices)
                 
                 self.updateNodes(synchronous: options.contains(.Synchronous), synchronousLoads: options.contains(.PreferSynchronousResourceLoading), crossfade: options.contains(.AnimateCrossfade), customAnimationTransition: customAnimationTransition, animated: animated, updateIndicesAndItems: updateIndicesAndItems, inputState: updatedState, previousNodes: previousNodes, inputOperations: operations, completion: { updatedState, operations in
-                    self.updateAdjacent(synchronous: options.contains(.Synchronous), animated: animated, customAnimationTransition: customAnimationTransition, state: updatedState, updateAdjacentItemsIndices: updateIndices, operations: operations, completion: { state, operations in
+                    self.updateAdjacent(synchronous: options.contains(.Synchronous), animated: animated, customAnimationTransition: customAnimationTransition, state: updatedState, updateAdjacentItemsIndices: updateIndices, operations: operations, completion: { [self] state, operations in
                         var updatedState = state
                         var updatedOperations = operations
                         updatedState.removeInvisibleNodes(&updatedOperations)

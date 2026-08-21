@@ -275,7 +275,11 @@ public final class SolidRoundedButtonNode: ASDisplayNode {
                     if self.isShimmering {
                         self.animationTimer?.invalidate()
                         
-                        Queue.mainQueue().after(1.25) {
+                        Queue.mainQueue().after(1.25) { [weak self] in
+                            guard let self else {
+                                return
+                            }
+
                             self.animationNode?.play()
                             
                             let timer = SwiftSignalKit.Timer(timeout: self.animationLoopTime, repeat: true, completion: { [weak self] in
@@ -1044,7 +1048,11 @@ public final class SolidRoundedButtonView: UIView {
                     if self.gloss {
                         self.animationTimer?.invalidate()
                         
-                        Queue.mainQueue().after(1.25) {
+                        Queue.mainQueue().after(1.25) { [weak self] in
+                            guard let self else {
+                                return
+                            }
+
                             self.animationNode?.play()
                             
                             let timer = SwiftSignalKit.Timer(timeout: self.animationLoopTime, repeat: true, completion: { [weak self] in

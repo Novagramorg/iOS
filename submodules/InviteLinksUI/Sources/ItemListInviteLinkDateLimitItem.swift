@@ -243,7 +243,7 @@ private final class ItemListInviteLinkTimeLimitItemNode: ListViewItemNode {
         let makeUnlimitedTextLayout = TextNode.asyncLayout(self.unlimitedTextNode)
         let makeCustomTextLayout = TextNode.asyncLayout(self.customTextNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var themeUpdated = false
             if currentItem?.theme !== item.theme {
                 themeUpdated = true

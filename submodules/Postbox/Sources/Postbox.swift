@@ -3770,7 +3770,7 @@ final class PostboxImpl {
     }
     
     public func aroundChatListView(groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate? = nil, index: ChatListIndex, count: Int, summaryComponents: ChatListEntrySummaryComponents, userInteractive: Bool = false, extractCachedData: ((CachedPeerData) -> AnyHashable?)?, accountPeerId: PeerId?) -> Signal<(ChatListView, ViewUpdateType), NoError> {
-        return self.transactionSignal(userInteractive: userInteractive, { subscriber, transaction in
+        return self.transactionSignal(userInteractive: userInteractive, { [self] subscriber, transaction in
             let mutableView = MutableChatListView(postbox: self, currentTransaction: transaction, groupId: groupId, filterPredicate: filterPredicate, aroundIndex: index, count: count, summaryComponents: summaryComponents, extractCachedData: extractCachedData, accountPeerId: accountPeerId)
             mutableView.render(postbox: self)
             
@@ -3793,7 +3793,7 @@ final class PostboxImpl {
     }
     
     public func contactPeerIdsView() -> Signal<ContactPeerIdsView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutableContactPeerIdsView(remoteTotalCount: self.metadataTable.getRemoteContactCount(), peerIds: self.contactsTable.get())
             let (index, signal) = self.viewTracker.addContactPeerIdsView(view)
             
@@ -3913,7 +3913,7 @@ final class PostboxImpl {
     }
     
     public func peerView(id: PeerId) -> Signal<PeerView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutablePeerView(postbox: self, peerId: id, components: .all)
             let (index, signal) = self.viewTracker.addPeerView(view)
             
@@ -3935,7 +3935,7 @@ final class PostboxImpl {
     }
     
     public func multiplePeersView(_ ids: [PeerId]) -> Signal<MultiplePeersView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutableMultiplePeersView(peerIds: ids, getPeer: { self.peerTable.get($0) }, getPeerPresence: { self.peerPresenceTable.get($0) })
             let (index, signal) = self.viewTracker.addMultiplePeersView(view)
             
@@ -3967,7 +3967,7 @@ final class PostboxImpl {
     }
     
     public func unreadMessageCountsView(items: [UnreadMessageCountsItem]) -> Signal<UnreadMessageCountsView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutableUnreadMessageCountsView(postbox: self, items: items)
             let (index, signal) = self.viewTracker.addUnreadMessageCountsView(view)
             
@@ -4002,7 +4002,7 @@ final class PostboxImpl {
     }
     
     public func stateView() -> Signal<PostboxStateView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let mutableView = MutablePostboxStateView(state: self.getState())
             
             subscriber.putNext(PostboxStateView(mutableView))
@@ -4086,7 +4086,7 @@ final class PostboxImpl {
     }
     
     public func itemCollectionsView(orderedItemListCollectionIds: [Int32], namespaces: [ItemCollectionId.Namespace], aroundIndex: ItemCollectionViewEntryIndex?, count: Int) -> Signal<ItemCollectionsView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let itemListViews = orderedItemListCollectionIds.map { collectionId -> MutableOrderedItemListView in
                 return MutableOrderedItemListView(postbox: self, collectionId: collectionId)
             }
@@ -4113,7 +4113,7 @@ final class PostboxImpl {
     }
     
     public func mergedOperationLogView(tag: PeerOperationLogTag, filterByPeerId: PeerId?, limit: Int) -> Signal<PeerMergedOperationLogView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutablePeerMergedOperationLogView(postbox: self, tag: tag, filterByPeerId: filterByPeerId, limit: limit)
             
             subscriber.putNext(PeerMergedOperationLogView(view))
@@ -4136,7 +4136,7 @@ final class PostboxImpl {
     }
     
     public func timestampBasedMessageAttributesView(tag: UInt16) -> Signal<TimestampBasedMessageAttributesView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutableTimestampBasedMessageAttributesView(postbox: self, tag: tag)
             let (index, signal) = self.viewTracker.addTimestampBasedMessageAttributesView(view)
             
@@ -4186,7 +4186,7 @@ final class PostboxImpl {
     }
     
     public func messageView(_ messageId: MessageId) -> Signal<MessageView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutableMessageView(messageId: messageId, message: transaction.getMessage(messageId))
             
             subscriber.putNext(MessageView(view))
@@ -4209,7 +4209,7 @@ final class PostboxImpl {
     }
     
     public func preferencesView(keys: [ValueBoxKey]) -> Signal<PreferencesView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutablePreferencesView(postbox: self, keys: Set(keys))
             let (index, signal) = self.viewTracker.addPreferencesView(view)
             
@@ -4231,7 +4231,7 @@ final class PostboxImpl {
     }
     
     public func combinedView(keys: [PostboxViewKey]) -> Signal<CombinedView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             var views: [PostboxViewKey: MutablePostboxView] = [:]
             for key in keys {
                 views[key] = postboxViewForKey(postbox: self, key: key)
@@ -4342,7 +4342,7 @@ final class PostboxImpl {
                 peerIndices[peerId] = transaction.addChatHidden(peerId: peerId)
             }
             return peerIndices
-        }).start(next: { peerIndices in
+        }).start(next: { [self] peerIndices in
             disposable.set(ActionDisposable { [weak self] in
                 queue.async {
                     guard let `self` = self else {
@@ -4619,7 +4619,7 @@ final class PostboxImpl {
     }
     
     public func failedMessageIdsView(peerId: PeerId) -> Signal<FailedMessageIdsView, NoError> {
-        return self.transactionSignal { subscriber, transaction in
+        return self.transactionSignal { [self] subscriber, transaction in
             let view = MutableFailedMessageIdsView(peerId: peerId, ids: self.failedMessageIds(for: peerId))
             let (index, signal) = self.viewTracker.addFailedMessageIdsView(view)
             subscriber.putNext(view.immutableView())

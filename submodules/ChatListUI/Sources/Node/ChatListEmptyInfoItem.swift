@@ -115,7 +115,7 @@ class ChatListEmptyInfoItemNode: ListViewItemNode {
     func asyncLayout() -> (_ item: ChatListEmptyInfoItem, _ params: ListViewItemLayoutParams, _ isLast: Bool) -> (ListViewItemNodeLayout, () -> Void) {
         let makeTextLayout = TextNode.asyncLayout(self.textNode)
         
-        return { item, params, last in
+        return { [weak self] item, params, last in
             let baseWidth = params.width - params.leftInset - params.rightInset
             
             let topInset: CGFloat = 8.0
@@ -240,7 +240,7 @@ class ChatListSectionHeaderNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: ChatListSectionHeaderItem, _ params: ListViewItemLayoutParams, _ isLast: Bool) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, last in
+        return { [weak self] item, params, last in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: 28.0), insets: UIEdgeInsets())
             
             return (layout, { [weak self] in

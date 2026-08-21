@@ -469,7 +469,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
 
             let accountPeerId = strongSelf.context.account.peerId
             let items = combineLatest(forwardOptions, strongSelf.context.account.postbox.messagesAtIds(messageIds), messagesCount)
-            |> map { forwardOptions, messages, messagesCount -> [ContextMenuItem] in
+            |> map { [chatController] forwardOptions, messages, messagesCount -> [ContextMenuItem] in
                 var items: [ContextMenuItem] = []
 
                 var hasCaptions = false
@@ -762,7 +762,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
             }
 
             let _ = (ChatSendMessageContextScreen.initialData(context: strongSelf.context, currentMessageEffectId: nil)
-            |> deliverOnMainQueue).start(next: { initialData in
+            |> deliverOnMainQueue).start(next: { [controller] initialData in
                 guard let strongSelf = self, let textInputPanelNode = strongSelf.textInputPanelNode else {
                     return
                 }

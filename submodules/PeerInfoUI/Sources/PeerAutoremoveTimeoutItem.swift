@@ -171,7 +171,7 @@ class PeerRemoveTimeoutItemNode: ListViewItemNode, ItemListItemNode {
         
         let makeTitleNodeLayouts = self.titleNodes.map(TextNode.asyncLayout)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var themeUpdated = false
             if currentItem?.presentationData.theme !== item.presentationData.theme {
                 themeUpdated = true

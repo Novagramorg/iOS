@@ -174,7 +174,7 @@ public class NotificationsCategoryItemListItemNode: ListViewItemNode, ItemListIt
         
         let currentItem = self.item
                 
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let rightInset = 34.0 + params.rightInset
 
             var updateArrowImage: UIImage?

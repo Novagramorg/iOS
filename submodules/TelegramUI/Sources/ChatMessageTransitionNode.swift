@@ -958,7 +958,11 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                 }
             case let .mediaInput(mediaInput):
                 if let snapshotView = mediaInput.extractSnapshot() {
-                    Queue.mainQueue().justDispatch {
+                    Queue.mainQueue().justDispatch { [snapshotView, weak self] in
+                        guard let self else {
+                            return
+                        }
+
                         if let itemNode = self.itemNode as? ChatMessageBubbleItemNode {
                             itemNode.cancelInsertionAnimations()
 
@@ -1011,7 +1015,11 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                     self.endAnimation()
                     return
                 }
-                Queue.mainQueue().justDispatch {
+                Queue.mainQueue().justDispatch { [weak self] in
+                    guard let self else {
+                        return
+                    }
+
                     if let itemNode = self.itemNode as? ChatMessageBubbleItemNode {
                         itemNode.cancelInsertionAnimations()
 

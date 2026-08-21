@@ -3017,7 +3017,7 @@ final class ShareWithPeersScreenComponent: Component {
                                     }
                                 }
                                 
-                                let complete = {
+                                let complete = { [controller, component] in
                                     let peers = component.context.engine.data.get(EngineDataMap(selectedPeers.map { id in
                                         return TelegramEngine.EngineData.Item.Peer.Peer(id: id)
                                     }))

@@ -3945,7 +3945,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
             let _ = (iconPromise.get()
             |> take(1)
-            |> deliverOnMainQueue).start(next: { verifierIcon in
+            |> deliverOnMainQueue).start(next: { [weak self] verifierIcon in
+                guard let self else {
+                    return
+                }
+
                 if let _ = peer.verificationIconFileId {
                     let removeController = removeVerificationAlertController(
                         context: self.context,
@@ -5013,7 +5017,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 })
                             }
                         },
-                        openContextMenu: { item, sourceNode, rect, gesture in
+                        openContextMenu: { [weak self] item, sourceNode, rect, gesture in
+                            guard let self else {
+                                return
+                            }
+
                             let link = "tg://settings/\(item.id)"
                             let items: [ContextMenuItem] = [
                                 .action( ContextMenuActionItem(
@@ -7284,7 +7292,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     
     public static func openSavedMessagesMoreMenu(context: AccountContext, sourceController: ViewController, isViewingAsTopics: Bool, sourceView: UIView, gesture: ContextGesture?) {
         let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
-        |> deliverOnMainQueue).startStandalone(next: { peer in
+        |> deliverOnMainQueue).startStandalone(next: { [sourceController] peer in
             guard let peer else {
                 return
             }

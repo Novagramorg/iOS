@@ -133,7 +133,7 @@ class IncreaseLimitHeaderItemNode: ListViewItemNode {
     func asyncLayout() -> (_ item: IncreaseLimitHeaderItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
         let makeTextLayout = TextNode.asyncLayout(self.textNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let topInset: CGFloat = 2.0
             
             let badgeHeight: CGFloat = 200.0

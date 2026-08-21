@@ -935,7 +935,7 @@ public final class OngoingCallContext {
         self.audioSessionDisposable.set((audioSessionActive
         |> filter { $0 }
         |> take(1)
-        |> deliverOn(queue)).start(next: { [weak self] _ in
+        |> deliverOn(queue)).start(next: { [weak self, callSessionManager] _ in
             if let strongSelf = self {
                 var allowP2P = allowP2P
                 
@@ -949,24 +949,9 @@ public final class OngoingCallContext {
                     }
                 }
                 
-                var unfilteredConnections: [CallSessionConnection]
+                let unfilteredConnections: [CallSessionConnection]
                 unfilteredConnections = [connections.primary] + connections.alternatives
-                
-                if version == "12.0.0" {
-                    for connection in unfilteredConnections {
-                        if case let .reflector(reflector) = connection {
-                            unfilteredConnections.append(.reflector(CallSessionConnection.Reflector(
-                                id: 123456,
-                                ip: "91.108.9.38",
-                                ipv6: "",
-                                isTcp: true,
-                                port: 595,
-                                peerTag: reflector.peerTag
-                            )))
-                        }
-                    }
-                }
-                
+
                 var reflectorIdList: [Int64] = []
                 for connection in unfilteredConnections {
                     switch connection {
@@ -997,17 +982,11 @@ public final class OngoingCallContext {
                     switch connection {
                     case let .reflector(reflector):
                         if reflector.isTcp {
-                            if version == "12.0.0" {
-                                /*if signalingReflector == nil {
-                                    signalingReflector = OngoingCallConnectionDescriptionWebrtc(reflectorId: 0, hasStun: false, hasTurn: true, hasTcp: true, ip: reflector.ip, port: reflector.port, username: "reflector", password: hexString(reflector.peerTag))
-                                }*/
-                            } else {
-                                if signalingReflector == nil {
-                                    signalingReflector = OngoingCallConnectionDescriptionWebrtc(reflectorId: 0, hasStun: false, hasTurn: true, hasTcp: true, ip: reflector.ip, port: reflector.port, username: "reflector", password: hexString(reflector.peerTag))
-                                }
-                                
-                                continue connectionsLoop
+                            if signalingReflector == nil {
+                                signalingReflector = OngoingCallConnectionDescriptionWebrtc(reflectorId: 0, hasStun: false, hasTurn: true, hasTcp: true, ip: reflector.ip, port: reflector.port, username: "reflector", password: hexString(reflector.peerTag))
                             }
+
+                            continue connectionsLoop
                         }
                     case .webRtcReflector:
                         break
@@ -1055,16 +1034,8 @@ public final class OngoingCallContext {
                 }
                 
                 #if DEBUG && true
-                var customParameters = customParameters
                 if let initialCustomParameters = try? JSONSerialization.jsonObject(with: (customParameters ?? "{}").data(using: .utf8)!) as? [String: Any] {
-                    var customParametersValue: [String: Any]
-                    customParametersValue = initialCustomParameters
-                    if version == "12.0.0" {
-                        customParametersValue["network_use_tcponly"] = true as NSNumber
-                        customParameters = String(data: try! JSONSerialization.data(withJSONObject: customParametersValue), encoding: .utf8)!
-                    }
-                    
-                    if let value = customParametersValue["network_use_tcponly"] as? Bool, value {
+                    if let value = initialCustomParameters["network_use_tcponly"] as? Bool, value {
                         filteredConnections = filteredConnections.filter { connection in
                             if connection.hasTcp {
                                 return true

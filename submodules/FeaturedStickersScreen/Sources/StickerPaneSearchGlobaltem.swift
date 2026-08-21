@@ -350,7 +350,7 @@ public class StickerPaneSearchGlobalItemNode: GridItemNode {
         self.highlightNode = highlightNode
         self.insertSubnode(highlightNode, at: 0)
         
-        Queue.mainQueue().after(1.5) {
+        Queue.mainQueue().after(1.5) { [highlightNode] in
             self.highlightNode = nil
             highlightNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak highlightNode] _ in
                 highlightNode?.removeFromSupernode()

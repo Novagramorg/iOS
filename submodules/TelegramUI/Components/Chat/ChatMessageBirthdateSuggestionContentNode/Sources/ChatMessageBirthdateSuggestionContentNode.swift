@@ -144,10 +144,10 @@ public class ChatMessageBirthdateSuggestionContentNode: ChatMessageBubbleContent
         
         let makeButtonTitleLayout = TextNode.asyncLayout(self.buttonTitleNode)
         
-        return { item, layoutConstants, _, _, _, _ in
+        return { [weak self] item, layoutConstants, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: true, headerSpacing: 0.0, hidesBackground: .always, forceFullCorners: false, forceAlignment: .center)
                         
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, position in
                 let width: CGFloat = 186.0
                 
                 var day: Int32 = 1
@@ -203,7 +203,7 @@ public class ChatMessageBirthdateSuggestionContentNode: ChatMessageBubbleContent
                     backgroundSize.height += 44.0
                 }
                 
-                return (backgroundSize.width, { boundingWidth in
+                return (backgroundSize.width, { [weak self] boundingWidth in
                     return (backgroundSize, { [weak self] animation, synchronousLoads, _ in
                         if let strongSelf = self {
                             let isFirstTime = strongSelf.item == nil

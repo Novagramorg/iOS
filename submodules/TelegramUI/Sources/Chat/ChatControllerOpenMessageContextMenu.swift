@@ -238,7 +238,7 @@ extension ChatControllerImpl {
                         actionsSignal = .single(actions)
                         |> then(
                             context.engine.stickers.resolveInlineStickers(fileIds: emojiFileIds)
-                            |> mapToSignal { files -> Signal<ContextController.Items, NoError> in
+                            |> mapToSignal { [weak self] files -> Signal<ContextController.Items, NoError> in
                                 var packReferences: [StickerPackReference] = []
                                 var existingIds = Set<Int64>()
                                 for (_, file) in files {

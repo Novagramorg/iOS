@@ -168,7 +168,7 @@ public class ItemListReactionItemNode: ListViewItemNode, ItemListItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var rightInset: CGFloat
             rightInset = 34.0 + params.rightInset
             let _ = rightInset

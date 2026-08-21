@@ -270,7 +270,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             let items: Signal<[ContextMenuItem], NoError> = activeAccountsAndPeers(context: self.context, includePrimary: true)
             |> take(1)
-            |> map { primary, other -> [ContextMenuItem] in
+            |> map { [weak self] primary, other -> [ContextMenuItem] in
                 var items: [ContextMenuItem] = []
                 var existingIds = Set<EnginePeer.Id>()
                 if let (_, peer) = primary {

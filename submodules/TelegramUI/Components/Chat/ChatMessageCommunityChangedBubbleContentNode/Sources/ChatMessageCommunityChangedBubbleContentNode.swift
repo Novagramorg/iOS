@@ -113,10 +113,10 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
         let makeSubtitleLayout = TextNode.asyncLayout(self.subtitleNode)
         let makeButtonTitleLayout = TextNode.asyncLayout(self.buttonTitleNode)
         
-        return { item, _, _, _, _, _ in
+        return { [weak self] item, _, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: true, headerSpacing: 0.0, hidesBackground: .always, forceFullCorners: false, forceAlignment: .center)
             
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, _ in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, _ in
                 let width: CGFloat = 180.0
                 let imageSize = CGSize(width: 80.0, height: 80.0)
                 let primaryTextColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper).primaryText
@@ -166,7 +166,7 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                 
                 let backgroundSize = CGSize(width: width, height: subtitleLayout.size.height + 165.0)
                 
-                return (backgroundSize.width, { boundingWidth in
+                return (backgroundSize.width, { [weak self] boundingWidth in
                     return (backgroundSize, { [weak self] _, synchronousLoads, _ in
                         guard let strongSelf = self else {
                             return

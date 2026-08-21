@@ -502,7 +502,11 @@ final class WallpaperGalleryItemNode: GalleryItemNode {
                 return context
             }))
 
-            Queue.mainQueue().after(0.1) {
+            Queue.mainQueue().after(0.1) { [weak self] in
+                guard let self else {
+                    return
+                }
+
                 self.brightnessNode.isHidden = false
                 self.temporaryImageNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, delay: 0.2, removeOnCompletion: false, completion: { [weak self] _ in
                     self?.temporaryImageNode.image = nil

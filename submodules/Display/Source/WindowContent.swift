@@ -743,6 +743,21 @@ public class Window1 {
         }
     }
     
+    /// Re-derives `deviceMetrics` from the current status bar height.
+    ///
+    /// `Window1` is constructed before the window is bound to a `UIWindowScene`, so at `init`
+    /// time the status bar host has no scene and reports a 0pt status bar. Some devices are
+    /// distinguished solely by that height (an iPhone Pro Max in Display Zoom has the same
+    /// 375x812 @3x logical screen as an iPhone X and differs only by its 47pt status bar), so
+    /// the initial capture can resolve the wrong device. The host must have its scene bound
+    /// before this is called.
+    ///
+    /// This only reassigns `deviceMetrics`; it does not refresh the window layout or trigger a
+    /// layout pass — the first real layout pass picks the new metrics up.
+    public func updateDeviceMetrics() {
+        self.deviceMetrics = DeviceMetrics(screenSize: UIScreen.main.bounds.size, scale: UIScreen.main.scale, statusBarHeight: self.statusBarHost?.statusBarFrame.height ?? 0.0, onScreenNavigationHeight: self.hostView.onScreenNavigationHeight)
+    }
+
     private var forceBadgeHidden = true
     public func setForceBadgeHidden(_ hidden: Bool) {
         guard hidden != self.forceBadgeHidden else {
@@ -840,6 +855,7 @@ public class Window1 {
         
         for view in self.hostView.eventView.subviews.reversed() {
             let classString = NSStringFromClass(type(of: view))
+            
             // The system edit menu is inserted as a top-level subview of the window (== eventView) and must
             // be hit-tested here, otherwise its touches fall through to the content below. Pre-iOS-16 this is
             // a `UICalloutBar`/`...ContextMenuContainerView`; on iOS 16+ `UIEditMenuInteraction` hosts it in a

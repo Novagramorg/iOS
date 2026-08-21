@@ -2113,7 +2113,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             self.mainContainerNode.accessibilityElementsHidden = false
             self.inlineStackContainerNode?.accessibilityElementsHidden = false
             
-            return { [weak self, weak placeholderNode] in
+            return { [weak self, weak placeholderNode, searchDisplayController] in
                 guard let self, let (layout, _, _, cleanNavigationBarHeight, _) = self.containerLayout else {
                     return
                 }

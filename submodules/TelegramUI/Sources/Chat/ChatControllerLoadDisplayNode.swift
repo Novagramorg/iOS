@@ -2324,7 +2324,7 @@ extension ChatControllerImpl {
                 return
             }
             
-            let _ = strongSelf.presentVoiceMessageDiscardAlert(action: {
+            let _ = strongSelf.presentVoiceMessageDiscardAlert(action: { [strongSelf] in
                 var interactive = true
                 if strongSelf.chatDisplayNode.isInputViewFocused {
                     interactive = false
