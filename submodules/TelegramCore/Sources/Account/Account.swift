@@ -1788,7 +1788,7 @@ public func standaloneStateManager(
                                     useRequestTimeoutTimers: false,
                                     appConfiguration: .defaultValue
                                 )
-                                |> map { network -> AccountStateManager? in
+                                |> map { [postbox] network -> AccountStateManager? in
                                     Logger.shared.log("StandaloneStateManager", "received network")
                                     
                                     postbox.mediaBox.fetchResource = { [weak postbox] resource, intervals, parameters -> Signal<MediaResourceDataFetchResult, MediaResourceDataFetchError> in

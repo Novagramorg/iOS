@@ -2369,7 +2369,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                    }
                }
             } else if let item = self.item, self.imageNode.frame.contains(location) {
-                let emojiTapAction: (Bool) -> InternalBubbleTapAction? = { shouldPlay in
+                let emojiTapAction: (Bool) -> InternalBubbleTapAction? = { [self] shouldPlay in
                     let beatingHearts: [UInt32] = [0x2764, 0x1F90E, 0x1F9E1, 0x1F499, 0x1F49A, 0x1F49C, 0x1F49B, 0x1F5A4, 0x1F90D]
                     let heart = 0x2764
                     let peach = 0x1F351
@@ -2399,7 +2399,11 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         
                         let syncAnimations = item.message.id.peerId.namespace == Namespaces.Peer.CloudUser
                     
-                        return .optionalAction({
+                        return .optionalAction({ [weak self] in
+                            guard let self else {
+                                return
+                            }
+
                             var haptic: EmojiHaptic?
                             if let current = self.haptic {
                                 haptic = current

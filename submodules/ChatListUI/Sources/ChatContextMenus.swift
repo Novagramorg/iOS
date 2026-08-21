@@ -118,7 +118,7 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
             let renderedPeer = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.RenderedPeer(id: peerId))
             
             return renderedPeer
-            |> mapToSignal { renderedPeer -> Signal<[ContextMenuItem], NoError> in
+            |> mapToSignal { [chatListController] renderedPeer -> Signal<[ContextMenuItem], NoError> in
                 guard let renderedPeer = renderedPeer else {
                     return .single([])
                 }
@@ -617,7 +617,7 @@ public func chatForumTopicMenuItems(context: AccountContext, peerId: EnginePeer.
         TelegramEngine.EngineData.Item.Peer.ThreadData(id: peerId, threadId: threadId),
         TelegramEngine.EngineData.Item.NotificationSettings.Global()
     )
-    |> mapToSignal { peer, peerNotificationSettings, threadData, globalNotificationSettings -> Signal<[ContextMenuItem], NoError> in
+    |> mapToSignal { [chatListController] peer, peerNotificationSettings, threadData, globalNotificationSettings -> Signal<[ContextMenuItem], NoError> in
         guard let peer else {
             return .single([])
         }

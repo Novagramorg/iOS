@@ -55,6 +55,7 @@ import SaveToCameraRoll
 import GlassBarButtonComponent
 import GlassBackgroundComponent
 import Weather
+import UniformTypeIdentifiers
 
 private let playbackButtonTag = GenericComponentViewTag()
 private let muteButtonTag = GenericComponentViewTag()
@@ -1361,7 +1362,7 @@ final class MediaEditorScreenComponent: Component {
                 }
                 transition.setFrame(view: inputMediaNode.view, frame: targetFrame, completion: { [weak inputMediaNode] _ in
                     if let inputMediaNode {
-                        Queue.mainQueue().after(0.2) {
+                        Queue.mainQueue().after(0.2) { [inputMediaNode] in
                             inputMediaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak inputMediaNode] _ in
                                 inputMediaNode?.view.removeFromSuperview()
                             })
@@ -3424,7 +3425,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             })
             
             let stickerPickerInputData = self.stickerPickerInputData
-            Queue.concurrentDefaultQueue().after(0.5, {
+            Queue.concurrentDefaultQueue().after(0.5, { [weak self] in
                 let emojiItems = EmojiPagerContentComponent.emojiInputData(
                     context: controller.context,
                     animationCache: controller.context.animationCache,
@@ -5556,7 +5557,11 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
         
         func addInitialLink(_ link: (url: String, name: String?)) {
             guard self.context.isPremium else {
-                Queue.mainQueue().after(0.3) {
+                Queue.mainQueue().after(0.3) { [weak self] in
+                    guard let self else {
+                        return
+                    }
+
                     let context = self.context
                     var replaceImpl: ((ViewController) -> Void)?
                     let demoController = context.sharedContext.makePremiumDemoController(context: context, subject: .stories, forceDark: true, action: {
@@ -8615,7 +8620,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
     
     @available(iOSApplicationExtension 11.0, iOS 11.0, *)
     public func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
-        return session.hasItemsConforming(toTypeIdentifiers: [kUTTypeImage as String])
+        return session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
     }
     
     @available(iOSApplicationExtension 11.0, iOS 11.0, *)

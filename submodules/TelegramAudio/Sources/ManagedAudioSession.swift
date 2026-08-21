@@ -558,7 +558,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
         
         let id = OSAtomicIncrement32(&self.nextId)
         let queue = self.queue
-        queue.async {
+        queue.async { [self] in
             self.holders.append(HolderRecord(id: id, audioSessionType: audioSessionType, control: ManagedAudioSessionControl(setupImpl: { [weak self] synchronous in
                 let f: () -> Void = {
                     if let strongSelf = self {

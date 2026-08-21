@@ -3189,7 +3189,7 @@ final class StorageUsageScreenComponent: Component {
                 cacheSettings |> take(1),
                 peerExceptions |> take(1)
             )
-            |> deliverOnMainQueue).start(next: { cacheSettings, peerExceptions in
+            |> deliverOnMainQueue).start(next: { [sourceView] cacheSettings, peerExceptions in
                 let currentValue: Int32 = cacheSettings.categoryStorageTimeout[mappedCategory] ?? Int32.max
                 
                 let applyValue: (Int32) -> Void = { value in

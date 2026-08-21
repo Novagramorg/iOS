@@ -893,7 +893,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
         }, openSubscriptions: {
             if #available(iOS 15, *), let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                Task {
+                let _ = Task {
                     try await AppStore.showManageSubscriptions(in: scene)
                 }
             } else if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
@@ -1075,7 +1075,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return (accountManager, initialPresentationDataAndSettings)
         }
         |> deliverOnMainQueue
-        |> mapToSignal { accountManager, initialPresentationDataAndSettings -> Signal<(SharedApplicationContext, LoggingSettings), NoError> in
+        |> mapToSignal { [self] accountManager, initialPresentationDataAndSettings -> Signal<(SharedApplicationContext, LoggingSettings), NoError> in
             self.mainWindow?.hostView.containerView.backgroundColor =  initialPresentationDataAndSettings.presentationData.theme.chatList.backgroundColor
             
             let legacyBasePath = appGroupUrl.path
@@ -1374,7 +1374,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         let authContextReadyDisposable = MetaDisposable()
         
         self.authContextDisposable.set((self.authContext.get()
-        |> deliverOnMainQueue).start(next: { context in
+        |> deliverOnMainQueue).start(next: { [weak self] context in
+            guard let self else {
+                return
+            }
+
             var network: Network?
             if let context = context {
                 network = context.account.network
@@ -2967,9 +2971,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     if #available(iOS 12.0, *) {
                         authorizationOptions.insert(.providesAppNotificationSettings)
                     }
-                    if #available(iOS 13.0, *) {
-                        authorizationOptions.insert(.announcement)
-                    }
                     Logger.shared.log("App \(self.episodeId)", "register for notifications: request authorization")
                     notificationCenter.requestAuthorization(options: authorizationOptions, completionHandler: { result, _ in
                         Logger.shared.log("App \(self.episodeId)", "register for notifications: received authorization: \(result)")
@@ -2995,9 +2996,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                 
                                 var carPlayOptions = options
                                 carPlayOptions.insert(.allowInCarPlay)
-                                if #available(iOS 13.2, *) {
-                                    carPlayOptions.insert(.allowAnnouncement)
-                                }
                                 
                                 unknownMessageCategory = UNNotificationCategory(identifier: "unknown", actions: [], intentIdentifiers: [], hiddenPreviewsBodyPlaceholder: hiddenContentString, options: options)
                                 repliableMessageCategory = UNNotificationCategory(identifier: "r", actions: [reply], intentIdentifiers: [INSearchForMessagesIntentIdentifier], hiddenPreviewsBodyPlaceholder: hiddenContentString, options: carPlayOptions)
@@ -3038,7 +3036,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> deliverOnMainQueue).start(next: { accountId in
             if let context = self.contextValue {
                 if let accountId = accountId, context.context.account.id != accountId || notification.request.content.userInfo["url"] != nil {
-                    completionHandler([.alert])
+                    completionHandler([.banner, .list])
                 }
             }
         })

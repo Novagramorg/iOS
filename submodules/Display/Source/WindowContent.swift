@@ -855,6 +855,7 @@ public class Window1 {
         
         for view in self.hostView.eventView.subviews.reversed() {
             let classString = NSStringFromClass(type(of: view))
+            
             // The system edit menu is inserted as a top-level subview of the window (== eventView) and must
             // be hit-tested here, otherwise its touches fall through to the content below. Pre-iOS-16 this is
             // a `UICalloutBar`/`...ContextMenuContainerView`; on iOS 16+ `UIEditMenuInteraction` hosts it in a

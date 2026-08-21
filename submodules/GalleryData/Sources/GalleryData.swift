@@ -337,7 +337,7 @@ public func chatMessageGalleryControllerData(
                 
                 return .gallery(startState
                 |> deliverOnMainQueue
-                |> map { startState in
+                |> map { [navigationController] startState in
                     let gallery = GalleryController(context: context, source: source ?? (standalone ? .standaloneMessage(message, mediaSubject) : .peerMessagesAtId(messageId: message.id, chatLocation: openChatLocation, customTag: chatFilterTag, chatLocationContextHolder: openChatLocationContextHolder)), invertItemOrder: reverseMessageGalleryOrder, streamSingleVideo: stream, fromPlayingVideo: autoplayingVideo, landscape: landscape, timecode: startState.timecode, playbackRate: startState.rate, synchronousLoad: synchronousLoad, replaceRootController: { [weak navigationController] controller, ready in
                         navigationController?.replaceTopController(controller, animated: false, ready: ready)
                     }, baseNavigationController: navigationController, actionInteraction: actionInteraction)

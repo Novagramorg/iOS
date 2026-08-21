@@ -371,7 +371,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
         super.selected()
         
         if let animatedStickerNode = self.animatedStickerNode {
-            Queue.mainQueue().after(0.1) {
+            Queue.mainQueue().after(0.1) { [animatedStickerNode, weak self] in
                 if !wasSelected {
                     animatedStickerNode.seekTo(.frameIndex(0))
                     animatedStickerNode.play(firstFrame: false, fromIndex: nil)

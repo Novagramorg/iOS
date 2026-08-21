@@ -3651,7 +3651,7 @@ public func storyMediaPickerController(
     )
     controller.forceSourceRect = true
     controller.getSourceRect = getSourceRect
-    controller.requestController = { _, present in
+    controller.requestController = { [selectionContext] _, present in
         let mediaPickerController = MediaPickerScreenImpl(
             context: context,
             updatedPresentationData: updatedPresentationData,

@@ -412,7 +412,7 @@ private func getReceiptData() -> Data? {
 
 extension InAppPurchaseManager: SKPaymentTransactionObserver {
     public func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
-        self.stateQueue.async {
+        self.stateQueue.async { [self] in
             let accountPeerId: String
             switch self.engine {
             case let .authorized(engine):

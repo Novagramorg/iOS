@@ -230,7 +230,7 @@ public class ChatMessageGiveawayBubbleContentNode: ChatMessageBubbleContentNode,
                 
         let currentItem = self.item
         
-        return { item, layoutConstants, _, _, constrainedSize, _ in
+        return { [weak self] item, layoutConstants, _, _, constrainedSize, _ in
             var giveaway: TelegramMediaGiveaway?
             var giveawayResults: TelegramMediaGiveawayResults?
             for media in item.message.media {
@@ -483,7 +483,7 @@ public class ChatMessageGiveawayBubbleContentNode: ChatMessageBubbleContentNode,
             let hideHeaders = item.message.forwardInfo == nil
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: hideHeaders, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, hidesHeaders: hideHeaders)
             
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, position in
                 let sideInsets = layoutConstants.text.bubbleInsets.right * 2.0
                 let maxTextWidth = min(200.0, max(1.0, constrainedSize.width - 7.0 - sideInsets))
                 
@@ -661,7 +661,7 @@ public class ChatMessageGiveawayBubbleContentNode: ChatMessageBubbleContentNode,
                 
                 let contentWidth = maxContentWidth + layoutConstants.text.bubbleInsets.right * 2.0
                 
-                return (contentWidth, { boundingWidth in
+                return (contentWidth, { [weak self] boundingWidth in
                     let (buttonSize, buttonApply) = continueLayout(boundingWidth - layoutConstants.text.bubbleInsets.right * 2.0, 33.0)
                     let buttonSpacing: CGFloat = 4.0
                     
@@ -1047,7 +1047,7 @@ private final class PeerButtonsStackNode: ASDisplayNode {
                     buttonLayoutsAndApply.append(buttonApply(maxWidth, displayAsynchronously))
                 }
                 
-                return (CGSize(width: maxWidth, height: max(0, originY - verticalButtonSpacing)), {
+                return (CGSize(width: maxWidth, height: max(0, originY - verticalButtonSpacing)), { [targetNode] in
                     targetNode.buttonNodes = buttonNodes
                     
                     for i in 0 ..< buttonNodes.count {

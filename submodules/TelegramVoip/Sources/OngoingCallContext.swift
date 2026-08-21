@@ -935,7 +935,7 @@ public final class OngoingCallContext {
         self.audioSessionDisposable.set((audioSessionActive
         |> filter { $0 }
         |> take(1)
-        |> deliverOn(queue)).start(next: { [weak self] _ in
+        |> deliverOn(queue)).start(next: { [weak self, callSessionManager] _ in
             if let strongSelf = self {
                 var allowP2P = allowP2P
                 

@@ -1085,7 +1085,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     
     public func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
         let requestService = self.requestService
-        return Signal { subscriber in
+        return Signal { [requestService] subscriber in
             let request = MTRequest()
             
             request.setPayload(data.1.makeData() as Data, metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag), shortMetadata: WrappedRequestShortMetadata(shortMetadata: WrappedShortFunctionDescription(data.0)), responseParser: { response in
@@ -1157,7 +1157,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     
     public func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
         let requestService = self.requestService
-        return Signal { subscriber in
+        return Signal { [requestService] subscriber in
             let request = MTRequest()
             
             request.setPayload(data.1.makeData() as Data, metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag), shortMetadata: WrappedRequestShortMetadata(shortMetadata: WrappedShortFunctionDescription(data.0)), responseParser: { response in

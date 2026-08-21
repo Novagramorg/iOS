@@ -524,7 +524,7 @@ public final class GlobalControlPanelsContext {
                     |> distinctUntilChanged(isEqual: { lhs, rhs in
                         return lhs.0 == rhs.0
                     })
-                    |> mapToSignal { activeCall, peer -> Signal<AccountGroupCallContextImpl.GroupCallPanelData?, NoError> in
+                    |> mapToSignal { [context] activeCall, peer -> Signal<AccountGroupCallContextImpl.GroupCallPanelData?, NoError> in
                         guard let activeCall = activeCall else {
                             return .single(nil)
                         }

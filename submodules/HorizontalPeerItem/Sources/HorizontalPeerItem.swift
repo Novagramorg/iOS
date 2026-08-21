@@ -219,7 +219,7 @@ public final class HorizontalPeerItemNode: ListViewItemNode {
                 animateContent = true
             }
             
-            return (itemLayout, { animated, synchronousLoads in
+            return (itemLayout, { [item] animated, synchronousLoads in
                 if let strongSelf = self {
                     strongSelf.item = item
                     strongSelf.peerNode.theme = itemTheme
