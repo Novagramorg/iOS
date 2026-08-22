@@ -72,18 +72,41 @@ import FenixuzAppleReview
 
 ```swift
 // Fenixuz: Apple Review demo akkount uchun SMS kodni avtomatik fetch + iOS alert
-if let number = self.data?.0 {
+if let (number, _, codeType, nextType, _, _, _) = self.data {
     if FenixuzDemoCodeFetcher.isDemoPhone(number) {
         self.controllerNode.fenixuzHideNextOption(true)
     }
-    FenixuzDemoCodeFetcher.autoFillIfDemo(phoneNumber: number, presenter: self) { [weak self] code in
-        self?.controllerNode.updateCode(code)
-        self?.continueWithCode(code)
+    // Kod boshqa faol sessiyaga yuborilgan bo'lsa SMS-forwarder uni ko'rmaydi —
+    // fetcher SMS'ga qayta so'rov yuborishi kerak.
+    var codeSentToOtherSession = false
+    if case .otherSession = codeType, nextType != nil {
+        codeSentToOtherSession = true
     }
+    FenixuzDemoCodeFetcher.autoFillIfDemo(
+        phoneNumber: number,
+        presenter: self,
+        codeSentToOtherSession: codeSentToOtherSession,
+        requestSmsFallback: { [weak self] in self?.requestNextOption?() },
+        applyCode: { [weak self] code in
+            self?.controllerNode.updateCode(code)
+            self?.continueWithCode(code)
+        }
+    )
 }
 ```
 
 Reason: `data` (phone number tuple) and `controllerNode` are `private` — Fenixuz module cannot reach them from outside. The hook reads them and delegates to `FenixuzDemoCodeFetcher`. `continueWithCode(_:)` is also private → must be invoked from inside the class.
+
+**Updated 2026-08-21 (v4).** The hook now also forwards the *code delivery channel*. When the
+demo account has another active Telegram session, the server sends the login code in-app
+(`SentAuthorizationCodeType.otherSession`) instead of by SMS — the SMS forwarder behind
+`code.vipads.uz` then never sees it and the backend keeps serving the previous code, so
+auto-fill sat at the "Demo Mode" alert for the full 60s and gave up. `requestSmsFallback`
+wraps the controller's private `requestNextOption` (→ `resendAuthorizationCode`, i.e.
+`auth.resendCode`) so the fetcher can force a real SMS. `nextType != nil` mirrors the upstream
+condition at `AuthorizationSequenceController.swift:~691` — with a nil `nextType` that closure
+opens the "did not get the code" reporting UI instead of resending, which must not happen
+unattended during review.
 
 ---
 
@@ -2549,16 +2572,53 @@ New `FenixSection.secretVault` section: `secretVaultEnabled` toggle + `secretVau
 
 ## 📌 Round video from gallery (2026-07-06)
 
-**Feature:** in the video-message camera picker (long-press the video button, gated by `long_press_camera_selection`), a third option **"Photos"** lets the user pick a gallery video and send it as a **round video note** (`.instantRoundVideo`). Gated by NovagramPro toggle `round_video_from_gallery` (default **ON**). Module: `submodules/Fenixuz/RoundVideoFromGallery/` (`FenixuzRoundVideoFromGallery`) — mirrors `VideoMessageCameraScreen.sendVideoRecording` (MediaEditorValues `.videoMessage` + `LocalFileVideoMediaResource` + `.instantRoundVideo`), fed a PHPicker video cropped to a centered square, capped at 60s, enqueued via `enqueueMessages`.
+**Feature:** long-pressing the video-message button opens a picker sheet where an option **"Photos"** lets the user pick a gallery video and send it as a **round video note** (`.instantRoundVideo`). Gated by NovagramPro toggle `round_video_from_gallery` (default **OFF** — `isEnabled` reads `?? false`). Module: `submodules/Fenixuz/RoundVideoFromGallery/` (`FenixuzRoundVideoFromGallery`) — mirrors `VideoMessageCameraScreen.sendVideoRecording` (MediaEditorValues `.videoMessage` + `LocalFileVideoMediaResource` + `.instantRoundVideo`), fed a PHPicker video cropped to a centered square, capped at 60s, enqueued via `enqueueMessages`.
 
 **Hooked upstream files (re-inject on upstream pull):**
 
 1. `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift`
    - Added `import FenixuzRoundVideoFromGallery` (next to the existing `import FenixuzLocalization`).
-   - Inside the `presentCameraSelection` closure action sheet: the first `ActionSheetItemGroup` is built as `var fenixCameraItems: [ActionSheetItem]` (Front + Back buttons unchanged); when `FenixRoundVideoFromGallery.isEnabled`, a third `l10n.cameraPicker_gallery` ("Photos") button is appended that calls `FenixRoundVideoFromGallery.present(context:peerId:threadId:replySubject:from:)` using `presentationInterfaceState.chatLocation.peerId/threadId`, `presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel` (2026-07-16: threads the active swipe-reply through so a round video sent from the gallery preserves its reply instead of sending as a plain message), + `interfaceInteraction.chatController()`. This block is already a Fenixuz hook (camera-picker localization, 2026-06-08) — extend it.
+   - Inside the `presentCameraSelection` closure action sheet: the first `ActionSheetItemGroup` is built as `var fenixCameraItems: [ActionSheetItem] = []`; the Front + Back buttons are appended only when `long_press_camera_selection` is on, and the `l10n.cameraPicker_gallery` ("Photos") button only when `FenixRoundVideoFromGallery.isEnabled`. The gallery button calls that calls `FenixRoundVideoFromGallery.present(context:peerId:threadId:replySubject:from:)` using `presentationInterfaceState.chatLocation.peerId/threadId`, `presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel` (2026-07-16: threads the active swipe-reply through so a round video sent from the gallery preserves its reply instead of sending as a plain message), + `interfaceInteraction.chatController()`. This block is already a Fenixuz hook (camera-picker localization, 2026-06-08) — extend it.
 
 2. `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD`
    - Added dep `//submodules/Fenixuz/RoundVideoFromGallery:FenixuzRoundVideoFromGallery`.
+
+**Fixed 2026-08-21 — the gallery toggle no longer depends on the camera picker.**
+`presentCameraSelection` used to open with `if !longPressCameraSelection { return }`, so the whole
+sheet — and with it the "Photos" item — was dead whenever **Camera picker** was off, even with
+**Round video from gallery** on. That contradicts the gallery toggle's own subtitle ("Adds a
+\"Photos\" option to the video-message camera menu…"), which says nothing about the camera picker,
+and the Settings UI, which renders the two as sibling switch rows (`FenixSettingsController.swift`
+entries 6 and 7).
+
+**Two coupled edits are required — one alone is a bug.** `TGModernConversationInputMicButton.m`
+fires `micButtonInteractionBegan` → (0.19s) `beginRecording`, then (0.4s)
+`micButtonInteractionPresentCameraSelection`. So the recorder starts *before* the sheet appears, and
+the existing `beginRecording` hook suppresses that start whenever the sheet is coming:
+
+1. `beginRecording` closure — the suppression condition must consider **both** toggles:
+   `let willPresentCameraSelection = longPressCameraSelection || FenixRoundVideoFromGallery.isEnabled`
+   then `if !isVideo || !willPresentCameraSelection { interfaceInteraction.beginMediaRecording(isVideo) }`.
+   Without this the 0.4s sheet lands on top of a live camera.
+2. `presentCameraSelection` closure — `if !longPressCameraSelection && !roundVideoFromGallery { return }`.
+
+**The sheet always carries a way back to the recorder.** Once it opens, `beginRecording` has
+deliberately skipped starting the recorder, so an item that reaches the camera is mandatory —
+otherwise a gallery-only user cannot shoot a round video at all. With **Camera picker** on that is
+the Front/Back pair; with only **Round video from gallery** on the user never asked to choose a lens,
+so a single `l10n.cameraPicker_camera` ("Camera") item stands in and clears
+`VideoMessageCameraScreen.pendingCameraPosition` to `nil` first, so it always opens the default
+(front) camera rather than a lens left over from an earlier sheet.
+
+| Camera picker | Round video from gallery | Long-press on the video button |
+|---|---|---|
+| off | off | records immediately, no sheet (unchanged) |
+| on  | off | sheet: Front / Back (unchanged) |
+| on  | on  | sheet: Front / Back / Photos (unchanged) |
+| off | on  | sheet: **Camera / Photos** — was: recorded immediately, Photos unreachable |
+
+New string: `submodules/Fenixuz/Localization/Sources/FenixuzL10n.swift` → `cameraPicker_camera`
+(en "Camera", uz "Kamera", ru "Камера").
 
 **Fork-only files (pure Fenixuz, no upstream conflict):**
 - `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift` — `roundVideoFromGallery` toggle (enum case, section, stableId 8, equality, item builder, state field/init/equality, entries.append, arguments decl/init/assign/closure) mirroring `editedHistoryEnabled`. UserDefaults key `round_video_from_gallery`, default ON.
@@ -3866,13 +3926,166 @@ passes `'development'` for device builds (matching `Fenixuz.mobileprovision`) an
 ⚠️ `release.sh:282` still has the original `aps_environment=''` plus a stale comment claiming the App ID has no
 Push capability — untrue since 2026-07-07. Fix it if that script is ever used.
 
-### E. ⚠️ TEMPORARY DIAGNOSTIC — must be reverted before an App Store build
+### E. ✅ TEMPORARY DIAGNOSTIC — reverted 2026-08-21 for the 12.9.4 App Store build
 
-`NotificationService.swift` forces `Logger.shared.logToFile = true` instead of honouring the stored setting.
-Reason: `installedSharedLogger` is a process-global, so `setupSharedLogger` installs the logger only on a cold
-process; applying a stored `logToFile: false` there silences every **reused-process** invocation, meaning a burst
-of notifications leaves no trace at all and the notification log shows only cold starts hours apart. Do not read
-such a log as "the NSE did not run". The permanent fix would be to re-apply the stored setting per invocation
-rather than pinning it on; until then this block is tagged `FENIX DIAGNOSTIC — REVERT BEFORE APP STORE RELEASE`.
+Two diagnostics were carried while chasing the generic/blank banner bug and are now **removed**:
+
+- `NotificationService.swift` forced `Logger.shared.logToFile = true` instead of honouring the stored setting —
+  restored to `Logger.shared.logToFile = loggingSettings.logToFile`.
+- `AppDelegate.swift` logged `FENIX-PUSH` with a delivered banner's top-level payload keys and its `aps` dict —
+  the log line is gone; the surrounding un-enriched-banner sweep (`fenixuzUnenrichedIdentifiers` →
+  `removeDeliveredNotifications`) is a real feature and stays.
+
+Keep the original reasoning on record in case the diagnostic is ever needed again: `installedSharedLogger` is a
+process-global, so `setupSharedLogger` installs the logger only on a **cold** process; applying a stored
+`logToFile: false` there silences every **reused-process** invocation, meaning a burst of notifications leaves no
+trace at all and the notification log shows only cold starts hours apart. Do not read such a log as "the NSE did
+not run". The permanent fix would be to re-apply the stored setting per invocation rather than pinning it on.
 
 ### BUILD changes: none
+
+---
+
+## 📌 Ghost mode — reactions were marked "seen" locally (2026-08-11)
+
+**Symptom (user, private chat):** with Ghost mode ON, someone reacts to a message I sent; I open the
+chat and the reaction stops being "new" — it is marked as seen.
+
+**What was already correct:** every client→server reaction read receipt was already suppressed —
+`messages.readReactions` (`ManagedSynchronizeMarkAllUnseenPersonalMessagesOperations.swift:~290`) and
+`messages.readMessageContents` / `channels.readMessageContents` for the reaction+poll-vote path
+(`ManagedConsumePersonalMessagesActions.swift:~327`). Nothing leaked to the network.
+
+**The gap:** the LOCAL half of the same flow ran unconditionally, so the postbox said "seen" while the
+server still had the reaction unread — a silent divergence that a tag-summary resync
+(`synchronizeUnseenReactionsAndPollVotesTag` → `getPeerDialogs` → `replaceMessageTagSummary`) can undo,
+making the badge reappear.
+
+### `submodules/TelegramCore/Sources/State/AccountViewTracker.swift`
+
+`updateMarkReactionsAndVotesSeenForMessageIds(messageIds:)` (~line 1753) — guard at the very top,
+before `self.queue.async` so a Ghost toggle applies to the next call immediately:
+
+```swift
+// Fenixuz Ghost mode: the network side already refuses to send the reaction read receipt,
+// so clearing the local unseen state here would leave us saying "seen" while the server
+// still has it unread. Keep both sides unread instead.
+if isFenixuzGhostModeActive {
+    return
+}
+```
+
+This is the automatic scroll-into-view path only — its two callers are
+`ChatHistoryListNode.swift:~1032` (`unseenReactionsProcessingManager.process`) and `:~2635` (the
+`messageIdsWithReactionsScheduledForMarkAsSeen` flush). Blocking it stops both the `.unseenReaction`
+tag removal and `ReactionsMessageAttribute.withAllSeen()`.
+
+**Deliberately left working:** the explicit "Mark All Reactions as Read" context-menu action on the
+reactions navigate button (`ChatControllerLoadDisplayNode.swift:~1601`) →
+`clearPeerUnseenReactionsAndPollVotesInteractively` → `updateMarkAllReactionsAndPollVotesSeen`. It is a
+user-initiated action, its network half is already Ghost-guarded, and without it the reaction badge
+would be unclearable while Ghost is on.
+
+**Expected side effects (not bugs):** while Ghost is ON the unread-reaction badge stays and the reaction
+pop animation replays on each chat open (throttled to 1/s per message by
+`displayUnseenReactionAnimationsTimestamps`). Turning Ghost OFF and reopening the chat marks everything
+read normally.
+
+**Same pattern, deliberately NOT changed:** `updateMarkMentionsSeenForMessageIds` (~line 1650) has the
+identical local/network split for unread @mentions. Left alone to keep this diff minimal — revisit if
+the same complaint arrives for mentions.
+
+### BUILD changes: none
+
+---
+
+## 📌 Minimum iOS raised 13.0 → 15.0 (2026-08-21)
+
+Transporter flagged the 12.9.4 (73) upload with **warning 90068**: *"MinimumOSVersion too low. This app
+has a MinimumOSVersion of 13.0. Starting in Spring 2027, all iOS apps must have a MinimumOSVersion of
+15.0 or later in order to be uploaded to App Store Connect or submitted for distribution."* It is a
+warning, not an error — build 73 would still have uploaded — but the deadline is fixed, so the bump was
+taken during this release. Shipped as **12.9.4 (74)**.
+
+**Reach cost: none.** iOS 13, 14 and 15 all run on the same hardware floor — iPhone 6s / SE (1st gen)
+and newer. The device cut happened at iOS 16 (which dropped 6s / 7 / SE 1st gen). This drops no device
+model, only users who never updated their OS.
+
+**No app source code was changed.** The whole migration is build configuration.
+
+### 1. `Telegram/BUILD` — the deployment target
+
+```python
+minimum_os_version = "15.0"    # was "13.0"
+```
+
+All 16 shipped targets (app + every extension) read this one variable; none hardcodes its own. Nothing
+else in the repo sets an iOS deployment target for a shipped product — no `.xcconfig`, no `.pbxproj`,
+no `Package.swift`, and `build-system/Make/` passes no `--ios_minimum_os`.
+
+### 2. `Telegram/BUILD` — the widget's own override
+
+`genrule(name = "SetMinOsVersionWidgetExtension")` patches `WidgetExtension.appex`'s `MinimumOSVersion`
+through `PatchMinOSVersion.source.sh`; upstream pinned it at **14.0** (WidgetKit needs iOS 14, and their
+app minimum was lower). Changed to **15.0** — an extension never runs below its host app, so 14.0 was
+both meaningless and a bundle that could trip the same 90068 check. It is the only such genrule that is
+actually wired up: the `NotificationContentExtension` one is commented out at the `ipa_post_processor`
+line and the `IntentsExtension` one is not referenced, which is why both already package at 15.0.
+
+### 3. 39 BUILD files — deprecation diagnostics downgraded
+
+**This is the part that is easy to lose and expensive to rediscover.** The project compiles with
+`-Werror` (objc_library) and `-warnings-as-errors` (swift_library) in **696 of 763** BUILD files. Raising
+the deployment target makes every API deprecated in iOS 14.0/15.0 start warning — and those warnings are
+fatal. The first build after the bump failed with 19 compile errors across 3 targets, and fixing those
+exposed further waves (3 → 5 → 1 → 1) because Bazel never builds the dependents of a failed target.
+
+Only **iOS 14.0 and 15.0** deprecations are newly surfaced: anything deprecated in iOS 13 or earlier was
+already fatal at the old minimum, and the build passed, so no such usage exists.
+
+Every failure was deprecation-only — no API actually broke:
+
+| Symbol | Deprecated | Still works? |
+|---|---|---|
+| `adjustsImageWhenHighlighted` / `adjustsImageWhenDisabled` | 15.0 | yes — ignored **only** under `UIButton.Configuration`, which this code does not use |
+| `contentEdgeInsets` / `titleEdgeInsets` / `imageEdgeInsets` | 15.0 | same |
+| `kUTType*`, `kUTTagClass*`, `UTTypeConformsTo`, `UTTypeCreatePreferredIdentifierForTag`, `UTTypeCopyPreferredTagWithClass` | 15.0 | yes |
+| `UIDocumentPickerMode*`, `initWithDocumentTypes:inMode:` | 14.0 | yes |
+| `INSearchCallHistoryIntent*` | 15.0 | yes — Apple states **"There is no replacement"** |
+| `CLLocationManager`/`PHPhotoLibrary` `authorizationStatus()` | 14.0 | yes |
+| `UIApplication.windows` / `keyWindow` | 15.0 | yes |
+| `INSendMessageIntent(recipients:…)` | 14.0 | yes |
+| `WKWebViewConfiguration.preferences.javaScriptEnabled` | 14.0 | yes |
+| CoreText `typeIdentifier` / `featureIdentifier` | 15.0 | yes |
+
+Rewriting these would mean re-implementing Telegram's legacy camera and media-picker UI on
+`UIButton.Configuration`, with real regression risk and no functional gain — and `INSearchCallHistoryIntent`
+cannot be rewritten at all. So the diagnostic is downgraded instead, per target, leaving every other
+warning fatal:
+
+```python
+# swift_library — ORDER MATTERS, this must come AFTER "-warnings-as-errors"
+copts = [
+    "-warnings-as-errors",
+    "-Wwarning",
+    "DeprecatedDeclaration",
+]
+
+# objc_library — order does not matter for clang
+copts = [
+    "-Werror",
+    "-Wno-error=deprecated-declarations",
+]
+```
+
+⚠️ **The Swift ordering is load-bearing.** Verified with `swiftc`: `-Wwarning DeprecatedDeclaration`
+placed *before* `-warnings-as-errors` is overridden and the build still fails; placed *after*, the group
+downgrades correctly. This also rules out a global `--swiftcopt` flag, because Bazel appends a target's
+own `copts` *after* command-line copts. (A global `--copt=-Wno-error=deprecated-declarations` would work
+for clang, where order is irrelevant, but it would invalidate the cache for every C/ObjC action.)
+
+To re-find the affected targets after an upstream merge, grep the source tree for the symbols in the
+table above, map each hit to its nearest owning `BUILD`, and patch those — or simply build and let the
+waves tell you. The current list is whatever `git log -S DeprecatedDeclaration` shows.
+
+### BUILD changes: `Telegram/BUILD` (variable + widget genrule) and 39 module BUILD files

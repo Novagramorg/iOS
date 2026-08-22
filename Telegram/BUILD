@@ -160,7 +160,11 @@ genrule(
     ],
 )
 
-minimum_os_version = "13.0"
+# Fenixuz: raised 13.0 -> 15.0 on 2026-08-21. Transporter warns (90068) that from Spring 2027
+# App Store Connect refuses any upload below 15.0. Costs nothing in reach: iOS 13, 14 and 15 all
+# run on iPhone 6s / SE (1st gen) and newer — the device cut happened at iOS 16 — so this drops
+# no device model, only users who never updated their OS.
+minimum_os_version = "15.0"
 
 notificationServiceExtensionVersion = "v1"
 
@@ -1016,6 +1020,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Fenixuz: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/TelegramUI",
@@ -1103,6 +1111,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Fenixuz: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
@@ -1198,6 +1210,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Fenixuz: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     data = [
         ":WidgetAssets",
@@ -1220,7 +1236,10 @@ genrule(
     cmd_bash =
 """
     name=WidgetExtension.appex
-    cat $(location PatchMinOSVersion.source.sh) | sed -e "s/<<<MIN_OS_VERSION>>>/14\\.0/g" | sed -e "s/<<<NAME>>>/$$name/g" > $(location SetMinOsVersionWidgetExtension.sh)
+    # Fenixuz: was 14.0 (upstream pinned it there because WidgetKit needs iOS 14 while their app
+    # minimum was lower). Our app minimum is now 15.0, so a 14.0 widget is both meaningless — an
+    # extension never runs below its host app — and a bundle that could trip Apple's 90068 check.
+    cat $(location PatchMinOSVersion.source.sh) | sed -e "s/<<<MIN_OS_VERSION>>>/15\\.0/g" | sed -e "s/<<<NAME>>>/$$name/g" > $(location SetMinOsVersionWidgetExtension.sh)
 """,
     srcs = [
         "PatchMinOSVersion.source.sh",
@@ -1329,6 +1348,14 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Fenixuz: with minimum_os_version at 15.0 the iOS-15 deprecations in this module become
+        # visible, and -warnings-as-errors turns them into build failures. The APIs still behave
+        # exactly as before (e.g. adjustsImageWhenHighlighted is only ignored when the button uses
+        # UIButton.Configuration, which this code does not), so downgrade just that diagnostic
+        # group back to a warning instead of rewriting working UI code. MUST come after
+        # -warnings-as-errors — Swift applies these in order and the later flag wins.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     data = glob([
         "SiriIntents/*.lproj/Intents.intentdefinition"
@@ -1432,6 +1459,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Fenixuz: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
