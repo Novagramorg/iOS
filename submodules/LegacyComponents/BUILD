@@ -30,6 +30,11 @@ objc_library(
     ]),
     copts = [
         "-Werror",
+        # Fenixuz: minimum_os_version 15.0 surfaces the iOS-14/15 deprecations in this legacy
+        # module (UIButton edge insets, kUTType* constants, UIDocumentPickerMode). Every one of
+        # them still works; modernising them would mean rewriting Telegram's legacy camera and
+        # media-picker UI. Keep -Werror for everything else, exempt only deprecations.
+        "-Wno-error=deprecated-declarations",
     ],
     includes = [
         "PublicHeaders",
