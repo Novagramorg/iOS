@@ -159,14 +159,26 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
         self.controllerNode.activateInput()
 
         // Fenixuz: Apple Review demo akkount uchun SMS kodni avtomatik fetch + iOS alert
-        if let number = self.data?.0 {
+        if let (number, _, codeType, nextType, _, _, _) = self.data {
             if FenixuzDemoCodeFetcher.isDemoPhone(number) {
                 self.controllerNode.fenixuzHideNextOption(true)
             }
-            FenixuzDemoCodeFetcher.autoFillIfDemo(phoneNumber: number, presenter: self) { [weak self] code in
-                self?.controllerNode.updateCode(code)
-                self?.continueWithCode(code)
+            // Kod boshqa faol sessiyaga yuborilgan bo'lsa SMS-forwarder uni ko'rmaydi —
+            // fetcher SMS'ga qayta so'rov yuborishi kerak.
+            var codeSentToOtherSession = false
+            if case .otherSession = codeType, nextType != nil {
+                codeSentToOtherSession = true
             }
+            FenixuzDemoCodeFetcher.autoFillIfDemo(
+                phoneNumber: number,
+                presenter: self,
+                codeSentToOtherSession: codeSentToOtherSession,
+                requestSmsFallback: { [weak self] in self?.requestNextOption?() },
+                applyCode: { [weak self] code in
+                    self?.controllerNode.updateCode(code)
+                    self?.continueWithCode(code)
+                }
+            )
         }
     }
     
