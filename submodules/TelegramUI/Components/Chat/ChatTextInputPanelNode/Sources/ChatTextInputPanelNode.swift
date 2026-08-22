@@ -965,8 +965,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         isVideo = true
                 }
 
+                // Fenixuz: the mic button fires beginRecording at 0.19s and the camera-selection
+                // sheet at 0.4s. Whenever that sheet is going to appear we must NOT start the
+                // recorder here — the sheet itself starts it (Front/Back). This has to consider
+                // BOTH toggles that can open the sheet, otherwise turning "Camera picker" off
+                // while "Round video from gallery" is on would drop the sheet on top of a live
+                // camera.
                 let longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? false
-                if !isVideo || !longPressCameraSelection {
+                let willPresentCameraSelection = longPressCameraSelection || FenixRoundVideoFromGallery.isEnabled
+                if !isVideo || !willPresentCameraSelection {
                     interfaceInteraction.beginMediaRecording(isVideo)
                 }
             }
@@ -1019,8 +1026,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         self.mediaActionButtons.micButton.presentCameraSelection = { [weak self] isVideo in
+            // Fenixuz: two INDEPENDENT NovagramPro toggles feed this sheet — "Camera picker"
+            // (front/back items) and "Round video from gallery" (the "Photos" item). Either one
+            // on its own is enough to open it. Gating the whole sheet on the camera picker made
+            // the gallery toggle dead whenever the camera picker happened to be off.
             let longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? false
-            if !longPressCameraSelection {
+            let roundVideoFromGallery = FenixRoundVideoFromGallery.isEnabled
+            if !longPressCameraSelection && !roundVideoFromGallery {
                 return
             }
             if let strongSelf = self, isVideo, let interfaceInteraction = strongSelf.interfaceInteraction, let presentationInterfaceState = strongSelf.presentationInterfaceState {
@@ -1028,25 +1040,42 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 let l10n = FenixuzL10n(presentationInterfaceState.strings)
                 let actionSheet = ActionSheetController(theme: ActionSheetControllerTheme(presentationTheme: presentationInterfaceState.theme, fontSize: presentationInterfaceState.fontSize))
                 // Fenixuz: Front/Back camera picker + optional "Photos" (gallery video -> round video note).
-                var fenixCameraItems: [ActionSheetItem] = [
-                    ActionSheetButtonItem(title: l10n.cameraPicker_front, color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                // Once this sheet opens, beginRecording above has deliberately skipped starting
+                // the recorder — so the sheet must always carry a way back to it. With "Camera
+                // picker" on that is the Front/Back pair; with only "Round video from gallery"
+                // on the user never asked to choose a lens, so a single "Camera" item stands in
+                // and uses the default (front) camera.
+                var fenixCameraItems: [ActionSheetItem] = []
+                if longPressCameraSelection {
+                    fenixCameraItems.append(ActionSheetButtonItem(title: l10n.cameraPicker_front, color: .accent, action: { [weak actionSheet, weak strongSelf] in
                         actionSheet?.dismissAnimated()
                         if let interfaceInteraction = strongSelf?.interfaceInteraction {
                             VideoMessageCameraScreen.pendingCameraPosition = .front
                             interfaceInteraction.beginMediaRecording(true)
                             interfaceInteraction.lockMediaRecording()
                         }
-                    }),
-                    ActionSheetButtonItem(title: l10n.cameraPicker_back, color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                    }))
+                    fenixCameraItems.append(ActionSheetButtonItem(title: l10n.cameraPicker_back, color: .accent, action: { [weak actionSheet, weak strongSelf] in
                         actionSheet?.dismissAnimated()
                         if let interfaceInteraction = strongSelf?.interfaceInteraction {
                             VideoMessageCameraScreen.pendingCameraPosition = .back
                             interfaceInteraction.beginMediaRecording(true)
                             interfaceInteraction.lockMediaRecording()
                         }
-                    })
-                ]
-                if FenixRoundVideoFromGallery.isEnabled {
+                    }))
+                } else {
+                    fenixCameraItems.append(ActionSheetButtonItem(title: l10n.cameraPicker_camera, color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                        actionSheet?.dismissAnimated()
+                        if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                            // Clear any lens left over from an earlier sheet so this always
+                            // opens the default camera (nil -> front in VideoMessageCameraScreen).
+                            VideoMessageCameraScreen.pendingCameraPosition = nil
+                            interfaceInteraction.beginMediaRecording(true)
+                            interfaceInteraction.lockMediaRecording()
+                        }
+                    }))
+                }
+                if roundVideoFromGallery {
                     fenixCameraItems.append(ActionSheetButtonItem(title: l10n.cameraPicker_gallery, color: .accent, action: { [weak actionSheet, weak strongSelf] in
                         actionSheet?.dismissAnimated()
                         if let strongSelf, let context = strongSelf.context, let presentationInterfaceState = strongSelf.presentationInterfaceState, let peerId = presentationInterfaceState.chatLocation.peerId, let controller = strongSelf.interfaceInteraction?.chatController() {

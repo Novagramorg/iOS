@@ -865,6 +865,13 @@ public struct FenixuzL10n {
         pick(en: "Photos", uz: "Galereyadan", ru: "Из галереи")
     }
 
+    // Shown instead of the Front/Back pair when only "Round video from gallery" is on —
+    // the sheet still needs a way to reach the recorder, but the user did not ask for a
+    // front/back choice.
+    public var cameraPicker_camera: String {
+        pick(en: "Camera", uz: "Kamera", ru: "Камера")
+    }
+
     // MARK: - Update check alert
 
     public var update_title: String {
