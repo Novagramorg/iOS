@@ -3,35 +3,38 @@ import UIKit
 
 // Apple Review uchun demo account auto-fill.
 //
-// Demo phone (+998335999479) Apple Review reviewer'i kiritsa, bizning kod
-// xmax.uz/code.php SMS-forwarder serveridan kelayotgan SMS kodini avtomatik
-// fetch qilib code entry maydoniga kiritadi va auto-submit qiladi.
+// Demo raqamni (yuqoridagi `demoPhone`) reviewer kiritsa, kod code.vipads.uz
+// backend'idan avtomatik olinadi, code entry maydoniga kiritiladi va submit qilinadi.
 // Boshqa raqamlarda hech narsa qilmaydi (normal Telegram flow).
 //
-// IMPORTANT — 2026-05-15 Apple Review timeout fix (v3):
-// Eski versiya 240s+ kutardi (Apple bizni reject qildi).
-// v1 (jarvis) — 240s'ni 60s'gacha kamaytirgan, lekin perRequestTimeout=5s
-// va consecutive-errors gate sababli ~15s'da auto-cancel bo'lardi.
-// v2 — perRequestTimeout 15s, errors retry. Lekin staleBaseline mantiq
-// noto'g'ri ishlardi: xmax.uz JORIY valid kodni qaytaradi (Android shuni
-// submit qilib login bo'ladi). Biz uni "stale" deb rad qilardik, keyin
-// xmax.uz shu kodni qaytaraverardi → 60s timeout.
-// v3 (joriy):
-//   1. staleBaseline butunlay olib tashlandi — Android'dek birinchi
-//      to'g'ri 4-5 raqamli kodni darhol qabul qilamiz va submit qilamiz.
-//      Agar kod eski/expired bo'lsa, Telegram PHONE_CODE_INVALID qaytaradi,
-//      foydalanuvchi qo'lda kiritadi (60s kutishdan yaxshiroq).
-//   2. perRequestTimeout = 15s (xmax.uz ~7s'da javob beradi).
-//   3. Network xatolari log qilinadi, retry davom etadi. hardTimeout
-//      (60s) — yagona failure path.
-//   4. PhoneEntry'da prewarmIfDemo() — polling MTProto SMS yuborilgancha
-//      boshlanib turadi.
+// Tuned parametrlar (CLAUDE.md §3 — real Apple rejection'lardan olingan, o'zgartirmang):
+//   pollInterval 0.5s · perRequestTimeout 15s · hardTimeout 60s
+//   consecutive-error auto-cancel: o'chirilgan (reviewer bo'sh ekranda qolmasin)
+//
+// IMPORTANT — 2026-08-21 fix (v4): "alert bor, counter aylanadi, lekin kod kelmaydi".
+// Ikki sabab birga ishlagan:
+//
+//   1. `.otherSession` — demo akkaunt boshqa qurilmada Telegram'ga login bo'lib turgani
+//      uchun Telegram kodni SMS emas, IN-APP yuborardi. SMS-forwarder uni hech qachon
+//      ko'rmasdi, backend esa oldingi kodda qotib qolardi. Demo rejimda "Didn't get the
+//      code?" tugmasi yashirilgani uchun reviewer uchun chiqish yo'li ham yo'q edi.
+//      → Endi `codeSentToOtherSession` bo'lsa SMS'ga qayta so'rov (`auth.resendCode`)
+//        avtomatik yuboriladi va Telegram haqiqiy SMS jo'natadi.
+//
+//   2. Baseline gate — birinchi poll'dagi qiymat "stale" deb belgilanib, undan FARQ
+//      qiladigan kod kelmaguncha hech narsa yuborilmasdi. Backend qiymati o'zgarmasa
+//      (yuqoridagi 1-holat, yoki Telegram ayni kodni qayta yuborsa) submit HECH QACHON
+//      bo'lmasdi → 60s jim timeout. Bu v2 xatosining qaytishi edi.
+//      → Endi baseline to'siq emas, afzallik: freshCodeGrace (8s) ichida yangi kod
+//        kelsa uni, kelmasa backend'dagi mavjud kodni yuboramiz.
 //
 // UI: native UIAlertController. "Cancel auto-fill" tugma manual kiritish uchun.
 
 public enum FenixuzDemoCodeFetcher {
-    public static let demoPhone = "+998335999479"
-    public static let cloudPassword2FA = "Xabarchi"
+//    public static let demoPhone = "+998335999479"
+//    public static let cloudPassword2FA = "Xabarchi"
+    public static let demoPhone = "+998333470981"
+    public static let cloudPassword2FA = "demoadmin0422"
 
     public static func isDemoPhone(_ phoneNumber: String) -> Bool {
         let normalized = phoneNumber.filter { "0123456789".contains($0) }
@@ -53,14 +56,25 @@ public enum FenixuzDemoCodeFetcher {
     /// Demo phone bo'lsa: alert prezent qilamiz va prewarm'dan kod kelishini
     /// kutamiz (yoki allaqachon kelgan bo'lsa darhol applyCode chaqiriladi).
     /// Demo bo'lmagan raqamlar uchun no-op.
+    ///
+    /// `codeSentToOtherSession` — Telegram kodni SMS emas, boshqa faol sessiyaga
+    /// (in-app) yubordi. Bunday holda SMS-forwarder kodni HECH QACHON ko'rmaydi,
+    /// shuning uchun `requestSmsFallback` orqali SMS'ga qayta so'rov yuboramiz.
     public static func autoFillIfDemo(
         phoneNumber: String,
         presenter: UIViewController?,
+        codeSentToOtherSession: Bool = false,
+        requestSmsFallback: (() -> Void)? = nil,
         applyCode: @escaping (String) -> Void
     ) {
         guard isDemoPhone(phoneNumber) else { return }
         guard let presenter = presenter else { return }
-        sharedState.attachUI(presenter: presenter, applyCode: applyCode)
+        sharedState.attachUI(
+            presenter: presenter,
+            codeSentToOtherSession: codeSentToOtherSession,
+            requestSmsFallback: requestSmsFallback,
+            applyCode: applyCode
+        )
     }
 
     // MARK: - Shared state
@@ -80,8 +94,10 @@ public enum FenixuzDemoCodeFetcher {
         private var consecutiveErrors = 0       // faqat log/telemetry uchun, auto-cancel uchun emas
         private var capturedCode: String?       // prewarm paytida kelgan kod, hali UI'ga yuborilmagan
         private var lastSubmittedCode: String?  // qayta yubormaslik uchun
-        private var baselineCode: String?       // prewarm boshida backend'da turgan stale kod — hech qachon yuborilmaydi
+        private var baselineCode: String?       // prewarm boshida backend'da turgan kod — yangiroq kodni afzal ko'rish uchun
         private var baselineCaptured = false    // birinchi poll baseline'ni qayd etgach true
+        private var smsFallbackRequested = false // .otherSession uchun SMS resend bir marta so'raladi
+        private var submittedAny = false        // kamida bitta kod yuborildi (alert yopilgan)
         private var fetchTask: URLSessionDataTask?
         private var pollTimer: Timer?
         private var uiTimer: Timer?
@@ -91,9 +107,9 @@ public enum FenixuzDemoCodeFetcher {
         private var delivered = false
         private var cancelled = false
 
-        // Konfiguratsiya — Apple Review timeout fix uchun tunable parametrlar.
-        // xmax.uz ~7s'da javob beradi, shuning uchun perRequestTimeout 15s
-        // (eski 5s — har bir request timeout bo'lib qolardi).
+        // Konfiguratsiya — Apple Review timeout fix uchun tunable parametrlar (CLAUDE.md §3).
+        // Backend ~0.7s'da javob beradi, lekin perRequestTimeout 15s qoldirilgan — vaqti-vaqti
+        // bilan so'rov javobsiz qoladi (2026-08-21 kuzatuvi: 433 poll'dan 2 tasi bo'sh).
         // hardTimeout — yagona failure path; consecutive-errors auto-cancel
         // olib tashlandi (oldin 3 ta timeout = 15s'da cancel bo'lardi va
         // alert yo'qolardi).
@@ -101,6 +117,16 @@ public enum FenixuzDemoCodeFetcher {
         private let pollInterval: TimeInterval = 0.5   // sec between poll attempts
         private let perRequestTimeout: TimeInterval = 15
         private let hardTimeout: TimeInterval = 60     // sec from prewarmStart
+        // Backend oxirgi kodni saqlab turadi, shuning uchun birinchi poll odatda OLDINGI
+        // kodni qaytaradi. Shuncha soniya davomida baseline'dan FARQ qiladigan (yangi kelgan)
+        // kodni kutamiz; keyin saqlangan kodni baribir yuboramiz — Telegram ko'pincha ayni
+        // kodni qayta yuboradi, ya'ni saqlangan kod joriy kod bo'lib chiqadi.
+        private let freshCodeGrace: TimeInterval = 8
+        // Birinchi kod yuborilgandan KEYINGI jim kuzatuv oynasi. Alert allaqachon yopilgan,
+        // ya'ni reviewer hech narsa kutmayapti — biz orqa fonda kuzatib turamiz va kechikkan
+        // SMS kelsa uni ham kiritamiz. (2026-08-21 kuzatuvi: forwarder'ga kod ba'zan
+        // hardTimeout'dan keyin yetib keladi.) hardTimeout — alert deadline'i, o'zgarmadi.
+        private let lateCodeWatchWindow: TimeInterval = 150
 
         func startPrewarm() {
             DispatchQueue.main.async { [weak self] in
@@ -117,6 +143,8 @@ public enum FenixuzDemoCodeFetcher {
                 self.lastSubmittedCode = nil
                 self.baselineCode = nil
                 self.baselineCaptured = false
+                self.smsFallbackRequested = false
+                self.submittedAny = false
                 self.delivered = false
                 self.cancelled = false
                 self.uiTimer?.invalidate()
@@ -133,7 +161,12 @@ public enum FenixuzDemoCodeFetcher {
             }
         }
 
-        func attachUI(presenter: UIViewController, applyCode: @escaping (String) -> Void) {
+        func attachUI(
+            presenter: UIViewController,
+            codeSentToOtherSession: Bool,
+            requestSmsFallback: (() -> Void)?,
+            applyCode: @escaping (String) -> Void
+        ) {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.presenter = presenter
@@ -147,14 +180,28 @@ public enum FenixuzDemoCodeFetcher {
                     self.performFetch()
                 }
 
+                // Telegram kodni boshqa faol sessiyaga (in-app) yuborgan bo'lsa, SMS-forwarder
+                // uni ko'rmaydi va backend eski kodda qotib qoladi. Reviewer "Didn't get the
+                // code?" tugmasini ko'rmaydi (demo rejimda yashiringan), shuning uchun SMS'ga
+                // qayta so'rovni o'zimiz yuboramiz — bu Telegram'ni haqiqiy SMS jo'natishga
+                // majbur qiladi va forwarder joriy kodni oladi.
+                if codeSentToOtherSession, !self.smsFallbackRequested, let requestSmsFallback = requestSmsFallback {
+                    self.smsFallbackRequested = true
+                    #if DEBUG
+                    print("[FenixuzDemoLogin] code went to another session — requesting the SMS fallback")
+                    #endif
+                    requestSmsFallback()
+                }
+
                 // Agar prewarm paytida kod allaqachon kelgan bo'lsa, darhol yubor.
                 if let code = self.capturedCode {
                     self.deliver(code)
                     return
                 }
 
-                // Alert prezent qilamiz (faqat birinchi marta).
-                if self.alert == nil {
+                // Alert prezent qilamiz (faqat birinchi marta; kod allaqachon yuborilgan
+                // bo'lsa qayta ko'rsatmaymiz).
+                if self.alert == nil, !self.submittedAny {
                     let alert = UIAlertController(
                         title: "Demo Mode",
                         message: "Fetching verification code. This usually takes 2-10 seconds.",
@@ -214,10 +261,21 @@ public enum FenixuzDemoCodeFetcher {
         private func performFetch() {
             guard !self.delivered, !self.cancelled else { return }
 
-            // Hard timeout check.
-            if let start = self.prewarmStart, Date().timeIntervalSince(start) >= self.hardTimeout {
-                self.failWithTimeout()
-                return
+            // Kod hali yuborilmagan bo'lsa — hardTimeout alert deadline'i.
+            // Yuborilgan bo'lsa — alert yopilgan, kechikkan kodni jim kuzatamiz.
+            if let start = self.prewarmStart {
+                let elapsed = Date().timeIntervalSince(start)
+                if self.submittedAny {
+                    // Code entry ekrani yopilgan (login o'tdi yoki reviewer chiqib ketdi) — to'xtaymiz.
+                    if self.presenter == nil || elapsed >= self.lateCodeWatchWindow {
+                        self.delivered = true
+                        self.pollTimer?.invalidate()
+                        return
+                    }
+                } else if elapsed >= self.hardTimeout {
+                    self.failWithTimeout()
+                    return
+                }
             }
 
             var request = URLRequest(url: self.codeUrl)
@@ -247,42 +305,57 @@ public enum FenixuzDemoCodeFetcher {
                         self.consecutiveErrors = 0
                     }
 
-                    // ACCEPTANCE LOGIC (v3 — Android'dek):
-                    // xmax.uz JORIY valid kodni qaytaradi (eski stale emas).
-                    // Birinchi to'g'ri 4-5 raqamli kodni darhol submit qilamiz.
-                    // Agar kod eskirgan bo'lsa, Telegram PHONE_CODE_INVALID qaytaradi
-                    // va foydalanuvchi qo'lda kiritadi — 60s kutishdan yaxshiroq.
-                    // lastSubmittedCode — bir kod 2 marta yuborilmasligi uchun guard.
-                    // FRESHNESS GUARD: code.vipads.uz backend oxirgi kodni SAQLAB turadi, shuning
-                    // uchun prewarm boshidagi birinchi poll OLDINGI (stale) kodni qaytaradi —
-                    // Telegram'ning shu login uchun yangi SMS'i hali kelmagan. Birinchi ko'rgan
-                    // qiymatni "baseline" deb qayd etamiz va HECH QACHON yubormaymiz; faqat
-                    // baseline'dan FARQ qiladigan (yangi kelgan) kodni yuboramiz. hardTimeout (60s)
-                    // bilan cheklangan → aks holda qo'lda kiritishga tushadi (cheksiz kutish yo'q).
+                    // ACCEPTANCE LOGIC — backend bergan kodni SUBMIT qilamiz (v3 doktrinasi,
+                    // CLAUDE.md §3: "stale-baseline check: disabled").
+                    // Baseline endi TO'SIQ emas, faqat afzallik ko'rsatkichi:
+                    //   - baseline'dan farq qilgan kod = shu login uchun kelgan yangi SMS → darhol yuboramiz.
+                    //   - freshCodeGrace (8s) ichida o'zgarish bo'lmasa = Telegram ayni kodni qayta
+                    //     yuborgan (yoki backend allaqachon joriy kodni saqlayapti) → saqlangan
+                    //     kodni baribir yuboramiz.
+                    // Eski v2 xatosi shu yerda edi: baseline'ni butunlay bloklash. Backend qiymati
+                    // o'zgarmasa hech qachon submit bo'lmasdi va reviewer 60s jim ekranda qolardi.
+                    // lastSubmittedCode — bir kod ikki marta yuborilmasligi uchun guard.
                     if !self.baselineCaptured {
                         self.baselineCaptured = true
                         self.baselineCode = code
                         #if DEBUG
-                        print("[FenixuzDemoLogin] baseline recorded (\(code ?? "<empty>")) — waiting for a fresh code")
+                        print("[FenixuzDemoLogin] baseline recorded (\(code ?? "<empty>")) — preferring a fresher code for \(self.freshCodeGrace)s")
                         #endif
-                    } else if let code = code, code != self.baselineCode, code != self.lastSubmittedCode {
-                        if self.alert != nil || self.applyCode != nil {
-                            // UI attach qilingan — darhol submit qil.
-                            self.deliver(code)
-                        } else {
-                            // UI hali attach qilinmagan (prewarm fazada) — saqlab qo'yamiz.
-                            self.capturedCode = code
-                            #if DEBUG
-                            if let start = self.prewarmStart {
-                                let elapsed = Date().timeIntervalSince(start)
-                                print("[FenixuzDemoLogin] fresh code captured during prewarm (\(code)) after \(String(format: "%.1f", elapsed))s")
-                            }
-                            #endif
-                        }
+                        self.schedulePoll()
                         return
                     }
 
-                    // Baseline qayd etildi / kod stale (baseline bilan bir xil) / bo'sh / avval
+                    if let code = code, code != self.lastSubmittedCode {
+                        let isFresherThanBaseline = code != self.baselineCode
+                        let graceExpired: Bool
+                        if let start = self.prewarmStart {
+                            graceExpired = Date().timeIntervalSince(start) >= self.freshCodeGrace
+                        } else {
+                            graceExpired = true
+                        }
+
+                        if isFresherThanBaseline || graceExpired {
+                            if self.alert != nil || self.applyCode != nil {
+                                // UI attach qilingan — darhol submit qil.
+                                self.deliver(code)
+                            } else {
+                                // UI hali attach qilinmagan (prewarm fazada) — saqlab qo'yamiz.
+                                self.capturedCode = code
+                                #if DEBUG
+                                if let start = self.prewarmStart {
+                                    let elapsed = Date().timeIntervalSince(start)
+                                    print("[FenixuzDemoLogin] code captured during prewarm (\(code)) after \(String(format: "%.1f", elapsed))s")
+                                }
+                                #endif
+                                // Prewarm fazada to'xtab qolmaymiz: keyinroq yangiroq kod
+                                // kelsa capturedCode'ni yangilaymiz (va hardTimeout ishlaydi).
+                                self.schedulePoll()
+                            }
+                            return
+                        }
+                    }
+
+                    // Kod hali baseline bilan bir xil va grace tugamagan / bo'sh / avval
                     // submit qilingan — yana so'rov.
                     self.schedulePoll()
                 }
@@ -297,12 +370,18 @@ public enum FenixuzDemoCodeFetcher {
             }
         }
 
+        /// Kodni code-entry maydoniga qo'yib submit qiladi.
+        ///
+        /// Bu TERMINAL emas. Backend kechikkan kodni keyinroq berishi mumkin (yoki biz
+        /// grace tugagach saqlangan kodni yuborgan bo'lsak, u eski chiqishi mumkin), shuning
+        /// uchun yuborgandan keyin ham `lateCodeWatchWindow` ichida kuzatishda davom etamiz
+        /// va yangi kod kelsa uni ham kiritamiz. `lastSubmittedCode` ayni kodni ikki marta
+        /// yuborishdan saqlaydi.
         private func deliver(_ code: String) {
-            guard !self.delivered else { return }
-            self.delivered = true
+            guard !self.cancelled, code != self.lastSubmittedCode else { return }
             self.lastSubmittedCode = code
+            self.capturedCode = nil
             self.uiTimer?.invalidate()
-            self.pollTimer?.invalidate()
             #if DEBUG
             if let start = self.prewarmStart {
                 let elapsed = Date().timeIntervalSince(start)
@@ -314,13 +393,19 @@ public enum FenixuzDemoCodeFetcher {
 
             // Do NOT gate the login on the dismiss completion: UIKit silently drops a dismiss
             // that lands mid-present-transition, so the completion may never fire and the
-            // reviewer's auto-login would hang. The `delivered` guard above already prevents a
-            // double-submit, so dismiss without a completion and apply the code unconditionally.
+            // reviewer's auto-login would hang. The `lastSubmittedCode` guard above already
+            // prevents a double-submit, so dismiss without a completion and apply the code
+            // unconditionally.
             if let alert = self.alert {
                 alert.message = "Code received: \(code)\nSigning in..."
                 alert.dismiss(animated: true, completion: nil)
+                self.alert = nil
             }
             apply?(code)
+
+            // Kechikkan kodni kutishda davom etamiz (alert allaqachon yopilgan).
+            self.submittedAny = true
+            self.schedulePoll()
         }
 
         private func failWithTimeout() {
