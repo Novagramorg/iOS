@@ -836,13 +836,7 @@ private final class NotificationServiceHandler {
         
         Logger.shared.log("NotificationService \(episode)", "Logging settings: (logToFile: \(loggingSettings.logToFile))")
         
-        // FENIX DIAGNOSTIC — REVERT BEFORE APP STORE RELEASE.
-        // iOS reuses one NSE process for a burst of notifications, and setupSharedLogger only
-        // installs the logger on a cold process. Setting logToFile from the stored setting here
-        // silences every reused-process invocation, so a burst leaves no trace at all in
-        // notification-logs and the only visible episodes are cold starts hours apart.
-        // Keep file logging on unconditionally while we chase the generic-banner bug.
-        Logger.shared.logToFile = true
+        Logger.shared.logToFile = loggingSettings.logToFile
         Logger.shared.logToConsole = loggingSettings.logToConsole
         Logger.shared.redactSensitiveData = loggingSettings.redactSensitiveData
 

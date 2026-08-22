@@ -473,14 +473,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                 // key only survives on notifications the NSE did NOT rewrite — an
                                 // enriched one carries the NSE's own userInfo instead — so this cannot
                                 // touch a real message banner, a call banner, or the local reminder.
-                                // FENIX DIAGNOSTIC — REVERT BEFORE APP STORE RELEASE.
-                                // This is the only place we can ever see the payload of a push that
-                                // never reached the notification extension: the extension logs nothing
-                                // because it was never launched, so the raw userInfo survives only on
-                                // the delivered banner. Log the top-level keys and the aps dict (not the
-                                // encrypted blob) to find out whether these pushes are missing
-                                // mutable-content, or whether ios simply declined to run the extension.
-                                Logger.shared.log("FENIX-PUSH", "un-enriched banner id=\(notification.request.identifier) keys=\(Array(payload.keys).map { "\($0)" }.sorted()) aps=\(String(describing: payload["aps"]))")
                                 fenixuzUnenrichedIdentifiers.append(notification.request.identifier)
                             }
                         }
