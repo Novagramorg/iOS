@@ -3,6 +3,14 @@ import Security
 import TONCrypto
 
 extension WalletContext {
+    struct PendingKeyRotation: Codable, Equatable {
+        let words: [String]
+        let publicKey: String
+        let boc: String
+        let normalizedHash: String
+        let validUntil: Int32
+    }
+
     struct SecretRecord: Codable {
         let schemaVersion: Int
         let words: [String]
@@ -12,6 +20,32 @@ extension WalletContext {
         let workchain: Int?
         let address: String
         let publicKey: String
+        let originalPublicKey: String?
+        let pendingKeyRotation: PendingKeyRotation?
+
+        init(
+            schemaVersion: Int,
+            words: [String],
+            walletVersion: WalletVersion,
+            network: String,
+            walletId: Int?,
+            workchain: Int?,
+            address: String,
+            publicKey: String,
+            originalPublicKey: String? = nil,
+            pendingKeyRotation: PendingKeyRotation? = nil
+        ) {
+            self.schemaVersion = schemaVersion
+            self.words = words
+            self.walletVersion = walletVersion
+            self.network = network
+            self.walletId = walletId
+            self.workchain = workchain
+            self.address = address
+            self.publicKey = publicKey
+            self.originalPublicKey = originalPublicKey
+            self.pendingKeyRotation = pendingKeyRotation
+        }
     }
 
     struct MetadataRecord: Codable, Equatable {
@@ -213,7 +247,10 @@ func walletInfo(secret: WalletContext.SecretRecord) -> WalletContext.WalletInfo 
     return WalletContext.WalletInfo(
         address: secret.address,
         publicKey: secret.publicKey,
-        version: secret.walletVersion
+        version: secret.walletVersion,
+        canDisableBackup: secret.walletVersion == .v5Experimental
+            && secret.originalPublicKey == nil
+            && secret.pendingKeyRotation == nil
     )
 }
 

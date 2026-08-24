@@ -29,6 +29,7 @@ func openWebAppImpl(
     skipTermsOfService: Bool,
     payload: String?,
     verifyAgeCompletion: ((Int) -> Void)?,
+    isOnramp: Bool = false,
     /// When supplied, the caller renders the loading state itself (an InstantPage V2 button pill
     /// shimmers) and the `.requestInProgress` title panel is suppressed — two simultaneous progress
     /// indicators for one tap read as a bug. When nil, the panel behaves exactly as before, which is
@@ -171,7 +172,7 @@ func openWebAppImpl(
                 }
                 
                 var presentImpl: ((ViewController, Any?) -> Void)?
-                let params = WebAppParameters(source: .menu, peerId: chatPeer?.id ?? botPeer.id, botId: botPeer.id, botName: botName, botVerified: botVerified, botAddress: botPeer.addressName ?? "", appName: hasWebApp ? "" : nil, url: url, queryId: nil, payload: nil, buttonText: buttonText, keepAliveSignal: nil, forceHasSettings: false, fullSize: fullSize, isFullscreen: isFullscreen, appSettings: appSettings)
+                let params = WebAppParameters(source: .menu, peerId: chatPeer?.id ?? botPeer.id, botId: botPeer.id, botName: botName, botVerified: botVerified, botAddress: botPeer.addressName ?? "", appName: hasWebApp ? "" : nil, url: url, queryId: nil, payload: nil, buttonText: buttonText, keepAliveSignal: nil, forceHasSettings: false, fullSize: fullSize, isFullscreen: isFullscreen, appSettings: appSettings, isOnramp: isOnramp)
                 
                 let controller = standaloneWebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, threadId: threadId, openUrl: { [weak parentController] url, concealed, forceUpdate, commit in
                     ChatControllerImpl.botOpenUrl(context: context, peerId: chatPeer?.id ?? botPeer.id, controller: parentController as? ChatControllerImpl, url: url, concealed: concealed, forceUpdate: forceUpdate, present: { c, a in
@@ -276,7 +277,7 @@ func openWebAppImpl(
                     } else {
                         source = url.isEmpty ? .generic : .simple
                     }
-                    let params = WebAppParameters(source: source, peerId: chatPeer?.id ?? botId, botId: botId, botName: botName, botVerified: botVerified, botAddress: botPeer.addressName ?? "", appName: "", url: result.url, queryId: nil, payload: payload, buttonText: buttonText, keepAliveSignal: nil, forceHasSettings: false, fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin), appSettings: appSettings)
+                    let params = WebAppParameters(source: source, peerId: chatPeer?.id ?? botId, botId: botId, botName: botName, botVerified: botVerified, botAddress: botPeer.addressName ?? "", appName: "", url: result.url, queryId: nil, payload: payload, buttonText: buttonText, keepAliveSignal: nil, forceHasSettings: false, fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin), appSettings: appSettings, isOnramp: isOnramp)
                     let controller = standaloneWebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, threadId: threadId, openUrl: { [weak parentController] url, concealed, forceUpdate, commit in
                         ChatControllerImpl.botOpenUrl(context: context, peerId: chatPeer?.id ?? botId, controller: parentController as? ChatControllerImpl, url: url, concealed: concealed, forceUpdate: forceUpdate, present: { c, a in
                             presentImpl?(c, a)
@@ -325,7 +326,7 @@ func openWebAppImpl(
                     }
                     
                     var presentImpl: ((ViewController, Any?) -> Void)?
-                    let params = WebAppParameters(source: .button, peerId: chatPeer?.id ?? botPeer.id, botId: botPeer.id, botName: botName, botVerified: botVerified, botAddress: botPeer.addressName ?? "", appName: hasWebApp ? "" : nil, url: result.url, queryId: result.queryId, payload: nil, buttonText: buttonText, keepAliveSignal: result.keepAliveSignal, forceHasSettings: false, fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin), appSettings: appSettings)
+                    let params = WebAppParameters(source: .button, peerId: chatPeer?.id ?? botPeer.id, botId: botPeer.id, botName: botName, botVerified: botVerified, botAddress: botPeer.addressName ?? "", appName: hasWebApp ? "" : nil, url: result.url, queryId: result.queryId, payload: nil, buttonText: buttonText, keepAliveSignal: result.keepAliveSignal, forceHasSettings: false, fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin), appSettings: appSettings, isOnramp: isOnramp)
                     let controller = standaloneWebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, threadId: threadId, openUrl: { [weak parentController] url, concealed, forceUpdate, commit in
                         ChatControllerImpl.botOpenUrl(context: context, peerId: chatPeer?.id ?? botPeer.id, controller: parentController as? ChatControllerImpl, url: url, concealed: concealed, forceUpdate: forceUpdate, present: { c, a in
                             presentImpl?(c, a)
@@ -709,7 +710,7 @@ public extension ChatControllerImpl {
         ChatControllerImpl.presentBotApp(context: self.context, parentController: self, botApp: botApp, botPeer: botPeer, payload: payload, mode: mode, concealed: concealed, commit: commit)
     }
     
-    fileprivate static func presentBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, concealed: Bool = false, commit: @escaping () -> Void = {}) {
+    internal static func presentBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool = false, concealed: Bool = false, commit: @escaping () -> Void = {}) {
         let chatController = parentController as? ChatControllerImpl
         let peerId: EnginePeer.Id
         let threadId = chatController?.chatLocation.threadId
@@ -786,7 +787,7 @@ public extension ChatControllerImpl {
                     updateProgress()
                 })
                 |> deliverOnMainQueue).startStandalone(next: { [weak parentController, weak chatController] result in
-                    let params = WebAppParameters(source: .generic, peerId: peerId, botId: botPeer.id, botName: botApp.title, botVerified: botPeer.isVerified, botAddress: botPeer.addressName ?? "", appName: botApp.shortName, url: result.url, queryId: 0, payload: payload, buttonText: "", keepAliveSignal: nil, forceHasSettings: botApp.flags.contains(.hasSettings), fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin), appSettings: appSettings)
+                    let params = WebAppParameters(source: .generic, peerId: peerId, botId: botPeer.id, botName: botApp.title, botVerified: botPeer.isVerified, botAddress: botPeer.addressName ?? "", appName: botApp.shortName, url: result.url, queryId: 0, payload: payload, buttonText: "", keepAliveSignal: nil, forceHasSettings: botApp.flags.contains(.hasSettings), fullSize: result.flags.contains(.fullSize), isFullscreen: result.flags.contains(.fullScreen), sameOrigin: result.flags.contains(.sameOrigin), appSettings: appSettings, isOnramp: isOnramp)
                     var presentImpl: ((ViewController, Any?) -> Void)?
                     let controller = standaloneWebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, threadId: threadId, openUrl: { url, concealed, forceUpdate, commit in
                         ChatControllerImpl.botOpenUrl(context: context, peerId: peerId, controller: chatController, url: url, concealed: concealed, forceUpdate: forceUpdate, present: { c, a in
@@ -879,7 +880,7 @@ public extension ChatControllerImpl {
                 }
             })
         } else {
-            context.sharedContext.openWebApp(
+            openWebAppImpl(
                 context: context,
                 parentController: parentController,
                 updatedPresentationData: updatedPresentationData,
@@ -892,7 +893,8 @@ public extension ChatControllerImpl {
                 source: .generic,
                 skipTermsOfService: false,
                 payload: payload,
-                verifyAgeCompletion: nil
+                verifyAgeCompletion: nil,
+                isOnramp: isOnramp
             )
         }
     }

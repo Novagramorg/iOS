@@ -18,8 +18,10 @@ swift_library(
         "//submodules/PresentationDataUtils",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramPresentationData",
+        "//submodules/TelegramStringFormatting",
         "//submodules/TelegramUI/Components/ListActionItemComponent",
         "//submodules/TelegramUI/Components/ListSectionComponent",
+        "//submodules/UndoUI",
         "//submodules/WalletContext",
     ],
     visibility = [

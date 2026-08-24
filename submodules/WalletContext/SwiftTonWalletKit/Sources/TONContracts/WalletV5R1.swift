@@ -158,6 +158,26 @@ public struct WalletV5R1: Sendable {
         validUntil: UInt32,
         auth: AuthKind
     ) throws -> Cell {
+        try Self.unsignedBody(
+            seqno: seqno,
+            walletID: walletID,
+            actions: actions,
+            validUntil: validUntil,
+            auth: auth
+        )
+    }
+
+    /// The body layout, free of any instance state.
+    ///
+    /// Static because `wallet-v5-experimental` produces byte-identical bodies and shares
+    /// this rather than keeping a second copy that could drift.
+    public static func unsignedBody(
+        seqno: UInt32,
+        walletID: UInt32,
+        actions: Cell,
+        validUntil: UInt32,
+        auth: AuthKind
+    ) throws -> Cell {
         let builder = beginCell()
         try builder.storeUInt(auth.opcode, bits: 32)
         try builder.storeUInt(UInt64(walletID), bits: 32)

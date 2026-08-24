@@ -4228,6 +4228,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController {
         return WalletWordsScreen(context: context, words: words, verify: verify, completion: completion)
     }
+
+    public func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletWordsScreen(context: context, words: words, mode: mode, completion: completion)
+    }
     
     public func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
         return WalletInfoScreen(context: context, mode: mode, completion: completion)
@@ -4423,6 +4427,18 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController {
         return incomingMessagePrivacyScreen(context: context, value: value, exceptions: exceptions, update: update)
+    }
+
+    public func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool) {
+        ChatControllerImpl.presentBotApp(
+            context: context,
+            parentController: parentController,
+            botApp: botApp,
+            botPeer: botPeer,
+            payload: payload,
+            mode: mode,
+            isOnramp: isOnramp
+        )
     }
     
     public func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?) {

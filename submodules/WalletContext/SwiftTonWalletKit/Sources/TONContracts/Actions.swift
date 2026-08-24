@@ -14,12 +14,17 @@ public enum WalletV5Action: Sendable {
     case removeExtension(Address)
     /// `action_extended_set_signature_auth_allowed`, tag `0x04`.
     case setSignatureAuthAllowed(Bool)
+    /// `action_extended_change_key`, tag `0x05`.
+    ///
+    /// Only the wallet-v5-experimental contract understands this; V5R1 rejects it with
+    /// exit code 141 (`UnsupportedAction`). See ``KeyRotation``.
+    case changeKey(KeyRotation)
 
     /// Extended actions are collected separately from out-actions during packing.
     public var isExtended: Bool {
         switch self {
         case .sendMessage: return false
-        case .addExtension, .removeExtension, .setSignatureAuthAllowed: return true
+        case .addExtension, .removeExtension, .setSignatureAuthAllowed, .changeKey: return true
         }
     }
 
@@ -27,6 +32,7 @@ public enum WalletV5Action: Sendable {
     static let addExtensionTag: UInt64 = 0x02
     static let removeExtensionTag: UInt64 = 0x03
     static let setSignatureAuthAllowedTag: UInt64 = 0x04
+    static let changeKeyTag: UInt64 = 0x05
 
     /// Serializes this action to its own cell.
     public func serialize() throws -> Cell {
@@ -48,6 +54,10 @@ public enum WalletV5Action: Sendable {
         case .setSignatureAuthAllowed(let allowed):
             try builder.storeUInt(Self.setSignatureAuthAllowedTag, bits: 8)
             try builder.storeUInt(allowed ? 1 : 0, bits: 1)
+        case .changeKey(let rotation):
+            try builder.storeUInt(Self.changeKeyTag, bits: 8)
+            // The rotation travels in a ref, not inline.
+            try builder.storeRef(try rotation.toCell())
         }
         return try builder.endCell()
     }

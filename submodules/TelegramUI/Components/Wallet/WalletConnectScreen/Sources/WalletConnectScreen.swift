@@ -442,8 +442,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                     x: contentCenterX,
                     y: contentHeight + card.size.height / 2.0
                 ))
-                .clipsToBounds(true)
-                //.cornerRadius(24.0)
+                .clipsToBounds(false)
             )
             contentHeight += card.size.height
             contentHeight += 18.0

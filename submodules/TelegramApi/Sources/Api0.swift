@@ -121,8 +121,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1113113093] = { return Api.BotMenuButton.parse_botMenuButtonCommands($0) }
     dict[1966318984] = { return Api.BotMenuButton.parse_botMenuButtonDefault($0) }
     dict[602479523] = { return Api.BotPreviewMedia.parse_botPreviewMedia($0) }
-    dict[-113453988] = { return Api.BotVerification.parse_botVerification($0) }
-    dict[-1328716265] = { return Api.BotVerifierSettings.parse_botVerifierSettings($0) }
+    dict[-147976487] = { return Api.BotVerification.parse_botVerification($0) }
+    dict[-1591021569] = { return Api.BotVerifierSettings.parse_botVerifierSettings($0) }
     dict[-283809188] = { return Api.BusinessAwayMessage.parse_businessAwayMessage($0) }
     dict[-910564679] = { return Api.BusinessAwayMessageSchedule.parse_businessAwayMessageScheduleAlways($0) }
     dict[-867328308] = { return Api.BusinessAwayMessageSchedule.parse_businessAwayMessageScheduleCustom($0) }
@@ -781,6 +781,12 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[577659656] = { return Api.NotifyPeer.parse_notifyForumTopic($0) }
     dict[-1613493288] = { return Api.NotifyPeer.parse_notifyPeer($0) }
     dict[-1261946036] = { return Api.NotifyPeer.parse_notifyUsers($0) }
+    dict[-104314509] = { return Api.OnrampAvailability.parse_onrampAvailability($0) }
+    dict[2078435198] = { return Api.OnrampLimits.parse_onrampLimits($0) }
+    dict[-1631009112] = { return Api.OnrampMethodAvailability.parse_onrampMethodAvailability($0) }
+    dict[230847874] = { return Api.OnrampProviderInfo.parse_onrampProviderInfo($0) }
+    dict[2055213545] = { return Api.OnrampQuote.parse_onrampQuote($0) }
+    dict[-773575132] = { return Api.OnrampSession.parse_onrampSession($0) }
     dict[1001931436] = { return Api.OutboxReadDate.parse_outboxReadDate($0) }
     dict[-1738178803] = { return Api.Page.parse_page($0) }
     dict[1464557951] = { return Api.PageBlock.parse_inputPageBlockMap($0) }
@@ -2235,6 +2241,18 @@ public extension Api {
         case let _1 as Api.NotificationSound:
             _1.serialize(buffer, boxed)
         case let _1 as Api.NotifyPeer:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.OnrampAvailability:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.OnrampLimits:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.OnrampMethodAvailability:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.OnrampProviderInfo:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.OnrampQuote:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.OnrampSession:
             _1.serialize(buffer, boxed)
         case let _1 as Api.OutboxReadDate:
             _1.serialize(buffer, boxed)

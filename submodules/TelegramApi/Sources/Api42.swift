@@ -3276,16 +3276,16 @@ public extension Api.functions.bots {
     }
 }
 public extension Api.functions.bots {
-    static func setCustomVerification(flags: Int32, bot: Api.InputUser?, peer: Api.InputPeer, customDescription: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func setCustomVerification(flags: Int32, bot: Api.InputUser?, peer: Api.InputPeer, customDescription: Api.TextWithEntities?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1953898563)
+        buffer.appendInt32(-191600809)
         serializeInt32(flags, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             bot!.serialize(buffer, true)
         }
         peer.serialize(buffer, true)
         if Int(flags) & Int(1 << 2) != 0 {
-            serializeString(customDescription!, buffer: buffer, boxed: false)
+            customDescription!.serialize(buffer, true)
         }
         return (FunctionDescription(name: "bots.setCustomVerification", parameters: [("flags", ConstructorParameterDescription(flags)), ("bot", ConstructorParameterDescription(bot)), ("peer", ConstructorParameterDescription(peer)), ("customDescription", ConstructorParameterDescription(customDescription))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
             let reader = BufferReader(buffer)
@@ -11163,6 +11163,45 @@ public extension Api.functions.payments {
     }
 }
 public extension Api.functions.payments {
+    static func createOnrampSession(flags: Int32, provider: String, cryptoCurrency: String, address: String, paymentMethod: String?, baseCurrency: String?, baseAmount: String?, memo: String?, theme: String?, successReturnUrl: String?, failReturnUrl: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.OnrampSession>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1638390056)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(provider, buffer: buffer, boxed: false)
+        serializeString(cryptoCurrency, buffer: buffer, boxed: false)
+        serializeString(address, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(paymentMethod!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeString(baseCurrency!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            serializeString(baseAmount!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 3) != 0 {
+            serializeString(memo!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 4) != 0 {
+            serializeString(theme!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 5) != 0 {
+            serializeString(successReturnUrl!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 6) != 0 {
+            serializeString(failReturnUrl!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "payments.createOnrampSession", parameters: [("flags", ConstructorParameterDescription(flags)), ("provider", ConstructorParameterDescription(provider)), ("cryptoCurrency", ConstructorParameterDescription(cryptoCurrency)), ("address", ConstructorParameterDescription(address)), ("paymentMethod", ConstructorParameterDescription(paymentMethod)), ("baseCurrency", ConstructorParameterDescription(baseCurrency)), ("baseAmount", ConstructorParameterDescription(baseAmount)), ("memo", ConstructorParameterDescription(memo)), ("theme", ConstructorParameterDescription(theme)), ("successReturnUrl", ConstructorParameterDescription(successReturnUrl)), ("failReturnUrl", ConstructorParameterDescription(failReturnUrl))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.OnrampSession? in
+            let reader = BufferReader(buffer)
+            var result: Api.OnrampSession?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.OnrampSession
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
     static func createStarGiftCollection(peer: Api.InputPeer, title: String, stargift: [Api.InputSavedStarGift]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.StarGiftCollection>) {
         let buffer = Buffer()
         buffer.appendInt32(524947079)
@@ -11343,6 +11382,108 @@ public extension Api.functions.payments {
             var result: Api.payments.GiveawayInfo?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.payments.GiveawayInfo
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
+    static func getOnrampAvailability(flags: Int32, provider: String, cryptoCurrency: String, baseCurrency: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.OnrampAvailability>) {
+        let buffer = Buffer()
+        buffer.appendInt32(784505169)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(provider, buffer: buffer, boxed: false)
+        serializeString(cryptoCurrency, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(baseCurrency!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "payments.getOnrampAvailability", parameters: [("flags", ConstructorParameterDescription(flags)), ("provider", ConstructorParameterDescription(provider)), ("cryptoCurrency", ConstructorParameterDescription(cryptoCurrency)), ("baseCurrency", ConstructorParameterDescription(baseCurrency))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.OnrampAvailability? in
+            let reader = BufferReader(buffer)
+            var result: Api.OnrampAvailability?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.OnrampAvailability
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
+    static func getOnrampBaseCurrencies(provider: String, cryptoCurrency: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[String]>) {
+        let buffer = Buffer()
+        buffer.appendInt32(478932467)
+        serializeString(provider, buffer: buffer, boxed: false)
+        serializeString(cryptoCurrency, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "payments.getOnrampBaseCurrencies", parameters: [("provider", ConstructorParameterDescription(provider)), ("cryptoCurrency", ConstructorParameterDescription(cryptoCurrency))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [String]? in
+            let reader = BufferReader(buffer)
+            var result: [String]?
+            if let _ = reader.readInt32() {
+                result = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
+    static func getOnrampLimits(flags: Int32, provider: String, cryptoCurrency: String, baseCurrency: String, paymentMethod: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.OnrampLimits>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-2132258307)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(provider, buffer: buffer, boxed: false)
+        serializeString(cryptoCurrency, buffer: buffer, boxed: false)
+        serializeString(baseCurrency, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(paymentMethod!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "payments.getOnrampLimits", parameters: [("flags", ConstructorParameterDescription(flags)), ("provider", ConstructorParameterDescription(provider)), ("cryptoCurrency", ConstructorParameterDescription(cryptoCurrency)), ("baseCurrency", ConstructorParameterDescription(baseCurrency)), ("paymentMethod", ConstructorParameterDescription(paymentMethod))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.OnrampLimits? in
+            let reader = BufferReader(buffer)
+            var result: Api.OnrampLimits?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.OnrampLimits
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
+    static func getOnrampProviders(flags: Int32, cryptoCurrency: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.OnrampProviderInfo]>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1061028060)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(cryptoCurrency!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "payments.getOnrampProviders", parameters: [("flags", ConstructorParameterDescription(flags)), ("cryptoCurrency", ConstructorParameterDescription(cryptoCurrency))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.OnrampProviderInfo]? in
+            let reader = BufferReader(buffer)
+            var result: [Api.OnrampProviderInfo]?
+            if let _ = reader.readInt32() {
+                result = Api.parseVector(reader, elementSignature: 0, elementType: Api.OnrampProviderInfo.self)
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.payments {
+    static func getOnrampQuote(flags: Int32, provider: String, cryptoCurrency: String, baseCurrency: String, baseAmount: String?, cryptoAmount: String?, paymentMethod: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.OnrampQuote>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-530168326)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(provider, buffer: buffer, boxed: false)
+        serializeString(cryptoCurrency, buffer: buffer, boxed: false)
+        serializeString(baseCurrency, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(baseAmount!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeString(cryptoAmount!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            serializeString(paymentMethod!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "payments.getOnrampQuote", parameters: [("flags", ConstructorParameterDescription(flags)), ("provider", ConstructorParameterDescription(provider)), ("cryptoCurrency", ConstructorParameterDescription(cryptoCurrency)), ("baseCurrency", ConstructorParameterDescription(baseCurrency)), ("baseAmount", ConstructorParameterDescription(baseAmount)), ("cryptoAmount", ConstructorParameterDescription(cryptoAmount)), ("paymentMethod", ConstructorParameterDescription(paymentMethod))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.OnrampQuote? in
+            let reader = BufferReader(buffer)
+            var result: Api.OnrampQuote?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.OnrampQuote
             }
             return result
         })

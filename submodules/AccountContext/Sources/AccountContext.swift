@@ -1373,6 +1373,12 @@ public enum WalletImportScreenMode: Equatable {
     case verify(words: [String])
 }
 
+public enum WalletWordsScreenMode: Equatable {
+    case view
+    case verify
+    case replacement
+}
+
 public enum WalletTransactionScreenMode {
     case transaction(WalletContext.Transaction)
     case preview(
@@ -1581,6 +1587,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletImportScreen(context: AccountContext, mode: WalletImportScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletSettingsScreen(context: AccountContext) -> ViewController
     func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController
+    func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
     func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectTransferRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
@@ -1607,6 +1614,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeMiniAppListScreenInitialData(context: AccountContext) -> Signal<MiniAppListScreenInitialData, NoError>
     func makeMiniAppListScreen(context: AccountContext, initialData: MiniAppListScreenInitialData) -> ViewController
     func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController
+    func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool)
     func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?)
     func openJoinChatWebView(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, webView: JoinChatWebView, chatTitle: String)
     func makeAffiliateProgramSetupScreenInitialData(context: AccountContext, peerId: EnginePeer.Id, mode: AffiliateProgramSetupScreenMode) -> Signal<AffiliateProgramSetupScreenInitialData, NoError>

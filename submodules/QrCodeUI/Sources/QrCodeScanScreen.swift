@@ -159,12 +159,6 @@ public final class QrCodeScanScreen: ViewController {
             self.animatedIn = true
             self.controllerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: layout.size.height), to: CGPoint(), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
-
-        #if DEBUG
-        if !self.codeResolved, case .customValidated = self.subject, let value = UIPasteboard.general.string {
-            self.completeWithCode(value)
-        }
-        #endif
     }
     
     private func dismissWithSession(session: RecentAccountSession?) {

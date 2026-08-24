@@ -73,6 +73,10 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/Components/ResizableSheetComponent",
+        "//submodules/Pasteboard",
+        "//submodules/Speak",
+        "//submodules/TextSelectionNode",
+        "//submodules/TranslateUI",
     ],
     visibility = [
         "//visibility:public",

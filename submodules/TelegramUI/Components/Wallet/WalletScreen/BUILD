@@ -16,6 +16,7 @@ swift_library(
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramStringFormatting",
+        "//submodules/TextFormat",
         "//submodules/ComponentFlow",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Components/MultilineTextComponent",

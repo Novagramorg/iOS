@@ -2,6 +2,7 @@ import Foundation
 import SwiftSignalKit
 import TelegramCore
 import TONConnect
+import TONContracts
 import TONCore
 import TONCrypto
 import TONToncenter
@@ -10,6 +11,8 @@ import TONWalletKit
 private let walletApiKey = "84f56a3a13a49c973bba18b3b69e5589c0a87c5227631629941155ef6ab0b555"
 private let walletFiatRatesRefreshInterval: TimeInterval = 15.0 * 60.0
 private let walletMetadataCachedItemLimit = 10
+private let walletPreparedBackupDisableLifetime: TimeInterval = 60.0 * 60.0
+private let walletKeyRotationMessageLifetime: TimeInterval = 5.0 * 60.0
 
 public final class WalletContext {
     public enum FiatCurrency: String, CaseIterable, Codable, Hashable {
@@ -212,17 +215,28 @@ public final class WalletContext {
     public enum WalletVersion: String, Codable, Equatable {
         case v4R2
         case v5R1
+        case v5Experimental
     }
+
+    private static let defaultWalletVersion: WalletVersion = .v5Experimental
+    private static let importVersionPriority: [WalletVersion] = [.v5Experimental, .v5R1, .v4R2]
 
     public struct WalletInfo: Equatable {
         public let address: String
         public let publicKey: String
         public let version: WalletVersion
+        public let canDisableBackup: Bool
 
-        public init(address: String, publicKey: String, version: WalletVersion) {
+        public init(
+            address: String,
+            publicKey: String,
+            version: WalletVersion,
+            canDisableBackup: Bool = false
+        ) {
             self.address = address
             self.publicKey = publicKey
             self.version = version
+            self.canDisableBackup = canDisableBackup
         }
     }
 
@@ -717,10 +731,34 @@ public final class WalletContext {
         }
     }
 
+    public struct PreparedBackupDisable: Equatable {
+        public let id: String
+        public let words: [String]
+        public let fee: Int64
+        public let availableBalance: Int64
+        public let expiresAt: Int32
+
+        public init(
+            id: String,
+            words: [String],
+            fee: Int64,
+            availableBalance: Int64,
+            expiresAt: Int32
+        ) {
+            self.id = id
+            self.words = words
+            self.fee = fee
+            self.availableBalance = availableBalance
+            self.expiresAt = expiresAt
+        }
+    }
+
     public enum ActiveOperation: Equatable {
         case creating
         case inspectingImport
         case importing
+        case preparingBackupDisable
+        case disablingBackup
         case preparingTransfer
         case submittingTransfer
         case loadingMoreTransactions
@@ -771,6 +809,7 @@ public final class WalletContext {
         case unsupportedMnemonicLength
         case invalidAddress
         case invalidAmount
+        case insufficientBalance(required: Int64)
         case operationInProgress
         case previewFailed
         case previewIncomplete
@@ -991,6 +1030,8 @@ public final class WalletContext {
             self.withMainQueue { [weak self] in
                 guard let self,
                       self.canUseNetworkRuntime,
+                      self.currentState.activeOperation != .disablingBackup,
+                      self.secretRecord?.pendingKeyRotation == nil,
                       let pending = self.pendingTonConnectRequests.first,
                       pending.id == id,
                       case let .connection(_, request) = pending,
@@ -1048,6 +1089,8 @@ public final class WalletContext {
             self.withMainQueue { [weak self] in
                 guard let self,
                       self.canUseNetworkRuntime,
+                      self.currentState.activeOperation != .disablingBackup,
+                      self.secretRecord?.pendingKeyRotation == nil,
                       let pending = self.pendingTonConnectRequests.first,
                       pending.id == id,
                       case let .transfer(_, request) = pending,
@@ -1143,6 +1186,21 @@ public final class WalletContext {
         let messages: [TransferMessage]
     }
 
+    private struct PreparedBackupDisableRecord {
+        let walletAddress: String
+        let originalPublicKey: String
+        let preparation: PreparedBackupDisable
+    }
+
+    private struct KeyRotationMessage {
+        let boc: String
+        let normalizedHash: String
+        let newPublicKey: Data
+        let fee: Int64
+        let availableBalance: Int64
+        let validUntil: UInt32
+    }
+
     private enum PendingTonConnectRequest {
         case connection(model: TonConnectRequest, request: ConnectionRequest)
         case transfer(model: TonConnectTransferRequest, request: SendTransactionRequest)
@@ -1201,6 +1259,7 @@ public final class WalletContext {
     private var streamRetryAttempt = 0
     private var balanceLastSuccessfulAt: Int32?
     private var preparedTransfers: [String: PreparedTransferRecord] = [:]
+    private var preparedBackupDisables: [String: PreparedBackupDisableRecord] = [:]
     private var streamTransactionOverlaysByTrace: [String: StreamTransactionOverlay] = [:]
     private var invalidatedStreamTraceHashes = Set<String>()
     private var collectibleMetadataCache: [String: WalletCollectibleMetadata] = [:]
@@ -1418,13 +1477,14 @@ public final class WalletContext {
                 throw WalletError.invalidMnemonic
             }
             let signer = try InMemorySigner(mnemonic: words)
-            let nativeWallet = try Wallet(v5r1: signer, network: .mainnet)
+            let walletVersion = WalletContext.defaultWalletVersion
+            let nativeWallet = try context.makeWallet(version: walletVersion, signer: signer)
             let address = nativeWallet.address.toString(bounceable: false)
             let publicKey = nativeWallet.publicKey.hexString
             let secret = SecretRecord(
                 schemaVersion: 1,
                 words: words,
-                walletVersion: .v5R1,
+                walletVersion: walletVersion,
                 network: Network.mainnet.chainId,
                 walletId: Int(nativeWallet.contractWalletID),
                 workchain: Int(nativeWallet.address.workchain),
@@ -1506,31 +1566,21 @@ public final class WalletContext {
             }
             let kit = try await context.initializedKit()
             let signer = try InMemorySigner(mnemonic: words)
-            let v4Wallet = try Wallet(v4r2: signer, network: .mainnet)
-            let v5Wallet = try Wallet(v5r1: signer, network: .mainnet)
-            let candidates = [
-                try await context.inspectCandidate(version: .v4R2, wallet: v4Wallet, kit: kit),
-                try await context.inspectCandidate(version: .v5R1, wallet: v5Wallet, kit: kit)
-            ]
-
-            let activeCandidates = candidates.filter { $0.isActive == true }
-            let suggestedVersion: WalletVersion?
-            if candidates.allSatisfy({ $0.isActive != nil }) {
-                if activeCandidates.count == 1 {
-                    suggestedVersion = activeCandidates[0].version
-                } else if activeCandidates.isEmpty {
-                    suggestedVersion = .v5R1
-                } else {
-                    suggestedVersion = nil
-                }
-            } else {
-                suggestedVersion = nil
-            }
+            let candidates = try await context.inspectImportCandidates(signer: signer, kit: kit)
+            let suggestedVersion = context.suggestedImportVersion(candidates: candidates)
             return ImportInspection(wordsCount: words.count, candidates: candidates, suggestedVersion: suggestedVersion)
         }
     }
 
+    public func importWallet(words: [String]) -> Signal<WalletInfo, WalletError> {
+        return self.importWallet(words: words, requestedVersion: nil)
+    }
+
     public func importWallet(words: [String], version: WalletVersion) -> Signal<WalletInfo, WalletError> {
+        return self.importWallet(words: words, requestedVersion: version)
+    }
+
+    private func importWallet(words: [String], requestedVersion: WalletVersion?) -> Signal<WalletInfo, WalletError> {
         return self.performOperation(.importing, cancelOnDispose: false) { context in
             guard case .empty = context.currentState.phase, context.secretRecord == nil else {
                 throw WalletError.walletAlreadyExists
@@ -1548,13 +1598,17 @@ public final class WalletContext {
                 throw WalletError.invalidMnemonic
             }
             let signer = try InMemorySigner(mnemonic: words)
-            let nativeWallet: Wallet
-            switch version {
-            case .v4R2:
-                nativeWallet = try Wallet(v4r2: signer, network: .mainnet)
-            case .v5R1:
-                nativeWallet = try Wallet(v5r1: signer, network: .mainnet)
+            let version: WalletVersion
+            if let requestedVersion {
+                version = requestedVersion
+            } else {
+                let candidates = try await context.inspectImportCandidates(signer: signer, kit: kit)
+                guard let suggestedVersion = context.suggestedImportVersion(candidates: candidates) else {
+                    throw WalletError.network
+                }
+                version = suggestedVersion
             }
+            let nativeWallet = try context.makeWallet(version: version, signer: signer)
 
             let address = nativeWallet.address.toString(bounceable: false)
             let publicKey = nativeWallet.publicKey.hexString
@@ -1635,13 +1689,152 @@ public final class WalletContext {
     public func recoveryPhrase() -> Signal<[String], WalletError> {
         return Signal { [weak self] subscriber in
             assert(Queue.mainQueue().isCurrent())
-            guard let self, let secret = self.secretRecord else {
+            guard let self,
+                  let secret = self.secretRecord,
+                  secret.pendingKeyRotation == nil else {
                 subscriber.putError(.noWallet)
                 return EmptyDisposable
             }
             subscriber.putNext(secret.words)
             subscriber.putCompletion()
             return EmptyDisposable
+        }
+    }
+
+    public func prepareDisableBackup() -> Signal<PreparedBackupDisable, WalletError> {
+        return self.performOperation(.preparingBackupDisable) { context in
+            guard let secret = context.secretRecord,
+                  secret.walletVersion == .v5Experimental,
+                  secret.originalPublicKey == nil,
+                  secret.pendingKeyRotation == nil else {
+                throw WalletError.unavailable
+            }
+            let wallet = try await context.initializedWallet()
+            guard wallet.address.toString(bounceable: false) == secret.address,
+                  wallet.publicKey.hexString == secret.publicKey else {
+                throw WalletError.storage(.identityMismatch)
+            }
+            guard let client = context.toncenterClient else {
+                throw WalletError.unavailable
+            }
+
+            let words = normalizedMnemonicWords(try Mnemonic.generate(wordCount: 24))
+            guard words.count == 24 else {
+                throw WalletError.invalidMnemonic
+            }
+            let message = try await context.makeKeyRotationMessage(
+                wallet: wallet,
+                currentPublicKey: secret.publicKey,
+                newWords: words,
+                client: client
+            )
+            let expiresAt = Int32(clamping: Int64(
+                Date().timeIntervalSince1970 + walletPreparedBackupDisableLifetime
+            ))
+            let preparation = PreparedBackupDisable(
+                id: UUID().uuidString,
+                words: words,
+                fee: message.fee,
+                availableBalance: message.availableBalance,
+                expiresAt: expiresAt
+            )
+            context.preparedBackupDisables.removeAll()
+            context.preparedBackupDisables[preparation.id] = PreparedBackupDisableRecord(
+                walletAddress: secret.address,
+                originalPublicKey: secret.publicKey,
+                preparation: preparation
+            )
+            context.removeExpiredPreparedBackupDisables()
+            return preparation
+        }
+    }
+
+    public func disableBackup(_ prepared: PreparedBackupDisable) -> Signal<WalletInfo, WalletError> {
+        return self.performOperation(
+            .disablingBackup,
+            cancelOnDispose: false,
+            cancelOnEnvironmentLoss: false
+        ) { context in
+            guard context.approvingTonConnectRequestIds.isEmpty else {
+                throw WalletError.operationInProgress
+            }
+            guard let record = context.preparedBackupDisables[prepared.id],
+                  record.preparation == prepared,
+                  TimeInterval(prepared.expiresAt) > Date().timeIntervalSince1970 else {
+                context.preparedBackupDisables.removeValue(forKey: prepared.id)
+                throw WalletError.preparedTransferExpired
+            }
+            guard let secret = context.secretRecord,
+                  secret.walletVersion == .v5Experimental,
+                  secret.originalPublicKey == nil,
+                  secret.pendingKeyRotation == nil,
+                  record.walletAddress == secret.address,
+                  record.originalPublicKey == secret.publicKey else {
+                throw WalletError.unavailable
+            }
+            let wallet = try await context.initializedWallet()
+            guard let client = context.toncenterClient else {
+                throw WalletError.unavailable
+            }
+            let message = try await context.makeKeyRotationMessage(
+                wallet: wallet,
+                currentPublicKey: secret.publicKey,
+                newWords: prepared.words,
+                client: client
+            )
+            guard message.availableBalance >= message.fee else {
+                throw WalletError.insufficientBalance(required: message.fee)
+            }
+
+            let pending = PendingKeyRotation(
+                words: prepared.words,
+                publicKey: message.newPublicKey.hexString,
+                boc: message.boc,
+                normalizedHash: message.normalizedHash,
+                validUntil: Int32(clamping: Int64(message.validUntil))
+            )
+            let pendingSecret = SecretRecord(
+                schemaVersion: secret.schemaVersion,
+                words: secret.words,
+                walletVersion: secret.walletVersion,
+                network: secret.network,
+                walletId: secret.walletId,
+                workchain: secret.workchain,
+                address: secret.address,
+                publicKey: secret.publicKey,
+                originalPublicKey: nil,
+                pendingKeyRotation: pending
+            )
+            do {
+                try context.vault.writeSecret(pendingSecret)
+            } catch let error as WalletKeychainVault.Error {
+                throw WalletError.storage(fatalStorageError(error))
+            }
+            context.secretRecord = pendingSecret
+            context.preparedBackupDisables.removeValue(forKey: prepared.id)
+            context.moveToPendingKeyRotationRecovery()
+
+            _ = try await client.sendBoc(message.boc)
+            let finalizedSecret = try await context.waitForKeyRotation(
+                secret: pendingSecret,
+                pending: pending,
+                client: client
+            )
+            let rotatedWallet = try context.restoredWallet(secret: finalizedSecret)
+            let kit = try await context.initializedKit()
+            await kit.register(wallet: rotatedWallet)
+            context.secretRecord = finalizedSecret
+            context.wallet = rotatedWallet
+            let info = walletInfo(secret: finalizedSecret)
+            context.replaceState(
+                phase: .wallet(info),
+                balance: context.currentState.balance,
+                transactions: context.currentState.transactions,
+                pendingTransfers: context.currentState.pendingTransfers,
+                activeOperation: context.currentState.activeOperation
+            )
+            context.synchronizationRequested = true
+            return info
         }
     }
 
@@ -2113,6 +2306,9 @@ public final class WalletContext {
             cancelOnDispose: false,
             cancelOnEnvironmentLoss: false
         ) { context in
+            guard context.secretRecord?.pendingKeyRotation == nil else {
+                throw WalletError.operationInProgress
+            }
             let hasStoredSecret: Bool
             do {
                 if context.secretRecord != nil {
@@ -2156,6 +2352,7 @@ public final class WalletContext {
             context.secretRecord = nil
             context.metadataRecord = nil
             context.preparedTransfers.removeAll()
+            context.preparedBackupDisables.removeAll()
             context.streamTransactionOverlaysByTrace.removeAll()
             context.invalidatedStreamTraceHashes.removeAll()
             context.collectibleMetadataCache.removeAll()
@@ -3121,7 +3318,7 @@ public final class WalletContext {
         guard self.canUseNetworkRuntime, self.lifecycleGeneration == generation else {
             throw WalletError.unavailable
         }
-        guard let secret = self.secretRecord, let metadata = self.metadataRecord else {
+        guard var secret = self.secretRecord, let metadata = self.metadataRecord else {
             throw WalletError.noWallet
         }
         guard secret.schemaVersion == 1, metadata.schemaVersion == 1 else {
@@ -3130,62 +3327,19 @@ public final class WalletContext {
         guard secret.network == Network.mainnet.chainId else {
             throw WalletError.storage(.unsupportedVersion)
         }
-        let words: [String]
-        do {
-            words = try validatedMnemonicWords(secret.words)
-        } catch {
-            throw WalletError.storage(.corrupted)
-        }
         let kit = try await self.initializedKit()
         guard self.canUseNetworkRuntime,
               self.lifecycleGeneration == generation,
               self.secretRecord?.address == secret.address else {
             throw WalletError.unavailable
         }
-        let signer = try InMemorySigner(mnemonic: words)
-        let wallet: Wallet
-        let workchain: Int8
-        if let value = secret.workchain {
-            guard let converted = Int8(exactly: value) else {
-                throw WalletError.storage(.corrupted)
+        if secret.pendingKeyRotation != nil {
+            guard let client = self.toncenterClient else {
+                throw WalletError.unavailable
             }
-            workchain = converted
-        } else {
-            workchain = 0
+            secret = try await self.reconcilePendingKeyRotation(secret: secret, client: client)
         }
-        let walletID: UInt32?
-        if let value = secret.walletId {
-            guard let converted = UInt32(exactly: value) else {
-                throw WalletError.storage(.corrupted)
-            }
-            walletID = converted
-        } else {
-            walletID = nil
-        }
-        switch secret.walletVersion {
-        case .v4R2:
-            if let walletID {
-                wallet = try Wallet(
-                    v4r2: signer,
-                    network: .mainnet,
-                    walletID: walletID,
-                    workchain: workchain
-                )
-            } else {
-                wallet = try Wallet(v4r2: signer, network: .mainnet, workchain: workchain)
-            }
-        case .v5R1:
-            if let walletID {
-                wallet = try Wallet(
-                    v5r1: signer,
-                    network: .mainnet,
-                    walletID: walletID,
-                    workchain: workchain
-                )
-            } else {
-                wallet = try Wallet(v5r1: signer, network: .mainnet, workchain: workchain)
-            }
-        }
+        let wallet = try self.restoredWallet(secret: secret)
         guard self.canUseNetworkRuntime,
               self.lifecycleGeneration == generation,
               self.secretRecord?.address == secret.address else {
@@ -3212,6 +3366,439 @@ public final class WalletContext {
             activeOperation: self.currentState.activeOperation
         )
         return wallet
+    }
+
+    private func makeWallet(
+        version: WalletVersion,
+        signer: any WalletSigner,
+        walletID: UInt32? = nil,
+        workchain: Int8 = 0,
+        originalPublicKey: Data? = nil
+    ) throws -> Wallet {
+        switch version {
+        case .v4R2:
+            if let walletID {
+                return try Wallet(
+                    v4r2: signer,
+                    network: .mainnet,
+                    walletID: walletID,
+                    workchain: workchain
+                )
+            } else {
+                return try Wallet(v4r2: signer, network: .mainnet, workchain: workchain)
+            }
+        case .v5R1:
+            if let walletID {
+                return try Wallet(
+                    v5r1: signer,
+                    network: .mainnet,
+                    walletID: walletID,
+                    workchain: workchain
+                )
+            } else {
+                return try Wallet(v5r1: signer, network: .mainnet, workchain: workchain)
+            }
+        case .v5Experimental:
+            if let originalPublicKey {
+                guard let walletID else {
+                    throw WalletError.storage(.corrupted)
+                }
+                return try Wallet(
+                    v5ExperimentalRotated: signer,
+                    originalPublicKey: originalPublicKey,
+                    network: .mainnet,
+                    walletID: walletID,
+                    workchain: workchain
+                )
+            } else if let walletID {
+                return try Wallet(
+                    v5Experimental: signer,
+                    network: .mainnet,
+                    walletID: walletID,
+                    workchain: workchain
+                )
+            } else {
+                return try Wallet(v5Experimental: signer, network: .mainnet, workchain: workchain)
+            }
+        }
+    }
+
+    private func restoredWallet(secret: SecretRecord) throws -> Wallet {
+        let words: [String]
+        do {
+            words = try validatedMnemonicWords(secret.words)
+        } catch {
+            throw WalletError.storage(.corrupted)
+        }
+        let signer = try InMemorySigner(mnemonic: words)
+        guard signer.publicKey.hexString == secret.publicKey else {
+            throw WalletError.storage(.identityMismatch)
+        }
+
+        let workchain: Int8
+        if let value = secret.workchain {
+            guard let converted = Int8(exactly: value) else {
+                throw WalletError.storage(.corrupted)
+            }
+            workchain = converted
+        } else {
+            workchain = 0
+        }
+        let walletID: UInt32?
+        if let value = secret.walletId {
+            guard let converted = UInt32(exactly: value) else {
+                throw WalletError.storage(.corrupted)
+            }
+            walletID = converted
+        } else {
+            walletID = nil
+        }
+        let originalPublicKey: Data?
+        if let value = secret.originalPublicKey {
+            guard secret.walletVersion == .v5Experimental,
+                  let data = Data(hexString: value),
+                  data.count == 32 else {
+                throw WalletError.storage(.corrupted)
+            }
+            originalPublicKey = data
+        } else {
+            originalPublicKey = nil
+        }
+        let wallet = try self.makeWallet(
+            version: secret.walletVersion,
+            signer: signer,
+            walletID: walletID,
+            workchain: workchain,
+            originalPublicKey: originalPublicKey
+        )
+        guard wallet.address.toString(bounceable: false) == secret.address,
+              wallet.publicKey.hexString == secret.publicKey else {
+            throw WalletError.storage(.identityMismatch)
+        }
+        return wallet
+    }
+
+    private func makeKeyRotationMessage(
+        wallet: Wallet,
+        currentPublicKey: String,
+        newWords: [String],
+        client: ToncenterClient
+    ) async throws -> KeyRotationMessage {
+        let accountState = try await client.getAccountState(address: wallet.address.toString())
+        guard accountState.isDeployed else {
+            throw WalletError.sdk("Cannot rotate the key of an undeployed wallet")
+        }
+        guard let availableBalance = Int64(String(accountState.nanoton)) else {
+            throw WalletError.sdk("Balance is outside Int64 range")
+        }
+        guard let expectedPublicKey = Data(hexString: currentPublicKey),
+              expectedPublicKey.count == 32,
+              try await self.onChainPublicKey(address: wallet.address, client: client) == expectedPublicKey else {
+            throw WalletError.storage(.identityMismatch)
+        }
+
+        let words = try validatedMnemonicWords(newWords)
+        let newKeys = try Mnemonic.keyPair(from: words)
+        let rotation = try KeyRotation.make(
+            address: wallet.address,
+            newPublicKey: newKeys.publicKey,
+            newSecretKey: newKeys.secretKey
+        )
+        guard try rotation.isProofValid(for: wallet.address) else {
+            throw WalletError.previewFailed
+        }
+        let seqno = try await self.walletSeqno(address: wallet.address, client: client)
+        let validUntil = UInt32(clamping: Int64(
+            Date().timeIntervalSince1970 + walletKeyRotationMessageLifetime
+        ))
+        let boc = try await wallet.signedKeyRotation(
+            rotation,
+            seqno: seqno,
+            isDeployed: true,
+            validUntil: validUntil
+        )
+        let normalizedHash = try NormalizedMessage.normalize(base64: boc).hash
+        let emulation = try await client.emulate(boc: boc, ignoreSignature: false)
+        guard !emulation.isIncomplete else {
+            throw WalletError.previewIncomplete
+        }
+        guard !emulation.transactions.isEmpty,
+              let fee = Int64(String(emulation.totalFees)),
+              fee > 0 else {
+            throw WalletError.previewFailed
+        }
+        if !emulation.allSucceeded && availableBalance >= fee {
+            throw WalletError.previewFailed
+        }
+        return KeyRotationMessage(
+            boc: boc,
+            normalizedHash: normalizedHash,
+            newPublicKey: newKeys.publicKey,
+            fee: fee,
+            availableBalance: availableBalance,
+            validUntil: validUntil
+        )
+    }
+
+    private func onChainPublicKey(address: Address, client: ToncenterClient) async throws -> Data {
+        let result = try await client.runGetMethod(
+            address: address.toString(),
+            method: "get_public_key",
+            stack: []
+        )
+        var reader = try result.reader()
+        let value = try reader.readBigInt()
+        guard value >= 0 else {
+            throw WalletError.sdk("get_public_key returned a negative value")
+        }
+        let bytes = BigUInt(value).serialize()
+        guard bytes.count <= 32 else {
+            throw WalletError.sdk("get_public_key returned an invalid value")
+        }
+        return Data(repeating: 0, count: 32 - bytes.count) + bytes
+    }
+
+    private func walletSeqno(address: Address, client: ToncenterClient) async throws -> UInt32 {
+        let result = try await client.runGetMethod(
+            address: address.toString(),
+            method: "seqno",
+            stack: []
+        )
+        var reader = try result.reader()
+        let value = try reader.readBigInt()
+        guard value >= 0, let seqno = UInt32(String(value)) else {
+            throw WalletError.sdk("seqno is outside UInt32 range")
+        }
+        return seqno
+    }
+
+    private func reconcilePendingKeyRotation(
+        secret: SecretRecord,
+        client: ToncenterClient
+    ) async throws -> SecretRecord {
+        guard let pending = secret.pendingKeyRotation else {
+            return secret
+        }
+        guard secret.walletVersion == .v5Experimental,
+              secret.originalPublicKey == nil,
+              let oldPublicKey = Data(hexString: secret.publicKey),
+              let newPublicKey = Data(hexString: pending.publicKey),
+              oldPublicKey.count == 32,
+              newPublicKey.count == 32,
+              let address = try? Address.parse(secret.address) else {
+            throw WalletError.storage(.corrupted)
+        }
+        let currentPublicKey = try await self.onChainPublicKey(address: address, client: client)
+        if currentPublicKey == newPublicKey {
+            return try self.finalizePendingKeyRotation(secret: secret, pending: pending)
+        }
+        guard currentPublicKey == oldPublicKey else {
+            throw WalletError.storage(.identityMismatch)
+        }
+        guard pending.validUntil > currentTimestamp() else {
+            return try await self.resolveExpiredKeyRotation(
+                secret: secret,
+                pending: pending,
+                client: client
+            )
+        }
+
+        _ = try await client.sendBoc(pending.boc)
+        do {
+            return try await self.waitForKeyRotation(secret: secret, pending: pending, client: client)
+        } catch let error as WalletError {
+            if error == .preparedTransferExpired {
+                return try await self.resolveExpiredKeyRotation(
+                    secret: secret,
+                    pending: pending,
+                    client: client
+                )
+            }
+            throw error
+        }
+    }
+
+    private func waitForKeyRotation(
+        secret: SecretRecord,
+        pending: PendingKeyRotation,
+        client: ToncenterClient
+    ) async throws -> SecretRecord {
+        guard let oldPublicKey = Data(hexString: secret.publicKey),
+              let newPublicKey = Data(hexString: pending.publicKey),
+              oldPublicKey.count == 32,
+              newPublicKey.count == 32,
+              let address = try? Address.parse(secret.address) else {
+            throw WalletError.storage(.corrupted)
+        }
+        while true {
+            try Task.checkCancellation()
+            guard self.canUseNetworkRuntime else {
+                throw WalletError.unavailable
+            }
+            let currentPublicKey = try await self.onChainPublicKey(address: address, client: client)
+            if currentPublicKey == newPublicKey {
+                return try self.finalizePendingKeyRotation(secret: secret, pending: pending)
+            }
+            guard currentPublicKey == oldPublicKey else {
+                throw WalletError.storage(.identityMismatch)
+            }
+            guard pending.validUntil > currentTimestamp() else {
+                throw WalletError.preparedTransferExpired
+            }
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+        }
+    }
+
+    private func resolveExpiredKeyRotation(
+        secret: SecretRecord,
+        pending: PendingKeyRotation,
+        client: ToncenterClient
+    ) async throws -> SecretRecord {
+        guard let oldPublicKey = Data(hexString: secret.publicKey),
+              let newPublicKey = Data(hexString: pending.publicKey),
+              oldPublicKey.count == 32,
+              newPublicKey.count == 32,
+              let address = try? Address.parse(secret.address) else {
+            throw WalletError.storage(.corrupted)
+        }
+        var hasSuccessfulTransaction = false
+        for attempt in 0 ..< 3 {
+            let currentPublicKey = try await self.onChainPublicKey(address: address, client: client)
+            if currentPublicKey == newPublicKey {
+                return try self.finalizePendingKeyRotation(secret: secret, pending: pending)
+            }
+            guard currentPublicKey == oldPublicKey else {
+                throw WalletError.storage(.identityMismatch)
+            }
+            let page = try await client.getTransactionsByMessageHash(pending.normalizedHash)
+            hasSuccessfulTransaction = hasSuccessfulTransaction
+                || page.transactions.contains(where: { !$0.isFailed })
+            if attempt != 2 {
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+        guard !hasSuccessfulTransaction else {
+            throw WalletError.network
+        }
+        return try self.clearPendingKeyRotation(secret: secret)
+    }
+
+    private func finalizePendingKeyRotation(
+        secret: SecretRecord,
+        pending: PendingKeyRotation
+    ) throws -> SecretRecord {
+        let words: [String]
+        do {
+            words = try validatedMnemonicWords(pending.words)
+        } catch {
+            throw WalletError.storage(.corrupted)
+        }
+        let signer = try InMemorySigner(mnemonic: words)
+        guard signer.publicKey.hexString == pending.publicKey else {
+            throw WalletError.storage(.identityMismatch)
+        }
+        let finalized = SecretRecord(
+            schemaVersion: secret.schemaVersion,
+            words: words,
+            walletVersion: secret.walletVersion,
+            network: secret.network,
+            walletId: secret.walletId,
+            workchain: secret.workchain,
+            address: secret.address,
+            publicKey: pending.publicKey,
+            originalPublicKey: secret.publicKey,
+            pendingKeyRotation: nil
+        )
+        do {
+            try self.vault.writeSecret(finalized)
+        } catch let error as WalletKeychainVault.Error {
+            throw WalletError.storage(fatalStorageError(error))
+        }
+        self.secretRecord = finalized
+        return finalized
+    }
+
+    private func clearPendingKeyRotation(secret: SecretRecord) throws -> SecretRecord {
+        let cleared = SecretRecord(
+            schemaVersion: secret.schemaVersion,
+            words: secret.words,
+            walletVersion: secret.walletVersion,
+            network: secret.network,
+            walletId: secret.walletId,
+            workchain: secret.workchain,
+            address: secret.address,
+            publicKey: secret.publicKey,
+            originalPublicKey: secret.originalPublicKey,
+            pendingKeyRotation: nil
+        )
+        do {
+            try self.vault.writeSecret(cleared)
+        } catch let error as WalletKeychainVault.Error {
+            throw WalletError.storage(fatalStorageError(error))
+        }
+        self.secretRecord = cleared
+        return cleared
+    }
+
+    private func moveToPendingKeyRotationRecovery() {
+        self.cancelPendingTonConnectRequests()
+        self.lifecycleGeneration &+= 1
+        self.walletInitializationTask?.cancel()
+        self.walletInitializationTask = nil
+        self.runtimeTask?.cancel()
+        self.runtimeTask = nil
+        self.synchronizationTask?.cancel()
+        self.synchronizationTask = nil
+        self.retryTask?.cancel()
+        self.retryTask = nil
+        self.pendingPollTask?.cancel()
+        self.pendingPollTask = nil
+        self.streamSnapshotTask?.cancel()
+        self.streamSnapshotTask = nil
+        self.tonConnectUrlTask?.cancel()
+        self.tonConnectUrlTask = nil
+        self.stopStreaming()
+        self.wallet = nil
+        self.replaceState(
+            phase: .restoring,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+    }
+
+    private func removeExpiredPreparedBackupDisables() {
+        let now = Date().timeIntervalSince1970
+        self.preparedBackupDisables = self.preparedBackupDisables.filter {
+            TimeInterval($0.value.preparation.expiresAt) > now
+        }
+    }
+
+    private func inspectImportCandidates(
+        signer: any WalletSigner,
+        kit: TonWalletKit
+    ) async throws -> [ImportCandidate] {
+        var candidates: [ImportCandidate] = []
+        candidates.reserveCapacity(3)
+        for version in [WalletVersion.v4R2, .v5R1, .v5Experimental] {
+            let wallet = try self.makeWallet(version: version, signer: signer)
+            candidates.append(try await self.inspectCandidate(version: version, wallet: wallet, kit: kit))
+        }
+        return candidates
+    }
+
+    private func suggestedImportVersion(candidates: [ImportCandidate]) -> WalletVersion? {
+        guard candidates.count == WalletContext.importVersionPriority.count,
+              candidates.allSatisfy({ $0.isActive != nil }) else {
+            return nil
+        }
+        for version in WalletContext.importVersionPriority {
+            if candidates.contains(where: { $0.version == version && $0.isActive == true }) {
+                return version
+            }
+        }
+        return WalletContext.defaultWalletVersion
     }
 
     private func inspectCandidate(

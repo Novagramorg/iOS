@@ -4,6 +4,7 @@ import Display
 import AccountContext
 import TelegramPresentationData
 import TelegramStringFormatting
+import TextFormat
 import ComponentFlow
 import ViewControllerComponent
 import ChatListHeaderComponent
@@ -557,6 +558,7 @@ private final class WalletScreenComponent: Component {
         private let transactionsSection = LazySectionView()
         private let collectiblesSection = LazySectionView()
         private let emptyTransactionsInfo = ComponentView<Empty>()
+        private let emptyTransactionsFooter = ComponentView<Empty>()
 
         private var component: WalletScreenComponent?
         private var environment: EnvironmentType?
@@ -583,6 +585,9 @@ private final class WalletScreenComponent: Component {
             self.cardContainerView = UIView()
             self.cardScrollContainerView = UIView()
             self.cardVisualContainerView = UIView()
+            self.cardContainerView.clipsToBounds = false
+            self.cardScrollContainerView.clipsToBounds = false
+            self.cardVisualContainerView.clipsToBounds = false
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.scrollsToTop = true
@@ -707,6 +712,18 @@ private final class WalletScreenComponent: Component {
                 }
                 section.removeFromSuperview()
                 section.clearVisibleItems()
+            })
+        }
+
+        private func hideEmptyTransactionsFooter(transition: ComponentTransition) {
+            guard let footerView = self.emptyTransactionsFooter.view, footerView.superview != nil else {
+                return
+            }
+            transition.setAlpha(view: footerView, alpha: 0.0, completion: { [weak footerView] _ in
+                guard let footerView, footerView.alpha == 0.0 else {
+                    return
+                }
+                footerView.removeFromSuperview()
             })
         }
 
@@ -1046,6 +1063,22 @@ private final class WalletScreenComponent: Component {
                 return
             }
             controller.push(component.context.sharedContext.makeWalletSettingsScreen(context: component.context))
+        }
+
+        private func openTerms(url: String) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            component.context.sharedContext.openExternalUrl(
+                context: component.context,
+                urlContext: .generic,
+                url: url,
+                forceExternal: false,
+                presentationData: presentationData,
+                navigationController: controller.navigationController as? NavigationController,
+                dismissInput: {}
+            )
         }
 
         private func openTransaction(_ transaction: WalletContext.Transaction) {
@@ -1430,6 +1463,22 @@ private final class WalletScreenComponent: Component {
                 })
             }
 
+            let transactions = (self.walletState?.transactions.items ?? []).filter {
+                $0.isVisibleInWalletHistory && $0.kind != .deployContract
+            }
+            let collectibles = self.walletState?.collectibles.items ?? []
+            if collectibles.isEmpty && self.selectedSection == .collectibles {
+                self.selectedSection = .transactions
+            }
+            let hasEmptyTransactions = self.selectedSection == .transactions && transactions.isEmpty
+            if hasEmptyTransactions {
+                self.isCardCollapsed = false
+                if self.scrollView.contentOffset != CGPoint() {
+                    self.scrollView.setContentOffset(CGPoint(), animated: false)
+                }
+            }
+            self.scrollView.isScrollEnabled = !hasEmptyTransactions
+
             //TODO:localize
             let title = "Wallet"
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
@@ -1753,11 +1802,6 @@ private final class WalletScreenComponent: Component {
             let buttonsHeight = max(addFundsButtonSize.height, sendButtonSize.height)
             var contentHeight = buttonsOriginY + buttonsHeight
 
-            let transactions = (self.walletState?.transactions.items ?? []).filter(\.isVisibleInWalletHistory)
-            let collectibles = self.walletState?.collectibles.items ?? []
-            if collectibles.isEmpty && self.selectedSection == .collectibles {
-                self.selectedSection = .transactions
-            }
             if !collectibles.isEmpty {
                 let transactionTabsOriginY = contentHeight + 12.0
                 let transactionTabsSize = self.updateTransactionTabs(
@@ -1854,6 +1898,7 @@ private final class WalletScreenComponent: Component {
                         emptyTransactionsInfoView?.removeFromSuperview()
                     })
                 }
+                self.hideEmptyTransactionsFooter(transition: transition)
                 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.blocksBackgroundColor)
             } else if self.selectedSection == .collectibles {
@@ -1861,6 +1906,7 @@ private final class WalletScreenComponent: Component {
                 if let emptyTransactionsInfoView = self.emptyTransactionsInfo.view {
                     emptyTransactionsInfoView.removeFromSuperview()
                 }
+                self.hideEmptyTransactionsFooter(transition: transition)
 
                 let itemContext = component.context
                 let itemTheme = environment.theme
@@ -2021,6 +2067,80 @@ private final class WalletScreenComponent: Component {
                     )
                 }
                 contentHeight = emptyTransactionsOriginY + emptyTransactionsInfoSize.height
+
+                //TODO:localize
+                let termsString = "By using Wallet you agree to Terms of Service."
+                let termsLink = "Terms of Service"
+                let termsText = NSMutableAttributedString(
+                    string: termsString,
+                    attributes: [
+                        .font: Font.regular(13.0),
+                        .foregroundColor: textColor
+                    ]
+                )
+                let termsLinkRange = (termsString as NSString).range(of: termsLink)
+                termsText.addAttributes(
+                    [
+                        .foregroundColor: accentColor,
+                        NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
+                    ],
+                    range: termsLinkRange
+                )
+
+                self.emptyTransactionsFooter.parentState = state
+                let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(
+                    transition: transition,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(termsText),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0,
+                        highlightColor: accentColor.withAlphaComponent(0.2),
+                        highlightAction: { attributes in
+                            if attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] != nil {
+                                return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                            } else {
+                                return nil
+                            }
+                        },
+                        tapAction: { [weak self] attributes, _ in
+                            guard let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String else {
+                                return
+                            }
+                            self?.openTerms(url: url)
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: cardWidth, height: 10000.0)
+                )
+                let emptyTransactionsFooterOriginY = max(
+                    contentHeight + 24.0,
+                    availableSize.height - environment.safeInsets.bottom - emptyTransactionsFooterSize.height - 16.0
+                )
+                if let emptyTransactionsFooterView = self.emptyTransactionsFooter.view {
+                    var wasVisible = true
+                    if emptyTransactionsFooterView.superview == nil {
+                        wasVisible = false
+                        self.addSubview(emptyTransactionsFooterView)
+                    }
+                    if !transition.animation.isImmediate && !wasVisible {
+                        transition.animateAlpha(view: emptyTransactionsFooterView, from: 0.0, to: 1.0)
+                    } else {
+                        transition.setAlpha(view: emptyTransactionsFooterView, alpha: 1.0)
+                    }
+
+                    let layoutTransition: ComponentTransition = wasVisible ? transition : .immediate
+                    layoutTransition.setFrame(
+                        view: emptyTransactionsFooterView,
+                        frame: CGRect(
+                            origin: CGPoint(
+                                x: floor((availableSize.width - emptyTransactionsFooterSize.width) * 0.5),
+                                y: emptyTransactionsFooterOriginY
+                            ),
+                            size: emptyTransactionsFooterSize
+                        )
+                    )
+                }
+                contentHeight = emptyTransactionsFooterOriginY + emptyTransactionsFooterSize.height
                 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.plainBackgroundColor)
             }

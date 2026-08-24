@@ -326,22 +326,17 @@ public final class WalletTransferCardComponent: Component {
                 )
             }
 
-            let safeZones = [
-                self.integralAmount.view,
-                self.fractionalAmount.view,
-                self.currency.view,
-                self.secondaryAmount.view,
-                self.address.view,
-                self.infoButton.view
-            ].compactMap { view -> CGRect? in
-                guard let view, !view.frame.isEmpty else {
-                    return nil
-                }
-                return view.frame
-            }
-
-            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: size))
-            self.backgroundView.update(size: size, safeZones: safeZones)
+            let projectionPadding = WalletCardBackgroundView.projectionPadding
+            transition.setFrame(
+                view: self.backgroundView,
+                frame: CGRect(
+                    x: -projectionPadding,
+                    y: -projectionPadding,
+                    width: size.width + projectionPadding * 2.0,
+                    height: size.height + projectionPadding * 2.0
+                )
+            )
+            self.backgroundView.update(cardSize: size, cornerRadius: 20.0 * scale)
             return size
         }
     }

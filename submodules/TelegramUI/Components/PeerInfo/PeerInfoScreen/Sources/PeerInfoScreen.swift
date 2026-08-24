@@ -3983,13 +3983,13 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         peer: peer,
                         verifierSettings: verifierSettings,
                         verifierIcon: verifierIcon,
-                        apply: { [weak self, weak controller] value in
+                        apply: { [weak self, weak controller] value, entities in
                             guard let self else {
                                 return
                             }
                             controller?.dismiss(animated: true)
                             
-                            let _ = (self.context.engine.peers.updateCustomVerification(botId: self.peerId, peerId: peer.id, value: .enabled(description: value))
+                            let _ = (self.context.engine.peers.updateCustomVerification(botId: self.peerId, peerId: peer.id, value: .enabled(description: value, descriptionEntities: entities))
                             |> deliverOnMainQueue).start(completed: { [weak self] in
                                 guard let self else {
                                     return

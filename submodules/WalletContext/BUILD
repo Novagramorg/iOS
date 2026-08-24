@@ -13,6 +13,7 @@ swift_library(
       "//submodules/SSignalKit/SwiftSignalKit",
       "//submodules/TelegramCore",
       "//submodules/WalletContext/SwiftTonWalletKit:TONConnect",
+      "//submodules/WalletContext/SwiftTonWalletKit:TONContracts",
       "//submodules/WalletContext/SwiftTonWalletKit:TONCore",
       "//submodules/WalletContext/SwiftTonWalletKit:TONCrypto",
       "//submodules/WalletContext/SwiftTonWalletKit:TONToncenter",
