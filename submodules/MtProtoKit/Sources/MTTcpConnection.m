@@ -847,6 +847,7 @@ struct ctr_state {
     NSString *_mtpIp;
     int32_t _mtpPort;
     MTProxySecret *_mtpSecret;
+    bool _isWebProxy;
     NSData *_helloRandom;
     NSData *_currentHelloResponse;
     
@@ -911,6 +912,7 @@ struct ctr_state {
         }
         
         if (context.apiEnvironment.socksProxySettings != nil) {
+            _isWebProxy = context.apiEnvironment.socksProxySettings.webProxy;
             if (context.apiEnvironment.socksProxySettings.secret != nil) {
                 _mtpIp = context.apiEnvironment.socksProxySettings.ip;
                 _mtpPort = context.apiEnvironment.socksProxySettings.port;
@@ -1005,7 +1007,9 @@ struct ctr_state {
             NSString *addressIp = _scheme.address.ip;
             MTSignal *resolveSignal = [MTSignal single:[[MTTcpConnectionData alloc] initWithIp:addressIp port:_scheme.address.port isSocks:false]];
             
-            if (_socksIp != nil) {
+            if (_isWebProxy) {
+                resolveSignal = [MTSignal single:[[MTTcpConnectionData alloc] initWithIp:@"127.0.0.1" port:443 isSocks:false]];
+            } else if (_socksIp != nil) {
                 bool isHostname = true;
                 struct in_addr ip4;
                 struct in6_addr ip6;
@@ -1066,6 +1070,8 @@ struct ctr_state {
                             } else {
                                 MTLog(@"[MTTcpConnection#%" PRIxPTR " connecting to %@:%d via %@:%d using %@:%@]", (intptr_t)strongSelf, strongSelf->_scheme.address.ip, (int)strongSelf->_scheme.address.port, strongSelf->_socksIp, (int)strongSelf->_socksPort, strongSelf->_socksUsername, strongSelf->_socksPassword);
                             }
+                        } else if (strongSelf->_mtpIp != nil && strongSelf->_isWebProxy) {
+                            MTLog(@"[MTTcpConnection#%" PRIxPTR " connecting via WEB proxy %@:%d]", (intptr_t)strongSelf, strongSelf->_mtpIp, (int)strongSelf->_mtpPort);
                         } else if (strongSelf->_mtpIp != nil) {
                             MTLog(@"[MTTcpConnection#%" PRIxPTR " connecting to %@:%d via mtp://%@:%d:%@]", (intptr_t)strongSelf, strongSelf->_scheme.address.ip, (int)strongSelf->_scheme.address.port, strongSelf->_mtpIp, (int)strongSelf->_mtpPort, strongSelf->_mtpSecret);
                         } else {
