@@ -74,6 +74,7 @@ public class UnauthorizedAccount {
     public let postbox: Postbox
     public let network: Network
     let stateManager: UnauthorizedAccountStateManager
+    private let proxySettingsDisposable = MetaDisposable()
     
     private let updateLoginTokenPipe = ValuePipe<Void>()
     public var updateLoginTokenEvents: Signal<Void, NoError> {
@@ -210,6 +211,18 @@ public class UnauthorizedAccount {
         })
         
         self.stateManager.reset()
+
+        self.proxySettingsDisposable.set((accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
+        |> map { sharedData -> ProxyServerSettings? in
+            return sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self)?.effectiveActiveServer
+        }
+        |> distinctUntilChanged).start(next: { [weak network] activeServer in
+            network?.updateProxySettings(activeServer)
+        }))
+    }
+
+    deinit {
+        self.proxySettingsDisposable.dispose()
     }
     
     public func changedMasterDatacenterId(accountManager: AccountManager<TelegramAccountManagerTypes>, masterDatacenterId: Int32) -> Signal<UnauthorizedAccount, NoError> {
@@ -1493,24 +1506,7 @@ public class Account {
             }
         }
         |> distinctUntilChanged).start(next: { activeServer in
-            let updated = activeServer.flatMap { activeServer -> MTSocksProxySettings? in
-                return activeServer.mtProxySettings
-            }
-            network.context.updateApiEnvironment { environment in
-                let current = environment?.socksProxySettings
-                let updateNetwork: Bool
-                if let current = current, let updated = updated {
-                    updateNetwork = !current.isEqual(updated)
-                } else {
-                    updateNetwork = (current != nil) != (updated != nil)
-                }
-                if updateNetwork {
-                    network.dropConnectionStatus()
-                    return environment?.withUpdatedSocksProxySettings(updated)
-                } else {
-                    return nil
-                }
-            }
+            network.updateProxySettings(activeServer)
         }))
 
         if !supplementary {
