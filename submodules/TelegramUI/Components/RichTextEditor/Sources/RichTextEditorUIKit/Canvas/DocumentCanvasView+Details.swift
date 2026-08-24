@@ -12,8 +12,15 @@ extension DocumentCanvasView {
         guard !boxes.isEmpty, !isInsideTable(head), !isInsideBlockQuote(head),
               let a = activeStack(at: head), a.box is BlockBox else { return }
         editing {
-            if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
-            guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return }
+            // THE CLAIM IS APPLIED HERE, ON THE NEXT INSTRUCTION — never batched to the end of this
+            // transaction's own `return`: the next statement's `activeStack(at: head)` reads the caret back. A deferred claim re-resolves at the
+            // pre-delete caret and silently produces a DIFFERENT document. Why, and the full list of
+            // fourteen such sites: `applyReplaceOutcome`'s doc in `+Editing.swift`. Pinned by
+            // `CaretLandingCharacterizationTests.test_insertDetailsBlockOverAMidParagraphSelectionSplitsTheParagraph`.
+            if selFrom != selTo {
+                applyCaretOutcome(applySelectionReplaceOutcome(globalFrom: selFrom, globalTo: selTo, text: ""))
+            }
+            guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return .unchanged }
             let model = DetailsBlock(id: BlockID.generate(), title: [],
                                      children: [.paragraph(ParagraphBlock(id: BlockID.generate(), style: .body, runs: []))],
                                      expanded: true)
@@ -40,7 +47,7 @@ extension DocumentCanvasView {
             recomputeSpans()
             // Caret into the title (first leaf region).
             let caret = detailsBox.leafRegions().first?.globalStart ?? (detailsBox.nodeStart + 2)
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -65,11 +72,34 @@ extension DocumentCanvasView {
             if caretTouched {
                 // Title is always present → keep the caret in the title on either fold direction.
                 let caret = newBox.leafRegions().first?.globalStart ?? (newBox.nodeStart + 2)
-                anchor = caret; head = caret
+                return .caret(at: caret)
             } else {                // caret outside — preserve, shifted by the size delta
                 let delta = newBox.nodeSize - oldSize
                 func remap(_ p: Int) -> Int { p < oldStart ? p : p + delta }
-                anchor = remap(beforeAnchor); head = remap(beforeHead)
+                // A RANGE, not a caret: this arm PRESERVES the pre-fold selection, which need not be
+                // collapsed. `.range` does not normalize its arguments, so a reversed selection stays
+                // reversed — the same pair of writes, in the same order.
+                //
+                // **DO NOT "SIMPLIFY" THIS TO `.caret(at:)`, AND THE SUITE WILL NOT STOP YOU.** Task 38
+                // measured exactly that: `return .caret(at: remap(beforeHead))` here AND in
+                // `+QuoteCollapse.toggleCollapsed`'s twin arm, full `Scripts/iostest.sh` — **2630 passed,
+                // 0 failures**, byte-identical to the control. Nothing in the tree exercises a fold with a
+                // NON-COLLAPSED selection sitting outside the folded box, which is the only state the two
+                // spellings differ in — and a glyph tap does not clear the selection first
+                // (`handleTap` routes glyph hits BEFORE caret placement), so that state is reachable.
+                // This is the Rule-24 shape recorded at `applyCaretOutcome`, met a second time: 26 of
+                // Task 38's 36 lines are `.caret` and the mechanical reading is that all 36 are.
+                // Stated here once; `+QuoteCollapse`'s arm points at this comment.
+                //
+                // **TASK 39 STEP 0a — IT IS PINNED NOW, and the pin was proven to arm.**
+                // `DetailsBoxFoldTests.test_fold_withARangeSelectionOutsideTheBox_preservesBOTHEndpoints`
+                // and `…_withAReversedRangeOutsideTheBox_keepsItReversed` seed a NON-COLLAPSED selection
+                // in a following paragraph and assert BOTH endpoints; with `.caret(at: remap(beforeHead))`
+                // built in this file AND in `+QuoteCollapse`, each suite reports **2 failures** (the
+                // mutation was confirmed present in both files before the red was believed — Rule 19), and
+                // both are green against the shipped spelling. Until Task 39 the guard here was a COMMENT,
+                // which this plan's own doctrine rejects (see `applyCaretOutcome` on R22).
+                return .range(remap(beforeAnchor), remap(beforeHead))
             }
         }
     }
@@ -120,7 +150,7 @@ extension DocumentCanvasView {
             parentStack.boxes.insert(body, at: index + 1)              // body paragraph AFTER the details block
             recomputeSpans()
             let caret = body.leafRegions().first?.globalStart ?? body.nodeStart
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
         return true
     }

@@ -291,8 +291,7 @@ final class ButtonRowBoxTests: XCTestCase {
         func backspaceAsDeliveredByIOS() {
             guard let below = canvas.boxes.last else { return XCTFail("no trailing paragraph") }
             let to = below.textStart
-            canvas.anchor = canvas.prevTextPosition(before: to)
-            canvas.head = to
+            canvas.setSelectionForTesting(anchor: canvas.prevTextPosition(before: to), head: to)
             canvas.deleteBackward()
         }
 
@@ -311,7 +310,7 @@ final class ButtonRowBoxTests: XCTestCase {
         guard let box = canvas.boxes.compactMap({ $0 as? ButtonRowBox }).first else {
             return XCTFail("expected a ButtonRowBox")
         }
-        canvas.anchor = box.nodeStart + 3; canvas.head = box.nodeStart + 3   // the third pill
+        canvas.setSelectionForTesting(anchor: box.nodeStart + 3, head: box.nodeStart + 3)   // the third pill
         canvas.deleteBackward()
         XCTAssertEqual(rowCount(canvas), 1, "the row must survive while it still has pills")
         guard case let .buttonRow(restored) = canvas.currentBlocks().last else {
@@ -327,7 +326,7 @@ final class ButtonRowBoxTests: XCTestCase {
         // Caret in the trailing EMPTY paragraph — the case that must be replaced rather than split.
         let canvas = view.canvasForTesting
         guard let empty = canvas.boxes.last else { return XCTFail("no trailing paragraph") }
-        canvas.anchor = empty.textStart; canvas.head = empty.textStart
+        canvas.setSelectionForTesting(anchor: empty.textStart, head: empty.textStart)
         view.insertButtonRow()
         let blocks = view.document.blocks
         XCTAssertEqual(blocks.count, 2, "the empty paragraph is replaced, not left beside the row")

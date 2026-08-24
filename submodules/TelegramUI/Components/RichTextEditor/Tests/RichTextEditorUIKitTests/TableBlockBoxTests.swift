@@ -303,8 +303,7 @@ extension TableBlockBoxTests {
         let tv = v.blockViews[BlockID("t")] as! TableBackingView
         tv.layoutIfNeeded()
         // Non-collapsed selection with the head inside the table.
-        v.anchor = t.cellTextStart(row: 0, column: 0)!
-        v.head = t.cellTextStart(row: 0, column: 1)!
+        v.setSelectionForTesting(anchor: t.cellTextStart(row: 0, column: 0)!, head: t.cellTextStart(row: 0, column: 1)!)
         let before = tv.scroll.contentOffset.x
         let rightEdge = CGPoint(x: t.frame.minX + tv.bounds.width - 4, y: t.frame.minY + 10)
         v.updateDragAutoScroll(point: rightEdge, headInTable: true)
@@ -489,7 +488,7 @@ extension TableBlockBoxTests {
         guard let caret = box(v).cellTextStart(row: 0, column: 0) else {
             return XCTFail("expected a first-cell text start")
         }
-        v.anchor = caret; v.head = caret
+        v.setSelectionForTesting(anchor: caret, head: caret)
         v.toggleTableBordered()
         guard case let .table(restored) = v.currentBlocks().first else {
             return XCTFail("expected a table")

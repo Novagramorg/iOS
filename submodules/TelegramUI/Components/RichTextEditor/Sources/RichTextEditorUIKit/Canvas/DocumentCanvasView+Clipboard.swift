@@ -18,12 +18,34 @@ extension DocumentCanvasView {
         }
     }
 
-    @objc override func copy(_ sender: Any?) {
+    // TASK 30 (Family 7): one-line router. The body below moved to `legacyCopy(_:)` and the backend
+    // forwards straight back to it (`LegacyRichTextInputBackend+Commands.swift`) — a PLAIN D24
+    // forward, the same shape Families 4-6 use.
+    @objc override func copy(_ sender: Any?) { inputBackend.performCommand(.copy, sender: sender) }
+
+    /// Was `DocumentCanvasView.copy(_:)`, renamed by TASK 30 when the witness became a router; the body
+    /// is untouched. `LegacyRichTextInputBackend.performCommand(.copy, sender:)` forwards here, and so
+    /// does `TelegramCommandInputClient.prepare`'s `.copy` branch — which called the WITNESS until this
+    /// task, i.e. a cycle waiting for `performCommand` to be routed through that client.
+    @objc func legacyCopy(_ sender: Any?) {
         guard selFrom < selTo else { return }
         writeSelectionToPasteboard(globalFrom: selFrom, globalTo: selTo)
     }
 
-    @objc override func cut(_ sender: Any?) {
+    // TASK 30 (Family 7): one-line router. See `legacyCut(_:)` just below for the body.
+    @objc override func cut(_ sender: Any?) { inputBackend.performCommand(.cut, sender: sender) }
+
+    /// Was `DocumentCanvasView.cut(_:)`, renamed by TASK 30; the body is untouched.
+    ///
+    /// **`replace(_:withText:)` here is itself a ROUTED WITNESS (Task 27a), and it is left that way
+    /// deliberately.** So one `cut(_:)` makes TWO backend calls — `performCommand(.cut, sender:)` and,
+    /// from inside this body, `replace(_:withText:)` — and any exactly-once assertion over a spy's call
+    /// log must account for the second. That is the identical shape Task 29 left in
+    /// `legacySetMarkedText` (which calls the routed `insertText`), on the precedent Task 27b set for
+    /// `DocumentCanvasView.swift`'s hardware-Return handler and `+Formula.swift`'s LaTeX insert. Do not
+    /// "fix" it by calling `legacyReplace` directly: the pre-seam body called the witness, and the
+    /// witness is where the `as? LegacyTextRange` drop decision lives (`+Insertion.swift`).
+    @objc func legacyCut(_ sender: Any?) {
         guard selFrom < selTo, let range = selectedTextRange else { return }
         writeSelectionToPasteboard(globalFrom: selFrom, globalTo: selTo)
         replace(range, withText: "")
@@ -43,7 +65,18 @@ extension DocumentCanvasView {
         pasteboard.setItems([RichTextEditorClipboard.pasteboardItem(for: fragment, plain: plain)], options: [:])
     }
 
-    @objc override func paste(_ sender: Any?) {
+    // TASK 30 (Family 7): one-line router. See `legacyPaste(_:)` just below for the body.
+    @objc override func paste(_ sender: Any?) { inputBackend.performCommand(.paste, sender: sender) }
+
+    /// Was `DocumentCanvasView.paste(_:)`, renamed by TASK 30; the body is untouched.
+    ///
+    /// **This body has a fallback the command client's `canPerform(.paste)` gate does not admit, which
+    /// is why `performCommand` forwards here instead of through that client** — see
+    /// `LegacyRichTextInputBackend+Commands.swift`'s header for the measurement. Short form: with an
+    /// EMPTY pasteboard and `canPasteMedia` absent or false, the gate answers `false` while this body
+    /// still calls `onPasteMedia?()`. `CanvasClipboardTests
+    /// .test_paste_noTextRep_delegatesToOnPasteMedia_documentUnchanged` pins exactly that case.
+    @objc func legacyPaste(_ sender: Any?) {
         // Plain text a host transforms to rich content (markdown) → TWO-STEP paste: insert the raw plain
         // text as one undo step, then replace it with the rich content as a second, so the first undo
         // reverts rich→plain and a further undo removes it. Only when the pasteboard carries NO richer
@@ -104,7 +137,7 @@ extension DocumentCanvasView {
     /// edit engine to delete the selection, then the Core `insertingFragment` model splice.
     func pasteFragment(_ fragment: Document) {
         guard !fragment.blocks.isEmpty else { return }
-        editing { _ = spliceFragmentInEditing(fragment) }
+        editing { _ = spliceFragmentInEditing(fragment); return .unchanged }
     }
 
     /// Deletes any selection and splices `fragment` at the caret, returning the inserted global range
@@ -118,8 +151,12 @@ extension DocumentCanvasView {
         // not a fragment splice, so reopening a message still preserves its actions verbatim.
         let fragment = rawFragment.convertingUnsupportedButtonActions()
         // 1. delete the selection (grapheme-safe, cross-region) → collapsed caret at selFrom.
+        // THE CLAIM IS APPLIED HERE, ON THE NEXT INSTRUCTION. This call is OUTSIDE any `editing { }` and
+        // `let caret = head` on the line after the brace reads it straight back; the whole splice below
+        // is computed from that value. Why, and the full list of fourteen such sites: `applyReplaceOutcome`'s
+        // doc in `+Editing.swift`. Pinned by `CanvasClipboardTests` (2 red under a deferred claim).
         if selFrom < selTo {
-            applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "")
+            applyCaretOutcome(applySelectionReplaceOutcome(globalFrom: selFrom, globalTo: selTo, text: ""))
         }
         let caret = head
         // 2. splice on the model.
@@ -131,23 +168,30 @@ extension DocumentCanvasView {
         // cell / media caption) fall through to the flatten.
         if let result = doc.insertingFragment(fragment, atGlobal: caret) {
             setBlocks(result.document.blocks, width: effectiveWidth)
-            anchor = min(result.caret, documentSize)
-            head = anchor
+            // TASK 39: `applyCaretOutcome` (`+Editing.swift`), applied here rather than returned. This
+            // function runs INSIDE `editing { }` at both of its call sites (its own doc says it must),
+            // so a publishing `setSelection` would be a second host selection report inside
+            // `performEditing`'s bracket — and it would land on a path that `setBlocks` has just
+            // re-entered, where the claim would then be re-clamped by that function's own claim.
+            // Deliberately AFTER `setBlocks`, exactly where the raw pair sat: `setBlocks` clamps the
+            // surviving selection against the OLD-then-NEW `documentSize`, and this claim overrides it.
+            applyCaretOutcome(.caret(at: min(result.caret, documentSize)))
             return (caret, result.caret)
         }
         if let near = doc.nearestTopLevelTextPosition(to: caret),
            let result = doc.insertingFragment(fragment, atGlobal: near) {
             setBlocks(result.document.blocks, width: effectiveWidth)
-            anchor = min(result.caret, documentSize)
-            head = anchor
+            applyCaretOutcome(.caret(at: min(result.caret, documentSize)))   // TASK 39: see the arm above
             return (near, result.caret)
         }
         // Fallback: caret not in a top-level paragraph/code region (e.g. a table cell).
-        // Flatten to plain text — newlines stripped, since applyReplace requires newline-free
+        // Flatten to plain text — newlines stripped, since applyReplaceOutcome requires newline-free
         // text (paragraph breaks are structural; a code block's interior "\n"s must not leak into a run).
         let flat = fragment.blocks.map(blockPlainText).joined(separator: " ")
             .replacingOccurrences(of: "\n", with: " ")
-        applySelectionReplace(globalFrom: caret, globalTo: caret, text: flat)
+        // THE CLAIM IS APPLIED HERE, ON THE NEXT INSTRUCTION: the very next statement RETURNS `head` to the
+        // caller as this paste's resulting caret. See `applyReplaceOutcome`'s doc in `+Editing.swift`.
+        applyCaretOutcome(applySelectionReplaceOutcome(globalFrom: caret, globalTo: caret, text: flat))
         return (caret, head)
     }
 
@@ -167,7 +211,7 @@ extension DocumentCanvasView {
         // Step 1 mutates the model + registers its undo group but does NOT notify the host, so the raw-text
         // state is never laid out / drawn (no flash). Step 2 next cycle does the visible, host-notifying edit.
         suppressHostChangeNotification = true
-        editing { range = spliceFragmentInEditing(plain) }        // step 1: raw plain text (this event)
+        editing { range = spliceFragmentInEditing(plain); return .unchanged }        // step 1: raw plain text (this event)
         suppressHostChangeNotification = false
         DispatchQueue.main.async { [weak self] in                 // step 2: replace with rich (next event)
             guard let self else { return }

@@ -39,8 +39,7 @@ final class CanvasTableBoundaryTests: XCTestCase {
     func test_dragSelectFromParagraphIntoCell_deleteDoesNotDestroyTable() {
         let v = canvas()
         let cellA = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("ap")) }!
-        v.anchor = 2                       // inside "Top"
-        v.head = cellA.globalStart + 2     // inside cell A
+        v.setSelectionForTesting(anchor: 2, head: cellA.globalStart + 2)   // inside "Top" inside cell A
         v.deleteBackward()
         XCTAssertTrue(hasTable(v), "table must survive a straddling selection delete")
         XCTAssertEqual(v.currentBlocks().count, 3)   // Top, table, Bot all intact
@@ -48,7 +47,7 @@ final class CanvasTableBoundaryTests: XCTestCase {
 
     func test_selectAllThenDelete_clearsDocument() {
         let v = canvas()   // [Top, table, Bot]
-        v.anchor = 0; v.head = v.documentSizeValue
+        v.setSelectionForTesting(anchor: 0, head: v.documentSizeValue)
         v.deleteBackward()
         // 3b: select-all delete clears everything (table gone), leaving an empty paragraph.
         XCTAssertFalse(v.currentBlocks().contains { if case .table = $0 { return true } else { return false } })
@@ -59,8 +58,7 @@ final class CanvasTableBoundaryTests: XCTestCase {
         let v = canvas()   // [Top, table, Bot]
         let top = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("top")) }!
         let bot = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("bot")) }!
-        v.anchor = top.globalStart + 1            // inside "Top" (after "T")
-        v.head = bot.globalStart + 1              // inside "Bot" (after "B")
+        v.setSelectionForTesting(anchor: top.globalStart + 1, head: bot.globalStart + 1)   // inside "Top" (after "T") inside "Bot" (after "B")
         v.deleteBackward()
         XCTAssertFalse(v.currentBlocks().contains { if case .table = $0 { return true } else { return false } })
         // endpoints merged: "T" + "ot" = "Tot"
@@ -81,7 +79,7 @@ final class CanvasTableBoundaryTests: XCTestCase {
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 500); v.layoutIfNeeded()
         let before = v.documentSizeValue
-        v.anchor = 0; v.head = 0
+        v.setSelectionForTesting(anchor: 0, head: 0)
         v.insertText("X")
         XCTAssertEqual(v.documentSizeValue, before + 1, "keystroke must not be dropped")
         guard case .table(let model) = (v.boxes.first as! TableBlockBox).currentBlock(),
@@ -99,7 +97,7 @@ final class CanvasTableBoundaryTests: XCTestCase {
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 500); v.layoutIfNeeded()
         let before = v.documentSizeValue
-        v.anchor = v.documentSizeValue; v.head = v.anchor
+        v.setSelectionForTesting(anchor: v.documentSizeValue, head: v.documentSizeValue)
         v.insertText("Y")
         XCTAssertEqual(v.documentSizeValue, before + 1, "keystroke must not be dropped")
         let tableBlock = v.currentBlocks().compactMap { b -> TableBlock? in

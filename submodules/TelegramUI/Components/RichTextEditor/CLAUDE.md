@@ -463,7 +463,7 @@ start of content right after a leading blank — so **two newlines at the beginn
 a **wholly-empty** block → un-code (`uncodeEmptyCodeBlock`); a MIDDLE blank line just inserts another newline.
 **Backspace** in a fully-empty code block un-codes it to body;
 a **tap below** a trailing code block appends a body paragraph; **cross-block** edits treat a code endpoint
-like media (truncate-and-keep partial coverage, drop full coverage) in `applyReplace`. **Creation:**
+like media (truncate-and-keep partial coverage, drop full coverage) in `applyReplaceOutcome`. **Creation:**
 `makeCodeBlock()` (`+ParagraphFormat`, façade-forwarded) toggles the touched top-level paragraphs into one code
 block (joining BOTH paragraph and existing-code text, refusing a selection that spans a non-text block) and
 toggles back to body paragraphs split on `"\n"`; wired to the composer's Format▸Code via
@@ -602,8 +602,8 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   `AttributedStringMapper.tableCellVariant()` copies a mapper onto it preserving theme/emojiScale. Each
   `TableBlockBox` derives a cell mapper once and builds every cell box with it. To keep edits consistent, a
   box created as a split/merge replacement **inherits its source box's mapper** (`CanvasBlock` now exposes
-  `mapper { get }`; the three cell-capable creators — `applyReplace` merge, `insertParagraphBreak` split,
-  `mergeParagraphs` — pass `start.box.mapper`/`p.mapper`/`upper.mapper` instead of the canvas mapper), and the
+  `mapper { get }`; the three cell-capable creators — `applyReplaceOutcome` merge, `insertParagraphBreak` split,
+  `mergeParagraphsOutcome` — pass `start.box.mapper`/`p.mapper`/`upper.mapper` instead of the canvas mapper), and the
   empty-cell typing path (`typingAttributeDict`'s empty-storage branch) resolves the owning box via
   `activeStack` and uses **its** mapper — so an empty cell's first typed character is 15pt too. Headings keep
   their fixed sizes in cells. (An explicit run `fontSize` still wins; read-back pins the rendered 15pt.)
@@ -681,17 +681,17 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   in `docs/instantpage-richtext.md` + `docs/richtext-composer.md` §4. Design/plan:
   `docs/superpowers/{specs,plans}/2026-07-08-richtext-media-spoiler*`.
 - **Backspace targeting a media block replaces it with an empty body paragraph IN PLACE** (2026-06-27, supersedes
-  the older per-case media-backspace rules). `replaceMediaWithEmptyParagraph(at:)` removes the media block and
+  the older per-case media-backspace rules). `replaceMediaWithEmptyParagraphOutcome(at:)` removes the media block and
   drops a fresh empty `.body` paragraph in its slot, caret there — NOT the old delete-and-merge-into-the-block-above
   (`deleteImageBox`) nor the old "act on the previous paragraph" gap behavior. It unifies every way a Backspace
-  "lands on" a media block, reached on FOUR paths in `deleteBackward` / `applySelectionReplace`:
+  "lands on" a media block, reached on FOUR paths in `deleteBackward` / `applySelectionReplaceOutcome`:
   - **collapsed caret at the media's leading gap** (`mediaBox(atGap: head)` branch) — **NOTE: narrowed
     2026-07-21** to the TAP-SELECTED case only (`imageSelection == img.id`); a plain non-selected gap caret now
     acts on the PREVIOUS block instead (see the "Backspace at a media block's leading gap" note below);
   - **collapsed caret at the start of the caption** (`pos.box is MediaBlockBox, pos.local == 0`) — empty OR
     non-empty caption (the caption text is **discarded**);
   - **a selection whose bounds EXACTLY equal a media node's span** (`from == nodeStart && to == textStart +
-    textLength`) in `applySelectionReplace` (deliberate select-the-image-then-delete);
+    textLength`) in `applySelectionReplaceOutcome` (deliberate select-the-image-then-delete);
   - **the iOS object-replacement RANGE of a tap-selected media — the LOAD-BEARING, compiler-invisible case**
     (device-log-verified). Tapping a media runs `selectImage` (collapsed caret at the gap, `imageSelection` set),
     but the `selectedTextRange` setter clears `imageSelection` and, right before Backspace, **iOS OVERRIDES the
@@ -707,8 +707,13 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
     stream`), don't hypothesise twice.**
 
   A media delete never leaves a zero-block document (a lone-block replace yields the empty paragraph). The image
-  edit-menu **"Delete"** still fully REMOVES the block (`deleteImageBox`, merges up) — only Backspace was
-  respecified. (`deleteBlock(at:parkingCaretAtGapOf:)` was removed with its sole caller.)
+  edit-menu **"Delete"** still fully REMOVES the block — only Backspace was respecified. (`deleteBlock(at:parkingCaretAtGapOf:)`
+  was removed with its sole caller.) **Name corrected 2026-08-21 (Task 36c), behaviour VERIFIED not inherited:**
+  this said `deleteImageBox`, which no longer exists under that spelling and was not this path's callee anyway.
+  The menu's Delete closure is `+Media.swift`'s `MediaControlRequest.delete` → `deleteMediaBlock(id:)`
+  (whole block) or `deleteMediaItem(blockID:itemIndex:)` (one album cell). `deleteImageBoxOutcome`'s own doc
+  comment in `+Editing.swift` is where this whole class of mis-attribution is described — including why its
+  count is deliberately not written down anywhere. Do not restate it here.
 
 **Backspace at a media block's leading gap (2026-07-21).** A plain, NON-tap-selected caret at a media
 block's leading gap (`nodeStart`, the slot to the LEFT of the image) now acts on the PREVIOUS block
@@ -728,14 +733,14 @@ deletable via tap-select + Backspace through the `imageSelection == img.id` bran
   (`deleteBackward`, the mirror of the leading-gap rule above). A collapsed caret at the start (`local == 0`) of
   a paragraph whose previous block is a non-text **atom** — an image (`MediaBlockBox`), a table (`TableBlockBox`),
   or a code block (`CodeBlockBox`), unified via `isNonParagraphAtom(_:)` — must NOT delete that block (you can't
-  merge text into it): an **empty** paragraph is removed (`removeBlock(at:parkingCaretAt:)`, so *"deleting the
+  merge text into it): an **empty** paragraph is removed (`removeBlockOutcome(at:parkingCaretAt:)`, so *"deleting the
   last paragraph" is always possible*), a **non-empty** one is kept; either way the caret steps back to the
   block's nearest text slot via `prevTextPosition` (an image's caption end, a table's last cell end, a code
   block's end) — never the block's degenerate node-start boundary. Previously the image branch called
   `deleteImageBox(at: pos.index - 1)` and silently destroyed the image; the table branch moved the caret but
   *kept* the empty paragraph (undeletable); the code branch left the empty paragraph in place. Text blocks
   (body/heading/quote/list paragraphs) still take the normal merge path below. (Select All + backspace still
-  removes a covered image — that goes through `applyReplace`, below.)
+  removes a covered image — that goes through `applyReplaceOutcome`, below.)
 - **An audio media block (`MediaKind.audio`) is a CAPTION-LESS atom** (2026-06-27) — unlike image/video/location it
   has **no caption** (not rendered, editable, or in the position model). `DocumentTree` emits `mediaBlock([mediaAtom])`
   (nodeSize 3, no caption paragraph), and `MediaBlockBox` is **dual-moded on `kind == .audio`** — `textLayout` →
@@ -774,7 +779,7 @@ deletable via tap-select + Backspace through the `imageSelection == img.id` bran
   document's only block is fine — a lone `[table]`/`[image]` is a valid document (the caret lands in the first
   cell / caption; tap-below re-adds a paragraph). The empty-replace only targets `BlockBox` paragraphs, so it
   never replaces an image caption / code block the caret happens to sit in.
-- **Select All + backspace removes a covered image, even a leading/trailing one** (`applyReplace` cross-block).
+- **Select All + backspace removes a covered image, even a leading/trailing one** (`applyReplaceOutcome` cross-block).
   A media endpoint is now dropped when the selection covers its **whole node** (leading gap + entire caption:
   `lo <= box.nodeStart && hi >= box.textStart + box.textLength`), so the merge path's `replaceSubrange(start...
   end)` clears it like a covered MIDDLE image already was. A **partially**-covered media endpoint (selection
@@ -912,7 +917,7 @@ RTL paragraphs (Arabic/Hebrew/…) lay out per-paragraph, **auto-detected by def
 - **LOAD-BEARING — font FAMILY is display-only and must NOT round-trip.** `NSTextStorage` font-fixing substitutes a
   script font into a run's `.font` **in storage** when the style font can't render the glyphs (Arabic/Hebrew/CJK).
   `characterAttributes(from:)` must therefore **not** capture `fontFamily` from the rendered font — it once did, so
-  the substituted family round-tripped and the font visibly changed on a backspace **merge** (`mergeParagraphs` →
+  the substituted family round-tripped and the font visibly changed on a backspace **merge** (`mergeParagraphsOutcome` →
   `currentParagraph()`). Font **size** IS still pinned on read-back (the 15pt table-cell round-trip needs it);
   bold/italic round-trip via font traits; forward `font(for:)` still honors an explicit import-set `fontFamily`.
 - **LOAD-BEARING — bold is a user-intent MARKER (`.rtBold`), not the rendered trait (2026-06-29).** The iOS
@@ -1016,7 +1021,7 @@ yet — verify via an RTE-active composer (`forceNewTextInput` ON — Debug Sett
   a stray Backspace can't then delete table rows), sets `pendingSpellingMenu`, presents the menu. The iOS-16
   `menuFor` short-circuits to the guesses `UIMenu` when `pendingSpellingMenu != nil` (bypasses the host
   `contextMenuItemsProvider`); iOS 13–15 uses `UIMenuController` + fixed `spellGuess0…3` selectors. Replace =
-  `editing { applySelectionReplace(...) }` (one undo step) then re-check. Gated on `wasFirstResponder` (a focusing
+  `editing { applySelectionReplaceOutcome(...) }` (one undo step) then re-check. Gated on `wasFirstResponder` (a focusing
   tap only places the caret). `pendingSpellingMenu` cleared at the top of `dismissEditMenuForSelectionOrTextChange`.
 - **Display-only** — nothing spell-related enters `Document`; **no `RichTextEditorCore` change**.
 - **LOAD-BEARING (kept from the public feature):** `drawCellSpelling` mirrors `drawCellSelection`'s
@@ -1098,10 +1103,10 @@ FAMILY does NOT have this problem (it's deliberately not round-tripped — see t
 **Where it bites (patched ~2026-07-05):**
 - **MERGE across styles is handled centrally in `ParagraphBlock.merging`** (Core): when the two paragraphs'
   styles differ, the appended (other) runs get their `fontSize` cleared so they inherit the surviving style's
-  size. This covers every merge path at once — `deleteBackward`'s top-level `applyReplace` merge (Backspace at
+  size. This covers every merge path at once — `deleteBackward`'s top-level `applyReplaceOutcome` merge (Backspace at
   a body paragraph's start into a preceding heading — reached as a RANGE `[prevEnd, thisStart]`, NOT a
-  collapsed caret, so it goes through `applySelectionReplace` → `applyReplace` → `merging`) and
-  `mergeParagraphs`. Same-style merges keep the pin (preserving the 15pt table-cell round-trip).
+  collapsed caret, so it goes through `applySelectionReplaceOutcome` → `applyReplaceOutcome` → `merging`) and
+  `mergeParagraphsOutcome`. Same-style merges keep the pin (preserving the 15pt table-cell round-trip).
 - **SPLIT (`insertParagraphBreak`) is still a separate patch**: Return in a heading makes the tail a body
   paragraph and clears the tail runs' `fontSize` (a split is not a `merging` call, so it needs its own sweep).
 
@@ -1118,7 +1123,7 @@ a RANGE. Centralizing in `merging` + testing the range form fixed it.)
   invariant). Then a heading run reads back with `fontSize == nil` and inherits whatever paragraph style it
   lands in; the 15pt cell case is handled by resolving the size against the *cell's* style at pin time (pin
   only when 15 ≠ the destination style's default), or by carrying the cell size as context, not per-run.
-- Then delete the scattered `fontSize = nil` patches in `insertParagraphBreak` / `mergeParagraphs` — they
+- Then delete the scattered `fontSize = nil` patches in `insertParagraphBreak` / `mergeParagraphsOutcome` — they
   become unnecessary once size inherits the style by construction.
 - Guardrail until then: any new code path that moves runs into a different-styled paragraph must strip the
   runs' pinned `fontSize` (or it will render at the wrong size).
@@ -1181,7 +1186,7 @@ a RANGE. Centralizing in `merging` + testing the range form fixed it.)
   near an emoji places the caret mid-cluster, and the next insert/delete (incl. via the chat composer's
   `selectedRange`) splits the cluster → a stray code unit (the "service character"). Pairs with the
   grapheme-aware `deleteBackward` below — both keep the editor surrogate-safe.
-- **Range delete/replace expands to whole grapheme clusters.** `applySelectionReplace` (THE chokepoint for
+- **Range delete/replace expands to whole grapheme clusters.** `applySelectionReplaceOutcome` (THE chokepoint for
   every selection-replacing edit — delete, type-over, paste, `replace(_:withText:)`) runs
   `rangeExpandedToGraphemeBoundaries` first, so a range covering only PART of a composed sequence is widened
   to the whole cluster. This is load-bearing for the **chat composer**: the OS delivers backspace there as a
@@ -1286,7 +1291,7 @@ a RANGE. Centralizing in `merging` + testing the range form fixed it.)
   paste edit (the default `coalescing: .none`), and IME composition commit + resign-first-responder + `setBlocks`
   (which call `breakUndoCoalescing()`; `setBlocks` also covers the undo/redo restore). Only the 3 char-insert
   `insertText` sites pass `.typing` and the 3 plain-delete `deleteBackward` sites pass `.deleting`; every
-  structural delete (paragraph merge / `removeBlock` / media-replace / un-quote / un-code / cross-block merge)
+  structural delete (paragraph merge / `removeBlockOutcome` / media-replace / un-quote / un-code / cross-block merge)
   stays `.none`. Scope note: system replacements via `replace(_:withText:)` (autocorrect/dictation) stay
   `.none`, so a dictation utterance is its own undo step. `undoRegistrationCount` is a test seam counting new
   steps; `UndoCoalescingTests`.
@@ -1525,7 +1530,7 @@ Renderer side + the design record: `docs/superpowers/specs/2026-08-18-code-block
 
 **Done** (model + editing + rendering all in place): the Core model, global position model, and JSON/`.rtdoc`
 serialization; continuous **cross-block and partial-cross-cell selection + editing** — the headline
-requirement, incl. editing across stacks via `applyReplace` / `applyMultiRegionClear`; structural editing
+requirement, incl. editing across stacks via `applyReplaceOutcome` / `applyMultiRegionClearOutcome`; structural editing
 (Enter splits / Backspace merges / cross-block delete) with snapshot undo; **lists** (rendering +
 `setList` / indent / outdent, incl. an **interactive checklist** — tappable `CheckNode` checkbox + message
 round-trip + emoji external share, see the note above), **images** (caption + gap cursor + selection highlight), **tables**
@@ -1616,3 +1621,30 @@ pre-move archive at `~/Documents/RichTextEditor/docs/superpowers/{specs,plans,sp
 foundational two: the main design spec (`2026-05-30-ios-rich-text-editor-design.md`) and the
 table-selection **spike findings** (`2026-05-30-table-selection-spike-findings.md` — the API learnings that
 drove the single-`UITextInput` architecture and its caveats).
+
+## Verification traps in this package (earned, 2026-08)
+
+Six measurement traps that cost real time during the input-backend seam work. Each is specific to this
+package or this repo, and each produced a **green result that meant nothing** until it was caught.
+
+- **`Scripts/iostest.sh` prints one `Executed …` summary PER TARGET, and the LAST is Core's.** Tailing the
+  log gives you the Core number (a few hundred) and reads as the whole suite (a few thousand). Always record
+  the decomposition: `N executed (UIKit X / S skipped + Core Y), exit 0`.
+- **`swift test --filter <Suite>` selects nothing here** and prints `Executed 0 tests, with 0 failures` — a
+  vacuous pass. Use `Scripts/iostest.sh <Target>/<Suite>` instead.
+- **`swift test` compiles NO canvas code.** All 67 `Canvas/*.swift` files are `#if canImport(UIKit)`-guarded
+  and the SwiftPM test build targets macOS, so a mutation planted in one of them proves nothing about
+  compilation. Build for the simulator when the claim is "this would/wouldn't compile".
+- **`sysctlbyname("kern.osversion")` in a simulator returns the HOST MAC's build** (e.g. `25G76`), not the
+  simulated iOS build. Use `ProcessInfo.operatingSystemVersionString`. This matters because two iOS 26.5
+  runtimes can be installed (`23F73` and a beta) sharing one identifier, and `device.plist` records only the
+  identifier.
+- **The `UITextInput` position axis is SPARSE**: a top-level paragraph boundary occupies TWO position slots
+  where the text projection emits one `"\n"`. Offsets are NOT character indices. `positionFromPosition:offset:`
+  does raw arithmetic then snaps, so aiming at a character index lands one character early past every
+  boundary. See `DocumentCanvasView+ComposerSelection.swift` for the existing global↔flat mapper.
+- **Never `pgrep -f "<pattern>"` from a watcher whose own command line contains that pattern** — it matches
+  itself and the loop never exits. Wait on a PID or a sentinel file. (Cost 42 minutes once.)
+
+**And the general form of all six:** before recording an empty or zero result as evidence, prove the
+instrument can produce a non-empty one. A count from an unvalidated command is not a measurement.

@@ -28,6 +28,7 @@ extension DocumentCanvasView {
                 p.layout.attributedString = mapper.attributedString(for: para)
             }
             recomputeSpans()
+            return .unchanged
         }
     }
 
@@ -70,8 +71,7 @@ extension DocumentCanvasView {
                 newBoxes.replaceSubrange(first...first, with: paras)
                 owning.boxes = newBoxes
                 recomputeSpans()
-                anchor = paras[0].textStart; head = paras[0].textStart
-                return
+                return .caret(at: paras[0].textStart)
             }
             // Toggle ON: join the touched blocks' text with "\n" into one code block. Existing code
             // block text is preserved (not dropped); the guard above already ensured every block
@@ -84,8 +84,7 @@ extension DocumentCanvasView {
             newBoxes.replaceSubrange(first...last, with: [codeBox])
             owning.boxes = newBoxes
             recomputeSpans()
-            anchor = codeBox.textStart + codeBox.textLength    // caret at END of new code block
-            head = anchor
+            return .caret(at: codeBox.textStart + codeBox.textLength)   // caret at END of new code block
         }
     }
 
@@ -128,8 +127,7 @@ extension DocumentCanvasView {
                 newBoxes.replaceSubrange(first...first, with: paras)
                 owning.boxes = newBoxes
                 recomputeSpans()
-                anchor = paras[0].textStart; head = paras[0].textStart
-                return
+                return .caret(at: paras[0].textStart)
             }
             // Toggle ON: join the touched blocks' runs with a "\n" separator between blocks into one
             // pull-quote. The guard above already ensured every block in range has a run representation.
@@ -144,8 +142,7 @@ extension DocumentCanvasView {
             newBoxes.replaceSubrange(first...last, with: [pqBox])
             owning.boxes = newBoxes
             recomputeSpans()
-            anchor = pqBox.textStart + pqBox.textLength    // caret at END of new pull-quote block
-            head = anchor
+            return .caret(at: pqBox.textStart + pqBox.textLength)   // caret at END of new pull-quote block
         }
     }
 
@@ -195,7 +192,7 @@ extension DocumentCanvasView {
             recomputeSpans()
             // Land the caret at the start of the first child in the new block quote.
             let caret = bqBox.children.boxes.first?.leafRegions().first?.globalStart ?? (bqBox.nodeStart + 1)
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -218,7 +215,7 @@ extension DocumentCanvasView {
             boxes = newBoxes
             recomputeSpans()
             let caret = bqBox.children.boxes.first?.leafRegions().first?.globalStart ?? (bqBox.nodeStart + 1)
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -275,7 +272,7 @@ extension DocumentCanvasView {
             parentStack.boxes.replaceSubrange(index...index, with: childBoxes)
             recomputeSpans()
             let caret = childBoxes.first?.leafRegions().first?.globalStart ?? bqBox.nodeStart
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -303,7 +300,7 @@ extension DocumentCanvasView {
             }
             recomputeSpans()
             let caret = body.leafRegions().first?.globalStart ?? body.nodeStart
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
         return true
     }
@@ -328,7 +325,7 @@ extension DocumentCanvasView {
             parentStack.boxes.insert(body, at: index)      // body paragraph BEFORE the quote
             recomputeSpans()
             let caret = body.leafRegions().first?.globalStart ?? body.nodeStart
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
         return true
     }
@@ -346,6 +343,7 @@ extension DocumentCanvasView {
                 restyle(p)
             }
             recomputeSpans()
+            return .unchanged
         }
     }
 

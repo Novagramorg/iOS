@@ -37,12 +37,33 @@ extension DocumentCanvasView {
         let covered = characterFormatTargets()
         guard !covered.isEmpty else { return }
         let allOn = covered.allSatisfy { isSet($0.storage, $0.range) }
-        editing {
-            for c in covered {
-                setOn(c.storage, c.range, allOn)
-                // Direct NSTextStorage mutation bypasses BlockLayout's renderVersion bump sites, so a
-                // view-backed paragraph wouldn't repaint (its renderSignature wouldn't change). Bump here.
-                c.layout.bumpRenderVersion()
+        // TASK 39b: a host-originated ATTRIBUTE-ONLY mutation. `.formatting` / `.preserveIfRebasable`
+        // — the text length does not change, so a marked range survives in principle.
+        //
+        // **TASK 41 CLOSED THE GAP THIS COMMENT USED TO DISCLOSE, AND THEN MEASURED THAT THIS SITE
+        // CANNOT REACH IT ANYWAY.** The disclosure read: "against the real document client
+        // `.preserveIfRebasable` degrades to `.discard` here, because `.formatting` still bumps the
+        // revision and D32's rebase is identity-or-nil. The policy states the INTENT; closing that gap
+        // is that method's business, not this call site's." Both halves are now false:
+        //   * the gap is closed — `reconcileMarkedTextForExternalChange` keys its fast path on
+        //     `change.reason.preservesTextOffsets`, and `.formatting` answers "offsets unmoved", so the
+        //     rebase is never attempted and nothing degrades; "in principle" is now the mechanism.
+        //   * and it was unreachable from here regardless: `performEditing` (`+Editing.swift`) opens
+        //     with `finalizeMarkedText()`, so the `editing { }` below COMMITS any live composition
+        //     BEFORE the mutation runs, and the policy is reached with no marked range at all.
+        //     MEASURED at BASE and pinned by `MarkedStateAuthorityTests
+        //     .test_aBoldToggleDuringACompositionCommitsIt_asItAlreadyDidAtBase`.
+        // The policy declaration stays: it is the honest description of the change, and it is what a
+        // future caller that does NOT go through `editing { }` would rely on.
+        synchronizingExternalChange(reason: .formatting, markedTextPolicy: .preserveIfRebasable) {
+            editing {
+                for c in covered {
+                    setOn(c.storage, c.range, allOn)
+                    // Direct NSTextStorage mutation bypasses BlockLayout's renderVersion bump sites, so a
+                    // view-backed paragraph wouldn't repaint (its renderSignature wouldn't change). Bump here.
+                    c.layout.bumpRenderVersion()
+                }
+                return .unchanged
             }
         }
     }

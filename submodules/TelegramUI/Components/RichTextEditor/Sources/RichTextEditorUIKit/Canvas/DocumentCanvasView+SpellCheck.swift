@@ -178,7 +178,7 @@ extension DocumentCanvasView {
     func applySpellingReplacement(_ guess: String) {
         guard let pending = pendingSpellingMenu else { return }
         pendingSpellingMenu = nil
-        editing { applySelectionReplace(globalFrom: pending.range.location,
+        editing { applySelectionReplaceOutcome(globalFrom: pending.range.location,
                                         globalTo: pending.range.location + pending.range.length, text: guess) }
         clearNativeAnnotations(global: pending.range, onlyStyle: .spelling)   // the corrected word's spelling flag only — don't wipe an overlapping grammar flag
         let newRange = NSRange(location: pending.range.location, length: (guess as NSString).length)

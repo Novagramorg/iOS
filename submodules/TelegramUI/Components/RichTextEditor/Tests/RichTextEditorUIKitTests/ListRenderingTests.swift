@@ -207,8 +207,7 @@ final class ListRenderingTests: XCTestCase {
             ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Alpha")]),
             ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Beta")]),
         ])
-        v.anchor = v.boxes[0].textStart
-        v.head = v.boxes[1].textStart + 1
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[1].textStart + 1)
         v.setList(.bullet)
         XCTAssertEqual((v.boxes[0] as! BlockBox).listMembership?.marker, .bullet)
         XCTAssertEqual((v.boxes[1] as! BlockBox).listMembership?.marker, .bullet)
@@ -219,7 +218,7 @@ final class ListRenderingTests: XCTestCase {
                                        runs: [TextRun(text: "Item")])])
         let um = UndoManager(); um.groupsByEvent = false
         v.undoManagerOverride = um
-        v.anchor = v.boxes[0].textStart + 1; v.head = v.anchor
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart + 1, head: v.boxes[0].textStart + 1)
         um.beginUndoGrouping(); v.setList(nil); um.endUndoGrouping()
         XCTAssertNil((v.boxes[0] as! BlockBox).listMembership)
         um.undo()

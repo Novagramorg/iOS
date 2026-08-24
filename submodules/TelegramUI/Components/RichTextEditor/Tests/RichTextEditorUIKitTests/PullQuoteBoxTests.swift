@@ -348,8 +348,7 @@ final class PullQuoteBoxTests: XCTestCase {
             return XCTFail("no author region")
         }
         let before = authorRegion.layout.attributedString.copy() as! NSAttributedString
-        canvas.anchor = authorRegion.globalStart
-        canvas.head = authorRegion.globalStart + authorRegion.length
+        canvas.setSelectionForTesting(anchor: authorRegion.globalStart, head: authorRegion.globalStart + authorRegion.length)
         canvas.toggleItalic()
         XCTAssertEqual(authorRegion.layout.attributedString, before,
                        "toggleItalic in the pull-quote author region must not mutate the author's attributes")

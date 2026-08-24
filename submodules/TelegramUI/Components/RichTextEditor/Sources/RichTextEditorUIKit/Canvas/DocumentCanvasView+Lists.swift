@@ -104,6 +104,7 @@ extension DocumentCanvasView {
                 restyle(p)
             }
             recomputeSpans()
+            return .unchanged
         }
     }
 
@@ -127,6 +128,7 @@ extension DocumentCanvasView {
             box.listMembership?.checked = newValue
             restyle(box)
             recomputeSpans()
+            return .unchanged
         }
         checklistMarkerViews[box.id]?.view.setChecked(newValue, animated: true)
     }
