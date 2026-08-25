@@ -40,16 +40,27 @@ public struct AttributedStringMapper {
     /// Host-provided formula renderer. `nil` (or returning nil for invalid LaTeX) makes formula runs
     /// display as raw LaTeX while preserving semantic metadata.
     public var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)?
+    /// Host-provided button type icon, already tinted to the colour it is handed. A nil RETURN means
+    /// this action has no icon, and the pill then reserves no width for one either — one question with
+    /// one answer, so what is drawn and what was measured cannot disagree. (An icon that exists but
+    /// whose image could not be loaded is a non-nil `RichTextButtonIcon` with a nil `image`; see there.)
+    ///
+    /// It has to come from the host: the icon depends on the button's ACTION, and the editor's
+    /// Telegram-free model carries every action it cannot name as an opaque `.unsupported` blob. Only
+    /// the host can decode that back into the action the renderer will resolve an icon from.
+    public var buttonIconProvider: ((ButtonAction) -> RichTextButtonIcon?)?
 
     public init(styleSheet: StyleSheet = .default, emojiScale: CGFloat = 1.0,
                 theme: RichTextEditorTheme = .default,
                 baseWritingDirection: NSWritingDirection = .natural,
-                formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? = nil) {
+                formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? = nil,
+                buttonIconProvider: ((ButtonAction) -> RichTextButtonIcon?)? = nil) {
         self.styleSheet = styleSheet
         self.emojiScale = emojiScale
         self.theme = theme
         self.baseWritingDirection = baseWritingDirection
         self.formulaRenderer = formulaRenderer
+        self.buttonIconProvider = buttonIconProvider
     }
 
     /// A copy of this mapper that renders table-cell content (a smaller body/quote base size, see
@@ -58,7 +69,8 @@ public struct AttributedStringMapper {
     /// via their source box's `mapper`).
     public func tableCellVariant() -> AttributedStringMapper {
         AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme,
-                               baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer)
+                               baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer,
+                               buttonIconProvider: buttonIconProvider)
     }
 
     /// A copy that renders body/pull-quote content at `size` points, PRESERVING this mapper's
@@ -68,7 +80,8 @@ public struct AttributedStringMapper {
         var s = styleSheet
         s.metrics.body.size = size
         return AttributedStringMapper(styleSheet: s, emojiScale: emojiScale, theme: theme,
-                                      baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer)
+                                      baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer,
+                                      buttonIconProvider: buttonIconProvider)
     }
 
     /// Points to enlarge a rendered inline emoji beyond its glyph box, per paragraph style (decoupled from
@@ -133,10 +146,20 @@ public struct AttributedStringMapper {
             label.addAttribute(.font, value: UIFont.systemFont(ofSize: fontSize, weight: .semibold),
                                range: NSRange(location: 0, length: label.length))
         }
+        let colors = theme.resolvedButtonColors(color: button.color, isDisabled: button.action == .disabled,
+                                                isLink: isBlockPill && button.isLink)
+        // Resolved BEFORE measuring, because whether there is an icon is also whether there is width to
+        // reserve for one. One question, one answer — a separate "does it have an icon" predicate could
+        // disagree with what is actually drawn.
+        let icon = buttonIconProvider?(button.action)
+        // Only an INLINE pill pays width for its icon; a block pill's badge overlays its fill and the
+        // row packer keeps the label clear of it with `blockIconReserve` instead.
+        let iconReserve: CGFloat = (icon != nil && !isBlockPill) ? styleSheet.metrics.button.inlineIconReserve : 0.0
+
         var effective: NSAttributedString = label
         var truncated = false
         if let maxWidth {
-            (effective, truncated) = truncatedButtonLabel(label, availableWidth: max(0.0, maxWidth - hPad * 2.0))
+            (effective, truncated) = truncatedButtonLabel(label, availableWidth: max(0.0, maxWidth - hPad * 2.0 - iconReserve))
         }
 
         var ascent: CGFloat = 0.0
@@ -154,14 +177,29 @@ public struct AttributedStringMapper {
         return ButtonTextAttachment(
             button: button,
             labelString: effective,
-            size: CGSize(width: inkWidth + hPad * 2.0, height: ascent + descent + vPad * 2.0),
+            size: CGSize(width: inkWidth + hPad * 2.0 + iconReserve, height: ascent + descent + vPad * 2.0),
             ascent: ascent + vPad,
             descent: descent + vPad,
             horizontalPadding: hPad,
             isTruncated: truncated,
-            colors: theme.resolvedButtonColors(color: button.color, isDisabled: button.action == .disabled,
-                                               isLink: isBlockPill && button.isLink)
+            colors: colors,
+            icon: icon,
+            iconReserve: iconReserve,
+            isBlockPill: isBlockPill
         )
+    }
+
+    /// Whether a button carries a type icon — the RESERVE question, asked without rasterising.
+    ///
+    /// Falls back to `richTextButtonHasBadge` when no host provider is registered. That coarse rule is
+    /// what the row packer used before there was a provider, so an unconfigured editor (a preview, a
+    /// test) keeps the geometry it had rather than silently re-flowing its rows; a configured one gets
+    /// the renderer's exact answer, including for the actions the editor's own model cannot name.
+    func buttonHasIcon(_ action: ButtonAction) -> Bool {
+        if let buttonIconProvider {
+            return buttonIconProvider(action) != nil
+        }
+        return richTextButtonHasBadge(action)
     }
 
     func attributedFormulaString(latex: String, attributes baseAttributes: [NSAttributedString.Key: Any]) -> NSAttributedString {

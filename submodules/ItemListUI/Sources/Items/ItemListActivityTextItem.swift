@@ -104,7 +104,7 @@ public class ItemListActivityTextItemNode: ListViewItemNode {
     public func asyncLayout() -> (_ item: ItemListActivityTextItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset: CGFloat = 15.0 + params.leftInset
             let verticalInset: CGFloat = 7.0
             

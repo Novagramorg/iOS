@@ -3630,7 +3630,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
         
-    private let emptyInputView = EmptyInputView()
+    // `EmptyInputView` is exported publicly by both ChatEntityKeyboardInputNode and
+    // TextFieldComponent, and both module names are also type names here, so neither can be used as
+    // a disambiguating qualifier. The class is trivial, so keep a private one.
+    private final class EmptyKeyboardInputView: UIView, UIInputViewAudioFeedback {
+        var enableInputClicksWhenVisible: Bool {
+            return true
+        }
+    }
+
+    private let emptyInputView = EmptyKeyboardInputView()
     private func chatPresentationInterfaceStateInputView(_ state: ChatPresentationInterfaceState) -> UIView? {
         switch state.inputMode {
         case .text:

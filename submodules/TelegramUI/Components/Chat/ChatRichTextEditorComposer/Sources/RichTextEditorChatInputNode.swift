@@ -8,6 +8,7 @@ import TextFormat
 import TelegramCore
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextButtonIcons
 import ChatInputTextNode
 import CheckNode
 import TelegramPresentationData
@@ -150,6 +151,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         }
     }
 
+    /// A button pill's type icon. Registered unconditionally rather than proxied through a host hook
+    /// like the formula renderer: the mapping is a pure function of the action, and it is GEOMETRY —
+    /// an inline pill grows by `inlineIconReserve` to hold its icon, so a composer that skipped it
+    /// would wrap a paragraph differently from the message it sends.
+    private func updateButtonIconProvider() {
+        self.editorView.registerButtonIconProvider(richTextEditorButtonIcon)
+    }
+
     public override func didLoad() {
         super.didLoad()
         // Model A: this node is the wrapper (the panel frames `asNode` to fill the clipping container);
@@ -185,6 +194,17 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             topInset: 3.0,
             bottomInset: 3.0
         )
+        // Code-block geometry for the compact composer. The band does NOT bleed at all here: the
+        // editor sits inside the input field's rounded background (inset by the panel's
+        // `textInputViewInternalInsets`, 12 left / 11 right) and its right content margin also
+        // reserves room for the accessory + send buttons, so ANY outward bleed reads as spilling past
+        // what the field shows. The band therefore spans exactly the text column, and the code is
+        // indented within it instead — the inward counterpart of the renderer's outward bleed. A
+        // small radius keeps the band from fighting the field's own rounding.
+        //
+        // Deliberately NOT WYSIWYG against the sent bubble, which is full-bleed and square: a compact
+        // field is a different container shape from a message bubble.
+        self.editorView.codeStyle = CodeStyle(horizontalBleed: 0.0, horizontalInset: 8.0, cornerRadius: 4.0)
         // Media (image/video/location/audio) insets like the text paragraphs in the compact composer
         // (the document/article editor keeps the default edge-to-edge bleed).
         self.editorView.mediaBlockStyle = MediaBlockStyle(horizontalBleed: 0.0)
@@ -287,6 +307,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Formula rendering is owned by the chat host; math-rendering dependencies live above this module.
         // Reinstalling when the provider arrives after `didLoad` reloads already-present formula atoms.
         self.updateFormulaRenderer()
+
+        self.updateButtonIconProvider()
 
         // Media rendering. The editor hosts each `.media` block via this provider, asking by the opaque host
         // `mediaID` (the node's own key, recorded in `mediaByID` by `registerMediaValue`). Resolve it back to
@@ -554,7 +576,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             accent: colors.accent,
             tableBorder: colors.tableBorder,
             tableHeaderBackground: colors.tableHeaderBackground,
-            codeBackground: colors.tableHeaderBackground,  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
+            codeBackground: colors.tableHeaderBackground,  // a code band reads as a highlighted table row — the same fill, deliberately
             containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8),
             shadowCursor: colors.shadowCursor,
             quoteAuthorText: colors.quoteAuthorText,

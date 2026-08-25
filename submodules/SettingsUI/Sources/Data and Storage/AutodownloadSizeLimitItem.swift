@@ -191,7 +191,7 @@ private final class AutodownloadSizeLimitItemNode: ListViewItemNode, ItemListIte
         let makeMinTextLayout = TextNode.asyncLayout(self.minTextNode)
         let makeMaxTextLayout = TextNode.asyncLayout(self.maxTextNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var themeUpdated = false
             if currentItem?.theme !== item.theme {
                 themeUpdated = true

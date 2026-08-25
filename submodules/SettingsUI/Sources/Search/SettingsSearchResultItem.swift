@@ -187,7 +187,7 @@ class SettingsSearchResultItemNode: ListViewItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var leftInset: CGFloat = params.leftInset
             let contentInset: CGFloat = 60.0
             

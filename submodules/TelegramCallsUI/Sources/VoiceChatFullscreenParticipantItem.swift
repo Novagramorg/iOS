@@ -436,7 +436,7 @@ class VoiceChatFullscreenParticipantItemNode: ItemListRevealOptionsItemNode {
         let currentItem = self.layoutParams?.0
         var hasVideo = self.videoNode != nil
         
-        return { item, params, first, last in
+        return { [weak self] item, params, first, last in
             let titleFont = Font.semibold(13.0)
             var titleAttributedString: NSAttributedString?
             

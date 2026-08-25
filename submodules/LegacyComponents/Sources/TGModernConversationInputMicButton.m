@@ -456,7 +456,10 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
         if (_lock == nil) {
             _stopButton = [[TGModernButton alloc] initWithFrame:CGRectMake(0.0f, 0.0f, 40.0f, 40.0f)];
             _stopButton.accessibilityLabel = TGLocalized(@"VoiceOver.Recording.StopAndPreview");
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wdeprecated-declarations" // legacy non-configuration UIButton: property is still honored
             _stopButton.adjustsImageWhenHighlighted = false;
+            #pragma clang diagnostic pop
             _stopButton.exclusiveTouch = true;
             [_stopButton setImage:[self stopButtonImage] forState:UIControlStateNormal];
             _stopButton.userInteractionEnabled = false;

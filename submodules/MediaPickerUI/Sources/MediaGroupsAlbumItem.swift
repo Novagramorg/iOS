@@ -195,7 +195,7 @@ class MediaGroupsAlbumItemNode: ListViewItemNode {
         let makeCountLayout = TextNode.asyncLayout(self.countNode)
         let currentItem = self.item
         
-        return { item, params, first, last in
+        return { [weak self] item, params, first, last in
             var updatedTheme: PresentationTheme?
             
             if currentItem?.presentationData.theme !== item.presentationData.theme {

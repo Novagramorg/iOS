@@ -449,7 +449,11 @@ public final class PeerCopyProtectionInfoScreen: ViewControllerComponentContaine
         super.viewDidAppear(animated)
         
         if !self.context.isPremium {
-            Queue.mainQueue().after(0.3, {
+            Queue.mainQueue().after(0.3, { [weak self] in
+                guard let self else {
+                    return
+                }
+
                 let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
                 let controller = UndoOverlayController(
                     presentationData: presentationData,

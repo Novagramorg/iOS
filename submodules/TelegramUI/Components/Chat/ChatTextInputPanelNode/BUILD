@@ -1,5 +1,12 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
+# See //submodules/TelegramUI:composer_state_writer_sources.
+filegroup(
+    name = "composer_state_writer_sources",
+    srcs = ["Sources/ChatTextInputPanelNode.swift"],
+    visibility = ["//visibility:public"],
+)
+
 swift_library(
     name = "ChatTextInputPanelNode",
     module_name = "ChatTextInputPanelNode",

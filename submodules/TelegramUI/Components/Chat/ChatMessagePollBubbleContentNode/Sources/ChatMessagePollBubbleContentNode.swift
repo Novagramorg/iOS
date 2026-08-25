@@ -2665,7 +2665,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
         
         let isPreviewingResults = self.isPreviewingResults
 
-        return { item, layoutConstants, _, _, _, _ in
+        return { [weak self] item, layoutConstants, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none)
             
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in

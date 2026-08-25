@@ -155,7 +155,7 @@ public class ItemListActionItemNode: ListViewItemNode, ItemListItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let titleFont = Font.regular(item.presentationData.fontSize.itemListBaseFontSize)
             
             var updatedTheme: PresentationTheme?

@@ -42,6 +42,21 @@ public struct StyleSheet {
     /// the fill's bottom edge. `nil` (default) keeps the current behavior. Per-host via `QuoteStyle.bottomInset`.
     public var quoteBottomInset: CGFloat?
 
+    /// Visible gap from a code band's top/bottom edge to its glyphs. Defaults to the shared render
+    /// metrics; `CodeStyle.verticalInset` overrides it per host. A code block no longer borrows the
+    /// quote's insets — its side padding is the paragraph inset by construction, so these two are the
+    /// only geometry it still owns.
+    public var codeVerticalInset: CGFloat = RichTextCodeMetrics.default.verticalInset
+    /// Gap between a code block's bold language line and its first code line. Defaults to the shared
+    /// render metrics; `CodeStyle.languageSpacing` overrides it per host.
+    public var codeLanguageSpacing: CGFloat = RichTextCodeMetrics.default.languageSpacing
+    /// Extra inset of code text inward from its band's edges. 0 = the text sits at the paragraph
+    /// inset (the renderer's rule). Per-host via `CodeStyle.horizontalInset`.
+    public var codeHorizontalInset: CGFloat = 0
+    /// Corner radius of a code band. 0 = square (the renderer's look). Per-host via
+    /// `CodeStyle.cornerRadius`.
+    public var codeCornerRadius: CGFloat = 0
+
     /// Points of indentation per list nesting level (where each level's marker hangs).
     public static let listIndentStep: CGFloat = 24
     /// Horizontal gap reserved between a list marker and its text — the text hangs this far past the

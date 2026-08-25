@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import RichTextEditorUIKit
+import RichTextButtonIcons
 
 private func richTextFontSpec(_ attributes: InstantPageTextAttributes) -> RichTextFontSpec {
     let style: RichTextFontStyle
@@ -26,7 +27,7 @@ public extension InstantPageTheme {
     /// content.
     ///
     /// The heading ladder comes from `headingTextAttributes(level:link:)` rather than being restated,
-    /// so H3–H6's derivation from the subheader (and its response to the reader's font-size slider) is
+    /// so H1–H6's derivation from the subheader (and its response to the reader's font-size slider) is
     /// shared rather than duplicated. The block scalars come from `InstantPageMetrics.unscaled`, the
     /// same source the renderer reads at page scale.
     ///
@@ -48,13 +49,17 @@ public extension InstantPageTheme {
             caption: richTextFontSpec(self.textCategories.caption),
             table: richTextFontSpec(self.textCategories.table),
             codeBlock: codeBlock,
-            codeBlockLanguageFontSize: m.codeBlockLanguageFontSize,
             baseBlockSpacing: m.baseBlockSpacing,
             blockVerticalPadding: m.blockVerticalPadding,
             headingVerticalPadding: m.headingVerticalPadding,
             dividerVerticalPadding: m.dividerVerticalPadding,
             detailsAdjacentSpacing: m.detailsAdjacentSpacing,
             edgeSpacingReduction: edgeSpacingReduction,
+            // Sourced from the renderer's own metrics, so the editor cannot drift from what it will
+            // render as — the same arrangement as `button:` below.
+            code: RichTextCodeMetrics(
+                verticalInset: m.codeBlockVerticalInset,
+                languageSpacing: m.codeBlockLanguageSpacing),
             // Sourced from the renderer's OWN constants rather than from `RichTextButtonMetrics.default`,
             // so the article editor cannot drift from what it will render as. The composer, which cannot
             // import this module, gets the pinned default instead — `RichTextV2ButtonParityTests` asserts
@@ -69,7 +74,9 @@ public extension InstantPageTheme {
                 adjacentSpacing: instantPageInlineButtonAdjacentSpacing,
                 blockRowHeight: instantPageBlockButtonHeight,
                 blockSpacing: instantPageBlockButtonSpacing,
-                blockIconReserve: instantPageBlockButtonIconReserve,
+                blockIconReserve: richTextBlockButtonIconReserve,
+                inlineIconReserve: richTextInlineButtonIconReserve,
+                blockIconInset: richTextBlockButtonIconInset,
                 maximumButtonsPerRow: instantPageBlockButtonsPerRow
             )
         )

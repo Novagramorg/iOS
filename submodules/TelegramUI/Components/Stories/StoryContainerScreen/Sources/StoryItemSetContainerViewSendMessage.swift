@@ -389,7 +389,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             targetFrame.origin.y = availableSize.height
             transition.setFrame(view: inputMediaNode.view, frame: targetFrame, completion: { [weak inputMediaNode] _ in
                 if let inputMediaNode {
-                    Queue.mainQueue().after(0.3) {
+                    Queue.mainQueue().after(0.3) { [inputMediaNode] in
                         inputMediaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { [weak inputMediaNode] _ in
                             inputMediaNode?.view.removeFromSuperview()
                         })
@@ -1013,7 +1013,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         guard let component = view.component else {
             return
         }
-        self.presentPaidMessageAlertIfNeeded(view: view, completion: { [weak self] in
+        self.presentPaidMessageAlertIfNeeded(view: view, completion: { [weak self, view] in
             guard let self else {
                 return
             }
@@ -1101,7 +1101,11 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         let _ = (component.context.engine.data.get(
             TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
         )
-        |> deliverOnMainQueue).start(next: { [weak view] peer in
+        |> deliverOnMainQueue).start(next: { [weak view, weak self] peer in
+            guard let self else {
+                return
+            }
+
             guard let view, let component = view.component, let peer else {
                 return
             }
@@ -1424,7 +1428,11 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
     }
 
     func performPaidMessageAction(view: StoryItemSetContainerComponent.View, minStars: Int? = nil) {
-        Task { @MainActor [weak view] in
+        Task { @MainActor [weak view, weak self] in
+            guard let self else {
+                return
+            }
+
             guard let view else {
                 return
             }
@@ -1945,7 +1953,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                             }
                             attachmentController?.dismiss(animated: true)
                             self.presentICloudFileGallery(view: view, peer: peer, replyMessageId: nil, replyToStoryId: focusedStoryId)
-                        }, presentDocumentScanner: nil, send: { [weak view] mediaReferences, _, _, _ in
+                        }, presentDocumentScanner: nil, send: { [weak view, weak self] mediaReferences, _, _, _ in
                             guard let view, let component = view.component else {
                                 return
                             }
@@ -3390,7 +3398,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             }
         }
         let _ = (signal
-        |> deliverOnMainQueue).start(next: { [weak parentController] packs in
+        |> deliverOnMainQueue).start(next: { [weak parentController, view, weak self] packs in
             guard !packs.isEmpty else {
                 return
             }
@@ -3697,7 +3705,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         case let .link(_, url):
             let concealed = !doesUrlMatchText(url: url, text: url, fullText: url)
             let displayUrl = URL(string: url)?.absoluteString ?? url
-            let action = {
+            let action = { [controller, view, weak self] in
                 let _ = component.context.sharedContext.openUserGeneratedUrl(context: component.context, peerId: component.slice.effectivePeer.id, url: url, webpage: nil, concealed: concealed, forceConcealed: false, skipUrlAuth: false, skipConcealedAlert: false, forceDark: true, present: { [weak controller] c in
                     controller?.present(c, in: .window(.root))
                 }, openResolved: { [weak self, weak view] resolved in
@@ -3724,7 +3732,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             return
         case let .starGift(_, slug):
             useGesturePosition = true
-            let action = {
+            let action = { [controller, self, view] in
                 let _ = component.context.sharedContext.openUserGeneratedUrl(context: component.context, peerId: nil, url: "https://t.me/nft/\(slug)", webpage: nil, concealed: false, forceConcealed: false, skipUrlAuth: false, skipConcealedAlert: false, forceDark: true, present: { [weak controller] c in
                     controller?.present(c, in: .window(.root))
                 }, openResolved: { [weak self, weak view] resolved in
@@ -3902,7 +3910,11 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
     }
 
     func openSendStars(view: StoryItemSetContainerComponent.View) {
-        Task { @MainActor [weak view] in
+        Task { @MainActor [weak view, weak self] in
+            guard let self else {
+                return
+            }
+
             guard let view else {
                 return
             }

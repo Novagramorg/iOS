@@ -91,9 +91,9 @@ public class ChatMessageCallBubbleContentNode: ChatMessageBubbleContentNode {
         let makeLabelLayout = TextNode.asyncLayout(self.labelNode)
         let makePeopleTextLayout = TextNode.asyncLayout(self.peopleTextNode)
         
-        return { item, layoutConstants, _, _, _, _ in
+        return { [weak self] item, layoutConstants, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none)
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, position in
                 let incoming = item.message.effectivelyIncoming(item.context.account.peerId)
                 
                 let horizontalInset = layoutConstants.text.bubbleInsets.left + layoutConstants.text.bubbleInsets.right
@@ -290,7 +290,7 @@ public class ChatMessageCallBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 boundingSize.width += 54.0
                 
-                return (boundingSize.width, { boundingWidth in
+                return (boundingSize.width, { [weak self] boundingWidth in
                     return (boundingSize, { [weak self] animation, _, _ in
                         if let strongSelf = self {
                             strongSelf.item = item

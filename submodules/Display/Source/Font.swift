@@ -180,9 +180,9 @@ public struct Font {
             if traits.contains(.monospacedNumbers) {
                 updatedDescriptor = updatedDescriptor?.addingAttributes([
                 UIFontDescriptor.AttributeName.featureSettings: [
-                  [UIFontDescriptor.FeatureKey.featureIdentifier:
+                  [UIFontDescriptor.FeatureKey.type:
                    kNumberSpacingType,
-                   UIFontDescriptor.FeatureKey.typeIdentifier:
+                   UIFontDescriptor.FeatureKey.selector:
                    kMonospacedNumbersSelector]
                 ]])
             }

@@ -249,12 +249,17 @@ final class DocumentCanvasView: UIView {
     var mediaBlockStyle: MediaBlockStyle = .default
 
     /// Per-host quote geometry. Applied via `applyQuoteStyle(_:)` (rebuilds the mapper stylesheet + pushes
-    /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
+    /// render values to the underlay).
     var quoteStyle: QuoteStyle = .default
 
     /// Per-host pull-quote geometry. Applied via `applyPullQuoteStyle(_:)` (pushes corner radius + fill alpha
     /// to the underlay). Read by `pullQuotePillRects()` / `pullQuoteMarkRects()` for the pill + mark geometry.
     var pullQuoteStyle: PullQuoteStyle = .default
+
+    /// Per-host code-block geometry. Applied via `applyCodeStyle(_:)`, which resolves its optionals
+    /// against the shared render metrics (`StyleSheet.metrics.code`) — so an unset host renders what
+    /// the InstantPage V2 renderer will.
+    var codeStyle: CodeStyle = .default
 
     /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to
     /// `BlockQuoteBox`; the `expand` image likewise.
@@ -760,10 +765,27 @@ final class DocumentCanvasView: UIView {
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection,
-                                             formulaRenderer: self.mapper.formulaRenderer)
+                                             formulaRenderer: self.mapper.formulaRenderer,
+                                             buttonIconProvider: self.mapper.buttonIconProvider)
         self.blockquoteUnderlay.barWidth = q.barWidth
         self.blockquoteUnderlay.cornerRadius = q.cornerRadius
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
+    }
+
+    /// Applies code-block geometry: stores the style and resolves its optionals into the stylesheet
+    /// against the shared render metrics. The caller reloads so the new insets take effect.
+    func applyCodeStyle(_ c: CodeStyle) {
+        self.codeStyle = c
+        var s = self.mapper.styleSheet
+        s.codeVerticalInset = c.verticalInset ?? s.metrics.code.verticalInset
+        s.codeLanguageSpacing = c.languageSpacing ?? s.metrics.code.languageSpacing
+        s.codeHorizontalInset = c.horizontalInset
+        s.codeCornerRadius = c.cornerRadius
+        self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
+                                             theme: self.mapper.theme,
+                                             baseWritingDirection: self.mapper.baseWritingDirection,
+                                             formulaRenderer: self.mapper.formulaRenderer,
+                                             buttonIconProvider: self.mapper.buttonIconProvider)
     }
 
     /// Applies pull-quote geometry: stores the style, pushes corner radius + fill alpha to the barless pill
@@ -794,10 +816,16 @@ final class DocumentCanvasView: UIView {
     func applyRenderMetrics(_ m: RichTextRenderMetrics) {
         var s = self.mapper.styleSheet
         s.metrics = m
+        // `metrics.code` is the FALLBACK for an unset `CodeStyle` field, so the resolved values have
+        // to be recomputed here too — a host that sets `renderMetrics` after `codeStyle` would
+        // otherwise keep the stale defaults, which is exactly the drift this contract exists to stop.
+        s.codeVerticalInset = self.codeStyle.verticalInset ?? m.code.verticalInset
+        s.codeLanguageSpacing = self.codeStyle.languageSpacing ?? m.code.languageSpacing
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection,
-                                             formulaRenderer: self.mapper.formulaRenderer)
+                                             formulaRenderer: self.mapper.formulaRenderer,
+                                             buttonIconProvider: self.mapper.buttonIconProvider)
     }
 
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
@@ -858,9 +886,9 @@ final class DocumentCanvasView: UIView {
     /// The blockquote run fills that intersect `band` (off-screen runs are dropped so they allocate no
     /// underlay image view). The no-scroll-host fallback band covers the whole document ⇒ all runs kept.
     func visibleBlockquoteFills(band: CGRect) -> [CGRect] {
-        // Flat-quote runs + collapsed-quote / code fills come from blockquoteDecorations(); BlockQuoteBox
-        // fills (including nested) come from the recursive blockQuoteFillRects().
-        let all = blockquoteDecorations().map { $0.fill } + blockQuoteFillRects()
+        // Quote fills only (including nested), from the recursive blockQuoteFillRects(). Code bands
+        // are painted by `CodeBlockBox` itself, so they are deliberately not fed here.
+        let all = blockQuoteFillRects()
         return all.filter { $0.intersects(band) }
     }
 
@@ -1122,8 +1150,16 @@ final class DocumentCanvasView: UIView {
         // spacing matches the rendered message. Its metrics come from the mapper, so a host's
         // `renderMetrics` reaches the rhythm as well as the fonts.
         applyRootSpacingConfig()
+        // A top-level code block's band reaches the CANVAS edge by default (the document-editor look,
+        // and what the renderer does in a bubble). A compact host overrides it: the composer's canvas
+        // sits inside the input field's rounded background, and `contentRightPad` also reserves room
+        // for the accessory and send buttons — so the canvas edge is well past what the field shows.
+        let codeBleed: (minXSide: CGFloat, maxXSide: CGFloat) = codeStyle.horizontalBleed
+            .map { (minXSide: $0, maxXSide: $0) }
+            ?? (minXSide: contentLeftPad, maxXSide: contentRightPad)
         _ = root.layout(origin: CGPoint(x: contentLeftPad, y: contentMargins.top),
-                        width: contentWidth(forWidth: bounds.width))
+                        width: contentWidth(forWidth: bounds.width),
+                        codeBleed: codeBleed)
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
         for case let bq as BlockQuoteBox in boxes { bq.recompute() }   // child frames depend on the quote frame
         for case let d as DetailsBox in boxes { d.recompute() }   // body child frames depend on the details frame

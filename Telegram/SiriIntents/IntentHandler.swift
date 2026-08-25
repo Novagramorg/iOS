@@ -71,7 +71,7 @@ class IntentHandler: INExtension {
 }
 
 @objc(IntentHandler)
-class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchForMessagesIntentHandling, INSetMessageAttributeIntentHandling, INStartCallIntentHandling, INSearchCallHistoryIntentHandling {
+class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchForMessagesIntentHandling, INSetMessageAttributeIntentHandling, INStartCallIntentHandling {
     private let accountPromise = Promise<Account?>()
     private let allAccounts = Promise<[(AccountRecordId, PeerId, Bool)]>()
     
@@ -721,60 +721,6 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             completion(response)
         }))
     }
-    
-    // MARK: - INSearchCallHistoryIntentHandling
-    
-    @available(iOSApplicationExtension 11.0, iOS 11.0, *)
-    public func resolveCallTypes(for intent: INSearchCallHistoryIntent, with completion: @escaping (INCallRecordTypeOptionsResolutionResult) -> Void) {
-        completion(.success(with: .missed))
-    }
-    
-    /*public func resolveCallType(for intent: INSearchCallHistoryIntent, with completion: @escaping (INCallRecordTypeResolutionResult) -> Void) {
-        completion(.success(with: .missed))
-    }*/
-    
-    public func handle(intent: INSearchCallHistoryIntent, completion: @escaping (INSearchCallHistoryIntentResponse) -> Void) {
-        if let appGroupUrl = self.appGroupUrl {
-            let rootPath = rootPathForBasePath(appGroupUrl.path)
-            if let data = try? Data(contentsOf: URL(fileURLWithPath: appLockStatePath(rootPath: rootPath))), let state = try? JSONDecoder().decode(LockState.self, from: data), isAppLocked(state: state) {
-                let userActivity = NSUserActivity(activityType: NSStringFromClass(INSearchCallHistoryIntent.self))
-                let response = INSearchCallHistoryIntentResponse(code: .failureRequiringAppLaunch, userActivity: userActivity)
-                completion(response)
-                return
-            }
-        }
-        
-        self.actionDisposable.set((self.accountPromise.get()
-        |> take(1)
-        |> castError(IntentHandlingError.self)
-        |> mapToSignal { account -> Signal<[CallRecord], IntentHandlingError> in
-            guard let account = account else {
-                return .fail(.generic)
-            }
-            
-            account.shouldBeServiceTaskMaster.set(.single(.now))
-            return missedCalls(account: account)
-            |> castError(IntentHandlingError.self)
-            |> afterDisposed {
-                account.shouldBeServiceTaskMaster.set(.single(.never))
-            }
-        }
-        |> deliverOnMainQueue).start(next: { calls in
-            let userActivity = NSUserActivity(activityType: NSStringFromClass(INSearchCallHistoryIntent.self))
-            let response: INSearchCallHistoryIntentResponse
-            if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
-                response = INSearchCallHistoryIntentResponse(code: .success, userActivity: userActivity)
-                response.callRecords = calls.map { $0.intentCall }
-            } else {
-                response = INSearchCallHistoryIntentResponse(code: .continueInApp, userActivity: userActivity)
-            }
-            completion(response)
-        }, error: { _ in
-            let userActivity = NSUserActivity(activityType: NSStringFromClass(INSearchCallHistoryIntent.self))
-            let response = INSearchCallHistoryIntentResponse(code: .failureRequiringAppLaunch, userActivity: userActivity)
-            completion(response)
-        }))
-    }
 
     @available(iOSApplicationExtension 14.0, iOS 14.0, *)
     func provideFriendsOptionsCollection(for intent: SelectFriendsIntent, searchTerm: String?, with completion: @escaping (INObjectCollection<Friend>?, Error?) -> Void) {
@@ -1394,4 +1340,63 @@ private func mapPeersToFriends(accountId: AccountRecordId, accountPeerId: PeerId
         }
     }
     return items
+}
+
+/// `INSearchCallHistoryIntent` and friends were deprecated in iOS 15 with no replacement, but the
+/// system still dispatches them, so the handler is retained. Keeping the conformance in a deprecated
+/// extension is what lets the deprecated types appear in these signatures without tripping
+/// `-warnings-as-errors`.
+@available(iOS, deprecated: 15.0, message: "INSearchCallHistoryIntent has no replacement; retained while the system still dispatches it.")
+extension DefaultIntentHandler: INSearchCallHistoryIntentHandling {
+    @available(iOSApplicationExtension 11.0, iOS 11.0, *)
+    public func resolveCallTypes(for intent: INSearchCallHistoryIntent, with completion: @escaping (INCallRecordTypeOptionsResolutionResult) -> Void) {
+        completion(.success(with: .missed))
+    }
+    
+    /*public func resolveCallType(for intent: INSearchCallHistoryIntent, with completion: @escaping (INCallRecordTypeResolutionResult) -> Void) {
+        completion(.success(with: .missed))
+    }*/
+    
+    public func handle(intent: INSearchCallHistoryIntent, completion: @escaping (INSearchCallHistoryIntentResponse) -> Void) {
+        if let appGroupUrl = self.appGroupUrl {
+            let rootPath = rootPathForBasePath(appGroupUrl.path)
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: appLockStatePath(rootPath: rootPath))), let state = try? JSONDecoder().decode(LockState.self, from: data), isAppLocked(state: state) {
+                let userActivity = NSUserActivity(activityType: NSStringFromClass(INSearchCallHistoryIntent.self))
+                let response = INSearchCallHistoryIntentResponse(code: .failureRequiringAppLaunch, userActivity: userActivity)
+                completion(response)
+                return
+            }
+        }
+        
+        self.actionDisposable.set((self.accountPromise.get()
+        |> take(1)
+        |> castError(IntentHandlingError.self)
+        |> mapToSignal { account -> Signal<[CallRecord], IntentHandlingError> in
+            guard let account = account else {
+                return .fail(.generic)
+            }
+            
+            account.shouldBeServiceTaskMaster.set(.single(.now))
+            return missedCalls(account: account)
+            |> castError(IntentHandlingError.self)
+            |> afterDisposed {
+                account.shouldBeServiceTaskMaster.set(.single(.never))
+            }
+        }
+        |> deliverOnMainQueue).start(next: { calls in
+            let userActivity = NSUserActivity(activityType: NSStringFromClass(INSearchCallHistoryIntent.self))
+            let response: INSearchCallHistoryIntentResponse
+            if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
+                response = INSearchCallHistoryIntentResponse(code: .success, userActivity: userActivity)
+                response.callRecords = calls.map { $0.intentCall }
+            } else {
+                response = INSearchCallHistoryIntentResponse(code: .continueInApp, userActivity: userActivity)
+            }
+            completion(response)
+        }, error: { _ in
+            let userActivity = NSUserActivity(activityType: NSStringFromClass(INSearchCallHistoryIntent.self))
+            let response = INSearchCallHistoryIntentResponse(code: .failureRequiringAppLaunch, userActivity: userActivity)
+            completion(response)
+        }))
+    }
 }

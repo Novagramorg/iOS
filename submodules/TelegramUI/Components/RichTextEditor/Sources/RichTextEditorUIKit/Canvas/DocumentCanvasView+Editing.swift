@@ -468,7 +468,7 @@ extension DocumentCanvasView {
             // Re-resolve after a possible delete (the caret moved); only insert if still in a code block.
             guard let active = activeStack(at: head), active.box is CodeBlockBox else { return }
             active.box.textLayout.replace(start: active.local, end: active.local,
-                                          with: NSAttributedString(string: newline, attributes: CodeBlockBox.codeAttributes()))
+                                          with: NSAttributedString(string: newline, attributes: CodeBlockBox.codeAttributes(textColor: self.mapper.theme.primaryText)))
             recomputeSpans()
             let caret = active.box.textStart + active.local + (newline as NSString).length
             anchor = caret; head = caret

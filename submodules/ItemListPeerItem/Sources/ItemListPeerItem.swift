@@ -927,7 +927,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
         
         let currentHasBadge = self.labelBadgeNode.image != nil
         
-        return { item, params, neighbors, headerAtTop in
+        return { [weak self] item, params, neighbors, headerAtTop in
             var updateArrowImage: UIImage?
             
             let statusFontSize: CGFloat = floor(item.presentationData.fontSize.itemListBaseFontSize * 14.0 / 17.0)

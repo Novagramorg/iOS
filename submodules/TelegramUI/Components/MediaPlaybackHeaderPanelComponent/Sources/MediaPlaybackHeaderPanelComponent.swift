@@ -262,6 +262,36 @@ public final class MediaPlaybackHeaderPanelComponent: Component {
                             return
                         }
 
+                        // A RICH message's audio plays out of an `InstantPageMediaPlaylist` — the file lives in
+                        // the message's `RichTextMessageAttribute`, not in `message.media` — so neither the item
+                        // id nor the location is a `PeerMessages*` one and the branch below never matched: the
+                        // mini player was inert for it. Open the same overlay music player the chat-history
+                        // playlists open, anchored on the message the playlist came from. That works because a
+                        // rich message IS `.music`-tagged (`tagsForStoreMessage` folds the attribute's media in),
+                        // so the player's own music-tagged history list finds it.
+                        if let instantPageLocation = component.data.playlistLocation as? InstantPagePlaylistLocation {
+                            // An Instant View page has no message to open — leave it inert, as before.
+                            guard let messageId = instantPageLocation.messageId else {
+                                return
+                            }
+                            guard case .music = component.data.kind else {
+                                // Voice / instant video: jump to the message, mirroring the non-music arm below.
+                                component.context.sharedContext.navigateToChat(accountId: component.context.account.id, peerId: messageId.peerId, messageId: messageId)
+                                return
+                            }
+                            let controllerContext: AccountContext
+                            if component.data.account.id == component.context.account.id {
+                                controllerContext = component.context
+                            } else {
+                                controllerContext = component.context.sharedContext.makeTempAccountContext(account: component.data.account)
+                            }
+                            let playerController = component.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: messageId.peerId), type: component.data.kind, initialMessageId: messageId, initialOrder: component.data.playbackOrder, playlistLocation: nil, parentNavigationController: navigationController)
+                            self.window?.endEditing(true)
+                            playerController.navigationPresentation = .flatModal
+                            controller.push(playerController)
+                            return
+                        }
+
                         if let id = component.data.item.id as? PeerMessagesMediaPlaylistItemId, let playlistLocation = component.data.playlistLocation as? PeerMessagesPlaylistLocation {
                             if case .music = component.data.kind {
                                 switch playlistLocation {

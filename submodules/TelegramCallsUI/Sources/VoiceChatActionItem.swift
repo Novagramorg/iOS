@@ -159,7 +159,7 @@ class VoiceChatActionItemNode: ListViewItemNode {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let currentItem = self.item
         
-        return { item, params, first, last in
+        return { [weak self] item, params, first, last in
             var updatedTheme: PresentationTheme?
             var updatedContent = false
             

@@ -179,7 +179,7 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
 
         let cachedMaskBackgroundImage = self.cachedMaskBackgroundImage
         
-        return { item, layoutConstants, _, _, _, _ in
+        return { [weak self] item, layoutConstants, _, _, _, _ in
             var isDetached = false
             if let _ = item.message.paidStarsAttribute {
                 isDetached = true

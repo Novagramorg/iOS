@@ -55,15 +55,12 @@ struct InstantPageMetrics {
     // MARK: Code blocks
 
     let codeBlockVerticalInset: CGFloat
-    let codeBlockHorizontalInset: CGFloat
     /// `layoutCodeBlock` overrides the theme's 14pt `codeBlock` category with an absolute 15pt.
     /// As a metric it still yields exactly 15.0 unscaled, and shrinks inside a quote instead of
     /// leaving code at full size while its surroundings scale.
     let codeBlockFontSize: CGFloat
-    /// The code-block language label, built at RENDER time in `InstantPageV2CodeBlockView`. It is
-    /// the only font in the V2 renderer not baked into an attributed string at layout time, so it
-    /// has to travel on the item to scale at all.
-    let codeBlockLanguageFontSize: CGFloat
+    /// Gap between the code block's bold language line and its first code line.
+    let codeBlockLanguageSpacing: CGFloat
 
     // MARK: Lists
     //
@@ -119,10 +116,9 @@ struct InstantPageMetrics {
         self.pullQuotePadding = s(30.0)
         self.quoteAttributionGap = s(3.0)
 
-        self.codeBlockVerticalInset = s(6.0)
-        self.codeBlockHorizontalInset = s(9.0)
+        self.codeBlockVerticalInset = s(14.0)
         self.codeBlockFontSize = s(15.0)
-        self.codeBlockLanguageFontSize = s(11.0)
+        self.codeBlockLanguageSpacing = s(3.0)
 
         self.listIndexSpacing = s(8.0)
         self.checklistMarkerSize = CGSize(width: s(18.0), height: s(18.0))

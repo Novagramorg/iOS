@@ -449,7 +449,7 @@ public func legacyAttachmentMenu(
                 if slowModeEnabled, allItems.count > 1 {
                     presentCantSendMultipleFiles()
                 } else {
-                    let process: (Bool) -> Void = { convert in
+                    let process: (Bool) -> Void = { [carouselItem, controller] convert in
                         let signals = TGMediaAssetsController.resultSignals(for: carouselItem.selectionContext, editingContext: carouselItem.editingContext, intent: intent, currentItem: currentItem, storeAssets: true, convertToJpeg: convert, descriptionGenerator: legacyAssetPickerItemGenerator(), saveEditedPhotos: saveEditedPhotos)
                         sendMessagesWithSignals(signals, silentPosting, scheduleTime, isFromPicker ? nil : { [weak carouselItem] uniqueId in
                             if let carouselItem = carouselItem {

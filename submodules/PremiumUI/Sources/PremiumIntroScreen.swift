@@ -2140,7 +2140,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
             let textSideInset: CGFloat = 16.0
             
             let forceDark = context.component.forceDark
-            let layoutPerks = {
+            let layoutPerks = { [state] in
                 size.height += 8.0
                                 
                 var i = 0
@@ -2325,7 +2325,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 }
             }
             
-            let layoutBusinessPerks = {
+            let layoutBusinessPerks = { [state] in
                 size.height += 8.0
                 
                 let gradientColors: [UIColor] = [
@@ -2543,7 +2543,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 size.height += 23.0
             }
             
-            let layoutMoreBusinessPerks = {
+            let layoutMoreBusinessPerks = { [state] in
                 size.height += 8.0
     
                 let status = state.peer?.emojiStatus
@@ -2704,7 +2704,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                 return (TelegramTextAttributes.URL, contents)
             })
             
-            let layoutAdsSettings = {
+            let layoutAdsSettings = { [state] in
                 size.height += 8.0
                 
                 var adsSettingsItems: [AnyComponentWithIdentity<Empty>] = []
@@ -2920,7 +2920,7 @@ private final class PremiumIntroScreenContentComponent: CombinedComponent {
                                 }
                                 if let signal = signal {
                                     let _ = (signal
-                                    |> deliverOnMainQueue).start(next: { resolvedUrl in
+                                    |> deliverOnMainQueue).start(next: { [controller] resolvedUrl in
                                         context.sharedContext.openResolvedUrl(resolvedUrl, context: context, urlContext: .generic, navigationController: navigationController, forceExternal: false, forceUpdate: false, openPeer: { peer, navigation in
                                         }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak controller] c, arguments in
                                             controller?.push(c)

@@ -368,7 +368,7 @@ private final class GuideItemComponent: Component {
                 
                 if component.isPlaying && !self.isPlaying {
                     self.isPlaying = true
-                    Queue.mainQueue().justDispatch {
+                    Queue.mainQueue().justDispatch { [view, weak self] in
                         let completionBlock = { [weak self] in
                             guard let self else {
                                 return

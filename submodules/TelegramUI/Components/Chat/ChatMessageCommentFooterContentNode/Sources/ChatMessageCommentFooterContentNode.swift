@@ -101,7 +101,7 @@ public final class ChatMessageCommentFooterContentNode: ChatMessageBubbleContent
         let makeCountLayout = self.countNode.asyncLayout()
         let makeAlternativeCountLayout = self.alternativeCountNode.asyncLayout()
         
-        return { item, layoutConstants, preparePosition, _, constrainedSize, _ in
+        return { [weak self] item, layoutConstants, preparePosition, _, constrainedSize, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none)
             
             let displaySeparator: Bool
@@ -117,7 +117,7 @@ public final class ChatMessageCommentFooterContentNode: ChatMessageBubbleContent
                 topSeparatorOffset = 2.0
             }
             
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, position in
                 let incoming = item.message.effectivelyIncoming(item.context.account.peerId)
                 
                 let maxTextWidth = CGFloat.greatestFiniteMagnitude
@@ -243,7 +243,7 @@ public final class ChatMessageCommentFooterContentNode: ChatMessageBubbleContent
                 let arrowImage = PresentationResourcesChat.chatMessageCommentsArrowIcon(item.presentationData.theme.theme, incoming: incoming)
                 let unreadIconImage = PresentationResourcesChat.chatMessageCommentsUnreadDotIcon(item.presentationData.theme.theme, incoming: incoming)
                 
-                return (suggestedBoundingWidth, { boundingWidth in
+                return (suggestedBoundingWidth, { [weak self] boundingWidth in
                     var boundingSize: CGSize
                     
                     boundingSize = textFrameWithoutInsets.size

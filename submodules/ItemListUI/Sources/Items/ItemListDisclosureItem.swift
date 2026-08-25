@@ -339,7 +339,7 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
         
         let currentHasBadge = self.labelBadgeNode.image != nil
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var rightInset: CGFloat
             switch item.disclosureStyle {
             case .none:

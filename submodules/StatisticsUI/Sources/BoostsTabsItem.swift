@@ -140,7 +140,7 @@ private final class BoostsTabsItemNode: ListViewItemNode {
         let makeBoostsTextLayout = TextNode.asyncLayout(self.boostsTextNode)
         let makeGiftsTextLayout = TextNode.asyncLayout(self.giftsTextNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var themeUpdated = false
             if currentItem?.theme !== item.theme {
                 themeUpdated = true

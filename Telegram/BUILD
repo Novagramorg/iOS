@@ -160,7 +160,7 @@ genrule(
     ],
 )
 
-minimum_os_version = "13.0"
+minimum_os_version = "15.0"
 
 notificationServiceExtensionVersion = "v1"
 
@@ -1246,7 +1246,11 @@ ios_extension(
         ":AppNameInfoPlist",
     ],
     minimum_os_version = minimum_os_version, # maintain the same minimum OS version across extensions
-    ipa_post_processor = ":SetMinOsVersionWidgetExtension",
+    # Deliberately NOT patched down: this used to stamp MinimumOSVersion=14.0 so a WidgetKit
+    # extension could ship while the app min was 13.0. Now that the app min is >= 14, stamping
+    # a plist minimum *below* the binary's minos makes App Store validation reject the bundle
+    # (error 90208). Same reason the other extensions' patches are commented out.
+    #ipa_post_processor = ":SetMinOsVersionWidgetExtension",
     #provides_main = True,
     provisioning_profile = select({
         ":disableProvisioningProfilesSetting": None,
@@ -1660,6 +1664,23 @@ plist_fragment(
         <string>AremacFS-Regular.otf</string>
         <string>AremacFS-Semibold.otf</string>
     </array>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default Configuration</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>

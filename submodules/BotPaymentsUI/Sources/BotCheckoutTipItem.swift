@@ -528,7 +528,7 @@ class BotCheckoutTipItemNode: ListViewItemNode, UITextFieldDelegate {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let makeLabelLayout = TextNode.asyncLayout(self.labelNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             //let rightInset: CGFloat = 16.0 + params.rightInset
 
             let labelsContentHeight: CGFloat = 34.0

@@ -335,7 +335,7 @@ private class MediaGroupsAlbumGridItemNode: ListViewItemNode {
             let nodeLayout = ListViewItemNodeLayout(contentSize: contentSize, insets: UIEdgeInsets())
             
             return (nodeLayout, { [weak self] in
-                return (nil, { _ in
+                return (nil, { [item] _ in
                     if let strongSelf = self {
                         strongSelf.item = item
                         strongSelf.layoutParams = params

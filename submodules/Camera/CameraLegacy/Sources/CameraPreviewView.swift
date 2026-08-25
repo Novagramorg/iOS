@@ -50,12 +50,10 @@ final class LegacyCameraSimplePreviewView: UIView, CameraSimplePreviewView {
         guard self.videoPreviewLayer.connection?.isVideoOrientationSupported == true else {
             return
         }
-        let statusBarOrientation: UIInterfaceOrientation
-        if #available(iOS 13.0, *) {
-            statusBarOrientation = UIApplication.shared.windows.first?.windowScene?.interfaceOrientation ?? .portrait
-        } else {
-            statusBarOrientation = UIApplication.shared.statusBarOrientation
-        }
+        // Prefer the scene this view actually lives in; fall back to a connected window scene while
+        // the view is not yet in the hierarchy.
+        let windowScene = self.window?.windowScene ?? UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene
+        let statusBarOrientation = windowScene?.interfaceOrientation ?? .portrait
         let videoOrientation = statusBarOrientation.videoOrientation
         self.videoPreviewLayer.connection?.videoOrientation = videoOrientation
         self.videoPreviewLayer.removeAllAnimations()

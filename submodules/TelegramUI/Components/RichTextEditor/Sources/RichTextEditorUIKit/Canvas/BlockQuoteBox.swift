@@ -8,7 +8,7 @@ import RichTextEditorCore
 /// so any block type nests — including nested block quotes (the factory is recursive). Token size =
 /// children + 2; `recompute()` assigns child `nodeStart`s and lays out frames; `leafRegions()` /
 /// `closestPosition` delegate to the child stack. The fill (accent bar + tinted background) is painted
-/// by `blockquoteDecorations()` — this box draws only its children.
+/// by the `blockQuoteFillRects()` underlay feed — this box draws only its children.
 ///
 /// **Collapsed** (`collapsed == true`): a non-editable ATOM (nodeSize 3, empty leafRegions) drawing a
 /// ≤3-line folded preview + a trailing expand glyph — mirroring `CollapsedQuoteBox`. Children are still
@@ -310,9 +310,14 @@ final class BlockQuoteBox: CanvasBlock {
         // Assign nodeStarts: baseOffset = this box's nodeStart (the open token).
         children.recompute(baseOffset: nodeStart)
         // Lay out child frames: content strip offset by the leading inset and top padding.
+        // A full-bleed child (a code block) reaches the quote's interior: out to just INSIDE the
+        // accent bar on the leading side, so the bar stays continuous down the whole quote rather
+        // than being interrupted for the child's height, and to the fill's trailing edge.
         children.layout(
             origin: CGPoint(x: frame.minX + quoteStyle.leadingInset, y: frame.minY + topInset),
-            width: innerWidth(frame.width)
+            width: innerWidth(frame.width),
+            codeBleed: (minXSide: max(0, quoteStyle.leadingInset - quoteStyle.barWidth),
+                        maxXSide: quoteStyle.trailingInset)
         )
         // Propagate recompute recursively into nested block quotes (their frames are now set above).
         for case let nested as BlockQuoteBox in children.boxes { nested.recompute() }
@@ -385,7 +390,7 @@ final class BlockQuoteBox: CanvasBlock {
 
     /// Collapsed → draws the clipped preview text + the tinted expand glyph (mirrors BlockQuoteBox.draw).
     /// Expanded → draws child boxes. The fill (accent bar + tinted background) is provided by
-    /// `blockquoteDecorations()` in both modes — this method draws only the text content.
+    /// the `blockQuoteFillRects()` underlay feed in both modes — this method draws only the text content.
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
         if collapsed {
             guard let layout = previewLayout else { return }

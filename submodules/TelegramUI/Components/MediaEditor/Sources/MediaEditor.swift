@@ -1885,7 +1885,12 @@ public final class MediaEditor {
                     let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
                     if fetchResult.count != 0 {
                         let asset = fetchResult.object(at: 0)
-                        signals.append(Signal { subscriber in
+                        signals.append(Signal { [weak self] subscriber in
+                            guard let self else {
+                                subscriber.putCompletion()
+                                return EmptyDisposable
+                            }
+
                             let options = PHVideoRequestOptions()
                             options.isNetworkAccessAllowed = true
                             options.deliveryMode = .highQualityFormat

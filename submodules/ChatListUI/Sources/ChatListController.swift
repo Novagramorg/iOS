@@ -1025,7 +1025,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if let id = id {
                 items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.ChatList_EditFolder, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
-                }, action: { c, f in
+                }, action: { [weak self] c, f in
                     c?.dismiss(completion: { [weak self] in
                         guard let self else {
                             return
@@ -2640,7 +2640,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 ], actionLayout: .vertical, parseMarkdown: true), in: .window(.root))
             }))
             
-            Queue.mainQueue().after(1.0, {
+            Queue.mainQueue().after(1.0, { [weak self] in
+                guard let self else {
+                    return
+                }
+
                 let _ = (
                     self.context.engine.data.get(
                         TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId),
@@ -3767,7 +3771,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     public static func openMoreMenu(context: AccountContext, peerId: EnginePeer.Id, sourceController: ViewController, isViewingAsTopics: Bool, sourceView: UIView, gesture: ContextGesture?) {
         let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
-        |> deliverOnMainQueue).startStandalone(next: { peer in
+        |> deliverOnMainQueue).startStandalone(next: { [sourceController] peer in
             guard case let .channel(channel) = peer else {
                 return
             }
@@ -5321,7 +5325,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     if !didJoin {
                         return
                     }
-                    Queue.mainQueue().after(0.5) {
+                    Queue.mainQueue().after(0.5) { [weak self] in
+                        guard let self else {
+                            return
+                        }
+
                         let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
                         |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
                             guard let self, let peer = peer?._asPeer() else {

@@ -567,6 +567,7 @@ final class ButtonRowBoxTests: XCTestCase {
         return richTextPackButtonRow(
             buttons: buttons, alignment: alignment, availableWidth: width,
             metrics: .default, isRTL: false,
+            hasIcon: { mapper.buttonHasIcon($0.action) },
             measure: { mapper.buttonAttachment(button: $0, isBlockPill: true, maxWidth: $1, horizontalPadding: $2) }
         ).attachments
     }

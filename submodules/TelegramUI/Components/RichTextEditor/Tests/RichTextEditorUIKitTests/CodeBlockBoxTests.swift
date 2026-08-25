@@ -21,8 +21,45 @@ final class CodeBlockBoxTests: XCTestCase {
     }
 
     func test_codeBox_usesFifteenPointFont_matchingQuote() {
-        let font = CodeBlockBox.codeAttributes()[.font] as? UIFont
-        XCTAssertEqual(font?.pointSize ?? 0, 15, accuracy: 0.5, "code block font is 15pt, matching the quote")
+        XCTAssertEqual(CodeBlockBox.codeFont.pointSize, 15, accuracy: 0.5, "code block font is 15pt, matching the quote")
+    }
+
+    /// Code text must take the theme's primary text colour. An attributed string with no
+    /// `.foregroundColor` draws BLACK, so a dark theme rendered code invisible against its own band.
+    func test_codeBox_textTakesThePrimaryTextColour() {
+        let theme = RichTextEditorTheme(
+            primaryText: .magenta, secondaryText: .black, placeholder: .placeholderText,
+            accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .gray)
+        let mapper = AttributedStringMapper(styleSheet: .default, theme: theme)
+        let box = CodeBlockBox(code: CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "let x = 1")]),
+                               mapper: mapper, width: 300)
+
+        let colour = box.layout.attributedString.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        XCTAssertEqual(colour, .magenta)
+    }
+
+    /// Newly TYPED characters take it too — the typing attributes are a separate site from the box's
+    /// own string, so fixing one without the other leaves fresh input black.
+    func test_codeBox_typingAttributesTakeThePrimaryTextColour() {
+        let theme = RichTextEditorTheme(
+            primaryText: .magenta, secondaryText: .black, placeholder: .placeholderText,
+            accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .gray)
+        let attrs = CodeBlockBox.codeAttributes(textColor: theme.primaryText)
+        XCTAssertEqual(attrs[.foregroundColor] as? UIColor, .magenta)
+    }
+
+    /// Render-only: the colour must not reach the model, or it would ride into a sent message.
+    func test_codeBox_textColourDoesNotEnterTheModel() {
+        let theme = RichTextEditorTheme(
+            primaryText: .magenta, secondaryText: .black, placeholder: .placeholderText,
+            accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .gray)
+        let mapper = AttributedStringMapper(styleSheet: .default, theme: theme)
+        let box = CodeBlockBox(code: CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "let x = 1")]),
+                               mapper: mapper, width: 300)
+
+        guard case let .code(cb) = box.currentBlock() else { return XCTFail("expected .code") }
+        XCTAssertEqual(cb.runs.count, 1)
+        XCTAssertNil(cb.runs[0].attributes.foreground, "code text colour is render-only")
     }
 
     func test_codeBox_currentBlockRoundTripsTextAndLanguage() {
@@ -42,12 +79,71 @@ final class CodeBlockBoxTests: XCTestCase {
         XCTAssertEqual(regions[0].ref, .code(BlockID("c1")))
     }
 
-    func test_codeBox_textLeftInsetMatchesQuoteIndent() {
-        // Code text must clear the shared accent bar exactly like quote text: its left inset is the
-        // quote's leading indent, not the old 8pt code padding.
+    /// The code text sits at the block's own leading edge — the paragraph column — not inset by the
+    /// quote's indent. The band reaches further out than the text; that is the bleed's job.
+    func test_codeBox_textOriginIsTheParagraphColumn() {
         let box = makeBox("x")
         box.frame = CGRect(x: 10, y: 0, width: 300, height: 40)
-        XCTAssertEqual(box.textOrigin.x - box.frame.minX, StyleSheet.default.quoteIndent, accuracy: 0.5)
+        XCTAssertEqual(box.textOrigin.x, box.frame.minX, accuracy: 0.5)
+    }
+
+    /// `blockViewFrame` is the block's full DRAWN extent, and `BlockBackingView` clips to it — so the
+    /// band is invisible unless the bleed is reflected here.
+    func test_codeBox_blockViewFrameOutsetsByTheBleed() {
+        let box = makeBox("x")
+        box.horizontalBleed = (minXSide: 16, maxXSide: 16)
+        box.frame = CGRect(x: 16, y: 0, width: 288, height: 40)
+
+        XCTAssertEqual(box.blockViewFrame.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(box.blockViewFrame.maxX, 320, accuracy: 0.5)
+        XCTAssertEqual(box.blockViewFrame.minY, box.frame.minY, accuracy: 0.5)
+        XCTAssertEqual(box.blockViewFrame.height, box.frame.height, accuracy: 0.5)
+    }
+
+    /// No bleed ⇒ the drawn extent is the frame, so an un-migrated container cannot make a code block
+    /// punch out of it.
+    func test_codeBox_blockViewFrameIsTheFrameWithoutBleed() {
+        let box = makeBox("x")
+        box.frame = CGRect(x: 16, y: 0, width: 288, height: 40)
+        XCTAssertEqual(box.blockViewFrame, box.frame)
+    }
+
+    /// The fill travels with the box, so a code block nested in a quote is filled too. It was not:
+    /// the quote underlay's feed walked top-level boxes only, and the code case lived there.
+    func test_codeBox_isNotFedToTheQuoteUnderlay() {
+        let canvas = DocumentCanvasView()
+        canvas.setBlocks([.code(CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "x")]))], width: 300)
+        canvas.frame = CGRect(x: 0, y: 0, width: 300, height: 300)
+        canvas.layoutIfNeeded()
+
+        XCTAssertTrue(canvas.blockQuoteFillRects().isEmpty)
+    }
+
+    /// The language line is bold, lowercased, and takes the BODY size — the quote author's spec —
+    /// rather than the old absolute 11pt monospace.
+    func test_codeBox_languageLineIsBoldBodySizedAndLowercased() {
+        let box = makeBox("x", language: "Swift")
+        guard let line = box.languageLine else { return XCTFail("expected a language line") }
+
+        XCTAssertEqual(line.string, "swift")
+        let font = line.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
+        XCTAssertEqual(font?.pointSize ?? 0, StyleSheet.default.metrics.body.size, accuracy: 0.5)
+        XCTAssertTrue(font?.fontDescriptor.symbolicTraits.contains(.traitBold) ?? false)
+    }
+
+    /// No language, and an empty language, both mean no line and no reserved height.
+    func test_codeBox_noLanguageLineWhenAbsent() {
+        XCTAssertNil(makeBox("x", language: nil).languageLine)
+        XCTAssertNil(makeBox("x", language: "").languageLine)
+    }
+
+    /// A labelled block is exactly one language line plus its gap taller than an unlabelled one.
+    func test_codeBox_languageLineAddsItsHeight() {
+        let plain = makeBox("x", language: nil)
+        let labelled = makeBox("x", language: "swift")
+        let delta = labelled.measuredHeight(forWidth: 300) - plain.measuredHeight(forWidth: 300)
+
+        XCTAssertGreaterThan(delta, StyleSheet.default.metrics.code.languageSpacing)
     }
 
     func test_codeBox_factoryProducesCodeBlockBox() {
@@ -92,7 +188,7 @@ final class CodeBlockBoxTests: XCTestCase {
         box.setWidth(300)                          // same width → genuine no-op (does not re-flow)
         let before = box.height
         box.textLayout.replace(start: 0, end: 0,
-                               with: NSAttributedString(string: "\n", attributes: CodeBlockBox.codeAttributes()))
+                               with: NSAttributedString(string: "\n", attributes: CodeBlockBox.codeAttributes(textColor: .black)))
         XCTAssertGreaterThan(box.height, before, "height must grow after an insert even without a width change")
     }
 }

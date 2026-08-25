@@ -199,7 +199,7 @@ class ContactListActionItemNode: ListViewItemNode {
         let makeSubtitleLayout = TextNode.asyncLayout(self.subtitleNode)
         let currentItem = self.item
         
-        return { item, params, firstWithHeader, last in
+        return { [weak self] item, params, firstWithHeader, last in
             var updatedTheme: PresentationTheme?
             
             if currentItem?.presentationData.theme !== item.presentationData.theme {

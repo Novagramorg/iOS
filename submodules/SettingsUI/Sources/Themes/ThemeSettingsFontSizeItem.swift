@@ -171,7 +171,7 @@ class ThemeSettingsFontSizeItemNode: ListViewItemNode, ItemListItemNode {
     func asyncLayout() -> (_ item: ThemeSettingsFontSizeItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updatedLeftIcon: UIImage?
             var updatedRightIcon: UIImage?
             

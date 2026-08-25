@@ -168,7 +168,7 @@ public class ChatListFilterPresetListSuggestedItemNode: ListViewItemNode, ItemLi
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let rightInset: CGFloat
             rightInset = 16.0 + params.rightInset
             

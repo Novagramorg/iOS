@@ -411,7 +411,7 @@ public class ItemListAvatarAndNameInfoItemNode: ListViewItemNode, ItemListItemNo
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let baseWidth = params.width - params.leftInset - params.rightInset
             
             let nameFont = Font.medium(floor(item.presentationData.fontSize.itemListBaseFontSize * 19.0 / 17.0))

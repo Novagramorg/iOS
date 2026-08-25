@@ -139,7 +139,7 @@ private final class WebBrowserItemNode: ListViewItemNode {
         let currentItem = self.item
 
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset: CGFloat = params.leftInset + 16.0 + 43.0
             
             let iconSize = CGSize(width: 29.0, height: 29.0)

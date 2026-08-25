@@ -884,7 +884,7 @@ public func dataAndStorageController(context: AccountContext, focusOnItemTag: Da
         let controller = intentsSettingsController(context: context)
         pushControllerImpl?(controller)
     }, toggleSensitiveContent: { value in
-        let update = {
+        let update = { [contentSettingsConfiguration] in
             let _ = (contentSettingsConfiguration.get()
             |> take(1)
             |> deliverOnMainQueue).start(next: { [weak contentSettingsConfiguration] settings in

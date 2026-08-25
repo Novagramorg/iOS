@@ -27,10 +27,9 @@ final class InstantPageMetricsTests: XCTestCase {
         XCTAssertEqual(m.pullQuotePadding, 30.0)
         XCTAssertEqual(m.quoteAttributionGap, 3.0)
 
-        XCTAssertEqual(m.codeBlockVerticalInset, 6.0)
-        XCTAssertEqual(m.codeBlockHorizontalInset, 9.0)
+        XCTAssertEqual(m.codeBlockVerticalInset, 14.0)
         XCTAssertEqual(m.codeBlockFontSize, 15.0)
-        XCTAssertEqual(m.codeBlockLanguageFontSize, 11.0)
+        XCTAssertEqual(m.codeBlockLanguageSpacing, 3.0)
 
         XCTAssertEqual(m.listIndexSpacing, 8.0)
         XCTAssertEqual(m.checklistMarkerSize, CGSize(width: 18.0, height: 18.0))

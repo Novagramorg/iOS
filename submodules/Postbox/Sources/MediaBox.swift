@@ -423,7 +423,7 @@ public final class MediaBox {
                         
                         if let statusUpdateDisposable = statusUpdateDisposable {
                             let statusQueue = self.statusQueue
-                            self.dataQueue.async {
+                            self.dataQueue.async { [statusContext] in
                                 if let (fileContext, releaseContext) = self.fileContext(for: resourceId) {
                                     let statusDisposable = fileContext.status(next: { [weak statusContext] value in
                                         statusQueue.async {
@@ -905,7 +905,7 @@ public final class MediaBox {
             let disposable = MetaDisposable()
             
             let dataQueue = self.dataQueue
-            self.dataQueue.async {
+            self.dataQueue.async { [self] in
                 let context: MediaBoxKeepResourceContext
                 if let current = self.keepResourceContexts[id] {
                     context = current
@@ -1014,7 +1014,7 @@ public final class MediaBox {
                     if attemptSynchronously && complete {
                         subscriber.putNext(MediaResourceData(path: paths.partial, offset: 0, size: 0, complete: false))
                     }
-                    self.dataQueue.async {
+                    self.dataQueue.async { [self] in
                         let key = CachedMediaResourceRepresentationKey(resourceId: resource.id.stringRepresentation, representation: representation.uniqueId)
                         let context: CachedMediaResourceRepresentationContext
                         if let currentContext = self.cachedRepresentationContexts[key] {
@@ -1202,7 +1202,7 @@ public final class MediaBox {
                     if attemptSynchronously && complete {
                         subscriber.putNext(MediaResourceData(path: paths.partial, offset: 0, size: 0, complete: false))
                     }
-                    self.dataQueue.async {
+                    self.dataQueue.async { [self] in
                         let key = CachedMediaResourceRepresentationKey(resourceId: baseResourceId, representation: id)
                         let context: CachedMediaResourceRepresentationContext
                         if let currentContext = self.cachedRepresentationContexts[key] {

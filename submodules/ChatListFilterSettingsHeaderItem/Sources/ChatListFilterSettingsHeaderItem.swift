@@ -109,7 +109,7 @@ class ChatListFilterSettingsHeaderItemNode: ListViewItemNode {
     func asyncLayout() -> (_ item: ChatListFilterSettingsHeaderItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let isHidden = params.width > params.availableHeight && params.availableHeight < 400.0
             
             let leftInset: CGFloat = 32.0 + params.leftInset

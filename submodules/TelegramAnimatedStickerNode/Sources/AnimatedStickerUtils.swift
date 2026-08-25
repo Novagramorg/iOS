@@ -8,7 +8,7 @@ import Compression
 import GZip
 import RLottieBinding
 import MediaResources
-import MobileCoreServices
+import UniformTypeIdentifiers
 import MediaResources
 import YuvConversion
 import AnimatedStickerNode
@@ -70,7 +70,7 @@ public func fetchCompressedLottieFirstFrameAJpeg(data: Data, size: CGSize, fitzM
                         let colorData = NSMutableData()
                         let alphaData = NSMutableData()
                         
-                        if let colorDestination = CGImageDestinationCreateWithData(colorData as CFMutableData, kUTTypeJPEG, 1, nil), let alphaDestination = CGImageDestinationCreateWithData(alphaData as CFMutableData, kUTTypeJPEG, 1, nil) {
+                        if let colorDestination = CGImageDestinationCreateWithData(colorData as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil), let alphaDestination = CGImageDestinationCreateWithData(alphaData as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) {
                             CGImageDestinationSetProperties(colorDestination, NSDictionary() as CFDictionary)
                             CGImageDestinationSetProperties(alphaDestination, NSDictionary() as CFDictionary)
                             

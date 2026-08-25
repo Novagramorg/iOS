@@ -69,7 +69,7 @@ class ChatListEmptyHeaderItemNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: ChatListEmptyHeaderItem, _ params: ListViewItemLayoutParams, _ isLast: Bool) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, last in
+        return { [weak self] item, params, last in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: 0.0), insets: UIEdgeInsets())
             
             return (layout, { [weak self] in

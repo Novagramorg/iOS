@@ -21,6 +21,21 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# Sources the composer flat-rebuild guard test scans. A Bazel-sandboxed XCTest only sees what is
+# declared, so these are wired as `data` on ChatRichTextEditorComposerTestsLib. See
+# ChatRichTextEditorComposer/Tests/ComposerFlatRebuildGuardTests.swift.
+filegroup(
+    name = "composer_state_writer_sources",
+    srcs = [
+        "Sources/CommandChatInputContextPanelNode.swift",
+        "Sources/CommandMenuChatInputContextPanelNode.swift",
+        "Sources/EmojisChatInputContextPanelNode.swift",
+        "Sources/HashtagChatInputContextPanelNode.swift",
+        "Sources/MentionChatInputContextPanelNode.swift",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 #filegroup(
 #    name = "Icons",
 #    srcs = glob([

@@ -197,7 +197,7 @@ public class ItemListCheckboxItemNode: ItemListRevealOptionsItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var leftInset: CGFloat = params.leftInset
             
             switch item.style {

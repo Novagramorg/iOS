@@ -977,7 +977,7 @@ extension ChatControllerImpl {
                             strongSelf.controllerNavigationDisposable.set(nil)
                             
                             if bot.flags.contains(.notActivated) {
-                                let alertController = webAppTermsAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, completion: { [weak self] allowWrite in
+                                let alertController = webAppTermsAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, completion: { [weak self, controller] allowWrite in
                                     guard let self else {
                                         return
                                     }

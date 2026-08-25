@@ -85,6 +85,9 @@ private func isKeyboardView(view: NSObject) -> Bool {
     if typeName.hasPrefix("UI") && typeName.hasSuffix("InputSetHostView") {
         return true
     }
+    if typeName.hasPrefix("UI") && typeName.hasSuffix("KeyboardItemContainerView") {
+        return true
+    }
     return false
 }
 
@@ -93,11 +96,14 @@ private func isKeyboardViewContainer(view: NSObject) -> Bool {
     if typeName.hasPrefix("UI") && typeName.hasSuffix("InputSetContainerView") {
         return true
     }
+    if typeName.hasPrefix("UI") && typeName.hasSuffix("TrackingWindowView") {
+        return true
+    }
     return false
 }
 
 private class ApplicationStatusBarHost: StatusBarHost {
-    private weak var scene: UIWindowScene?
+    weak var scene: UIWindowScene?
     
     init(scene: UIWindowScene?) {
         self.scene = scene
@@ -129,11 +135,15 @@ private class ApplicationStatusBarHost: StatusBarHost {
     }
     
     var keyboardWindow: UIWindow? {
-        if #available(iOS 16.0, *) {
-            return UIApplication.shared.internalGetKeyboard()
+        // The keyboard window belongs to an internal keyboard scene, so it is not enumerable through
+        // any public API; it is reached through our own window scene's keyboard scene delegate.
+        if let window = UIApplication.shared.internalGetKeyboard(for: self.scene) {
+            return window
         }
-        
-        for window in UIApplication.shared.windows {
+
+        // Pre-iOS-16 the keyboard window was not flagged as internal and did show up in the scene's
+        // window list, so this remains as a fallback for those releases.
+        for window in UIApplication.shared.allWindowSceneWindows {
             if isKeyboardWindow(window: window) {
                 return window
             }
@@ -228,6 +238,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     @objc var window: UIWindow?
     var nativeWindow: (UIWindow & WindowHost)?
     var mainWindow: Window1!
+    private var statusBarHost: ApplicationStatusBarHost?
     private var dataImportSplash: LegacyDataImportSplash?
     private var memoryUsageOverlayView: UILabel?
     
@@ -415,6 +426,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         let (window, hostView) = nativeWindowHostView()
         let statusBarHost = ApplicationStatusBarHost(scene: window.windowScene)
+        self.statusBarHost = statusBarHost
         self.mainWindow = Window1(hostView: hostView, statusBarHost: statusBarHost)
         if let traitCollection = window.rootViewController?.traitCollection {
             if #available(iOS 13.0, *) {
@@ -598,7 +610,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             externalRequestVerificationStream: self.firebaseRequestVerificationSecretStream.get(),
             externalRecaptchaRequestVerification: { method, siteKey in
                 return Signal<String?, NoError> { subscriber in
-                    let recaptchaClient: Promise<RecaptchaClient>
+                    // Recaptcha.fetchClient's completion is @Sendable, so it does not inherit this
+                    // closure's inferred main-actor isolation: from inside it neither the Promise (a
+                    // lock-based pre-concurrency class, so not Sendable) nor self's mutable state may
+                    // be touched. Both spellings are diagnosed, and Xcode 26's compiler raises them to
+                    // errors under -warnings-as-errors (Xcode 27's leaves them as warnings). The
+                    // promise is in fact only ever set on the main queue, which Queue.mainQueue()
+                    // guarantees and the compiler cannot see - hence the explicit opt-out.
+                    nonisolated(unsafe) let recaptchaClient: Promise<RecaptchaClient>
                     if let current = self.recaptchaClientsBySiteKey[siteKey] {
                         recaptchaClient = current
                     } else {
@@ -796,8 +815,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         GlobalExperimentalSettings.isAppStoreBuild = buildConfig.isAppStoreBuild
         GlobalExperimentalSettings.enableFeed = false
         
-        self.window?.makeKeyAndVisible()
-        
         var hasActiveCalls: Signal<Bool, NoError> = .single(false)
         if CallKitIntegration.isAvailable, let callKitIntegration = CallKitIntegration.shared {
             hasActiveCalls = callKitIntegration.hasActiveCalls
@@ -867,12 +884,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 return false
             }
         }, getTopWindow: {
-            for window in application.windows.reversed() {
+            for window in application.allWindowSceneWindows.reversed() {
                 if window === self.window || window === statusBarHost.keyboardWindow {
                     return window
                 }
             }
-            return application.windows.last
+            return application.allWindowSceneWindows.last
         }, displayNotification: { text in
         }, applicationInForeground: self.isInForegroundPromise.get(),
            applicationIsActive: self.isActivePromise.get(),
@@ -912,7 +929,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
         }, openSubscriptions: {
             if #available(iOS 15, *), let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                Task {
+                let _ = Task {
                     try await AppStore.showManageSubscriptions(in: scene)
                 }
             } else if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
@@ -1047,7 +1064,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             let phoneCode = String(repeating: dcDigit, count: 5)
 
             let window = self.window!
-            window.makeKeyAndVisible()
 
             NSLog("[DeleteAccount] starting for +\(digits)")
             let _ = test_loginAndDeleteAccount(
@@ -1095,7 +1111,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return (accountManager, initialPresentationDataAndSettings)
         }
         |> deliverOnMainQueue
-        |> mapToSignal { accountManager, initialPresentationDataAndSettings -> Signal<(SharedApplicationContext, LoggingSettings), NoError> in
+        |> mapToSignal { [self] accountManager, initialPresentationDataAndSettings -> Signal<(SharedApplicationContext, LoggingSettings), NoError> in
             self.mainWindow?.hostView.containerView.backgroundColor =  initialPresentationDataAndSettings.presentationData.theme.chatList.backgroundColor
             
             let legacyBasePath = appGroupUrl.path
@@ -1418,7 +1434,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         let authContextReadyDisposable = MetaDisposable()
         
         self.authContextDisposable.set((self.authContext.get()
-        |> deliverOnMainQueue).start(next: { context in
+        |> deliverOnMainQueue).start(next: { [weak self] context in
+            guard let self else {
+                return
+            }
+
             var network: Network?
             if let context = context {
                 network = context.account.network
@@ -1554,14 +1574,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         let _ = self.isActivePromise.get().start(next: { value in
             Logger.shared.log("App \(self.episodeId)", "isActive = \(value)")
         })
-        
-        if let url = launchOptions?[.url] {
-            if let url = url as? URL, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
-                self.openUrlWhenReady(url: url, external: true)
-            } else if let urlString = url as? String, urlString.lowercased().hasPrefix("tg:") || urlString.lowercased().hasPrefix("ton:") || urlString.lowercased().hasPrefix("\(buildConfig.appSpecificUrlScheme):"), let url = URL(string: urlString) {
-                self.openUrlWhenReady(url: url, external: true)
-            }
-        }
         
         if application.applicationState == .active {
             self.isInForegroundValue = true
@@ -1733,6 +1745,41 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
                 
         return true
+    }
+    
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        // Only the application-role scene owns the app's window and drives app-wide life-cycle
+        // state. Other roles (e.g. an external display) get no delegate at all, so they cannot
+        // take the account offline or dismiss overlays while the app is foreground on the phone.
+        if connectingSceneSession.role == .windowApplication {
+            configuration.delegateClass = SceneDelegate.self
+        }
+        return configuration
+    }
+
+    func attach(scene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
+        self.statusBarHost?.scene = scene
+        self.window?.windowScene = scene
+        self.mainWindow?.updateDeviceMetrics()
+        self.window?.makeKeyAndVisible()
+
+        for context in connectionOptions.urlContexts {
+            let url = context.url
+            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
+                self.openUrlWhenReady(url: url, external: true)
+            } else {
+                self.handleOpenURL(url)
+            }
+        }
+
+        for userActivity in connectionOptions.userActivities {
+            self.handleUserActivity(userActivity)
+        }
+
+        if let shortcutItem = connectionOptions.shortcutItem {
+            self.handleShortcutItem(shortcutItem, completionHandler: { _ in })
+        }
     }
     
     private var backgroundSessionSourceDataDisposables: [String: Disposable] = [:]
@@ -1939,7 +1986,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }))
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
+    func handleWillResignActive() {
         self.isActiveValue = false
         self.isActivePromise.set(false)
         self.clearNotificationsManager?.commitNow()
@@ -1966,7 +2013,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
     }
 
-    func applicationDidEnterBackground(_ application: UIApplication) {
+    func handleDidEnterBackground() {
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedApplicationContext in
@@ -2001,7 +2048,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         let taskIdHolder = TaskIdHolder()
         
-        taskIdHolder.taskId = application.beginBackgroundTask(withName: "lock", expirationHandler: {
+        taskIdHolder.taskId = UIApplication.shared.beginBackgroundTask(withName: "lock", expirationHandler: {
             if let taskId = taskIdHolder.taskId {
                 UIApplication.shared.endBackgroundTask(taskId)
             }
@@ -2013,7 +2060,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
     }
 
-    func applicationWillEnterForeground(_ application: UIApplication) {
+    func handleWillEnterForeground() {
         if self.isActiveValue {
             self.isInForegroundValue = true
             self.isInForegroundPromise.set(true)
@@ -2045,7 +2092,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
     }
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
+    func handleDidBecomeActive() {
         self.isInForegroundValue = true
         self.isInForegroundPromise.set(true)
         self.isActiveValue = true
@@ -2993,30 +3040,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
     }
     
-    func application(_ application: UIApplication, open url: URL, sourceApplication: String?) -> Bool {
-        self.openUrl(url: url)
-        return true
-    }
-    
-    func application(_ application: UIApplication, open url: URL, sourceApplication: String?, annotation: Any) -> Bool {
-        self.openUrl(url: url)
-        return true
-    }
-    
-    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    func handleOpenURL(_ url: URL) {
         guard self.openUrlInProgress != url else {
-            return true
+            return
         }
-        
         self.openUrl(url: url)
-        return true
     }
-    
-    func application(_ application: UIApplication, handleOpen url: URL) -> Bool {
-        self.openUrl(url: url)
-        return true
-    }
-    
+
     private func openUrl(url: URL) {
         let _ = (self.sharedContextPromise.get()
         |> take(1)
@@ -3073,7 +3103,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
     }
     
-    func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+    @discardableResult func handleUserActivity(_ userActivity: NSUserActivity) -> Bool {
         if #available(iOS 10.0, *) {
             var startCallContacts: [INPerson]?
             var isVideo = false
@@ -3240,8 +3270,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         return true
     }
     
-    @available(iOS 9.0, *)
-    func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+    func handleShortcutItem(_ shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedContext in
@@ -3501,9 +3530,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     if #available(iOS 12.0, *) {
                         authorizationOptions.insert(.providesAppNotificationSettings)
                     }
-                    if #available(iOS 13.0, *) {
-                        authorizationOptions.insert(.announcement)
-                    }
                     Logger.shared.log("App \(self.episodeId)", "register for notifications: request authorization")
                     notificationCenter.requestAuthorization(options: authorizationOptions, completionHandler: { result, _ in
                         Logger.shared.log("App \(self.episodeId)", "register for notifications: received authorization: \(result)")
@@ -3529,9 +3555,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                 
                                 var carPlayOptions = options
                                 carPlayOptions.insert(.allowInCarPlay)
-                                if #available(iOS 13.2, *) {
-                                    carPlayOptions.insert(.allowAnnouncement)
-                                }
                                 
                                 unknownMessageCategory = UNNotificationCategory(identifier: "unknown", actions: [], intentIdentifiers: [], hiddenPreviewsBodyPlaceholder: hiddenContentString, options: options)
                                 repliableMessageCategory = UNNotificationCategory(identifier: "r", actions: [reply], intentIdentifiers: [INSearchForMessagesIntentIdentifier], hiddenPreviewsBodyPlaceholder: hiddenContentString, options: carPlayOptions)
@@ -3572,7 +3595,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> deliverOnMainQueue).start(next: { accountId in
             if let context = self.contextValue {
                 if let accountId = accountId, context.context.account.id != accountId || notification.request.content.userInfo["url"] != nil {
-                    completionHandler([.alert])
+                    completionHandler([.banner, .list])
                 }
             }
         })

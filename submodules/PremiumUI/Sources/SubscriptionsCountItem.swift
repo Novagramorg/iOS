@@ -159,7 +159,7 @@ private final class SubscriptionsCountItemNode: ListViewItemNode {
         let currentItem = self.item
         let makeTextLayouts = self.textNodes.map(TextNode.asyncLayout)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var themeUpdated = false
             if currentItem?.theme !== item.theme {
                 themeUpdated = true

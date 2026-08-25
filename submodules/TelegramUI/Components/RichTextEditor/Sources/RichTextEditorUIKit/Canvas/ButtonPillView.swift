@@ -20,6 +20,12 @@ final class ButtonPillView: UIView {
     private var horizontalPadding: CGFloat = 0.0
     private var ascent: CGFloat = 0.0
     private var colors: (fill: UIColor, label: UIColor) = (.clear, .label)
+    /// The host-supplied type icon and the trailing width the measurement held for it. Both come from
+    /// the attachment, so what is drawn and what was reserved cannot disagree.
+    private var icon: RichTextButtonIcon?
+    private var iconReserve: CGFloat = 0.0
+    private var isBlockPill: Bool = false
+    private var blockIconInset: CGPoint = .zero
 
     /// Emoji host views inside this pill's label, pooled by `EmojiRef.instanceID` exactly as the canvas
     /// pools body-text emoji — so a re-layout reuses the same view and its animation survives.
@@ -37,11 +43,15 @@ final class ButtonPillView: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
-    func configure(attachment: ButtonTextAttachment) {
+    func configure(attachment: ButtonTextAttachment, metrics: RichTextButtonMetrics) {
         self.labelString = attachment.labelString
         self.horizontalPadding = attachment.horizontalPadding
         self.ascent = attachment.ascent
         self.colors = attachment.colors
+        self.icon = attachment.icon
+        self.iconReserve = attachment.iconReserve
+        self.isBlockPill = attachment.isBlockPill
+        self.blockIconInset = metrics.blockIconInset
         setNeedsDisplay()
     }
 
@@ -66,6 +76,51 @@ final class ButtonPillView: UIView {
         recoloured.addAttribute(.foregroundColor, value: colors.label,
                                 range: NSRange(location: 0, length: recoloured.length))
         recoloured.draw(at: labelOrigin())
+
+        // The action's type icon, drawn after the label so a pill too narrow for both keeps the icon
+        // rather than losing it under the text.
+        // Tinted here rather than at measurement, for the same reason the label is: the pill's colour
+        // role is resolved with the theme, and a `danger`/disabled icon must dim with its text.
+        if let image = icon?.image(colors.label), let frame = iconFrame(image) {
+            image.draw(in: frame)
+        }
+    }
+
+    /// Where the type icon lands, in pill-local coordinates, or nil when there is none.
+    ///
+    /// Mirrors the V2 renderer (`instantPageInlineButtonIconFrame` / the block badge in
+    /// `InstantPageV2ButtonPillContentView`). An INLINE icon trails the label — an inline pill is the
+    /// label's ink box plus 2pt, with nowhere to put a corner badge, so the pill was measured
+    /// `iconReserve` wider to hold this. A BLOCK pill is a 40pt touch target and has the room for the
+    /// badge, whose clearance comes from the packer's side inset rather than from the pill's width.
+    ///
+    /// The icon is drawn at its own natural size, so the reserve and the drawn ink stay consistent even
+    /// if the host ever supplies a differently sized asset: the gap absorbs the difference and the
+    /// trailing edge still lands on the pill's padding.
+    private func iconFrame(_ icon: UIImage) -> CGRect? {
+        guard bounds.width > 0, bounds.height > 0 else {
+            return nil
+        }
+        if isBlockPill {
+            return CGRect(origin: CGPoint(x: bounds.width - blockIconInset.x - icon.size.width,
+                                          y: blockIconInset.y),
+                          size: icon.size)
+        }
+        let origin = labelOrigin()
+        let inkWidth = labelString.length > 0
+            ? CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(labelString), nil, nil, nil))
+            : 0.0
+        // The reserve is the gap plus the icon, so the gap is whatever the icon does not take.
+        let spacing = max(0.0, iconReserve - icon.size.width)
+        // Centred on the label's CAP box rather than on the pill box: the pill's box is asymmetric
+        // around the text because it also holds the descender, so pill-centring reads visibly low.
+        let baselineY = origin.y + ascent
+        let capHeight = (labelString.length > 0
+            ? (labelString.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)?.capHeight
+            : nil) ?? 0.0
+        return CGRect(origin: CGPoint(x: origin.x + inkWidth + spacing,
+                                      y: baselineY - capHeight / 2.0 - icon.size.height / 2.0),
+                      size: icon.size)
     }
 
     /// Top-left of the label's drawing box, centred within whatever width the pill was given. In justify
@@ -74,7 +129,10 @@ final class ButtonPillView: UIView {
         let inkWidth = labelString.length > 0
             ? CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(labelString), nil, nil, nil))
             : 0.0
-        let x = max(horizontalPadding, (bounds.width - inkWidth) / 2.0)
+        // The icon's reserve is trailing room belonging to the label+icon GROUP, so it comes off the
+        // width the label centres within — otherwise the label slides right by half of it and the
+        // hosted emoji, which are placed from this origin, slide with it.
+        let x = max(horizontalPadding, (bounds.width - inkWidth - iconReserve) / 2.0)
         let labelHeight = labelString.size().height
         return CGPoint(x: x, y: max(0.0, (bounds.height - labelHeight) / 2.0))
     }

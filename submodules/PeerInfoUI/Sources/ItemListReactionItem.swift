@@ -199,7 +199,7 @@ public class ItemListReactionItemNode: ListViewItemNode, ItemListItemNode {
         let currentItem = self.item
         var currentDisabledOverlayNode = self.disabledOverlayNode
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var contentSize: CGSize
             var insets: UIEdgeInsets
             let separatorHeight = UIScreenPixel
