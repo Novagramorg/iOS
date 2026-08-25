@@ -97,7 +97,8 @@ final class DetailsBox: CanvasBlock {
             self.foldedBodyModel = d.children
         }
         let stack = BlockStack(boxes: boxes)
-        stack.verticalInsetBase = 0
+        stack.spacingModel = .containerInterior
+            stack.verticalInsetBase = 0
         self.children = stack
     }
 
@@ -122,6 +123,8 @@ final class DetailsBox: CanvasBlock {
     var rendersAsBlockView: Bool { true }
 
     /// container(2) + Σ children (title + body when expanded). Matches `DocumentTree`'s `.details` mapping.
+    var spacingKind: RichTextBlockSpacingKind { .details }
+
     var nodeSize: Int {
         children.boxes.reduce(0) { $0 + $1.nodeSize } + 2
     }

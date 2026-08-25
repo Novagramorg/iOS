@@ -1,71 +1,4 @@
 public extension Api.messages {
-    enum SavedGifs: TypeConstructorDescription {
-        public class Cons_savedGifs: TypeConstructorDescription {
-            public var hash: Int64
-            public var gifs: [Api.Document]
-            public init(hash: Int64, gifs: [Api.Document]) {
-                self.hash = hash
-                self.gifs = gifs
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("savedGifs", [("hash", ConstructorParameterDescription(self.hash)), ("gifs", ConstructorParameterDescription(self.gifs))])
-            }
-        }
-        case savedGifs(Cons_savedGifs)
-        case savedGifsNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .savedGifs(let _data):
-                if boxed {
-                    buffer.appendInt32(-2069878259)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.gifs.count))
-                for item in _data.gifs {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .savedGifsNotModified:
-                if boxed {
-                    buffer.appendInt32(-402498398)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .savedGifs(let _data):
-                return ("savedGifs", [("hash", ConstructorParameterDescription(_data.hash)), ("gifs", ConstructorParameterDescription(_data.gifs))])
-            case .savedGifsNotModified:
-                return ("savedGifsNotModified", [])
-            }
-        }
-
-        public static func parse_savedGifs(_ reader: BufferReader) -> SavedGifs? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: [Api.Document]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.messages.SavedGifs.savedGifs(Cons_savedGifs(hash: _1!, gifs: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_savedGifsNotModified(_ reader: BufferReader) -> SavedGifs? {
-            return Api.messages.SavedGifs.savedGifsNotModified
-        }
-    }
-}
-public extension Api.messages {
     enum SavedReactionTags: TypeConstructorDescription {
         public class Cons_savedReactionTags: TypeConstructorDescription {
             public var tags: [Api.SavedReactionTag]
@@ -1497,6 +1430,56 @@ public extension Api.payments {
             let _c3 = _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.payments.ConnectedStarRefBots.connectedStarRefBots(Cons_connectedStarRefBots(count: _1!, connectedBots: _2!, users: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.payments {
+    enum CurrencyRates: TypeConstructorDescription {
+        public class Cons_currencyRates: TypeConstructorDescription {
+            public var rates: [Api.CurrencyRate]
+            public init(rates: [Api.CurrencyRate]) {
+                self.rates = rates
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("currencyRates", [("rates", ConstructorParameterDescription(self.rates))])
+            }
+        }
+        case currencyRates(Cons_currencyRates)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .currencyRates(let _data):
+                if boxed {
+                    buffer.appendInt32(-1144199998)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.rates.count))
+                for item in _data.rates {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .currencyRates(let _data):
+                return ("currencyRates", [("rates", ConstructorParameterDescription(_data.rates))])
+            }
+        }
+
+        public static func parse_currencyRates(_ reader: BufferReader) -> CurrencyRates? {
+            var _1: [Api.CurrencyRate]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.CurrencyRate.self)
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.payments.CurrencyRates.currencyRates(Cons_currencyRates(rates: _1!))
             }
             else {
                 return nil

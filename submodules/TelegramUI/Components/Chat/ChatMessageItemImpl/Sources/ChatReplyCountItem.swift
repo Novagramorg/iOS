@@ -8,17 +8,24 @@ import TelegramPresentationData
 import AccountContext
 import WallpaperBackgroundNode
 import ChatControllerInteraction
+import ChatMessageItem
 import ChatMessageItemCommon
 
 private let titleFont = UIFont.systemFont(ofSize: 13.0)
 
-public class ChatReplyCountItem: ListViewItem {
+public class ChatReplyCountItem: ListViewItem, ChatHistoryItemWithHeaders {
     public let index: EngineMessage.Index
     public let isComments: Bool
     public let count: Int
     public let presentationData: ChatPresentationData
     public let header: ChatMessageDateHeader
     public let controllerInteraction: ChatControllerInteraction
+
+    // The item-side mirror of the node's `headers()` override below. Load-bearing under the CoreList
+    // backend: a reply-count row that published nothing would split its day's header run in two.
+    public var headers: [ListViewItemHeader] {
+        return [self.header]
+    }
 
     public var neighborDescriptor: AnyEquatable {
         return AnyEquatable(ChatHistoryItemNeighbor.replyCount(dateHeaderId: self.header.id))
@@ -202,21 +209,8 @@ public class ChatReplyCountItemNode: ListViewItemNode {
         
         self.absoluteRect = (rect, containerSize)
 
-        if let backgroundNode = self.backgroundNode {
-            var backgroundFrame = backgroundNode.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += rect.minY
-            
-            backgroundNode.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-        }
     }
 
-    override public func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.offset(value: CGPoint(x: value.x, y: -value.y), animationCurve: animationCurve, duration: duration)
-        }
-    }
-    
     override public func headers() -> [ListViewItemHeader]? {
         if let item = self.item {
             return [item.header]

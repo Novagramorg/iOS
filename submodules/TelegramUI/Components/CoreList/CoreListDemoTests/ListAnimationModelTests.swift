@@ -567,7 +567,7 @@ final class ListAnimationModelTests: XCTestCase {
             compiler: CoreAnimationCompiler(emitsAnimations: false),
             mediaTime: { time },
             durationFactor: { 1 },
-            animationInstaller: { track, property, _, completion in
+            animationInstaller: { track, property, _, _, completion in
                 guard property == .positionY else { return }
                 installed.append((track, completion))
             }
@@ -609,7 +609,7 @@ final class ListAnimationModelTests: XCTestCase {
             compiler: CoreAnimationCompiler(emitsAnimations: false),
             mediaTime: { time },
             durationFactor: { 1 },
-            animationInstaller: { track, property, _, completion in
+            animationInstaller: { track, property, _, _, completion in
                 if property == .positionY { installed.append((track, completion)) }
             }
         )

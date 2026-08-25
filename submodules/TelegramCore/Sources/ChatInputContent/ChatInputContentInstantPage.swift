@@ -103,10 +103,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
             // Single item: byte-identical to the pre-container output.
             let item = m.items[0]
             switch item.kind {
-            case .image, .video, .audio:
+            case .image, .video, .audio, .document:
                 // Stash the Media in the page's `media` dict, keyed by its own MediaId; the block carries only the id.
-                // image/video/audio are always a concrete TelegramMediaImage/TelegramMediaFile with an id; a nil-id
-                // medium is dropped (it could not be resolved back from the dict anyway).
+                // image/video/audio/document are always a concrete TelegramMediaImage/TelegramMediaFile with an id;
+                // a nil-id medium is dropped (it could not be resolved back from the dict anyway).
                 guard let mediaId = item.media.id else {
                     break
                 }
@@ -118,6 +118,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                     // music & voice both serialize as `.audio`; the file's `.Audio(isVoice:)` attribute (carried on
                     // the stored Media) drives the music-vs-voice render. No size/alignment is representable.
                     result.append(.audio(id: mediaId, caption: caption))
+                case .document:
+                    // A caption-less block, so `caption` is .empty for editor-authored content; the field is
+                    // carried anyway because the wire block has one.
+                    result.append(.document(id: mediaId, caption: caption))
                 default:
                     result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false, spoiler: item.isSpoiler))
                 }
@@ -167,13 +171,23 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 }
                 return InstantPageTableRow(cells: cells)
             }
-            result.append(.table(title: .empty, rows: rows, bordered: true, striped: false))
+            // TODO: `striped` (and `title`) are the last unmodelled `pageBlockTable` fields — a server
+            // table with `striped: true` keeps its borders through this round-trip but loses its stripes.
+            // Deliberate, not an oversight: modelling them needs an editor affordance too.
+            result.append(.table(title: .empty, rows: rows, bordered: t.bordered, striped: false, compact: t.compact))
         case let .details(d):
             // Recursive detail (folding) block → InstantPage `.details`. Forward the title as RichText and the
             // inner content unchanged; `expanded` maps 1:1 (the inverse of a block-quote's `collapsed`).
             result.append(.details(title: richText(from: d.title),
                                    blocks: instantPageBlocks(from: d.content, collectingMediaInto: &media),
                                    expanded: d.expanded))
+        case let .buttonRow(row):
+            result.append(.buttonRow(
+                alignment: row.alignment,
+                buttons: row.buttons.map {
+                    InstantPageButton(text: richText(from: $0.label), action: $0.action, color: $0.color, isLink: $0.isLink)
+                }
+            ))
         }
         i += 1
     }
@@ -199,6 +213,10 @@ func richText(from runs: [ChatInputRun]) -> RichText {
                 rt = .url(text: .plain(run.text), url: url, webpageId: nil)
             case let .date(date):
                 rt = .textDate(text: .plain(run.text), date: date, format: nil)
+            case let .button(button):
+                // The carrying run's text is a bare `U+FFFC` and is deliberately NOT emitted — a
+                // button's label lives inside the button. The reverse restores the `U+FFFC`.
+                rt = .textButton(InstantPageButton(text: richText(from: button.label), action: button.action, color: button.color, isLink: button.isLink))
             case nil:
                 rt = .plain(run.text)
             }
@@ -408,6 +426,14 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             if let media = media[id] {
                 result.append(.media(ChatInputMedia(media: media, kind: .audio, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
+        case let .document(id, caption):
+            // Mirror of `.audio`: resolve the concrete `TelegramMediaFile` from the page `media` dict (the
+            // forward always stores it). naturalSize/displayWidth/alignment restore the editor's media
+            // defaults; the caption rides the chat currency even though the editor renders none (a document
+            // is caption-less on screen — `MediaBlockBox` drops it at that boundary).
+            if let media = media[id] {
+                result.append(.media(ChatInputMedia(media: media, kind: .document, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+            }
         case let .map(latitude, longitude, _, _, caption):
             // Reconstruct a `TelegramMediaMap` from the inline coordinates (no media-dict lookup — a `.map` block
             // stores none). zoom/dimensions are render-only and dropped; venue is not in the block (the caption
@@ -415,7 +441,7 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             // matching the .image/.video canonicalization above.
             let map = TelegramMediaMap(latitude: latitude, longitude: longitude, heading: nil, accuracyRadius: nil, venue: nil)
             result.append(.media(ChatInputMedia(media: map, kind: .location, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
-        case let .table(_, rows, _, _):
+        case let .table(_, rows, bordered, _, compact):
             // Rebuild the `ChatInputTable`. Columns are inferred from the widest row's SPANNED cell count (each
             // cell occupies `max(1, colspan)` grid columns, so a colspanning first cell no longer under-counts
             // — a plain, no-span table still infers from the raw cell count, matching the prior behavior); column
@@ -447,7 +473,14 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
                 }
                 return ChatInputTableRow(height: nil, cells: cells)
             }
-            result.append(.table(ChatInputTable(columns: columns, rows: outRows)))
+            result.append(.table(ChatInputTable(columns: columns, rows: outRows, compact: compact, bordered: bordered)))
+        case let .buttonRow(alignment, buttons):
+            result.append(.buttonRow(ChatInputButtonRow(
+                buttons: buttons.map {
+                    ChatInputButton(label: chatInputRuns(fromRichText: $0.text), action: $0.action, color: $0.color, isLink: $0.isLink)
+                },
+                alignment: alignment
+            )))
         default:
             break // Non-text InstantPage blocks have no ChatInputContent representation (drafts never carry them).
         }
@@ -513,6 +546,12 @@ func chatInputRun(fromSinglePart rt: RichText, attributes: ChatInputInlineAttrib
         return chatInputRun(fromSinglePart: inner, attributes: attributes)
     case .empty:
         return ChatInputRun(text: "", attributes: attributes)
+    case let .textButton(button):
+        // A button is an atom: its run text is a bare `U+FFFC`, mirroring the custom-emoji and formula
+        // invariants. The label lives INSIDE the button, not in the run — falling through to the
+        // `default:` below would flatten the pill to its label text and destroy the button.
+        attributes.entity = .button(ChatInputButton(label: chatInputRuns(fromRichText: button.text), action: button.action, color: button.color, isLink: button.isLink))
+        return ChatInputRun(text: "\u{FFFC}", attributes: attributes)
     default:
         // Defensive for wire-only RichText cases that the forward never produces.
         return ChatInputRun(text: rt.plainText, attributes: attributes)

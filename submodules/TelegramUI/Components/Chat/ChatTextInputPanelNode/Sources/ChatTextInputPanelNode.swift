@@ -696,7 +696,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
 
-    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? {
+    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? {
         didSet { self.richTextInputNode?.mediaItemViewFactory = self.mediaItemViewFactory }
     }
 
@@ -1014,6 +1014,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.mediaActionButtons.updateAccessibility()
         
         self.mediaActionButtons.expandMediaInputButton.addTarget(self, action: #selector(self.expandButtonPressed), for: .touchUpInside)
+        self.mediaActionButtons.stopButton.addTarget(self, action: #selector(self.stopButtonPressed), for: .touchUpInside)
         self.mediaActionButtons.expandMediaInputButtonBackgroundView.alpha = 0.0
         
         self.searchLayoutClearButton.highligthedChanged = { [weak self] highlighted in
@@ -1821,7 +1822,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        let inputHasText = !(self.richTextInputNode?.inputContentIsEmpty ?? true)
+        let inputHasText = !isRecording && !(self.richTextInputNode?.inputContentIsEmpty ?? true)
         
         var hasMenuButton = false
         var menuButtonExpanded = false
@@ -4731,6 +4732,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
+        // The mic button's press handling begins on touch-*down* (micButtonInteractionBegan),
+        // so a touch that lands on it can arm a recording before the Stop tap resolves —
+        // stacking stopButton on top is not enough on its own.
+        self.mediaActionButtons.stopButton.isHidden = !displayStop
+        self.mediaActionButtons.micButton.isUserInteractionEnabled = !displayStop
+
         if displayStop {
             let alphaTransition = ComponentTransition(alphaTransition)
             alphaTransition.setAlpha(view: self.mediaActionButtons.micButton, alpha: 0.0)
@@ -5250,15 +5257,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             text = current.inputText.attributedSubstring(from: NSMakeRange(current.selectionRange.lowerBound, current.selectionRange.count)).string
             return (current, inputMode)
         }
-        if let context = self.context {
-            if let speechHolder = speakText(context: context, text: text) {
-                speechHolder.completion = { [weak self, weak speechHolder] in
-                    if let strongSelf = self, strongSelf.currentSpeechHolder == speechHolder {
-                        strongSelf.currentSpeechHolder = nil
-                    }
+        if let speechHolder = speakText(text: text) {
+            speechHolder.completion = { [weak self, weak speechHolder] in
+                if let strongSelf = self, strongSelf.currentSpeechHolder == speechHolder {
+                    strongSelf.currentSpeechHolder = nil
                 }
-                self.currentSpeechHolder = speechHolder
             }
+            self.currentSpeechHolder = speechHolder
         }
         if #available(iOS 13.0, *) {
             UIMenuController.shared.hideMenu()
@@ -5768,6 +5773,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     @objc public func expandButtonPressed() {
         self.toggleExpandMediaInput?()
+    }
+
+    @objc private func stopButtonPressed() {
+        self.interfaceInteraction?.stopIncomingStreamingMessage()
     }
     
     @objc func accessoryItemButtonPressed(_ button: UIView) {

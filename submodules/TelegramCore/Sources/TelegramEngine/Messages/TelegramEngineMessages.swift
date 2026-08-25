@@ -97,6 +97,10 @@ public extension TelegramEngine {
         	return _internal_clearCloudDraftsInteractively(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId)
         }
 
+        public func stopIncomingTypingDraft(peerId: EnginePeer.Id, threadId: Int64?) -> Signal<Never, NoError> {
+            return _internal_stopIncomingTypingDraft(postbox: self.account.postbox, network: self.account.network, peerId: peerId, threadId: threadId)
+        }
+
         public func applyMaxReadIndexInteractively(index: MessageIndex) -> Signal<Void, NoError> {
             return _internal_applyMaxReadIndexInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, index: index)
         }
@@ -225,6 +229,10 @@ public extension TelegramEngine {
 
         public func retryEphemeralOutgoingMessage(messageId: MessageId) -> Signal<MessageId?, NoError> {
             return _internal_retryEphemeralOutgoingMessage(account: self.account, messageId: messageId)
+        }
+
+        public func revertAnchoredEphemeralMessage(messageId: MessageId) -> Signal<Never, NoError> {
+            return _internal_revertAnchoredEphemeralMessage(account: self.account, messageId: messageId)
         }
 
         public func refreshWelcomeMessages(peerId: PeerId) -> Signal<Void, NoError> {

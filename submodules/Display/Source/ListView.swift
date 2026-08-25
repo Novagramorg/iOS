@@ -3381,9 +3381,6 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
                         }
                         self.layer.add(animation, forKey: "animation-\(self.takeNextAnimationId())")
                         if !completeOffset.isZero {
-                            for itemNode in self.itemNodes {
-                                itemNode.applyAbsoluteOffset(value: CGPoint(x: 0.0, y: -completeOffset), animationCurve: animationCurve, duration: animationDuration)
-                            }
                             self.didScrollWithOffset?(-completeOffset, ContainedViewLayoutTransition.animated(duration: animationDuration, curve: animationCurve), nil, self.isTrackingOrDecelerating)
                         }
                     }
@@ -3428,9 +3425,6 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
                 self.layer.add(springAnimation, forKey: nil)
 
                 if !completeOffset.isZero {
-                    for itemNode in self.itemNodes {
-                        itemNode.applyAbsoluteOffset(value: CGPoint(x: 0.0, y: -completeOffset), animationCurve: .spring, duration: duration)
-                    }
                     self.didScrollWithOffset?(-completeOffset, .animated(duration: duration, curve: .spring), nil, self.isTrackingOrDecelerating)
                 }
             } else {
@@ -3810,12 +3804,6 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
                         self.layer.add(animation, forKey: "animation-\(self.takeNextAnimationId()))")
                     }
 
-                    for itemNode in self.itemNodes {
-                        itemNode.applyAbsoluteOffset(value: CGPoint(x: 0.0, y: -offset), animationCurve: animationCurve, duration: animationDuration)
-                    }
-                    for itemNode in temporaryPreviousNodes {
-                        itemNode.applyAbsoluteOffset(value: CGPoint(x: 0.0, y: -offset), animationCurve: animationCurve, duration: animationDuration)
-                    }
                     self.didScrollWithOffset?(-offset, .animated(duration: animationDuration, curve: animationCurve), nil, self.isTrackingOrDecelerating)
                     if let verticalScrollIndicator = self.verticalScrollIndicator {
                         verticalScrollIndicator.layer.add(reverseAnimation, forKey: nil)

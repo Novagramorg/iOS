@@ -2,12 +2,17 @@ import Foundation
 import TONCore
 import TONToncenter
 
-/// One user-facing value movement extracted from a Toncenter trace.
+/// One user-facing wallet operation extracted from a Toncenter trace.
 ///
 /// This is deliberately independent of any application's presentation model. In particular,
 /// a jetton is identified by the wallet contract that handled the message; the host decides
 /// which master, symbol and formatting policy that contract represents.
 public struct WalletActivity: Sendable, Equatable {
+    public enum Kind: String, Sendable, Equatable {
+        case transfer
+        case deployContract
+    }
+
     public enum Direction: String, Sendable, Equatable {
         case incoming
         case outgoing
@@ -31,9 +36,10 @@ public struct WalletActivity: Sendable, Equatable {
     public let transactionHash: String
     public let logicalTime: String
     public let timestamp: Int
+    public let kind: Kind
     public let direction: Direction
     public let asset: Asset
-    /// Nanoton for TON, token base units for a jetton, and zero for an NFT.
+    /// Nanoton for TON, token base units for a jetton, and zero for an NFT or deployment.
     public let amount: BigUInt
     /// Total wallet-account fees attributed to this activity, in nanoton.
     public let fee: BigUInt
@@ -56,7 +62,8 @@ public struct WalletActivity: Sendable, Equatable {
         counterparty: Address?,
         counterpartyName: String?,
         comment: String?,
-        status: Status
+        status: Status,
+        kind: Kind = .transfer
     ) {
         self.id = id
         self.traceID = traceID
@@ -64,6 +71,7 @@ public struct WalletActivity: Sendable, Equatable {
         self.transactionHash = transactionHash
         self.logicalTime = logicalTime
         self.timestamp = timestamp
+        self.kind = kind
         self.direction = direction
         self.asset = asset
         self.amount = amount
@@ -160,6 +168,50 @@ public enum WalletActivityExtractor {
         let timestamp = firstWalletTransaction.now
         let transactionHash = firstWalletTransaction.hash
 
+        var deployOperations: [(transaction: ChainTransaction, message: ChainMessage, address: Address)] = []
+        for transaction in walletTransactions {
+            if let message = transaction.inMessage,
+               message.hasStateInit,
+               message.source == nil || message.kind == .contractDeploy {
+                deployOperations.append((transaction, message, walletAddress))
+            }
+            for message in transaction.outMessages
+            where message.kind == .contractDeploy {
+                guard let address = parsedAddress(message.destination), address != walletAddress else {
+                    continue
+                }
+                deployOperations.append((transaction, message, address))
+            }
+        }
+
+        func deployActivities(fee: BigUInt) -> [WalletActivity] {
+            return deployOperations.enumerated().map { index, operation in
+                WalletActivity(
+                    id: messageID(
+                        kind: "deploy",
+                        direction: .outgoing,
+                        messageHash: operation.message.hash,
+                        transactionHash: operation.transaction.hash,
+                        disambiguator: operation.address.rawString.lowercased()
+                    ),
+                    traceID: traceID,
+                    externalMessageHash: externalMessageHash,
+                    transactionHash: operation.transaction.hash,
+                    logicalTime: operation.transaction.logicalTime,
+                    timestamp: operation.transaction.now,
+                    direction: .outgoing,
+                    asset: .ton,
+                    amount: 0,
+                    fee: index == 0 ? fee : 0,
+                    counterparty: operation.address,
+                    counterpartyName: addressName(operation.address, in: addressBook),
+                    comment: nil,
+                    status: status,
+                    kind: .deployContract
+                )
+            }
+        }
+
         var containsJettonOperation = false
         for transaction in walletTransactions {
             for message in transaction.outMessages {
@@ -188,7 +240,7 @@ public enum WalletActivityExtractor {
                     counterpartyName: addressName(payload.destination, in: addressBook),
                     comment: nonEmptyString(payload.comment),
                     status: status
-                )]
+                )] + deployActivities(fee: 0)
             }
             if let message = transaction.inMessage,
                let payload = TransferPayloadDecoder.jettonNotification(from: message) {
@@ -214,12 +266,12 @@ public enum WalletActivityExtractor {
                     counterpartyName: addressName(payload.sender, in: addressBook),
                     comment: nonEmptyString(payload.comment),
                     status: status
-                )]
+                )] + deployActivities(fee: 0)
             }
         }
         if containsJettonOperation {
             // Do not misrepresent the service TON attached to a malformed jetton call as a send.
-            return []
+            return deployActivities(fee: totalFee)
         }
 
         for transaction in walletTransactions {
@@ -249,7 +301,7 @@ public enum WalletActivityExtractor {
                     counterpartyName: addressName(payload.newOwner, in: addressBook),
                     comment: nonEmptyString(payload.comment),
                     status: status
-                )]
+                )] + deployActivities(fee: 0)
             }
             if let message = transaction.inMessage,
                let payload = TransferPayloadDecoder.nftOwnershipAssigned(from: message),
@@ -275,7 +327,7 @@ public enum WalletActivityExtractor {
                     counterpartyName: addressName(payload.previousOwner, in: addressBook),
                     comment: nonEmptyString(payload.comment),
                     status: status
-                )]
+                )] + deployActivities(fee: 0)
             }
         }
 
@@ -284,7 +336,7 @@ public enum WalletActivityExtractor {
         for transaction in walletTransactions {
             if let message = transaction.inMessage,
                parsedAddress(message.source) != walletAddress,
-               MessageClassifier.classify(message) == .tonTransfer,
+               message.kind == .tonTransfer,
                let amount = positiveAmount(message.value) {
                 let counterparty = parsedAddress(message.source)
                 result.append(WalletActivity(
@@ -312,7 +364,7 @@ public enum WalletActivityExtractor {
             }
             for message in transaction.outMessages
             where parsedAddress(message.destination) != walletAddress
-                && MessageClassifier.classify(message) == .tonTransfer {
+                && message.kind == .tonTransfer {
                 guard let amount = positiveAmount(message.value) else { continue }
                 let counterparty = parsedAddress(message.destination)
                 result.append(WalletActivity(
@@ -339,7 +391,7 @@ public enum WalletActivityExtractor {
                 didAssignFee = true
             }
         }
-        return result
+        return result + deployActivities(fee: result.isEmpty ? totalFee : 0)
     }
 
     private static func messageID(

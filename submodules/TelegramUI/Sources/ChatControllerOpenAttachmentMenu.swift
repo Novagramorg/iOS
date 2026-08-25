@@ -184,6 +184,9 @@ extension ChatControllerImpl {
             
             var canSendPolls = true
             var canSendTodos = true
+            if case let .customChatContents(customChatContents) = self.presentationInterfaceState.subject, case .welcomeMessages = customChatContents.kind {
+                canSendTodos = false
+            }
             if let peer = self.presentationInterfaceState.renderedPeer?.peer {
                 if let peer = peer as? TelegramUser {
                     if peer.botInfo == nil && peer.id != self.context.account.peerId {
@@ -389,7 +392,7 @@ extension ChatControllerImpl {
                 if !premiumGiftOptions.isEmpty {
                     buttons.insert(.gift, at: 1)
                 }
-                buttons.insert(.richText, at: 1)   // rich text is default-on (legacy is the opt-out)
+                buttons.append(.richText)
                 
                 guard let initialButton = initialButton else {
                     if case let .bot(botId, botPayload, botJustInstalled) = subject {
@@ -1235,6 +1238,9 @@ extension ChatControllerImpl {
         }
         if request.music {
             availableButtons.append(.audio)
+        }
+        if request.file {
+            availableButtons.append(.file)
         }
         if request.location {
             availableButtons.append(.location)
@@ -2502,19 +2508,29 @@ extension ChatControllerImpl {
                 guard let self else {
                     return
                 }
-                func areItemsOnlyAppended(existing: [TelegramMediaTodo.Item], updated: [TelegramMediaTodo.Item]) -> Bool {
-                    guard updated.count >= existing.count else {
-                        return false
-                    }
-                    for (index, existingItem) in existing.enumerated() {
-                        if index >= updated.count || updated[index] != existingItem {
-                            return false
-                        }
-                    }
-                    return true
+                func hasSameMetadata(existing: TelegramMediaTodo, updated: TelegramMediaTodo) -> Bool {
+                    return existing.flags == updated.flags
+                        && existing.text == updated.text
+                        && existing.textEntities == updated.textEntities
                 }
 
-                if canEdit && !areItemsOnlyAppended(existing: existingTodo.items, updated: todo.items) {
+                func appendedItemsIfOnlyAppended(existing: TelegramMediaTodo, updated: TelegramMediaTodo) -> [TelegramMediaTodo.Item]? {
+                    guard hasSameMetadata(existing: existing, updated: updated), updated.items.count > existing.items.count else {
+                        return nil
+                    }
+                    for (index, existingItem) in existing.items.enumerated() {
+                        if updated.items[index] != existingItem {
+                            return nil
+                        }
+                    }
+                    return Array(updated.items.dropFirst(existing.items.count))
+                }
+
+                if hasSameMetadata(existing: existingTodo, updated: todo) && existingTodo.items == todo.items {
+                    return
+                } else if let appendedItems = appendedItemsIfOnlyAppended(existing: existingTodo, updated: todo) {
+                    let _ = self.context.engine.messages.appendTodoMessageItems(messageId: messageId, items: appendedItems).start()
+                } else if canEdit {
                     let _ = self.context.engine.messages.requestEditMessage(
                         messageId: messageId,
                         text: "",
@@ -2523,9 +2539,6 @@ extension ChatControllerImpl {
                         richText: nil,
                         inlineStickers: [:]
                     ).start()
-                } else {
-                    let appendedItems = Array(todo.items[existingTodo.items.count ..< todo.items.count])
-                    let _ = self.context.engine.messages.appendTodoMessageItems(messageId: messageId, items: appendedItems).start()
                 }
             }
         )

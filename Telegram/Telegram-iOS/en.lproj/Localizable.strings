@@ -3997,6 +3997,9 @@ Unused sets are archived when you add more.";
 
 "Conversation.UnsupportedMediaPlaceholder" = "This message is not supported on your version of Telegram. Please update to the latest version.";
 "Conversation.UpdateTelegram" = "UPDATE TELEGRAM";
+"Conversation.UnsupportedMedia.Title" = "Unsupported message";
+"Conversation.UnsupportedMedia.Text" = "Update Telegram to view this message";
+"Conversation.UnsupportedMedia.Action" = "Update";
 
 "Cache.LowDiskSpaceText" = "Your phone has run out of available storage. Please free some space to download or upload media.";
 
@@ -8676,6 +8679,7 @@ Sorry for the inconvenience.";
 
 "StorageManagement.AutoremoveSpaceDescription" = "If your cache size exceeds this limit, the oldest media will be deleted.";
 
+"StorageManagement.ClearConfirmationTitle" = "Clear Cache";
 "StorageManagement.ClearConfirmationText" = "Media and documents will stay in the cloud and can be re-downloaded if you need them again.";
 
 "StorageManagement.TabChats" = "Chats";
@@ -16584,12 +16588,14 @@ Error: %8$@";
 "RichText.Menu.List.Bullet" = "Bulleted List";
 "RichText.Menu.List.Numbered" = "Numbered List";
 "RichText.Menu.List.Checklist" = "Checklist";
-"RichText.Menu.List.Detail" = "Detail Block";
+"RichText.Menu.List.Detail" = "Toggle Block";
 "RichText.Menu.Table.Copy" = "Copy Table";
 "RichText.Menu.Table.ConvertToText" = "Convert to Text";
 "RichText.Menu.Table.Delete" = "Delete Table";
 "RichText.Menu.Table.HighlightOn" = "Highlight";
 "RichText.Menu.Table.HighlightOff" = "Remove Highlight";
+"RichText.Menu.Table.CompactOn" = "Compact";
+"RichText.Menu.Table.CompactOff" = "Remove Compact";
 "RichText.PlaceholderBody" = "Type something...";
 "RichText.PlaceholderQuote" = "Type a quote here";
 "RichText.PlaceholderCode" = "Type code here";
@@ -16609,8 +16615,51 @@ Error: %8$@";
 "WelcomeMessages.ServiceHeader1" = "New members will see this message when they join";
 "WelcomeMessages.ServiceHeader2" = "Touch and hold it to delete it";
 "WelcomeMessages.MessageLimitReachedText_1" = "Limit of %@ message reached";
-"WelcomeMessages.MessageLimitReachedText_aby" = "Limit of %@ messages reached";
+"WelcomeMessages.MessageLimitReachedText_any" = "Limit of %@ messages reached";
 "Chat.Placeholder.WelcomeMessage" = "Add a message...";
 
 "Chat.EphemeralMessage.BadgeYou" = "Only visible to you";
 "Chat.EphemeralMessage.Badge" = "Only visible to %@";
+"Chat.EphemeralMessage.AnchoredInfo" = "This version of the message is only visible to you.";
+"Chat.EphemeralMessage.Revert" = "Revert";
+"Chat.EphemeralMessage.RevertInfo" = "Restores the message to it's original content";
+
+"Channel.EditAdmin.PermissionManageWelcomeMessages" = "Manage Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessagesGroup" = "Send Welcome Messages";
+"Channel.EditAdmin.PermissionSendWelcomeMessagesChannel" = "Send Welcome Messages";
+
+"RichText.ButtonEditorTitle" = "Button";
+"RichText.ButtonLabelPlaceholder" = "Label";
+"RichText.ButtonURLPlaceholder" = "URL";
+"RichText.ButtonSectionContent" = "CONTENT";
+"RichText.ButtonSectionStyle" = "STYLE";
+"RichText.ButtonDelete" = "Delete Button";
+"RichText.ButtonStyleDefault" = "Default";
+"RichText.ButtonStylePrimary" = "Primary";
+"RichText.ButtonStyleDanger" = "Danger";
+"RichText.ButtonStyleSuccess" = "Success";
+"RichText.ButtonStyleLink" = "Link";
+"RichText.ButtonActionCopy" = "Copies text";
+"RichText.ButtonActionDisabled" = "Disabled";
+"RichText.ButtonActionNotEditable" = "This button's action can't be edited";
+"RichText.MenuInlineButton" = "Button";
+"RichText.MenuButtonRow" = "Button Row";
+"RichText.ButtonRowAlignment" = "Alignment";
+"RichText.ButtonRowAlignJustify" = "Justify";
+"RichText.ButtonRowAlignLeft" = "Left";
+"RichText.ButtonRowAlignCenter" = "Center";
+"RichText.ButtonRowAlignRight" = "Right";
+"RichText.ButtonRowDelete" = "Delete Row";
+"RichText.ButtonRowAdd" = "Add Button";
+"RichText.Menu.Table.BordersOn" = "Show Borders";
+"RichText.Menu.Table.BordersOff" = "Hide Borders";
+
+"Notification.JoinedGroupViaCommunity" = "%@ joined the group via community";
+"Notification.JoinedGroupViaCommunityYou" = "You joined the group via community";
+"Gift.Message.InputPlaceholder" = "Add message…";
+"Gift.Message.MakePublic" = "Make message public";
+"Gift.Message.PreviewInChat" = "Preview in chat";
+"Gift.Message.SendNow" = "Send Now";
+"Gift.Message.ToastText" = "You can add a message for **%@** or send **%@** right away.";
+"Gift.Message.ToastTitle" = "Add Message";
+"Gift.Message.YourMessage" = "Your message...";

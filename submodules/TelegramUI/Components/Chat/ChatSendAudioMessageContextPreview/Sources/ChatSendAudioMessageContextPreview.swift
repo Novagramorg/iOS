@@ -128,7 +128,8 @@ public final class ChatSendContactMessageContextPreview: UIView, ChatSendMessage
                 isPreview: true,
                 isStandalone: true,
                 rank: nil,
-                rankRole: nil
+                rankRole: nil,
+                isGiftMessageComposerPreview: false
             )
             items.append(item)
         }
@@ -283,7 +284,8 @@ public final class ChatSendAudioMessageContextPreview: UIView, ChatSendMessageCo
             isPreview: true,
             isStandalone: true,
             rank: nil,
-            rankRole: nil
+            rankRole: nil,
+            isGiftMessageComposerPreview: false
         )
         let items = [item]
         
@@ -482,7 +484,7 @@ public final class ChatSendGroupMediaMessageContextPreview: UIView, ChatSendMess
         }, commitEmojiInteraction: { _, _, _, _ in
         }, openLargeEmojiInfo: { _, _, _ in
         }, openJoinLink: { _ in
-        }, openWebView: { _, _, _, _ in
+        }, openWebView: { _, _, _, _, _ in
         }, activateAdAction: { _, _, _, _ in
         }, adContextAction: { _, _, _ in
         }, removeAd: { _ in

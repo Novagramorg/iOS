@@ -52,7 +52,7 @@ Every test command must use all three mandatory options:
 - `-collect-test-diagnostics never` — **without this, any run with a failing test hangs forever.**
   xcodebuild defaults to `on-failure`, and on failure it blocks in
   `XCTHRunDestinationAllocator.collectSimulatorDiagnostics` gathering a sysdiagnose; with several
-  simulators booted it effectively never returns. Measured on the same deliberately-failing test:
+  simulators booted it effectively never returns. Measured on a deliberately-failing test:
   5.26s with the flag, still blocked after 240s without it (and only ~1.7s of CPU, so it is waiting,
   not working). A PASSING run exits in ~5s either way, which is what makes this so confusing — the
   hang appears only when you have something to fix.
@@ -82,10 +82,13 @@ interval only**: neither fires for momentum, bounce or programmatic writes, so a
   `UIScrollView`. It owns the private 10,000,000-point virtual canvas and prevents programmatic
   offset writes from re-entering the user-scroll callback.
 - `PhysicsScrollEngine` is an additive selectable backend with `.stepped` and `.keyframe`
-  deceleration. A finger on moving content grabs the scroll and absorbs the stopping tap. The
-  stopping-tap absorption works by declaring, via `shouldBeRequiredToFailBy`, that content
-  recognizers under `host` must wait for the pan to fail — and that declaration is **gated on content
-  actually moving**; see the gotcha below before touching it.
+  deceleration. A finger on moving content grabs the scroll and absorbs the stopping tap. **Those are
+  two mechanisms on two different clocks, and only one of them is under this engine's control.** The
+  STOP is `noteTouchDown` — touch delivery, which nothing can hold; the ABSORB is the forced `.began`
+  (`shouldBeginImmediately`), which is plain UIKit gesture exclusion: the engine grants NO
+  simultaneity to any recognizer, so a pan force-begun on moving content fails the content recognizer.
+  There is deliberately no `shouldBeRequiredToFailBy` counterpart; see the arbitration gotcha below
+  before adding either, or before moving anything onto the `.began` path.
 - Both physics modes use `PhysicsScrollCore`. The keyframe mode renders deceleration through
   `KeyframeFlight`; coordinate-only rebases update its persistent shift without restarting the
   flight, while a true edge or trajectory-shape change rebakes with a seamless splice. A real edge
@@ -126,6 +129,114 @@ The plain `container` holds loaded live views:
 - bottom loaded: the engine supplies the bottom-aligned origin;
 - neither edge loaded: the engine supplies its neutral origin and `applyShift` preserves screen
   position across container rebases.
+
+A row declaring `pinsToBottomEdge` is held against the viewport's bottom edge. **That is two
+mechanisms answering two different questions, and collapsing them into one number is the defect family
+this replaced** — the analogue of `ListViewImpl`'s `experimentalSnapScrollToPinnedItem` +
+`calculatePinToEdgeTopInset`:
+
+- **`holdsPinnedRow` — a latch, answering WHERE the row goes.** Engaged by an explicit `scrollTo` at
+  `lowestPinnedItemIndex` (`ListView.swift:2737`); released on `engine.onWillBeginDragging`
+  (`:879`), on the pinned row leaving the collection, and on a full replace. Release is **permanent**
+  for that pin: scrolling back to the edge does not re-engage it, and only a new `scrollTo` does. The
+  release is the TOUCH, not the movement, so every programmatic offset write — self-update flushes,
+  inset changes — keeps the pin. While engaged, `resolveAnchor` returns a `.resolved` `ResolvedAnchor`
+  on the pinned row (directly below the `scrollTo` branch, so an explicit jump still wins and
+  `preserveVisibleContent` does not). Its placement reads **only the pinned row's own height**, so it
+  has no loading precondition — anchoring on a row loads it.
+- **`bottomEdgePinSlack` — extra top-inset slack, answering whether there is scroll ROOM to rest
+  there.** Positive only while the content above the pin is shorter than the viewport;
+  `max(0, …)`-clamped exactly as `ListView.swift:1134` clamps it. Derived from the built window's own
+  geometry, reading only intra-window offsets so it is answerable inside the very alignment step that
+  consumes it, and folded into an effective top inset at three points: `buildWindow`'s `topEdge`,
+  `loadedEdgeRange`'s `minimum` (the one that makes it survive user scrolling and self-update flushes,
+  since render and rebalance both go through there), and `rebuildFromScratch`'s initial offset.
+  `applyChanges` compensates inset changes against that effective edge rather than the raw inset.
+
+The two are **matched by construction**, which is why the clamp cannot strand the anchor: the pin's
+target sits exactly `visibleArea − span + ext` points past the natural minimum, the same expression the
+slack returns. Positive and the edge extends by precisely that much; negative and the target is already
+inside the natural range.
+
+**Never un-clamp the slack.** It was, briefly, to make the edge hold the row without a latch. A
+negative slack is placement leaking into a scroll-range quantity: it reached `loadedEdgeRange`'s
+minimum and extended the range into empty space, so on device a tall streaming reply could not be
+scrolled down to at all — it overscroll-bounced. **And the slack must stay latch-INDEPENDENT**, since
+release happens at finger-down: a range that shrank with it would move content under the user's finger
+before the drag had travelled a point.
+
+`isStrictlyPinnedToBottomEdge` answers "is the row held", and reads the **latch** plus a presented-frame
+check that the animation has landed. Not geometry: with a latch there is no such thing as a row at the
+edge by coincidence, and the old `slack != 0 || ext > 0` guard reads false in exactly the tall-content
+regime where the pin is most firmly held. `ChatControllerLoadDisplayNode.swift:900-904` uses it to
+decide whether **sending a message drops the pin**, so it is not only the scroll-to-bottom button that
+depends on it.
+
+`appendUntilPinnedRowLoaded` still exists and runs only while the latch is **disengaged** (an engaged
+latch anchors on the pinned row, making it window member zero). Its `window.height < visibleArea` bound
+is **correct** under the clamped slack — once the rows above the pin alone exceed the viewport the
+slack is zero regardless of the pinned row's height. It was patched once on the theory that it was
+defective; the patch made device behaviour worse and was reverted. Do not patch it again.
+
+**A released anchor rides the EFFECTIVE top edge (`inset + slack`), and that is what absorbs a
+streaming reply's growth.** The slack shrinks by exactly what the content above the pin gains, so an
+anchor holding its distance from that edge lets the reply extend into the room the slack gives up
+while the pinned row — and all the history below it, which is what the user is reading — holds still.
+That is already what happens resting at the edge, which is why only the released state was ever wrong.
+Held at an ABSOLUTE offset instead, nothing takes up the retreat and every point of growth pushes the
+rows below: measured as pinned 200 → 250 → 300 → 350 → 400 → 440 for reply 100 → 340, and reported
+from the device as the chat drifting upward mid-stream. The settle clamp then cancelled only the part
+that crossed the edge, which is the same absorption arriving late, partially and in one jerk —
++100, **+40, +60**, +100 for four equal 100pt steps, drift-tug-drift-tug. Once `span` reaches the
+viewport the slack clamps at zero and there is nothing left to spend, so the growth pushes; that
+regime is unchanged.
+
+Mechanically it is one addend, and it lives in **`buildWindow`'s `pinSlackBaseline`** because it needs
+the NEW window's slack, which exists nowhere earlier. `topInsetDelta` carries the geometry half and
+structurally cannot see this one — both of its samples read `oldWindow` and the old items, so they
+differ only when `logicalSize` or `viewportInsets` changed. It is deliberately NOT gated on
+`compensatesInsetChange` — a caller whose own drag owns the movement still wants growth absorbed rather
+than pushed under its finger.
+
+**Two conditions gate the baseline, and the second one is the subtle one.** Only a `.fixed` anchor
+takes it: a `.resolved` one (an explicit `scrollTo`, or the latch itself) computes placement from the
+geometry the pass is building, and the `pinsLoadedTop` branch translates onto `topEdge` outright. And
+only an anchor **above** the pinned row — an anchor above the pin has to MOVE by the spend to deliver
+the invariant, while one at or below the pin delivers it by HOLDING, its old screen position already
+being the right answer because nothing above it can displace it. Projecting there moves it by the whole
+slack delta. That is not hypothetical: it is the pass that ENDS a stream. The typing draft carrying
+`TypingDraftMessageAttribute` is replaced by the real cloud message
+(`ChatHistoryListNode.swift:2240`), so index 0 departs, `topItemWasDeleted` sends `resolveAnchor` past
+it to the first survivor — the pinned row — and the final message measuring differently from the last
+draft moved the pin by exactly that difference. Reported as one small jerk at the end of streaming, and
+"usually" because the two often measure the same. `testTheDraftBecomingTheRealMessageDoesNotMoveThePin`
+locks it.
+
+Because the anchor moves with the edge, a parked user's distance from the declared minimum is
+invariant and they can no longer be clamped at all. Three things are known NOT to work here, and
+re-deriving them is expensive:
+
+1. **Collapsing the slack at finger-up** yanks a short-reply chat ~210pt on any small drag-and-lift.
+   Benign only when the slack is already small — i.e. when there was nothing to fix.
+2. **Reserving the room the user is standing in** (a stored floor under the slack, gated on the drag
+   event) does stop the tug, and is the wrong cure: it freezes the effective edge, so the growth it
+   was meant to protect goes straight back into pushing the rows below, and the chat drifts for as
+   long as the user stays parked. Absorption removes the clamp's reason to fire instead of outvoting
+   it. Built, device-tested and abandoned; it needed a stored value, an event gate, three retirement
+   rules and three guards, all to outvote a clamp that then had no reason to fire.
+3. **Fixing only the settle clamp** reaches one of two movers: `buildWindow`'s `topEdge` feeds
+   `alignTopIfUnderfilled`, which places the window before the clamp ever runs. Anything acting on the
+   effective edge must act on both, which is why the projection is a window translate rather than an
+   offset correction.
+
+Also unresolved and **unreproduced**: a mid-stream send reportedly snaps although the pin survives. An
+engaged latch should be immune, so suspect that `isStrictlyPinnedToBottomEdge` reading the PRESENTED
+frame answers false mid-animation, `ChatControllerLoadDisplayNode.swift:900-904` nils
+`pinToTopStableId`, and the `lowestPinnedItemIndex == nil` release fires — which is **permanent**, and
+cannot tell a transient absence from a real one.
+
+`docs/superpowers/specs/2026-08-04-corelist-pin-to-edge-design.md` (telegram-ios repo root) describes
+the **superseded** slack-only mechanism; this section is the current contract.
 
 `activeWindow` is a pure settled `Window` value containing contiguous `(index, view, frame)` items.
 It is the loaded projection of the current item collection, not animation state. Frames are
@@ -183,6 +294,33 @@ inferred from `loadedIndexRange`. `loadedItemEntries` is the same in-place walk 
 but yields `(index, view)` pairs, for hosts that need each row's collection index during a full-window
 pass (computing a visible range, say) without counting iterations — array position equals collection
 index only while the window still starts at 0.
+
+`animateInsertedBlock(identities:origin:transition:)` slides a run of rows in from just beyond one edge
+of where they settled, as one rigid block — every named row takes the same offset, so the run keeps its
+spacing for the whole travel. **The host names the EDGE (`CoreListBlockOrigin`, stated in content order,
+not on screen — a rotated host reads the cases the other way round) and this view measures the
+DISTANCE** (the block's own total settled height, reserved space included), because the heights come
+from the very pass the call follows. Unloaded rows are skipped: no layer, and nothing to see. It exists
+because an entering row otherwise appears in place, which is correct for the model and wrong for a chat;
+`CoreListChatHistoryBackend` calls it for messages arriving at the newest edge. **It is list-owned
+deliberately** — a host installing its own additive position animation would have it read back as a
+CoreList track by `capturePresentedPositionOffsets()` at the next pass (see the granular-animation
+contract), and going through `transitionPosition` is also what lets an overlapping arrival compose with
+the slide already in flight. Safe to call straight after `applyChanges`: it defers onto the same
+scheduler behind a pass that was itself deferred for re-entrancy, which a synchronous window read could
+not survive.
+
+**Row geometry is a pair, and picking the wrong half is silent.** `presentedFrame(of:)` is where a row
+IS — the default, and what a host must use instead of `convert(_:from:)` (see the
+`contentHost.bounds.origin.y` gotcha below). `settledFrame(of:)` is where it WILL BE once the
+animations in flight finish; it is exactly `presentedFrame` without the correction. A host wants
+settled in one situation only: reporting the OUTCOME of a pass it just submitted, alongside that
+pass's transition, so a consumer animating on that transition arrives where the content will. At that
+moment presented is the *pre-animation* position and nothing re-reports when the animation lands —
+there is no per-frame hook outside user scrolling. Both are ancestor-path-agnostic, so a row carried
+by `crossingOverlay` converts correctly either way. Reporting presented at a transaction point is a
+real shipped bug, not a hypothetical: see "Content offsets" in
+`docs/chat/corelist-chat-history-backend.md`.
 
 `visibleRectUpdated(_:)` on `CoreListItemView` pushes each loaded row the part of itself inside the
 viewport, in the row's own coordinate space, or `nil` when it is not visible. It fires at the end of
@@ -381,17 +519,124 @@ through `CAAnimation.setCoreListCompletion`, a copy of Display's `CALayerAnimati
 than to a transaction. See
 `docs/superpowers/specs/2026-07-27-corelist-transition-design.md`.
 
+**A new animation resumes from what the layer is RENDERING, not from the model's analytic value.**
+`ListAnimationModel.resumeValue` consults a provider `ListAnimationController` installs over its layer
+bindings; `value(for:property:at:)` is untouched and still answers settled geometry, which window
+building, `bottomEdgePinSlack` and the `finalize` deadline all depend on. The two are separate methods
+so a future change cannot convert the settled consumers by accident.
+
+The model's clock is the pass clock and Core Animation's is the commit that follows, so the analytic
+value sits systematically ahead of the screen. That is invisible while one authority owns a layer and
+becomes a compounding drift the moment two do — the chat's hosted item node sets its own box from
+`presentation()`, and the row and the node diverged one-signed up to 3.2pt per streamed token.
+
+**The provider answers for the ABSOLUTE properties — `.height`, `.width`, `.opacity` — with the
+presented value.** Those are the same quantity in the same space as the model's, so there is nothing to
+convert and no base to be wrong about.
+
+**And `.positionY` is sampled only for owners whose base a PASS writes —
+`ListAnimationOwner.hasPassWrittenPositionBase`, true for `.live` and nothing else.** Pass entry proves
+that *this* pass has not moved the base; it proves nothing about a writer that runs BETWEEN passes, and
+`renderAttachments()` is exactly such a writer — it rewrites every attachment's frame on every render,
+including every user-scroll frame, because a parked attachment stays parked on screen only by moving its
+base with the content. `presentation()` therefore trails an attachment's model by one frame of base
+movement, and reading that as a contribution starts the next animated pass a whole frame of displacement
+away from where the row is drawn. Shipped as a chat whose gutter avatars and date pills snapped, then
+animated into place, at the touch-up of an interactive keyboard dismissal: the parked pill's layer read
+`model=573.00 presented=515.33` **with no animation on it at all**, and it jumped 57.66pt. The
+per-frame passes a drag emits are immediate and settle at once, so the misread costs nothing until the
+one ANIMATED pass at lift inherits it — which is why it looks like a dismissal-only defect.
+`.exit`, `.transient` and `.ghostBlock` are excluded for the same reason (`shiftExitOverlayChildren`
+rebases every overlay child's `position.y` from `render()`, which a scroll rebalance reaches without a
+pass); no defect has been observed there, but the property this samples is not true of them either.
+Note "committed" is not the bar and could not be: a base written last turn may not have been PRESENTED
+when this turn samples, so a per-frame-written base can never be differenced against `presentation()`.
+`AttachmentResumeBaseTests` locks both the seam and the rendered position; it needs a scene-attached
+window, since a windowless fixture resolves no presentation layer and passes vacuously.
+
+**`.positionY` is answered too, but from a snapshot taken at PASS ENTRY, never sampled in the
+provider.** An additive contribution is `presented − the base the render tree was committed against`,
+and the only handle on that base is the layer's model value. A pass overwrites it long before any
+transition installs: `render()` writes every window item's NEW settled frame
+(`CoreVirtualListView.swift:2870`) and the transitions install ~550 lines later (`:2022`); the
+crossing-carry path writes the new position explicitly one statement before its own call (`:3012`). So
+sampling *there* yields `contribution − (this pass's displacement)`, and `transitionPositionOffset`
+adds the displacement back onto `oldSettledY` — **counting it twice**. That shipped once, as a chat
+whose every row below a growing message snapped one whole growth backwards and then animated 2× the
+distance into place. It looked like an anchorPoint problem and was not; rows carry
+`anchorPoint = (0, 0)`, which is what made `presented − model` look like a safe read in the first place.
+`ListAnimationController.capturePresentedPositionOffsets()` takes the snapshot before the pass writes
+anything — the order `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`)
+already uses — and `applyChanges` clears it in the same `defer` as the rest of the per-pass state.
+
+**Why it became necessary: a model-resumed property and a screen-resumed one disagree about where
+"now" is by δ, and the seam the eye watches is their SUM.** A growing row's bottom against the row
+below it is one `.height` (screen) plus one `.positionY`, so every re-target lost `δ × velocity` there
+and it accumulated — measured as a seam opening 1.9pt over ten 20pt growth steps under a released pin,
+~24pt without one, and reported from the device as micro-wobble under a streaming reply. Isolating it
+is a one-line experiment: make `.height` decline too and the seam closes to exactly 0.000. This is what
+retired the old reasoning that position had "no second authority to drift against" — its own row's
+height is one.
+
+`.positionX` and `.viewportOffset` still decline, and the hoist does NOT fix them: their reasons are
+not the ordering one. `.positionX` — the transition gets bare `contentX` while the layer gets
+`contentX + positionOffsetX`, and that offset is the track's own contribution rather than a within-pass
+constant; resolve that disagreement first. `.viewportOffset` — its model is written by the physics
+engine outside the commit cycle, so `presented − model` can straddle a frame, and at fling speed a
+frame is a lot of points. Measure before switching either on.
+
+Windowless layers resolve no presentation layer, so nothing is captured, the provider returns nil and
+the analytic path is taken — which is why the existing suite keeps its exact model-vs-CA assertions
+unchanged. `PresentedPositionResumeBaseTests` locks the position arithmetic (one displacement, never
+two) at both the seam and end-to-end through a `CoreVirtualListView` in a real rendering window;
+`PresentationResumeSamplingTests` locks which properties are sampled; `PresentedResumeSeamTests` locks
+the rendered seam between a growing row and the row below it across in-flight re-targets, which is the
+consequence the arithmetic exists to protect.
+
+**That same property makes the whole suite blind to this provider, and a test to catch it is vacuous
+by default.** `VirtualListFixture` never enters a render tree, so its rows take the analytic path and
+the dozen-plus exact `positionTrack(…).from` assertions in `CoreVirtualListAnimationTests` — any one of
+which would have caught a doubled displacement on sight — simply never executed the sampled code.
+`testFixtureLayersHaveNoPresentationLayer` pins that blindness rather than removing it, deliberately,
+and the only test with both a rendering window and a real list pass
+(`testRealCACompletionTearsDownExitWithoutAnalyticReap`) asserts teardown and no geometry. So a test
+here needs **a scene-attached window AND an owner actually bound to that layer** — the provider guards
+on both and returns nil before its switch otherwise, which is how the original
+"these properties must not be sampled" test passed against the very defect it named. Assert a sampled
+property is non-nil in the same test as the witness. Verify by mutation, not by reading.
+
+**Three forms of this have been shipped and reverted**, all the same mistake — one subtraction mixing
+two spaces, or two bases. `.viewportOffset` as `presented - settled`: the viewport's model
+`bounds.origin.y` is the live scroll position driven by the physics engine, never the settled offset.
+`.positionY` as the presented POSITION with the model subtracting `newSettledY`: the model is handed
+`containerOriginY + localY` (`CoreVirtualListView.swift:2818`) while the layer is handed `localY`
+(`:3121`). `.positionY` as `presented - layer.position.y` **evaluated inside the provider**: right
+spaces, wrong base, as above. The first two jumped the whole list on device; the third doubled every
+displacement.
+
+Note what separates the third from what ships now, because they are the same subtraction: WHEN it is
+evaluated. At pass entry the layer's model value is still the base its render tree was committed
+against; ~570 lines later it is this pass's new settled position. A future change that moves the
+capture later, or adds a second capture after any settled write, re-creates the reverted form exactly.
+
 `CoreAnimationCompiler` is an output renderer, never an authority. It builds through the shared
 `makeCoreListAnimation` factory — a copy of `CAAnimationUtils.makeAnimation`'s branch tree — so what
 CoreList emits is what every other Telegram surface emits: a `CABasicAnimation` with a
 `CAMediaTimingFunction` for bezier curves, and a real `CASpringAnimation` for the two system-spring
 durations (0.5, and 0.3832 on iOS 26). It then adds the model-path properties the factory does not
-set: `beginTime = track.startTime`, `fillMode = .both`, `isRemovedOnCompletion = false`, and the
-generation metadata. Position is additive on `position.x`/`position.y`, width/height absolute on
-`bounds.size.width`/`bounds.size.height`, opacity absolute, all on the track's own curve, start time,
-and already-scaled duration. **No `CAKeyframeAnimation` is emitted outside the physics deceleration
-flights** (`KeyframeFlight`, `Trajectory+Keyframe`, the two physics engines), which play baked
-trajectories rather than curves.
+set: `fillMode = .both`, `isRemovedOnCompletion = false`, the generation metadata, and — alongside it
+— `CoreListAnimation.startTime` (the model track's declared phase axis) and
+`CoreListAnimation.preservesPhase` (the origin policy the emission chose). It leaves `beginTime`
+UNSET, so Core Animation resolves it at the commit, on the same clock as every other animation in the
+app; the one exception is `ListAnimationController.rebind`, which passes
+`CoreListAnimationOrigin.explicit` (see the gotcha below). Position is additive on
+`position.x`/`position.y`, width/height absolute on `bounds.size.width`/`bounds.size.height`, opacity
+absolute, all on the track's own curve and already-scaled duration. **`CAKeyframeAnimation` is emitted in exactly two places, and both play a
+baked trajectory rather than a curve:** the physics deceleration flights (`KeyframeFlight`,
+`Trajectory+Keyframe`, the two physics engines), and attachment flight tracks
+(`CoreVirtualListView+Attachments.installAttachmentFlightTracks`), which compose the same trajectory
+with an attachment's own solve so a floating header stays glued to the content the render server is
+moving. Nothing else may emit one.
 Interruption never reads layer presentation state back into the model. Production uses no display-link list
 renderer and no `UIViewPropertyAnimator`.
 
@@ -404,6 +649,13 @@ both the ghost's attached local edge and a live/ghost `minY` or `maxY` witness e
 that pass's independently resolved anchor, including ghost-to-ghost handoff when a live carrier departs. A
 ghost above the pass anchor therefore rides its `maxY` on the following boundary's `minY`, while a genuine
 same-pass or delayed replacement carries the ghost at matching `minY` edges.
+
+**A carousel pass attaches no boundary witness at all.** Its departed strip has no live neighbourhood
+left to attach to — the destination is a different region of the collection, which is what made the
+pass a carousel — and the shared additive viewport track already owns the travel for the outgoing
+strip exactly as much as for the incoming one. Blocks created there stay `.unresolved` and hold their
+remapped roots; this is the outgoing counterpart of the destination-only-survivor rule above. See the
+gotcha below for what a witness does there.
 
 Mutation anchors use the engine offset clamped to the currently known loaded edges. Rubber-band displacement
 is presentation-only: it is restored to the displayed engine offset after settled geometry is resolved and
@@ -501,6 +753,7 @@ protocol CoreListItem: AnyObject {
     func view() -> UIView & CoreListItemView
     func isEqual(to other: CoreListItem) -> Bool
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition)
+    var pinsToBottomEdge: Bool { get }
 }
 
 protocol CoreListItemView: AnyObject {
@@ -517,15 +770,67 @@ equality explicitly); an identity-only item still opts in by writing `isEqual` t
 identity field(s). `apply(to:transition:)` updates a reused view in place (default: no-op).
 `update(width:transition:)` lays out the row and returns its measured height.
 
+`pinsToBottomEdge` declares that this row is held against the viewport's BOTTOM edge, with the list
+declaring whatever extra top-inset slack that needs (see "Virtual content and settled window"). It
+defaults to `false` — honest rather than conservative, unlike `isEqual`, since a row that says nothing
+about pinning is not pinned. When several loaded rows declare it the LOWEST index wins, matching
+`ListViewImpl`'s `lowestPinnedIndex`.
+
 Both receive the enclosing pass's `CoreListTransition`, so a row can animate its own internals on the
-same curve and duration as its outer geometry. It is non-immediate **only** when that row's content
-changed in the pass — a reconciled survivor, or an animated self-update flush. Fresh views, scroll-in
-loads, unchanged survivors, and off-screen remeasures receive `.immediate`: there is nothing to
-animate from, or the change is purely outer geometry, which `ListAnimationModel` owns. `update` must
-return the settled height either way, and may be called twice in one pass (dirty remeasure, then
-window construction) — the transition's setters early-out on an equal target, so the second call is a
-no-op. The mechanism is a per-pass `reconciledIdentities` set paired with `currentPassTransition`;
-scroll-driven rebalancing leaves the set empty, which is what makes its rows `.immediate` for free.
+same curve and duration as its outer geometry. It is non-immediate in exactly two cases, both meaning
+"this row has to RE-LAY-OUT and has a prior layout to animate from": its **content was reconciled** in
+the pass — a reconciled survivor, or an animated self-update flush (`reconciledIdentities`) — or the
+pass **changed `contentWidth`**, so `buildWindow` re-measures every loaded row at a new width
+(`contentWidthChangedInPass`).
+
+The second is not a special case of the first, and omitting it was a real bug: a horizontal inset or a
+viewport-width change reconciles nothing, yet every row reflows — a bubble rewraps its text, its
+subviews move. `ListAnimationModel` owns the row's OUTER frame and animates that, but it knows nothing
+about where a label sits inside a bubble, so row internals snapped while the frame animated. Note the
+asymmetry that explains: the older "purely outer geometry" reasoning is correct for a **vertical**
+inset change, which leaves `contentWidth` alone so nothing re-measures, and wrong for a horizontal one.
+
+Everything else receives `.immediate`: a view **created in this pass** (`freshViewsThisPass` — nothing
+to animate from, and this exclusion outranks the width case), and, while the width is unchanged,
+scroll-in loads, unchanged survivors and off-screen remeasures, none of which relayout. Scroll-driven
+rebalancing changes neither content nor width, so its rows stay `.immediate` for free.
+
+`contentWidthChangedInPass` compares `contentWidth` across the pass's geometry assignment
+using the same `0.5` epsilon `CoreListNodeHostView.update(width:transition:)` uses to decide whether to
+relayout at all. **The two must agree** — drift either way gives a row that animates without
+relayouting, or relayouts without animating.
+
+**The inference is per-PASS, which constrains callers.** A host that installs a geometry change in one
+pass and animates the relayout in the next leaves the animated pass with no delta to infer from, and
+nothing in `measureTransition` can recover it — by then the layout is already correct. `ListViewImpl`
+has no such constraint because its equivalent, `ListViewUpdateSizeAndInsets.customAnimationTransition`,
+is an instruction rather than an inference (`Display/Source/ListView.swift:1791`). Submit the geometry
+change and its animation in the same pass; the chat does.
+
+`update` must return the settled height either way, and may be called twice in one pass (dirty
+remeasure, then window construction) — the transition's setters early-out on an equal target, so the
+second call is a no-op.
+
+**Attachments follow the same rule**, through `attachmentMeasureTransition(serial:isFreshView:)`:
+reconciled content (`reconciledAttachmentSerials`) or a changed `contentWidth`, with a freshly created
+view outranking both. The width case matters at least as much here — a chat date pill CENTRES itself
+in the width it is given, so any viewport resize (rotation, Split View) moves it across the screen.
+Both per-pass sets are cleared together
+at the pass boundary; `reconciledAttachmentSerials` was for a long time never cleared at all despite a
+comment saying otherwise, which left any attachment that reconciled once measuring with the pass
+transition on every later animated pass.
+
+**A live attachment view is laid out exactly once per pass, and `measuredAttachmentHeight` must keep it
+that way.** A `.reservesSpace` run is measured twice — once during stacking to size its reserve, once by
+`resolveAttachments` for real. The probe used to reuse the live view, and since
+`update(width:transition:)` both measures AND lays out, that laid the view out at the target with
+`.immediate`; the real measure then found every setter already at its target and, because transition
+setters early-out on an equal target, animated nothing. Reserving attachments could not animate their
+internals at all — width change or content change. The probe now measures a THROWAWAY built from
+`run.representative`, which also fixes a staleness: the old reuse measured the live view BEFORE
+`apply(to:)` reconciled it, so a run whose content changed reserved space for its previous content.
+Cost is one view construction per reserving run per pass, and zero for a list with no reserving
+attachments (the chat backend is `.overlay` throughout).
 
 📖 **Read before changing:** `DemoRow.swift` and
 `docs/plans/2026-05-31-item-content-reconcile-design.md`.
@@ -564,15 +869,17 @@ runtime-selectable between stepped and keyframe modes.
 ## Scroll physics replica
 
 `CoreListDemo/ScrollPhysics/` is a standalone, UIKit-free value-model replica derived from UIKitCore
-on iOS 26.2. Core files implement per-axis drag, release, deceleration, rubber banding, projection,
-and offset math. `PanRecognizer.swift` handles input. `Trajectory.swift` and
+on iOS 26.2. Core files implement per-axis drag, deceleration, rubber banding, projection, and offset
+math; `ReleaseDecision.swift` owns the gesture-RELEASE path (velocity capture, the guarded 2-D
+decelerate/stop decision, and the repeated-flick multiplier), which is two-dimensional and
+gesture-lifetime and therefore deliberately not on `ScrollAxis`. `PanRecognizer.swift` handles input. `Trajectory.swift` and
 `Trajectory+Keyframe.swift` bake rate-independent linear keyframe playback and seamless splicing.
 Recording support and tests live under the corresponding production/test folders.
 
 📖 **Read before changing any physics constant or formula:**
 `docs/plans/2026-05-22-uikit-scrollview-physics-analysis.md` and
-`docs/plans/2026-05-23-pan-recognizer-reproduction-design.md`. The formulas come from assembly;
-decompiler SIMD/FP pseudocode is not authoritative.
+`docs/plans/2026-05-23-pan-recognizer-reproduction-design.md`.
+The formulas come from assembly; decompiler SIMD/FP pseudocode is not authoritative.
 
 ## Tests
 
@@ -588,11 +895,28 @@ Animation an authority.
   actual paused layer check.
 - `CoreVirtualListAnimationTests` cover insert, remove, replacement, move, mixed passes, view reuse,
   overlay teardown, unchanged-track preservation, full viewport-geometry retargeting, and scrolling while active.
+- `PresentationResumeSamplingTests` and `PresentedPositionResumeBaseTests` cover the presented-value
+  provider: which properties it samples (absolute only), that an absolute re-issue resumes from the
+  screen both at a bare layer and through a real list pass, and that a position track starts one
+  displacement from the screen rather than two. **They are the only tests that reach the provider at
+  all** — every other suite runs windowless, so `presentation()` is nil and the analytic path is taken,
+  which `testFixtureLayersHaveNoPresentationLayer` pins deliberately. A test here needs a
+  scene-attached window AND an owner bound to that layer, or it returns nil at the provider's guard and
+  passes vacuously; assert a sampled property is non-nil in the same test as the witness. Verify by
+  mutation — the "these properties are not sampled" test shipped green against the very defect it
+  named.
 - `MixedPassStressTests` run a bounded fixed-seed grammar over structural, row-geometry,
-  viewport-geometry, and programmatic-scroll changes. They verify transaction-boundary C0
-  continuity, exact unchanged-track preservation, installed CA/model metadata parity for observed
-  owners, settled window integrity, and carry/ghost teardown. Failures report the seed, pass, and
+  viewport-geometry, programmatic-scroll, and attachment-run changes. They verify transaction-boundary
+  C0 continuity, exact unchanged-track preservation, installed CA/model metadata parity for observed
+  owners, settled window integrity — including reservation gaps and the attachment invariants (unique
+  serials, member ranges inside the loaded range, one space-reserving attachment per edge per
+  boundary, deterministic sort order) — and carry/ghost teardown. Failures report the seed, pass, and
   full action prefix; minimize any production failure into the owning focused suite before fixing it.
+  **Attachments are opt-in** (`MixedPassScenario(…, includesAttachments: true)`) and draw from a
+  SEPARATE RNG: the scenario is a shared seeded generator and some focused suites replay its exact
+  sequence, so putting attachment draws in the main `rng` silently hands every one of them a different
+  scenario. `testTheGrammarActuallyExercisesAttachments` is the non-vacuity guard — every other
+  assertion here is conditional on what the grammar happens to produce.
 - Core-window, content, engine, and physics suites retain non-animation behavior coverage.
 
 ## Non-obvious gotchas
@@ -603,8 +927,56 @@ Animation an authority.
   `convertTime(CACurrentMediaTime(), from: nil)`. Layer-local time, not raw media time, preserves
   analytic/CA agreement when Simulator Slow Animations changes layer speed. Sampling once per row
   creates clock skew and breaks cross-property transaction guarantees.
-- Every emitted CA keyframe uses the analytic track's explicit `beginTime`; allowing Core Animation
-  to choose commit time introduces phase drift at retarget boundaries.
+- **Every emitted CA animation leaves `beginTime` IMPLICIT, so the commit resolves it.** That is what
+  puts a CoreList track on the same clock as everything a host can write — `ContainedViewLayoutTransition`
+  / `CAAnimationUtils`, and CoreList's own executor path (`CALayer.animate` stamps an origin only in
+  its unreachable `delay != 0` branch). Measured: every animation added in one runloop turn resolves
+  to one origin, the model path and the executor path included, so a pass's tracks stay mutually exact.
+  The model's own phase axis rides `CoreListAnimation.startTime` metadata instead, which is exact with
+  no commit — needed because a layer outside the render tree never resolves an origin at all
+  (`beginTime` stays 0 forever, `presentation()` nil), which is every windowless test fixture.
+  - **The exception is `rebind`**, re-emitting an in-flight track onto another layer: `fillMode = .both`
+    holds `from` before-begin, so an implicit origin would replay the whole curve. It stamps
+    `CoreListAnimationOrigin.explicit` with the origin Core Animation RESOLVED for the animation it
+    replaces (read back off the layer, or remembered by `captureResolvedOrigins` when the binding was
+    dropped), **not** `track.startTime` — the two differ by the producing pass's commit delay, and
+    stamping the model's clock would jump the curve forward by that much on every rebind and desync
+    the row from its still-bound neighbours.
+  - **Two sites must NOT be swept into a grep-driven change here**, both deliberately past origins on
+    a different clock: the attachment flight keyframes (`CoreVirtualListView+Attachments`, key
+    `coreListAttachmentFlight`) and the physics trajectories (`PhysicsScrollEngine`,
+    `Trajectory+Keyframe`, `SplicedTrajectory`), which re-install with a past origin on every rebake
+    precisely so a mid-flight rebake resumes at its current phase.
+  - **The residual, named:** the model now LEADS the screen by the commit delay δ for any query that
+    compares a model sample against the screen at the same instant (`presentedFrame(of:)`). δ is the
+    rest of `applyChanges` plus the rest of the runloop turn — it contains the pass's own main-thread
+    cost, so it is neither constant nor bounded by a measurement of one pass shape; it has been
+    measured only on the demo, never on the chat surface. Two consequences follow and are accepted
+    rather than fixed: a retarget's residual discontinuity is `velocity × (δ_new − δ_old)` instead of
+    the old `velocity × δ`, which is smaller when consecutive passes cost the same and can exceed it
+    (and change sign) when they do not — this is what the presented-position capture removes for
+    `.positionY` specifically, by resuming that property from the screen rather than from the leading
+    model, and it still applies to any query or property that does not; and an equal-endpoint track
+    completing on its analytic
+    deadline now finishes δ BEFORE its CA-driven siblings from the same pass, so a ghost block can
+    tear down that much before it finishes moving. Do NOT resolve the `presentedFrame` lead by
+    redirecting hosts to `settledFrame(of:)` — that is a different value with its own shipped failure
+    mode (see "Row geometry is a pair"). The only real fix shares one commit-resolved origin between
+    the model and CA, which nothing does today.
+  - **Do NOT re-stamp `ListAnimationTrack.startTime` to the resolved commit time.** `install` arms
+    `scheduleAnalyticCompletion(deadline: startTime + duration)` at the moment of install and never
+    re-reads the track, and that timer is one-shot; a `startTime` moved forward makes it fire early,
+    `model.complete` returns false, `finalize` re-inserts the pending, and nothing in production ever
+    re-drives it. The victims are exactly the tenants that deadline exists for — the non-fading
+    full-replace carousel exit strip and the `viewportOffset: 0 -> 0` re-target — and the whole suite
+    is blind to it, because `VirtualListFixture` defaults to `emitsCA: false` and drives teardown from
+    the model clock.
+  - `InsetRectOverlayAnimator` is `.atCommit` too, and it pays a cost the model path does not: it
+    samples `from` from the RENDER SERVER (`layer.presentation()`), so an implicit origin costs it a
+    `velocity × δ` step on every retarget of an in-flight guide, where the explicit stamp was
+    continuous by construction. Accepted — the guide must share the list's clock, and every other
+    presentation-sampled emitter in the module already pays it. Do not "fix" a visible step there by
+    re-stamping.
 - Duration scaling happens only in `ListAnimationController`; the compiler receives the final
   duration and must not scale again.
 - Same-target position and extent writes must return before touching the model, CA key, completion ledger,
@@ -624,6 +996,19 @@ Animation an authority.
   sampled member-local geometry; identity alone is insufficient because reinsertion may coexist with a
   fading departure. Contiguous members move only through their stable block wrapper, whose additive position
   owner rides a live/ghost boundary witness.
+- **A ghost block created in a carousel pass must take no witness, and the failure is destination-
+  dependent.** `initialGhostWitness` walks back for a surviving predecessor and, finding none — which
+  a full replace guarantees — falls through to proposing `newItems[0]` (or, at the far end,
+  `newItems.last`). That proposal *resolves* precisely when the destination window reaches a
+  collection edge, and the departed strip then gets a position track onto the head of the incoming
+  window and visibly walks over it while the viewport track carries both. Every mid-collection jump
+  stays rigid, because both edge rows are unloaded and the witness stays `.unresolved` — so the
+  suites that cover carousels could not see it: `ProgrammaticScrollAnimationTests` asserts strip
+  adjacency but keeps the same collection (old rows become viewport carries, not ghosts), and
+  `CarouselFadeSuppressionTests` does full replaces but only checks opacity, always at index 50. It
+  surfaced as a chat jumping from far in the past to the newest message: 348pt of overlap on a 400pt
+  strip at 75% of the travel. `FullReplaceCarouselStripSeparationTests` locks both collection edges,
+  the mid-collection control, and the mechanism (`witness == .unresolved`, no ghost position track).
 - Ghost witnesses migrate toward the current pass anchor, not a remembered direction. Pure scroll must not
   reconsider witnesses or replace block tracks; coordinate-only remaps must shift wrapper model positions and
   ledger roots by the same exact delta. Empty referenced blocks remain spatial nodes until dependents finish.
@@ -638,6 +1023,54 @@ Animation an authority.
   writing non-zero offsets.
 - Trackpad indirect scroll ignores `pan.setTranslation(.zero)`; keep the explicit translation
   baseline in the physics engine.
+- **The gesture-release path is a 2-D, gesture-LIFETIME decision, and `.began` is a velocity sample.**
+  `ReleaseDecision` owns it (`ScrollPhysics/ReleaseDecision.swift`), not `ScrollAxis`: the
+  decelerate/stop threshold is `vx² + vy²` evaluated on the RAW latest sample before the low-pass, the
+  0.75/0.25 low-pass is GUARDED on the previous-axis pair being non-zero, and the repeated-flick
+  multiplier outlives a gesture — while `PhysicsScrollCore.beginDrag` rebuilds `ScrollPhysics` from
+  scratch every gesture, so anything stored there would need hand-maintaining. `-[UIScrollView
+  handlePan:]` case 1 zeroes the four velocity ivars and then calls `_updatePanGesture` **immediately**,
+  so `.began` contributes a full sample and applies its translation; treating it as setup only ran every
+  gesture one sample behind UIKit and released a short flick — one or two `.changed` events — at a
+  QUARTER of its velocity. Measured: ~370pt where UIKit travels ~1493pt. A force-begun pan is the
+  exception and feeds nothing, because it is a catch on moving content rather than a flick start.
+  `Deceleration.spring` must NOT apply `vScale`; only the free-decel term and its to-the-edge sub-step
+  do.
+- **A dead axis must not answer questions about a live one.** `ScrollPhysics.step` ORs the two axes'
+  "ended a deceleration" flags — correct in itself, one axis reaching its edge really is an end. But
+  `PhysicsScrollCore` pins x to a DEAD axis (offset 0, `min == max == 0`, no velocity), and
+  `Deceleration.settled()` calls an in-bounds axis settled the moment its velocity is under the floor.
+  So x reported "ended" on every frame it was ever stepped and the OR was unconditionally true. Since
+  the core clears the repeated-flick streak on exactly that signal, the FIRST deceleration frame after
+  every release cleared it — in both drivers (`.stepped` on the display link's first callback,
+  `.keyframe` on the single hand-off step before the bake). The streak could never reach the three
+  consecutive fast flicks growth requires, so `_fastScrollMultiplier` sat at 1 forever and a burst of
+  flicks carried **0.99×** a single flick where UIScrollView compounds to 1.9× and beyond. `ScrollAxis.step`
+  now gates the flag on the deceleration having actually been RUNNING (decelerating, and either above
+  `Deceleration.velocityFloor` or displaced past an edge and still springing back — the exact complement
+  of `settled()`). Note the failure was invisible to every existing streak test because they flicked
+  repeatedly WITHOUT ever stepping the integrator between flicks; the regression tests now drive a burst
+  both ways, and `test_theFourthFlickOfABurstTravelsFartherThanTheSameFlickAlone` states it as distance.
+- **A harness that drives the engine from a foreign recognizer must replay the engine's touch-down
+  hookup too.** `core.beginTouchTracking` is reached only via `PhysicsScrollEngine`'s OWN
+  `pan.onTouchDown`. The A/B comparison view deliberately drives the engine from
+  `UIScrollView.panGestureRecognizer`, whose touches never route through it — so the streak never
+  expired on a pause and `_fastScrollStartMultiplier` stayed pinned at 1, meaning the replica could not
+  compound across a burst even with the physics correct. That reads as a physics difference that does
+  not exist in the app. `PhysicsScrollEngine.noteTouchDown(at:)` exists for that hookup. (The
+  trackpad/indirect path also never calls it — see `gestureRecognizer(_:shouldReceive:)`. Whether UIKit
+  applies the fast-scroll multiplier to indirect scroll at all is **unverified**; do not "fix" that by
+  analogy.)
+- **A replay harness must drive the same entry point production drives, or it validates a driver nobody
+  ships.** `ScrollReplay.replay` folds every recorded DISPLAY FRAME through `drag(...)`, including the
+  first — so it behaved like UIKit whether or not the live engine fed its `.began` sample, and a suite
+  holding the integrator to ≤3px against real `UIScrollView` traces could not see a 4× error in the
+  release. The defect lived in the engine↔core seam and no fixture crossed it. `ScrollReplay.replayEvents`
+  drives the per-EVENT touch stream the way `PhysicsScrollEngine.applyPanUpdate` does and is the seam
+  oracle; `replay` remains the integrator oracle. `applyPanUpdate` takes its indirect-ness as a
+  PARAMETER for the same reason — a `PhysicsPanGestureRecognizer` that has received no touches reports
+  `isIndirectScroll == true`, so a synthetic gesture reading it off the recognizer would silently get
+  the trackpad rubber-band coefficient.
 - **`ScrollEngine.offset` is per-frame stable; never sample a running animation through it, and never read
   `contentHost.bounds.origin.y` as a position.** That layer value is the additive BASE of the emitted keyframe
   animation, parked at the trajectory's `finalOffset` for the whole flight — mid-flight it holds the flight's
@@ -658,6 +1091,28 @@ Animation an authority.
   genuinely clamps on a `contentSize` shrink, and the realized shift is the only correct amount); and any
   lurch test must measure against `TestScrollEngine.liveViewportOffset`, never `engine.offset`, or it passes
   by its own measuring stick freezing.
+- **Stopping a render-server-played flight is a SWAP, not a removal.** A catch cannot take effect at the
+  instant it is decided: the model write and the animation removal travel in one transaction, and that
+  transaction is presented at the next frame the pipeline can produce, never the frame its value was
+  sampled in. The render server keeps playing until it lands, so freezing the list at
+  `flight.liveOffset(now: localNow())` hands it a value the screen has already passed and the content
+  snaps *back* by `velocity × (that gap)` — measured 40pt one frame late and 79pt two frames late off a
+  3000 pt/s release. The gap is the rest of the main-thread turn plus commit-to-display, which is why it
+  reads as a barely-visible early stop on a pipeline that commits within its frame and as a real
+  reversal on one that does not. `catchFlight(braking:)` therefore stops the flight at `brakeStopTime()`
+  (the sampling link's `targetTimestamp` plus a frame of headroom) and swaps in the path
+  `truncated(at:)` that instant, on the flight's own `startTime` — the same continuous-swap idiom
+  `reemitFlightAnimation` uses, and truncation is exact before the cut, so whichever frame the swap
+  lands on presents what the flight would have anyway. **`presentation()` cannot detect or fix this**:
+  it is evaluated on the main thread at `CACurrentMediaTime()` and agrees with the analytic sampler to
+  −0.02ms, so it describes the same instant the defect is already sampling, not scan-out. Bias the lead
+  LATE: with a swap, landing early costs only a few more milliseconds of the flight's own motion, while
+  landing late is the step — an asymmetry a plain forward-projected snap does not have (it turns an
+  early landing into a forward jump instead). Only the interactive catches brake; `setOffset` /
+  `haltMotionInPlace` / `tearDown` immediately impose their own position, and an additive brake residual
+  would ride on top of that write. `FlightCatchContinuityTests` pins all of it, including the measured
+  step as its own non-vacuity control. The deterministic engine harness is structurally blind here —
+  `TestScrollEngine` has no render server, so its correct lead is zero and it keeps the hard stop.
 - **Anything that displaces screen-space content must join `displacesViewport`, or it silently degrades
   to per-row tracks.** The predicate (`logicalSizeChanged || insetsChanged || hasAdditionalScrollDistance`)
   gates the ONE shared additive viewport track that owns a pass's displacement. Omitted from it, a pass
@@ -667,6 +1122,25 @@ Animation an authority.
   window stay behind, because they follow the viewport track and nothing else. It caught
   `additionalScrollDistance` during implementation: the shift was correct, exact, and animating on the
   right curve, through the wrong owner.
+- **Core Animation never RUNS a `from == to` animation, so it never reports one stopping.** It
+  changes nothing, the render server has nothing to schedule, and `animationDidStop` is never sent —
+  with `isRemovedOnCompletion = false` the animation just sits on the layer forever. That is fatal
+  here because a completion is not bookkeeping: it is the teardown trigger for every tenant of
+  `exitOverlay`, and two of them ride equal-endpoint tracks BY DESIGN. A non-fading exit
+  (`beginExit(fadesOut: false)` — every departing row of a full-replace carousel, i.e. the chat's
+  scroll-to-bottom) installs `opacity: o -> o` purely to own a deadline; and a viewport re-target
+  onto the displacement already in flight yields `viewportOffset: 0 -> 0`, whose completion is what
+  runs `finishViewportGeneration`. Both stranded their content on top of the live rows, invisibly to
+  every existing guard: `assertOverlayInvariants` passes because the view IS owned — by an owner
+  whose reaping can never happen. `ListAnimationController.install` therefore drives such a track's
+  completion from the ANALYTIC deadline (`ListAnimationTrack.deliversNoCoreAnimationCompletion`),
+  which is also the rule the architecture already states — the model is the presentation authority
+  and the compiler is an output renderer, so a model-owned completion must not depend on whether
+  Core Animation found the animation worth running. Note the model-level guard is NOT enough and was
+  already deliberately bypassed: `beginExit` routes around the equal-target early-out precisely so
+  the track exists, and the comment there explains that returning `.unchanged` would leak every
+  member — the emitted animation then leaked them anyway. `NoOpAnimationCompletionTests` locks both
+  cases plus the "a moving track arms no timer" non-vacuity guard.
 - **A zero duration is immediate, which is the opposite of ComponentFlow.** `ComponentTransition`
   treats only `.none` as immediate and animates `.curve(duration: 0, …)`. CoreList settles a
   zero-duration property immediately, and roughly half the test suite says "no animation" as
@@ -688,6 +1162,36 @@ Animation an authority.
   is `x²(3−2x)` in real arithmetic, but 1/3 and 2/3 round to float32 and every sample drifts by up to
   1.7e-8 — including at phase 0.5, where the ideal bezier is exactly 0.5. Payload-free cases
   (`.easeInOut`, `.linear`) use `Double` literals and are exact.
+- **A baked deceleration must apply UIScrollView's one-frame release hand-off, and omitting it is
+  invisible to every distance measurement.** `-[UIScrollView _endPanNormal:]` sets the decel's
+  `lastUpdateTime = now − 1/maxFPS` and then calls `_smoothScrollWithUpdateTime:(now)` SYNCHRONOUSLY,
+  so a real scroll view has already integrated exactly one display frame before anything is presented
+  — regardless of the release-to-first-frame gap (analysis §2, "Decel hand-off"). `.stepped` inherits
+  it from its display link's first callback and `ScrollReplay` models it as `firstDecelStepMs`, but a
+  baked `Trajectory` starts at `t = 0` = the release state, so `.keyframe` trailed UIScrollView by one
+  frame of integration for the WHOLE flight: identical shape, identical landing, `v × frame` less
+  displacement at every instant. At 8.9 pts/ms on a 120Hz panel that is 74pt missing from the first
+  frame, which reads as a slower initial speed — while total travel, whole-flight profile, rendered-
+  vs-planned position and the deterministic suite all keep agreeing, because the difference is a phase
+  shift that converges. `PhysicsScrollCore.applyDecelerationHandOff` is applied in `launchFlight`
+  before the bake; it fires no `onScroll` and writes no host bounds, since the flight parks the layer
+  immediately after. Applying it also brings the landing DOWN by ~3-5% — omitting it overshoots.
+  - **It is a real integration frame, so it can END the deceleration it was handed**, and `launchFlight`
+    must re-check `core.isDecelerating` after it rather than baking. `endDrag` reports `.decelerate` for
+    two releases with nothing left to spend: a blend that CANCELS — the decelerate threshold reads the
+    RAW latest sample and the 0.75/0.25 low-pass runs after it, so a finger reversing on its last sample
+    releases above the threshold at ~0 pts/ms, below `Deceleration.velocityFloor` — and an overscrolled
+    release already inside `settleTolerance`. Both settle inside the hand-off's own step, and building a
+    `KeyframeFlight` from the resulting `.idle` core trips its precondition assert on device.
+    **The overscrolled one is an everyday gesture, and the pixel grid is why:** the spring's rest is
+    pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
+    release speed, comes to rest at exactly −1/3 pt. The content therefore sits overscrolled inside the
+    tolerance after any bounce, and the next tap or sub-threshold release springs back from there with
+    nothing left to play. At the tests' default scale 1 it rounds to −0.0 instead, so a fixture that
+    never sets a device scale cannot see it. `.stepped` absorbs both cases silently in its first link
+    callback, and `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this
+    lives only on the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through
+    `applyPanUpdate` (the seam) and at the core.
 - **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
   animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
   real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no
@@ -715,16 +1219,78 @@ Animation an authority.
   respond to it here. The argument is `float` on some builds and `double` on others, which is why the
   lookup inspects the encoding. If the selector disappears, both the model and the emitter fall back
   to the adjusted bezier, degrading together rather than disagreeing.
-- **`PhysicsScrollEngine`'s `shouldBeRequiredToFailBy` must stay gated on content motion**
-  (`flight != nil || core.isDecelerating`). Declaring it unconditionally breaks every
-  press-and-hold recognizer hosted in the list, because such a recognizer must recognize *while the
-  finger is still down* while the pan only fails on lift — UIKit can never release the dependency and
-  silently tears the recognizer down (`Gestures` → `_resetGestureRecognizer`): no activation, no
-  cancellation callback, just a half-run press animation springing back. Taps are immune (they
-  recognize on lift, the same instant the pan fails), so the demo's tap-only rows cannot catch this;
-  it surfaced as chat bubbles' `ContextGesture` long-press-for-context-menu dying under the CoreList
-  chat backend. Absorbing the stopping tap is the rule's only purpose and can only arise while
-  content moves, so the gate costs nothing.
+- **A ghost block's `settledRootY` is its SAMPLED root, not its settled top.** Block formation freezes
+  members at their analytic in-flight arrangement deliberately, so a row that departs mid-animation has
+  a root nowhere near its settled position (measured 148.639 vs 50.0). It is the right value to render
+  from and the wrong one to make decisions with: `initialGhostWitness` compares the run's OLD SETTLED
+  top — from `oldState`, translated by `oldLiveEdgeCoordinateShift` into the pass's post-rebase space —
+  against the successor's new settled `minY`, to decide whether the successor collapsed into the gap
+  (share the top edge, block holds still) or went elsewhere (hang the block's bottom on it). Deciding
+  that from the anchor's position instead is a proxy that fails exactly when the anchor is itself one of
+  the departing rows, which is what made a head deletion slide the block down by its own height.
+- **Never grant gesture simultaneity from the list's pan, and never declare a failure dependency on
+  it.** These are one rule with two halves, and shipping either half cost a bug. UIKit resolves
+  simultaneity as *either delegate says yes*, so a grant here overrides a refusal written somewhere
+  this file never mentions: a nested scroll view's UIKit default, or `ContextGesture`'s explicit
+  `other is UIPanGestureRecognizer -> false` (`Display/Source/ContextGesture.swift:66`). The list's
+  pan IS a pan, so everything refusing pans is refusing it — and none of that is visible from the
+  content side, which is what makes a grant unfindable. It shipped twice: an in-bubble carousel and
+  the chat history both scrolling on one diagonal drag, then a bubble's long-press running its press
+  animation and never activating. The second was the *repair* for the first: a grant needs
+  `shouldBeRequiredToFailBy` to claw back what it handed out, and a dependency HOLDS a recognizer in
+  `.possible` rather than failing it. A pan force-begun on moving content never fails until lift, so
+  the held recognizer waits — while `ContextGesture` drives its press animation from its own
+  `delayTimer` + `DisplayLinkAnimator`, which know nothing about arbitration and run on schedule.
+  Animation without activation, ending in an early `reset()` or hanging until the finger lifts.
+  `ListViewImpl` has neither construct: `ListViewScroller` denies everything but
+  `ListViewTapGestureRecognizer` (`Display/Source/ListViewScroller.swift:15`) and declares no
+  dependency anywhere, letting plain exclusion both absorb the stopping tap and cancel a pending
+  press. Taps are nearly immune to the dependency form (they recognize on lift, the same instant the
+  pan fails), so the demo's tap-only rows cannot catch a regression here.
+  - **The mirror half: ANCESTORS declare it about us, so nothing time-critical may ride the forced
+    `.began`.** `NavigationContainer` returns `shouldBeRequiredToFailBy == true` for every
+    `UIPanGestureRecognizer` (`Display/Source/Navigation/NavigationContainer.swift:202`;
+    `NavigationModalContainer:147` likewise), and our pan IS one — so the list's pan cannot RECOGNIZE
+    until the interactive-pop `InteractiveTransitionGestureRecognizer` fails. That recognizer fails on
+    ~2pt of off-axis travel, and for a dead-still finger not until it LIFTS (it overrides no
+    `touchesEnded`, so the default pan failure at lift is what resolves it). A real drag is unaffected
+    — it crosses 2pt long before our ~10pt hysteresis — but the forced `.began` is written at
+    `touchesBegan` with ZERO translation, precisely the moment the dependency is guaranteed unresolved.
+    With the flight catch on that path, the stop would therefore wait for the finger to move or lift,
+    while `onTouchDown`/`onTouchUp` (touch delivery, unholdable) fire on time — leaving `handleTouchUp`
+    to run with `sawDrag` still false and possibly launch a bounce before the held `.began` arrives to
+    `beginDrag` on it. **This consequence is DERIVED, not observed** — the dependency and the pop pan's
+    failure timing are both read off the source, and no device repro was captured (the investigation
+    that found this was chasing a different symptom, which turned out not to involve this pan at all).
+    The catch nevertheless belongs in `noteTouchDown` on its own merits: that is where
+    `-[UIScrollView _beginTrackingWithEvent:]` stops its own deceleration, and it takes the stop off a
+    path this engine does not control. `.began` keeps an idempotent catch for trackpad, which gets no
+    touch-down at all. Absorption still rides arbitration and would still degrade while the pop pan is
+    unresolved; the candidate cure (returning `true` from
+    `disablesInteractiveTransitionGestureRecognizerNow` on the list's view while content moves, which
+    makes `hasHorizontalGestures` `.strict` and fails the pop pan in its own `touchesBegan`) also kills
+    the edge swipe for the duration of a fling and needs a device pass. The one thing NOT to do is
+    answer it from this engine's own delegate.
+  - **`delaysTouchesEnded` must stay `false`.** A freshly constructed recognizer defaults to `true`,
+    and `UIScrollView.panGestureRecognizer` — what `ListViewImpl` scrolls on — is `false` (measured on
+    iOS 26.2, and asserted as a control in `PhysicsScrollEngineTests`). Left at the default, the list's
+    pan withholds every `UITouchPhaseEnded` from the views beneath it until it resolves. Row
+    recognizers never notice (they receive touches regardless of hit-testing), which is what makes it
+    invisible; a `UIControl` inside a row reads touch-up from the view, and chat's inline bot keyboards
+    are real `UIButton`s.
+- **Every view in the attachment chain must be a passthrough, and each level fails independently.**
+  `AttachmentContainerView` spans the whole content area and is the topmost sibling in `contentHost`,
+  and an attachment host typically spans the full content width — so any point one of them claims and
+  does not use is a touch the rows never see. Both must answer `point(inside:)` from "would my content
+  take this", never from "is this within my bounds": the container asks each subview, and a host asks
+  its hosted content's `hitTest` (NOT its `point(inside:)` — a full-width hosted view says yes
+  everywhere, which is the same bug one level down). Shipped as both halves at once. The container's
+  `if super.point(inside:) { return true }` fast path made the chat's message bubbles receive no
+  touches at all; fixing only that left the full-width gutter-avatar hosts blanking every bubble
+  beside them. **Scrolling keeps working either way** — the pan recognizer lives on an ancestor, and
+  ancestors see touches regardless of where hit-testing settles — so the list looks entirely healthy
+  while nothing in it can be tapped. `AttachmentContainerHitTestTests` locks the container half;
+  the host half lives in TelegramUI, which has no test target.
 
 ## Project conventions
 
@@ -734,6 +1300,29 @@ Animation an authority.
   tree may contain unrelated WIP.
 - Use only the dedicated **iPhone 17 Pro K2** simulator. If it is unavailable, stop and ask.
 - Every `xcodebuild ... test` command must include `-parallel-testing-enabled NO`.
+- **Attachment stacking resolves INSIDE the solve, and it cannot live anywhere else.**
+  `CoreListAttachedItem.stackingGroup` tags an attachment into a group; `stackingYield` names a group
+  it defers to plus a minimum gap, and `AttachmentOffsetMap.y(atOffset:)` composes the partners'
+  positions into its own — `min` over every OVERLAPPING partner (the overlap test is load-bearing:
+  without it a partner far above wins the min unconditionally), iterated to a fixed point, clamped at
+  the band top. The obvious implementation, a post-solve fix-up over view frames, is wrong for one
+  reason: `composedKeyframe` SAMPLES `y(atOffset:)` to bake the CA track a momentum flight rides, so
+  a nudge resolved anywhere else would be absent from that track and the attachment would ride
+  un-nudged for the whole deceleration and snap at the end. **One level only** — a map that yields
+  must not itself be a yield target — asserted, not merely documented. Two consequences that look
+  free and are not: a yielding attachment's `stickDistance` measures against the adjusted bound (else
+  one riding its run reports a full gap of stick and fades as though parked), and sibling z-order is
+  re-asserted by `renderAttachments` on every render, because appending only unseen views left the
+  order to whichever run entered the loaded window first.
+- **An attachment's frame and its stick distance solve at DIFFERENT offsets, deliberately.**
+  `renderAttachments` writes the frame at `attachmentSolveOffset` — the flight's destination while one
+  plays, because the additive `CAKeyframeAnimation` supplies the displacement — and delivers
+  `stickDistanceUpdated` at the live `engine.offset`, because nothing on the render server carries
+  that value and a consumer deriving an appearance from it needs where the attachment IS. Solving the
+  distance at the settled offset freezes it for the whole fling; solving the frame at the live offset
+  doubles the travel. They agree because both go through `AttachmentOffsetMap.y(atOffset:)`, which is
+  also what `composedKeyframe` bakes — asserted vertex-by-vertex in
+  `AttachmentKeyframeParityTests.testStickDistanceDescribesTheRenderedPositionAtEveryVertex`.
 
 ## Documentation authority
 

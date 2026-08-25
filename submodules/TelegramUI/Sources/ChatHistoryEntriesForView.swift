@@ -142,7 +142,7 @@ func chatHistoryEntriesForView(
     
     var count = 0
     loop: for entry in view.entries {
-        var message = entry.message
+        var message = entry.message.withAppliedEphemeralReplacementMessage()
         var isRead = entry.isRead
         
         var pinToTop = false

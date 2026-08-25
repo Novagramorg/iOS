@@ -281,6 +281,9 @@ extension DocumentCanvasView {
             }
             return
         }
+        if handleButtonTapIfNeeded(at: point) {
+            return
+        }
         if handleFormulaTapIfNeeded(at: point) {
             return
         }

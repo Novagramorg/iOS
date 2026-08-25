@@ -187,6 +187,20 @@ further 10pt is trimmed). Without this an empty field over-insets on the right.
 All inline / structural features round-trip losslessly through the native composer; the markers live in shared
 `TextFormat` codecs so live-edit, send, copy, and paste agree.
 
+> **Document (file) blocks (added 2026-07-31).** A generic file attached in the article editor is a
+> `MediaKind.document` block — a CAPTION-LESS atom (the audio shape: `nodeSize` 3, empty `leafRegions()`,
+> gap-caret), rendered as a fixed **52pt** row that must stay in lockstep with `InstantPageV2Layout`'s
+> `documentFrame`. It threads editor `Document` ↔ `ChatInputContent` (`ChatInputMediaKind.document`,
+> raw **4**) ↔ `InstantPage` (`.document(id:caption:)`). Like `.audio`, the chat currency CARRIES a
+> caption while the editor renders none — `MediaBlockBox` drops it at the boundary. Routing: everything
+> picked that is not video/music/voice becomes a document, including an image-mime file from the Files
+> tab (that tab's "send as file" meaning). Documents are permanently single-item and never grouped into
+> a collage or slideshow. The host renderer dispatches on the editor's `MediaKind` (threaded through the
+> media-view seam), NOT by sniffing the resolved `Media` — sniffing sent an image-mime file to the photo
+> pool. A file carrying a preview renders its **thumbnail** in the row (editor and bubble share the node,
+> so both get it at once). Recipient-side render, the thumbnail/status-colour traps, and tap-to-open live
+> in `instantpage-richtext.md`. Runtime-verified 2026-07-31.
+
 - **Formatting menu (iOS 16+):** the composer's **Format** submenu (Bold/Italic/Monospace/Link/Strikethrough/
   Underline/Quote/Spoiler/Date/Code, secret-chat gated) is spliced into the editor's edit menu via
   `RichTextEditorView.contextMenuItemsProvider`. Actions route to the native engine; **Link** through the host
@@ -484,6 +498,27 @@ with default options) → `InstantPage` → `chatInputContent(fromInstantPage:)`
 is nothing but unformatted `.body` paragraphs, so ordinary text (incl. multi-line) falls through to the default
 plain paste; CommonMark's paired-delimiter rules mean a stray `*`/`-` never triggers.
 
+**Self-referential links are stripped BEFORE that gate (load-bearing — a pasted URL must stay plain).** Apple's
+`NSAttributedString(markdown:)` applies the **GFM autolink extension**, so a bare `https://…` — and also a bare
+`www.…` host or an email address, each of which the parser *rewrites* into `http://www.…` / `mailto:…` — comes
+back as a LINK run whose label is the URL itself. That entity alone made the gate answer "richer than plain", so
+pasting a plain URL latched the field to the native editor and landed the URL as a **text link** (`textUrl`),
+pinning a destination the plain URL already carries. `chatInputContentStrippingSelfReferentialLinks(_:)`
+(`TextFormat/SelfReferentialLinks.swift`) clears every `.url` entity whose covered text IS its own URL, so a
+URL-only paste now falls through to plain paste and the recipient's client detects the URL itself. A genuine
+text link (`[label](url)`, a label that differs from its target) is untouched and still classifies as rich, as is
+anything pasted from Telegram's own `private.telegramtext` / editor-fragment representations — those never go
+through an importer. The predicate `chatInputLinkIsSelfReferential(text:url:)` tolerates exactly the
+normalizations a producer applies (added `mailto:` / `http(s)://` scheme — the latter only when the text carries
+no scheme of its own — percent-encoded path, trailing `/`); a `tg://` mention/date marker never matches its own
+label, so those entities are unaffected. **The same rule is applied on the other import paths, not just markdown**:
+`chatInputStateStringFromRTF` (legacy field, RTF/HTML paste — via the `NSAttributedString` form
+`chatInputTextStrippingSelfReferentialLinks`), `legacyChatInputAttributedString(fromRTF:)`, and the editor's own
+`RTFConversion.fragment(fromRTF:)` (which uses a **duplicate** of the predicate, `linkIsSelfReferential`, in
+`RichTextEditorCore` — Core cannot import `TextFormat`; keep the two in step). The **copy** direction
+(`storeAttributedTextInPasteboard`) is deliberately NOT touched: it keeps whatever entities the source message
+carried.
+
 **Why the monolith owns the parse.** `BrowserUI` already depends on `ChatRichTextEditorComposer`, so neither the
 panel, the attachment screen, nor the `RichTextEditor` package may import it (cycle). The parse therefore lives in
 the `TelegramUI` monolith (the one layer that can import `BrowserUI` + `AccountContext`) and is **injected downward
@@ -520,10 +555,13 @@ when the message is sent — a separate send-path change.
 
 ## 8. Accepted limitations & deferred work
 
-- **Cross-device collapsed-quote fidelity:** the MTProto `Api.RichMessage`/`InputRichMessage` has no `collapsed`
-  flag, so the three model quote states collapse to one on the wire (`.quote(isCollapsed:false)` /
-  `.collapsedQuote` are round-trip identity; `.quote(isCollapsed:true)` normalizes to `.collapsedQuote`; `nil`/
-  `false` → visible quote — required, else every synced quote would fold).
+- **Cross-device collapsed-quote fidelity (multi-block only):** drafts sync as
+  `Api.InputRichMessage.inputRichMessage(blocks: [Api.PageBlock])`
+  (`ManagedSynchronizeChatInputStateOperations.swift`), so a **single-paragraph** collapsed quote now
+  keeps its collapsed state across devices — `pageBlockBlockquote` carries `collapsed:flags.0?true`.
+  A quote with two or more blocks still serializes as `pageBlockBlockquoteBlocks`, which has no such
+  flag, and arrives expanded. Closing that needs a server-side
+  `pageBlockBlockquoteBlocks flags:# collapsed:flags.0?true`.
 - **Custom-emoji `enableAnimation`** has no `RichText` carrier, so it canonicalizes to `true` on the reverse
   (re-derived at decoration; pinned by `test_customEmoji_enableAnimationFalse`).
 - **Forum/monoforum topic drafts** and **folder/archived dialog drafts** are not restored on the `fetchChatList`
@@ -535,6 +573,16 @@ when the message is sent — a separate send-path change.
 - **Writing-direction override in the composer:** auto-detect handles RTL while typing, but a manual whole-document
   LTR/RTL toggle is not surfaced in the chat composer (it exists on the façade + the attachment screen). Gutter
   ornaments (list markers / quote bar / indents) and table columns are not yet mirrored for RTL.
+- **Document blocks have no composer authoring affordance** — they enter the composer only via the edit
+  round-trip; the article editor is the only place to attach one. There is likewise **no editor-side
+  open/preview** of an attached document.
+- **Markdown copy drops a document block** (`InstantPageToMarkdown` has no spelling for it), the same class of
+  loss already accepted for inline buttons. Editing is unaffected — that path is structural.
+- **`ChatInputMediaKind` raw `4` fails to decode on an older build** reading a cross-device-synced draft (its
+  `init(from:)` rejects unknown raw values). Consistent with the `ChatInputListMarker.checklist` precedent.
+- **File-reference refresh for an EXPIRED rich-message document is unverified.** The open path builds
+  `FileMediaReference.message(…)`, but the file lives in the attribute rather than `message.media`.
+  Freshly-received messages are unaffected; the fallback if it fails is a `.standalone(media:)` reference.
 
 ## Key files
 
@@ -550,6 +598,7 @@ when the message is sent — a separate send-path change.
 | panel (GET/SET, node select) | `Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` |
 | markdown-on-paste parse (monolith) | `TelegramUI/Sources/PastedMarkdownConversion.swift` |
 | markdown-on-paste gate | `TextFormat/Sources/PastedMarkdownGate.swift` (`+ Tests/PastedMarkdownGateTests.swift`) |
+| self-referential-link strip (paste) | `TextFormat/Sources/SelfReferentialLinks.swift` (`+ Tests/SelfReferentialLinkTests.swift`); editor-side duplicate `RichTextEditorCore/Model/SelfReferentialLinks.swift` |
 | CommonMark → InstantPage (send + paste) | `BrowserUI/Sources/BrowserMarkdown.swift` (`inputRichTextAttributeFromText`) |
 | two-step paste + neutral transformer hook | `RichTextEditor/.../Canvas/DocumentCanvasView+Clipboard.swift` (`pasteMarkdownTwoStep`), `DocumentCanvasView.swift` (`plainTextFragmentTransformer`, `suppressHostChangeNotification`) |
 | state value-equality | `AccountContext/Sources/ChatController.swift` |

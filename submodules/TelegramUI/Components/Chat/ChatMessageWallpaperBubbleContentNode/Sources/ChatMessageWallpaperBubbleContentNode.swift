@@ -517,12 +517,6 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
         self.absoluteRect = (rect, containerSize)
         
-        if let mediaBackgroundContent = self.mediaBackgroundContent {
-            var backgroundFrame = mediaBackgroundContent.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += rect.minY
-            mediaBackgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-        }
     }
     
     override public func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {

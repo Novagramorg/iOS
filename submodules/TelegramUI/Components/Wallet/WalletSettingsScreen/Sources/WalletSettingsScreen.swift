@@ -11,6 +11,8 @@ import MultilineTextComponent
 import ListSectionComponent
 import ListActionItemComponent
 import PresentationDataUtils
+import TelegramStringFormatting
+import UndoUI
 
 private final class WalletSettingsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -36,7 +38,13 @@ private final class WalletSettingsScreenComponent: Component {
         private var component: WalletSettingsScreenComponent?
         private var environment: EnvironmentType?
         private weak var state: EmptyComponentState?
+        private var isUpdating = false
         private let operationDisposable = MetaDisposable()
+        private let backupOperationDisposable = MetaDisposable()
+        private let walletStateDisposable = MetaDisposable()
+        private var walletState: WalletContext.State?
+        private weak var backupWordsController: ViewController?
+        private var preparedBackupDisable: WalletContext.PreparedBackupDisable?
 
         override init(frame: CGRect) {
             self.scrollView = UIScrollView()
@@ -62,6 +70,8 @@ private final class WalletSettingsScreenComponent: Component {
 
         deinit {
             self.operationDisposable.dispose()
+            self.backupOperationDisposable.dispose()
+            self.walletStateDisposable.dispose()
         }
 
         func scrollToTop() {
@@ -113,7 +123,9 @@ private final class WalletSettingsScreenComponent: Component {
         }
 
         private func presentDisableBackupAlert() {
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  self.walletState?.activeOperation == nil else {
                 return
             }
 
@@ -133,10 +145,269 @@ private final class WalletSettingsScreenComponent: Component {
                 actions: [
                     TextAlertAction(type: .genericAction, title: cancelTitle, action: {
                     }),
-                    TextAlertAction(type: .destructiveAction, title: disableTitle, action: {
+                    TextAlertAction(type: .destructiveAction, title: disableTitle, action: { [weak self] in
+                        self?.prepareDisableBackup()
                     })
                 ]
             ), in: .window(.root))
+        }
+
+        private func prepareDisableBackup() {
+            guard let component = self.component else {
+                return
+            }
+            self.backupOperationDisposable.set((component.walletContext.prepareDisableBackup()
+            |> deliverOnMainQueue).start(next: { [weak self] prepared in
+                self?.presentUpdateSecretPhraseAlert(prepared: prepared)
+            }, error: { [weak self] _ in
+                self?.presentDisableBackupError(keepPhrase: false)
+            }))
+        }
+
+        private func presentUpdateSecretPhraseAlert(prepared: WalletContext.PreparedBackupDisable) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let feeText = self.formattedFee(prepared.fee)
+            //TODO:localize
+            let text = "You'll get a new phrase to write down. Address and balance stay the same.\n\nNetwork fee: \(feeText)."
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Update Secret Phrase?",
+                text: text,
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Not now", action: {
+                    }),
+                    TextAlertAction(type: .defaultAction, title: "Update", action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        if prepared.availableBalance < prepared.fee {
+                            self.presentInsufficientBalanceAlert(prepared: prepared)
+                        } else {
+                            self.openReplacementPhrase(prepared: prepared)
+                        }
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func presentInsufficientBalanceAlert(prepared: WalletContext.PreparedBackupDisable) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let feeText = self.formattedFee(prepared.fee)
+            //TODO:localize
+            let text = "You need \(feeText) to update your recovery phrase."
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Not enough Gram",
+                text: text,
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Not now", action: {
+                    }),
+                    TextAlertAction(type: .defaultAction, title: "Top up", action: { [weak self] in
+                        guard let self,
+                              let component = self.component,
+                              let controller = self.environment?.controller(),
+                              let phase = self.walletState?.phase,
+                              case let .wallet(info) = phase else {
+                            return
+                        }
+                        controller.push(component.context.sharedContext.makeWalletReceiveScreen(
+                            context: component.context,
+                            address: info.address
+                        ))
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func openReplacementPhrase(prepared: WalletContext.PreparedBackupDisable) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            self.preparedBackupDisable = prepared
+            let wordsController = component.context.sharedContext.makeWalletWordsScreen(
+                context: component.context,
+                words: prepared.words,
+                mode: .replacement,
+                completion: { [weak self] in
+                    self?.presentFinalDisableBackupAlert()
+                }
+            )
+            self.backupWordsController = wordsController
+            if let wordsController = wordsController as? ViewControllerComponentContainer {
+                wordsController.wasDismissed = { [weak self, weak wordsController] in
+                    Queue.mainQueue().justDispatch { [weak self, weak wordsController] in
+                        guard let self,
+                              self.preparedBackupDisable?.id == prepared.id else {
+                            return
+                        }
+                        if let wordsController,
+                           let navigationController = wordsController.navigationController,
+                           navigationController.viewControllers.contains(where: { $0 === wordsController }) {
+                            return
+                        }
+                        self.backupWordsController = nil
+                        self.preparedBackupDisable = nil
+                    }
+                }
+            }
+            controller.push(wordsController)
+        }
+
+        private func presentFinalDisableBackupAlert() {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let prepared = self.preparedBackupDisable else {
+                return
+            }
+            let presentingController: ViewController
+            if let topController = self.backupWordsController?.navigationController?.topViewController as? ViewController {
+                presentingController = topController
+            } else {
+                presentingController = controller
+            }
+            presentingController.present(textAlertController(
+                context: component.context,
+                title: "Disable Backup?",
+                text: "Telegram will delete its encrypted backup, and your recovery key will be updated. This can't be undone.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                        self?.dismissBackupWordsFlow()
+                    }),
+                    TextAlertAction(type: .destructiveAction, title: "Disable", action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        component.context.sharedContext.authorizeWalletAccess(
+                            context: component.context,
+                            completion: { [weak self] authorized in
+                                guard let self else {
+                                    return
+                                }
+                                guard authorized else {
+                                    self.dismissBackupWordsFlow()
+                                    return
+                                }
+                                self.submitDisableBackup(prepared: prepared)
+                            }
+                        )
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func submitDisableBackup(prepared: WalletContext.PreparedBackupDisable) {
+            guard let component = self.component else {
+                return
+            }
+            self.backupOperationDisposable.set((component.walletContext.disableBackup(prepared)
+            |> deliverOnMainQueue).start(next: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.dismissBackupWordsFlow()
+                self.presentBackupDisabledToast()
+            }, error: { [weak self] error in
+                guard let self else {
+                    return
+                }
+                if case let .insufficientBalance(required) = error {
+                    self.presentInsufficientBalanceAlert(prepared: WalletContext.PreparedBackupDisable(
+                        id: prepared.id,
+                        words: prepared.words,
+                        fee: required,
+                        availableBalance: 0,
+                        expiresAt: prepared.expiresAt
+                    ))
+                } else {
+                    self.presentDisableBackupError(keepPhrase: true)
+                }
+            }))
+        }
+
+        private func dismissBackupWordsFlow() {
+            guard let wordsController = self.backupWordsController else {
+                self.preparedBackupDisable = nil
+                return
+            }
+            if let navigationController = wordsController.navigationController as? NavigationController,
+               let index = navigationController.viewControllers.firstIndex(where: { $0 === wordsController }) {
+                navigationController.setViewControllers(
+                    Array(navigationController.viewControllers.prefix(upTo: index)),
+                    animated: true
+                )
+            } else {
+                wordsController.dismiss()
+            }
+            self.backupWordsController = nil
+            self.preparedBackupDisable = nil
+        }
+
+        private func presentDisableBackupError(keepPhrase: Bool) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let text: String
+            if keepPhrase {
+                text = "Check the wallet balance and network connection, then try again. Keep the new recovery phrase until the wallet status is updated."
+            } else {
+                text = "Check the wallet balance and network connection, then try again."
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Couldn't Disable Backup",
+                text: text,
+                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
+                })]
+            ), in: .window(.root))
+        }
+
+        private func formattedFee(_ fee: Int64) -> String {
+            guard let component = self.component else {
+                return ""
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let gramValue = formatTonAmountText(
+                fee,
+                dateTimeFormat: presentationData.dateTimeFormat,
+                maxDecimalPositions: 9
+            )
+            if let walletState = self.walletState,
+               let rate = walletState.fiat.selectedRate {
+                let fiatValue = formatTonFiatValue(
+                    fee,
+                    divide: true,
+                    rate: rate.unitsPerGram,
+                    currencySymbol: walletState.fiat.selectedCurrency.symbol,
+                    maxDecimalPositions: 4,
+                    dateTimeFormat: presentationData.dateTimeFormat
+                )
+                return "\(gramValue) GRAM (≈\(fiatValue))"
+            } else {
+                return "\(gramValue) GRAM"
+            }
+        }
+
+        private func presentBackupDisabledToast() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            controller.present(
+                UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .emoji(
+                        name: "TwoFactorSetupRememberSuccess",
+                        text: "Backup Disabled. Your recovery phrase is now the only way to restore your wallet."
+                    ),
+                    position: .bottom,
+                    action: { _ in false }
+                ),
+                in: .current
+            )
         }
 
         private func presentDeleteWalletAlert() {
@@ -188,10 +459,34 @@ private final class WalletSettingsScreenComponent: Component {
             environment: Environment<EnvironmentType>,
             transition: ComponentTransition
         ) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
+
+            if self.backupWordsController == nil {
+                self.preparedBackupDisable = nil
+            }
+
             let environment = environment[EnvironmentType.self].value
+            let previousWalletContext = self.component?.walletContext
             self.component = component
             self.environment = environment
             self.state = state
+
+            if previousWalletContext !== component.walletContext {
+                self.walletState = component.walletContext.stateValue
+                self.walletStateDisposable.set((component.walletContext.state
+                |> deliverOnMainQueue).start(next: { [weak self] walletState in
+                    guard let self else {
+                        return
+                    }
+                    self.walletState = walletState
+                    if !self.isUpdating {
+                        self.state?.updated(transition: .easeInOut(duration: 0.25))
+                    }
+                }))
+            }
 
             let theme = environment.theme
             self.backgroundColor = theme.list.blocksBackgroundColor
@@ -219,6 +514,12 @@ private final class WalletSettingsScreenComponent: Component {
             let sectionSpacing: CGFloat = 24.0
             let sectionWidth = availableSize.width - sideInset * 2.0
             var contentHeight = environment.navigationHeight + 16.0
+            let canDisableBackup: Bool
+            if let phase = self.walletState?.phase, case let .wallet(info) = phase {
+                canDisableBackup = info.canDisableBackup
+            } else {
+                canDisableBackup = false
+            }
 
             self.recoverySection.parentState = self.state
             let recoverySectionSize = self.recoverySection.update(
@@ -279,64 +580,68 @@ private final class WalletSettingsScreenComponent: Component {
             contentHeight += recoverySectionSize.height
             contentHeight += sectionSpacing
 
-            self.backupSection.parentState = self.state
-            let backupSectionSize = self.backupSection.update(
-                transition: transition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: theme,
-                    style: .glass,
-                    header: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: backupHeader.uppercased(),
-                            font: headerFont,
-                            textColor: theme.list.freeTextColor
-                        )),
-                        maximumNumberOfLines: 0
-                    )),
-                    footer: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: backupFooter,
-                            font: footerFont,
-                            textColor: theme.list.freeTextColor
-                        )),
-                        maximumNumberOfLines: 0
-                    )),
-                    items: [
-                        AnyComponentWithIdentity(id: "disableBackup", component: AnyComponent(ListActionItemComponent(
-                            theme: theme,
-                            style: .glass,
-                            title: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(
-                                    string: disableBackupAction,
-                                    font: actionFont,
-                                    textColor: theme.list.itemDestructiveColor
-                                )),
-                                maximumNumberOfLines: 0
+            if canDisableBackup {
+                self.backupSection.parentState = self.state
+                let backupSectionSize = self.backupSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: theme,
+                        style: .glass,
+                        header: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: backupHeader.uppercased(),
+                                font: headerFont,
+                                textColor: theme.list.freeTextColor
                             )),
-                            accessory: nil,
-                            action: { [weak self] _ in
-                                self?.presentDisableBackupAlert()
-                            }
-                        )))
-                    ]
-                )),
-                environment: {},
-                containerSize: CGSize(width: sectionWidth, height: 10000.0)
-            )
-            if let backupSectionView = self.backupSection.view {
-                if backupSectionView.superview == nil {
-                    self.scrollView.addSubview(backupSectionView)
-                }
-                transition.setFrame(
-                    view: backupSectionView,
-                    frame: CGRect(
-                        origin: CGPoint(x: sideInset, y: contentHeight),
-                        size: backupSectionSize
-                    )
+                            maximumNumberOfLines: 0
+                        )),
+                        footer: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: backupFooter,
+                                font: footerFont,
+                                textColor: theme.list.freeTextColor
+                            )),
+                            maximumNumberOfLines: 0
+                        )),
+                        items: [
+                            AnyComponentWithIdentity(id: "disableBackup", component: AnyComponent(ListActionItemComponent(
+                                theme: theme,
+                                style: .glass,
+                                title: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: disableBackupAction,
+                                        font: actionFont,
+                                        textColor: theme.list.itemDestructiveColor
+                                    )),
+                                    maximumNumberOfLines: 0
+                                )),
+                                accessory: nil,
+                                action: { [weak self] _ in
+                                    self?.presentDisableBackupAlert()
+                                }
+                            )))
+                        ]
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: sectionWidth, height: 10000.0)
                 )
+                if let backupSectionView = self.backupSection.view {
+                    if backupSectionView.superview == nil {
+                        self.scrollView.addSubview(backupSectionView)
+                    }
+                    transition.setFrame(
+                        view: backupSectionView,
+                        frame: CGRect(
+                            origin: CGPoint(x: sideInset, y: contentHeight),
+                            size: backupSectionSize
+                        )
+                    )
+                }
+                contentHeight += backupSectionSize.height
+                contentHeight += sectionSpacing
+            } else {
+                self.backupSection.view?.removeFromSuperview()
             }
-            contentHeight += backupSectionSize.height
-            contentHeight += sectionSpacing
 
             self.deleteSection.parentState = self.state
             let deleteSectionSize = self.deleteSection.update(

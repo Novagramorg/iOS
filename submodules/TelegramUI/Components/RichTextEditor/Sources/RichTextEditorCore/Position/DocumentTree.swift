@@ -22,8 +22,9 @@ public enum DocumentTree {
             return .paragraph(id: p.id,
                               children: [.text(length: p.utf16Count, ref: .paragraph(p.id))])
         case .media(let img):
-            if img.kind == .audio {
-                // Audio is a caption-less atom — no caption paragraph node (nodeSize = 1 atom + 2 wrapper = 3).
+            if img.kind.isCaptionless {
+                // Audio and document are caption-less atoms — no caption paragraph node
+                // (nodeSize = 1 atom + 2 wrapper = 3).
                 return .mediaBlock(id: img.id, children: [.mediaAtom(id: img.id)])
             }
             return .mediaBlock(id: img.id, children: [
@@ -77,6 +78,16 @@ public enum DocumentTree {
                 children.append(contentsOf: d.children.map(node(for:)))
             }
             return .details(id: d.id, children: children)
+        case .buttonRow(let r):
+            // A text-free block. Reuses `.mediaBlock` + `.mediaAtom` exactly as a COLLAPSED block
+            // quote already does (see the `bq.collapsed` arm above and `BlockQuoteBox`'s comment):
+            // `PositionMapping` / `PositionResolver` are generic over `children`/`nodeSize`/`isLeaf`
+            // and special-case only `.text`, so a container of bare atoms needs no new DocNode case.
+            // One atom per pill gives the caret a stop per pill; an EMPTY row still gets one atom so
+            // it remains selectable and deletable (a zero-child container would have nodeSize 2 with
+            // no interior position to place a caret at).
+            let atomCount = max(1, r.buttons.count)
+            return .mediaBlock(id: r.id, children: Array(repeating: .mediaAtom(id: r.id), count: atomCount))
         }
     }
 

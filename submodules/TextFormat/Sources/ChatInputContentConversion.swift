@@ -67,6 +67,9 @@ public func attributedString(from content: ChatInputContent, renderListMarkers: 
                         enableAnimation: enableAnimation), range: r)
             case nil:
                 break
+            case .button:
+                // No chat text attribute: a pill has no entity form (see the fallback path's note).
+                break
             }
             result.append(piece)
         }
@@ -127,7 +130,7 @@ public func attributedString(from content: ChatInputContent, renderListMarkers: 
                         range: NSRange(location: start, length: len))
                 }
             }
-        case .media, .table, .details:
+        case .media, .table, .details, .buttonRow:
             // INTENTIONAL render-only filter (not deferred): the legacy `UITextView` composer cannot represent a
             // structural media/table/detail block, so this `NSAttributedString` projection drops them. Heading/list
             // paragraphs above similarly render as plain text (`appendRuns` ignores heading style + list membership).
@@ -198,6 +201,10 @@ public func entityPreservingFallbackAttributedString(
                     if preserveCustomEmoji(fileId, file) {
                         piece.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: file, enableAnimation: enableAnimation), range: range)
                     }
+                case .button:
+                    // No chat text attribute: a pill has no entity form. Deliberately NOT a textUrl for a
+                    // `.url` action — that would silently demote the pill to a plain link.
+                    break
                 case nil:
                     break
                 }
@@ -259,6 +266,11 @@ public func entityPreservingFallbackAttributedString(
                     }
                     appendParagraph(rowText, blockAttribute: inheritedBlockAttribute)
                 }
+            case .buttonRow:
+                // Defensive entity-path fallback (a button always forces the rich path). A pill has no
+                // flat-text form and its label is not document text, so it contributes nothing — matching
+                // `attributedString(from:)` and `ChatInputContent.plainText`.
+                break
             }
         }
     }

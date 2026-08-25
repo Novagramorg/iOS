@@ -1901,7 +1901,7 @@ struct ctr_state {
                 [self requestReadDataWithLength:1 tag:MTTcpReadTagPacketShortLength];
             }
         } else {
-            if (length > 16 * 1024 * 1024) {
+            if (length < 4 || length > 16 * 1024 * 1024) {
                 if (MTLogEnabled()) {
                     MTLog(@"[MTTcpConnection#%" PRIxPTR " received invalid length %d]", (intptr_t)self, length);
                 }

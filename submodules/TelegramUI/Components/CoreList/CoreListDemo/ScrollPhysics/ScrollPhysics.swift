@@ -5,7 +5,6 @@ import Foundation // log
 /// `velocity` is points/millisecond. Pixel-rounded offsets are returned by `step`;
 /// the internal `offset` stays full-precision across frames (matching the integrator).
 struct ScrollAxis {
-    enum Decision { case decelerate, stop }
     enum Phase { case idle, dragging, decelerating }
 
     // Config
@@ -15,13 +14,15 @@ struct ScrollAxis {
     let rate: CGFloat
     let lnRate: CGFloat
     let scale: CGFloat
-    let vScale: CGFloat
+    /// `_fastScrollMultiplier`, the free-deceleration distance multiplier. Mutable because the
+    /// integrator itself clears it on reaching the spring or settling (`0x17a87bc` / `0x17a8844`),
+    /// and `Trajectory.build` needs to observe WHEN that happened to re-time it onto a baked path.
+    var vScale: CGFloat
     let c: CGFloat
 
     // State
     private(set) var offset: CGFloat
     private(set) var velocity: CGFloat = 0
-    private var prevVelocity: CGFloat = 0
     private var dragStartOffset: CGFloat = 0
     private(set) var phase: Phase = .idle
 
@@ -36,57 +37,57 @@ struct ScrollAxis {
     mutating func beginDrag() {
         dragStartOffset = offset
         velocity = 0
-        prevVelocity = 0
         phase = .dragging
     }
 
-    /// `translation`/`recognizerVelocity` are the pan recognizer's values (points, points/sec).
-    mutating func drag(translation: CGFloat, recognizerVelocity: CGFloat) {
+    /// `translation` is the pan recognizer's cumulative value in points. Gesture VELOCITY is not
+    /// this type's business — `ReleaseDecision` owns it, because the release decision it feeds is
+    /// two-dimensional (the threshold is `vx² + vy²`, the low-pass guard tests both axes jointly)
+    /// and cannot be answered per axis.
+    mutating func drag(translation: CGFloat) {
         let proposed = dragStartOffset - translation                       // §3
         offset = RubberBand.offset(proposed, min: min, max: max, range: range, c: c) // §1
-        prevVelocity = velocity
-        velocity = -recognizerVelocity * 0.001                              // §3: pts/s → pts/ms, negated
     }
 
-    mutating func endDrag() -> Decision {
-        // §4 low-pass. Empirically confirmed by Plan 2's recorded-fixture regression: UIScrollView
-        // weights the PREVIOUS drag-frame velocity 0.75 and the latest 0.25. (The medium-flick
-        // fixture's deceleration distance matches 0.75·prev + 0.25·latest to ~1px, vs a ~23px
-        // undershoot when reversed.) Resolves the ambiguity in the decoded _endPanNormal: swaps.
-        velocity = 0.75 * prevVelocity + 0.25 * velocity
-        // Released while overscrolled (past an edge) → must spring back even with no flick velocity,
-        // matching `_endPanNormal` starting the decel timer when bouncing. Without this, a tap or tiny
-        // drag during a bounce ends as `.stop` and the content freezes off the edge.
-        if offset < min || offset > max {
-            phase = .decelerating
-            return .decelerate
-        }
-        if velocity * velocity < 0.0625 {                                   // §4 threshold (|v| < 0.25)
-            velocity = 0
-            phase = .idle
-            return .stop
-        }
+    /// Enter deceleration at a release velocity `ReleaseDecision` already decided (pts/ms).
+    /// The caller is responsible for the release DECISION; this only installs its result.
+    mutating func applyRelease(velocity: CGFloat) {
+        self.velocity = velocity
         phase = .decelerating
-        return .decelerate
     }
 
-    /// Advance one deceleration frame; returns the pixel-rounded offset to write and whether settled.
-    /// Call only after `endDrag()` has returned `.decelerate`.
-    mutating func step(dtMs: CGFloat) -> (written: CGFloat, settled: Bool) {
+    /// Advance one deceleration frame; returns the pixel-rounded offset to write, whether settled,
+    /// and whether this frame ENDED the deceleration (entered the spring or settled), which is the
+    /// integrator's own fast-scroll reset. Call only after `applyRelease(velocity:)`.
+    mutating func step(dtMs: CGFloat) -> (written: CGFloat, settled: Bool, endedDeceleration: Bool) {
+        // "Ended a deceleration" means one that was actually RUNNING. An axis already at rest cannot
+        // end anything, and saying it does is not pedantry: CoreList pins x to a dead axis
+        // (offset 0, min == max == 0, velocity 0), which is in-bounds and below the velocity floor, so
+        // it reports `settled` on every step. Combined with `||` in `ScrollPhysics.step` that made the
+        // pair ALWAYS report a deceleration ending — which cleared the fast-scroll streak on the first
+        // step of every flight and is why the repeated-flick multiplier could never reach the three
+        // consecutive flicks it needs to grow.
+        // Running == decelerating AND not already at rest — the exact complement of `settled()`:
+        // above the integrator's velocity floor, or displaced past an edge and still springing back.
+        let outOfBounds = offset < min || offset > Swift.max(max, min)
+        let wasRunning = phase == .decelerating
+            && (abs(velocity) >= Deceleration.velocityFloor || outOfBounds)
         // Deceleration is a single-frame value type; reconstruct it each frame from the live
         // full-precision offset/velocity. Do NOT hoist it into stored state — that would discard
         // the inter-frame precision the integrator depends on.
         var d = Deceleration(offset: offset, velocity: velocity, min: min, max: max,
                              rate: rate, vScale: vScale)
-        let settled = d.step(dtMs: dtMs)
+        let (settled, endedDeceleration) = d.step(dtMs: dtMs)
         offset = d.offset                                                   // keep full precision
         velocity = d.velocity
         if settled { phase = .idle }
-        return (OffsetMath.pixelRound(offset, scale: scale), settled)       // §6 write rounds
+        let reallyEnded = wasRunning && endedDeceleration
+        if reallyEnded { vScale = 1 }                                       // 0x17a87bc / 0x17a8844
+        return (OffsetMath.pixelRound(offset, scale: scale), settled, reallyEnded) // §6 write rounds
     }
 
     /// Move the bounce points without disturbing any dynamic state (offset/velocity/phase/
-    /// dragStartOffset/prevVelocity). The analogue of a UIScrollView `contentSize` change — lets a
+    /// dragStartOffset). The analogue of a UIScrollView `contentSize` change — lets a
     /// scroll engine declare a freshly-loaded edge mid-interaction. Changes no physics formula.
     /// `range` (the viewport dimension, not the content span) is intentionally left unchanged.
     mutating func setBounds(min: CGFloat, max: CGFloat) {
@@ -108,11 +109,10 @@ struct ScrollAxis {
     /// substrate. `velocity` is the integrator's unit (pts/ms). Sets phase to `.decelerating`; the
     /// next `step` continues from here. Changes no physics formula. Sets only the `step`/`build`
     /// substate (offset/velocity/phase) — it does NOT update `dragStartOffset`, so a caller must go
-    /// straight into `step`/`build` and never follow a reseed with `drag()`/`endDrag()`.
+    /// straight into `step`/`build` and never follow a reseed with `drag()`/`applyRelease()`.
     mutating func reseedDeceleration(offset: CGFloat, velocity: CGFloat) {
         self.offset = offset
         self.velocity = velocity
-        self.prevVelocity = velocity
         self.phase = .decelerating
     }
 
@@ -128,19 +128,25 @@ struct ScrollPhysics {
 
     mutating func beginDrag() { x.beginDrag(); y.beginDrag() }
 
-    mutating func endDrag() -> (x: ScrollAxis.Decision, y: ScrollAxis.Decision) {
-        (x.endDrag(), y.endDrag())
+    /// Install a release velocity `ReleaseDecision` already decided, on both axes.
+    mutating func applyRelease(velocity: CGPoint) {
+        x.applyRelease(velocity: velocity.x)
+        y.applyRelease(velocity: velocity.y)
     }
 
-    mutating func drag(translation: CGPoint, recognizerVelocity: CGPoint) {
-        x.drag(translation: translation.x, recognizerVelocity: recognizerVelocity.x)
-        y.drag(translation: translation.y, recognizerVelocity: recognizerVelocity.y)
+    mutating func drag(translation: CGPoint) {
+        x.drag(translation: translation.x)
+        y.drag(translation: translation.y)
     }
 
-    /// Returns the offset to write and whether BOTH axes have settled.
-    mutating func step(dtMs: CGFloat) -> (written: CGPoint, settled: Bool) {
+    /// Returns the offset to write, whether BOTH axes have settled, and whether EITHER ended its
+    /// deceleration this frame (the integrator's fast-scroll reset — one axis reaching an edge is
+    /// enough, matching `_getBouncingDecelerationOffset` being called per axis against one ivar).
+    mutating func step(dtMs: CGFloat) -> (written: CGPoint, settled: Bool, endedDeceleration: Bool) {
         let rx = x.step(dtMs: dtMs)
         let ry = y.step(dtMs: dtMs)
-        return (CGPoint(x: rx.written, y: ry.written), rx.settled && ry.settled)
+        return (CGPoint(x: rx.written, y: ry.written),
+                rx.settled && ry.settled,
+                rx.endedDeceleration || ry.endedDeceleration)
     }
 }

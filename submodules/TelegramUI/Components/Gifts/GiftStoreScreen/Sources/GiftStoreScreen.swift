@@ -265,8 +265,8 @@ public final class GiftStoreContentComponent: Component {
                                                 acceptedPrice: nil,
                                                 skipConfirmation: false,
                                                 starsTopUpOptions: starsTopUpOptions,
-                                                buyGift: { [weak self] slug, peerId, price in
-                                                    return self?.starGiftsContext?.buyStarGift(slug: slug, peerId: peerId, price: price) ?? .complete()
+                                                buyGift: { [weak self] slug, peerId, price, hideName, text, entities in
+                                                    return self?.starGiftsContext?.buyStarGift(slug: slug, peerId: peerId, price: price, hideName: hideName, text: text, entities: entities) ?? .complete()
                                                 },
                                                 getController: controller,
                                                 updateProgress: { _ in },
@@ -300,8 +300,8 @@ public final class GiftStoreContentComponent: Component {
                                                     subject: .uniqueGift(uniqueGift, component.peerId),
                                                     allSubjects: allSubjects,
                                                     index: index,
-                                                    buyGift: { slug, peerId, price in
-                                                        return self.starGiftsContext?.buyStarGift(slug: slug, peerId: peerId, price: price) ?? .complete()
+                                                    buyGift: { slug, peerId, price, hideName, text, entities in
+                                                        return self.starGiftsContext?.buyStarGift(slug: slug, peerId: peerId, price: price, hideName: hideName, text: text, entities: entities) ?? .complete()
                                                     },
                                                     updateResellStars: { _, price in
                                                         return self.starGiftsContext?.updateStarGiftResellPrice(slug: uniqueGift.slug, price: price) ?? .complete()

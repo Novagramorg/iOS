@@ -241,7 +241,7 @@ final class AssetTests: XCTestCase {
 
     func testResolvedDomainYieldsCanonicalAddress() throws {
         let json = """
-        {"records":[{"domain":"example.ton","dns_wallet_address":"0:\(String(repeating: "83", count: 32))"}]}
+        {"records":[{"domain":"example.ton","dns_wallet":"0:\(String(repeating: "83", count: 32))"}]}
         """
         let wire = try JSONDecoder().decode(Wire.DNSRecordsResponse.self, from: Data(json.utf8))
         let resolved = try XCTUnwrap(try Mappers.dnsWallet(wire))
@@ -251,13 +251,22 @@ final class AssetTests: XCTestCase {
         XCTAssertEqual(Mappers.dnsDomain(wire), "example.ton")
     }
 
+    func testLegacyDNSWalletAddressStillResolves() throws {
+        let json = """
+        {"records":[{"domain":"legacy.ton","dns_wallet_address":"0:\(String(repeating: "44", count: 32))"}]}
+        """
+        let wire = try JSONDecoder().decode(Wire.DNSRecordsResponse.self, from: Data(json.utf8))
+        let resolved = try XCTUnwrap(try Mappers.dnsWallet(wire))
+        XCTAssertEqual(try Address.parse(resolved).rawString, "0:" + String(repeating: "44", count: 32))
+    }
+
     /// Records without a wallet address (a next-resolver or site record) must be skipped
     /// rather than mapped to an empty address.
     func testRecordsWithoutWalletAddressAreSkipped() throws {
         let json = """
         {"records":[
           {"domain":"a.ton","dns_next_resolver":"0:\(String(repeating: "11", count: 32))"},
-          {"domain":"a.ton","dns_wallet_address":"0:\(String(repeating: "22", count: 32))"}
+          {"domain":"a.ton","dns_wallet":"0:\(String(repeating: "22", count: 32))"}
         ]}
         """
         let wire = try JSONDecoder().decode(Wire.DNSRecordsResponse.self, from: Data(json.utf8))

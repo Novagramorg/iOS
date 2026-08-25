@@ -8,7 +8,8 @@ import PresentationDataUtils
 import TelegramStringFormatting
 import ComponentFlow
 import ViewControllerComponent
-import SheetComponent
+import ResizableSheetComponent
+import NavigationStackComponent
 import BalancedTextComponent
 import BundleIconComponent
 import GlassBarButtonComponent
@@ -22,155 +23,61 @@ fileprivate enum WalletTransferFinishResult {
     case confirmed
 }
 
-private final class WalletTransferSheetContent: CombinedComponent {
+private final class WalletTransferSheetContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
-    let context: AccountContext
-    let walletContext: WalletContext
     let request: WalletContext.TonConnectTransferRequest
-    let confirm: (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void
-    let updateIsBusy: (Bool) -> Void
-    let animateOut: ActionSlot<Action<Void>>
-    let getController: () -> ViewController?
+    let walletState: WalletContext.State?
+    let bottomInset: CGFloat
+    let infoPressed: () -> Void
 
     init(
-        context: AccountContext,
-        walletContext: WalletContext,
         request: WalletContext.TonConnectTransferRequest,
-        confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void,
-        updateIsBusy: @escaping (Bool) -> Void,
-        animateOut: ActionSlot<Action<Void>>,
-        getController: @escaping () -> ViewController?
+        walletState: WalletContext.State?,
+        bottomInset: CGFloat,
+        infoPressed: @escaping () -> Void
     ) {
-        self.context = context
-        self.walletContext = walletContext
         self.request = request
-        self.confirm = confirm
-        self.updateIsBusy = updateIsBusy
-        self.animateOut = animateOut
-        self.getController = getController
+        self.walletState = walletState
+        self.bottomInset = bottomInset
+        self.infoPressed = infoPressed
     }
 
     static func ==(lhs: WalletTransferSheetContent, rhs: WalletTransferSheetContent) -> Bool {
-        return lhs.context === rhs.context
-            && lhs.walletContext === rhs.walletContext
-            && lhs.request == rhs.request
+        return lhs.request == rhs.request
+            && lhs.walletState == rhs.walletState
+            && lhs.bottomInset == rhs.bottomInset
     }
 
-    final class State: ComponentState {
-        private let getController: () -> ViewController?
-        private let disposables = DisposableSet()
+    final class View: UIView {
+        private let appIcon = ComponentView<Empty>()
+        private let title = ComponentView<Empty>()
+        private let domain = ComponentView<Empty>()
+        private let card = ComponentView<Empty>()
+        private let fee = ComponentView<Empty>()
 
-        fileprivate var walletState: WalletContext.State?
-        fileprivate var isAuthorizing = false
-        fileprivate var isConfirming = false
-
-        init(
-            walletContext: WalletContext,
-            getController: @escaping () -> ViewController?
-        ) {
-            self.getController = getController
-
-            super.init()
-
-            self.disposables.add((walletContext.state
-            |> deliverOnMainQueue).start(next: { [weak self] walletState in
-                guard let self else {
-                    return
-                }
-                self.walletState = walletState
-                self.updated(transition: .easeInOut(duration: 0.25))
-            }))
+        override init(frame: CGRect) {
+            super.init(frame: frame)
         }
 
-        deinit {
-            self.disposables.dispose()
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
         }
 
-        func finish(_ result: WalletTransferFinishResult, animated: Bool, animateOut: ActionSlot<Action<Void>>) {
-            guard let controller = self.getController() as? WalletTransferScreen else {
-                return
-            }
-            controller.finish(result, animated: animated, animateOut: animateOut)
-        }
-
-        func confirm(component: WalletTransferSheetContent) {
-            guard !self.isAuthorizing, !self.isConfirming else {
-                return
-            }
-            self.isAuthorizing = true
-            component.updateIsBusy(true)
-            self.updated(transition: .easeInOut(duration: 0.2))
-
-            component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self] authorized in
-                Queue.mainQueue().async {
-                    guard let self, self.isAuthorizing else {
-                        return
-                    }
-                    self.isAuthorizing = false
-                    guard authorized else {
-                        component.updateIsBusy(false)
-                        self.updated(transition: .easeInOut(duration: 0.2))
-                        return
-                    }
-
-                    self.isConfirming = true
-                    self.updated(transition: .easeInOut(duration: 0.2))
-                    component.confirm({ [weak self] result in
-                        guard let self else {
-                            return
-                        }
-                        switch result {
-                        case .success:
-                            self.finish(.confirmed, animated: true, animateOut: component.animateOut)
-                        case .failure:
-                            self.isConfirming = false
-                            component.updateIsBusy(false)
-                            self.updated(transition: .easeInOut(duration: 0.2))
-                            guard let controller = self.getController() else {
-                                return
-                            }
-                            //TODO:localize
-                            let errorText = "Unable to send this transaction. Please try again."
-                            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                            controller.present(textAlertController(
-                                context: component.context,
-                                title: nil,
-                                text: errorText,
-                                actions: [
-                                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
-                                ]
-                            ), in: .window(.root))
-                        }
-                    })
-                }
-            })
-        }
-    }
-
-    func makeState() -> State {
-        return State(walletContext: self.walletContext, getController: self.getController)
-    }
-
-    static var body: Body {
-        let appIcon = Child(WalletConnectAppIconComponent.self)
-        let title = Child(BalancedTextComponent.self)
-        let domain = Child(HStack<Empty>.self)
-        let card = Child(WalletTransferCardComponent.self)
-        let fee = Child(BalancedTextComponent.self)
-        let cancelButton = Child(ButtonComponent.self)
-        let confirmButton = Child(ButtonComponent.self)
-        let closeButton = Child(GlassBarButtonComponent.self)
-
-        return { context in
-            let component = context.component
-            let state = context.state
-            let environment = context.environment[EnvironmentType.self].value
+        func update(
+            component: WalletTransferSheetContent,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let environment = environment[EnvironmentType.self].value
             let theme = environment.theme
+            transition.setBackgroundColor(view: self, color: theme.list.modalPlainBackgroundColor)
 
             let safeContentWidth = max(
                 0.0,
-                context.availableSize.width - environment.safeInsets.left - environment.safeInsets.right
+                availableSize.width - environment.safeInsets.left - environment.safeInsets.right
             )
             let contentCenterX = environment.safeInsets.left + safeContentWidth / 2.0
             let textWidth = max(1.0, safeContentWidth - 48.0)
@@ -180,31 +87,40 @@ private final class WalletTransferSheetContent: CombinedComponent {
 
             var contentHeight: CGFloat = 32.0
 
+            self.appIcon.parentState = state
             let appIconSize = CGSize(width: 88.0, height: 88.0)
-            let appIconCenter = CGPoint(
-                x: contentCenterX,
-                y: contentHeight + appIconSize.height / 2.0
-            )
-            let appIcon = appIcon.update(
-                component: WalletConnectAppIconComponent(
+            let _ = self.appIcon.update(
+                transition: transition,
+                component: AnyComponent(WalletConnectAppIconComponent(
                     applicationName: component.request.applicationName,
                     url: component.request.iconUrl
-                ),
-                availableSize: appIconSize,
-                transition: context.transition
+                )),
+                environment: {},
+                containerSize: appIconSize
             )
-            context.add(appIcon
-                .position(appIconCenter)
-                .cornerRadius(appIconSize.width * 0.5)
-                .clipsToBounds(true)
-            )
+            if let appIconView = self.appIcon.view {
+                if appIconView.superview == nil {
+                    self.addSubview(appIconView)
+                }
+                appIconView.clipsToBounds = true
+                transition.setCornerRadius(layer: appIconView.layer, cornerRadius: appIconSize.width * 0.5)
+                transition.setFrame(
+                    view: appIconView,
+                    frame: CGRect(
+                        origin: CGPoint(x: floor(contentCenterX - appIconSize.width / 2.0), y: contentHeight),
+                        size: appIconSize
+                    )
+                )
+            }
             contentHeight += appIconSize.height
             contentHeight += 18.0
 
             //TODO:localize
-            let titleText = "\(component.request.applicationName) requests a transfer"
-            let title = title.update(
-                component: BalancedTextComponent(
+            let titleText = "Confirm Action"
+            self.title.parentState = state
+            let titleSize = self.title.update(
+                transition: .immediate,
+                component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
                         string: titleText,
                         font: Font.bold(22.0),
@@ -213,15 +129,23 @@ private final class WalletTransferSheetContent: CombinedComponent {
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.1
-                ),
-                availableSize: CGSize(width: textWidth, height: context.availableSize.height),
-                transition: .immediate
+                )),
+                environment: {},
+                containerSize: CGSize(width: textWidth, height: availableSize.height)
             )
-            context.add(title.position(CGPoint(
-                x: contentCenterX,
-                y: contentHeight + title.size.height / 2.0
-            )))
-            contentHeight += title.size.height
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                transition.setFrame(
+                    view: titleView,
+                    frame: CGRect(
+                        origin: CGPoint(x: floor(contentCenterX - titleSize.width / 2.0), y: contentHeight),
+                        size: titleSize
+                    )
+                )
+            }
+            contentHeight += titleSize.height
             contentHeight += 4.0
 
             let domainItems: [AnyComponentWithIdentity<Empty>] = [AnyComponentWithIdentity(
@@ -232,40 +156,59 @@ private final class WalletTransferSheetContent: CombinedComponent {
                     color: accentColor
                 ))
             )]
-            let domain = domain.update(
-                component: HStack<Empty>(domainItems, spacing: 4.0),
-                availableSize: CGSize(width: textWidth, height: 30.0),
-                transition: .immediate
+            self.domain.parentState = state
+            let domainSize = self.domain.update(
+                transition: .immediate,
+                component: AnyComponent(HStack<Empty>(domainItems, spacing: 4.0)),
+                environment: {},
+                containerSize: CGSize(width: textWidth, height: 30.0)
             )
-            context.add(domain.position(CGPoint(
-                x: contentCenterX,
-                y: contentHeight + domain.size.height / 2.0
-            )))
-            contentHeight += domain.size.height
+            if let domainView = self.domain.view {
+                if domainView.superview == nil {
+                    self.addSubview(domainView)
+                }
+                transition.setFrame(
+                    view: domainView,
+                    frame: CGRect(
+                        origin: CGPoint(x: floor(contentCenterX - domainSize.width / 2.0), y: contentHeight),
+                        size: domainSize
+                    )
+                )
+            }
+            contentHeight += domainSize.height
             contentHeight += 20.0
 
-            let fiatCurrency = state.walletState?.fiat.selectedCurrency ?? .usd
-            let fiatRate = state.walletState?.fiat.selectedRate
+            let fiatCurrency = component.walletState?.fiat.selectedCurrency ?? .usd
+            let fiatRate = component.walletState?.fiat.selectedRate
             let cardWidth = min(361.0, max(1.0, safeContentWidth - 42.0))
-            let card = card.update(
-                component: WalletTransferCardComponent(
+            self.card.parentState = state
+            let cardSize = self.card.update(
+                transition: transition,
+                component: AnyComponent(WalletTransferCardComponent(
                     amount: component.request.amount,
                     recipient: component.request.recipient,
                     fiatCurrency: fiatCurrency,
                     fiatRate: fiatRate,
-                    dateTimeFormat: environment.dateTimeFormat
-                ),
-                availableSize: CGSize(width: cardWidth, height: context.availableSize.height),
-                transition: context.transition
+                    dateTimeFormat: environment.dateTimeFormat,
+                    infoPressed: component.infoPressed
+                )),
+                environment: {},
+                containerSize: CGSize(width: cardWidth, height: availableSize.height)
             )
-            context.add(card
-                .position(CGPoint(
-                    x: contentCenterX,
-                    y: contentHeight + card.size.height / 2.0
-                ))
-                .clipsToBounds(true)
-            )
-            contentHeight += card.size.height
+            if let cardView = self.card.view {
+                if cardView.superview == nil {
+                    self.addSubview(cardView)
+                }
+                cardView.clipsToBounds = true
+                transition.setFrame(
+                    view: cardView,
+                    frame: CGRect(
+                        origin: CGPoint(x: floor(contentCenterX - cardSize.width / 2.0), y: contentHeight),
+                        size: cardSize
+                    )
+                )
+            }
+            contentHeight += cardSize.height
             contentHeight += 18.0
 
             let formattedFee = formatTonAmountText(
@@ -289,47 +232,125 @@ private final class WalletTransferSheetContent: CombinedComponent {
                 //TODO:localize
                 feeText = "Network fee: \(formattedFee) Grams."
             }
-            let fee = fee.update(
-                component: BalancedTextComponent(
+            self.fee.parentState = state
+            let feeSize = self.fee.update(
+                transition: .immediate,
+                component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
                         string: feeText,
-                        font: Font.regular(13.0),
+                        font: Font.regular(15.0),
                         textColor: secondaryTextColor
                     )),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
-                ),
-                availableSize: CGSize(width: textWidth, height: context.availableSize.height),
-                transition: .immediate
+                )),
+                environment: {},
+                containerSize: CGSize(width: textWidth, height: availableSize.height)
             )
-            context.add(fee.position(CGPoint(
-                x: contentCenterX,
-                y: contentHeight + fee.size.height / 2.0
-            )))
-            contentHeight += fee.size.height
-            contentHeight += 20.0
+            if let feeView = self.fee.view {
+                if feeView.superview == nil {
+                    self.addSubview(feeView)
+                }
+                transition.setFrame(
+                    view: feeView,
+                    frame: CGRect(
+                        origin: CGPoint(x: floor(contentCenterX - feeSize.width / 2.0), y: contentHeight),
+                        size: feeSize
+                    )
+                )
+            }
+            contentHeight += feeSize.height
+            contentHeight += component.bottomInset
+
+            return CGSize(width: availableSize.width, height: contentHeight)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<EnvironmentType>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            state: state,
+            environment: environment,
+            transition: transition
+        )
+    }
+}
+
+private final class WalletTransferActionsComponent: Component {
+    let theme: PresentationTheme
+    let isBusy: Bool
+    let isConfirming: Bool
+    let cancel: () -> Void
+    let confirm: () -> Void
+
+    init(
+        theme: PresentationTheme,
+        isBusy: Bool,
+        isConfirming: Bool,
+        cancel: @escaping () -> Void,
+        confirm: @escaping () -> Void
+    ) {
+        self.theme = theme
+        self.isBusy = isBusy
+        self.isConfirming = isConfirming
+        self.cancel = cancel
+        self.confirm = confirm
+    }
+
+    static func ==(lhs: WalletTransferActionsComponent, rhs: WalletTransferActionsComponent) -> Bool {
+        return lhs.theme == rhs.theme
+            && lhs.isBusy == rhs.isBusy
+            && lhs.isConfirming == rhs.isConfirming
+    }
+
+    final class View: UIView {
+        private let cancelButton = ComponentView<Empty>()
+        private let confirmButton = ComponentView<Empty>()
+
+        private var component: WalletTransferActionsComponent?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(
+            component: WalletTransferActionsComponent,
+            availableSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            self.component = component
 
             let buttonSpacing: CGFloat = 10.0
-            let buttonInsets = ContainerViewLayout.concentricInsets(
-                bottomInset: environment.safeInsets.bottom,
-                innerDiameter: 52.0,
-                sideInset: 30.0
-            )
-            let buttonsWidth = max(2.0, safeContentWidth - buttonInsets.left - buttonInsets.right)
-            let cancelButtonWidth = floorToScreenPixels((buttonsWidth - buttonSpacing) / 2.0)
-            let confirmButtonWidth = buttonsWidth - buttonSpacing - cancelButtonWidth
-            let isBusy = state.isAuthorizing || state.isConfirming
+            let height = min(52.0, availableSize.height)
+            let cancelButtonWidth = floorToScreenPixels((availableSize.width - buttonSpacing) / 2.0)
+            let confirmButtonWidth = availableSize.width - buttonSpacing - cancelButtonWidth
 
             //TODO:localize
             let cancelTitle = "Cancel"
-            let cancelButton = cancelButton.update(
-                component: ButtonComponent(
+            let cancelSize = self.cancelButton.update(
+                transition: transition,
+                component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
                         style: .glass,
-                        color: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.1),
-                        foreground: theme.list.itemPrimaryTextColor,
-                        pressedColor: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.16),
+                        color: component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.1),
+                        foreground: component.theme.list.itemPrimaryTextColor,
+                        pressedColor: component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.16),
                         cornerRadius: 26.0
                     ),
                     content: AnyComponentWithIdentity(
@@ -337,31 +358,34 @@ private final class WalletTransferSheetContent: CombinedComponent {
                         component: AnyComponent(Text(
                             text: cancelTitle,
                             font: Font.semibold(17.0),
-                            color: theme.list.itemPrimaryTextColor
+                            color: component.theme.list.itemPrimaryTextColor
                         ))
                     ),
-                    isEnabled: !isBusy,
-                    action: { [weak state] in
-                        state?.finish(.cancelled, animated: true, animateOut: component.animateOut)
+                    isEnabled: !component.isBusy,
+                    action: { [weak self] in
+                        self?.component?.cancel()
                     }
-                ),
-                availableSize: CGSize(width: cancelButtonWidth, height: 52.0),
-                transition: context.transition
+                )),
+                environment: {},
+                containerSize: CGSize(width: cancelButtonWidth, height: height)
             )
-            context.add(cancelButton.position(CGPoint(
-                x: contentCenterX - buttonSpacing / 2.0 - cancelButton.size.width / 2.0,
-                y: contentHeight + cancelButton.size.height / 2.0
-            )))
+            if let cancelView = self.cancelButton.view {
+                if cancelView.superview == nil {
+                    self.addSubview(cancelView)
+                }
+                transition.setFrame(view: cancelView, frame: CGRect(origin: .zero, size: cancelSize))
+            }
 
             //TODO:localize
             let confirmTitle = "Confirm"
-            let confirmButton = confirmButton.update(
-                component: ButtonComponent(
+            let confirmSize = self.confirmButton.update(
+                transition: transition,
+                component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
                         style: .glass,
-                        color: theme.list.itemCheckColors.fillColor,
-                        foreground: theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
+                        color: component.theme.list.itemCheckColors.fillColor,
+                        foreground: component.theme.list.itemCheckColors.foregroundColor,
+                        pressedColor: component.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9),
                         cornerRadius: 26.0
                     ),
                     content: AnyComponentWithIdentity(
@@ -369,55 +393,47 @@ private final class WalletTransferSheetContent: CombinedComponent {
                         component: AnyComponent(Text(
                             text: confirmTitle,
                             font: Font.semibold(17.0),
-                            color: theme.list.itemCheckColors.foregroundColor
+                            color: component.theme.list.itemCheckColors.foregroundColor
                         ))
                     ),
-                    isEnabled: !isBusy,
-                    displaysProgress: state.isConfirming,
-                    action: { [weak state] in
-                        state?.confirm(component: component)
+                    isEnabled: !component.isBusy,
+                    displaysProgress: component.isConfirming,
+                    action: { [weak self] in
+                        self?.component?.confirm()
                     }
-                ),
-                availableSize: CGSize(width: confirmButtonWidth, height: 52.0),
-                transition: context.transition
+                )),
+                environment: {},
+                containerSize: CGSize(width: confirmButtonWidth, height: height)
             )
-            context.add(confirmButton.position(CGPoint(
-                x: contentCenterX + buttonSpacing / 2.0 + confirmButton.size.width / 2.0,
-                y: contentHeight + confirmButton.size.height / 2.0
-            )))
-            contentHeight += max(cancelButton.size.height, confirmButton.size.height)
-            contentHeight += buttonInsets.bottom
+            if let confirmView = self.confirmButton.view {
+                if confirmView.superview == nil {
+                    self.addSubview(confirmView)
+                }
+                transition.setFrame(
+                    view: confirmView,
+                    frame: CGRect(
+                        origin: CGPoint(x: cancelButtonWidth + buttonSpacing, y: 0.0),
+                        size: confirmSize
+                    )
+                )
+            }
 
-            let closeButton = closeButton.update(
-                component: GlassBarButtonComponent(
-                    size: CGSize(width: 44.0, height: 44.0),
-                    backgroundColor: nil,
-                    isDark: theme.overallDarkAppearance,
-                    state: .glass,
-                    component: AnyComponentWithIdentity(
-                        id: "close",
-                        component: AnyComponent(BundleIconComponent(
-                            name: "Navigation/Close",
-                            tintColor: theme.chat.inputPanel.panelControlColor
-                        ))
-                    ),
-                    action: { [weak state] _ in
-                        guard let state, !state.isAuthorizing, !state.isConfirming else {
-                            return
-                        }
-                        state.finish(.cancelled, animated: true, animateOut: component.animateOut)
-                    }
-                ),
-                availableSize: CGSize(width: 44.0, height: 44.0),
-                transition: .immediate
-            )
-            context.add(closeButton.position(CGPoint(
-                x: environment.safeInsets.left + 16.0 + closeButton.size.width / 2.0,
-                y: 16.0 + closeButton.size.height / 2.0
-            )))
-
-            return CGSize(width: context.availableSize.width, height: contentHeight)
+            return CGSize(width: availableSize.width, height: height)
         }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }
 
@@ -448,113 +464,290 @@ private final class WalletTransferSheetComponent: CombinedComponent {
     }
 
     final class State: ComponentState {
-        fileprivate var isBusy = false
+        private let disposables = DisposableSet()
+        private var isFinished = false
 
-        func updateIsBusy(_ value: Bool) {
-            guard self.isBusy != value else {
+        fileprivate var walletState: WalletContext.State?
+        fileprivate var isAuthorizing = false
+        fileprivate var isConfirming = false
+        fileprivate var isPreviewPresented = false
+
+        fileprivate var isBusy: Bool {
+            return self.isAuthorizing || self.isConfirming
+        }
+
+        init(walletContext: WalletContext) {
+            super.init()
+
+            self.disposables.add((walletContext.state
+            |> deliverOnMainQueue).start(next: { [weak self] walletState in
+                guard let self, !self.isFinished else {
+                    return
+                }
+                self.walletState = walletState
+                self.updated(transition: .easeInOut(duration: 0.25))
+            }))
+        }
+
+        deinit {
+            self.disposables.dispose()
+        }
+
+        func finish(
+            _ result: WalletTransferFinishResult,
+            getController: () -> ViewController?,
+            animated: Bool,
+            animateOut: ActionSlot<Action<Void>>?
+        ) {
+            guard !self.isFinished, let controller = getController() as? WalletTransferScreen else {
                 return
             }
-            self.isBusy = value
+            self.isFinished = true
+            controller.finish(result, animated: animated, animateOut: animateOut)
+        }
+
+        func confirm(
+            component: WalletTransferSheetComponent,
+            getController: @escaping () -> ViewController?,
+            animateOut: ActionSlot<Action<Void>>
+        ) {
+            guard !self.isFinished, !self.isAuthorizing, !self.isConfirming else {
+                return
+            }
+            self.isAuthorizing = true
             self.updated(transition: .easeInOut(duration: 0.2))
+
+            component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self] authorized in
+                Queue.mainQueue().async {
+                    guard let self, !self.isFinished, self.isAuthorizing else {
+                        return
+                    }
+                    self.isAuthorizing = false
+                    guard authorized else {
+                        self.updated(transition: .easeInOut(duration: 0.2))
+                        return
+                    }
+
+                    self.isConfirming = true
+                    self.updated(transition: .easeInOut(duration: 0.2))
+                    component.confirm({ [weak self] result in
+                        Queue.mainQueue().async {
+                            guard let self, !self.isFinished else {
+                                return
+                            }
+                            switch result {
+                            case .success:
+                                self.finish(
+                                    .confirmed,
+                                    getController: getController,
+                                    animated: true,
+                                    animateOut: animateOut
+                                )
+                            case .failure:
+                                self.isConfirming = false
+                                self.updated(transition: .easeInOut(duration: 0.2))
+                                guard let controller = getController() else {
+                                    return
+                                }
+                                //TODO:localize
+                                let errorText = "Unable to send this transaction. Please try again."
+                                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                                controller.present(textAlertController(
+                                    context: component.context,
+                                    title: nil,
+                                    text: errorText,
+                                    actions: [
+                                        TextAlertAction(
+                                            type: .defaultAction,
+                                            title: presentationData.strings.Common_OK,
+                                            action: {}
+                                        )
+                                    ]
+                                ), in: .window(.root))
+                            }
+                        }
+                    })
+                }
+            })
         }
     }
 
     func makeState() -> State {
-        return State()
+        return State(walletContext: self.walletContext)
     }
 
     static var body: Body {
-        let sheet = Child(SheetComponent<EnvironmentType>.self)
+        let sheet = Child(ResizableSheetComponent<EnvironmentType>.self)
         let animateOut = StoredActionSlot(Action<Void>.self)
-        let sheetExternalState = SheetComponent<EnvironmentType>.ExternalState()
 
         return { context in
+            let component = context.component
+            let componentState = context.state
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
-            let componentState = context.state
+            let theme = environment.theme.withModalBlocksBackground()
 
-            let sheet = sheet.update(
-                component: SheetComponent<EnvironmentType>(
-                    content: AnyComponent<EnvironmentType>(WalletTransferSheetContent(
-                        context: context.component.context,
-                        walletContext: context.component.walletContext,
-                        request: context.component.request,
-                        confirm: context.component.confirm,
-                        updateIsBusy: { [weak componentState] value in
-                            componentState?.updateIsBusy(value)
-                        },
-                        animateOut: animateOut,
-                        getController: controller
+            let dismiss: (Bool) -> Void = { [weak componentState] animated in
+                componentState?.finish(
+                    .cancelled,
+                    getController: controller,
+                    animated: animated,
+                    animateOut: animated ? animateOut : nil
+                )
+            }
+
+            let bottomInsets = ContainerViewLayout.concentricInsets(
+                bottomInset: environment.safeInsets.bottom,
+                innerDiameter: 52.0,
+                sideInset: 30.0
+            )
+            let contentBottomInset = bottomInsets.bottom + 52.0 + 16.0
+
+            let popPreview: () -> Void = { [weak componentState] in
+                guard let componentState, componentState.isPreviewPresented else {
+                    return
+                }
+                componentState.isPreviewPresented = false
+                componentState.updated(transition: .spring(duration: 0.45))
+            }
+
+            var navigationItems: [AnyComponentWithIdentity<EnvironmentType>] = [
+                AnyComponentWithIdentity(
+                    id: "transfer",
+                    component: AnyComponent(WalletTransferSheetContent(
+                        request: component.request,
+                        walletState: componentState.walletState,
+                        bottomInset: contentBottomInset,
+                        infoPressed: { [weak componentState] in
+                            guard let componentState, !componentState.isPreviewPresented else {
+                                return
+                            }
+                            componentState.isPreviewPresented = true
+                            componentState.updated(transition: .spring(duration: 0.45))
+                        }
+                    ))
+                )
+            ]
+            if componentState.isPreviewPresented {
+                navigationItems.append(AnyComponentWithIdentity(
+                    id: "preview",
+                    component: AnyComponent(WalletTransferPreviewComponent(
+                        context: component.context,
+                        request: component.request,
+                        walletState: componentState.walletState,
+                        bottomInset: contentBottomInset
+                    ))
+                ))
+            }
+
+            let titleItem: AnyComponent<Empty>?
+            let rightItem: AnyComponent<Empty>?
+            if componentState.isPreviewPresented {
+                titleItem = AnyComponent(VStack<Empty>([
+                    AnyComponentWithIdentity(
+                        id: "title",
+                        component: AnyComponent(Text(
+                            text: "Confirm Action",
+                            font: Font.semibold(17.0),
+                            color: theme.actionSheet.primaryTextColor
+                        ))
+                    ),
+                    AnyComponentWithIdentity(
+                        id: "domain",
+                        component: AnyComponent(Text(
+                            text: component.request.domain,
+                            font: Font.regular(13.0),
+                            color: theme.actionSheet.secondaryTextColor
+                        ))
+                    )
+                ], spacing: 0.0))
+                rightItem = AnyComponent(WalletTransferNavigationAppIconComponent(
+                    applicationName: component.request.applicationName,
+                    iconUrl: component.request.iconUrl
+                ))
+            } else {
+                titleItem = nil
+                rightItem = nil
+            }
+
+            let sheetComponent = sheet.update(
+                component: ResizableSheetComponent<EnvironmentType>(
+                    content: AnyComponent<EnvironmentType>(NavigationStackComponent(
+                        items: navigationItems,
+                        clipContent: true,
+                        requestPop: popPreview
                     )),
-                    style: .glass,
-                    backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
-                    followContentSizeChanges: true,
+                    titleItem: titleItem,
+                    leftItem: AnyComponent(GlassBarButtonComponent(
+                        size: CGSize(width: 44.0, height: 44.0),
+                        backgroundColor: nil,
+                        isDark: theme.overallDarkAppearance,
+                        state: .glass,
+                        component: AnyComponentWithIdentity(
+                            id: componentState.isPreviewPresented ? "back" : "close",
+                            component: AnyComponent(BundleIconComponent(
+                                name: componentState.isPreviewPresented ? "Navigation/Back" : "Navigation/Close",
+                                tintColor: theme.chat.inputPanel.panelControlColor
+                            ))
+                        ),
+                        action: { [weak componentState] _ in
+                            guard let componentState else {
+                                return
+                            }
+                            if componentState.isPreviewPresented {
+                                popPreview()
+                            } else if !componentState.isBusy {
+                                dismiss(true)
+                            }
+                        }
+                    )),
+                    rightItem: rightItem,
+                    hasTopEdgeEffect: false,
+                    bottomItem: AnyComponent(WalletTransferActionsComponent(
+                        theme: theme,
+                        isBusy: componentState.isBusy,
+                        isConfirming: componentState.isConfirming,
+                        cancel: {
+                            dismiss(true)
+                        },
+                        confirm: { [weak componentState] in
+                            componentState?.confirm(
+                                component: component,
+                                getController: controller,
+                                animateOut: animateOut
+                            )
+                        }
+                    )),
+                    backgroundColor: .color(theme.list.plainBackgroundColor),
                     clipsContent: true,
-                    isScrollEnabled: !componentState.isBusy,
-                    autoAnimateOut: false,
-                    externalState: sheetExternalState,
-                    animateOut: animateOut,
-                    onPan: {
-                    },
-                    willDismiss: {
-                    }
+                    animateOut: animateOut
                 ),
                 environment: {
                     environment
-                    SheetComponentEnvironment(
+                    ResizableSheetComponentEnvironment(
+                        theme: theme,
+                        statusBarHeight: environment.statusBarHeight,
+                        safeInsets: environment.safeInsets,
+                        inputHeight: 0.0,
                         metrics: environment.metrics,
                         deviceMetrics: environment.deviceMetrics,
                         isDisplaying: environment.value.isVisible,
                         isCentered: environment.metrics.widthClass == .regular,
-                        hasInputHeight: !environment.inputHeight.isZero,
+                        screenSize: context.availableSize,
                         regularMetricsSize: CGSize(width: 430.0, height: 900.0),
                         dismiss: { animated in
-                            guard !componentState.isBusy else {
-                                return
-                            }
-                            if let controller = controller() as? WalletTransferScreen {
-                                controller.finish(.cancelled, animated: animated, animateOut: animateOut)
-                            }
+                            dismiss(animated)
                         }
                     )
                 },
                 availableSize: context.availableSize,
                 transition: context.transition
             )
-            context.add(sheet.position(CGPoint(
+            context.add(sheetComponent.position(CGPoint(
                 x: context.availableSize.width / 2.0,
                 y: context.availableSize.height / 2.0
             )))
 
-            if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
-                var sideInset: CGFloat = 0.0
-                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
-                if case .regular = environment.metrics.widthClass {
-                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
-                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
-                }
-                let layout = ContainerViewLayout(
-                    size: context.availableSize,
-                    metrics: environment.metrics,
-                    deviceMetrics: environment.deviceMetrics,
-                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
-                    safeInsets: UIEdgeInsets(
-                        top: 0.0,
-                        left: max(sideInset, environment.safeInsets.left),
-                        bottom: 0.0,
-                        right: max(sideInset, environment.safeInsets.right)
-                    ),
-                    additionalInsets: .zero,
-                    statusBarHeight: environment.statusBarHeight,
-                    inputHeight: nil,
-                    inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
-                )
-                controller.presentationContext.containerLayoutUpdated(
-                    layout,
-                    transition: context.transition.containedViewLayoutTransition
-                )
-            }
             return context.availableSize
         }
     }
@@ -587,7 +780,8 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
         )
 
         self.navigationPresentation = .flatModal
-        self.automaticallyControlPresentationContextLayout = false
+        
+        self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
     }
 
     required public init(coder aDecoder: NSCoder) {
@@ -638,8 +832,8 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
 
     public func dismissAnimated() {
         if let view = self.node.hostView.findTaggedView(
-            tag: SheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
-        ) as? SheetComponent<ViewControllerComponentContainer.Environment>.View {
+            tag: ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
+        ) as? ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View {
             view.dismissAnimated()
         } else {
             self.finish(.cancelled, animated: false, animateOut: nil)

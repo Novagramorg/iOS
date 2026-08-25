@@ -42,7 +42,7 @@ extension ChatControllerImpl {
                 }
             }
             
-            guard let topMessage = messages.first else {
+            guard let topMessage = updatedMessages.first else {
                 return
             }
 

@@ -744,9 +744,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
 
             self.placeholderNode.updateAbsoluteRect(CGRect(origin: CGPoint(x: rect.minX + self.placeholderNode.frame.minX, y: rect.minY + self.placeholderNode.frame.minY), size: self.placeholderNode.frame.size), within: containerSize)
             
-            if let backgroundNode = self.backgroundNode {
-                backgroundNode.update(rect: CGRect(origin: CGPoint(x: rect.minX + self.placeholderNode.frame.minX, y: rect.minY + self.placeholderNode.frame.minY), size: self.placeholderNode.frame.size), within: containerSize, transition: .immediate)
-            }
             
             if let threadInfoNode = self.threadInfoNode {
                 var threadInfoNodeFrame = threadInfoNode.frame
@@ -780,23 +777,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 reactionButtonsNode.update(rect: rect, within: containerSize, transition: .immediate)
             }
                         
-            if let replyBackgroundContent = self.replyBackgroundContent {
-                var replyBackgroundContentFrame = replyBackgroundContent.frame
-                replyBackgroundContentFrame.origin.x += rect.minX
-                replyBackgroundContentFrame.origin.y += rect.minY
-                
-                replyBackgroundContent.update(rect: rect, within: containerSize, transition: .immediate)
-            }
-        }
-    }
-    
-    override public func applyAbsoluteOffset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double) {
-        if let backgroundNode = self.backgroundNode {
-            backgroundNode.offset(value: value, animationCurve: animationCurve, duration: duration)
-        }
-        
-        if let reactionButtonsNode = self.reactionButtonsNode {
-            reactionButtonsNode.offset(value: value, animationCurve: animationCurve, duration: duration)
         }
     }
     
@@ -1021,6 +1001,9 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             if let subject = item.associatedData.subject, case .messageOptions = subject {
                 needsShareButton = false
             }
+            if Namespaces.Message.allEphemeral.contains(item.message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(item.message.id.namespace) {
+                needsShareButton = false
+            }
             
             var isEmoji = false
             if let _ = telegramDice {
@@ -1217,9 +1200,9 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             var replyQuote: (quote: EngineMessageReplyQuote, isQuote: Bool)?
             var replyInnerSubject: EngineMessageReplyInnerSubject?
             var replyStory: StoryId?
+            var inlineBotNameString: String?
             for attribute in item.message.attributes {
                 if let attribute = attribute as? InlineBotMessageAttribute {
-                    var inlineBotNameString: String?
                     if let peerId = attribute.peerId, let bot = item.message.peers[peerId] as? TelegramUser {
                         inlineBotNameString = bot.addressName
                     } else {
@@ -1352,7 +1335,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     }
                 }
                 let availableWidth = max(60.0, availableContentWidth + 6.0)
-                forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
+                forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType == nil ? inlineBotNameString : nil, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
             }
             
             var needsReplyBackground = false
@@ -1866,23 +1849,11 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     if let backgroundContent = strongSelf.replyBackgroundContent, let replyBackgroundFrame {
                         backgroundContent.cornerRadius = 4.0
                         backgroundContent.frame = replyBackgroundFrame
-                        if let (rect, containerSize) = strongSelf.absoluteRect {
-                            var backgroundFrame = backgroundContent.frame
-                            backgroundFrame.origin.x += rect.minX
-                            backgroundFrame.origin.y += rect.minY
-                            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                        }
                     }
                     
                     if let backgroundContent = strongSelf.forwardBackgroundContent, let forwardBackgroundFrame {
                         backgroundContent.cornerRadius = 4.0
                         backgroundContent.frame = forwardBackgroundFrame
-                        if let (rect, containerSize) = strongSelf.absoluteRect {
-                            var backgroundFrame = backgroundContent.frame
-                            backgroundFrame.origin.x += rect.minX
-                            backgroundFrame.origin.y += rect.minY
-                            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-                        }
                     }
                     
                     let panelsAlpha: CGFloat = item.controllerInteraction.selectionState == nil ? 1.0 : 0.0

@@ -5,8 +5,20 @@ import UIKit
 /// virtual-content trick and the re-entrancy guard live HERE — `UIScrollView` needs a finite
 /// `contentSize`; a future physics engine implements `ScrollEngine` without either.
 final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
+    // Diagnostic only (FlightTrace-gated): the real scroll view's release velocity and opening frames.
+    private var uikitOpeningLink: CADisplayLink?
+    private var uikitOpeningSamples = 0
+    private var uikitLaunchOffset: CGFloat = 0
+    private var uikitLaunchWall: CFTimeInterval = 0
+    /// The 10,000,000pt virtual canvas is recentred mid-scroll, which moves the offset without moving
+    /// the content — subtract it or an opening sample reads as a five-million-point "frame".
+    private var uikitShiftAccum: CGFloat = 0
     let scrollView: UIScrollView
     var onScroll: ((CGFloat) -> Void)?
+
+    /// Never fires: UIScrollView advances `bounds.origin` on the main thread every frame, so a
+    /// per-frame consumer is already in lockstep with the content.
+    var onFlightChanged: ((ScrollFlight?) -> Void)?
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
 
@@ -65,6 +77,7 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
 
     func applyShift(_ dy: CGFloat) {
         isProgrammatic = true
+        uikitShiftAccum += dy       // diagnostic only: canvas rebases move the offset, not the content
         scrollView.bounds.origin.y += dy
         isProgrammatic = false
     }
@@ -99,6 +112,45 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         onWillBeginDragging?()
+    }
+
+    /// UIKit hands us ITS OWN release velocity here, in points per millisecond — the same unit and the
+    /// same quantity `ReleaseDecision` computes — plus the landing it projects from it. That makes this
+    /// the one place the replica can be compared against the real thing live, rather than inferred: if
+    /// our velocity is systematically lower for a comparable flick, a slower initial speed follows
+    /// directly, and no amount of trajectory instrumentation would show it because our path would be
+    /// self-consistently correct for the velocity we captured.
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        guard FlightTrace.isEnabled else { return }
+        FlightTrace.shared.begin("UISCROLLVIEW flight")
+        let from = scrollView.contentOffset.y
+        FlightTrace.shared.log(String(
+            format: "launch v=%.6f offset=%.1f target=%.1f travel=%.1f  (UIKit's own numbers)",
+            velocity.y, from, targetContentOffset.pointee.y, targetContentOffset.pointee.y - from))
+        uikitLaunchOffset = from
+        uikitShiftAccum = 0
+        uikitOpeningSamples = 0
+        uikitLaunchWall = CACurrentMediaTime()
+        uikitOpeningLink?.invalidate()
+        let link = CADisplayLink(target: self, selector: #selector(uikitOpeningTick))
+        link.add(to: .main, forMode: .common)
+        uikitOpeningLink = link
+    }
+
+    /// Opening frames of a REAL UIScrollView deceleration, in the same shape as the physics engine's
+    /// so the two can be compared line for line.
+    @objc private func uikitOpeningTick() {
+        guard uikitOpeningSamples < 6 else {
+            uikitOpeningLink?.invalidate(); uikitOpeningLink = nil
+            FlightTrace.shared.flush()
+            return
+        }
+        uikitOpeningSamples += 1
+        FlightTrace.shared.log(String(format: "OPENING uikit(contentOffset) #%d t=%.2fms moved=%.1f",
+                                      uikitOpeningSamples,
+                                      (CACurrentMediaTime() - uikitLaunchWall) * 1000,
+                                      scrollView.contentOffset.y - uikitShiftAccum - uikitLaunchOffset))
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {

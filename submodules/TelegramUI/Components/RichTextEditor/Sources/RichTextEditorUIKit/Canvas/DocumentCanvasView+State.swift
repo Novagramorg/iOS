@@ -61,6 +61,11 @@ extension DocumentCanvasView {
             // "in table" for toolbar purposes (so table-structural commands can enable).
             hasSelection: selFrom < selTo,
             isInTable: isInsideTable(head) || isInsideTable(anchor),
+            // Read the box's STORED flag, not `currentBlock()` — that reconstructs the entire
+            // TableBlock (every row, cell and cell block stack), and `currentState()` runs on every
+            // toolbar refresh, i.e. every keystroke typed inside a table.
+            isTableCompact: activeTable()?.box.isCompact ?? false,
+            isTableBordered: activeTable()?.box.isBordered ?? true,
             selectionIsTextOnly: selectionIsTextOnly(),
             canUndo: effectiveUndoManager?.canUndo ?? false,
             canRedo: effectiveUndoManager?.canRedo ?? false,

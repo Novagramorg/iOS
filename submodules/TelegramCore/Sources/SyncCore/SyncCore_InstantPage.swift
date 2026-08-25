@@ -81,7 +81,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
     /// A generic file. Its own case rather than a widened `.audio`, which renders a music player.
     case document(id: MediaId, caption: InstantPageCaption)
     /// A row of inline buttons, laid out across the width (max 8 per row per the schema).
-    case buttonRow(buttons: [InstantPageButton])
+    case buttonRow(alignment: InstantPageButtonRowAlignment, buttons: [InstantPageButton])
     case cover(InstantPageBlock)
     case webEmbed(url: String?, html: String?, dimensions: PixelDimensions?, caption: InstantPageCaption, stretchToWidth: Bool, allowScrolling: Bool, coverId: MediaId?)
     case postEmbed(url: String, webpageId: MediaId?, avatarId: MediaId?, author: String, date: Int32, blocks: [InstantPageBlock], caption: InstantPageCaption)
@@ -90,7 +90,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
     case channelBanner(TelegramChannel?)
     case kicker(RichText)
     case thinking(RichText)
-    case table(title: RichText, rows: [InstantPageTableRow], bordered: Bool, striped: Bool)
+    case table(title: RichText, rows: [InstantPageTableRow], bordered: Bool, striped: Bool, compact: Bool)
     case details(title: RichText, blocks: [InstantPageBlock], expanded: Bool)
     case relatedArticles(title: RichText, articles: [InstantPageRelatedArticle])
     case map(latitude: Double, longitude: Double, zoom: Int32, dimensions: PixelDimensions, caption: InstantPageCaption)
@@ -178,13 +178,16 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             case InstantPageBlockType.document.rawValue:
                 self = .document(id: MediaId(namespace: decoder.decodeInt32ForKey("i.n", orElse: 0), id: decoder.decodeInt64ForKey("i.i", orElse: 0)), caption: decodeCaption(decoder))
             case InstantPageBlockType.buttonRow.rawValue:
-                self = .buttonRow(buttons: decoder.decodeObjectArrayWithDecoderForKey("btns") as [InstantPageButton])
+                self = .buttonRow(
+                    alignment: InstantPageButtonRowAlignment(rawValue: decoder.decodeInt32ForKey("al", orElse: 0)) ?? .justify,
+                    buttons: decoder.decodeObjectArrayWithDecoderForKey("btns") as [InstantPageButton]
+                )
             case InstantPageBlockType.kicker.rawValue:
                 self = .kicker(decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case InstantPageBlockType.thinking.rawValue:
                 self = .thinking(decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case InstantPageBlockType.table.rawValue:
-                self = .table(title: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, rows: decoder.decodeObjectArrayWithDecoderForKey("r"), bordered: decoder.decodeInt32ForKey("b", orElse: 0) != 0, striped: decoder.decodeInt32ForKey("s", orElse: 0) != 0)
+                self = .table(title: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, rows: decoder.decodeObjectArrayWithDecoderForKey("r"), bordered: decoder.decodeInt32ForKey("b", orElse: 0) != 0, striped: decoder.decodeInt32ForKey("s", orElse: 0) != 0, compact: decoder.decodeInt32ForKey("c", orElse: 0) != 0)
             case InstantPageBlockType.details.rawValue:
                 self = .details(title: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, blocks: decoder.decodeObjectArrayWithDecoderForKey("b"), expanded: decoder.decodeInt32ForKey("o", orElse: 0) != 0)
             case InstantPageBlockType.relatedArticles.rawValue:
@@ -361,8 +364,9 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 encoder.encodeInt32(id.namespace, forKey: "i.n")
                 encoder.encodeInt64(id.id, forKey: "i.i")
                 encoder.encodeObject(caption, forKey: "mc")
-            case let .buttonRow(buttons):
+            case let .buttonRow(alignment, buttons):
                 encoder.encodeInt32(InstantPageBlockType.buttonRow.rawValue, forKey: "r")
+                encoder.encodeInt32(alignment.rawValue, forKey: "al")
                 encoder.encodeObjectArray(buttons, forKey: "btns")
             case let .kicker(text):
                 encoder.encodeInt32(InstantPageBlockType.kicker.rawValue, forKey: "r")
@@ -370,12 +374,13 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             case let .thinking(text):
                 encoder.encodeInt32(InstantPageBlockType.thinking.rawValue, forKey: "r")
                 encoder.encodeObject(text, forKey: "t")
-            case let .table(title, rows, bordered, striped):
+            case let .table(title, rows, bordered, striped, compact):
                 encoder.encodeInt32(InstantPageBlockType.table.rawValue, forKey: "r")
                 encoder.encodeObject(title, forKey: "t")
                 encoder.encodeObjectArray(rows, forKey: "r")
                 encoder.encodeInt32(bordered ? 1 : 0, forKey: "b")
                 encoder.encodeInt32(striped ? 1 : 0, forKey: "s")
+                encoder.encodeInt32(compact ? 1 : 0, forKey: "c")
             case let .details(title, blocks, expanded):
                 encoder.encodeInt32(InstantPageBlockType.details.rawValue, forKey: "r")
                 encoder.encodeObject(title, forKey: "t")
@@ -482,10 +487,14 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
-            case let .blockQuote(lhsBlocks, lhsCaption, _):
-                // `collapsed` is intentionally excluded from equality: no layout/render code reads it, so including
-                // it would only add spurious inequality (redraw/diff churn). Revisit alongside collapse rendering.
-                if case let .blockQuote(rhsBlocks, rhsCaption, _) = rhs, lhsBlocks == rhsBlocks, lhsCaption == rhsCaption {
+            case let .blockQuote(lhsBlocks, lhsCaption, lhsCollapsed):
+                // `collapsed` is part of equality now that `pageBlockBlockquote` carries it on the wire.
+                // While it was wire-invisible, excluding it only avoided diff churn; now excluding it would
+                // pin a stale collapse state whenever it is the only thing that changed. The API layer
+                // normalizes every cloud-received quote to a non-nil value, so a locally-composed `false`
+                // matches the server echo on the pending→confirmed swap. `nil` survives only on rows
+                // written before the field existed, which compare unequal once — a one-time re-render.
+                if case let .blockQuote(rhsBlocks, rhsCaption, rhsCollapsed) = rhs, lhsBlocks == rhsBlocks, lhsCaption == rhsCaption, lhsCollapsed == rhsCollapsed {
                     return true
                 } else {
                     return false
@@ -563,8 +572,8 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
-            case let .buttonRow(buttons):
-                if case .buttonRow(buttons) = rhs {
+            case let .buttonRow(alignment, buttons):
+                if case .buttonRow(alignment, buttons) = rhs {
                     return true
                 } else {
                     return false
@@ -581,8 +590,8 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
-            case let .table(lhsTitle, lhsRows, lhsBordered, lhsStriped):
-                if case let .table(rhsTitle, rhsRows, rhsBordered, rhsStriped) = rhs, lhsTitle == rhsTitle, lhsRows == rhsRows, lhsBordered == rhsBordered, lhsStriped == rhsStriped {
+            case let .table(lhsTitle, lhsRows, lhsBordered, lhsStriped, lhsCompact):
+                if case let .table(rhsTitle, rhsRows, rhsBordered, rhsStriped, rhsCompact) = rhs, lhsTitle == rhsTitle, lhsRows == rhsRows, lhsBordered == rhsBordered, lhsStriped == rhsStriped, lhsCompact == rhsCompact {
                     return true
                 } else {
                     return false
@@ -679,13 +688,15 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 throw FlatBuffersError.missingRequiredField()
             }
             let caption = try RichText(flatBuffersObject: value.caption)
+            // Absent on payloads written before the field existed, which is exactly the model's `nil`.
+            let collapsed = value.collapsed?.value
             if value.blocksCount > 0 {
                 let blocks = try (0 ..< value.blocksCount).map { try InstantPageBlock(flatBuffersObject: value.blocks(at: $0)!) }
-                self = .blockQuote(blocks: blocks, caption: caption, collapsed: nil)
+                self = .blockQuote(blocks: blocks, caption: caption, collapsed: collapsed)
             } else if let legacyText = value.text {
-                self = .blockQuote(blocks: [.paragraph(try RichText(flatBuffersObject: legacyText))], caption: caption, collapsed: nil)
+                self = .blockQuote(blocks: [.paragraph(try RichText(flatBuffersObject: legacyText))], caption: caption, collapsed: collapsed)
             } else {
-                self = .blockQuote(blocks: [], caption: caption, collapsed: nil)
+                self = .blockQuote(blocks: [], caption: caption, collapsed: collapsed)
             }
         case .instantpageblockPullquote:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_PullQuote.self) else {
@@ -716,7 +727,10 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_ButtonRow.self) else {
                 throw FlatBuffersError.missingRequiredField()
             }
-            self = .buttonRow(buttons: try (0 ..< value.buttonsCount).map { try InstantPageButton(flatBuffersObject: value.buttons(at: $0)!) })
+            self = .buttonRow(
+                alignment: InstantPageButtonRowAlignment(rawValue: value.alignment) ?? .justify,
+                buttons: try (0 ..< value.buttonsCount).map { try InstantPageButton(flatBuffersObject: value.buttons(at: $0)!) }
+            )
         case .instantpageblockCover:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Cover.self) else {
                 throw FlatBuffersError.missingRequiredField()
@@ -762,7 +776,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Table.self) else {
                 throw FlatBuffersError.missingRequiredField()
             }
-            self = .table(title: try RichText(flatBuffersObject: value.title), rows: try (0 ..< value.rowsCount).map { try InstantPageTableRow(flatBuffersObject: value.rows(at: $0)!) }, bordered: value.bordered, striped: value.striped)
+            self = .table(title: try RichText(flatBuffersObject: value.title), rows: try (0 ..< value.rowsCount).map { try InstantPageTableRow(flatBuffersObject: value.rows(at: $0)!) }, bordered: value.bordered, striped: value.striped, compact: value.compact)
         case .instantpageblockDetails:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_Details.self) else {
                 throw FlatBuffersError.missingRequiredField()
@@ -876,7 +890,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_List.addVectorOf(items: itemsOffset, &builder)
             TelegramCore_InstantPageBlock_List.add(ordered: ordered, &builder)
             offset = TelegramCore_InstantPageBlock_List.endInstantPageBlock_List(&builder, start: start)
-        case let .blockQuote(blocks, caption, _):
+        case let .blockQuote(blocks, caption, collapsed):
             valueType = .instantpageblockBlockquote
             let blocksOffsets = blocks.map { $0.encodeToFlatBuffers(builder: &builder) }
             let blocksOffset = builder.createVector(ofOffsets: blocksOffsets, len: blocksOffsets.count)
@@ -884,6 +898,9 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             let start = TelegramCore_InstantPageBlock_BlockQuote.startInstantPageBlock_BlockQuote(&builder)
             TelegramCore_InstantPageBlock_BlockQuote.addVectorOf(blocks: blocksOffset, &builder)
             TelegramCore_InstantPageBlock_BlockQuote.add(caption: captionOffset, &builder)
+            if let collapsed = collapsed {
+                TelegramCore_InstantPageBlock_BlockQuote.add(collapsed: TelegramCore_OptionalBool(value: collapsed), &builder)
+            }
             offset = TelegramCore_InstantPageBlock_BlockQuote.endInstantPageBlock_BlockQuote(&builder, start: start)
         case let .pullQuote(text, caption):
             valueType = .instantpageblockPullquote
@@ -932,12 +949,13 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_Document.add(id: id.asFlatBuffersObject(), &builder)
             TelegramCore_InstantPageBlock_Document.add(caption: captionOffset, &builder)
             offset = TelegramCore_InstantPageBlock_Document.endInstantPageBlock_Document(&builder, start: start)
-        case let .buttonRow(buttons):
+        case let .buttonRow(alignment, buttons):
             valueType = .instantpageblockButtonrow
             let buttonOffsets = buttons.map { $0.encodeToFlatBuffers(builder: &builder) }
             let buttonsOffset = builder.createVector(ofOffsets: buttonOffsets)
             let start = TelegramCore_InstantPageBlock_ButtonRow.startInstantPageBlock_ButtonRow(&builder)
             TelegramCore_InstantPageBlock_ButtonRow.addVectorOf(buttons: buttonsOffset, &builder)
+            TelegramCore_InstantPageBlock_ButtonRow.add(alignment: alignment.rawValue, &builder)
             offset = TelegramCore_InstantPageBlock_ButtonRow.endInstantPageBlock_ButtonRow(&builder, start: start)
         case let .cover(block):
             valueType = .instantpageblockCover
@@ -1025,7 +1043,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             let start = TelegramCore_InstantPageBlock_Thinking.startInstantPageBlock_Thinking(&builder)
             TelegramCore_InstantPageBlock_Thinking.add(text: textOffset, &builder)
             offset = TelegramCore_InstantPageBlock_Thinking.endInstantPageBlock_Thinking(&builder, start: start)
-        case let .table(title, rows, bordered, striped):
+        case let .table(title, rows, bordered, striped, compact):
             valueType = .instantpageblockTable
             let titleOffset = title.encodeToFlatBuffers(builder: &builder)
             let rowsOffsets = rows.map { $0.encodeToFlatBuffers(builder: &builder) }
@@ -1035,6 +1053,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_Table.addVectorOf(rows: rowsOffset, &builder)
             TelegramCore_InstantPageBlock_Table.add(bordered: bordered, &builder)
             TelegramCore_InstantPageBlock_Table.add(striped: striped, &builder)
+            TelegramCore_InstantPageBlock_Table.add(compact: compact, &builder)
             offset = TelegramCore_InstantPageBlock_Table.endInstantPageBlock_Table(&builder, start: start)
         case let .details(title, blocks, expanded):
             valueType = .instantpageblockDetails
@@ -1279,6 +1298,19 @@ public indirect enum InstantPageListItem: PostboxCoding, Equatable {
         TelegramCore_InstantPageListItem.add(value: offset, &builder)
         return TelegramCore_InstantPageListItem.endInstantPageListItem(&builder, start: start)
     }
+}
+
+/// Horizontal placement of a `pageBlockButtonRow`'s pills, from the block's three schema flag bits
+/// (`align_left:flags.0`, `align_center:flags.1`, `align_right:flags.2`).
+///
+/// `justify == 0` is load-bearing. A page cached before this field existed decodes as 0 in both
+/// codecs, and 0 is exactly the stretch-to-fill layout those pages were rendered with — so honouring
+/// the bits needs no cache migration.
+public enum InstantPageButtonRowAlignment: Int32 {
+    case justify = 0
+    case left = 1
+    case center = 2
+    case right = 3
 }
 
 public enum TableHorizontalAlignment: Int32 {

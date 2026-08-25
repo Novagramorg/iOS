@@ -2,6 +2,10 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
+import AnimatedTextComponent
+import PlainButtonComponent
+import BundleIconComponent
+import MultilineTextComponent
 import TelegramPresentationData
 import TelegramStringFormatting
 import WalletContext
@@ -12,19 +16,22 @@ public final class WalletTransferCardComponent: Component {
     public let fiatCurrency: WalletContext.FiatCurrency
     public let fiatRate: WalletContext.FiatRate?
     public let dateTimeFormat: PresentationDateTimeFormat
+    public let infoPressed: () -> Void
 
     public init(
         amount: Int64,
         recipient: String,
         fiatCurrency: WalletContext.FiatCurrency,
         fiatRate: WalletContext.FiatRate?,
-        dateTimeFormat: PresentationDateTimeFormat
+        dateTimeFormat: PresentationDateTimeFormat,
+        infoPressed: @escaping () -> Void = {}
     ) {
         self.amount = amount
         self.recipient = recipient
         self.fiatCurrency = fiatCurrency
         self.fiatRate = fiatRate
         self.dateTimeFormat = dateTimeFormat
+        self.infoPressed = infoPressed
     }
 
     public static func ==(lhs: WalletTransferCardComponent, rhs: WalletTransferCardComponent) -> Bool {
@@ -37,50 +44,38 @@ public final class WalletTransferCardComponent: Component {
 
     public final class View: UIView {
         private let backgroundView = WalletCardBackgroundView()
-        private let amountLabel = UILabel()
-        private let fiatLabel = UILabel()
-        private let addressLabel = UILabel()
-        private let ribbonView = UIView()
-        private let ribbonLabel = UILabel()
+        private let integralAmount = ComponentView<Empty>()
+        private let fractionalAmount = ComponentView<Empty>()
+        private let currency = ComponentView<Empty>()
+        private let secondaryAmount = ComponentView<Empty>()
+        private let address = ComponentView<Empty>()
+        private let infoButton = ComponentView<Empty>()
+
+        private var component: WalletTransferCardComponent?
 
         override public init(frame: CGRect) {
             super.init(frame: frame)
 
-            self.backgroundView.clipsToBounds = true
-            self.backgroundView.layer.cornerRadius = 20.0
+            self.addSubview(self.backgroundView)
+
+            self.clipsToBounds = true
+            self.layer.cornerRadius = 20.0
             if #available(iOS 13.0, *) {
                 self.layer.cornerCurve = .continuous
             }
-
-            self.amountLabel.textColor = .white
-            self.amountLabel.adjustsFontSizeToFitWidth = true
-            self.amountLabel.minimumScaleFactor = 0.65
-            self.fiatLabel.textColor = UIColor(rgb: 0x6ddcff)
-            self.addressLabel.textColor = .white
-            self.addressLabel.numberOfLines = 2
-            self.addressLabel.adjustsFontSizeToFitWidth = true
-            self.addressLabel.minimumScaleFactor = 0.75
-
-            self.ribbonView.backgroundColor = UIColor(rgb: 0x087be5)
-            self.ribbonLabel.textColor = .white
-            self.ribbonLabel.textAlignment = .center
-            self.ribbonLabel.font = Font.semibold(11.0)
-            //TODO:localize
-            self.ribbonLabel.text = "TRANSFER"
-            self.ribbonView.addSubview(self.ribbonLabel)
-
-            self.addSubview(self.backgroundView)
-            self.addSubview(self.amountLabel)
-            self.addSubview(self.fiatLabel)
-            self.addSubview(self.addressLabel)
-            //self.addSubview(self.ribbonView)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func update(component: WalletTransferCardComponent, availableSize: CGSize) -> CGSize {
+        func update(
+            component: WalletTransferCardComponent,
+            availableSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            self.component = component
+
             let referenceSize = CGSize(width: 361.0, height: 220.0)
             let width = max(1.0, availableSize.width)
             let scale = width / referenceSize.width
@@ -88,79 +83,260 @@ public final class WalletTransferCardComponent: Component {
 
             self.layer.cornerRadius = 20.0 * width / 336.0
 
-            let amountText = formatTonAmountText(
+            let formattedAmount = formatTonAmountText(
                 component.amount,
                 dateTimeFormat: component.dateTimeFormat,
                 maxDecimalPositions: 9
             )
-            //TODO:localize
-            self.amountLabel.attributedText = NSAttributedString(
-                string: "−\(amountText) GRAM",
-                font: Font.with(
-                    size: 28.0 * scale,
-                    design: .round,
-                    weight: .semibold,
-                    traits: .monospacedNumbers
-                ),
-                textColor: .white
+
+            let amountIntegralText: String
+            let amountFractionalText: String
+            if component.amount == 0 {
+                amountIntegralText = formattedAmount
+                amountFractionalText = ""
+            } else if let decimalRange = formattedAmount.range(of: component.dateTimeFormat.decimalSeparator) {
+                amountIntegralText = String(formattedAmount[..<decimalRange.lowerBound])
+                var fractionalDigits = String(formattedAmount[decimalRange.upperBound...])
+                while fractionalDigits.count < 2 {
+                    fractionalDigits.append("0")
+                }
+                amountFractionalText = component.dateTimeFormat.decimalSeparator + fractionalDigits
+            } else {
+                amountIntegralText = formattedAmount
+                amountFractionalText = component.dateTimeFormat.decimalSeparator + "00"
+            }
+
+            let mainColor = UIColor.white
+            let secondaryColor = UIColor(rgb: 0x6ddcff)
+            let integralSize = self.integralAmount.update(
+                transition: transition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: Font.with(
+                        size: 22.0,
+                        design: .round,
+                        weight: .semibold,
+                        traits: .monospacedNumbers
+                    ),
+                    color: mainColor,
+                    items: [
+                        AnimatedTextComponent.Item(
+                            id: "gramIcon",
+                            content: .icon("Wallet/CardGram", tint: false, offset: CGPoint(x: 0.0, y: -1.0))
+                        ),
+                        AnimatedTextComponent.Item(
+                            id: "gramIntegral",
+                            content: .text("−\(amountIntegralText)")
+                        )
+                    ],
+                    noDelay: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: width, height: 100.0)
+            )
+            let fractionalSize = self.fractionalAmount.update(
+                transition: transition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: Font.with(
+                        size: 18.0,
+                        design: .round,
+                        weight: .semibold,
+                        traits: .monospacedNumbers
+                    ),
+                    color: mainColor,
+                    items: [
+                        AnimatedTextComponent.Item(id: "gramFraction", content: .text(amountFractionalText))
+                    ],
+                    noDelay: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: width, height: 100.0)
+            )
+            let currencySize = self.currency.update(
+                transition: transition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: Font.with(
+                        size: 22.0,
+                        design: .round,
+                        weight: .semibold
+                    ),
+                    color: secondaryColor,
+                    items: [
+                        AnimatedTextComponent.Item(id: "gramCurrency", content: .text("GRAM"))
+                    ],
+                    noDelay: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: width, height: 100.0)
             )
 
+            let mainCenterY = 94.0
+            let integralOriginY = floor(mainCenterY - integralSize.height * 0.5)
+            let integralBottomY = integralOriginY + integralSize.height
+            var mainOriginX = 20.0
+            if let integralView = self.integralAmount.view {
+                if integralView.superview == nil {
+                    self.addSubview(integralView)
+                }
+                transition.setFrame(
+                    view: integralView,
+                    frame: CGRect(
+                        origin: CGPoint(x: mainOriginX, y: integralOriginY),
+                        size: integralSize
+                    )
+                )
+            }
+            mainOriginX += integralSize.width
+            if !amountFractionalText.isEmpty {
+                mainOriginX += 1.0
+            }
+            if let fractionalView = self.fractionalAmount.view {
+                if fractionalView.superview == nil {
+                    self.addSubview(fractionalView)
+                }
+                transition.setFrame(
+                    view: fractionalView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: mainOriginX,
+                            y: floor(integralBottomY - fractionalSize.height - 2.0) - 1.0 - UIScreenPixel
+                        ),
+                        size: fractionalSize
+                    )
+                )
+            }
+            mainOriginX += fractionalSize.width
+            mainOriginX += 5.0
+            if let currencyView = self.currency.view {
+                if currencyView.superview == nil {
+                    self.addSubview(currencyView)
+                }
+                transition.setFrame(
+                    view: currencyView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: mainOriginX,
+                            y: floor(integralBottomY - currencySize.height - 2.0)
+                        ),
+                        size: currencySize
+                    )
+                )
+            }
+
+            let secondaryText: String
             if let fiatRate = component.fiatRate {
-                self.fiatLabel.text = formatTonFiatValue(
+                secondaryText = formatTonFiatValue(
                     component.amount,
                     divide: true,
                     rate: fiatRate.unitsPerGram,
                     currencySymbol: component.fiatCurrency.symbol,
-                    maxDecimalPositions: 2,
+                    maxDecimalPositions: component.amount == 0 ? 0 : 2,
                     dateTimeFormat: component.dateTimeFormat
                 )
             } else {
-                self.fiatLabel.text = nil
+                secondaryText = "—"
             }
-            self.fiatLabel.font = Font.with(
-                size: 14.0 * scale,
-                design: .round,
-                weight: .semibold,
-                traits: .monospacedNumbers
+            let secondarySize = self.secondaryAmount.update(
+                transition: transition,
+                component: AnyComponent(AnimatedTextComponent(
+                    font: Font.with(
+                        size: 14.0,
+                        design: .round,
+                        weight: .semibold,
+                        traits: .monospacedNumbers
+                    ),
+                    color: secondaryColor,
+                    items: [
+                        AnimatedTextComponent.Item(id: "secondaryAmount", content: .text(secondaryText))
+                    ],
+                    noDelay: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: width, height: 100.0)
             )
-            self.addressLabel.attributedText = NSAttributedString(
-                string: formattedWalletTransferAddress(component.recipient),
-                font: Font.with(size: 13.0 * scale, design: .monospace, weight: .semibold),
-                textColor: .white
-            )
+            if let secondaryView = self.secondaryAmount.view {
+                if secondaryView.superview == nil {
+                    self.addSubview(secondaryView)
+                }
+                transition.setFrame(
+                    view: secondaryView,
+                    frame: CGRect(
+                        origin: CGPoint(x: 24.0, y: 114.0),
+                        size: secondarySize
+                    )
+                )
+            }
 
-            let contentInset = 24.0 * scale
-            self.amountLabel.frame = CGRect(
-                x: contentInset,
-                y: 62.0 * scale,
-                width: width - contentInset * 2.0,
-                height: 38.0 * scale
+            let addressSize = self.address.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: formattedWalletTransferAddress(component.recipient),
+                        font: Font.with(size: 13.0 * scale, design: .monospace, weight: .semibold),
+                        textColor: .white
+                    )),
+                    maximumNumberOfLines: 2,
+                    lineSpacing: 0.1
+                )),
+                environment: {},
+                containerSize: CGSize(width: width - 48.0 * scale, height: 42.0 * scale)
             )
-            self.fiatLabel.frame = CGRect(
-                x: contentInset,
-                y: 104.0 * scale,
-                width: width - contentInset * 2.0,
-                height: 20.0 * scale
-            )
-            self.addressLabel.frame = CGRect(
-                x: contentInset,
-                y: 157.0 * scale,
-                width: width - contentInset * 2.0,
-                height: 42.0 * scale
-            )
+            if let addressView = self.address.view {
+                if addressView.superview == nil {
+                    self.addSubview(addressView)
+                }
+                transition.setFrame(
+                    view: addressView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: 24.0 * scale,
+                            y: floor(178.0 * scale - addressSize.height * 0.5)
+                        ),
+                        size: addressSize
+                    )
+                )
+            }
 
-            let ribbonSize = CGSize(width: 104.0 * scale, height: 28.0 * scale)
-            self.ribbonView.bounds = CGRect(origin: .zero, size: ribbonSize)
-            self.ribbonView.center = CGPoint(x: width - 30.0 * scale, y: 20.0 * scale)
-            self.ribbonView.transform = CGAffineTransform(rotationAngle: .pi / 4.0)
-            self.ribbonLabel.frame = CGRect(origin: .zero, size: ribbonSize)
+            let infoSize = self.infoButton.update(
+                transition: transition,
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(BundleIconComponent(
+                        name: "Wallet/CardInfo",
+                        tintColor: nil,
+                        scaleFactor: scale
+                    )),
+                    minSize: CGSize(width: 50.0, height: 38.0),
+                    action: { [weak self] in
+                        self?.component?.infoPressed()
+                    },
+                    animateAlpha: false
+                )),
+                environment: {},
+                containerSize: CGSize(width: 80.0 * scale, height: 80.0)
+            )
+            if let infoView = self.infoButton.view {
+                if infoView.superview == nil {
+                    self.addSubview(infoView)
+                }
+                transition.setFrame(
+                    view: infoView,
+                    frame: CGRect(
+                        origin: CGPoint(x: width - 32.0 - infoSize.width, y: 82.0 * scale),
+                        size: infoSize
+                    )
+                )
+            }
 
-            self.backgroundView.frame = CGRect(origin: .zero, size: size)
-            self.backgroundView.update(size: size, safeZones: [
-                self.amountLabel.frame,
-                self.fiatLabel.frame,
-                self.addressLabel.frame
-            ])
+            let projectionPadding = WalletCardBackgroundView.projectionPadding
+            transition.setFrame(
+                view: self.backgroundView,
+                frame: CGRect(
+                    x: -projectionPadding,
+                    y: -projectionPadding,
+                    width: size.width + projectionPadding * 2.0,
+                    height: size.height + projectionPadding * 2.0
+                )
+            )
+            self.backgroundView.update(cardSize: size, cornerRadius: 20.0 * scale)
             return size
         }
     }
@@ -176,7 +352,11 @@ public final class WalletTransferCardComponent: Component {
         environment: Environment<Empty>,
         transition: ComponentTransition
     ) -> CGSize {
-        return view.update(component: self, availableSize: availableSize)
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            transition: transition
+        )
     }
 }
 

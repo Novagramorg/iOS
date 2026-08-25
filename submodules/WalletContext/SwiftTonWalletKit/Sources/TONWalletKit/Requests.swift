@@ -250,6 +250,44 @@ public struct TransferMessage: Sendable, Equatable {
 /// amount excludes fees and forwarded value — showing it as the cost understates what
 /// leaves the wallet.
 public struct EmulationPreview: Sendable {
+    public struct Operation: Sendable, Equatable {
+        public enum Kind: Sendable, Equatable {
+            case transfer
+            case callContract
+            case deployContract
+            case excess
+            case unknown
+        }
+
+        public enum Direction: Sendable, Equatable {
+            case incoming
+            case outgoing
+        }
+
+        public let id: String
+        public let kind: Kind
+        public let direction: Direction?
+        public let address: String?
+        public let amount: BigUInt?
+        public let comment: String?
+
+        public init(
+            id: String,
+            kind: Kind,
+            direction: Direction?,
+            address: String?,
+            amount: BigUInt?,
+            comment: String?
+        ) {
+            self.id = id
+            self.kind = kind
+            self.direction = direction
+            self.address = address
+            self.amount = amount
+            self.comment = comment
+        }
+    }
+
     /// Fees the wallet pays, nanoton.
     public let fees: BigUInt
     /// Net balance change magnitude, nanoton.
@@ -264,6 +302,29 @@ public struct EmulationPreview: Sendable {
     /// True when the emulator could not follow the whole tree. The preview is partial and
     /// must not be shown as authoritative.
     public let isIncomplete: Bool
+    /// User-facing emulated operations in causal order. The external wallet execution
+    /// root is omitted because its outbound messages are represented by child transactions.
+    public let operations: [Operation]
+
+    private static func addressesEqual(_ lhs: String?, _ rhs: String) -> Bool {
+        guard let lhs else {
+            return false
+        }
+        if let parsedLhs = try? Address.parse(lhs), let parsedRhs = try? Address.parse(rhs) {
+            return parsedLhs == parsedRhs
+        }
+        return lhs.caseInsensitiveCompare(rhs) == .orderedSame
+    }
+
+    private static func isExternalWalletRoot(_ transaction: ChainTransaction, walletAddress: String) -> Bool {
+        guard self.addressesEqual(transaction.account, walletAddress) else {
+            return false
+        }
+        guard let source = transaction.inMessage?.source else {
+            return true
+        }
+        return source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     public init(
         fees: BigUInt,
@@ -271,7 +332,8 @@ public struct EmulationPreview: Sendable {
         isOutgoing: Bool,
         transactionCount: Int,
         willFail: Bool,
-        isIncomplete: Bool
+        isIncomplete: Bool,
+        operations: [Operation] = []
     ) {
         self.fees = fees
         self.netMagnitude = netMagnitude
@@ -279,6 +341,7 @@ public struct EmulationPreview: Sendable {
         self.transactionCount = transactionCount
         self.willFail = willFail
         self.isIncomplete = isIncomplete
+        self.operations = operations
     }
 
     /// Derives a preview for one wallet from an emulation.
@@ -320,5 +383,69 @@ public struct EmulationPreview: Sendable {
             return !hasSuccessfulItemTransfer
         }
         self.isIncomplete = emulation.isIncomplete
+        self.operations = emulation.transactions.compactMap { transaction in
+            if Self.isExternalWalletRoot(transaction, walletAddress: walletAddress) {
+                return nil
+            }
+
+            let inbound = transaction.inMessage
+            let kind: Operation.Kind
+            if let inbound {
+                switch inbound.kind {
+                case .tonTransfer:
+                    kind = .transfer
+                case .excess:
+                    kind = .excess
+                case .contractDeploy:
+                    kind = .deployContract
+                case .contractExec, .jettonTransfer, .jettonInternalTransfer, .jettonNotify,
+                     .jettonBurn, .jettonMint, .nftTransfer, .nftOwnershipAssigned,
+                     .nftOwnerChanged:
+                    kind = .callContract
+                case .unknown:
+                    kind = .unknown
+                }
+            } else {
+                kind = .unknown
+            }
+
+            let inboundAmount = inbound?.value.flatMap { BigUInt($0) } ?? 0
+
+            let direction: Operation.Direction?
+            if Self.addressesEqual(inbound?.source, walletAddress) {
+                direction = .outgoing
+            } else if Self.addressesEqual(inbound?.destination, walletAddress)
+                        || Self.addressesEqual(transaction.account, walletAddress) {
+                direction = .incoming
+            } else {
+                direction = nil
+            }
+
+            let amount: BigUInt?
+            if kind == .deployContract {
+                amount = nil
+            } else {
+                amount = inboundAmount > 0 ? inboundAmount : nil
+            }
+
+            let address: String?
+            switch direction {
+            case .some(.outgoing):
+                address = inbound?.destination ?? transaction.account
+            case .some(.incoming):
+                address = inbound?.source ?? transaction.account
+            case nil:
+                address = transaction.account
+            }
+
+            return Operation(
+                id: "\(transaction.hash):\(transaction.logicalTime)",
+                kind: kind,
+                direction: direction,
+                address: address,
+                amount: amount,
+                comment: inbound?.textComment
+            )
+        }
     }
 }

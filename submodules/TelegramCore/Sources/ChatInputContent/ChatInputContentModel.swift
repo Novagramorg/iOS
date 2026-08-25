@@ -45,6 +45,8 @@ public enum ChatInputInlineEntity: Equatable, Codable {
     case url(String)
     case date(Int32)
     case customEmoji(fileId: Int64, file: TelegramMediaFile?, enableAnimation: Bool)
+    /// An inline `RichText.textButton`. The carrying run's text MUST be exactly one `U+FFFC`.
+    case button(ChatInputButton)
 
     public static func == (lhs: ChatInputInlineEntity, rhs: ChatInputInlineEntity) -> Bool {
         switch (lhs, rhs) {
@@ -54,6 +56,7 @@ public enum ChatInputInlineEntity: Equatable, Codable {
         // `file` is a heavy media reference that is reconstructed from a side cache (and dropped by
         // the canonical ChatTextInputStateText form); identity is the fileId + animation flag.
         case let (.customEmoji(aId, _, aAnim), .customEmoji(bId, _, bAnim)): return aId == bId && aAnim == bAnim
+        case let (.button(a), .button(b)): return a == b
         default: return false
         }
     }
@@ -65,6 +68,7 @@ public enum ChatInputInlineEntity: Equatable, Codable {
         case date
         case fileId
         case enableAnimation
+        case button
     }
 
     private enum Kind: Int32, Codable {
@@ -72,6 +76,7 @@ public enum ChatInputInlineEntity: Equatable, Codable {
         case url
         case date
         case customEmoji
+        case button
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +100,8 @@ public enum ChatInputInlineEntity: Equatable, Codable {
             let enableAnimation = try container.decode(Bool.self, forKey: .enableAnimation)
             // `file` is not persisted (reconstructed from a side cache); decode as nil.
             self = .customEmoji(fileId: fileId, file: nil, enableAnimation: enableAnimation)
+        case .button:
+            self = .button(try container.decode(ChatInputButton.self, forKey: .button))
         }
     }
 
@@ -118,6 +125,9 @@ public enum ChatInputInlineEntity: Equatable, Codable {
             // `file` is intentionally not persisted; only fileId + enableAnimation are encoded.
             try container.encode(fileId, forKey: .fileId)
             try container.encode(enableAnimation, forKey: .enableAnimation)
+        case let .button(button):
+            try container.encode(Kind.button.rawValue, forKey: .kind)
+            try container.encode(button, forKey: .button)
         }
     }
 }
@@ -177,7 +187,7 @@ public struct ChatInputContent: Equatable {
                 } else {
                     result.append(bq.content.plainText)
                 }
-            case .media, .table, .details:
+            case .media, .table, .details, .buttonRow:
                 // Off the flat axis: no character AND no separator (see `blockFlatLength`). Matches
                 // `attributedString(from:)` (drops them) and the editor's `composerParagraphs()` (skips them).
                 // A detail block round-trips via the structured Codable + InstantPage path, not flat text.
@@ -220,6 +230,8 @@ public struct ChatInputContent: Equatable {
             return false
         case .details:
             return false
+        case .buttonRow:
+            return false
         }
     }
 
@@ -237,7 +249,7 @@ public struct ChatInputContent: Equatable {
                 return code.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case let .pullQuote(pq):
                 return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .media, .table, .blockQuote, .details:
+            case .media, .table, .blockQuote, .details, .buttonRow:
                 return false
             }
         }
@@ -269,6 +281,9 @@ public struct ChatInputContent: Equatable {
                 if chatInputRunsContainFormula(paragraph.runs) {
                     return false
                 }
+                if chatInputRunsContainButton(paragraph.runs) {
+                    return false
+                }
                 // A heading or a list paragraph carries structure the message-entity set can't express.
                 if paragraph.list != nil {
                     return false
@@ -280,7 +295,7 @@ public struct ChatInputContent: Equatable {
                     return false
                 }
             case let .code(code):
-                return !chatInputRunsContainFormula(code.runs)
+                return !chatInputRunsContainFormula(code.runs) && !chatInputRunsContainButton(code.runs)
             case .media: return false
             case .table: return false
             case .pullQuote:
@@ -302,6 +317,10 @@ public struct ChatInputContent: Equatable {
             case .details:
                 // A detail (folding) block carries structure the message-entity set can't express → rich path.
                 return false
+            case .buttonRow:
+                // A button has no message-entity form at all → rich path. LOAD-BEARING: returning true
+                // here would send the message as plain text + entities and destroy the buttons.
+                return false
             }
         }
     }
@@ -310,6 +329,17 @@ public struct ChatInputContent: Equatable {
 private func chatInputRunsContainFormula(_ runs: [ChatInputRun]) -> Bool {
     for run in runs {
         if run.attributes.formula != nil {
+            return true
+        }
+    }
+    return false
+}
+
+/// True when any run carries an inline button entity. A button has no message-entity form, so its
+/// presence forces the rich `.instantPage` send path exactly as a formula does.
+private func chatInputRunsContainButton(_ runs: [ChatInputRun]) -> Bool {
+    for run in runs {
+        if case .button = run.attributes.entity {
             return true
         }
     }
@@ -414,6 +444,7 @@ public enum ChatInputBlock: Equatable, Codable {
     /// Collapsed → 1 " " placeholder on the flat axis; expanded → inner content on the flat axis.
     case blockQuote(ChatInputBlockQuote)
     case details(ChatInputDetails)
+    case buttonRow(ChatInputButtonRow)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -424,6 +455,7 @@ public enum ChatInputBlock: Equatable, Codable {
         case pullQuote
         case blockQuote
         case details
+        case buttonRow
     }
 
     private enum Kind: Int32, Codable {
@@ -435,6 +467,8 @@ public enum ChatInputBlock: Equatable, Codable {
         case pullQuote  = 5
         case blockQuote = 6
         case details    = 7
+        // NEVER renumber. 8 is the next free value: 2 is a deliberate gap (retired collapsedQuote).
+        case buttonRow  = 8
     }
 
     public init(from decoder: Decoder) throws {
@@ -462,6 +496,8 @@ public enum ChatInputBlock: Equatable, Codable {
             self = .blockQuote(try container.decode(ChatInputBlockQuote.self, forKey: .blockQuote))
         case .details:
             self = .details(try container.decode(ChatInputDetails.self, forKey: .details))
+        case .buttonRow:
+            self = .buttonRow(try container.decode(ChatInputButtonRow.self, forKey: .buttonRow))
         }
     }
 
@@ -489,6 +525,9 @@ public enum ChatInputBlock: Equatable, Codable {
         case let .details(d):
             try container.encode(Kind.details.rawValue, forKey: .kind)
             try container.encode(d, forKey: .details)
+        case let .buttonRow(row):
+            try container.encode(Kind.buttonRow.rawValue, forKey: .kind)
+            try container.encode(row, forKey: .buttonRow)
         }
     }
 }
@@ -643,12 +682,17 @@ public struct ChatInputListMembership: Equatable, Codable {
     }
 }
 
-/// The medium's kind (image, video, audio, or location). Mirrors the editor `MediaKind`.
+/// The medium's kind (image, video, location, audio, or document). Mirrors the editor `MediaKind`.
+///
+/// NOTE: `init(from:)` below throws on an unknown raw value, so an OLDER build decoding a
+/// cross-device-synced draft containing `.document` (raw 4) fails that draft's decode. Accepted, and
+/// consistent with the precedent set when `ChatInputListMarker.checklist` was added.
 public enum ChatInputMediaKind: Int32, Equatable, Codable {
     case image = 0
     case video = 1
     case location = 2
     case audio = 3
+    case document = 4
 
     private enum CodingKeys: String, CodingKey {
         case raw
@@ -1041,9 +1085,28 @@ extension ChatInputTableRow: Codable {
 public struct ChatInputTable: Equatable, Codable {
     public var columns: [ChatInputColumnSpec]
     public var rows: [ChatInputTableRow]
-    public init(columns: [ChatInputColumnSpec] = [], rows: [ChatInputTableRow] = []) {
+    /// Render-only: halve every cell's interior padding. Mirrors `pageBlockTable`'s `compact` flag.
+    public var compact: Bool
+    /// `pageBlockTable`'s `bordered` flag. Defaults TRUE — a table persisted before this field existed
+    /// was always bordered, and the forward converter hard-coded `bordered: true`.
+    public var bordered: Bool
+    public init(columns: [ChatInputColumnSpec] = [], rows: [ChatInputTableRow] = [], compact: Bool = false,
+                bordered: Bool = true) {
         self.columns = columns
         self.rows = rows
+        self.compact = compact
+        self.bordered = bordered
+    }
+    private enum CodingKeys: String, CodingKey { case columns, rows, compact, bordered }
+    // Custom decode so drafts persisted before `compact` / `bordered` existed still load. Encoding stays
+    // synthesized.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        columns = try c.decodeIfPresent([ChatInputColumnSpec].self, forKey: .columns) ?? []
+        rows = try c.decodeIfPresent([ChatInputTableRow].self, forKey: .rows) ?? []
+        compact = try c.decodeIfPresent(Bool.self, forKey: .compact) ?? false
+        // Absent => true: an older draft's table was always bordered.
+        bordered = try c.decodeIfPresent(Bool.self, forKey: .bordered) ?? true
     }
 }
 
@@ -1089,7 +1152,7 @@ public extension ChatInputContent {
         switch block {
         case .paragraph, .code, .pullQuote, .blockQuote:
             return true
-        case .media, .table, .details:
+        case .media, .table, .details, .buttonRow:
             return false
         }
     }
@@ -1110,7 +1173,7 @@ public extension ChatInputContent {
             // Collapsed → 1 (the " " placeholder); expanded → the recursed interior flat length
             // (the inner ChatInputContent's plainText already applies the same inter-block accounting).
             return bq.collapsed ? 1 : (bq.content.plainText as NSString).length
-        case .media, .table, .details:
+        case .media, .table, .details, .buttonRow:
             return 0
         }
     }

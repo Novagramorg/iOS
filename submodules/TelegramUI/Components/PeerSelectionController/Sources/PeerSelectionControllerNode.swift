@@ -673,6 +673,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, beginMediaRecording: { _ in
         }, finishMediaRecording: { _ in
         }, stopMediaRecording: {
+        }, stopIncomingStreamingMessage: {
         }, lockMediaRecording: {
         }, resumeMediaRecording: {
         }, deleteRecordedMedia: {

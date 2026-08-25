@@ -1103,7 +1103,7 @@ final class ThemeAccentColorControllerNode: ASDisplayNode, ASScrollViewDelegate 
                     return state
                 }, animated: true)
             }, clickThroughMessage: { _, _ in
-            }, backgroundNode: self.backgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil)
+            }, backgroundNode: self.backgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false)
             return item
         }
         
@@ -1160,15 +1160,11 @@ final class ThemeAccentColorControllerNode: ASDisplayNode, ASScrollViewDelegate 
         var bottomOffset: CGFloat = 9.0 + bottomInset
         if let messageNodes = self.messageNodes {
             for itemNode in messageNodes {
-                let previousFrame = itemNode.frame
                 transition.updateFrame(node: itemNode, frame: CGRect(origin: CGPoint(x: 0.0, y: bottomOffset), size: itemNode.frame.size))
                 bottomOffset += itemNode.frame.height
                 
                 let relativeFrame = itemNode.frame.offsetBy(dx: 0.0, dy: relativeOffset)
                 itemNode.updateAbsoluteRect(relativeFrame, within: containerSize)
-                if case let .animated(duration, curve) = transition {
-                    itemNode.applyAbsoluteOffset(value: CGPoint(x: 0.0, y: -relativeFrame.minY + previousFrame.minY), animationCurve: curve, duration: duration)
-                }
             }
         }
         

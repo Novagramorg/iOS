@@ -16,6 +16,8 @@ import AnimationCache
 import MultiAnimationRenderer
 import InvisibleInkDustNode
 import ShimmeringMask
+import WallpaperBackgroundNode
+import UnsupportedContentPill
 
 // MARK: - Stable item identity (for view reuse on re-layouts)
 
@@ -36,7 +38,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame, inlineButton, buttonRow
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame, inlineButton, buttonRow, unsupportedContent
 }
 
 // MARK: - Render context
@@ -73,6 +75,24 @@ public final class InstantPageV2RenderContext {
     /// Whether a video file should auto-play inline (energy-usage autoplay setting AND already
     /// downloaded), computed by the host. Default `{ _ in false }` — no inline autoplay.
     public let shouldAutoplayVideo: (TelegramMediaFile) -> Bool
+    /// The host's chat wallpaper, when it has one. The unsupported-content pill asks it for a
+    /// `.free` bubble background so the wallpaper shows through the card.
+    ///
+    /// A closure rather than a stored reference: a message-scoped context must not retain the
+    /// chat's background node, and the host may swap its node without rebuilding the context.
+    /// Bubble backgrounds here are portal views that mirror their source, so nothing else — no
+    /// absolute rect, no scroll offset — has to be threaded through.
+    public let wallpaperBackgroundNode: () -> WallpaperBackgroundNode?
+    /// Whether the media on this page must be excluded from screenshots and screen recordings
+    /// (`setLayerDisableScreenshots`), and denied the gallery's share/save affordances. Set by the
+    /// chat bubble from the message's copy-protection state; `false` for V1 Instant View, web IV
+    /// and the send preview, which have no protected content.
+    ///
+    /// Mutable because copy protection is a *peer* setting that can be toggled while a message is
+    /// on screen: that changes neither the webpage nor the page layout, so the V2View — and with it
+    /// this context — is not rebuilt. The host refreshes the flag before each `update(layout:…)`
+    /// and every media view re-reads it from the context in its own `update(…)`.
+    public private(set) var captureProtected: Bool
 
     public init(
         context: AccountContext,
@@ -87,6 +107,8 @@ public final class InstantPageV2RenderContext {
         shouldAutoDownloadImage: @escaping (TelegramMediaImage) -> Bool = { _ in false },
         shouldAutoDownloadFile: @escaping (TelegramMediaFile) -> Bool = { _ in false },
         shouldAutoplayVideo: @escaping (TelegramMediaFile) -> Bool = { _ in false },
+        wallpaperBackgroundNode: @escaping () -> WallpaperBackgroundNode? = { nil },
+        captureProtected: Bool = false,
         message: MessageReference?
     ) {
         self.context = context
@@ -102,6 +124,15 @@ public final class InstantPageV2RenderContext {
         self.shouldAutoDownloadImage = shouldAutoDownloadImage
         self.shouldAutoDownloadFile = shouldAutoDownloadFile
         self.shouldAutoplayVideo = shouldAutoplayVideo
+        self.wallpaperBackgroundNode = wallpaperBackgroundNode
+        self.captureProtected = captureProtected
+    }
+
+    /// Refresh the copy-protection state. See `captureProtected`; the host calls this before each
+    /// `InstantPageV2View.update(layout:theme:animation:)` so reused media views pick the new value
+    /// up in their own `update(…)`.
+    public func updateCaptureProtected(_ captureProtected: Bool) {
+        self.captureProtected = captureProtected
     }
 
     /// Update the content-bearing webpage for a later chunk of the SAME message with the SAME
@@ -156,7 +187,11 @@ private final class InstantPageInlineImageData {
 
 private final class InstantPageEmojiLayerData {
     let itemLayer: InlineStickerItemLayer
-    weak var textView: InstantPageV2TextView?
+    /// The view whose coordinate space `itemLayer.frame` is in — an `InstantPageV2TextView` for an
+    /// emoji in body text, or an `InstantPageV2ButtonPillView` for one in a button label. Only a
+    /// text host has a progressive-reveal cursor; a pill already pops in atomically with its
+    /// paragraph, so a pill-hosted emoji is revealed from the start.
+    weak var hostView: UIView?
     var charIndexInItem: Int = 0
     var revealed: Bool = false
 
@@ -178,8 +213,16 @@ public final class InstantPageV2View: UIView {
     public var checkboxTapped: ((_ path: [Int], _ newValue: Bool) -> Void)?
 
     /// Fired when an InstantPage button is tapped — an inline `RichText.textButton` or a member of a
-    /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch.
-    public var buttonTapped: ((InstantPageButton) -> Void)?
+    /// `pageBlockButtonRow`. The consumer maps it onto the message-button dispatch, and reports the
+    /// action's progress back through the promise so the tapped pill can shimmer while it is in
+    /// flight. Leaving the promise unfulfilled is fine — the pill simply never shimmers.
+    public var buttonTapped: ((InstantPageButton, Promise<Bool>) -> Void)?
+    /// Fires when a `.document` row whose file is already downloaded is tapped.
+    public var documentTapped: ((TelegramMediaFile) -> Void)?
+    /// Fired when the Update button on an unsupported-content pill is tapped. Hosts inside a chat
+    /// route this to the App Store page; hosts that leave it nil still render the button (the tap
+    /// is inert) so the pill's width does not change between preview and sent message.
+    public var unsupportedActionTapped: (() -> Void)?
 
     var itemViews: [InstantPageItemView] = []
     private var itemViewStableIds: [InstantPageV2StableItemId] = []
@@ -420,8 +463,71 @@ public final class InstantPageV2View: UIView {
 
                     data.itemLayer.dynamicColor = textColor
                     data.itemLayer.frame = itemFrame
-                    data.textView = textView
+                    data.hostView = textView
                     data.charIndexInItem = emojiItem.range.location
+                }
+            }
+        }
+
+        // Second walk: custom emoji inside button pills. Registered here rather than owned by the
+        // pill so they inherit the same reveal, looping and visibility gates as body-text emoji
+        // instead of needing a parallel implementation of all three.
+        for view in self.itemViews {
+            // `pillSize` comes from the ITEM, never from the pill's live bounds: a freshly created
+            // InstantPageV2InlineButtonView assigns its pill's frame in `layoutSubviews`, which has
+            // not run yet at this point.
+            var pills: [(pill: InstantPageV2ButtonPillView, size: CGSize)] = []
+            if let buttonView = view as? InstantPageV2InlineButtonView {
+                pills.append((buttonView.pillView, buttonView.item.frame.size))
+            } else if let rowView = view as? InstantPageV2ButtonRowView {
+                for (index, pill) in rowView.pillViews.enumerated() where index < rowView.item.buttons.count {
+                    pills.append((pill, rowView.item.buttons[index].frame.size))
+                }
+            } else {
+                continue
+            }
+
+            for entry in pills {
+                let pill = entry.pill
+                let textColor = pill.resolvedLabelColor
+                for placement in instantPageButtonEmojiPlacements(attachment: pill.attachment, pillSize: entry.size) {
+                    let index = nextIndexById[placement.emoji.fileId] ?? 0
+                    nextIndexById[placement.emoji.fileId] = index + 1
+                    let id = InlineStickerItemLayer.Key(id: placement.emoji.fileId, index: index)
+                    validIds.append(id)
+
+                    let data: InstantPageEmojiLayerData
+                    if let existing = self.inlineStickerItemLayers[id] {
+                        data = existing
+                        if data.itemLayer.superlayer !== pill.emojiContainerView.layer {
+                            pill.emojiContainerView.layer.addSublayer(data.itemLayer)
+                        }
+                    } else {
+                        let pointSize = floor(placement.frame.width * 1.3)
+                        let layer = InlineStickerItemLayer(
+                            context: context,
+                            userLocation: .other,
+                            attemptSynchronousLoad: false,
+                            emoji: placement.emoji,
+                            file: placement.emoji.file,
+                            cache: cache,
+                            renderer: renderer,
+                            placeholderColor: UIColor(white: 0.5, alpha: 0.3),
+                            pointSize: CGSize(width: pointSize, height: pointSize),
+                            dynamicColor: textColor
+                        )
+                        layer.opacity = 0.0
+                        data = InstantPageEmojiLayerData(itemLayer: layer)
+                        self.inlineStickerItemLayers[id] = data
+                        pill.emojiContainerView.layer.addSublayer(layer)
+                    }
+
+                    data.itemLayer.dynamicColor = textColor
+                    data.itemLayer.frame = placement.frame
+                    data.hostView = pill
+                    // No reveal cursor on a pill host, so `charIndexInItem` is unused; the layer is
+                    // taken to full opacity by `updateEmojiReveal` at the end of this method.
+                    data.charIndexInItem = 0
                 }
             }
         }
@@ -493,7 +599,8 @@ public final class InstantPageV2View: UIView {
                             frame: itemFrame,
                             context: context,
                             userLocation: .other,
-                            theme: theme
+                            theme: theme,
+                            captureProtected: renderContext.captureProtected
                         )
                         // Image starts hidden; updateImageReveal pops it in when the streaming
                         // cursor crosses its char-index. For non-streaming pages (no
@@ -506,6 +613,7 @@ public final class InstantPageV2View: UIView {
                     }
 
                     data.view.frame = itemFrame
+                    data.view.captureProtected = renderContext.captureProtected
                     data.textView = textView
                     data.charIndexInItem = imageItem.range.location
                 }
@@ -527,7 +635,7 @@ public final class InstantPageV2View: UIView {
     func updateEmojiReveal(animated: Bool) {
         for (_, data) in self.inlineStickerItemLayers {
             let revealed: Bool
-            if let textView = data.textView, let count = textView.currentRevealCharacterCount {
+            if let textView = data.hostView as? InstantPageV2TextView, let count = textView.currentRevealCharacterCount {
                 revealed = data.charIndexInItem < count
             } else {
                 revealed = true
@@ -598,8 +706,8 @@ public final class InstantPageV2View: UIView {
     func updateEmojiVisibility() {
         for (_, data) in self.inlineStickerItemLayers {
             let onScreen: Bool
-            if let visibilityRect = self.visibilityRect, let textView = data.textView {
-                let rectInSelf = textView.convert(data.itemLayer.frame, to: self)
+            if let visibilityRect = self.visibilityRect, let hostView = data.hostView {
+                let rectInSelf = hostView.convert(data.itemLayer.frame, to: self)
                 onScreen = rectInSelf.intersects(visibilityRect)
             } else {
                 // No visibility rect == not tracked / off-screen → don't animate. The root view's
@@ -735,15 +843,15 @@ public final class InstantPageV2View: UIView {
             v.update(item: button, theme: theme)
             // Re-wire on reuse: the closure captures self, and a reused view may have been created
             // against a previous InstantPageV2View.
-            v.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            v.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return v
         case let .buttonRow(row):
             guard let v = existingView as? InstantPageV2ButtonRowView else { return nil }
             v.update(item: row, theme: theme)
-            v.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            v.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return v
         case let .mediaImage(media):
@@ -768,6 +876,10 @@ public final class InstantPageV2View: UIView {
             return v
         case let .document(document):
             guard let v = existingView as? InstantPageV2DocumentView, let rc = self.renderContext else { return nil }
+            // Re-wire: a recycled view may belong to a previous InstantPageV2View (see onDocumentTapped).
+            v.onDocumentTapped = { [weak self] file in
+                self?.documentTapped?(file)
+            }
             v.update(item: document, theme: theme, renderContext: rc)
             return v
         case let .thinking(thinking):
@@ -777,6 +889,15 @@ public final class InstantPageV2View: UIView {
         case let .slideshow(slideshow):
             guard let v = existingView as? InstantPageV2SlideshowView, let rc = self.renderContext else { return nil }
             v.update(item: slideshow, theme: theme, renderContext: rc)
+            return v
+        case let .unsupportedContent(unsupported):
+            guard let v = existingView as? InstantPageV2UnsupportedView else { return nil }
+            v.update(item: unsupported, theme: theme, renderContext: self.renderContext)
+            // Re-wire on reuse: the closure captures self, and a reused view may have been created
+            // against a previous InstantPageV2View.
+            v.onActionTapped = { [weak self] in
+                self?.unsupportedActionTapped?()
+            }
             return v
         }
     }
@@ -806,6 +927,7 @@ public final class InstantPageV2View: UIView {
         case .buttonRow:               return .positional(.buttonRow, position)
         case .thinking:                return .thinking(position)
         case .slideshow:               return .positional(.slideshow, position)
+        case .unsupportedContent:      return .positional(.unsupportedContent, position)
         }
     }
 
@@ -911,7 +1033,11 @@ public final class InstantPageV2View: UIView {
             }
         case let .document(document):
             if let renderContext = self.renderContext {
-                return InstantPageV2DocumentView(item: document, renderContext: renderContext, theme: theme)
+                let view = InstantPageV2DocumentView(item: document, renderContext: renderContext, theme: theme)
+                view.onDocumentTapped = { [weak self] file in
+                    self?.documentTapped?(file)
+                }
+                return view
             } else {
                 return InstantPageV2MediaPlaceholderView(item: InstantPageV2MediaPlaceholderItem(frame: document.frame, kind: .audio, cornerRadius: 0.0), theme: theme)
             }
@@ -919,14 +1045,20 @@ public final class InstantPageV2View: UIView {
             return InstantPageV2FormulaView(item: formula, theme: theme)
         case let .inlineButton(button):
             let view = InstantPageV2InlineButtonView(item: button, theme: theme)
-            view.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            view.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
             }
             return view
         case let .buttonRow(row):
             let view = InstantPageV2ButtonRowView(item: row, theme: theme)
-            view.onButtonTapped = { [weak self] button in
-                self?.buttonTapped?(button)
+            view.onButtonTapped = { [weak self] button, progress in
+                self?.buttonTapped?(button, progress)
+            }
+            return view
+        case let .unsupportedContent(unsupported):
+            let view = InstantPageV2UnsupportedView(item: unsupported, theme: theme, renderContext: self.renderContext)
+            view.onActionTapped = { [weak self] in
+                self?.unsupportedActionTapped?()
             }
             return view
         case let .thinking(thinking):
@@ -1749,12 +1881,16 @@ final class InstantPageV2ListMarkerView: UIView, InstantPageItemView {
             )
             dot.cornerRadius = radius
             self.layer.addSublayer(dot)
-        case let .number(text):
+        case let .number(string, alignment):
+            // The string carries the font and colour it was MEASURED with during layout; do not
+            // rebuild them here. This used to set `systemFont(ofSize: 17.0)` and `item.color`
+            // explicitly, which silently disagreed with the theme's paragraph font whenever that
+            // was not system 17 — and since the marker column's width comes from the measured
+            // string, the drawn digits then no longer filled the box that was supposed to align them.
             let label = UILabel()
-            label.text = text
-            label.textColor = item.color
-            label.font = UIFont.systemFont(ofSize: 17.0)
-            label.textAlignment = .right
+            label.attributedText = string
+            // The frame is the WHOLE marker column, so this alignment is what lines the dots up.
+            label.textAlignment = alignment
             label.frame = CGRect(origin: .zero, size: item.frame.size)
             self.addSubview(label)
         case let .checklist(checked, colors):
@@ -1932,7 +2068,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
 
     let titleTextView: InstantPageV2TextView
     private let chevronView: UIImageView
-    private let separator: UIView
     var bodyView: InstantPageV2View?
     private let titleHitView: UIView
 
@@ -1967,9 +2102,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         // Decorative: let taps fall through to titleHitView (which carries the toggle gesture).
         self.chevronView.isUserInteractionEnabled = false
 
-        self.separator = UIView()
-        self.separator.isUserInteractionEnabled = false
-
         self.titleHitView = UIView()
         self.titleHitView.backgroundColor = .clear
 
@@ -1979,7 +2111,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
 
         self.addSubview(self.titleTextView)
         self.addSubview(self.chevronView)
-        self.addSubview(self.separator)
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(self.titleTapped))
         self.insertSubview(self.titleHitView, at: 0)
@@ -2011,7 +2142,7 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         self.chevronView.bounds = CGRect(origin: .zero, size: chevronSize)
         self.chevronView.center = CGPoint(
             x: item.rtl ? (item.frame.width - item.sideInset - chevronSize.width / 2.0) : (item.sideInset + chevronSize.width / 2.0),
-            y: item.titleFrame.midY + 1.0
+            y: item.titleFrame.midY
         )
 
         self.titleHitView.frame = item.titleFrame
@@ -2020,7 +2151,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
         // view's own frame height (clipsToBounds = true), not by the body itself — see
         // InstantPageV2View.update. The body's internal layout is forwarded `animation` so a
         // *nested* details block inside the body can also animate its own toggle.
-        let blockHeight: CGFloat
         if item.isExpanded {
             if let innerLayout = item.innerLayout {
                 let body: InstantPageV2View
@@ -2046,9 +2176,6 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
                     origin: CGPoint(x: 0.0, y: item.titleFrame.maxY),
                     size: innerLayout.contentSize
                 )
-                blockHeight = body.frame.maxY
-            } else {
-                blockHeight = item.titleFrame.maxY
             }
         } else {
             if let existingBody = self.bodyView {
@@ -2062,16 +2189,7 @@ final class InstantPageV2DetailsView: UIView, InstantPageItemView {
                     self.bodyView = nil
                 }
             }
-            blockHeight = item.titleFrame.maxY
         }
-        
-        self.separator.backgroundColor = item.separatorColor
-        animation.animator.updateFrame(layer: self.separator.layer, frame: CGRect(
-            x: 8.0,
-            y: blockHeight - UIScreenPixel,
-            width: item.frame.width - 8.0 * 2.0,
-            height: UIScreenPixel
-        ), completion: nil)
 
         // Chevron rotation. The body teardown on collapse is NOT tied to this completion — see
         // finalizePendingCollapse(), which the parent calls from the frame-shrink (clip) animation.
@@ -2135,7 +2253,7 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
         if let language = item.language, !language.isEmpty {
             self.languageLabel.isHidden = false
             self.languageLabel.attributedText = NSAttributedString(string: language, attributes: [
-                .font: UIFont(name: "Menlo", size: 11.0) ?? Font.regular(11.0),
+                .font: UIFont(name: "Menlo", size: item.languageFontSize) ?? Font.regular(item.languageFontSize),
                 .foregroundColor: item.languageLabelColor
             ])
             self.languageLabel.sizeToFit()

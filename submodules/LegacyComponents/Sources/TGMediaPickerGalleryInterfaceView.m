@@ -2086,10 +2086,11 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-    
-    [_captionMixin setContentAreaHeight:self.frame.size.height];
-    
+
     UIInterfaceOrientation orientation = [self interfaceOrientation];
+    _captionMixin.interfaceOrientation = [[LegacyComponentsGlobals provider] applicationStatusBarOrientation];
+    [_captionMixin setContentAreaHeight:self.frame.size.height];
+
     CGSize screenSize = TGScreenSize();
     if (TGIsPad())
         screenSize = [self referenceViewSize];

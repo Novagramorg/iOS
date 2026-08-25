@@ -280,11 +280,13 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         
         public let imageOrVideo: ImageOrVideo?
         public let music: Bool
+        public let file: Bool
         public let location: Bool
         
-        public init(imageOrVideo: ImageOrVideo?, music: Bool, location: Bool) {
+        public init(imageOrVideo: ImageOrVideo?, music: Bool, file: Bool, location: Bool) {
             self.imageOrVideo = imageOrVideo
             self.music = music
+            self.file = file
             self.location = location
         }
     }
@@ -689,7 +691,12 @@ final class RichTextAttachmentScreenComponent: Component {
                             kind = .audio
                             naturalSize = CGSize(width: 1.0, height: 1.0)
                         } else {
-                            continue   // unsupported document type
+                            // Everything else from the Files tab is a document row — including an image-mime
+                            // file, matching that tab's "send as file" meaning. Also a fixed-height row, so
+                            // naturalSize is ignored by MediaBlockBox; pass the same 1x1 placeholder as audio.
+                            media = file
+                            kind = .document
+                            naturalSize = CGSize(width: 1.0, height: 1.0)
                         }
                     case let .location(map):
                         // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
@@ -714,6 +721,7 @@ final class RichTextAttachmentScreenComponent: Component {
             self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
                 imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 10),
                 music: true,
+                file: true,
                 location: true
             )) { [weak self] items in
                 guard let self else { return }
@@ -844,7 +852,7 @@ final class RichTextAttachmentScreenComponent: Component {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let contextController = makeContextController(
                 presentationData: presentationData,
-                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView, containerView: controller.view)),
                 items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
             )
@@ -1095,26 +1103,53 @@ final class RichTextAttachmentScreenComponent: Component {
                 c?.dismiss(completion: nil)
             })))
             
+            // Buttons. With a SELECTION the item converts it into one inline pill (the Link flow's
+            // analogue); with no selection it drops a block row, whose sheet the user opens by tapping
+            // the pill.
+            if editorState.hasSelection {
+                items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuInlineButton, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] c, _ in
+                    c?.dismiss(completion: nil)
+                    self?.editor.makeSelectionInlineButton()
+                })))
+            } else {
+                items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_MenuButtonRow, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] c, _ in
+                    c?.dismiss(completion: nil)
+                    guard let self else {
+                        return
+                    }
+                    // No caret: drop the row at the document end, not at offset 0 — same rule as insertTable.
+                    self.focusEditorAtDocumentEndIfNeeded(hasCursor: hasCursor)
+                    self.editor.insertButtonRow()
+                })))
+            }
+
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let contextController = makeContextController(
                 presentationData: presentationData,
-                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView, containerView: controller.view)),
                 items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
             )
             (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
         }
 
-        private func presentActionMenu(from sourceView: UIView, items: [ContextMenuItem]) {
+        private func presentActionMenu(from sourceView: UIView, items: [ContextMenuItem], actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition = .top) {
             guard let component = self.component else { return }
+            guard let selfController = self.environment?.controller() else {
+                return
+            }
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let controller = makeContextController(
                 presentationData: presentationData,
-                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView, containerView: selfController.view, actionsPosition: actionsPosition)),
                 items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
             )
-            self.environment?.controller()?.presentInGlobalOverlay(controller)
+            selfController.presentInGlobalOverlay(controller)
         }
 
         /// Maps the app theme to the editor's render colors. Every value is `PresentationTheme`-derived —
@@ -1146,7 +1181,14 @@ final class RichTextAttachmentScreenComponent: Component {
                 containerPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9),
                 shadowCursor: shadowCursorColor,
                 quoteAuthorText: theme.list.itemAccentColor,
-                quoteAuthorPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9)
+                quoteAuthorPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9),
+                // Pill colours, mirroring `instantPageButtonColors`: the neutral pill takes the panel
+                // fill + accent label, and danger/success carry the LABEL colour (the editor derives
+                // their 15% fills itself, as the renderer does).
+                buttonNeutralFill: theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.08),
+                buttonNeutralLabel: theme.list.itemAccentColor,
+                buttonDanger: theme.list.itemDestructiveColor,
+                buttonSuccess: theme.list.itemDisclosureActions.constructive.fillColor
             )
         }
 
@@ -1192,6 +1234,12 @@ final class RichTextAttachmentScreenComponent: Component {
                 // is a no-op on this first pass since `appliedTheme` is now set, and handles later theme
                 // changes when the frame — and a working reload width — exists.)
                 editor.theme = Self.mapEditorTheme(environment.theme)
+                // Lay text out with the exact numbers the recipient's renderer will use. This document is
+                // sent as a rich message, so the counterpart surface is the chat bubble — the same metrics
+                // the composer uses. Set alongside `theme` and BEFORE `editor.document`, per the
+                // host-ordering invariant: the document setter bakes the current mapper into each block's
+                // attributed string.
+                editor.renderMetrics = InstantPageTheme.chatMessageRenderMetrics()
                 self.appliedTheme = environment.theme
                 // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
                 // tune here to diverge from the chat composer.
@@ -1261,6 +1309,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         self.pickMedia(request: RichTextAttachmentScreen.MediaRequest(
                             imageOrVideo: RichTextAttachmentScreen.MediaRequest.ImageOrVideo(limit: 1),
                             music: false,
+                            file: false,
                             location: false
                         )) { items in
                             guard let item = items.first, item.kind == .image || item.kind == .video else { return }   // mosaic is photo/video only
@@ -1340,6 +1389,102 @@ final class RichTextAttachmentScreenComponent: Component {
                     })
                 }
 
+                // Tapping EITHER pill kind opens the property sheet. `completion(nil)` deletes the pill —
+                // and its row, when it was the last one.
+                editor.onEditButtonRequested = { [weak self] button, isBlockPill, completion in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    let controller = ButtonEditorScreen(context: component.context, button: button,
+                                                        isBlockPill: isBlockPill) { [weak self] updated in
+                        completion(updated)
+                        DispatchQueue.main.async { [weak self] in
+                            self?.editor.becomeFirstResponder()
+                        }
+                    }
+                    self.environment?.controller()?.present(controller, in: .window(.root))
+                }
+
+                // The row's "…" menu: Add Button / Alignment (submenu) / Delete Row. Alignment uses the
+                // project-standard `pushItems` submenu, exactly as the Add menu's Heading item does.
+                editor.onRequestButtonRowMenu = { [weak self] request in
+                    guard let self, let environment = self.environment, let component = self.component else {
+                        return
+                    }
+                    let strings = environment.strings
+                    var items: [ContextMenuItem] = []
+
+                    items.append(.action(ContextMenuActionItem(text: strings.RichText_ButtonRowAdd, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: nil)
+                        request.addButton()
+                    })))
+
+                    items.append(.action(ContextMenuActionItem(text: strings.RichText_ButtonRowAlignment, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AlignVCenter"), color: theme.contextMenu.primaryColor)
+                    }, action: { c, _ in
+                        var subItems: [ContextMenuItem] = []
+                        subItems.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_Back, icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+                        }, iconPosition: .left, action: { c, _ in
+                            c?.popItems()
+                        })))
+                        subItems.append(.separator)
+                        let alignments: [(ButtonRowAlignment, String)] = [
+                            (.justify, strings.RichText_ButtonRowAlignJustify),
+                            (.left, strings.RichText_ButtonRowAlignLeft),
+                            (.center, strings.RichText_ButtonRowAlignCenter),
+                            (.right, strings.RichText_ButtonRowAlignRight),
+                        ]
+                        for (alignment, title) in alignments {
+                            subItems.append(.action(ContextMenuActionItem(text: title, icon: { _ in nil },
+                                additionalLeftIcon: { theme in
+                                    return alignment == request.alignment
+                                        ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                        : UIImage()
+                                }, iconPosition: .left, action: { c, _ in
+                                    c?.dismiss(completion: nil)
+                                    request.setAlignment(alignment)
+                                })))
+                        }
+                        c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+                    })))
+
+                    items.append(.separator)
+                    items.append(.action(ContextMenuActionItem(text: strings.RichText_ButtonRowDelete, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: nil)
+                        request.deleteRow()
+                    })))
+
+                    // Anchor to the "…" rect, NOT to the editor view: `presentActionMenu` uses the whole
+                    // source view as the reference, so passing `self.editor` positioned the menu against
+                    // the entire editor and it landed offscreen. Same transient-anchor technique the
+                    // table structural menu uses (`presentTableStructuralMenu`): a zero-interaction view
+                    // at `request.sourceRect` inside the canvas, removed when the controller dismisses.
+                    guard let anchorParent = request.view else {
+                        return
+                    }
+                    guard let selfController = self.environment?.controller() else {
+                        return
+                    }
+                    let anchor = UIView(frame: request.sourceRect)
+                    anchor.isUserInteractionEnabled = false
+                    anchorParent.addSubview(anchor)
+
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                    let controller = makeContextController(
+                        presentationData: presentationData,
+                        source: .reference(RichTextActionContextReferenceSource(sourceView: anchor, containerView: selfController.view, actionsPosition: .bottom)),
+                        items: .single(ContextController.Items(content: .list(items))),
+                        gesture: nil
+                    )
+                    controller.dismissed = { [weak anchor] in anchor?.removeFromSuperview() }
+                    selfController.presentInGlobalOverlay(controller)
+                }
+
                 editor.registerMediaViewProvider { [weak self] items, _, displayMode, existing in
                     guard let self, let component = self.component else { return nil }
                     // Theme an audio row to the editor's accent/text scheme (same `list.item*` sources as
@@ -1351,9 +1496,16 @@ final class RichTextAttachmentScreenComponent: Component {
                         title: theme.list.itemPrimaryTextColor,
                         description: theme.list.itemSecondaryTextColor
                     )
-                    let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
+                    // Same `list.item*` sources as the audio row; ignored for image/map media.
+                    let documentColors = InstantPageDocumentColorOverride(
+                        control: theme.list.itemAccentColor,
+                        controlForeground: theme.list.itemCheckColors.foregroundColor,
+                        title: theme.list.itemPrimaryTextColor,
+                        description: theme.list.itemSecondaryTextColor
+                    )
+                    let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool, kind: MediaKind)] = items.compactMap { item in
                         guard let media = self.attachedMedia[item.mediaID] else { return nil }
-                        return (EngineMedia(media), item.naturalSize, item.isSpoiler)
+                        return (EngineMedia(media), item.naturalSize, item.isSpoiler, item.kind)
                     }
                     guard !resolved.isEmpty else { return nil }
                     // In-place update: reuse the existing container (surviving photo/video cells keep their bound
@@ -1362,7 +1514,10 @@ final class RichTextAttachmentScreenComponent: Component {
                         view.updateResolvedItems(resolved, displayMode: displayMode)
                         return view
                     }
-                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors, displayMode: displayMode)
+                    return MediaItemNodeView(context: component.context, items: resolved,
+                                             audioColorOverride: audioColors,
+                                             documentColorOverride: documentColors,
+                                             displayMode: displayMode)
                 }
 
                 // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette
@@ -1601,6 +1756,31 @@ final class RichTextAttachmentScreenComponent: Component {
                                 f(.default)
                                 self?.editor.convertCurrentTableToText()
                             })))
+                            // One state read for both items: `currentState()` walks the whole TableBlock.
+                            let tableState = self.editor.currentState()
+                            let tableIsCompact = tableState.isTableCompact
+                            items.append(.action(ContextMenuActionItem(
+                                text: tableIsCompact ? environment.strings.RichText_Menu_Table_CompactOff : environment.strings.RichText_Menu_Table_CompactOn,
+                                icon: { _ in
+                                    return nil
+                                },
+                                action: { [weak self] _, f in
+                                    f(.default)
+                                    self?.editor.toggleTableCompact()
+                                })))
+                            let tableIsBordered = tableState.isTableBordered
+                            items.append(.action(ContextMenuActionItem(
+                                text: tableIsBordered ? environment.strings.RichText_Menu_Table_BordersOff : environment.strings.RichText_Menu_Table_BordersOn,
+                                icon: { _ in
+                                    // No borders/grid asset exists in Images.xcassets; the sibling
+                                    // Compact item is likewise icon-less. A made-up bundleImageName
+                                    // would silently render nothing (UIImage returns nil).
+                                    return nil
+                                },
+                                action: { [weak self] _, f in
+                                    f(.default)
+                                    self?.editor.toggleTableBordered()
+                                })))
                             items.append(.action(ContextMenuActionItem(text: environment.strings.RichText_Menu_Table_Delete, textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTable()
                             })))
@@ -1869,10 +2049,17 @@ final class RichTextAttachmentScreenComponent: Component {
 @available(iOS 13.0, *)
 private final class RichTextActionContextReferenceSource: ContextReferenceContentSource {
     private let sourceView: UIView
-    init(sourceView: UIView) { self.sourceView = sourceView }
+    private let containerView: UIView
+    private let actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition
+    init(sourceView: UIView, containerView: UIView, actionsPosition: ContextControllerReferenceViewInfo.ActionsPosition = .top) {
+        self.sourceView = sourceView
+        self.containerView = containerView
+        self.actionsPosition = actionsPosition
+    }
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
         return ContextControllerReferenceViewInfo(referenceView: self.sourceView,
-            contentAreaInScreenSpace: UIScreen.main.bounds,
-            insets: UIEdgeInsets(top: -4.0, left: 0.0, bottom: -4.0, right: 0.0), actionsPosition: .top)
+            contentAreaInScreenSpace: self.containerView.convert(self.containerView.bounds, to: nil),
+            insets: UIEdgeInsets(top: -4.0, left: 0.0, bottom: -4.0, right: 0.0),
+            actionsPosition: self.actionsPosition)
     }
 }

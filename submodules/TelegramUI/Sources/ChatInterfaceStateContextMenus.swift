@@ -494,6 +494,128 @@ func updatedChatEditInterfaceMessageState(context: AccountContext, state: ChatPr
     )
 }
 
+private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, message: EngineRawMessage, controllerInteraction: ChatControllerInteraction, interfaceInteraction: ChatPanelInterfaceInteraction) -> Signal<ContextController.Items, NoError> {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
+    let replacementMessage = message.activeEphemeralReplacementMessage
+
+    var richMessageInstantPage: InstantPage?
+    if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
+        richMessageInstantPage = richTextAttribute.instantPage
+    }
+
+    var imageResource: TelegramMediaResource?
+    var isExpired = false
+    var isPoll = false
+    var diceEmoji: String?
+    for media in message.effectiveMedia {
+        if media is TelegramMediaExpiredContent {
+            isExpired = true
+        } else if media is TelegramMediaPoll {
+            isPoll = true
+        } else if let dice = media as? TelegramMediaDice {
+            diceEmoji = dice.emoji
+        } else if let image = media as? TelegramMediaImage, let largest = largestImageRepresentation(image.representations) {
+            imageResource = largest.resource
+        }
+    }
+
+    let resourceStatus: Signal<EngineMediaResource.FetchStatus?, NoError>
+    if let imageResource {
+        resourceStatus = context.engine.resources.status(resource: EngineMediaResource(imageResource))
+        |> take(1)
+        |> map(Optional.init)
+    } else {
+        resourceStatus = .single(nil)
+    }
+
+    return resourceStatus
+    |> map { resourceStatus -> ContextController.Items in
+        let resourceAvailable: Bool
+        if let resourceStatus, case .Local = resourceStatus {
+            resourceAvailable = true
+        } else {
+            resourceAvailable = false
+        }
+
+        var actions: [ContextMenuItem] = []
+
+        let noAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+        actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Chat_EphemeralMessage_AnchoredInfo, textFont: .small, icon: { _ in return nil }, action: noAction)))
+        actions.append(.separator)
+        
+        let hasCopyableContent = !message.text.isEmpty || richMessageInstantPage != nil || diceEmoji != nil || (resourceAvailable && imageResource != nil)
+        if hasCopyableContent && !isCopyProtected && !isExpired && !isPoll {
+            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopy, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
+            }, action: { _, f in
+                let copyText = {
+                    if let richMessageInstantPage {
+                        UIPasteboard.general.items = [richMessagePasteboardItem(fromInstantPage: richMessageInstantPage)]
+                    } else if let diceEmoji {
+                        UIPasteboard.general.string = diceEmoji
+                    } else {
+                        let entities = (message.attributes.first(where: { $0 is TextEntitiesMessageAttribute }) as? TextEntitiesMessageAttribute)?.entities
+                        if let restricted = message.attributes.first(where: { $0 is RestrictedContentMessageAttribute }) as? RestrictedContentMessageAttribute, let restrictedText = restricted.platformText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) {
+                            storeMessageTextInPasteboard(restrictedText, entities: nil)
+                        } else {
+                            storeMessageTextInPasteboard(message.text, entities: entities)
+                        }
+                    }
+                    Queue.mainQueue().after(0.2, {
+                        controllerInteraction.displayUndo(.copy(text: chatPresentationInterfaceState.strings.Conversation_MessageCopied))
+                    })
+                }
+
+                if message.text.isEmpty, richMessageInstantPage == nil, diceEmoji == nil, resourceAvailable, let imageResource {
+                    let _ = (context.engine.resources.data(resource: EngineMediaResource(imageResource), incremental: true)
+                    |> take(1)
+                    |> deliverOnMainQueue).startStandalone(next: { data in
+                        if data.isComplete, let imageData = try? Data(contentsOf: URL(fileURLWithPath: data.path)), let image = UIImage(data: imageData) {
+                            UIPasteboard.general.image = image
+                            Queue.mainQueue().after(0.2, {
+                                controllerInteraction.displayUndo(.copy(text: chatPresentationInterfaceState.strings.Conversation_ImageCopied))
+                            })
+                        }
+                    })
+                } else {
+                    copyText()
+                }
+                f(.default)
+            })))
+        }
+
+        if let replacementMessage {
+            let isForwardingDisabled = (replacementMessage.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute)?.isForwardingDisabled ?? false
+            if !isForwardingDisabled && !isCopyProtected && !replacementMessage.containsSecretMedia && !replacementMessage.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent }) {
+                actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    interfaceInteraction.forwardMessages([replacementMessage])
+                    f(.dismissWithoutContent)
+                })))
+            }
+
+            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.contextMenu.primaryColor)
+            }, action: { controller, _ in
+                interfaceInteraction.reportMessages([replacementMessage], controller)
+            })))
+        }
+
+        let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0)
+        let revertSubtitle = NSAttributedString(string: presentationData.strings.Chat_EphemeralMessage_RevertInfo, font: subtitleFont, textColor: presentationData.theme.contextMenu.destructiveColor)
+        actions.append(.action(ContextMenuActionItem(text: presentationData.strings.Chat_EphemeralMessage_Revert, textColor: .destructive, textLayout: .secondLineWithAttributedValue(revertSubtitle), icon: { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reload"), color: theme.contextMenu.destructiveColor, flipHorizontally: true)
+        }, action: { _, f in
+            f(.default)
+            let _ = context.engine.messages.revertAnchoredEphemeralMessage(messageId: message.id).startStandalone()
+        })))
+
+        return ContextController.Items(content: .list(actions))
+    }
+}
+
 func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, messages: [EngineRawMessage], controllerInteraction: ChatControllerInteraction?, selectAll: Bool, interfaceInteraction: ChatPanelInterfaceInteraction?, readStats: MessageReadStats? = nil, messageNode: ChatMessageItemView? = nil) -> Signal<ContextController.Items, NoError> {
     guard let interfaceInteraction = interfaceInteraction, let controllerInteraction = controllerInteraction else {
         return .single(ContextController.Items(content: .list([])))
@@ -505,6 +627,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if message.id.namespace == Namespaces.Message.Local && message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) {
             return .single(ContextController.Items(content: .list([])))
         }
+    }
+    if let message = messages.first, message.activeEphemeralReplacementMessage != nil {
+        return ephemeralReplacementContextMenuItems(chatPresentationInterfaceState: chatPresentationInterfaceState, context: context, message: message, controllerInteraction: controllerInteraction, interfaceInteraction: interfaceInteraction)
     }
     
     var isEmbeddedMode = false
@@ -1190,7 +1315,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             let sendGiftTitle: String
             var isIncoming = message.effectivelyIncoming(context.account.peerId)
             for media in message.media {
-                if let action = media as? TelegramMediaAction, case let .starGiftUnique(_, isUpgrade, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action {
+                if let action = media as? TelegramMediaAction, case let .starGiftUnique(_, isUpgrade, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action {
                     if isUpgrade && message.author?.id == context.account.peerId {
                         isIncoming = true
                     }
@@ -2628,6 +2753,11 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                     }
                 }
                 if id.namespace == Namespaces.Message.EphemeralLocal {
+                    let isForwardingDisabled = (message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute)?.isForwardingDisabled ?? false
+                    let isAction = message.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent })
+                    if !isForwardingDisabled && !message.containsSecretMedia && !isAction && !isCopyProtected && !isShareProtected && !(message.flags.isSending || message.flags.contains(.Failed)) {
+                        optionsMap[id]!.insert(.forward)
+                    }
                     optionsMap[id]!.insert(.deleteLocally)
                     if message.flags.contains(.Incoming), message.attributes.contains(where: { $0 is EphemeralMessageAttribute }) {
                         optionsMap[id]!.insert(.report)

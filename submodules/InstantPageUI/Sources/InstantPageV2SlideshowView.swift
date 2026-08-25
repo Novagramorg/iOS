@@ -178,6 +178,7 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
             let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
             for node in self.pageImageNodes {
                 node.update(strings: strings, theme: theme)
+                node.captureProtected = renderContext.captureProtected
             }
         }
         self.setNeedsLayout()

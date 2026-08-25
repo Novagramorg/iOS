@@ -3810,7 +3810,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
                     }
                 } else if case let .gift(gift) = subject {
                     isGift = true
-                    let media: [Media] = [TelegramMediaAction(action: .starGiftUnique(gift: .unique(gift), isUpgrade: false, isTransferred: false, savedToProfile: false, canExportDate: nil, transferStars: nil, isRefunded: false, isPrepaidUpgrade: false, peerId: nil, senderId: nil, savedId: nil, resaleAmount: nil, canTransferDate: nil, canResaleDate: nil, dropOriginalDetailsStars: nil, assigned: false, fromOffer: false, canCraftAt: nil, isCrafted: false))]
+                    let media: [Media] = [TelegramMediaAction(action: .starGiftUnique(gift: .unique(gift), isUpgrade: false, isTransferred: false, savedToProfile: false, canExportDate: nil, transferStars: nil, isRefunded: false, isPrepaidUpgrade: false, peerId: nil, senderId: nil, savedId: nil, resaleAmount: nil, canTransferDate: nil, canResaleDate: nil, dropOriginalDetailsStars: nil, assigned: false, fromOffer: false, canCraftAt: nil, isCrafted: false, text: nil, entities: nil, nameHidden: false))]
                     let message = Message(stableId: 0, stableVersion: 0, id: MessageId(peerId: self.context.account.peerId, namespace: Namespaces.Message.Cloud, id: -1), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: nil, text: "", attributes: [], media: media, peers: SimpleDictionary(), associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
                     messages = .single([message])
                 } else {
@@ -6856,7 +6856,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
     var didComplete = false
     
     public var cancelled: (Bool) -> Void = { _ in }
-    public var willComplete: (UIImage?, Bool, @escaping () -> Void) -> Void
+    public var willComplete: (UIImage?, Bool, @escaping () -> Void, @escaping () -> Void) -> Void
     public var completion: ([MediaEditorScreenImpl.Result], @escaping (@escaping () -> Void) -> Void) -> Void
     public var dismissed: () -> Void = { }
     public var willDismiss: () -> Void = { }
@@ -6890,7 +6890,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
         initialLink: (url: String, name: String?)? = nil,
         transitionIn: TransitionIn?,
         transitionOut: @escaping (Bool, Bool?) -> TransitionOut?,
-        willComplete: @escaping (UIImage?, Bool, @escaping () -> Void) -> Void = { _, _, commit in commit() },
+        willComplete: @escaping (UIImage?, Bool, @escaping () -> Void, @escaping () -> Void) -> Void = { _, _, commit, _ in commit() },
         completion: @escaping ([MediaEditorScreenImpl.Result], @escaping (@escaping () -> Void) -> Void) -> Void
     ) {
         self.context = context

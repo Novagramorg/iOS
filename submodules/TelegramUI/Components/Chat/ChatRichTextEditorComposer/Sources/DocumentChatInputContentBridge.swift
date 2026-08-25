@@ -3,6 +3,7 @@ import Postbox
 import TelegramCore
 import RichTextEditorCore
 import TextFormat
+import RichTextEditorMessageConversion
 
 /// A DIRECT, structure-preserving bridge between the RichTextEditor `Document` and TelegramCore's
 /// `ChatInputContent` value model — the draft currency for the native composer node.
@@ -83,6 +84,11 @@ public func chatInputContent(
             blocks.append(.blockQuote(ChatInputBlockQuote(
                 content: inner, collapsed: bq.collapsed,
                 author: chatInputRuns(fromRuns: bq.author, resolveEmoji: resolveEmoji))))
+        case let .buttonRow(row):
+            blocks.append(.buttonRow(ChatInputButtonRow(
+                buttons: row.buttons.map(chatInputButton(fromButtonRef:)),
+                alignment: instantPageRowAlignment(from: row.alignment)
+            )))
         case let .details(d):
             // Editor detail (folding) container → currency .details, recursing its children as a sub-document.
             let inner = chatInputContent(fromDocument: Document(blocks: d.children),
@@ -143,6 +149,8 @@ private func chatInputMediaKind(fromKind kind: MediaKind) -> ChatInputMediaKind 
         return .location
     case .audio:
         return .audio
+    case .document:
+        return .document
     }
 }
 
@@ -211,7 +219,7 @@ private func chatInputTable(
         }
         return ChatInputTableRow(height: row.height, cells: cells)
     }
-    return ChatInputTable(columns: columns, rows: rows)
+    return ChatInputTable(columns: columns, rows: rows, compact: table.compact, bordered: table.bordered)
 }
 
 /// Flatten a table cell's blocks to a single run list. A paragraph contributes its runs verbatim; any other
@@ -233,6 +241,10 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
             runs.append(contentsOf: media.caption)
         case .table:
             // A nested table has no flat-run form; contribute nothing.
+            break
+        case .buttonRow:
+            // A table cell is a flat run list and a button row has no inline form; contribute nothing.
+            // Its label is button chrome, not document text, so leaking it into the cell would be wrong.
             break
         case let .blockQuote(bq):
             // A table cell is inline-only; block-quote structure is not representable inside a cell.
@@ -263,6 +275,11 @@ private func chatInputRuns(
         // `EmojiRef`. The chat currency instead carries that alt text AS the run text under the custom-emoji
         // entity (matching `chatInputContent(from:)` / `ComposerDocumentBridge`), so the SENT message's text +
         // entity length are the emoji, not a bare `U+FFFC`. Substitute it when this resolved to a custom emoji.
+        // A button run's text stays the bare `U+FFFC` — unlike a custom emoji, whose alt text is
+        // substituted, a pill's label lives inside the button and is never document text.
+        if run.attributes.button != nil {
+            return ChatInputRun(text: "\u{FFFC}", attributes: attributes)
+        }
         if case .customEmoji? = attributes.entity, let altText = run.attributes.emoji?.altText, !altText.isEmpty {
             return ChatInputRun(text: altText, attributes: attributes)
         }
@@ -281,7 +298,9 @@ private func chatInputInlineAttributes(
     // link when a run improbably carries both — matching `ComposerDocumentBridge`, which short-circuits on
     // a custom-emoji run before reading any other attribute.
     var entity: ChatInputInlineEntity?
-    if let emoji = attributes.emoji, let resolved = resolveEmoji(emoji) {
+    if let button = attributes.button {
+        entity = .button(chatInputButton(fromButtonRef: button))
+    } else if let emoji = attributes.emoji, let resolved = resolveEmoji(emoji) {
         entity = .customEmoji(fileId: resolved.fileId, file: resolved.file, enableAnimation: true)
     } else if let link = attributes.link {
         switch classifyChatLink(link) {
@@ -372,6 +391,12 @@ private func documentBlocks(
         }
         return [.blockQuote(BlockQuote(id: BlockID.generate(), children: children, collapsed: bq.collapsed,
                                        author: runs(fromChatInputRuns: bq.author, registerEmoji: registerEmoji)))]
+    case let .buttonRow(row):
+        return [.buttonRow(ButtonRowBlock(
+            id: BlockID.generate(),
+            buttons: row.buttons.map(buttonRef(fromChatInputButton:)),
+            alignment: buttonRowAlignment(from: row.alignment)
+        ))]
     case let .details(d):
         // Currency .details → a real editor Block.details, recursing the inner ChatInputContent back to
         // editor blocks. `expanded` maps 1:1.
@@ -420,6 +445,8 @@ private func mediaKind(fromChatInputKind kind: ChatInputMediaKind) -> MediaKind 
         return .location
     case .audio:
         return .audio
+    case .document:
+        return .document
     }
 }
 
@@ -490,7 +517,7 @@ private func tableBlock(
         }
         return Row(id: BlockID.generate(), height: row.height, cells: cells)
     }
-    return TableBlock(id: BlockID.generate(), columns: columns, rows: rows)
+    return TableBlock(id: BlockID.generate(), columns: columns, rows: rows, compact: table.compact, bordered: table.bordered)
 }
 
 private func runs(
@@ -508,7 +535,7 @@ private func runs(
             attributes.emoji = emoji
             return TextRun(text: "\u{FFFC}", attributes: attributes)
         }
-        if attributes.formula != nil {
+        if attributes.formula != nil || attributes.button != nil {
             return TextRun(text: "\u{FFFC}", attributes: attributes)
         }
         return TextRun(text: run.text, attributes: attributes)
@@ -539,6 +566,8 @@ private func characterAttributes(
             result.link = dateMarkdownURL(timestamp: timestamp)
         case let .url(url):
             result.link = url
+        case let .button(button):
+            result.button = buttonRef(fromChatInputButton: button)
         }
     }
     return result
@@ -550,9 +579,17 @@ private func characterAttributes(
 /// via `legacyChatInputAttributedString`). Returns false when the data isn't parseable as RTF.
 public func rtfRequiresNativeRichInput(_ data: Data) -> Bool {
     guard let document = RTFImport.document(fromRTF: data) else { return false }
+    return documentRequiresNativeRichInput(document)
+}
+
+/// The block predicate behind `rtfRequiresNativeRichInput`, split out so it can be tested without
+/// round-tripping through RTF bytes.
+func documentRequiresNativeRichInput(_ document: Document) -> Bool {
     return document.blocks.contains { block in
         switch block {
-        case .table, .media, .details:
+        case .table, .media, .details, .buttonRow:
+            // A button row has no linear text form at all — the legacy field cannot render it even
+            // as text, so its presence must latch the composer to the native editor.
             return true
         case .paragraph, .code, .pullQuote, .blockQuote:
             return false
@@ -573,5 +610,7 @@ public func legacyChatInputAttributedString(fromRTF data: Data) -> NSAttributedS
     }
     guard hasList else { return nil }
     let content = chatInputContent(fromDocument: document, resolveEmoji: { _ in nil }, resolveMedia: { _ in nil })
-    return attributedString(from: content, renderListMarkers: true)
+    // Paste direction: an imported link whose label IS its own URL pastes as plain text (see
+    // `chatInputContentStrippingSelfReferentialLinks`), matching the `chatInputStateStringFromRTF` path.
+    return attributedString(from: chatInputContentStrippingSelfReferentialLinks(content), renderListMarkers: true)
 }

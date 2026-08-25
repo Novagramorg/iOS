@@ -2000,7 +2000,7 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
         
         _transport.simultaneousTransactionsEnabled = true;
         
-        if (data.length <= 4 + 15) {
+        if (data.length >= 4 && data.length <= 4 + 15) {
             int32_t protocolErrorCode = 0;
             [data getBytes:&protocolErrorCode range:NSMakeRange(0, 4)];
             

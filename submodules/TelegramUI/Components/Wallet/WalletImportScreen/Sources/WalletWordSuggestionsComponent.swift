@@ -12,12 +12,23 @@ final class WalletWordSuggestionsComponent: Component {
     let fieldIndex: Int
     let query: String
     let words: [String]
+    let isInteractive: Bool
+    let pulseId: Int
     let action: (String) -> Void
 
-    init(fieldIndex: Int, query: String, words: [String], action: @escaping (String) -> Void) {
+    init(
+        fieldIndex: Int,
+        query: String,
+        words: [String],
+        isInteractive: Bool = true,
+        pulseId: Int = 0,
+        action: @escaping (String) -> Void
+    ) {
         self.fieldIndex = fieldIndex
         self.query = query
         self.words = Array(words.prefix(3))
+        self.isInteractive = isInteractive
+        self.pulseId = pulseId
         self.action = action
     }
 
@@ -25,13 +36,39 @@ final class WalletWordSuggestionsComponent: Component {
         return lhs.fieldIndex == rhs.fieldIndex
             && lhs.query == rhs.query
             && lhs.words == rhs.words
+            && lhs.isInteractive == rhs.isInteractive
+            && lhs.pulseId == rhs.pulseId
     }
 
     final class View: UIView, UIScrollViewDelegate {
+        private struct ItemId: Hashable {
+            let index: Int
+            let word: String
+        }
+
         private final class ItemButton: UIButton {
+            private let backgroundLayer = SimpleShapeLayer()
+            private let separatorLayer = SimpleLayer()
+
             var restingBackgroundColor: UIColor = .clear {
                 didSet {
                     self.updateBackgroundColor()
+                }
+            }
+
+            var touchesLeftEdge = false {
+                didSet {
+                    if self.touchesLeftEdge != oldValue {
+                        self.setNeedsLayout()
+                    }
+                }
+            }
+
+            var touchesRightEdge = false {
+                didSet {
+                    if self.touchesRightEdge != oldValue {
+                        self.setNeedsLayout()
+                    }
                 }
             }
 
@@ -41,10 +78,80 @@ final class WalletWordSuggestionsComponent: Component {
                 }
             }
 
+            override init(frame: CGRect) {
+                super.init(frame: frame)
+
+                self.backgroundLayer.fillColor = UIColor.clear.cgColor
+                self.layer.insertSublayer(self.backgroundLayer, at: 0)
+
+                self.separatorLayer.backgroundColor = UIColor.white.withAlphaComponent(0.08).cgColor
+                self.separatorLayer.opacity = 0.0
+                self.layer.addSublayer(self.separatorLayer)
+            }
+
+            required init?(coder: NSCoder) {
+                fatalError("init(coder:) has not been implemented")
+            }
+
             private func updateBackgroundColor() {
-                self.backgroundColor = self.isHighlighted
+                self.backgroundLayer.fillColor = (self.isHighlighted
                     ? UIColor(rgb: 0x5a5a5e)
-                    : self.restingBackgroundColor
+                    : self.restingBackgroundColor).cgColor
+            }
+
+            func updateDisplaysSeparator(_ displaysSeparator: Bool, transition: ComponentTransition) {
+                transition.setAlpha(layer: self.separatorLayer, alpha: displaysSeparator ? 1.0 : 0.0)
+            }
+
+            override func layoutSubviews() {
+                super.layoutSubviews()
+
+                self.backgroundLayer.frame = self.bounds
+                self.separatorLayer.frame = CGRect(
+                    x: self.bounds.width - UIScreenPixel,
+                    y: 0.0,
+                    width: UIScreenPixel,
+                    height: self.bounds.height
+                )
+
+                let edgeInset: CGFloat = 3.0
+                let rect = CGRect(
+                    x: edgeInset,
+                    y: edgeInset,
+                    width: self.bounds.width - edgeInset * 2.0,
+                    height: self.bounds.height - edgeInset * 2.0
+                )
+                let leftRadius: CGFloat = self.touchesLeftEdge ? rect.height * 0.5 : 4.0
+                let rightRadius: CGFloat = self.touchesRightEdge ? rect.height * 0.5 : 4.0
+
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: rect.minX + leftRadius, y: rect.minY))
+                path.addLine(to: CGPoint(x: rect.maxX - rightRadius, y: rect.minY))
+                path.addArc(
+                    tangent1End: CGPoint(x: rect.maxX, y: rect.minY),
+                    tangent2End: CGPoint(x: rect.maxX, y: rect.minY + rightRadius),
+                    radius: rightRadius
+                )
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - rightRadius))
+                path.addArc(
+                    tangent1End: CGPoint(x: rect.maxX, y: rect.maxY),
+                    tangent2End: CGPoint(x: rect.maxX - rightRadius, y: rect.maxY),
+                    radius: rightRadius
+                )
+                path.addLine(to: CGPoint(x: rect.minX + leftRadius, y: rect.maxY))
+                path.addArc(
+                    tangent1End: CGPoint(x: rect.minX, y: rect.maxY),
+                    tangent2End: CGPoint(x: rect.minX, y: rect.maxY - leftRadius),
+                    radius: leftRadius
+                )
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + leftRadius))
+                path.addArc(
+                    tangent1End: CGPoint(x: rect.minX, y: rect.minY),
+                    tangent2End: CGPoint(x: rect.minX + leftRadius, y: rect.minY),
+                    radius: leftRadius
+                )
+                path.closeSubpath()
+                self.backgroundLayer.path = path
             }
         }
 
@@ -54,11 +161,9 @@ final class WalletWordSuggestionsComponent: Component {
         private let backgroundLayer = SimpleShapeLayer()
         private let shadowLayer = SimpleLayer()
         private let scrollView = UIScrollView()
-        private var itemButtons: [ItemButton] = []
-        private var separatorViews: [UIView] = []
+        private var itemButtons: [ItemId: ItemButton] = [:]
 
         private var component: WalletWordSuggestionsComponent?
-        private var relativeNotchPositionX: CGFloat?
 
         override init(frame: CGRect) {
             let backgroundColor = UIColor(rgb: 0x2c2c2e).withAlphaComponent(0.92)
@@ -105,18 +210,25 @@ final class WalletWordSuggestionsComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func adjustBackground(relativePositionX: CGFloat) {
-            self.relativeNotchPositionX = relativePositionX
-            self.updateBackground(size: self.bounds.size, relativePositionX: relativePositionX)
+        func adjustBackground(relativePositionX: CGFloat, transition: ComponentTransition) {
+            self.updateBackground(
+                size: self.bounds.size,
+                relativePositionX: relativePositionX,
+                transition: transition
+            )
         }
 
-        private func updateBackground(size: CGSize, relativePositionX: CGFloat) {
+        private func updateBackground(
+            size: CGSize,
+            relativePositionX: CGFloat,
+            transition: ComponentTransition
+        ) {
             guard size.width > 0.0, size.height > 0.0 else {
                 return
             }
 
             let bodyMinY = WalletWordSuggestionsComponent.notchHeight
-            let radius: CGFloat = 16.0
+            let radius: CGFloat = 18.0
             let notchWidth: CGFloat = 19.0
             let notchBaseX = min(
                 size.width - radius - notchWidth,
@@ -177,16 +289,19 @@ final class WalletWordSuggestionsComponent: Component {
             )
             path.closeSubpath()
 
-            self.shadowLayer.frame = CGRect(origin: .zero, size: size)
-            self.shadowLayer.shadowPath = path
-            self.blurView.frame = CGRect(origin: .zero, size: size)
-            self.blurView.update(size: size, transition: .immediate)
-            self.backgroundLayer.frame = CGRect(origin: .zero, size: size)
-            self.backgroundLayer.path = path
+            let frame = CGRect(origin: .zero, size: size)
+            transition.setFrame(layer: self.shadowLayer, frame: frame)
+            transition.setShadowPath(layer: self.shadowLayer, path: path)
+            transition.setFrame(view: self.blurView, frame: frame)
+            self.blurView.update(size: size, transition: transition.containedViewLayoutTransition)
+            transition.setFrame(layer: self.backgroundLayer, frame: frame)
+            transition.setShapeLayerPath(layer: self.backgroundLayer, path: path)
         }
 
         @objc private func itemPressed(_ sender: UIButton) {
-            guard let component = self.component, component.words.indices.contains(sender.tag) else {
+            guard let component = self.component,
+                  component.isInteractive,
+                  component.words.indices.contains(sender.tag) else {
                 return
             }
             component.action(component.words[sender.tag])
@@ -200,30 +315,10 @@ final class WalletWordSuggestionsComponent: Component {
             transition: ComponentTransition
         ) -> CGSize {
             let resetScrollingPosition = self.component?.words != component.words
+            let animatePulse = !component.isInteractive
+                && component.pulseId != 0
+                && self.component?.pulseId != component.pulseId
             self.component = component
-
-            while self.itemButtons.count < component.words.count {
-                let button = ItemButton(type: .custom)
-                button.titleLabel?.font = Self.itemFont
-                button.addTarget(self, action: #selector(self.itemPressed(_:)), for: .touchUpInside)
-                self.itemButtons.append(button)
-                self.scrollView.addSubview(button)
-            }
-            while self.itemButtons.count > component.words.count {
-                self.itemButtons.removeLast().removeFromSuperview()
-            }
-
-            let separatorCount = max(0, component.words.count - 1)
-            while self.separatorViews.count < separatorCount {
-                let separatorView = UIView()
-                separatorView.backgroundColor = UIColor.white.withAlphaComponent(0.08)
-                separatorView.isUserInteractionEnabled = false
-                self.separatorViews.append(separatorView)
-                self.scrollView.addSubview(separatorView)
-            }
-            while self.separatorViews.count > separatorCount {
-                self.separatorViews.removeLast().removeFromSuperview()
-            }
 
             var itemWidths: [CGFloat] = []
             var contentWidth: CGFloat = 0.0
@@ -237,11 +332,14 @@ final class WalletWordSuggestionsComponent: Component {
             let width = min(availableSize.width, contentWidth)
             let size = CGSize(width: width, height: WalletWordSuggestionsComponent.height)
             let bodyHeight = WalletWordSuggestionsComponent.height - WalletWordSuggestionsComponent.notchHeight
-            self.scrollView.frame = CGRect(
-                x: 0.0,
-                y: WalletWordSuggestionsComponent.notchHeight,
-                width: width,
-                height: bodyHeight
+            transition.setFrame(
+                view: self.scrollView,
+                frame: CGRect(
+                    x: 0.0,
+                    y: WalletWordSuggestionsComponent.notchHeight,
+                    width: width,
+                    height: bodyHeight
+                )
             )
             self.scrollView.contentSize = CGSize(width: contentWidth, height: bodyHeight)
             self.scrollView.alwaysBounceHorizontal = contentWidth > width
@@ -250,49 +348,97 @@ final class WalletWordSuggestionsComponent: Component {
             }
 
             var itemX: CGFloat = 0.0
+            var validIds = Set<ItemId>()
             for index in component.words.indices {
-                let button = self.itemButtons[index]
                 let word = component.words[index]
+                let id = ItemId(index: index, word: word)
+                validIds.insert(id)
+
+                let button: ItemButton
+                let isNew: Bool
+                if let current = self.itemButtons[id] {
+                    button = current
+                    isNew = false
+                } else {
+                    button = ItemButton(type: .custom)
+                    button.titleLabel?.font = Self.itemFont
+                    button.addTarget(self, action: #selector(self.itemPressed(_:)), for: .touchUpInside)
+                    self.itemButtons[id] = button
+                    self.scrollView.addSubview(button)
+                    isNew = true
+                }
+
                 let title = NSMutableAttributedString(
                     string: word,
                     attributes: [
                         .font: Self.itemFont,
-                        .foregroundColor: UIColor.white
+                        .foregroundColor: UIColor(rgb: 0xb9b9ba),
                     ]
                 )
-                let queryLength = min((component.query as NSString).length, title.length)
+                let queryLength = component.isInteractive
+                    ? min((component.query as NSString).length, title.length)
+                    : 0
                 if queryLength > 0 {
                     title.addAttribute(
                         .foregroundColor,
-                        value: UIColor(rgb: 0xb9b9ba),
+                        value: UIColor.white,
                         range: NSRange(location: 0, length: queryLength)
                     )
                 }
                 button.tag = index
                 button.setAttributedTitle(title, for: .normal)
                 button.setAttributedTitle(title, for: .highlighted)
-                button.restingBackgroundColor = index == 0 ? UIColor(rgb: 0xffffff, alpha: 0.1) : .clear
-                button.frame = CGRect(x: itemX, y: 0.0, width: itemWidths[index], height: bodyHeight)
+                button.setAttributedTitle(title, for: .disabled)
+                button.isEnabled = component.isInteractive
+                button.restingBackgroundColor = component.isInteractive && index == 0
+                    ? UIColor(rgb: 0xffffff, alpha: 0.1)
+                    : .clear
+                button.touchesLeftEdge = index == component.words.startIndex
+                button.touchesRightEdge = index == component.words.index(before: component.words.endIndex)
+                button.updateDisplaysSeparator(
+                    index != component.words.index(before: component.words.endIndex),
+                    transition: isNew ? .immediate : transition
+                )
+                let buttonFrame = CGRect(x: itemX, y: 0.0, width: itemWidths[index], height: bodyHeight)
+                if isNew {
+                    button.frame = buttonFrame
+                    button.alpha = 0.0
+                    transition.setAlpha(view: button, alpha: 1.0)
+                } else {
+                    transition.setFrame(view: button, frame: buttonFrame)
+                }
                 button.accessibilityLabel = word
-                var accessibilityTraits: UIAccessibilityTraits = .button
-                if index == 0 {
+                var accessibilityTraits: UIAccessibilityTraits = component.isInteractive ? .button : .staticText
+                if component.isInteractive && index == 0 {
                     accessibilityTraits.insert(.selected)
                 }
                 button.accessibilityTraits = accessibilityTraits
-
-                itemX += itemWidths[index]
-                if index < self.separatorViews.count {
-                    self.separatorViews[index].frame = CGRect(
-                        x: itemX - UIScreenPixel,
-                        y: 0.0,
-                        width: UIScreenPixel,
-                        height: bodyHeight
+                if animatePulse && index == component.words.startIndex {
+                    button.layoutIfNeeded()
+                    button.titleLabel?.layer.animateKeyframes(
+                        values: [1.0 as NSNumber, 1.04 as NSNumber, 1.0 as NSNumber],
+                        duration: 0.2,
+                        keyPath: "transform.scale",
+                        timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue
                     )
                 }
+
+                itemX += itemWidths[index]
             }
 
-            let relativeNotchPositionX = self.relativeNotchPositionX ?? width / 2.0
-            self.updateBackground(size: size, relativePositionX: relativeNotchPositionX)
+            var removeIds: [ItemId] = []
+            for (id, button) in self.itemButtons {
+                if !validIds.contains(id) {
+                    removeIds.append(id)
+                    button.isUserInteractionEnabled = false
+                    transition.setAlpha(view: button, alpha: 0.0, completion: { [weak button] _ in
+                        button?.removeFromSuperview()
+                    })
+                }
+            }
+            for id in removeIds {
+                self.itemButtons.removeValue(forKey: id)
+            }
 
             return size
         }

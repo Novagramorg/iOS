@@ -10,6 +10,10 @@ import MultilineTextComponent
 import LottieComponent
 import WalletCollectibleImageComponent
 
+private let walletCollectibleLottieHosts: Set<String> = [
+    "nft.fragment.com",
+]
+
 public func walletCollectibleFragmentUrl(_ value: String?) -> String? {
     guard let value,
           let components = URLComponents(string: value),
@@ -33,7 +37,8 @@ private final class WalletRemoteLottieContent: LottieComponent.Content {
     init?(urlString: String) {
         guard let url = URL(string: urlString),
               url.scheme?.lowercased() == "https",
-              url.host?.lowercased() == "nft.fragment.com" else {
+              let host = url.host?.lowercased(),
+              walletCollectibleLottieHosts.contains(host) else {
             return nil
         }
         self.url = url
@@ -58,7 +63,8 @@ private final class WalletRemoteLottieContent: LottieComponent.Content {
                   response.expectedContentLength <= 0
                     || response.expectedContentLength <= Int64(Self.maximumSize),
                   let data,
-                  data.count <= Self.maximumSize else {
+                  data.count <= Self.maximumSize,
+                  (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else {
                 return
             }
             f(.animation(data: data, cacheKey: self.url.absoluteString))

@@ -98,15 +98,16 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
-    /// Per-host tunable text-layout metrics (body/caption line height + paragraph spacing; a growable set).
-    /// Defaults reproduce the editor's built-in document look (`.default` — 1.10 line height, 8pt paragraph
-    /// gap); the compact chat composer assigns `.compact` (natural 1.0 line height, no spacing) so multi-line
-    /// text reads tight like the legacy input. Set before the first `update(...)`/document seed (the
-    /// compact-host knob convention); assigning it after content rebuilds the boxes so the new metrics take
-    /// effect (like `quoteStyle`).
-    public var textLayoutMetrics: TextLayoutMetrics = .default {
+    /// The render metrics the editor lays text out with — fonts, per-style line-spacing factors, and
+    /// the block-rhythm scalars. Defaults to the chat-message look, which is what a rich message
+    /// renders as in a bubble. A host that renders its content through a differently-configured
+    /// InstantPage V2 surface passes that surface's metrics here instead. Set before the first
+    /// `update(...)`/document seed (the compact-host knob convention); assigning it after content
+    /// rebuilds the boxes so the new metrics take effect (like `quoteStyle`).
+    public var renderMetrics: RichTextRenderMetrics = .default {
         didSet {
-            canvas.applyTextLayoutMetrics(textLayoutMetrics)
+            guard renderMetrics != oldValue else { return }
+            canvas.applyRenderMetrics(renderMetrics)
             if bounds.width > 0.0 {
                 canvas.reload(self.document.blocks, width: bounds.width)
             }
@@ -216,6 +217,11 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         public let link: String?
         public let hasSelection: Bool
         public let isInTable: Bool
+        /// True when the caret/selection is inside a table whose `compact` flag is set (halved cell
+        /// padding). False when not in a table at all, so a host needs no optional handling.
+        public let isTableCompact: Bool
+        /// Whether the caret's table draws its grid. `true` when the caret isn't in a table.
+        public let isTableBordered: Bool
         /// True when a non-empty selection touches only paragraph text — no media or table block, and
         /// neither endpoint is inside a table cell. A list marker can only be meaningfully applied to
         /// paragraph blocks, so a host toolbar uses this to gate a per-selection List action. False for
@@ -321,10 +327,26 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     @discardableResult
     public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero,
                        scrollIndicatorInsets: UIEdgeInsets? = nil) -> CGFloat {
+        // A changed TOP inset must re-seat a scroll view that is resting at the top — UIKit only CLAMPS
+        // `contentOffset` when an inset changes, and with `contentInsetAdjustmentBehavior = .never` nothing
+        // else re-seats it. For a SHORT document the clamp is enough (the visible-height floor in
+        // `performLayout` makes −top the only valid offset), but a document TALLER than the viewport leaves
+        // offset 0 in range, so its first screenful stayed hidden under the top inset band (the article
+        // editor opened scrolled under the navigation bar). Captured BEFORE the inset is written; `<=`
+        // admits a rubber-band overscroll above the top, which is still "at the top".
+        let previousTopInset = scrollView.contentInset.top
+        let wasRestingAtTop = scrollView.contentOffset.y <= -previousTopInset + 0.5
         scrollView.contentInset = insets
         scrollView.verticalScrollIndicatorInsets = scrollIndicatorInsets ?? insets
         canvas.contentMargins = contentMargins
-        return performLayout(size: size)
+        let contentHeight = performLayout(size: size)
+        // After `performLayout`, so the new content size is in place (an offset write can be clamped by it).
+        // Gated on the top inset actually CHANGING, so an update driven by anything else — a keyboard-driven
+        // bottom inset, a re-layout after an edit — never re-seats a scroll the user owns.
+        if abs(insets.top - previousTopInset) > 0.01, wasRestingAtTop {
+            scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: -insets.top)
+        }
+        return contentHeight
     }
 
     /// Sizes the scroll view + canvas to `size` and returns the measured CONTENT height (min 44). The
@@ -434,6 +456,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func deleteTableColumn() { canvas.deleteTableColumn() }
     /// Deletes the table the caret is in (no-op otherwise).
     public func deleteTable() { canvas.deleteTable() }
+
+    /// Flips the caret's table between compact (halved cell padding) and normal, as one undo step.
+    /// No-op when the caret is not in a table.
+    public func toggleTableCompact() { canvas.toggleTableCompact() }
+
+    /// Shows / hides the caret table's grid. An unbordered table also lays out flush (zero-width
+    /// borders), matching how the sent message renders it.
+    public func toggleTableBordered() { canvas.toggleTableBordered() }
     /// Copies the caret's current table to the pasteboard (app fragment + RTF table + plain-text flatten). No-op outside a table.
     public func copyCurrentTable() { canvas.copyCurrentTable() }
     /// Replaces the caret's current table with body paragraphs (one per row, cells space-joined), one undo step. No-op outside a table.
@@ -497,6 +527,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// registered renderer, invalid/unrenderable formula content degrades to visible raw LaTeX.
     public func insertFormula(latex: String) { canvas.insertFormula(latex: latex) }
 
+    /// Inserts a button row (one default pill) at the caret. Top-level only: a row inside a table or a
+    /// block quote is preserved and rendered if it arrives via the edit round-trip, but not created.
+    public func insertButtonRow() { canvas.insertButtonRow() }
+
+    /// Converts the current selection into ONE inline pill whose label is the selected text — the Link
+    /// flow's analogue. No-op with a collapsed caret or an empty selection.
+    public func makeSelectionInlineButton() { canvas.makeSelectionInlineButton() }
+
     /// Deletes one unit before the caret (drives a custom keyboard's backspace key).
     public func deleteBackward() { canvas.deleteBackward() }
 
@@ -533,6 +571,24 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     /// Called when the user taps an existing formula atom. The host presents UI and invokes `completion`
     /// with the replacement LaTeX.
+    /// Asked to present the pill property sheet when a pill is tapped — for BOTH pill kinds. The
+    /// completion applies the edit; passing `nil` deletes the pill (and its row, if it was the last).
+    /// Mirrors `onEditFormulaRequested`. While unset, tapping a pill just places the caret.
+    ///
+    /// `isBlockPill` says which kind was tapped (`true` = a `pageBlockButtonRow` pill, `false` = an
+    /// inline `RichText.textButton`) — the same distinction `AttributedStringMapper.buttonAttachment`
+    /// and the renderer's `isInline` draw with. A host offers different properties per kind: the article
+    /// editor drops the link style for a row pill, where a chrome-less button is not something an author
+    /// should create, and keeps it inline (where it IS the plain-link rendering).
+    public var onEditButtonRequested: ((_ button: ButtonRef, _ isBlockPill: Bool, _ completion: @escaping (ButtonRef?) -> Void) -> Void)? {
+        didSet { canvas.buttonEditRequested = onEditButtonRequested }
+    }
+
+    /// Asked to present a button row's alignment/delete menu. Mirrors `onRequestTableStructuralMenu`.
+    public var onRequestButtonRowMenu: ((ButtonRowMenuRequest) -> Void)? {
+        didSet { canvas.buttonRowMenuRequested = onRequestButtonRowMenu }
+    }
+
     public var onEditFormulaRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)? {
         get { canvas.formulaEditRequested }
         set { canvas.formulaEditRequested = newValue }

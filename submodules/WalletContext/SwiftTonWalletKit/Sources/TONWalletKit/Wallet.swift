@@ -9,6 +9,10 @@ import TONConnect
 public enum WalletVersion: String, Codable, Sendable {
     case v4r2
     case v5r1
+    /// `wallet-v5-experimental` — V5R1 plus one-time public-key rotation.
+    ///
+    /// Other stacks name it differently; the Rust reference calls this version `Wallet`.
+    case v5experimental
 }
 
 /// Produces signatures for a wallet.
@@ -62,6 +66,7 @@ public struct Wallet: Sendable {
     let signer: any WalletSigner
     let v5: WalletV5R1?
     let v4: WalletV4R2?
+    let v5x: WalletV5Experimental?
 
     /// Builds a V5R1 wallet with the network-aware walletId.
     ///
@@ -100,6 +105,7 @@ public struct Wallet: Sendable {
         self.signer = signer
         self.v5 = wallet
         self.v4 = nil
+        self.v5x = nil
         self.id = WalletID(
             WalletID_.make(chainId: network.chainId, address: address.toString())
         )
@@ -122,6 +128,101 @@ public struct Wallet: Sendable {
         self.signer = signer
         self.v5 = nil
         self.v4 = wallet
+        self.v5x = nil
+        self.id = WalletID(
+            WalletID_.make(chainId: network.chainId, address: address.toString())
+        )
+    }
+
+    /// Builds a `wallet-v5-experimental` wallet with the network-aware walletId.
+    public init(
+        v5Experimental signer: any WalletSigner,
+        network: Network,
+        workchain: Int8 = 0
+    ) throws {
+        guard let globalId = Int32(network.chainId) else {
+            throw WalletKitError.validationFailed(reason: "Network chainId \(network.chainId) is not numeric")
+        }
+        try self.init(
+            v5Experimental: signer,
+            network: network,
+            walletID: WalletV5Experimental.walletID(globalId: globalId, workchain: workchain),
+            workchain: workchain
+        )
+    }
+
+    /// Builds a `wallet-v5-experimental` wallet with an explicitly persisted wallet id.
+    ///
+    /// Note what this init cannot express: a wallet whose key has already been rotated.
+    /// The address comes from the *deployed* state init, so re-deriving it from a rotated
+    /// key would name a different account. Restoring such a wallet means keeping the
+    /// address, and the original public key that derives it, alongside the current signer
+    /// — see ``rotationBody(to:seqno:validUntil:)``.
+    public init(
+        v5Experimental signer: any WalletSigner,
+        network: Network,
+        walletID: UInt32,
+        workchain: Int8 = 0
+    ) throws {
+        let wallet = WalletV5Experimental(
+            publicKey: signer.publicKey, walletID: walletID, workchain: workchain
+        )
+        let address = try wallet.address()
+
+        self.version = .v5experimental
+        self.address = address
+        self.network = network
+        self.publicKey = signer.publicKey
+        self.contractWalletID = walletID
+        self.signer = signer
+        self.v5 = nil
+        self.v4 = nil
+        self.v5x = wallet
+        self.id = WalletID(
+            WalletID_.make(chainId: network.chainId, address: address.toString())
+        )
+    }
+
+    /// A wallet whose one-time key rotation has already happened.
+    ///
+    /// After a rotation the account's address and its signing key no longer agree: the
+    /// address is fixed by the state init that was deployed, which embeds the *original*
+    /// key, while only the *new* key can authorize anything. Every other initializer here
+    /// derives the address from the signer, so none of them can name a rotated wallet —
+    /// without this one, rotating would make the account unusable through this kit.
+    ///
+    /// `originalPublicKey` is what the address derives from and must be the key the wallet
+    /// was created with; `signer` holds the key it uses now. Passing the current key as
+    /// `originalPublicKey` silently produces a different, non-existent account, so the
+    /// caller has to persist the original alongside the wallet.
+    ///
+    /// One consequence worth knowing: ``stateInit()`` still describes the deployed state,
+    /// which advertises the *old* public key. It hashes to the right address, but a TON
+    /// Connect peer that cross-checks the advertised key against the state init — as the
+    /// Rust reference's `verify_standard_wallet` does — will reject the connection. That
+    /// tension is inherent to a contract whose key can change while its address cannot.
+    public init(
+        v5ExperimentalRotated signer: any WalletSigner,
+        originalPublicKey: Data,
+        network: Network,
+        walletID: UInt32,
+        workchain: Int8 = 0
+    ) throws {
+        // Address from the original key; signing from the new one.
+        let wallet = WalletV5Experimental(
+            publicKey: originalPublicKey, walletID: walletID, workchain: workchain
+        )
+        let address = try wallet.address()
+
+        self.version = .v5experimental
+        self.address = address
+        self.network = network
+        self.publicKey = signer.publicKey
+        self.contractWalletID = walletID
+        self.signer = signer
+        self.v5 = nil
+        self.v4 = nil
+        self.v5x = wallet
         self.id = WalletID(
             WalletID_.make(chainId: network.chainId, address: address.toString())
         )
@@ -132,6 +233,7 @@ public struct Wallet: Sendable {
     public func stateInit() throws -> StateInit {
         if let v5 { return try v5.stateInit() }
         if let v4 { return try v4.stateInit() }
+        if let v5x { return try v5x.stateInit() }
         throw WalletKitError.validationFailed(reason: "Wallet has no contract")
     }
 
@@ -146,7 +248,7 @@ public struct Wallet: Sendable {
     /// silently truncated.
     public var maxMessagesPerTransfer: Int {
         switch version {
-        case .v5r1: return ActionList.maxActions
+        case .v5r1, .v5experimental: return ActionList.maxActions
         case .v4r2: return Cell.maxRefs
         }
     }
@@ -216,6 +318,23 @@ public struct Wallet: Sendable {
                 return try external.toCell().toBocBase64()
             }
 
+            if let v5x {
+                let actions = try ActionList.pack(
+                    messages.map { .sendMessage(mode: sendMode, message: $0) }
+                )
+                let payload = try v5x.unsignedBody(
+                    seqno: seqno,
+                    walletID: v5x.config.walletID,
+                    actions: actions,
+                    validUntil: validUntil,
+                    auth: .external
+                )
+                let signature = try await signer.sign(payload.hash())
+                let body = try WalletV5Experimental.signedBody(payload: payload, signature: signature)
+                let external = try v5x.externalMessage(body: body, includeStateInit: !isDeployed)
+                return try external.toCell().toBocBase64()
+            }
+
             if let v4 {
                 let payload = try v4.unsignedTransfer(
                     seqno: seqno,
@@ -241,6 +360,58 @@ public struct Wallet: Sendable {
         }
 
         throw WalletKitError.validationFailed(reason: "Wallet has no contract")
+    }
+
+    /// Signs a one-time public-key rotation, without broadcasting it.
+    ///
+    /// Only `wallet-v5-experimental` supports this; every other version throws.
+    ///
+    /// The returned BoC is deliberately *not* sent here. Rotation is irreversible and
+    /// available once per wallet, so the decision to broadcast belongs to the caller, who
+    /// should have confirmed with the user and — critically — verified that the new key is
+    /// backed up. A rotation to a key whose secret is lost cannot be undone, and the funds
+    /// go with it. The signature is made with the wallet's **current** key, because the
+    /// contract treats rotation as an owner action; the proof inside `rotation` is what
+    /// establishes that someone holds the new key.
+    ///
+    /// The caller must update its stored signer and mark the rotation spent only after the
+    /// transaction settles — see ``WalletV5Experimental/rotated(to:)``. Note that the
+    /// address cannot be re-derived from the new key afterwards; it stays as deployed.
+    public func signedKeyRotation(
+        _ rotation: KeyRotation,
+        seqno: UInt32,
+        isDeployed: Bool,
+        validUntil: UInt32
+    ) async throws -> String {
+        guard let v5x else {
+            throw WalletKitError.validationFailed(
+                reason: "Key rotation requires wallet-v5-experimental, not \(version.rawValue)"
+            )
+        }
+        guard isDeployed else {
+            throw WalletKitError.validationFailed(
+                reason: "Cannot rotate the key of an undeployed wallet"
+            )
+        }
+
+        do {
+            let actions = try v5x.changeKeyActions(rotation)
+            let payload = try v5x.unsignedBody(
+                seqno: seqno,
+                walletID: v5x.config.walletID,
+                actions: actions,
+                validUntil: validUntil,
+                auth: .external
+            )
+            let signature = try await signer.sign(payload.hash())
+            let body = try WalletV5Experimental.signedBody(payload: payload, signature: signature)
+            let external = try v5x.externalMessage(body: body, includeStateInit: false)
+            return try external.toCell().toBocBase64()
+        } catch let error as WalletKitError {
+            throw error
+        } catch {
+            throw WalletKitError.contractFailure(underlying: error)
+        }
     }
 
     /// Signs a `signData` request, which is a hash rather than a transaction.

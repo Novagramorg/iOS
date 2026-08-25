@@ -159,10 +159,10 @@ final class BlockQuoteBoxTests: XCTestCase {
 
     // MARK: - 15pt body font (render-only)
 
-    /// Block-quote children render at 15pt (bodyBaseSize = 15 via withBodyBaseSize), matching the
+    /// Block-quote children render at 15pt (body font size 15 via withBodyFontSize), matching the
     /// old flat `.quote` fixed size. The mapper stored on the child BlockBox carries the 15pt base
     /// so every downstream render path (collapsed preview, child boxes, headings — which are
-    /// independent of bodyBaseSize — all stay correct). Headings keep their fixed size.
+    /// independent of the body font size — all stay correct). Headings keep their fixed size.
     func test_blockQuoteBox_childBodyFontIs15pt() {
         let bq = BlockQuote(id: BlockID("q"), children: [
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hello")]))
@@ -173,7 +173,7 @@ final class BlockQuoteBoxTests: XCTestCase {
         guard let childBox = box.children.boxes.first as? BlockBox else { return XCTFail("child should be a BlockBox") }
         XCTAssertEqual(childBox.mapper.styleSheet.font(for: .body, attributes: .plain).pointSize, 15,
                        accuracy: 0.5, "block-quote body content renders at 15pt, not the document's 17pt")
-        // Headings inside a quote keep their fixed size (they don't use bodyBaseSize).
+        // Headings inside a quote keep their fixed size (they don't use the body font size).
         XCTAssertGreaterThan(childBox.mapper.styleSheet.font(for: .heading1, attributes: .plain).pointSize, 20,
                              "heading1 inside a quote keeps its fixed large size")
         // currentBlock() round-trips the children's text content (structural integrity).
@@ -183,7 +183,7 @@ final class BlockQuoteBoxTests: XCTestCase {
         XCTAssertEqual(p.runs.map(\.text).joined(), "hello", "text content is unchanged by the 15pt mapping")
     }
 
-    /// Nested quotes and quotes-in-cells stay 15pt — withBodyBaseSize(15) on an already-15pt mapper
+    /// Nested quotes and quotes-in-cells stay 15pt — withBodyFontSize(15) on an already-15pt mapper
     /// is idempotent; there is no per-level shrink.
     func test_blockQuoteBox_nestedQuote_staysAt15pt() {
         let inner = BlockQuote(id: BlockID("i"), children: [
@@ -198,7 +198,7 @@ final class BlockQuoteBoxTests: XCTestCase {
         // The inner (nested) BlockQuoteBox also stores a 15pt mapper — no further shrink.
         guard let innerBox = box.children.boxes.first as? BlockQuoteBox else { return XCTFail("inner should be BlockQuoteBox") }
         XCTAssertEqual(innerBox.mapper.styleSheet.font(for: .body, attributes: .plain).pointSize, 15,
-                       accuracy: 0.5, "nested quote stays at 15pt (withBodyBaseSize is idempotent)")
+                       accuracy: 0.5, "nested quote stays at 15pt (withBodyFontSize is idempotent)")
     }
 
     func test_canvasBuildsBlockQuoteBox_recursively() {

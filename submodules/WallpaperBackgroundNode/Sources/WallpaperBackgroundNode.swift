@@ -196,13 +196,15 @@ public protocol WallpaperBubbleBackgroundNode: ASDisplayNode {
     
     var implicitContentUpdate: Bool { get set }
     
-    func update(rect: CGRect, within containerSize: CGSize, transition: ContainedViewLayoutTransition)
-    func update(rect: CGRect, within containerSize: CGSize, delay: Double, transition: ContainedViewLayoutTransition)
-    func update(rect: CGRect, within containerSize: CGSize, transition: CombinedTransition)
-    func update(rect: CGRect, within containerSize: CGSize, animator: ControlledTransitionAnimator)
-    func offset(value: CGPoint, animationCurve: ContainedViewLayoutTransitionCurve, duration: Double)
-    func offsetSpring(value: CGFloat, duration: Double, damping: CGFloat)
-    
+    // No absolute-rect surface. A portal view mirrors its source, so a bubble background follows the
+    // wallpaper without being told where it is or how far it just travelled. The `update(rect:within:)`
+    // overloads and `offset`/`offsetSpring` that used to live here existed only for the pre-portal
+    // `contentsRect` implementation.
+    //
+    // NOTE `BubbleBackgroundNodeImpl` keeps its own `update(rect:within:transition:)` as a concrete
+    // method: `WallpaperBackgroundNodeImpl` renders three of them OFF-SCREEN as the portal sources, and
+    // that call is what sets the `contentsRect` each source draws. It is not part of this protocol
+    // because no bubble consumes it.
     func reloadBindings()
 }
 
@@ -1905,18 +1907,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         return false
     }
     
-    public func makeLegacyBubbleBackground(for type: WallpaperBubbleType) -> WallpaperBubbleBackgroundNode? {
-        let node = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: type)
-        node.updateContents()
-        return node
-    }
-
     public func makeBubbleBackground(for type: WallpaperBubbleType) -> WallpaperBubbleBackgroundNode? {
         if !self.hasBubbleBackground(for: type) {
             return nil
         }
         
-        var sourceView: PortalSourceView?
+        let sourceView: PortalSourceView?
         switch type {
         case .free:
             sourceView = self.freeBackgroundPortalSourceView
@@ -1925,15 +1921,28 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         case .outgoing:
             sourceView = self.outgoingBackgroundPortalSourceView
         }
-        
-        if let sourceView, let portalView = PortalView(matchPosition: true) {
-            sourceView.addPortal(view: portalView)
-            let node = WallpaperBackgroundNodeImpl.BubbleBackgroundPortalNodeImpl(portalView: portalView)
-            return node
-        } else {
-            let node = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: type)
-            return node
+
+        // Portal only. This used to fall back to `BubbleBackgroundNodeImpl`, the pre-portal
+        // implementation that renders a `contentsRect` window onto the shared wallpaper and therefore
+        // positions itself entirely from `update(rect:within:)` / `offset(...)` — the plumbing every
+        // consumer is being relieved of. Returning it without that plumbing would draw the whole
+        // wallpaper squashed into each bubble, with no counter-motion while the bubble travels.
+        //
+        // A nil return is already a supported answer here: it is what a `hasBubbleBackground` miss
+        // returns, and every caller degrades to the flat themed bubble colour.
+        //
+        // Neither half of this guard can fail on a shipping OS. The three portal source views are
+        // created unconditionally in `init` under `if #available(iOS 12.0, *)`, which is always true at
+        // this deployment target. `PortalView(matchPosition:)` fails only when `makePortalView`
+        // (UIKitUtils.m:211) cannot resolve the PRIVATE `_UIPortalView` class — so the fallback removed
+        // here was the private-API safety net, and its loss is visible only on a future OS where Apple
+        // drops that class. Bubbles would then render flat rather than falling back to the pre-portal
+        // `contentsRect` implementation.
+        guard let sourceView, let portalView = PortalView(matchPosition: true) else {
+            return nil
         }
+        sourceView.addPortal(view: portalView)
+        return WallpaperBackgroundNodeImpl.BubbleBackgroundPortalNodeImpl(portalView: portalView)
     }
     
     public func makeFreeBackground() -> PortalView? {

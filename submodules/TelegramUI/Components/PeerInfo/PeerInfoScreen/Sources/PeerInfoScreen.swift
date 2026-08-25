@@ -1256,7 +1256,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }, commitEmojiInteraction: { _, _, _, _ in
         }, openLargeEmojiInfo: { _, _, _ in
         }, openJoinLink: { _ in
-        }, openWebView: { _, _, _, _ in
+        }, openWebView: { _, _, _, _, _ in
         }, activateAdAction: { _, _, _, _ in
         }, adContextAction: { _, _, _ in
         }, removeAd: { _ in
@@ -2470,11 +2470,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 }
                                 return profileGifts.upgradeStarGift(formId: formId, reference: reference, keepOriginalInfo: keepOriginalInfo)
                             },
-                            buyGift: { [weak profileGifts] slug, peerId, price in
+                            buyGift: { [weak profileGifts] slug, peerId, price, hideName, text, entities in
                                 guard let profileGifts else {
                                     return .never()
                                 }
-                                return profileGifts.buyStarGift(slug: slug, peerId: peerId, price: price)
+                                return profileGifts.buyStarGift(slug: slug, peerId: peerId, price: price, hideName: hideName, text: text, entities: entities)
                             },
                             shareStory: { [weak self] uniqueGift in
                                 guard let self, let controller = self.controller else {
@@ -3983,13 +3983,13 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         peer: peer,
                         verifierSettings: verifierSettings,
                         verifierIcon: verifierIcon,
-                        apply: { [weak self, weak controller] value in
+                        apply: { [weak self, weak controller] value, entities in
                             guard let self else {
                                 return
                             }
                             controller?.dismiss(animated: true)
                             
-                            let _ = (self.context.engine.peers.updateCustomVerification(botId: self.peerId, peerId: peer.id, value: .enabled(description: value))
+                            let _ = (self.context.engine.peers.updateCustomVerification(botId: self.peerId, peerId: peer.id, value: .enabled(description: value, descriptionEntities: entities))
                             |> deliverOnMainQueue).start(completed: { [weak self] in
                                 guard let self else {
                                     return

@@ -5,6 +5,7 @@ import Display
 import CoreList
 import ComponentFlow
 import ComponentDisplayAdapters
+import ChatMessageItem
 import ChatMessageItemImpl
 
 // CoreList cannot depend on ComponentFlow — its Bazel target has no `deps` and its demo builds
@@ -60,7 +61,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // here renders the whole chat 180°-rotated. Stored for the makeListView contract; no transform.
     var rotated: Bool = false
 
-    private let coreList: CoreVirtualListView
+    // Internal rather than private: the header adapter in CoreListChatHistoryHeaders.swift
+    // enumerates attachments through it. Still invisible outside TelegramUI.
+    let coreList: CoreVirtualListView
 
     // Ordered entry array: the source of truth for what CoreVirtualListView displays. Mirrors the
     // ListView transaction model (delete/insert/update over indices) with a stable serial per entry
@@ -138,6 +141,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // would have. The handover is continuous rather than a step.
     private var isTracking = false
 
+    // Backing state for the header flashing driver in CoreListChatHistoryHeaders.swift.
+    // `SwiftSignalKit.Timer` explicitly: `Timer` alone is ambiguous here, since Foundation's is in
+    // scope too.
+    var headerFlashTimer: SwiftSignalKit.Timer?
+    var isFlashingHeaders = false
+
     // MARK: - Callbacks the controller installs
     var displayedItemRangeChanged: (ListViewDisplayedItemRange, Any?) -> Void = { _, _ in }
     var visibleContentOffsetChanged: (ListViewVisibleContentOffset, ContainedViewLayoutTransition) -> Void = { _, _ in }
@@ -183,6 +192,45 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return (self.currentInsets.top, self.currentSize.height - self.currentInsets.bottom)
     }
 
+    // The insets handed to CoreList: VERTICAL ONLY. Rows are laid out at the full viewport width and
+    // the horizontal insets travel to the hosted item as ListViewItemLayoutParams.leftInset/rightInset
+    // (CoreListEntryItem.leftInset, CoreListNodeHostView.rebuild) — which is exactly what ListViewImpl
+    // does: there is no `x: insets.left` anywhere in ListView.swift, its rows are full width, and the
+    // inset reaches the item as a layout param (Display/Source/ListView.swift:2384).
+    //
+    // Two reasons that level matters, not one:
+    //
+    //   Orientation.  A node carries its OWN π (ChatMessageItemView.init(rotated:) →
+    //                 CATransform3DMakeRotation(π, 0, 0, 1), which flips x as well as y). Item π +
+    //                 wrapper π = identity, so an inset applied INSIDE the item lands on the screen
+    //                 side the chat named. CoreList's viewport insets instead frame the row itself
+    //                 (`contentWidth = width - left - right`, CoreVirtualListView.swift:2262), taking
+    //                 only the wrapper's π — so `insets.left` came out on the screen RIGHT. Measured:
+    //                 the topics sidebar's 92pt shrank the bubbles by 92pt on the screen RIGHT and
+    //                 moved nothing away from the left, so the sidebar overlapped the content it was
+    //                 supposed to make room for.
+    //
+    //   Animation.    Framing the row cannot animate the move, and swapping the insets to fix the
+    //                 orientation did not change that. A view's subviews do not follow its
+    //                 `bounds.size.width`, so the row's content only moves when the hosted node is
+    //                 re-laid out — which happened at the destination width immediately, and mirrored
+    //                 that content about a centre that had itself jumped by half the inset. Visually:
+    //                 items animating correctly but offset by half the inset from the first frame.
+    //                 As a layout param it is an ordinary item relayout, which the item animates on
+    //                 the pass transition like any other content change.
+    //
+    // Vertical needs no such treatment because BOTH backends let the list decide a row's vertical
+    // position: one π either way, which the chat's pre-mirror at ChatControllerNode.swift:2500 already
+    // accounts for.
+    private var coreListInsets: UIEdgeInsets {
+        return UIEdgeInsets(
+            top: self.currentInsets.top,
+            left: 0.0,
+            bottom: self.currentInsets.bottom,
+            right: 0.0
+        )
+    }
+
     // The settled rect of a loaded row in the hosted CoreVirtualListView's coordinate space, or nil
     // when `node` is not currently loaded.
     //
@@ -212,12 +260,35 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return self.coreList.presentedFrame(of: view)
     }
 
-    // The settled rect of the row at a collection index, or nil when that index is not loaded.
-    private func loadedFrame(atIndex index: Int) -> CGRect? {
+    // Which of CoreList's two geometries a content-offset read wants. They differ only while something
+    // is animating the viewport, and then they differ by the whole remaining travel.
+    //
+    // `.presented` — where content is on screen right now. What a question about the CURRENT position
+    // means, and what every per-frame scroll read wants.
+    //
+    // `.settled` — where content will be once the pass in flight finishes. What the transaction-end
+    // emission means: it reports the OUTCOME of the pass it just submitted, paired with that pass's
+    // transition. This is also what ListViewImpl reports at the same point, because there the two
+    // coincide — `replayOperations` writes final item-node frames immediately and animates the layers
+    // additively, so its model IS its presented geometry.
+    private enum OffsetGeometry {
+        case presented
+        case settled
+    }
+
+    // The rect of the row at a collection index in the requested geometry, or nil when that index is
+    // not loaded. `geometry` is deliberately NOT defaulted: which one a call site wants is the whole
+    // question, and a default would let a new caller pick one by accident.
+    private func loadedFrame(atIndex index: Int, _ geometry: OffsetGeometry) -> CGRect? {
         guard let view = self.coreList.loadedItemView(at: index) else {
             return nil
         }
-        return self.listFrame(of: view)
+        switch geometry {
+        case .presented:
+            return self.listFrame(of: view)
+        case .settled:
+            return self.coreList.settledFrame(of: view)
+        }
     }
 
     // The collection index of a loaded row, or nil when `node` is not currently loaded.
@@ -250,6 +321,21 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // ListViewImpl, which reads the OLD self.insets in this branch (note the commented-out
     // `// updateSizeAndInsets?.insets ?? self.insets` at ListView.swift:3143) and applies the
     // size/inset change separately afterwards.
+    // Whether `index` is the LOWEST entry declaring `pinToEdgeWithInset` — `ListViewImpl` runs the
+    // same scan before taking its pin-to-edge branch (`Display/Source/ListView.swift:3151-3158`), and
+    // it matches CoreList's own `lowestPinnedIndex` rule, so the explicit scroll and the resting pin
+    // always name the same row.
+    private func isLowestPinToEdgeIndex(_ index: Int) -> Bool {
+        guard self.entries.indices.contains(index),
+              self.entries[index].listItem.pinToEdgeWithInset else {
+            return false
+        }
+        for i in 0 ..< index where self.entries[i].listItem.pinToEdgeWithInset {
+            return false
+        }
+        return true
+    }
+
     private func pointOffset(for position: ListViewScrollPosition,
                              index: Int,
                              height: CGFloat,
@@ -262,6 +348,28 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let insetTop = self.currentInsets.top
         let insetBottom = self.currentInsets.bottom
         let contentAreaHeight = viewportHeight - insetTop - insetBottom
+
+        // `ListViewImpl` replaces the requested position WHOLESALE for a pin-to-edge target
+        // (`Display/Source/ListView.swift:3146-3170`): the chat asks for `.top(0.0)` from
+        // `scrollToPinToTopStableId` (`ChatHistoryListNode.swift:2525`) and relies on the list to know
+        // better. Here `.top(0.0)` would return 0 and place the row on `viewportInsets.top` — the
+        // SCREEN BOTTOM under the wrapper's π, the opposite end from where it belongs.
+        //
+        // `scrollPositioningInsets.bottom` is deliberately NOT added, unlike `ListViewImpl` (`:3168`).
+        // CoreList's own resting pin works in the list's geometry and cannot see it, so including it
+        // would land this scroll a few points off the position every later pass re-pins to, and
+        // `isStrictlyScrolledToPinToEdgeItem()` would answer false immediately after the scroll that
+        // established the pin. It is zero for every row that can carry the flag anyway — only
+        // `ChatUnreadItem`/`ChatReplyCountItem` set a non-zero value, and neither can be pinned.
+        //
+        // `ListViewImpl` also guards this branch on `pinToEdgeTopInset > 0 || pinExtension > 0`. Not
+        // reproduced: when that guard would be false the placement below sits past CoreList's minimum
+        // edge and is clamped back to the position the unguarded branch produces anyway, so the guard
+        // would only add a second copy of the slack calculation to keep in sync.
+        if self.isLowestPinToEdgeIndex(index) {
+            let extensionOffset = max(0.0, height - contentAreaHeight * 0.5)
+            return (viewportHeight - insetBottom + extensionOffset) - height - insetTop
+        }
 
         switch position {
         case let .top(additionalOffset):
@@ -295,7 +403,10 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             // the row loaded. It is produced only by ensureItemNodeVisible — which always holds a
             // loaded node — and by the experimentalSnapScrollToItem path, which nothing in chat ever
             // enables. An unloaded target therefore falls back to center-with-top-overflow.
-            guard let frame = self.loadedFrame(atIndex: index) else {
+            //
+            // `.presented`: the question here is literally "is this row on screen right now", so the
+            // rendered position is the input, not where a pass in flight is taking it.
+            guard let frame = self.loadedFrame(atIndex: index, .presented) else {
                 return height <= contentAreaHeight + CGFloat.ulpOfOne
                     ? floor((contentAreaHeight - height) / 2.0)
                     : 0.0
@@ -338,8 +449,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             // false by then). Harmless: momentum only follows a drag that already moved content, so the
             // flag is set either way.
             self.didMoveContentDuringDrag = true
+            self.noteHeaderFlashingActivity()
             self.updateVisibleItemRange(force: false)
-            self.updateVisibleContentOffset(transition: .immediate)
+            // `.presented`: this fires per frame while content is moving under the finger or its
+            // momentum, so "where is it now" is both the question and the answer, and any single frame
+            // being slightly off is corrected by the next one.
+            self.updateVisibleContentOffset(transition: .immediate, geometry: .presented)
         }
         self.coreList.onLoadedEdgeReached = { [weak self] _ in
             guard let self else { return }
@@ -363,6 +478,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
             self.didMoveContentDuringDrag = false
             self.isTracking = true
+            self.noteHeaderFlashingActivity()
 
             func cancelContextGestures(view: UIView) {
                 if let gestureRecognizers = view.gestureRecognizers {
@@ -380,19 +496,51 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             for itemNode in self.itemNodes {
                 cancelContextGestures(view: itemNode.view)
             }
-            
+            self.cancelAttachmentContextGestures()
+
             self.beganInteractiveDragging(.zero)
         }
         // Close the tracking interval. Fires on `.ended` AND `.cancelled`, so a drag torn down by a
         // competing recognizer cannot leave the flag stuck on and permanently suppress inset compensation.
         //
-        // Deliberately does NOT call `self.endedInteractiveDragging`: that callback drives the
-        // overscroll-to-open-next-channel behavior, which is a separate unimplemented item rather than
-        // something to switch on as a side effect of this hook becoming available.
+        // This is also ListViewImpl's `scrollViewDidEndDragging` (Display/Source/ListView.swift:903-930),
+        // and the three callbacks it fires there are reproduced in its order. The `willDecelerate`
+        // distinction it gets from UIKit is read here from `isScrollFlightActive`, which is meaningful
+        // because the engine emits this hook AFTER launching deceleration.
         self.coreList.didEndDragging = { [weak self] in
             guard let self else { return }
             self.isTracking = false
+
+            let isDecelerating = self.coreList.isScrollFlightActive
+            // `contentOffset.y < -48.0` (ListView.swift:913) against the near edge. Its only consumer is
+            // the overlay audio player's pull-to-dismiss, and that list is built `rotated: false`
+            // (the default on ChatHistoryListNodeImpl.init, which OverlayAudioPlayerControllerNode does
+            // not override), so "past the min edge" is the plain pull-down the gesture means.
+            if isDecelerating && self.coreList.overscrollDistance < -48.0 {
+                self.didEndScrollingWithOverscroll?()
+            }
+            // The point is `ListViewImpl.touchesPosition`; both consumers take it as `_`
+            // (ChatHistoryListNode.swift:1268, OverlayAudioPlayerControllerNode.swift:363), so `.zero`
+            // matches what `beganInteractiveDragging` already passes above rather than inventing a
+            // coordinate space for a value nothing reads.
+            self.endedInteractiveDragging(.zero)
+            if !isDecelerating {
+                self.didEndScrolling?(false)
+            }
         }
+        // The momentum half: `scrollViewDidEndDecelerating` (ListView.swift:932-941), including its
+        // `!isTracking` guard, which is what keeps a flight *caught* by a new touch from reporting a
+        // stop. See the seam's own comment for why the flag is already true by then.
+        self.coreList.didEndScrolling = { [weak self] in
+            guard let self, !self.isTracking else { return }
+            self.didEndScrolling?(true)
+        }
+    }
+
+    deinit {
+        // The timer holds `self` weakly, so this is not a cycle — but a fired timer on a dead
+        // backend is still wasted work on the main run loop.
+        self.headerFlashTimer?.invalidate()
     }
 
     override func layout() {
@@ -406,7 +554,8 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // Applies a ListView-style batch to the entry array (mirroring ListView's own ordering:
     // deletes first, then inserts, then updates), maps size/insets, and re-renders the full settled
     // set via CoreVirtualListView.applyChanges. Fine-grained insert/delete animations and
-    // stationaryItemRange/customAnimationTransition are intentionally ignored for the PoC.
+    // stationaryItemRange is intentionally ignored for the PoC; `customAnimationTransition` is
+    // honored (see the transition precedence below).
     func chatHistoryTransaction(
         deleteIndices: [ListViewDeleteItem],
         insertIndicesAndItems: [ChatHistoryListViewInsertItem],
@@ -462,6 +611,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let scrollToItem = effectiveScrollToItem
 
         var sizeChanged = false
+        let previousSideInsets = (left: self.currentInsets.left, right: self.currentInsets.right)
         if let sizeAndInsets = updateSizeAndInsets, (sizeAndInsets.size != self.currentSize || sizeAndInsets.insets != self.currentInsets) {
             self.currentSize = sizeAndInsets.size
             self.currentInsets = sizeAndInsets.insets
@@ -471,6 +621,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         }
 
         let structurallyChanged = !deleteIndices.isEmpty || !insertIndicesAndItems.isEmpty || !updateIndicesAndItems.isEmpty
+        // Read before the mutation below rewrites `self.entries`. `deleteIndices` are indices into the
+        // OLD array, so `arrivingBlockStableIds` cannot say where they fall without it.
+        let previousEntryCount = self.entries.count
         if structurallyChanged {
             var updated = self.entries
             // Deletes: apply in descending index order so earlier removals don't shift later ones.
@@ -483,7 +636,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             for insert in insertIndicesAndItems.sorted(by: { $0.index < $1.index }) {
                 let stableVersion = self.nextStableVersion
                 self.nextStableVersion += 1
-                let entry = CoreListEntryItem(stableId: insert.stableId, stableVersion: stableVersion, listItem: insert.item)
+                let entry = CoreListEntryItem(stableId: insert.stableId, stableVersion: stableVersion, listItem: insert.item, backend: self, leftInset: self.currentInsets.left, rightInset: self.currentInsets.right)
                 let clamped = min(max(insert.index, 0), updated.count)
                 updated.insert(entry, at: clamped)
             }
@@ -492,7 +645,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
                 if update.index >= 0 && update.index < updated.count {
                     let stableVersion = self.nextStableVersion
                     self.nextStableVersion += 1
-                    updated[update.index] = CoreListEntryItem(stableId: update.stableId, stableVersion: stableVersion, listItem: update.item)
+                    updated[update.index] = CoreListEntryItem(stableId: update.stableId, stableVersion: stableVersion, listItem: update.item, backend: self, leftInset: self.currentInsets.left, rightInset: self.currentInsets.right)
                 }
             }
             // Neighbors are a function of final adjacency, so they are computed once the array has
@@ -506,7 +659,20 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
             self.entries = updated
         }
-        
+
+        // A horizontal inset change is a content change for every row: the item lays itself out
+        // against leftInset/rightInset, so the entries are re-pinned and re-submitted. Identity and
+        // stable version are preserved, so each row reconciles as a survivor whose content changed and
+        // reaches its host with the pass transition — the same path an edited message takes, and the
+        // reason the move animates at all. Cheap and rare: it runs when a sidebar opens or closes.
+        let sideInsetsChanged = self.currentInsets.left != previousSideInsets.left
+            || self.currentInsets.right != previousSideInsets.right
+        if sideInsetsChanged && !self.entries.isEmpty {
+            self.entries = self.entries.map {
+                $0.withSideInsets(left: self.currentInsets.left, right: self.currentInsets.right)
+            }
+        }
+
         // The row's placement can depend on its own measured height (bottom-align, center,
         // make-visible), and on a history jump the target is not loaded — the entries array was
         // replaced wholesale — so the backend cannot measure it. CoreList measures the anchor as the
@@ -566,6 +732,43 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             case let .Custom(duration, x1, y1, x2, y2):
                 transition = .init(animation: .curve(duration: duration, curve: .custom(x1, y1, x2, y2)))
             }
+        } else if let customAnimationTransition,
+                  case let .animated(duration, curve) = customAnimationTransition.legacyAnimator.transition,
+                  duration != 0.0 {
+            // An ITEM asking for a specific transition, which is a more specific statement than the
+            // generic insertion animation below and therefore outranks it.
+            //
+            // This is the streaming path, and dropping it was visible. A content node re-measuring
+            // itself calls `requestFullUpdate(ControlledTransition(duration: 0.15, curve: .easeInOut))`
+            // (ChatMessageRichDataBubbleContentNode.swift:1092/:1207/:1224, and the text node's three
+            // siblings), which reaches `requestMessageUpdate` and arrives here as
+            // `customAnimationTransition` with `options: [.AnimateInsertion, .Synchronous]` and no
+            // `scrollToItem`/`updateSizeAndInsets` (ChatHistoryListNode.swift:4920/:4941). Ignoring it
+            // ran the ROW on the `.AnimateInsertion` fallback — spring over 0.4s — while the node
+            // animated its own internals over 0.15s ease-in-out: a 2.7x duration difference and a
+            // different curve, so the node's content settled while its own row was still travelling.
+            // On a streaming bubble that re-fires per token, and it reads as the bubble wobbling.
+            //
+            // NOTE this is the standalone parameter, NOT `ListViewUpdateSizeAndInsets`'s field of the
+            // same name — the floating-topics side panel sets THAT one
+            // (ChatControllerNode.swift:2619) and reaches the `updateSizeAndInsets` branch above, so
+            // it is unaffected. The two were previously conflated, which is how this producer came to
+            // be recorded as "the chat sets it in exactly one place".
+            switch curve {
+            case .easeInOut:
+                transition = .easeInOut(duration: duration)
+            case .easeIn:
+                transition = .init(animation: .curve(duration: duration, curve: .easeIn))
+            case .linear:
+                // `.linear(duration:)` is a CoreListDemoTests convenience, not shipping API.
+                transition = .init(animation: .curve(duration: duration, curve: .linear))
+            case .spring, .customSpring:
+                // CoreList has one spring; `.customSpring`'s mass/stiffness/damping have no analogue,
+                // so it degrades rather than silently rendering as a bezier of the wrong shape.
+                transition = .spring(duration: duration)
+            case let .custom(x1, y1, x2, y2):
+                transition = .init(animation: .curve(duration: duration, curve: .custom(x1, y1, x2, y2)))
+            }
         } else if options.contains(.AnimateInsertion) {
             transition = .spring(duration: 0.4)
         }
@@ -607,17 +810,61 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // `pinsLoadedTop`, so the newest message would stop tracking the inset edge — the one case that
         // must keep working.
         let compensatesInsetChange = !self.isTracking
+
+        // `.RequestItemInsertionAnimations` means the LIST must not animate these arrivals: on
+        // ListViewImpl it hands the insertion animation to the node
+        // (Display/Source/ListView.swift:2867-2870 → `forceAnimateInsertion`), and the chat's send
+        // morph then cancels that node animation. CoreList has no node-animation step — its arrival
+        // animation is the entering row's own opacity track, on the host view — so the same
+        // statement lands as "do not fade". Without it the bubble is cross-faded twice: once by the
+        // morph carrying it out of the input field, once by the list underneath.
+        //
+        // The chat sets this flag on exactly one path, the fast send
+        // (Chat/ChatControllerLoadDisplayNode.swift:938), and drops it under `disableAnimations`
+        // (ChatHistoryListNode.swift:2090, :2539) — where the pass is immediate and fades nothing
+        // anyway, so the default is the right answer there.
+        let animatesInsertions = !options.contains(.RequestItemInsertionAnimations)
+
         if structurallyChanged || sizeChanged || scrollTo != nil || additionalScrollDistance != 0.0 {
             self.coreList.applyChanges(
-                items: structurallyChanged ? self.entries : nil,
+                items: (structurallyChanged || sideInsetsChanged) ? self.entries : nil,
                 newSize: self.currentSize == .zero ? nil : self.currentSize,
-                newInsets: self.currentInsets,
+                // Vertical only — see `coreListInsets`.
+                newInsets: self.coreListInsets,
                 scrollTo: scrollTo,
                 additionalScrollDistance: additionalScrollDistance,
                 anchorMode: stationaryItemRange == nil ? .automatic : .preserveVisibleContent,
                 compensatesInsetChange: compensatesInsetChange,
+                animatesInsertions: animatesInsertions,
                 transition: transition
             )
+        }
+
+        // Messages arriving at the newest edge slide in from beyond it, rather than fading into place
+        // where they will sit. This is `ListViewImpl`'s behaviour, though not by its mechanism:
+        // `ChatMessageItemView.animateInsertion` (ChatMessageItemView.swift:712) does it by displacing
+        // the node's own `transitionOffset`, and BOTH halves of that are inert here — the setter
+        // early-outs under `hostOwnsFrame` (ListViewItemNode.swift:275), which `rebuild` sets on every
+        // hosted node, and `addTransitionOffsetAnimation` is advanced only by `ListViewImpl`'s display
+        // link (ListView.swift:4823), which CoreList has no equivalent of. Calling `animateInsertion`
+        // here would compile, run, and animate nothing.
+        //
+        // So it is a CoreList track instead, and it must be one: an additive position animation added
+        // to the row's layer directly would be read back as a CoreList track by
+        // `capturePresentedPositionOffsets()` at the next pass, and a second message landing mid-slide
+        // would resume against a displacement the model never issued.
+        if let arrivingStableIds = self.arrivingBlockStableIds(
+            deleteIndices: deleteIndices,
+            insertIndicesAndItems: insertIndicesAndItems,
+            previousEntryCount: previousEntryCount,
+            options: options
+        ) {
+            // `.beforeBlock` is content order, not screen: index 0 is the NEWEST message and sits at
+            // the start of CoreList's content, which the wrapper's π renders at the visual bottom. So
+            // travelling forward from before index 0 is the block rising from under the input panel.
+            self.coreList.animateInsertedBlock(identities: arrivingStableIds,
+                                               origin: .beforeBlock,
+                                               transition: transition)
         }
 
         // Transaction end is where programmatic movement is reported: setOffset / applyShift /
@@ -630,10 +877,78 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // The transition mirrors the animation applied above. ContainedViewLayoutTransitionCurve has no
         // .easeOut, so the standard ease-out bezier approximates CoreList's .easeOut(0.3); this is
         // cosmetic, since consumers use the transition only to co-animate their own chrome.
+        //
+        // `.settled` is load-bearing, and this is the ONLY emission point that is not per-frame. The
+        // pass has been submitted but its animation has not moved anything yet, so the presented value
+        // here is the PRE-animation position — and no per-frame hook exists to correct it, since
+        // `onVisibleWindowChanged` fires only on user scrolls. Reporting presented therefore leaves the
+        // consumer wrong until the user next drags: tapping scroll-to-bottom left the button on screen
+        // (the emission described where the jump started), and opening the keyboard at the bottom of a
+        // chat made it appear (mid-inset-animation the emission read ~98pt against a settled 0, past the
+        // 40pt `minOffsetForNavigation` threshold in ChatControllerLoadDisplayNode.swift:5393).
+        //
+        // Settled is also what ListViewImpl reports at its equivalent points, and it is self-correcting
+        // in the one case where the two disagree for a reason — a transaction landing mid-fling — because
+        // the next scroll frame re-reports presented.
         let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
-        self.updateVisibleContentOffset(transition: offsetTransition)
+        self.updateVisibleContentOffset(transition: offsetTransition, geometry: .settled)
+        self.pushHeaderFlashingState(animated: false)
         completion(self.displayedItemRange)
+    }
+
+    /// The stable ids of a transaction that is a plain arrival at the newest edge, or nil when it is
+    /// anything else. Feeds the entering-block slide above.
+    ///
+    /// Positional rather than by message direction: a bot's reply, a message from another peer and one
+    /// you sent from a second device all land the same way, and the backend deals in stableIds and
+    /// `ListViewItem`s rather than in message semantics. The one arrival it must NOT claim is the local
+    /// fast send, which is what `.RequestItemInsertionAnimations` names — there the send morph is
+    /// already carrying the bubble out of the input field, and it is the same flag that suppresses
+    /// `animatesInsertions` a few lines above, for the same reason.
+    private func arrivingBlockStableIds(
+        deleteIndices: [ListViewDeleteItem],
+        insertIndicesAndItems: [ChatHistoryListViewInsertItem],
+        previousEntryCount: Int,
+        options: ListViewDeleteAndInsertOptions
+    ) -> [AnyHashable]? {
+        guard !insertIndicesAndItems.isEmpty else {
+            return nil
+        }
+        // **An arrival normally DOES delete something.** The history view is a sliding window of
+        // bounded size, so a message landing at the newest edge pushes the oldest one out of the view
+        // in the same transaction — and `entries[0]` is the newest, so that departure is at the far
+        // END of the old array. Requiring no deletes at all rejects nearly every real arrival; what
+        // disqualifies one is a departure ANYWHERE ELSE, which is a message being removed rather than
+        // the window sliding.
+        //
+        // Updates are not disqualifying either, and that is the load-bearing half of the same point: a
+        // message from the author who sent the one before it changes that bubble's merge state, so the
+        // commonest arrival of all carries an update alongside its insert.
+        let deletedIndices = deleteIndices.map { $0.index }.sorted()
+        guard deletedIndices.count <= previousEntryCount else {
+            return nil
+        }
+        guard deletedIndices == Array((previousEntryCount - deletedIndices.count) ..< previousEntryCount) else {
+            return nil
+        }
+        guard !options.contains(.RequestItemInsertionAnimations) else {
+            return nil
+        }
+        // Everything arriving at once is a population — opening a chat, a hole reload — not messages
+        // coming in. Those passes are immediate today, so this is a belt on top of the transition
+        // check inside `animateInsertedBlock`, but a full replace should never slide even if one
+        // acquires a curve.
+        guard insertIndicesAndItems.count < self.entries.count else {
+            return nil
+        }
+        // Contiguous and anchored at the newest edge. An insert further in is history being filled in
+        // around what is already there.
+        let indices = insertIndicesAndItems.map { $0.index }.sorted()
+        guard indices == Array(0 ..< insertIndicesAndItems.count) else {
+            return nil
+        }
+        return Array(insertIndicesAndItems.reversed().map { AnyHashable($0.stableId) })
     }
 
     // Parity with ListViewImpl.immediateDisplayedItemRange (ListView.swift:4683). loadedRange is the
@@ -677,10 +992,14 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     }
 
     // Fires visibleContentOffsetChanged. ListViewImpl's namesake also fires
-    // visibleBottomContentOffsetChanged, but ChatHistoryListViewBackend has no such member — chat
-    // calls visibleBottomContentOffset() directly.
-    private func updateVisibleContentOffset(transition: ContainedViewLayoutTransition) {
-        self.visibleContentOffsetChanged(self.visibleContentOffset(), transition)
+    // visibleBottomContentOffsetChanged, but ChatHistoryListViewBackend has no such member: the bottom
+    // offset has no per-frame consumer in chat at all, and its one caller pulls it through
+    // settledContentOffsets().
+    //
+    // `geometry` is `.settled` at the transaction point and `.presented` on the scroll path — see
+    // OffsetGeometry, and the call sites for why each is the one that consumers can act on.
+    private func updateVisibleContentOffset(transition: ContainedViewLayoutTransition, geometry: OffsetGeometry) {
+        self.visibleContentOffsetChanged(self.visibleContentOffset(geometry), transition)
     }
 
     func addAfterTransactionsCompleted(_ f: @escaping () -> Void) { f() }
@@ -698,23 +1017,38 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // that has no analogue here, because CoreList departures live in the exitOverlay and never appear
     // in the loaded window.
     func visibleContentOffset() -> ListViewVisibleContentOffset {
+        return self.visibleContentOffset(.presented)
+    }
+
+    private func visibleContentOffset(_ geometry: OffsetGeometry) -> ListViewVisibleContentOffset {
         guard let range = self.coreList.loadedIndexRange else {
             return .none
         }
-        guard range.first == 0, let frame = self.loadedFrame(atIndex: 0) else {
+        guard range.first == 0, let frame = self.loadedFrame(atIndex: 0, geometry) else {
             return .unknown
         }
         return .known(-(frame.minY - self.currentInsets.top))
     }
 
+    // Both offsets in the settled geometry — see the protocol declaration for why they are one member.
+    // The two are read back-to-back with no pass in between, so they cannot straddle an animation
+    // boundary.
+    func settledContentOffsets() -> (top: ListViewVisibleContentOffset, bottom: ListViewVisibleContentOffset) {
+        return (self.visibleContentOffset(.settled), self.visibleBottomContentOffset(.settled))
+    }
+
     // Parity with ListViewImpl.visibleBottomContentOffset (ListView.swift:1412): `.known` only when the
     // list's BOTTOM edge is loaded (the window ends at the last entry). Note this one is NOT negated —
     // both offsets read as "how much content lies beyond that visible edge", positive = more hidden.
-    func visibleBottomContentOffset() -> ListViewVisibleContentOffset {
+    //
+    // Private, unlike its `visibleContentOffset()` sibling: nothing in the chat asks this question
+    // per-frame, so it is reached only through `settledContentOffsets()` and the raw member is off the
+    // backend contract entirely.
+    private func visibleBottomContentOffset(_ geometry: OffsetGeometry) -> ListViewVisibleContentOffset {
         guard let range = self.coreList.loadedIndexRange else {
             return .none
         }
-        guard range.last == self.entries.count - 1, let frame = self.loadedFrame(atIndex: range.last) else {
+        guard range.last == self.entries.count - 1, let frame = self.loadedFrame(atIndex: range.last, geometry) else {
             return .unknown
         }
         return .known(frame.maxY - (self.currentSize.height - self.currentInsets.bottom))
@@ -766,7 +1100,22 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
         }
     }
-    func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {}
+    // Backed by CoreList's own live attachment set — see itemHeaderNodes in
+    // CoreListChatHistoryHeaders.swift.
+    //
+    // THREE chat consumers, and the third does not name this file: the live theme/presentation
+    // update (ChatHistoryListNode.swift:2649), the chat-loading fade-in (:4418), and
+    // `ChatController.updateItemNodesSelectionStates` (ChatController.swift:8382), which reaches
+    // this through the wrapper's forwarder (`historyNode.forEachItemHeaderNode`) and is what
+    // animates the gutter avatars into and out of selection mode. Grepping for `listView
+    // .forEachItemHeaderNode` finds the first two and misses the third — which is how this backend
+    // briefly grew a duplicate driver for that same push. See the selection-mode note under
+    // `itemHeaderNodes` in CoreListChatHistoryHeaders.swift for what that cost.
+    func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void) {
+        for node in self.itemHeaderNodes {
+            f(node)
+        }
+    }
 
     // ListViewImpl's own body (Display/Source/ListView.swift:5159-5199) with four substitutions: the
     // index comes from loadedIndex(of:) because a hosted node carries no ListView index; the node's
@@ -875,6 +1224,17 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         return self.loadedFrame(of: node)
     }
 
+    func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect? {
+        // The attachment-side `loadedFrame(of:)`. `loadedAttachmentViews` is the live set, so absence
+        // from it IS the liveness guard — same argument `itemHeaderNodes` makes.
+        for view in self.coreList.loadedAttachmentViews {
+            if let hostView = view as? CoreListHeaderHostView, hostView.headerNode === node {
+                return self.listFrame(of: hostView)
+            }
+        }
+        return nil
+    }
+
     // Same predicate as forEachVisibleItemNode's filter, via the shared band.
     func itemNodeVisibleInsideInsets(_ node: ListViewItemNode) -> Bool {
         guard let frame = self.loadedFrame(of: node) else {
@@ -883,7 +1243,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let band = self.visibleBand
         return frame.maxY > band.top && frame.minY < band.bottom
     }
-    func isStrictlyScrolledToPinToEdgeItem() -> Bool { return false }
+    // Was a hard `false` for the PoC, which disabled the whole pin-to-edge mechanic AND routed every
+    // send down the `scrollToItem` branch (see "Send animation" in
+    // docs/chat/corelist-chat-history-backend.md).
+    func isStrictlyScrolledToPinToEdgeItem() -> Bool {
+        return self.coreList.isStrictlyPinnedToBottomEdge
+    }
     func scrollWithDirection(_ direction: ListViewScrollDirection, distance: CGFloat) -> Bool { return false }
 }
 
@@ -897,17 +1262,80 @@ private final class CoreListEntryItem: CoreListItem {
     // when a neighbor changed, and passed into layout so merge/date decisions are correct.
     var neighbors: ListViewItemNeighbors
 
+    // The chat's horizontal insets, carried on the item so that changing them is a CONTENT change:
+    // `isEqual(to:)` compares them, so a sidebar opening reconciles every row and the pass transition
+    // reaches each host. See `coreListInsets` for why they travel to the item instead of framing rows.
+    let leftInset: CGFloat
+    let rightInset: CGFloat
+
+    // Built once here rather than computed on demand: CoreList consults `attachedItems` repeatedly
+    // within a pass — `AttachmentRuns.pendingRuns` runs per row during stacking as well as once per
+    // window build. It depends on the item's headers and on the side insets the headers lay out
+    // against, so only a pass that changes one of those invalidates it — vertical geometry cannot.
+    let attachedItems: [AnyHashable: CoreListAttachedItem]
+
+    // Held for withSideInsets(left:right:), which has to rebuild `attachedItems`.
+    private weak var backend: CoreListChatHistoryBackend?
+
     var identity: AnyHashable { AnyHashable(self.stableId) }
-    
-    init(stableId: UInt64, stableVersion: Int, listItem: ListViewItem, neighbors: ListViewItemNeighbors = .none) {
+
+    // CoreList's analogue of the ListView flag, forwarded verbatim. Only `ChatMessageItemImpl`
+    // implements it (from `ChatMessageEntryAttributes.pinToTop`), so this is true exactly for the
+    // message the chat named in `pinToTopStableId`.
+    //
+    // It stays current without any invalidation of its own: the flag changes only when the entry's
+    // attributes change, which always arrives as an `updateIndicesAndItems` entry — so the pass that
+    // changes it is always one that re-submits `items:` to `applyChanges`.
+    var pinsToBottomEdge: Bool { return self.listItem.pinToEdgeWithInset }
+
+    init(stableId: UInt64,
+         stableVersion: Int,
+         listItem: ListViewItem,
+         backend: CoreListChatHistoryBackend?,
+         leftInset: CGFloat,
+         rightInset: CGFloat,
+         neighbors: ListViewItemNeighbors = .none) {
         self.stableId = stableId
         self.stableVersion = stableVersion
         self.listItem = listItem
         self.neighbors = neighbors
+        self.leftInset = leftInset
+        self.rightInset = rightInset
+        self.backend = backend
+
+        var attachedItems: [AnyHashable: CoreListAttachedItem] = [:]
+        if let headerItem = listItem as? ChatHistoryItemWithHeaders {
+            for header in headerItem.headers {
+                // A topic header — a date header carrying a separableThreadId — comes through here
+                // like any other, keyed by its own id, and declares the stacking that keeps it clear
+                // of that day's plain date header. See `CoreListHeaderAttachedItem.stackingYield`.
+                attachedItems[AnyHashable(header.id)] = CoreListHeaderAttachedItem(header: header,
+                                                                                  backend: backend,
+                                                                                  leftInset: leftInset,
+                                                                                  rightInset: rightInset)
+            }
+        }
+        self.attachedItems = attachedItems
+    }
+
+    /// The same entry re-pinned to new side insets, preserving its identity and stable version so it
+    /// reconciles as a survivor whose content changed rather than as a replacement.
+    func withSideInsets(left: CGFloat, right: CGFloat) -> CoreListEntryItem {
+        return CoreListEntryItem(stableId: self.stableId,
+                                 stableVersion: self.stableVersion,
+                                 listItem: self.listItem,
+                                 backend: self.backend,
+                                 leftInset: left,
+                                 rightInset: right,
+                                 neighbors: self.neighbors)
     }
 
     func view() -> UIView & CoreListItemView {
-        return CoreListNodeHostView(listItem: self.listItem, neighbors: self.neighbors)
+        return CoreListNodeHostView(listItem: self.listItem,
+                                    neighbors: self.neighbors,
+                                    leftInset: self.leftInset,
+                                    rightInset: self.rightInset,
+                                    rotated: self.backend?.rotated ?? true)
     }
 
     // Content equality: the engine matches rows by `identity` (= stableId); this additionally compares
@@ -926,12 +1354,18 @@ private final class CoreListEntryItem: CoreListItem {
         if other.neighbors != self.neighbors {
             return false
         }
+        // The row lays its content out against these, so a change is a content change.
+        if other.leftInset != self.leftInset || other.rightInset != self.rightInset {
+            return false
+        }
         return true
     }
 
     func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
         (view as? CoreListNodeHostView)?.setListItem(self.listItem,
                                                      neighbors: self.neighbors,
+                                                     leftInset: self.leftInset,
+                                                     rightInset: self.rightInset,
                                                      transition: transition)
     }
 }
@@ -944,26 +1378,84 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
     private var lastWidth: CGFloat = -1.0
     private var lastHeight: CGFloat = 0.0
     private var contentDirty: Bool = true
-    /// The transition from the most recent `setListItem`, held for the layout that follows.
+    /// The enclosing pass's transition, held for the layout that follows and consumed by `rebuild`.
+    ///
+    /// Written by BOTH `setListItem` (reconciliation) and `update(width:transition:)` (every pass), in
+    /// that order, so `rebuild` sees the `update` value. They agree by contract — CoreList makes the
+    /// transition non-immediate only for a row whose content changed in the pass, which is the same
+    /// row `setListItem` was called for. `update` writing it unconditionally is what keeps it from
+    /// going stale: a later pass that rebuilds for a width change alone re-reads that pass's own
+    /// (immediate) transition rather than replaying the last reconciliation's.
     private var pendingTransition: CoreListTransition = .immediate
 
     var onContentDidChange: ((_ animated: Bool) -> Void)? = nil
 
-    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors) {
+    // The chat's horizontal insets, handed to the hosted node as layout params rather than applied by
+    // framing this view — see `coreListInsets`. They arrive through the item (they are part of its
+    // content equality), so a sidebar opening reconciles every row and reaches `rebuild` with the
+    // pass transition, which is what lets the ITEM animate its own content across the inset.
+    private var leftInset: CGFloat
+    private var rightInset: CGFloat
+
+    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors, leftInset: CGFloat, rightInset: CGFloat, rotated: Bool) {
         self.listItem = listItem
         self.neighbors = neighbors
+        self.leftInset = leftInset
+        self.rightInset = rightInset
+        self.rotated = rotated
         super.init(frame: .zero)
+    }
+
+    // Construction-only, like `rotated` on the backend itself: which end of the node's box is the
+    // reserved space a non-`spansMemberInsets` attachment must not ride over. Verbatim
+    // `self.rotated ? itemNode.insets.top : itemNode.insets.bottom`
+    // (Display/Source/ListView.swift:4278) — the chat's rows fold `timestampHeaderHeight` into
+    // `layoutInsets.top` and the node carries its own π, so under a rotated chat the header's
+    // reservation is the node's TOP inset even though it renders at the visual bottom.
+    private let rotated: Bool
+
+    var attachmentBandTrim: CGFloat {
+        guard let itemNode = self.itemNode else {
+            return 0.0
+        }
+        return self.rotated ? itemNode.insets.top : itemNode.insets.bottom
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func setListItem(_ item: ListViewItem,
                      neighbors: ListViewItemNeighbors,
+                     leftInset: CGFloat,
+                     rightInset: CGFloat,
                      transition: CoreListTransition) {
         self.listItem = item
         self.neighbors = neighbors
+        self.leftInset = leftInset
+        self.rightInset = rightInset
         self.pendingTransition = transition
         self.contentDirty = true
+    }
+
+    /// The most recent binding from CoreList, held for the same reason `visibleRect` is: the solve can
+    /// name this row's attachments before `update(width:)` has built the node they belong on.
+    private var attachedItems: [UIView & CoreListAttachedItemView] = []
+
+    // CoreList answers "which attachments hang off this row"; the only translation left is attachment
+    // host → header node. `setAttachedHeaderNodes` compares before notifying, which is what makes it
+    // safe to receive this every solve — including the frames where nothing moved, and the frame after
+    // a recycled view is handed a set for a different row.
+    func attachedItemsUpdated(_ attachments: [UIView & CoreListAttachedItemView]) {
+        self.attachedItems = attachments
+        self.applyAttachedItems()
+    }
+
+    private func applyAttachedItems() {
+        guard let itemNode = self.itemNode else {
+            return
+        }
+        itemNode.setAttachedHeaderNodes(self.attachedItems.compactMap {
+            ($0 as? CoreListHeaderHostView)?.headerNode
+        })
     }
 
     /// The most recent rect from CoreList, held so a node built after the notification still gets it.
@@ -1001,38 +1493,154 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
     }
 
     func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
-        // Deferred: map `transition` onto ListViewItemUpdateAnimation so a reconciled chat row
-        // animates its internal layout. Today the node relayouts with .None and the row's outer
-        // geometry animates via ListAnimationModel, which is the pre-existing behavior.
-        _ = transition
-        _ = self.pendingTransition
+        self.pendingTransition = transition
         if self.itemNode == nil || self.contentDirty || abs(width - self.lastWidth) > 0.5 {
             self.rebuild(width: width)
         }
         if let itemNode = self.itemNode {
-            itemNode.frame = CGRect(x: 0.0, y: 0.0, width: width, height: self.lastHeight)
+            /*self.layer.borderColor = UIColor.blue.cgColor
+            self.layer.borderWidth = 0.5
+
+            itemNode.layer.borderColor = UIColor.red.cgColor
+            itemNode.layer.borderWidth = 1.5*/
+
+            // The node's box is applied by `rebuild`, before the item's own apply — see there for why
+            // that ordering is load-bearing and why the pass transition animates it. This call is the
+            // backstop for the passes that do NOT rebuild (an unchanged survivor, a fresh view), and it
+            // no-ops whenever `rebuild` has already installed this frame.
+            //
+            // It reaches the layer at all only because of `ListViewItemNode.hostOwnsFrame`. Without
+            // that, assigning `contentSize`/`insets` resized the node as a side effect, so this frame
+            // was already installed by the time anything tried to animate to it and EVERY setter
+            // no-oped on its equality guard — `itemNode.frame =`, `CoreListTransition.setFrame`,
+            // `ContainedViewLayoutTransition.updateFrame(node:)`, `CALayer.animateFrame`. That is why
+            // the box snapped under every variant tried before, and why the earlier experiment matrix
+            // (snapped box vs animated box, against three different compensation displacements) was
+            // one configuration wearing several labels: the box had never once moved.
+            let itemNodeFrame = CGRect(x: 0.0, y: 0.0, width: width, height: self.lastHeight)
+            transition.setFrame(view: itemNode.view, frame: itemNodeFrame)
         }
         return self.lastHeight
     }
 
     private func rebuild(width: CGFloat) {
-        let params = ListViewItemLayoutParams(width: width, leftInset: 0.0, rightInset: 0.0, availableHeight: .greatestFiniteMagnitude, isStandalone: false)
+        // Full row width plus separate side insets, exactly as ListViewImpl builds these params
+        // (Display/Source/ListView.swift:2384). The alternative — folding the inset into `width` — was
+        // what this did before, and it cannot animate: shrinking the node re-lays its content out at
+        // the destination immediately, and the node's own π mirrors that content about a centre that
+        // has itself jumped by half the inset.
+        let params = ListViewItemLayoutParams(width: width, leftInset: self.leftInset, rightInset: self.rightInset, availableHeight: .greatestFiniteMagnitude, isStandalone: false)
         
         if let itemNode = self.itemNode {
             var layoutAndApply: (ListViewItemNodeLayout, (ListViewItemApply) -> Void)?
-            self.listItem.updateNode(async: { f in f() }, node: { itemNode }, params: params, neighbors: self.neighbors, animation: ListViewItemUpdateAnimation.None, completion: { nodeLayout, nodeApply in
+            // The pass transition, as the animation the item drives its OWN internals with. Outer
+            // geometry is not animated from here — ListAnimationModel owns that. CoreList's item
+            // contract already makes this non-immediate exactly when this row's content changed in the
+            // pass (a reconciled survivor, or an animated self-update flush) and `.immediate` for fresh
+            // views, scroll-in loads, unchanged survivors and off-screen remeasures, so there is no
+            // reconciled/not-reconciled test to make here.
+            //
+            // Routed through the existing CoreListTransition → ComponentTransition →
+            // ContainedViewLayoutTransition chain rather than re-deriving a curve, so there stays one
+            // mapping to keep correct — and that chain folds CoreList's zero-duration-means-immediate
+            // case into `.immediate` (see the ComponentTransition init at the top of this file).
+            //
+            // That fold matters for exactly one reason, and it is NOT that a zero duration would
+            // otherwise animate — it would not, on any path. A zero-duration `ControlledTransition`
+            // already collapses: `LegacyAnimator` maps `duration.isZero` to `.immediate`
+            // (ContainedViewLayoutTransition.swift:2761). What does NOT collapse is
+            // `ListViewItemUpdateAnimation.isAnimated`, which is true for ANY `.System` whatever its
+            // duration (ListViewItem.swift:10) — and `ChatMessageBubbleItemNode` branches on it in
+            // ~20 places to run its OWN animations on its own hard-coded durations, not the
+            // transition's. Reaching `.System` with a zero duration would put the item on those
+            // animated paths while the transition itself says immediate. Mapping the immediate case
+            // to `.None` is what keeps `isAnimated` false.
+            let mappedAnimation: ListViewItemUpdateAnimation
+            switch ComponentTransition(self.pendingTransition).containedViewLayoutTransition {
+            case .immediate:
+                mappedAnimation = .None
+            case let .animated(duration, curve):
+                // `interactive: false` yields the LegacyAnimator — plain ContainedViewLayoutTransition
+                // semantics, which is exactly what the item reads back out through
+                // `animation.transition` (ListViewItem.swift:33). ListViewImpl passes `true` only where
+                // it retains the transition to SCRUB it (`controlledTransition`, ListView.swift:1805);
+                // nothing here scrubs, so a NativeAnimator would be a UIViewPropertyAnimator nobody
+                // drives.
+                //
+                // The duration stays LOGICAL. ListViewImpl multiplies by
+                // `UIView.animationDurationFactor()` at that same site because a NativeAnimator needs
+                // wall-clock time; the legacy path instead reaches `CALayer.animate`, which applies the
+                // Slow Animations factor itself as `speed` (CAAnimationUtils.swift:105-109). Scaling
+                // here too would apply it twice, breaking CoreList's "exactly once per path" rule —
+                // under which the transition handed to an item is always the logical one.
+                mappedAnimation = .System(
+                    duration: duration,
+                    transition: ControlledTransition(duration: duration, curve: curve, interactive: false)
+                )
+            }
+            self.listItem.updateNode(async: { f in f() }, node: { itemNode }, params: params, neighbors: self.neighbors, animation: mappedAnimation, completion: { nodeLayout, nodeApply in
                 layoutAndApply = (nodeLayout, nodeApply)
             })
             if let (nodeLayout, nodeApply) = layoutAndApply {
                 let height = nodeLayout.contentSize.height + nodeLayout.insets.top + nodeLayout.insets.bottom
-                nodeApply(ListViewItemApply())
                 // Same fields, same order ListViewImpl stamps in updateNodeAtIndex. Load-bearing:
                 // `insets` is the content-box term the visibility fraction divides by, and the flip
                 // term inside ChatMessageBubbleItemNode.mapVisibility. ChatMessageItemImpl assigns
                 // these on its nodeConfiguredForParams path only, so without this they go stale
                 // whenever a relayout changes them — a date header appearing, say.
+                //
+                // contentSize/insets are written BEFORE the apply, matching ListView.swift:3008-3015.
+                // The order is load-bearing and compiler-invisible: `apply` runs caller code
+                // synchronously (ChatMessageBubbleItemNode's `awaitingAppliedReaction`, which dismisses
+                // an open context menu), and that code samples the row's on-screen geometry with a bare
+                // `UIView.convert` off the item node. Both setters rewrite the node's `frame` with its
+                // origin pinned (ListViewItemNode.swift:209-224), and under the chat's π the node's own
+                // height is what maps its content to screen — so with the old height still installed the
+                // sample lands a full height-delta too low. Writing them first makes the convert chain
+                // report the settled position even though CoreList has not rendered the row's new frame
+                // yet: the row's container origin is the sum of the LOWER indices' heights, which this
+                // row's own growth cannot change.
+                //
+                // `apparentHeight` stays after the apply, also matching ListViewImpl, which assigns it
+                // only in the post-apply branches (ListView.swift:3021/3053/3083).
                 itemNode.contentSize = nodeLayout.contentSize
                 itemNode.insets = nodeLayout.insets
+                // Under `hostOwnsFrame` those two assignments no longer resize the node — that is the
+                // point of the flag — so the box is applied here instead, and it must be BEFORE the
+                // apply for the convert-chain reason above.
+                //
+                // Through the pass transition, which animates `bounds.size.height` and `position.y`
+                // from their presentation values: the same two tracks, the same resume rule, and the
+                // same curve the engine uses for the ROW. That is what makes this ONE animation rather
+                // than a correction chasing another animation — the node's box and its row travel
+                // together by construction, and the content follows the box through the node's π.
+                //
+                // `setFrame` is only reached because the node no longer pre-empted it. Previously
+                // `contentSize`/`insets` had already installed this exact frame, so every setter
+                // returned at its equality guard and the box snapped no matter which one was used.
+                let nodeFrame = CGRect(x: 0.0, y: 0.0, width: width, height: height)
+                self.pendingTransition.setFrame(view: itemNode.view, frame: nodeFrame)
+                // `CoreListTransition` writes the LAYER, so the node's own `_bounds`/`_position` cache
+                // — what its `frame`/`bounds`/`position` getters return, and what `apparentFrame` and
+                // the backend's `itemNodeFrame(_:)` are built on — would otherwise go stale. Writing
+                // the model after the animated setter re-writes the same values and leaves the
+                // animations in place.
+                itemNode.frame = nodeFrame
+                // The content-offset convention `insets.didSet` maintains when the node owns itself.
+                // The item's own layout is expressed against it, so it is not optional.
+                //
+                // Applied UNANIMATED, deliberately. Routing it through
+                // `pendingTransition.setBoundsOriginY` instead — so that a changing inset would travel
+                // on the same curve as the height, the way ListViewImpl folds its `insetPart` into the
+                // `transitionOffset` seed (ListView.swift:3063) — brought the wobble back on device,
+                // and was reverted without the mechanism being established. It is dormant either way:
+                // the chat's items no longer carry insets, so this term is constant and a snap is
+                // invisible. See docs/chat/corelist-chat-history-backend.md, "Deferred".
+                let contentOffsetY = -nodeLayout.insets.top
+                if abs(itemNode.bounds.origin.y - contentOffsetY) > CGFloat.ulpOfOne {
+                    itemNode.bounds.origin.y = contentOffsetY
+                }
+                nodeApply(ListViewItemApply())
                 itemNode.apparentHeight = height
                 self.lastHeight = height
             } else {
@@ -1056,6 +1664,11 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
                 // ListViewImpl keeps it in step with the row's rendered height.
                 let height = node.contentSize.height + node.insets.top + node.insets.bottom
                 node.apparentHeight = height
+                // Claimed only AFTER the node has been built. `nodeConfiguredForParams` assigns
+                // `contentSize`/`insets` itself, and on this path we WANT the node's own writes: they
+                // are what give a fresh view its initial box, with nothing to animate from anyway.
+                // From here on the host owns it — see `ListViewItemNode.hostOwnsFrame`.
+                node.hostOwnsFrame = true
                 self.itemNode = node
                 self.addSubview(node.view)
                 self.lastHeight = height
@@ -1069,5 +1682,8 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         // A rect may have arrived before this node existed, and a relayout can change the insets the
         // fraction divides by, so re-derive visibility from the rect we hold.
         self.applyVisibility()
+        // Same argument, and it also covers the node being REPLACED: the binding CoreList last named
+        // is still correct for this row, but the new node's own array is empty.
+        self.applyAttachedItems()
     }
 }

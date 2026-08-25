@@ -4,6 +4,7 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 import TelegramCore
+import TelegramStringFormatting
 import TelegramPresentationData
 import TelegramUIPreferences
 import ProgressNavigationButtonNode
@@ -176,10 +177,11 @@ class ContactMultiselectionControllerImpl: ViewController, ContactMultiselection
             })
         case let .premiumGifting(birthdays, selectToday, _):
             if let birthdays, selectToday {
-                let today = Calendar(identifier: .gregorian).component(.day, from: Date())
+                let currentDate = Date()
+                let currentTimeZone = TimeZone.current
                 var todayPeers: [EnginePeer.Id] = []
                 for (peerId, birthday) in birthdays {
-                    if birthday.day == today {
+                    if relativeDateForBirthday(birthday, relativeTo: currentDate, timeZone: currentTimeZone) == .today {
                         todayPeers.append(peerId)
                     }
                 }

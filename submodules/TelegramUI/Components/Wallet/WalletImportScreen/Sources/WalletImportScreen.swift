@@ -55,6 +55,14 @@ private final class WalletImportScreenComponent: Component {
         private final class WordTextField: UITextField {
             var emptyBackspace: (() -> Void)?
             var pastedText: ((String) -> Bool)?
+            var shouldBecomeFirstResponder: (() -> Bool)?
+
+            override func becomeFirstResponder() -> Bool {
+                guard self.shouldBecomeFirstResponder?() ?? true else {
+                    return false
+                }
+                return super.becomeFirstResponder()
+            }
 
             override func deleteBackward() {
                 if self.text?.isEmpty != false {
@@ -73,27 +81,31 @@ private final class WalletImportScreenComponent: Component {
 
         private final class WordFieldView: UIView, UITextFieldDelegate {
             let index: Int
+            private var displayNumber: Int
 
-            private let numberLabel = UILabel()
+            private let backgroundLayer = SimpleShapeLayer()
+            private let numberText = ComponentView<Empty>()
+            private let pasteButton = ComponentView<Empty>()
             let textField = WordTextField()
 
             var textChanged: ((Int, String) -> Void)?
             var editingChanged: ((Int, Bool) -> Void)?
+            var shouldBeginEditing: ((Int) -> Bool)?
             var returnPressed: ((Int) -> Void)?
             var pasteWords: ((Int, [String]) -> Bool)?
             var emptyBackspace: ((Int) -> Void)?
+            var pastePressed: (() -> Void)?
 
             init(index: Int, displayNumber: Int, wordCount: Int) {
                 self.index = index
+                self.displayNumber = displayNumber
 
                 super.init(frame: CGRect())
 
-                self.layer.cornerRadius = 26.0
-                self.layer.masksToBounds = true
-
-                self.numberLabel.text = "\(displayNumber)."
-                self.numberLabel.font = Font.with(size: 17.0, traits: .monospacedNumbers)
-                self.numberLabel.textAlignment = .right
+                self.backgroundLayer.lineWidth = 1.0
+                self.backgroundLayer.fillColor = UIColor.clear.cgColor
+                self.backgroundLayer.strokeColor = UIColor.clear.cgColor
+                self.layer.addSublayer(self.backgroundLayer)
 
                 self.textField.delegate = self
                 self.textField.font = Font.regular(17.0)
@@ -112,6 +124,12 @@ private final class WalletImportScreenComponent: Component {
                     self.textField.smartInsertDeleteType = .no
                 }
                 self.textField.addTarget(self, action: #selector(self.textFieldTextChanged), for: .editingChanged)
+                self.textField.shouldBecomeFirstResponder = { [weak self] in
+                    guard let self else {
+                        return true
+                    }
+                    return self.shouldBeginEditing?(self.index) ?? true
+                }
                 self.textField.emptyBackspace = { [weak self] in
                     guard let self else {
                         return
@@ -131,7 +149,6 @@ private final class WalletImportScreenComponent: Component {
                     return self.pasteWords?(self.index, words) ?? false
                 }
 
-                self.addSubview(self.numberLabel)
                 self.addSubview(self.textField)
             }
 
@@ -139,32 +156,134 @@ private final class WalletImportScreenComponent: Component {
                 fatalError("init(coder:) has not been implemented")
             }
 
-            func update(theme: PresentationTheme, isInvalid: Bool, size: CGSize) {
-                self.backgroundColor = isInvalid
-                    ? theme.list.itemDestructiveColor.withAlphaComponent(0.1)
-                    : theme.list.itemInputField.backgroundColor
+            func updateConfiguration(displayNumber: Int, wordCount: Int) {
+                self.displayNumber = displayNumber
+                self.textField.returnKeyType = self.index == wordCount - 1 ? .done : .next
+            }
 
-                self.numberLabel.textColor = theme.list.itemSecondaryTextColor
-                self.textField.textColor = isInvalid ? theme.list.itemDestructiveColor : theme.list.itemPrimaryTextColor
+            func update(
+                theme: PresentationTheme,
+                isInvalid: Bool,
+                displaysPasteButton: Bool,
+                size: CGSize
+            ) {
+                let transition = ComponentTransition.easeInOut(duration: 0.2)
+
+                let backgroundFrame = CGRect(origin: .zero, size: size)
+                transition.setFrame(layer: self.backgroundLayer, frame: backgroundFrame)
+                transition.setShapeLayerPath(
+                    layer: self.backgroundLayer,
+                    path: UIBezierPath(roundedRect: backgroundFrame, cornerRadius: 26.0).cgPath
+                )
+                transition.setShapeLayerFillColor(
+                    layer: self.backgroundLayer,
+                    color: isInvalid
+                        ? theme.list.itemInputField.backgroundColor.mixedWith(theme.list.itemDestructiveColor, alpha: 0.03)
+                        : theme.list.itemInputField.backgroundColor
+                )
+                transition.setShapeLayerStrokeColor(
+                    layer: self.backgroundLayer,
+                    color: isInvalid ? theme.list.itemDestructiveColor : .clear
+                )
+
+                let numberColor = self.textField.isFirstResponder || self.textField.text?.isEmpty == false
+                    ? theme.list.itemPrimaryTextColor
+                    : theme.list.itemSecondaryTextColor
+                self.textField.textColor = theme.list.itemPrimaryTextColor
                 self.textField.tintColor = theme.list.itemAccentColor
                 self.textField.keyboardAppearance = theme.rootController.keyboardColor.keyboardAppearance
 
                 let numberInset: CGFloat = 10.0
                 let numberWidth: CGFloat = 26.0
                 let numberTextSpacing: CGFloat = 5.0
-                self.numberLabel.frame = CGRect(
-                    x: numberInset,
-                    y: 0.0,
-                    width: numberWidth,
-                    height: size.height
+                let numberTextSize = self.numberText.update(
+                    transition: transition,
+                    component: AnyComponent(Text(
+                        text: "\(self.displayNumber).",
+                        font: Font.with(size: 17.0, traits: .monospacedNumbers),
+                        color: .white,
+                        tintColor: numberColor
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: numberWidth, height: size.height)
                 )
+                if let numberTextView = self.numberText.view {
+                    if numberTextView.superview == nil {
+                        self.insertSubview(numberTextView, belowSubview: self.textField)
+                    }
+                    numberTextView.frame = CGRect(
+                        x: numberInset + numberWidth - numberTextSize.width,
+                        y: floor((size.height - numberTextSize.height) / 2.0) + 1.0,
+                        width: numberTextSize.width,
+                        height: numberTextSize.height
+                    )
+                }
+                let textFieldMinX = numberInset + numberWidth + numberTextSpacing
+                var textFieldMaxX = size.width - 9.0
+                if displaysPasteButton {
+                    let pasteButtonHeight: CGFloat = 28.0
+                    let pasteButtonSize = self.pasteButton.update(
+                        transition: transition,
+                        component: AnyComponent(ButtonComponent(
+                            background: ButtonComponent.Background(
+                                style: .legacy,
+                                color: theme.overallDarkAppearance
+                                    ? theme.actionSheet.opaqueItemBackgroundColor
+                                    : theme.list.plainBackgroundColor,
+                                foreground: theme.list.itemAccentColor,
+                                pressedColor: theme.list.itemInputField.backgroundColor,
+                                cornerRadius: pasteButtonHeight / 2.0
+                            ),
+                            content: AnyComponentWithIdentity(
+                                id: AnyHashable("paste"),
+                                component: AnyComponent(Text(
+                                    text: "Paste",
+                                    font: Font.semibold(15.0),
+                                    color: theme.list.itemAccentColor
+                                ))
+                            ),
+                            restrictContentAnimations: true,
+                            contentInsets: UIEdgeInsets(
+                                top: 0.0,
+                                left: 16.0,
+                                bottom: 0.0,
+                                right: 16.0
+                            ),
+                            fitToContentWidth: true,
+                            isEnabled: true,
+                            displaysProgress: false,
+                            action: { [weak self] in
+                                self?.pastePressed?()
+                            }
+                        )),
+                        environment: {},
+                        containerSize: CGSize(
+                            width: max(1.0, size.width - 16.0),
+                            height: pasteButtonHeight
+                        )
+                    )
+                    if let pasteButtonView = self.pasteButton.view {
+                        var transition = transition
+                        if pasteButtonView.superview == nil {
+                            transition = .immediate
+                            self.addSubview(pasteButtonView)
+                        }
+                        let pasteButtonFrame = CGRect(
+                            x: size.width - 12.0 - pasteButtonSize.width,
+                            y: floor((size.height - pasteButtonSize.height) / 2.0),
+                            width: pasteButtonSize.width,
+                            height: pasteButtonSize.height
+                        )
+                        transition.setFrame(view: pasteButtonView, frame: pasteButtonFrame)
+                        textFieldMaxX = pasteButtonFrame.minX - 4.0
+                    }
+                } else {
+                    self.pasteButton.view?.removeFromSuperview()
+                }
                 self.textField.frame = CGRect(
-                    x: numberInset + numberWidth + numberTextSpacing,
+                    x: textFieldMinX,
                     y: 0.0,
-                    width: max(
-                        0.0,
-                        size.width - numberInset - numberWidth - numberTextSpacing - 9.0
-                    ),
+                    width: max(0.0, textFieldMaxX - textFieldMinX),
                     height: size.height
                 )
             }
@@ -244,7 +363,11 @@ private final class WalletImportScreenComponent: Component {
         private var invalidWordIndices = Set<Int>()
         private var activeWordIndex: Int?
         private var wordSuggestions: [String] = []
+        private var hasInvalidWordSuggestion = false
+        private var invalidWordSuggestionPulseId = 0
         private var wordSuggestionFrame: CGRect?
+        private var hasPasteboardText = UIPasteboard.general.hasStrings
+        private var scrollToBottomAfterPaste = false
 
         override init(frame: CGRect) {
             self.scrollView.showsVerticalScrollIndicator = true
@@ -266,29 +389,58 @@ private final class WalletImportScreenComponent: Component {
             self.scrollView.delegate = self
             self.addSubview(self.scrollView)
 
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(self.pasteboardDidChange(_:)),
+                name: UIPasteboard.changedNotification,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(self.pasteboardDidChange(_:)),
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+
             self.setupWordInputFields(displayNumbers: Array(1 ... 12), preserving: [])
         }
 
-        private func setupWordInputFields(displayNumbers: [Int], preserving existingWords: [String]) {
+        private func setupWordInputFields(
+            displayNumbers: [Int],
+            preserving existingWords: [String],
+            preservingFocus: Bool = false
+        ) {
             guard !displayNumbers.isEmpty else {
                 return
             }
             let count = displayNumbers.count
-            for field in self.wordFields {
-                field.removeFromSuperview()
-            }
-            self.wordFields.removeAll()
+            let preservedActiveWordIndex = preservingFocus
+                ? self.wordFields.firstIndex(where: { $0.textField.isFirstResponder })
+                : nil
             self.words = Array(repeating: "", count: count)
             for index in 0 ..< min(existingWords.count, count) {
                 self.words[index] = existingWords[index]
             }
             self.updateImportPhraseValidity()
             self.invalidWordIndices.removeAll()
-            self.activeWordIndex = nil
+            if let preservedActiveWordIndex, preservedActiveWordIndex < count {
+                self.activeWordIndex = preservedActiveWordIndex
+            } else {
+                self.activeWordIndex = nil
+            }
             self.wordSuggestions = []
+            self.hasInvalidWordSuggestion = false
             self.wordSuggestionFrame = nil
 
-            for index in 0 ..< count {
+            if self.wordFields.count > count {
+                for field in self.wordFields[count...] {
+                    field.removeFromSuperview()
+                }
+                self.wordFields.removeSubrange(count...)
+            }
+
+            while self.wordFields.count < count {
+                let index = self.wordFields.count
                 let field = WordFieldView(
                     index: index,
                     displayNumber: displayNumbers[index],
@@ -300,6 +452,9 @@ private final class WalletImportScreenComponent: Component {
                 field.editingChanged = { [weak self] index, isEditing in
                     self?.wordEditingChanged(index: index, isEditing: isEditing)
                 }
+                field.shouldBeginEditing = { [weak self] index in
+                    return self?.shouldBeginEditingWord(at: index) ?? true
+                }
                 field.returnPressed = { [weak self] index in
                     self?.handleReturn(from: index)
                 }
@@ -309,13 +464,29 @@ private final class WalletImportScreenComponent: Component {
                 field.emptyBackspace = { [weak self] index in
                     self?.moveFocusBackward(from: index)
                 }
-                field.setText(self.words[index])
+                field.pastePressed = { [weak self] in
+                    self?.pasteRecoveryPhrase()
+                }
                 self.wordFields.append(field)
+            }
+
+            for index in self.wordFields.indices {
+                let field = self.wordFields[index]
+                field.updateConfiguration(
+                    displayNumber: displayNumbers[index],
+                    wordCount: count
+                )
+                if field.textField.text != self.words[index] {
+                    field.setText(self.words[index])
+                }
             }
             if !self.isVerificationMode {
                 for index in self.words.indices where !self.words[index].isEmpty {
                     self.validateWord(at: index)
                 }
+            }
+            if self.activeWordIndex != nil {
+                self.updateWordSuggestions()
             }
         }
 
@@ -323,11 +494,12 @@ private final class WalletImportScreenComponent: Component {
             guard (count == 12 || count == 24), count != self.words.count else {
                 return
             }
-            self.setupWordInputFields(displayNumbers: Array(1 ... count), preserving: self.words)
+            self.setupWordInputFields(
+                displayNumbers: Array(1 ... count),
+                preserving: self.words,
+                preservingFocus: true
+            )
             self.componentState?.updated(transition: .easeInOut(duration: 0.25))
-            DispatchQueue.main.async { [weak self] in
-                self?.wordFields.first(where: { $0.textField.text?.isEmpty != false })?.textField.becomeFirstResponder()
-            }
         }
 
         required init?(coder: NSCoder) {
@@ -335,8 +507,18 @@ private final class WalletImportScreenComponent: Component {
         }
 
         deinit {
+            NotificationCenter.default.removeObserver(self)
             self.titleTransformContainer.removeFromSuperview()
             self.operationDisposable.dispose()
+        }
+
+        @objc private func pasteboardDidChange(_ notification: Notification) {
+            let hasPasteboardText = UIPasteboard.general.hasStrings
+            guard self.hasPasteboardText != hasPasteboardText else {
+                return
+            }
+            self.hasPasteboardText = hasPasteboardText
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
         }
 
         func scrollToTop() {
@@ -388,19 +570,58 @@ private final class WalletImportScreenComponent: Component {
                   let component = self.component,
                   let activeWordIndex,
                   self.words.indices.contains(activeWordIndex),
-                  !self.words[activeWordIndex].isEmpty else {
+                  self.words[activeWordIndex].count >= 2 else {
                 self.wordSuggestions = []
+                self.hasInvalidWordSuggestion = false
                 return
             }
+            let word = self.words[activeWordIndex]
             let suggestions = component.walletContext.mnemonicWordSuggestions(
-                for: self.words[activeWordIndex],
+                for: word,
                 limit: 3
             )
-            if suggestions.count == 1, suggestions[0] == self.words[activeWordIndex] {
+            if suggestions.isEmpty && !component.walletContext.isMnemonicWord(word) {
+                self.wordSuggestions = ["Invalid word"]
+                self.hasInvalidWordSuggestion = true
+                self.invalidWordIndices.insert(activeWordIndex)
+            } else if suggestions.count == 1, suggestions[0] == word {
                 self.wordSuggestions = []
+                self.hasInvalidWordSuggestion = false
             } else {
                 self.wordSuggestions = suggestions
+                self.hasInvalidWordSuggestion = false
             }
+        }
+
+        private func isInvalidWord(at index: Int) -> Bool {
+            guard !self.isVerificationMode,
+                  let component = self.component,
+                  self.words.indices.contains(index) else {
+                return false
+            }
+            let word = self.words[index]
+            return !word.isEmpty && !component.walletContext.isMnemonicWord(word)
+        }
+
+        private func rejectInvalidWord(at index: Int) {
+            guard self.wordFields.indices.contains(index) else {
+                return
+            }
+            self.invalidWordIndices.insert(index)
+            self.updateWordSuggestions()
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            self.wordFields[index].layer.addShakeAnimation()
+            HapticFeedback().error()
+        }
+
+        private func shouldBeginEditingWord(at index: Int) -> Bool {
+            guard let activeWordIndex = self.activeWordIndex,
+                  activeWordIndex != index,
+                  self.isInvalidWord(at: activeWordIndex) else {
+                return true
+            }
+            self.rejectInvalidWord(at: activeWordIndex)
+            return false
         }
 
         private func selectSuggestedWord(_ word: String, at index: Int) {
@@ -414,6 +635,7 @@ private final class WalletImportScreenComponent: Component {
             self.wordFields[index].setText(word)
             self.invalidWordIndices.remove(index)
             self.wordSuggestions = []
+            self.hasInvalidWordSuggestion = false
             self.updateImportPhraseValidity()
             self.componentState?.updated(transition: .immediate)
             self.advanceFocus(from: index)
@@ -438,10 +660,16 @@ private final class WalletImportScreenComponent: Component {
             guard self.words.indices.contains(index) else {
                 return
             }
-            self.words[index] = self.normalizeWord(text)
+            let previousWord = self.words[index]
+            let word = self.normalizeWord(text)
+            self.words[index] = word
             self.updateImportPhraseValidity()
             self.invalidWordIndices.remove(index)
             self.updateWordSuggestions()
+            if word.count > previousWord.count && self.hasInvalidWordSuggestion {
+                self.invalidWordSuggestionPulseId += 1
+                HapticFeedback().impact()
+            }
             self.componentState?.updated(transition: .immediate)
         }
 
@@ -469,11 +697,17 @@ private final class WalletImportScreenComponent: Component {
         }
 
         private func handleReturn(from index: Int) {
-            if self.activeWordIndex == index, let firstSuggestion = self.wordSuggestions.first {
+            if self.activeWordIndex == index,
+               !self.hasInvalidWordSuggestion,
+               let firstSuggestion = self.wordSuggestions.first {
                 self.selectSuggestedWord(firstSuggestion, at: index)
-            } else {
-                self.advanceFocus(from: index)
+                return
             }
+            if self.isInvalidWord(at: index) {
+                self.rejectInvalidWord(at: index)
+                return
+            }
+            self.advanceFocus(from: index)
         }
 
         private func advanceFocus(from index: Int) {
@@ -486,9 +720,13 @@ private final class WalletImportScreenComponent: Component {
                 HapticFeedback().error()
                 return
             }
+            guard !self.isInvalidWord(at: index) else {
+                self.rejectInvalidWord(at: index)
+                return
+            }
 
             if index + 1 < self.wordFields.count {
-                self.wordFields[index + 1].textField.becomeFirstResponder()
+                let _ = self.wordFields[index + 1].textField.becomeFirstResponder()
             } else {
                 self.wordFields[index].textField.resignFirstResponder()
             }
@@ -498,7 +736,7 @@ private final class WalletImportScreenComponent: Component {
             guard index > 0 else {
                 return
             }
-            self.wordFields[index - 1].textField.becomeFirstResponder()
+            let _ = self.wordFields[index - 1].textField.becomeFirstResponder()
         }
 
         private func insertWords(_ sourceWords: [String], from index: Int) -> Bool {
@@ -531,7 +769,7 @@ private final class WalletImportScreenComponent: Component {
                         return
                     }
                     if nextIndex < self.wordFields.count {
-                        self.wordFields[nextIndex].textField.becomeFirstResponder()
+                        let _ = self.wordFields[nextIndex].textField.becomeFirstResponder()
                     } else {
                         self.wordFields.last?.textField.resignFirstResponder()
                     }
@@ -564,6 +802,7 @@ private final class WalletImportScreenComponent: Component {
             }
 
             self.wordSuggestions = []
+            self.hasInvalidWordSuggestion = false
             self.updateImportPhraseValidity()
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             if normalizedWords.count > 1 {
@@ -584,12 +823,46 @@ private final class WalletImportScreenComponent: Component {
                     return
                 }
                 if nextIndex < self.wordFields.count {
-                    self.wordFields[nextIndex].textField.becomeFirstResponder()
+                    let _ = self.wordFields[nextIndex].textField.becomeFirstResponder()
                 } else {
                     self.wordFields.last?.textField.resignFirstResponder()
                 }
             }
             return true
+        }
+
+        private func pasteRecoveryPhrase() {
+            guard !self.isVerificationMode, let component = self.component else {
+                return
+            }
+            guard let text = UIPasteboard.general.string else {
+                self.hasPasteboardText = false
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                return
+            }
+
+            let words = text
+                .split(whereSeparator: { $0.isWhitespace })
+                .map { self.normalizeWord(String($0)) }
+                .filter { !$0.isEmpty }
+            guard words.count == 12 || words.count == 24 else {
+                self.presentInvalidPhraseLength(count: words.count)
+                return
+            }
+            guard component.walletContext.isMnemonicValid(words: words) else {
+                self.presentInvalidMnemonic()
+                return
+            }
+
+            for field in self.wordFields where field.textField.isFirstResponder {
+                field.textField.resignFirstResponder()
+            }
+            self.setupWordInputFields(
+                displayNumbers: Array(1 ... words.count),
+                preserving: words
+            )
+            self.scrollToBottomAfterPaste = true
+            self.componentState?.updated(transition: .easeInOut(duration: 0.25))
         }
 
         private func presentInvalidPhraseLength(count: Int) {
@@ -693,7 +966,7 @@ private final class WalletImportScreenComponent: Component {
                                 guard let self, self.wordFields.indices.contains(firstIndex) else {
                                     return
                                 }
-                                self.wordFields[firstIndex].textField.becomeFirstResponder()
+                                let _ = self.wordFields[firstIndex].textField.becomeFirstResponder()
                             }
                         }
                     })
@@ -718,7 +991,7 @@ private final class WalletImportScreenComponent: Component {
             }
             self.isImporting = true
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.operationDisposable.set((component.walletContext.importWallet(words: words, version: .v5R1)
+            self.operationDisposable.set((component.walletContext.importWallet(words: words)
             |> deliverOnMainQueue).start(next: { [weak self] _ in
                 self?.dismiss()
             }, error: { [weak self] _ in
@@ -746,8 +1019,7 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
 
-            let titleCenterY = environment.statusBarHeight
-                + (environment.navigationHeight - environment.statusBarHeight) * 0.5
+            let titleCenterY = environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) * 0.5 + 3.0
             let titleTransformDistance: CGFloat = 20.0
             let titleY = max(
                 titleCenterY,
@@ -1152,6 +1424,9 @@ private final class WalletImportScreenComponent: Component {
 
             let fieldHeight: CGFloat = 52.0
             let fieldSpacing: CGFloat = 14.0
+            let displaysPasteButton = !isVerificationMode
+                && self.hasPasteboardText
+                && self.words.allSatisfy { $0.isEmpty }
             for index in self.wordFields.indices {
                 var transition = transition
                 let field = self.wordFields[index]
@@ -1168,7 +1443,8 @@ private final class WalletImportScreenComponent: Component {
                 transition.setFrame(view: field, frame: fieldFrame)
                 field.update(
                     theme: theme,
-                    isInvalid: self.invalidWordIndices.contains(index),
+                    isInvalid: false,
+                    displaysPasteButton: index == 0 && displaysPasteButton,
                     size: fieldFrame.size
                 )
                 contentHeight += fieldHeight
@@ -1179,7 +1455,7 @@ private final class WalletImportScreenComponent: Component {
             if !self.didRequestInitialFocus {
                 self.didRequestInitialFocus = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                    self?.wordFields.first?.textField.becomeFirstResponder()
+                    let _ = self?.wordFields.first?.textField.becomeFirstResponder()
                 }
             }
             contentHeight += 24.0
@@ -1251,14 +1527,19 @@ private final class WalletImportScreenComponent: Component {
                     self.scrollView.addSubview(wordSuggestionView)
                     animateIn = true
                 }
+                let suggestionTransition: ComponentTransition = animateIn
+                    ? .immediate
+                    : .easeInOut(duration: 0.2)
 
                 let suggestionIndex = activeWordIndex
                 let suggestionSize = wordSuggestionView.update(
-                    transition: .immediate,
+                    transition: suggestionTransition,
                     component: AnyComponent(WalletWordSuggestionsComponent(
                         fieldIndex: activeWordIndex,
                         query: self.words[activeWordIndex],
                         words: self.wordSuggestions,
+                        isInteractive: !self.hasInvalidWordSuggestion,
+                        pulseId: self.hasInvalidWordSuggestion ? self.invalidWordSuggestionPulseId : 0,
                         action: { [weak self] word in
                             self?.selectSuggestedWord(word, at: suggestionIndex)
                         }
@@ -1280,14 +1561,17 @@ private final class WalletImportScreenComponent: Component {
                     width: suggestionSize.width,
                     height: suggestionSize.height
                 )
-                wordSuggestionView.frame = suggestionFrame
+                suggestionTransition.setFrame(view: wordSuggestionView, frame: suggestionFrame)
                 self.wordSuggestionFrame = suggestionFrame
                 self.scrollView.bringSubviewToFront(wordSuggestionView)
                 if let componentView = wordSuggestionView.componentView as? WalletWordSuggestionsComponent.View {
-                    componentView.adjustBackground(relativePositionX: fieldFrame.midX - suggestionFrame.minX)
+                    componentView.adjustBackground(
+                        relativePositionX: fieldFrame.midX - suggestionFrame.minX,
+                        transition: suggestionTransition
+                    )
                 }
                 if animateIn {
-                    wordSuggestionView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+                    wordSuggestionView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1)
                 }
             } else {
                 self.removeWordSuggestionView()
@@ -1322,6 +1606,25 @@ private final class WalletImportScreenComponent: Component {
             )
             if self.scrollView.verticalScrollIndicatorInsets != scrollIndicatorInsets {
                 self.scrollView.verticalScrollIndicatorInsets = scrollIndicatorInsets
+            }
+
+            if self.scrollToBottomAfterPaste && environment.inputHeight == 0.0 {
+                self.scrollToBottomAfterPaste = false
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    let maximumOffsetY = max(
+                        0.0,
+                        self.scrollView.contentSize.height
+                            + self.scrollView.contentInset.bottom
+                            - self.scrollView.bounds.height
+                    )
+                    self.scrollView.setContentOffset(
+                        CGPoint(x: 0.0, y: maximumOffsetY),
+                        animated: true
+                    )
+                }
             }
 
             self.updateScrolling(transition: transition)

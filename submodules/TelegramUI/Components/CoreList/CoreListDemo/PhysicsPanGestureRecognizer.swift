@@ -10,8 +10,10 @@ import UIKit.UIGestureRecognizerSubclass
 /// the scroll view catches a trackpad finger-down via the public `UIGestureRecognizerDelegate`
 /// `gestureRecognizer(_:shouldReceive:)` (UIEvent) callback instead.
 final class PhysicsPanGestureRecognizer: UIPanGestureRecognizer {
-    /// Fired the instant a finger lands (before the pan recognizes a drag).
-    var onTouchDown: (() -> Void)?
+    /// Fired the instant a finger lands (before the pan recognizes a drag), carrying the touch
+    /// event's timestamp — the analogue of `-[UIScrollView _beginTrackingWithEvent:]` reading
+    /// `event.timestamp`, which shares `CACurrentMediaTime`'s timebase.
+    var onTouchDown: ((TimeInterval) -> Void)?
     /// Fired when a finger lifts / the touch is cancelled.
     var onTouchUp: (() -> Void)?
 
@@ -24,9 +26,10 @@ final class PhysicsPanGestureRecognizer: UIPanGestureRecognizer {
     /// When this returns `true`, the recognizer recognizes immediately on touch-down (no ~10px
     /// hysteresis) — the scroll view/engine sets it while content is MOVING, so a finger landing on
     /// moving content grabs the scroll at once (UIScrollView's no-deadzone behaviour). The forced
-    /// `.began` is also what lets a stopping tap be absorbed: a begun pan never fails, and the engine
-    /// makes content recognizers require this pan to fail, so they are prevented. A `nil`/`false`
-    /// closure leaves the normal pan hysteresis intact, so taps with the content at rest pass through.
+    /// `.began` is also what lets a stopping tap be absorbed: the engine grants no gesture
+    /// simultaneity, so UIKit's plain exclusion fails the content recognizer the moment this pan
+    /// begins. A `nil`/`false` closure leaves the normal pan hysteresis intact, so taps with the
+    /// content at rest pass through.
     var shouldBeginImmediately: (() -> Bool)?
 
     override init(target: Any?, action: Selector?) {
@@ -44,7 +47,7 @@ final class PhysicsPanGestureRecognizer: UIPanGestureRecognizer {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
         isIndirectScroll = false               // a real touch landed → this is a direct (finger) gesture
-        onTouchDown?()
+        onTouchDown?(event.timestamp)
         // Grab moving content the instant the finger lands (no hysteresis). Evaluated AFTER onTouchDown
         // so onTouchDown must not have already stopped the motion — the engine no longer catches there.
         if shouldBeginImmediately?() == true { state = .began }

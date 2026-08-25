@@ -90,9 +90,27 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     // absence from the loaded window.
     func itemNodeFrame(_ node: ListViewItemNode) -> CGRect?
 
+    // The header-node twin, and it exists for exactly the same reason: a header node's view is a
+    // subview of its attachment host under a hosting backend, so its own frame is `(0, 0, w, h)` and
+    // any position read off it is silently zero. `forEachItemHeaderNode` handing out real nodes is
+    // what makes this reachable — the enumerator being right does not make the geometry right.
+    func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect?
+
     func addAfterTransactionsCompleted(_ f: @escaping () -> Void)
     func visibleContentOffset() -> ListViewVisibleContentOffset
-    func visibleBottomContentOffset() -> ListViewVisibleContentOffset
+
+    // Both content offsets, sampled together in the SETTLED geometry — where the content will be once
+    // whatever is animating finishes.
+    //
+    // One member rather than the `visibleContentOffset()` / `visibleBottomContentOffset()` pair it
+    // replaces, for two reasons. It is a question about the list's STATE, asked while a transaction is
+    // being prepared, so the mid-animation position is the wrong instant: on `ListViewImpl` the two
+    // coincide (its model IS its presented geometry), but under a hosting backend they diverge by the
+    // whole remaining travel of any pass in flight. And the caller COMPARES the two, so sampling them
+    // separately lets them describe different instants — the failure the single member makes
+    // unrepresentable. The thresholds stay in the chat layer; this only fixes the instant.
+    func settledContentOffsets() -> (top: ListViewVisibleContentOffset, bottom: ListViewVisibleContentOffset)
+
     func transferVelocity(_ velocity: CGFloat)
     func resetScrolledToItem()
 
@@ -176,6 +194,20 @@ extension ListViewImpl: ChatHistoryListViewBackend {
             return nil
         }
         return node.frame
+    }
+
+    public func itemHeaderNodeFrame(_ node: ListViewItemHeaderNode) -> CGRect? {
+        // Header nodes are direct subviews of the list here, so their frame is already list space.
+        // There is no `index`-style liveness flag on a header node; `forEachItemHeaderNode` only ever
+        // hands out live ones, and a caller holding a stale node past that is out of contract.
+        return node.frame
+    }
+
+    // Settled and presented are the same thing here: `replayOperations` writes final item-node frames
+    // immediately and animates the layers additively, so these two reads already return the endpoint.
+    // This is the pair the chat used to sample separately, which on this backend is exactly equivalent.
+    public func settledContentOffsets() -> (top: ListViewVisibleContentOffset, bottom: ListViewVisibleContentOffset) {
+        return (self.visibleContentOffset(), self.visibleBottomContentOffset())
     }
 
     public func chatHistoryTransaction(

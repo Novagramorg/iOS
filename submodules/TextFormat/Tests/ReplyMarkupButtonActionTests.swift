@@ -5,7 +5,9 @@ import TelegramCore
 
 /// Covers the two shared `Api` → `ReplyMarkupButtonAction` mappers introduced when the schema
 /// collapsed 16 per-behaviour keyboard-button constructors into `keyboardButton` (ButtonType) and
-/// `keyboardInlineButton` (InlineButtonType).
+/// `keyboardInlineButton` (InlineButtonType). The schema has since moved `keyboardInlineButton` into
+/// its own `KeyboardInlineButton` type (with a matching `keyboardInlineButtonRow`), but the two
+/// action mappers below are unaffected — `Api.ButtonType` and `Api.InlineButtonType` did not change.
 ///
 /// Scope limit worth knowing: `ReplyMarkupButton(apiButton:)` and
 /// `ReplyMarkupMessageAttribute(apiMarkup:)` are **internal** to TelegramCore, so the button-level

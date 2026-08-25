@@ -4,9 +4,13 @@ import QuartzCore
 final class ListAnimationController {
     typealias ScheduleAfter = (_ delay: TimeInterval,
                                _ work: @escaping () -> Void) -> Void
+    /// The `origin` parameter is not decoration: a forwarding installer that drops it emits
+    /// `.atCommit` for a rebind, which restarts an in-flight curve from `from`. The seam carries the
+    /// resolved value rather than a `Bool` so there is nothing for a forwarder to re-derive.
     typealias AnimationInstaller = (_ track: ListAnimationTrack,
                                     _ property: ListAnimatedProperty,
                                     _ layer: CALayer,
+                                    _ origin: CoreListAnimationOrigin,
                                     _ completion: @escaping () -> Void) -> Void
 
     let model: ListAnimationModel
@@ -19,6 +23,18 @@ final class ListAnimationController {
             self.value = value
         }
     }
+
+    /// Identifies one emitted animation exactly: replacing the track (new generation) makes any
+    /// remembered origin inapplicable, which is what the generation is doing in the key.
+    private struct ResolvedOriginKey: Hashable {
+        let owner: ListAnimationOwner
+        let property: ListAnimatedProperty
+        let generation: UInt64
+    }
+
+    private static let allProperties: [ListAnimatedProperty] = [
+        .viewportOffset, .positionX, .positionY, .width, .height, .opacity
+    ]
 
     private struct PendingCompletion {
         let owner: ListAnimationOwner
@@ -35,9 +51,27 @@ final class ListAnimationController {
     private let scheduleAfter: ScheduleAfter
     private let animationInstaller: AnimationInstaller?
     private var bindings: [ListAnimationOwner: WeakLayer] = [:]
+
+    /// Per-PASS snapshot of each bound layer's additive position contribution, taken at pass ENTRY.
+    ///
+    /// `presented - layer.position.y` is the additive contribution only while the layer's model value
+    /// is still the base the render tree was committed against. A pass overwrites it in `render()`
+    /// (`CoreVirtualListView.swift:2870`) long before any transition installs (`:2022`), which is why
+    /// the provider cannot sample this itself — doing so counts the pass's own displacement twice, and
+    /// shipped once as a chat whose every row snapped a whole growth backwards before animating.
+    /// Hoisting the sample to before those writes is the one ordering that makes the form correct, and
+    /// it is the order `CoreListTransition.setPositionY` already uses.
+    ///
+    /// Empty outside a pass, and empty for any layer with no presentation layer — a windowless test
+    /// fixture, or a layer that has never reached a commit — so those fall back to the analytic value
+    /// and every exact assertion in the suite is unchanged.
+    private var passPresentedPositionOffsets: [ListAnimationOwner: CGFloat] = [:]
     private var knownOwners: Set<ListAnimationOwner> = []
     private var pendingCompletions: [UInt64: PendingCompletion] = [:]
     private var nextCompletionSerial: UInt64 = 0
+    /// The origin Core Animation resolved for a track whose binding has since been dropped. Read
+    /// only by `rebind`; see `phaseOrigin(for:owner:property:layer:)`.
+    private var resolvedOrigins: [ResolvedOriginKey: TimeInterval] = [:]
 
     init(model: ListAnimationModel = ListAnimationModel(),
          compiler: CoreAnimationCompiler = CoreAnimationCompiler(),
@@ -54,6 +88,114 @@ final class ListAnimationController {
         self.durationFactor = durationFactor
         self.scheduleAfter = scheduleAfter
         self.animationInstaller = animationInstaller
+
+        // A new animation resumes from what the layer is RENDERING, not from the model's analytic
+        // value at the pass clock. Those differ by the commit delay the pass has not yet incurred —
+        // the same skew `resolvedOrigin(ofTrack:property:on:)` exists to recover for `rebind` — and
+        // the difference is invisible while one authority owns a layer. It stops being invisible as
+        // soon as two do: the chat's hosted item node sets its own box from `presentation()`, and the
+        // two boxes drifted one-signed and compounding, measured at up to 3.2pt.
+        //
+        // The controller is the only half of this pair that knows about layers, so the Core Animation
+        // dependency stops here and the model stays a plain function of its inputs.
+        //
+        // Returns nil for an owner with no binding, a released layer, or a layer that has never
+        // reached a commit — and with nothing in flight, presented == model, so the analytic fallback
+        // returns the same number rather than a different one. That is what makes the mixed source
+        // safe here, and it is why windowless tests keep their exact analytic assertions.
+        model.presentedValueProvider = { [weak self] owner, property in
+            guard let self,
+                  let layer = self.bindings[owner]?.value,
+                  let presentation = layer.presentation()
+            else { return nil }
+            // ABSOLUTE properties only. An absolute track's presented value IS the track's own
+            // quantity, in the track's own space, with nothing to convert.
+            //
+            // **An ADDITIVE property's contribution is `presented - the base the render tree was
+            // committed against`, and the only handle on that base is the layer's model value** — the
+            // right number only for as long as nobody has overwritten it. By the time this provider is
+            // asked, somebody has: a pass writes every window item's NEW settled frame in `render()`
+            // (`CoreVirtualListView.swift:2870`) and installs the transitions ~550 lines later
+            // (`:2022`), and the crossing-carry path writes the new position explicitly one statement
+            // before its own call (`:3012`). Sampling HERE therefore yields
+            // `contribution - (this pass's displacement)`, which `transitionPositionOffset` then adds
+            // the displacement back onto — counting it TWICE. Shipped once, as a chat whose rows
+            // snapped one whole growth backwards before animating into place.
+            //
+            // `.positionY` is answered from `passPresentedPositionOffsets` instead: the same quantity,
+            // sampled at pass ENTRY, before any of those writes. That is the order
+            // `CoreListTransition.setPositionY` (`Transition/CoreListTransition.swift:178`) already
+            // uses, and it is what `PresentedPositionResumeBaseTests` was written to make safe.
+            //
+            // And only for owners whose base a pass owns — the snapshot is empty for the rest, so they
+            // fall back to the analytic value here. Pass entry proves that THIS pass has not moved the
+            // base; it proves nothing about a writer that runs between passes, and `renderAttachments`
+            // is exactly such a writer. See `ListAnimationOwner.hasPassWrittenPositionBase`.
+            //
+            // **Why it became necessary.** A property resumed from the model and one resumed from the
+            // screen disagree about where "now" is by the commit delay δ, and the user-visible seam
+            // between a growing row and the row below it is their SUM: the grower's `.height` (screen)
+            // plus a `.positionY` (model). Every re-target lost δ×velocity there and it accumulated —
+            // measured as a seam opening 1.9pt over ten 20pt growth steps with a pin, ~24pt without
+            // one, reported from the device as micro-wobble under a streaming reply.
+            // `PresentedResumeSeamTests` locks it, and needs a real window: the seam is exact in the
+            // analytic model, so every windowless suite here agrees trivially and sees nothing.
+            //
+            // The other two additive properties stay analytic, for reasons that are NOT the ordering
+            // one and are not fixed by the hoist:
+            //
+            //   `.positionX` — a horizontal jump when the sidebar opens/closes or insets change. The
+            //     transition is handed bare `contentX` (`CoreVirtualListView.swift:1987`) while the
+            //     layer gets `contentX + positionOffsetX` (`:3121`), and `positionOffsetX` is the
+            //     track's OWN contribution, not a within-pass constant. Two other sites already treat
+            //     it as part of the settled position (`:3139`, `:3171`). Resolve that disagreement
+            //     before sampling.
+            //
+            //   `.viewportOffset` — jitter during a fling rather than a static jump. `presentation()`
+            //     is the last COMMITTED value while the model is whatever the physics engine wrote
+            //     this frame (`PhysicsScrollCore.swift:216`, `PhysicsScrollEngine.swift:341-342`), so
+            //     `presented - model` can straddle a frame, and at fling speed a frame is a lot of
+            //     points. Sampling it cost a whole-list jump on every re-issue, measured on device.
+            //
+            // In every case: measure first, the way the height divergence was measured. Reasoning
+            // about additive tracks without measurement is what cost three builds.
+            switch property {
+            case .width: return presentation.bounds.size.width
+            case .height: return presentation.bounds.size.height
+            case .opacity: return CGFloat(presentation.opacity)
+            case .positionY: return self.passPresentedPositionOffsets[owner]
+            case .viewportOffset, .positionX: return nil
+            }
+        }
+    }
+
+    /// Samples every bound layer's rendered position offset. MUST be called before the pass writes any
+    /// settled geometry; `CoreVirtualListView.applyChanges` calls it at entry and clears it in the same
+    /// `defer` that clears the rest of the per-pass state.
+    func capturePresentedPositionOffsets() {
+        passPresentedPositionOffsets.removeAll(keepingCapacity: true)
+        for (owner, binding) in bindings {
+            // Only owners whose base a PASS owns. `presented − model` is the track's contribution only
+            // while the model still holds the base the render tree was committed against, and pass
+            // entry guarantees that for a row and for nothing else — an attachment's base is rewritten
+            // by every `renderAttachments()`, an overlay child's by every coordinate rebase. See
+            // `ListAnimationOwner.hasPassWrittenPositionBase`.
+            guard owner.hasPassWrittenPositionBase,
+                  let layer = binding.value,
+                  let presentation = layer.presentation()
+            else { continue }
+            passPresentedPositionOffsets[owner] = presentation.position.y - layer.position.y
+        }
+    }
+
+    /// What the pass-entry snapshot holds for an owner, or nil when nothing was captured for it. For
+    /// tests: the resume path itself reads `passPresentedPositionOffsets` through the model's provider.
+    func capturedPresentedPositionOffset(owner: ListAnimationOwner) -> CGFloat? {
+        passPresentedPositionOffsets[owner]
+    }
+
+    func clearPresentedPositionOffsets() {
+        passPresentedPositionOffsets.removeAll(keepingCapacity: true)
     }
 
     func setReferenceLayer(_ layer: CALayer?) {
@@ -88,6 +230,28 @@ final class ListAnimationController {
         writeOpacity(1, on: layer)
     }
 
+    /// Seeds a newly created attachment owner's settled geometry without starting any track — the
+    /// attachment analogue of `seedLive`, and a near-copy of it: `model.seedLive(owner:…)` accepts any
+    /// `ownsLiveElement` owner, so only the owner and the `precondition` differ.
+    ///
+    /// The `== nil` guard matters: this runs for every serial with no old state, which includes a run
+    /// that scrolled into the window while a track from an earlier pass is still live. Seeding
+    /// unconditionally would overwrite it.
+    func seedAttachment(owner: ListAnimationOwner, layer: CALayer) {
+        precondition(owner.isAttachment)
+        _ = bind(owner: owner, to: layer)
+        knownOwners.insert(owner)
+        if model.value(for: owner, property: .opacity, at: now()) == nil {
+            model.seedLive(owner: owner,
+                           positionOffsetX: 0,
+                           positionOffsetY: 0,
+                           opacity: 1,
+                           width: layer.bounds.width,
+                           height: layer.bounds.height)
+        }
+        writeOpacity(1, on: layer)
+    }
+
     func seedGhostBlock(owner: ListAnimationOwner,
                         layer: CALayer,
                         settledRootY: CGFloat) {
@@ -109,7 +273,24 @@ final class ListAnimationController {
                             transactionTime: TimeInterval? = nil,
                             completion: @escaping (UInt64) -> Void = { _ in })
         -> ListAnimationMutation {
-        let owner = ListAnimationOwner.live(identity)
+        transitionPosition(owner: .live(identity),
+                           layer: layer,
+                           oldSettledY: oldSettledY,
+                           newSettledY: newSettledY,
+                           transition: transition,
+                           transactionTime: transactionTime,
+                           completion: completion)
+    }
+
+    @discardableResult
+    func transitionPosition(owner: ListAnimationOwner,
+                            layer: CALayer,
+                            oldSettledY: CGFloat,
+                            newSettledY: CGFloat,
+                            transition: CoreListTransition,
+                            transactionTime: TimeInterval? = nil,
+                            completion: @escaping (UInt64) -> Void = { _ in })
+        -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
         let time = transactionTime ?? now()
@@ -240,7 +421,21 @@ final class ListAnimationController {
                           newSettledHeight: CGFloat,
                           transition: CoreListTransition,
                           transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
-        let owner = ListAnimationOwner.live(identity)
+        transitionHeight(owner: .live(identity),
+                         layer: layer,
+                         oldSettledHeight: oldSettledHeight,
+                         newSettledHeight: newSettledHeight,
+                         transition: transition,
+                         transactionTime: transactionTime)
+    }
+
+    @discardableResult
+    func transitionHeight(owner: ListAnimationOwner,
+                          layer: CALayer,
+                          oldSettledHeight: CGFloat,
+                          newSettledHeight: CGFloat,
+                          transition: CoreListTransition,
+                          transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
         let time = transactionTime ?? now()
@@ -299,7 +494,17 @@ final class ListAnimationController {
                 layer: CALayer,
                 transition: CoreListTransition,
                 transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
-        let owner = ListAnimationOwner.live(identity)
+        insert(owner: .live(identity),
+               layer: layer,
+               transition: transition,
+               transactionTime: transactionTime)
+    }
+
+    @discardableResult
+    func insert(owner: ListAnimationOwner,
+                layer: CALayer,
+                transition: CoreListTransition,
+                transactionTime: TimeInterval? = nil) -> ListAnimationMutation {
         let binding = bind(owner: owner, to: layer)
         knownOwners.insert(owner)
         let mutation = model.beginInsertion(
@@ -323,7 +528,23 @@ final class ListAnimationController {
                   transactionTime: TimeInterval? = nil,
                   fadesOut: Bool = true,
                   completion: @escaping () -> Void) -> ListAnimationOwner {
-        let liveOwner = ListAnimationOwner.live(identity)
+        makeExit(owner: .live(identity),
+                 layer: layer,
+                 contentY: contentY,
+                 transition: transition,
+                 transactionTime: transactionTime,
+                 fadesOut: fadesOut,
+                 completion: completion)
+    }
+
+    @discardableResult
+    func makeExit(owner liveOwner: ListAnimationOwner,
+                  layer: CALayer,
+                  contentY: CGFloat,
+                  transition: CoreListTransition,
+                  transactionTime: TimeInterval? = nil,
+                  fadesOut: Bool = true,
+                  completion: @escaping () -> Void) -> ListAnimationOwner {
         _ = bind(owner: liveOwner, to: layer)
         knownOwners.insert(liveOwner)
 
@@ -397,8 +618,14 @@ final class ListAnimationController {
     func unbind(identity: AnyHashable,
                 layer: CALayer,
                 at time: TimeInterval? = nil) {
-        let owner = ListAnimationOwner.live(identity)
+        unbind(owner: .live(identity), layer: layer, at: time)
+    }
+
+    func unbind(owner: ListAnimationOwner,
+                layer: CALayer,
+                at time: TimeInterval? = nil) {
         guard let binding = bindings[owner], binding.value === layer else { return }
+        captureResolvedOrigins(for: owner, on: layer)
         removeModelAnimations(from: layer)
         bindings.removeValue(forKey: owner)
         discardPendingCompletions(boundTo: binding)
@@ -447,9 +674,80 @@ final class ListAnimationController {
                 continue
             }
             writeEndpoint(track.to, property: property, on: layer)
+            // This track was minted in an earlier pass and must render already partway through, so
+            // it is the module's ONE explicit origin — see `CoreListAnimationOrigin.explicit`. The
+            // origin is the one Core Animation resolved for the animation this replaces, NOT
+            // `track.startTime`: the two differ by the producing pass's commit delay, and stamping
+            // the model's clock would jump the curve forward by exactly that much on every rebind.
             install(track, owner: owner, property: property,
                     layer: layer, binding: binding,
-                    removesOwner: false, cleanup: nil)
+                    removesOwner: false, cleanup: nil,
+                    origin: .explicit(phaseOrigin(for: track, owner: owner,
+                                                  property: property, layer: layer)))
+        }
+        pruneResolvedOrigins()
+    }
+
+    /// The phase origin a rebind must reproduce: the one Core Animation resolved for the animation
+    /// that is being re-emitted, so the row resumes rendering exactly where it was rather than where
+    /// the model says it should be.
+    ///
+    /// Three sources, in order of directness:
+    /// 1. the target layer itself — a scroll-driven promotion of a crossing carry rebinds onto the
+    ///    very layer whose animation is still running, so the resolved origin is right there;
+    /// 2. what `captureResolvedOrigins` remembered when the previous binding was dropped;
+    /// 3. `track.startTime`, when Core Animation never resolved an origin at all. A `beginTime` of 0
+    ///    means exactly that: the layer never reached a commit inside a render tree (a detached view
+    ///    or a windowless test fixture — measured: it stays 0 forever and `presentation()` is nil).
+    ///    Nothing was on screen, so there is no rendered phase to preserve.
+    private func phaseOrigin(for track: ListAnimationTrack,
+                             owner: ListAnimationOwner,
+                             property: ListAnimatedProperty,
+                             layer: CALayer) -> TimeInterval {
+        if let resolved = resolvedOrigin(ofTrack: track, property: property, on: layer) {
+            return resolved
+        }
+        let key = ResolvedOriginKey(owner: owner, property: property,
+                                    generation: track.generation)
+        return resolvedOrigins[key] ?? track.startTime
+    }
+
+    /// The origin Core Animation resolved for `track`'s installed animation on `layer`, or nil if the
+    /// layer carries a different generation or never reached a commit.
+    private func resolvedOrigin(ofTrack track: ListAnimationTrack,
+                                property: ListAnimatedProperty,
+                                on layer: CALayer) -> TimeInterval? {
+        guard let animation = layer.animation(forKey: compiler.animationKey(for: property)),
+              (animation.value(forKey: "CoreListAnimation.generation") as? NSNumber)?.uint64Value
+                == track.generation
+        else { return nil }
+        // Core Animation writes the resolved origin back into the animation the layer holds (the
+        // copy `add` made), so this reads CA's own answer rather than anything CoreList stamped.
+        let resolved = animation.beginTime
+        return resolved == 0 ? nil : resolved
+    }
+
+    /// Remembers what Core Animation resolved for each of `owner`'s in-flight tracks, immediately
+    /// before the binding carrying them is dropped. Without this a later `rebind` has nothing but
+    /// `track.startTime` to stamp, and stamps a phase the screen was never at.
+    private func captureResolvedOrigins(for owner: ListAnimationOwner, on layer: CALayer) {
+        for property in Self.allProperties {
+            guard let track = model.track(for: owner, property: property),
+                  let resolved = resolvedOrigin(ofTrack: track, property: property, on: layer)
+            else { continue }
+            resolvedOrigins[ResolvedOriginKey(owner: owner, property: property,
+                                              generation: track.generation)] = resolved
+        }
+        pruneResolvedOrigins()
+    }
+
+    /// Self-maintaining cleanup: an entry survives only while its exact track generation is still the
+    /// model's. Replacing or completing the track drops it, so the map cannot outgrow the set of
+    /// unbound-but-still-animating owners.
+    private func pruneResolvedOrigins() {
+        guard !resolvedOrigins.isEmpty else { return }
+        resolvedOrigins = resolvedOrigins.filter { key, _ in
+            model.track(for: key.owner, property: key.property)?.generation == key.generation
         }
     }
 
@@ -484,6 +782,24 @@ final class ListAnimationController {
 
     func opacity(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
         model.value(for: owner, property: .opacity, at: time)
+    }
+
+    func positionOffset(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
+        model.value(for: owner, property: .positionY, at: time)
+    }
+
+    /// Whether an owner currently has a live layer binding. Test affordance; the pass itself never
+    /// needs to ask.
+    func isBound(owner: ListAnimationOwner) -> Bool {
+        bindings[owner]?.value != nil
+    }
+
+    func width(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
+        model.value(for: owner, property: .width, at: time)
+    }
+
+    func height(owner: ListAnimationOwner, at time: TimeInterval) -> CGFloat? {
+        model.value(for: owner, property: .height, at: time)
     }
 
     func viewportOffset(at time: TimeInterval) -> CGFloat {
@@ -540,6 +856,7 @@ final class ListAnimationController {
         for owner in Array(knownOwners) {
             pruneUnboundSettledLiveOwner(owner, at: time)
         }
+        pruneResolvedOrigins()
     }
 
     func reset() {
@@ -551,6 +868,7 @@ final class ListAnimationController {
         bindings.removeAll()
         knownOwners.removeAll()
         pendingCompletions.removeAll()
+        resolvedOrigins.removeAll()
         model.reset()
     }
 
@@ -577,9 +895,14 @@ final class ListAnimationController {
             }
         case let .started(track):
             writeEndpoint(track.to, property: property, on: layer)
+            // `.atCommit`: every mutation reaching `apply` came from a `ListAnimationModel` call that
+            // stamped the track with the clock passed into that very call. The track is about to
+            // start, so the commit at the end of this runloop turn IS its origin — and being the
+            // same origin every other animation committed in that turn gets is the whole point.
             install(track, owner: owner, property: property,
                     layer: layer, binding: binding,
-                    removesOwner: removesOwner, cleanup: cleanup)
+                    removesOwner: removesOwner, cleanup: cleanup,
+                    origin: .atCommit)
         }
     }
 
@@ -589,7 +912,8 @@ final class ListAnimationController {
                          layer: CALayer,
                          binding: WeakLayer,
                          removesOwner: Bool,
-                         cleanup: (() -> Void)?) {
+                         cleanup: (() -> Void)?,
+                         origin: CoreListAnimationOrigin) {
         discardPendingCompletions(owner: owner, property: property)
         nextCompletionSerial += 1
         let serial = nextCompletionSerial
@@ -606,10 +930,52 @@ final class ListAnimationController {
             self.finalize(serial, at: self.now())
         }
         if let animationInstaller {
-            animationInstaller(track, property, layer, completion)
+            animationInstaller(track, property, layer, origin, completion)
         } else {
             compiler.install(track, property: property, on: layer,
-                             completion: completion)
+                             origin: origin, completion: completion)
+        }
+        // The model deadline must never be LATER than the CA end. It is not: `startTime` stays at the
+        // pass clock while the commit that starts the animation is at or after it (and a `.explicit`
+        // rebind origin is a resolved commit time, so likewise at or after it), so a CA-driven
+        // completion always lands past `isComplete(at:)` and `finalize`'s early branch — which
+        // re-inserts the pending and never re-arms — stays unreachable. Re-stamping `startTime`
+        // forward would invert this and strand every equal-endpoint exit-overlay tenant.
+        if track.deliversNoCoreAnimationCompletion {
+            scheduleAnalyticCompletion(serial: serial,
+                                       deadline: track.startTime + track.duration)
+        }
+    }
+
+    /// Drive `finalize` from the analytic deadline for a track Core Animation will never call back
+    /// for. **An animation whose `fromValue` equals its `toValue` produces no visual change, so the
+    /// render server never runs it and `animationDidStop` is never sent** — the animation just sits
+    /// on the layer (`isRemovedOnCompletion = false`) forever.
+    ///
+    /// That matters because a completion here is not only bookkeeping: it is the teardown trigger for
+    /// every tenant of the exit overlay. Three of them ride equal-endpoint tracks by design, and all
+    /// three stranded stale rows on top of live content:
+    ///
+    /// - a **non-fading exit** (`beginExit(fadesOut: false)`, i.e. every departing row of a
+    ///   full-replace carousel) installs `opacity: o -> o` purely to own a teardown deadline, so the
+    ///   whole outgoing strip stayed parked in `exitOverlay`;
+    /// - a **viewport re-target onto the displacement already in flight** yields
+    ///   `viewportOffset: 0 -> 0`, and `finishViewportGeneration` never ran — stranding its viewport
+    ///   carries and every crossing carry that had migrated onto that generation.
+    ///
+    /// The model is the presentation authority and the compiler is an output renderer, so a
+    /// model-owned completion must not depend on whether Core Animation found the animation worth
+    /// running. Scheduled only for the tracks that need it — arming a timer per animated property
+    /// would cost dozens of timers per pass for no gain, since a track that moves does get its
+    /// callback. `finalize` removes the pending record first, so a later CA callback for the same
+    /// serial is an exact no-op and the two paths cannot double-fire.
+    private func scheduleAnalyticCompletion(serial: UInt64, deadline: TimeInterval) {
+        // One shot: `scheduleAfter` never fires early, so `now()` inside the block is at or past the
+        // deadline and `track.isComplete(at:)` therefore holds — the re-arm loop that
+        // `scheduleUnboundTrackReap` needs (it races an unbind, not a deadline) has no analogue here.
+        scheduleAfter(max(0, deadline - now())) { [weak self] in
+            guard let self, self.pendingCompletions[serial] != nil else { return }
+            self.finalize(serial, at: self.now())
         }
     }
 
@@ -665,6 +1031,11 @@ final class ListAnimationController {
             binding.value === layer ? boundOwner : nil
         }
         if !previousOwners.isEmpty {
+            // Capture before the wipe, for the same reason `invalidateBinding` does: a live owner
+            // whose view has been recycled under it may still be rebound onto a fresh layer later.
+            for previousOwner in previousOwners {
+                captureResolvedOrigins(for: previousOwner, on: layer)
+            }
             removeModelAnimations(from: layer)
         }
         for previousOwner in previousOwners {
@@ -684,6 +1055,9 @@ final class ListAnimationController {
                                    removeAnimations: Bool) {
         guard let binding = bindings.removeValue(forKey: owner) else { return }
         if removeAnimations, let layer = binding.value {
+            // `bind` routes an owner moving to a fresh layer through here, so this is the other
+            // arrival at a rebind — the resolved origin must be taken before the animation goes.
+            captureResolvedOrigins(for: owner, on: layer)
             removeModelAnimations(from: layer)
         }
         discardPendingCompletions(boundTo: binding)
@@ -693,6 +1067,7 @@ final class ListAnimationController {
                                        layer: CALayer,
                                        at time: TimeInterval) {
         guard let binding = bindings[owner], binding.value === layer else { return }
+        captureResolvedOrigins(for: owner, on: layer)
         removeModelAnimations(from: layer)
         bindings.removeValue(forKey: owner)
         discardPendingCompletions(boundTo: binding)
@@ -713,7 +1088,9 @@ final class ListAnimationController {
 
     private func pruneUnboundSettledLiveOwner(_ owner: ListAnimationOwner,
                                               at time: TimeInterval) {
-        guard owner.isLive, bindings[owner] == nil else { return }
+        // `ownsLiveElement`, not `isLive`: an unbound attachment owner must be pruned on exactly the
+        // same terms as an unbound row owner, or its settled state outlives every reference to it.
+        guard owner.ownsLiveElement, bindings[owner] == nil else { return }
         model.reap(owner: owner, at: time)
         let hasTrack = [ListAnimatedProperty.positionX, .positionY,
                         .width, .height, .opacity].contains {

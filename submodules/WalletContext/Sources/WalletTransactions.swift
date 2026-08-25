@@ -77,6 +77,14 @@ func walletTransactions(
             status = .completed
         }
 
+        let kind: WalletContext.Transaction.Kind
+        switch activity.kind {
+        case .transfer:
+            kind = .transfer
+        case .deployContract:
+            kind = .deployContract
+        }
+
         let counterparty = activity.counterparty?.toString(bounceable: false)
         let amount: Int64
         let currency: WalletContext.Transaction.Currency
@@ -129,7 +137,8 @@ func walletTransactions(
             comment: activity.comment,
             currency: currency,
             collectible: collectible,
-            status: status
+            status: status,
+            kind: kind
         ))
     }
     return result
@@ -213,6 +222,12 @@ func transactionKey(_ transaction: WalletContext.Transaction) -> String {
         return id
     }
     let blockchainKey = transactionHashKey(transactionHash)
+    if transaction.kind == .deployContract {
+        let addressKey = transaction.counterparty.flatMap { rawAddress($0) }
+            ?? transaction.counterparty.map(transactionHashKey)
+            ?? "unknown"
+        return "transaction:\(blockchainKey):deploy:\(addressKey)"
+    }
     if let collectible = transaction.collectible {
         let itemKey = rawAddress(collectible.address) ?? transactionHashKey(collectible.address)
         return "transaction:\(blockchainKey):nft:\(transaction.direction.rawValue):\(itemKey)"

@@ -533,7 +533,7 @@ func opportunisticallyTransformMessageWithMedia(network: Network, postbox: Postb
 
 private func forwardedMessageToBeReuploaded(transaction: Transaction, id: MessageId) -> Message? {
     if let message = transaction.getMessage(id) {
-        if message.id.namespace != Namespaces.Message.Cloud {
+        if message.id.namespace != Namespaces.Message.Cloud && !Namespaces.Message.allEphemeral.contains(message.id.namespace) {
             return message
         } else {
             return nil
@@ -1167,18 +1167,26 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                             }
                         }
                         
-                        if sourceMessage.id.namespace == Namespaces.Message.Cloud && peerId.namespace != Namespaces.Peer.SecretChat {
+                        if (sourceMessage.id.namespace == Namespaces.Message.Cloud || Namespaces.Message.allEphemeral.contains(sourceMessage.id.namespace)) && peerId.namespace != Namespaces.Peer.SecretChat {
                             attributes.append(ForwardSourceInfoAttribute(messageId: sourceMessage.id))
                         
-                            if peerId == account.peerId {
+                            if sourceMessage.id.namespace == Namespaces.Message.Cloud && peerId == account.peerId {
                                 attributes.append(SourceReferenceMessageAttribute(messageId: sourceMessage.id))
                             }
                             
                             attributes.append(contentsOf: filterMessageAttributesForForwardedMessage(requestedAttributes))
                             attributes.append(contentsOf: filterMessageAttributesForForwardedMessage(sourceMessage.attributes, forwardedMessageIds: forwardedMessageIds))
+
+                            let ephemeralParams = ephemeralForwardParams(sourceMessage)
+                            let ephemeralBotPeerId = ephemeralParams?.botPeerId
+                            if sourceMessage.id.namespace == Namespaces.Message.EphemeralLocal {
+                                attributes.removeAll(where: { $0 is InlineBotMessageAttribute })
+                            } else if sourceMessage.id.namespace == Namespaces.Message.EphemeralAnchored, let inlineBotPeerId = ephemeralParams?.inlineBotPeerId, !attributes.contains(where: { $0 is InlineBotMessageAttribute }) {
+                                attributes.append(InlineBotMessageAttribute(peerId: inlineBotPeerId, title: nil))
+                            }
                             
                             var sourceReplyMarkup: ReplyMarkupMessageAttribute? = nil
-                            var sourceSentViaBot = false
+                            var sourceSentViaBot = ephemeralBotPeerId != nil
                             for attribute in attributes {
                                 if let attribute = attribute as? ReplyMarkupMessageAttribute {
                                     sourceReplyMarkup = attribute
@@ -1215,13 +1223,15 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                             
                             if hideSendersNames {
                                 
+                            } else if sourceMessage.id.namespace == Namespaces.Message.EphemeralLocal {
+                                forwardInfo = StoreMessageForwardInfo(authorId: ephemeralParams?.authorId ?? author.id, sourceId: nil, sourceMessageId: nil, date: sourceMessage.timestamp, authorSignature: nil, psaType: nil, flags: [])
                             } else if let sourceForwardInfo = sourceMessage.forwardInfo {
                                 forwardInfo = StoreMessageForwardInfo(authorId: sourceForwardInfo.author?.id, sourceId: sourceForwardInfo.source?.id, sourceMessageId: sourceForwardInfo.sourceMessageId, date: sourceForwardInfo.date, authorSignature: sourceForwardInfo.authorSignature, psaType: nil, flags: [])
                             } else {
                                 if sourceMessage.id.peerId != account.peerId {
-                                    var sourceId: PeerId? = nil
-                                    var sourceMessageId: MessageId? = nil
-                                    if case let .channel(peer) = messageMainPeer(EngineMessage(sourceMessage)), case .broadcast = peer.info {
+                                    var sourceId = ephemeralParams?.sourceId
+                                    var sourceMessageId = ephemeralParams?.sourceMessageId
+                                    if ephemeralParams == nil, case let .channel(peer) = messageMainPeer(EngineMessage(sourceMessage)), case .broadcast = peer.info {
                                         sourceId = peer.id
                                         sourceMessageId = sourceMessage.id
                                     }
@@ -1236,7 +1246,8 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
 
                                     let psaType: String? = nil
 
-                                    forwardInfo = StoreMessageForwardInfo(authorId: author.id, sourceId: sourceId, sourceMessageId: sourceMessageId, date: sourceMessage.timestamp, authorSignature: authorSignature, psaType: psaType, flags: [])
+                                    let forwardAuthorId = ephemeralParams?.authorId ?? author.id
+                                    forwardInfo = StoreMessageForwardInfo(authorId: forwardAuthorId, sourceId: sourceId, sourceMessageId: sourceMessageId, date: sourceMessage.timestamp, authorSignature: authorSignature, psaType: psaType, flags: [])
                                 } else {
                                     forwardInfo = nil
                                 }

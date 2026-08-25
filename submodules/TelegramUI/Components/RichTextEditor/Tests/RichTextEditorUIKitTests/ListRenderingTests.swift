@@ -111,15 +111,20 @@ final class ListRenderingTests: XCTestCase {
         XCTAssertEqual(markerBaseline, textBaseline, accuracy: 0.5)
     }
 
-    func test_listMarker_origin_isBelowTextOrigin_dueToLineHeightMultiple() {
-        // Regression guard for the misalignment: body uses lineHeightMultiple 1.10, pushing the first
-        // baseline ~2pt below the natural top, so the marker origin must sit below textOrigin.y (the old
-        // code drew at textOrigin.y, leaving the number floating above the text line).
+    func test_listMarker_sitsOnTheParagraphsFirstBaseline() {
+        // Regression guard for the original misalignment (the marker drawn at textOrigin.y, leaving the
+        // number floating above the text line). Stated as the invariant that actually matters and
+        // survives a metrics change: the marker's baseline IS the paragraph's first text baseline.
+        // (It was previously phrased as "below textOrigin due to lineHeightMultiple 1.10" — that
+        // mechanism is gone; under the pinned-box model the first baseline is the font's ascender.)
         let v = canvas([ParagraphBlock(id: BlockID("a"), style: .body,
                                        list: ListMembership(marker: .ordered), runs: [TextRun(text: "Item")])])
         let box = v.boxes[0] as! BlockBox
         let draw = v.listMarkerDraws().first { $0.id == box.id }!
-        XCTAssertGreaterThan(draw.origin.y, box.textOrigin.y)
+        let markerBaseline = draw.origin.y + draw.font.ascender
+        let textBaseline = box.textOrigin.y + (box.layout.firstLineBaselineFromTop ?? -1)
+        XCTAssertEqual(markerBaseline, textBaseline, accuracy: 0.5,
+                       "the marker must share the paragraph's first text baseline")
     }
 
     func test_listMarkerDraws_oneEntryPerListBox_withLabelAndIndentColumn() {

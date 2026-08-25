@@ -18,15 +18,14 @@ final class ScrollReplayTests: XCTestCase {
         // UIKit convention: a downward finger drag yields negative translation.y; ScrollAxis maps it
         // via (dragStart − translation), so the content offset increases (content scrolls up/down).
         for i in 1...5 {                                  // drag down 5 frames, ~ -12 pts/frame (cumulative)
-            p.drag(translation: CGPoint(x: 0, y: CGFloat(-12 * i)),
-                   recognizerVelocity: CGPoint(x: 0, y: -2000))
+            p.drag(translation: CGPoint(x: 0, y: CGFloat(-12 * i)))
             rec.frames.append(.init(t: t, phase: .dragging,
                                     translation: CGPoint(x: 0, y: CGFloat(-12 * i)),
                                     recognizerVelocity: CGPoint(x: 0, y: -2000),
                                     groundTruthOffset: CGPoint(x: p.x.offset, y: p.y.offset)))
             t += 0.016
         }
-        _ = p.endDrag()
+        p.applyRelease(velocity: CGPoint(x: 0, y: 2.0))
         for _ in 0..<120 {                                // decelerate ~2s
             let r = p.step(dtMs: 16)
             rec.frames.append(.init(t: t, phase: .decelerating, translation: .zero,

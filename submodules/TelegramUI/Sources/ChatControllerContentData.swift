@@ -706,20 +706,27 @@ extension ChatControllerImpl {
                 
                 let globalPrivacySettings = context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.GlobalPrivacy())
                 
-                let canStopIncomingStreamingMessage: Signal<Bool, NoError> = .single(false)
-                /*if let peerId = chatLocation.peerId {
+                // Presence of a draft is not the condition: a draft without can_stop, and one
+                // already stopped with keep_on_stop, must both leave the button hidden.
+                let canStopIncomingStreamingMessage: Signal<Bool, NoError>
+                if let peerId = chatLocation.peerId {
                     let key = PeerAndThreadId(peerId: peerId, threadId: chatLocation.threadId)
                     canStopIncomingStreamingMessage = context.account.postbox.combinedView(keys: [PostboxViewKey.typingDrafts(key)])
                     |> map { views -> Bool in
-                        guard let view = views.views[PostboxViewKey.typingDrafts(key)] as? TypingDraftsView else {
+                        guard let view = views.views[PostboxViewKey.typingDrafts(key)] as? TypingDraftsView, let typingDraft = view.typingDraft else {
                             return false
                         }
-                        return view.typingDraft != nil
+                        for attribute in typingDraft.attributes {
+                            if let attribute = attribute as? TypingDraftMessageAttribute {
+                                return attribute.canStop
+                            }
+                        }
+                        return false
                     }
                     |> distinctUntilChanged
                 } else {
                     canStopIncomingStreamingMessage = .single(false)
-                }*/
+                }
 
                 self.peerDisposable = combineLatest(
                     queue: Queue.mainQueue(),
@@ -1403,20 +1410,27 @@ extension ChatControllerImpl {
                 
                 let globalPrivacySettings = context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.GlobalPrivacy())
                 
-                let canStopIncomingStreamingMessage: Signal<Bool, NoError> = .single(false)
-                /*if let peerId = chatLocation.peerId {
+                // Presence of a draft is not the condition: a draft without can_stop, and one
+                // already stopped with keep_on_stop, must both leave the button hidden.
+                let canStopIncomingStreamingMessage: Signal<Bool, NoError>
+                if let peerId = chatLocation.peerId {
                     let key = PeerAndThreadId(peerId: peerId, threadId: chatLocation.threadId)
                     canStopIncomingStreamingMessage = context.account.postbox.combinedView(keys: [PostboxViewKey.typingDrafts(key)])
                     |> map { views -> Bool in
-                        guard let view = views.views[PostboxViewKey.typingDrafts(key)] as? TypingDraftsView else {
+                        guard let view = views.views[PostboxViewKey.typingDrafts(key)] as? TypingDraftsView, let typingDraft = view.typingDraft else {
                             return false
                         }
-                        return view.typingDraft != nil
+                        for attribute in typingDraft.attributes {
+                            if let attribute = attribute as? TypingDraftMessageAttribute {
+                                return attribute.canStop
+                            }
+                        }
+                        return false
                     }
                     |> distinctUntilChanged
                 } else {
                     canStopIncomingStreamingMessage = .single(false)
-                }*/
+                }
                 
                 self.peerDisposable = (combineLatest(queue: Queue.mainQueue(),
                     peerView,

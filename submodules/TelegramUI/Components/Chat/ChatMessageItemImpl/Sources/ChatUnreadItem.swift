@@ -8,15 +8,22 @@ import TelegramPresentationData
 import AccountContext
 import WallpaperBackgroundNode
 import ChatControllerInteraction
+import ChatMessageItem
 import ChatMessageItemCommon
 
 private let titleFont = UIFont.systemFont(ofSize: 13.0)
 
-public class ChatUnreadItem: ListViewItem {
+public class ChatUnreadItem: ListViewItem, ChatHistoryItemWithHeaders {
     public let index: EngineMessage.Index
     public let presentationData: ChatPresentationData
     public let controllerInteraction: ChatControllerInteraction
     public let header: ChatMessageDateHeader
+
+    // The item-side mirror of the node's `headers()` override below. Load-bearing under the CoreList
+    // backend: an unread separator that published nothing would split its day's header run in two.
+    public var headers: [ListViewItemHeader] {
+        return [self.header]
+    }
 
     public var neighborDescriptor: AnyEquatable {
         return AnyEquatable(ChatHistoryItemNeighbor.unread(dateHeaderId: self.header.id))
@@ -198,12 +205,6 @@ public class ChatUnreadItemNode: ListViewItemNode {
         super.updateAbsoluteRect(rect, within: containerSize)
         
         self.absolutePosition = (rect, containerSize)
-        if let backgroundContent = self.backgroundContent {
-            var backgroundFrame = backgroundContent.frame
-            backgroundFrame.origin.x += rect.minX
-            backgroundFrame.origin.y += containerSize.height - rect.minY
-            backgroundContent.update(rect: backgroundFrame, within: containerSize, transition: .immediate)
-        }
     }
     
     override public func headers() -> [ListViewItemHeader]? {

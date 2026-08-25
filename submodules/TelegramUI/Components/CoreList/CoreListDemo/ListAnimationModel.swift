@@ -8,6 +8,9 @@ enum ListAnimationOwner: Hashable {
     case exit(UInt64)
     case transient(UInt64)
     case ghostBlock(UInt64)
+    /// A live attachment run, keyed by its serial. Distinct from `.live` because a run is not a row:
+    /// its key is a serial the list mints, not a collection identity.
+    case attachment(UInt64)
 
     var isLive: Bool {
         if case .live = self { return true }
@@ -18,6 +21,53 @@ enum ListAnimationOwner: Hashable {
         if case .ghostBlock = self { return true }
         return false
     }
+
+    var isAttachment: Bool {
+        if case .attachment = self { return true }
+        return false
+    }
+
+    /// Owners presenting a live on-screen element with the FULL property set — a row or an attachment
+    /// run. `.viewport`, `.ghostBlock`, `.exit` and `.transient` each own a narrower set, which is
+    /// what the model's live-element entry points are guarding against. Written as an exhaustive
+    /// switch so a future case has to state which side it is on.
+    var ownsLiveElement: Bool {
+        switch self {
+        case .live, .attachment: return true
+        case .viewport, .exit, .transient, .ghostBlock: return false
+        }
+    }
+
+    /// Whether a PASS is the only thing that writes this owner's layer position — the precondition for
+    /// `presented − model` to mean "the additive track's contribution" and therefore the precondition
+    /// for `ListAnimationController.capturePresentedPositionOffsets` to sample it at all.
+    ///
+    /// A row qualifies: `render()` writes container-local frames, which are offset-independent, so the
+    /// renders that run outside a pass (a scroll rebalance) rewrite a surviving row's base with the
+    /// value it already had. Nothing else qualifies:
+    ///
+    /// - `.attachment` — `renderAttachments()` rewrites every attachment's frame on EVERY render, and
+    ///   it must: a parked attachment stays parked on screen only by moving its base with the content.
+    ///   So between two frames `presentation()` lags the model by one frame of base movement. Reading
+    ///   that lag as a contribution made a parked date pill snap 57.66pt at the touch-up of an
+    ///   interactive keyboard dismissal — its layer showed `model=573.00 presented=515.33` with no
+    ///   animation on it at all. See `AttachmentResumeBaseTests`.
+    /// - `.exit`, `.transient`, `.ghostBlock` — `shiftExitOverlayChildren` adds a coordinate rebase to
+    ///   every overlay child's `position.y`, and it runs from `render()`, which a scroll rebalance
+    ///   reaches without a pass. Same hazard, same exclusion; no defect has been observed there, but
+    ///   the property this samples is not true of them either.
+    /// - `.viewport` — excluded one level up, by property: see the provider in
+    ///   `ListAnimationController.init`.
+    ///
+    /// Note that "committed" is not the bar and could not be: a base written last turn may not have
+    /// been PRESENTED yet when this turn samples, so a per-frame-written base can never be differenced
+    /// against `presentation()` at all.
+    var hasPassWrittenPositionBase: Bool {
+        switch self {
+        case .live: return true
+        case .attachment, .viewport, .exit, .transient, .ghostBlock: return false
+        }
+    }
 }
 
 enum ListAnimatedProperty: Hashable {
@@ -27,6 +77,22 @@ enum ListAnimatedProperty: Hashable {
     case width
     case height
     case opacity
+}
+
+extension ListAnimatedProperty {
+    /// Whether this property's track carries an OFFSET that decays to zero, rather than an absolute
+    /// value.
+    ///
+    /// The single source of truth: `CoreAnimationCompiler.isAdditive` delegates here, and
+    /// `ListAnimationModel.resumeValue` uses it to convert a presented value into the track's space.
+    /// Two switches that must agree is precisely the shape of defect this seam was added to fix, so
+    /// there is one — and `PresentationResumeSamplingTests` asserts the delegation still holds.
+    var isAdditiveTrack: Bool {
+        switch self {
+        case .viewportOffset, .positionX, .positionY: return true
+        case .width, .height, .opacity: return false
+        }
+    }
 }
 
 struct ListAnimationTrack: Equatable {
@@ -77,6 +143,18 @@ struct ListAnimationTrack: Equatable {
     func isComplete(at time: TimeInterval) -> Bool {
         duration <= 0 || time >= startTime + duration
     }
+
+    /// True when the animation compiled from this track cannot produce an `animationDidStop`.
+    ///
+    /// Core Animation does not run an animation whose `fromValue` equals its `toValue`: it changes
+    /// nothing, so the render server has nothing to schedule and never reports a stop. The track is
+    /// still a real analytic track with a real deadline — several of them exist ONLY to own that
+    /// deadline (see `beginExit(fadesOut: false)`) — so the controller drives their completion from
+    /// the model instead. Same epsilon as `ListAnimationModel.positionEpsilon`, and deliberately not
+    /// read from it: this is a property of the EMITTED animation, not of the model's no-op policy.
+    var deliversNoCoreAnimationCompletion: Bool {
+        abs(to - from) <= 1e-6
+    }
 }
 
 enum ListAnimationMutation: Equatable {
@@ -110,6 +188,14 @@ final class ListAnimationModel {
     private var nextExitSerial: UInt64 = 0
     private var nextTransientSerial: UInt64 = 0
     private var states: [ListAnimationOwner: OwnerState] = [:]
+
+    /// Supplies the value a layer is CURRENTLY RENDERING for a property, or nil when there is no
+    /// binding, no layer, or no presentation layer.
+    ///
+    /// Installed by `ListAnimationController`, which is the only half of that pair that knows about
+    /// layers — so the Core Animation dependency stops there and this stays a plain function of its
+    /// inputs. Nil in windowless tests, which is what keeps their analytic assertions exact.
+    var presentedValueProvider: ((ListAnimationOwner, ListAnimatedProperty) -> CGFloat?)?
 
     var ownerCount: Int { states.count }
 
@@ -145,7 +231,7 @@ final class ListAnimationModel {
                   opacity: CGFloat,
                   width: CGFloat,
                   height: CGFloat) {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         states[owner] = OwnerState(viewportOffset: 0,
                                    positionOffsetX: positionOffsetX,
                                    positionOffsetY: positionOffsetY,
@@ -174,9 +260,9 @@ final class ListAnimationModel {
         guard abs(newSettledOffset - oldSettledOffset) > positionEpsilon else {
             return .unchanged
         }
-        let correction = value(for: .viewport,
-                               property: .viewportOffset,
-                               at: time) ?? 0
+        let correction = resumeValue(for: .viewport,
+                                     property: .viewportOffset,
+                                     at: time) ?? 0
         return replace(owner: .viewport,
                        property: .viewportOffset,
                        from: oldSettledOffset + correction - newSettledOffset,
@@ -190,7 +276,7 @@ final class ListAnimationModel {
                             newSettledY: CGFloat,
                             at time: TimeInterval,
                             transition: CoreListTransition) -> ListAnimationMutation {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         ensureLive(owner)
         return transitionPositionOffset(owner: owner,
                                         oldSettledY: oldSettledY,
@@ -207,7 +293,7 @@ final class ListAnimationModel {
         if owner.isLive { ensureLive(owner) }
         guard states[owner] != nil else { return .unchanged }
         guard abs(newSettledX - oldSettledX) > positionEpsilon else { return .unchanged }
-        let currentOffset = value(for: owner, property: .positionX, at: time) ?? 0
+        let currentOffset = resumeValue(for: owner, property: .positionX, at: time) ?? 0
         return replace(owner: owner,
                        property: .positionX,
                        from: oldSettledX + currentOffset - newSettledX,
@@ -236,7 +322,17 @@ final class ListAnimationModel {
                                           at time: TimeInterval,
                                           transition: CoreListTransition) -> ListAnimationMutation {
         guard abs(newSettledY - oldSettledY) > positionEpsilon else { return .unchanged }
-        let currentOffset = value(for: owner, property: .positionY, at: time) ?? 0
+        // `currentOffset` is the track's own quantity — the additive contribution decaying to zero,
+        // relative to the OLD settled position — so it composes with `oldSettledY` and nothing needs
+        // converting or threading.
+        //
+        // It is therefore ANALYTIC, and `resumeValue` declines to sample `.positionY` for exactly that
+        // reason: a presented sample can only be expressed against the layer's model value, which
+        // `render()` has already moved to the NEW settled position by the time this runs, so adding it
+        // to `oldSettledY` counts the pass's displacement twice. Three versions of this have now been
+        // wrong, all by mixing spaces or bases inside one subtraction; see the provider in
+        // `ListAnimationController.init`.
+        let currentOffset = resumeValue(for: owner, property: .positionY, at: time) ?? 0
         let currentVisibleY = oldSettledY + currentOffset
         return replace(owner: owner,
                        property: .positionY,
@@ -251,12 +347,12 @@ final class ListAnimationModel {
                           newSettledHeight: CGFloat,
                           at time: TimeInterval,
                           transition: CoreListTransition) -> ListAnimationMutation {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         ensureLive(owner, height: oldSettledHeight)
         guard abs(newSettledHeight - oldSettledHeight) > positionEpsilon else {
             return .unchanged
         }
-        let currentHeight = value(for: owner, property: .height, at: time)
+        let currentHeight = resumeValue(for: owner, property: .height, at: time)
             ?? oldSettledHeight
         return replace(owner: owner, property: .height,
                        from: currentHeight, to: newSettledHeight,
@@ -273,7 +369,7 @@ final class ListAnimationModel {
         guard abs(newSettledWidth - oldSettledWidth) > positionEpsilon else {
             return .unchanged
         }
-        let currentWidth = value(for: owner, property: .width, at: time)
+        let currentWidth = resumeValue(for: owner, property: .width, at: time)
             ?? oldSettledWidth
         return replace(owner: owner,
                        property: .width,
@@ -289,7 +385,7 @@ final class ListAnimationModel {
                            transition: CoreListTransition) -> ListAnimationMutation {
         guard let state = states[owner] else { return .unchanged }
         guard state.opacity != target else { return .unchanged }
-        let from = value(for: owner, property: .opacity, at: time) ?? state.opacity
+        let from = resumeValue(for: owner, property: .opacity, at: time) ?? state.opacity
         return replace(owner: owner, property: .opacity, from: from, to: target,
                        at: time, transition: transition)
     }
@@ -299,7 +395,7 @@ final class ListAnimationModel {
                         height: CGFloat,
                         at time: TimeInterval,
                         transition: CoreListTransition) -> ListAnimationMutation {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         seedLive(owner: owner,
                  positionOffsetX: 0,
                  positionOffsetY: 0,
@@ -310,11 +406,14 @@ final class ListAnimationModel {
                        at: time, transition: transition)
     }
 
+    /// `ownsLiveElement`: an attachment run departs on exactly the same terms as a row.
+    /// `beginTransient` deliberately keeps `isLive` — transients are a crossing-carry mechanism
+    /// attachments do not participate in.
     func beginExit(from owner: ListAnimationOwner,
                    at time: TimeInterval,
                    transition: CoreListTransition,
                    fadesOut: Bool = true) -> ListAnimationExit {
-        precondition(owner.isLive)
+        precondition(owner.ownsLiveElement)
         ensureLive(owner)
 
         let positionX = value(for: owner, property: .positionX, at: time) ?? 0
@@ -374,6 +473,30 @@ final class ListAnimationModel {
     func track(for owner: ListAnimationOwner,
                property: ListAnimatedProperty) -> ListAnimationTrack? {
         states[owner]?.tracks[property]
+    }
+
+    /// The value a new animation for `property` should start FROM.
+    ///
+    /// Deliberately a different method from `value(for:property:at:)`, which answers "where will this
+    /// be when settled" and must stay analytic — window building, `bottomEdgePinSlack`, the `finalize`
+    /// deadline and the controller's own queries all depend on that. Hooking the provider onto
+    /// `value(...)` itself would silently convert every one of them into presented reads, which is the
+    /// one thing this change must not do. The distinct name makes that structural instead of a comment
+    /// someone has to notice.
+    ///
+    /// The provider returns values already in the TRACK's space, so there is no conversion here — and
+    /// the provider only answers for ABSOLUTE properties, which is what makes that true for free. No
+    /// additive property is sampled: its contribution can only be recovered as `presented - the base
+    /// the render tree was committed against`, and by the time a transition installs, the pass has
+    /// already overwritten that base with the new settled one. See the provider in
+    /// `ListAnimationController.init` for the full argument and for the defect it shipped.
+    func resumeValue(for owner: ListAnimationOwner,
+                     property: ListAnimatedProperty,
+                     at time: TimeInterval) -> CGFloat? {
+        if let presented = presentedValueProvider?(owner, property) {
+            return presented
+        }
+        return value(for: owner, property: property, at: time)
     }
 
     func value(for owner: ListAnimationOwner,

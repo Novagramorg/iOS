@@ -625,7 +625,6 @@ final class ContextControllerNode: ViewControllerTracingNode, ASScrollViewDelega
                         self?.clippingNode.view.mask = nil
                         self?.animatedIn = true
                     })
-                    contentParentNode.applyAbsoluteOffsetSpring?(-contentContainerOffset.y, springDuration, springDamping)
                 }
                 
                 extracted.willUpdateIsExtractedToContextPreview?(true, .animated(duration: 0.2, curve: .easeInOut))
@@ -944,7 +943,6 @@ final class ContextControllerNode: ViewControllerTracingNode, ASScrollViewDelega
                     intermediateCompletion()
                 })
                 contentParentNode.updateAbsoluteRect?(self.contentContainerNode.frame.offsetBy(dx: 0.0, dy: -self.scrollNode.view.contentOffset.y + contentContainerOffset.y), self.bounds.size)
-                contentParentNode.applyAbsoluteOffset?(CGPoint(x: 0.0, y: -contentContainerOffset.y), transitionCurve, transitionDuration)
                 
                 contentParentNode.willUpdateIsExtractedToContextPreview?(false, .animated(duration: 0.2, curve: .easeInOut))
             } else {

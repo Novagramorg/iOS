@@ -335,7 +335,7 @@ private func computeEntries(items: [InstantPageV2LaidOutItem], cursor: inout Int
             // removing a thinking block never jumps the answer's reveal position.
             entries.append(.thinking(start: cursor))
         case .formula, .inlineButton, .buttonRow, .document, .mediaImage, .mediaVideo, .mediaMap, .mediaCoverImage, .mediaAudio, .mediaPlaceholder, .slideshow,
-             .divider, .listMarker, .blockQuoteBar, .shape, .imageOrnament, .anchor, .quoteFrame:
+             .divider, .listMarker, .blockQuoteBar, .shape, .imageOrnament, .anchor, .quoteFrame, .unsupportedContent:
             let start = cursor
             cursor += itemWidthCost(item)
             entries.append(.nonText(start: start, end: cursor))

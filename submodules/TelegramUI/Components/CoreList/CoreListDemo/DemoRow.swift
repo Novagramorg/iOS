@@ -10,17 +10,42 @@ final class DemoListItem: CoreListItem {
     /// `minHeight` parameter optional, so the existing `DemoListItem(id:title:detail:accentColor:)`
     /// call sites still compile.
     let minHeight: CGFloat
+    /// Which attachment run this row belongs to. Rows sharing a groupIndex form one run.
+    let groupIndex: Int
+    /// Whether this row renders a nested horizontally scrolling strip. The demo's stand-in for chat's
+    /// in-bubble scrollers (the joined-channel carousel, a rich-message table) — the shape that
+    /// exposed the scroll-pan arbitration bug. Off by default so existing fixtures are unchanged.
+    let hasNestedScroller: Bool
 
-    init(id: UUID, title: String, detail: String, accentColor: UIColor, minHeight: CGFloat = 0) {
+    init(id: UUID,
+         title: String,
+         detail: String,
+         accentColor: UIColor,
+         minHeight: CGFloat = 0,
+         groupIndex: Int = 0,
+         hasNestedScroller: Bool = false) {
         self.id = id
         self.title = title
         self.detail = detail
         self.accentColor = accentColor
         self.minHeight = minHeight
+        self.groupIndex = groupIndex
+        self.hasNestedScroller = hasNestedScroller
+    }
+
+    /// The group index is part of the KEY, not merely the content: a run is identified by key, so two
+    /// adjacent groups must publish different keys to be different runs. (`ChatMessageDateHeader`
+    /// does the same, folding its rounded timestamp into its id.)
+    var attachedItems: [AnyHashable: CoreListAttachedItem] {
+        [
+            "date\(groupIndex)": DemoDateHeader(title: "Group \(groupIndex)"),
+            "avatar\(groupIndex)": DemoAvatar(color: accentColor, initial: "\(groupIndex % 10)"),
+        ]
     }
 
     func view() -> (UIView & CoreListItemView) {
-        DemoListItemView(title: title, detail: detail, accentColor: accentColor, minHeight: minHeight)
+        DemoListItemView(title: title, detail: detail, accentColor: accentColor,
+                         minHeight: minHeight, hasNestedScroller: hasNestedScroller)
     }
 
     // Content equality (design 2026-05-31 §4). The engine matches rows by `identity` (= id); this
@@ -29,13 +54,20 @@ final class DemoListItem: CoreListItem {
     // changed is NOT equal, so it reconciles + animates its height.
     func isEqual(to other: CoreListItem) -> Bool {
         guard let o = other as? DemoListItem else { return false }
-        return o.id == id && o.minHeight == minHeight   // title/detail/accentColor are fixed per id in the demo
+        // title/detail/accentColor are fixed per id in the demo; groupIndex is not — the Groups
+        // control changes it, which is what makes runs split and merge.
+        return o.id == id && o.minHeight == minHeight && o.groupIndex == groupIndex
+            && o.hasNestedScroller == hasNestedScroller
     }
 
     // Hand the reused/recycled view this item's new external state (minHeight; title/detail/accent are
     // fixed per id). This view's mechanics happen to leave its internal state (isExpanded/extraHeight)
     // alone on a minHeight change — a VIEW choice, not an engine contract.
-    func apply(to view: UIView & CoreListItemView) {
+    /// NOTE the `transition:` parameter. Without it this does NOT satisfy
+    /// `CoreListItem.apply(to:transition:)` — Swift silently binds the protocol extension's no-op
+    /// default and this method becomes dead code, so content reconciliation never reaches the view
+    /// and every size-changing demo action does nothing.
+    func apply(to view: UIView & CoreListItemView, transition: CoreListTransition) {
         (view as? DemoListItemView)?.applyMinHeight(minHeight)
     }
 }
@@ -58,13 +90,20 @@ final class DemoListItemView: UIView, CoreListItemView {
     /// Orthogonal to the view-only `isExpanded`/`extraHeight`; the natural/expanded/grown height still
     /// wins when larger.
     private var minHeight: CGFloat
+    /// The nested horizontally scrolling strip, or nil. Deliberately a plain `UIScrollView` with a
+    /// default delegate: the point is that its own `shouldRecognizeSimultaneouslyWith` denies
+    /// simultaneity (the UIKit default), exactly like chat's in-bubble scrollers.
+    private let nestedScroller: UIScrollView?
+    private static let nestedScrollerHeight: CGFloat = 44
     var onContentDidChange: ((Bool) -> Void)?
 
-    init(title: String, detail: String, accentColor: UIColor, minHeight: CGFloat = 0) {
+    init(title: String, detail: String, accentColor: UIColor, minHeight: CGFloat = 0,
+         hasNestedScroller: Bool = false) {
         self.titleText = title
         self.detailText = detail
         self.accentColor = accentColor
         self.minHeight = minHeight
+        self.nestedScroller = hasNestedScroller ? UIScrollView() : nil
         super.init(frame: .zero)
 
         layer.cornerRadius = 18
@@ -93,6 +132,31 @@ final class DemoListItemView: UIView, CoreListItemView {
         addSubview(pillView)
         addSubview(titleLabel)
         addSubview(detailLabel)
+
+        if let nestedScroller {
+            nestedScroller.alwaysBounceHorizontal = true
+            nestedScroller.alwaysBounceVertical = false
+            nestedScroller.showsHorizontalScrollIndicator = false
+            nestedScroller.showsVerticalScrollIndicator = false
+            nestedScroller.contentInsetAdjustmentBehavior = .never
+            nestedScroller.clipsToBounds = true
+            nestedScroller.layer.cornerRadius = 10
+            nestedScroller.layer.cornerCurve = .continuous
+            for chipIndex in 0..<12 {
+                let chip = UILabel(frame: CGRect(x: CGFloat(chipIndex) * 84 + 8, y: 6,
+                                                 width: 76, height: 32))
+                chip.text = "Chip \(chipIndex)"
+                chip.textAlignment = .center
+                chip.textColor = .white
+                chip.font = .systemFont(ofSize: 13, weight: .semibold)
+                chip.backgroundColor = accentColor.withAlphaComponent(0.85)
+                chip.layer.cornerRadius = 8
+                chip.clipsToBounds = true
+                nestedScroller.addSubview(chip)
+            }
+            nestedScroller.contentSize = CGSize(width: 12 * 84 + 16, height: Self.nestedScrollerHeight)
+            addSubview(nestedScroller)
+        }
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(toggleExpanded))
         addGestureRecognizer(tap)
@@ -136,9 +200,18 @@ final class DemoListItemView: UIView, CoreListItemView {
         transition.setFrame(view: titleLabel, frame: CGRect(x: contentInsets.left, y: contentInsets.top + pillSize.height + 10, width: labelWidth, height: titleHeight))
 
         var totalHeight = contentInsets.top + pillSize.height + 10 + titleHeight + contentInsets.bottom
+        if let nestedScroller {
+            transition.setFrame(view: nestedScroller,
+                                frame: CGRect(x: contentInsets.left,
+                                              y: titleLabel.frame.maxY + 8,
+                                              width: labelWidth,
+                                              height: Self.nestedScrollerHeight))
+            totalHeight += 8 + Self.nestedScrollerHeight
+        }
         if isExpanded {
             let detailHeight = detailLabel.sizeThatFits(CGSize(width: labelWidth, height: .greatestFiniteMagnitude)).height
-            transition.setFrame(view: detailLabel, frame: CGRect(x: contentInsets.left, y: titleLabel.frame.maxY + 8, width: labelWidth, height: detailHeight))
+            let detailY = (nestedScroller?.frame.maxY ?? titleLabel.frame.maxY) + 8
+            transition.setFrame(view: detailLabel, frame: CGRect(x: contentInsets.left, y: detailY, width: labelWidth, height: detailHeight))
             totalHeight += 8 + detailHeight
         }
 
@@ -146,8 +219,108 @@ final class DemoListItemView: UIView, CoreListItemView {
     }
 }
 
+/// Space-reserving floating date-style header: the classic sticky section header.
+final class DemoDateHeader: CoreListAttachedItem {
+    let title: String
+
+    init(title: String) { self.title = title }
+
+    var placement: CoreListAttachmentPlacement { .reservesSpace }
+    var edge: CoreListAttachmentEdge { .top }
+    var isFloating: Bool { true }
+
+    func view() -> UIView & CoreListAttachedItemView { DemoDateHeaderView(title: title) }
+
+    func isEqual(to other: CoreListAttachedItem) -> Bool {
+        (other as? DemoDateHeader)?.title == title
+    }
+
+    func apply(to view: UIView & CoreListAttachedItemView, transition: CoreListTransition) {
+        (view as? DemoDateHeaderView)?.setTitle(title)
+    }
+}
+
+final class DemoDateHeaderView: UIView, CoreListAttachedItemView {
+    private let pill = UILabel()
+    var onContentDidChange: ((Bool) -> Void)?
+
+    init(title: String) {
+        super.init(frame: .zero)
+        pill.font = .systemFont(ofSize: 13, weight: .semibold)
+        pill.textAlignment = .center
+        pill.textColor = .white
+        pill.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        pill.layer.cornerRadius = 11
+        pill.layer.cornerCurve = .continuous
+        pill.clipsToBounds = true
+        pill.text = title
+        addSubview(pill)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setTitle(_ title: String) { pill.text = title }
+
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
+        let size = pill.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        let pillWidth = min(width - 32, size.width + 24)
+        transition.setFrame(view: pill,
+                            frame: CGRect(x: (width - pillWidth) / 2, y: 6,
+                                          width: pillWidth, height: 22))
+        return 34
+    }
+}
+
+/// In-run overlay floating avatar: sits at the run's last row and rides the display bottom.
+final class DemoAvatar: CoreListAttachedItem {
+    let color: UIColor
+    let initial: String
+
+    init(color: UIColor, initial: String) {
+        self.color = color
+        self.initial = initial
+    }
+
+    var placement: CoreListAttachmentPlacement { .overlay }
+    var edge: CoreListAttachmentEdge { .bottom }
+    var isFloating: Bool { true }
+
+    func view() -> UIView & CoreListAttachedItemView {
+        DemoAvatarView(color: color, initial: initial)
+    }
+
+    func isEqual(to other: CoreListAttachedItem) -> Bool {
+        guard let other = other as? DemoAvatar else { return false }
+        return other.initial == initial && other.color == color
+    }
+}
+
+final class DemoAvatarView: UIView, CoreListAttachedItemView {
+    private let bubble = UILabel()
+    var onContentDidChange: ((Bool) -> Void)?
+
+    init(color: UIColor, initial: String) {
+        super.init(frame: .zero)
+        bubble.backgroundColor = color
+        bubble.textColor = .white
+        bubble.textAlignment = .center
+        bubble.font = .systemFont(ofSize: 15, weight: .bold)
+        bubble.text = initial
+        bubble.layer.cornerRadius = 16
+        bubble.clipsToBounds = true
+        addSubview(bubble)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func update(width: CGFloat, transition: CoreListTransition) -> CGFloat {
+        transition.setFrame(view: bubble, frame: CGRect(x: 6, y: 0, width: 32, height: 32))
+        return 32
+    }
+}
+
 extension DemoListItem {
-    static func makeItems(count: Int = 180) -> [DemoListItem] {
+    static func makeItems(count: Int = 180, groupSize: Int = 6, nestedScrollerEvery: Int = 0) -> [DemoListItem] {
         let accents: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemRed, .systemTeal, .systemIndigo]
 
         return (0..<count).map { index in
@@ -163,7 +336,9 @@ extension DemoListItem {
                 id: UUID(),
                 title: "Row \(index)",
                 detail: detail,
-                accentColor: accents[index % accents.count]
+                accentColor: accents[index % accents.count],
+                groupIndex: index / max(1, groupSize),
+                hasNestedScroller: nestedScrollerEvery > 0 && index % nestedScrollerEvery == 0
             )
         }
     }

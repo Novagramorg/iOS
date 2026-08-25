@@ -13,6 +13,22 @@ struct Trajectory {
 
     let samples: [Sample]
 
+    /// Seconds from this path's own `t == 0` at which the integrator ended its deceleration —
+    /// entering the bounce spring or settling — which is where `_getBouncingDecelerationOffset`
+    /// clears `_fastScrollMultiplier` (`0x17a87bc` / `0x17a8844`). `nil` if the path never gets there.
+    ///
+    /// A baked path has no per-frame hook, so the engine's sampling tick clears the streak when it
+    /// passes this time. **`spliced` and `truncated` must carry it**: a rebake that loses it leaves
+    /// the streak armed through a settle that should have cleared it, so the next flick inside the
+    /// 1 s window compounds on a multiplier it did not earn — a chat that flings further each time
+    /// until the user pauses.
+    let multiplierResetTime: TimeInterval?
+
+    init(samples: [Sample], multiplierResetTime: TimeInterval? = nil) {
+        self.samples = samples
+        self.multiplierResetTime = multiplierResetTime
+    }
+
     var duration: TimeInterval { samples.last?.t ?? 0 }
     var finalOffset: CGFloat { samples.last?.offset ?? samples.first?.offset ?? 0 }
 
@@ -62,6 +78,25 @@ extension Trajectory {
     /// Max carried history when rebaking, in seconds. Caps the spliced keyframe count while giving CA
     /// a well-defined recent past across the animation swap. (Design §3.)
     static let historyWindow: TimeInterval = 1.0
+
+    /// This path up to `t` (seconds from launch), coming to rest there — every vertex before `t`
+    /// verbatim, then the interpolated sample AT `t` as the endpoint. `offset(at:)` is therefore
+    /// UNCHANGED for every time ≤ `t` and constant after it.
+    ///
+    /// That exactness is the whole point: replayed as a keyframe animation on the SAME `beginTime`,
+    /// this presents pixel-for-pixel what the full path presents until `t`, so swapping one for the
+    /// other mid-flight is invisible no matter which frame the swap lands on. `KeyframeFlight.braked`
+    /// uses it to stop a caught flight without the render server ever stepping backward.
+    func truncated(at t: TimeInterval) -> Trajectory {
+        guard let first = samples.first else { return self }
+        // A cut before the reset means the path no longer reaches it; a cut after it retains it.
+        let retainedReset = multiplierResetTime.flatMap { $0 <= t + 1e-9 ? $0 : nil }
+        if t <= first.t { return Trajectory(samples: [first], multiplierResetTime: retainedReset) }
+        if t >= duration { return self }
+        var out = samples.filter { $0.t < t - 1e-9 }
+        out.append(Sample(t: t, offset: offset(at: t), velocity: velocity(at: t)))
+        return Trajectory(samples: out, multiplierResetTime: retainedReset)
+    }
 }
 
 /// A rebaked trajectory plus the layer-local time it should be played from.
@@ -103,27 +138,44 @@ extension Trajectory {
         for s in future.samples where s.t > 1e-9 {
             out.append(Sample(t: (now - newBegin) + s.t, offset: s.offset, velocity: s.velocity))
         }
-        return SplicedTrajectory(trajectory: Trajectory(samples: out), beginTime: newBegin)
+        // Re-time the reset onto the spliced axis. The FUTURE path owns everything after `now`, so
+        // its reset wins; the history's only counts if it already happened inside the retained
+        // window, in which case the multiplier is already 1 and the exact instant is moot but kept
+        // exact anyway.
+        let resetOnSplicedAxis: TimeInterval?
+        if let futureReset = future.multiplierResetTime {
+            resetOnSplicedAxis = (now - newBegin) + futureReset
+        } else if let currentReset = current.multiplierResetTime {
+            let global = prevBeginTime + currentReset
+            resetOnSplicedAxis = global > newBegin - 1e-9 ? global - newBegin : 0
+        } else {
+            resetOnSplicedAxis = nil
+        }
+        return SplicedTrajectory(trajectory: Trajectory(samples: out,
+                                                       multiplierResetTime: resetOnSplicedAxis),
+                                 beginTime: newBegin)
     }
 }
 
 extension Trajectory {
     /// Simulate a released axis forward to settle, recording one sample per `stepMs` step.
-    /// `axis` MUST be in its post-`endDrag()` `.decelerate` state. Drives `ScrollAxis.step` verbatim,
+    /// `axis` MUST be in its post-`applyRelease(velocity:)` `.decelerating` state. Drives `ScrollAxis.step` verbatim,
     /// so the vertices are the integrator's own outputs — parity is exact by construction.
     static func build(from axis: ScrollAxis, stepMs: CGFloat = 1000.0 / 120.0) -> Trajectory {
         var a = axis
         // t == 0 is the exact (full-precision) release offset so the path starts with no jump.
         var samples: [Sample] = [Sample(t: 0, offset: a.offset, velocity: a.velocity)]
         var t: TimeInterval = 0
+        var multiplierResetTime: TimeInterval?
         let stepSeconds = TimeInterval(stepMs) / 1000.0
         let capSeconds: TimeInterval = 10.0          // safety: real paths settle well before this
         while t < capSeconds {
-            let (written, settled) = a.step(dtMs: stepMs)
+            let (written, settled, endedDeceleration) = a.step(dtMs: stepMs)
             t += stepSeconds
+            if endedDeceleration, multiplierResetTime == nil { multiplierResetTime = t }
             samples.append(Sample(t: t, offset: written, velocity: a.velocity))
             if settled { break }
         }
-        return Trajectory(samples: samples)
+        return Trajectory(samples: samples, multiplierResetTime: multiplierResetTime)
     }
 }

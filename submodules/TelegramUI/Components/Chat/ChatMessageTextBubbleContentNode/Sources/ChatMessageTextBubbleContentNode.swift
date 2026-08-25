@@ -351,12 +351,11 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 }
                 
                 var rawText: String
-                var attributedText: NSAttributedString
+                let attributedText: NSAttributedString
                 var messageEntities: [MessageTextEntity]?
                 
                 var mediaDuration: Double? = nil
                 var isSeekableWebMedia = false
-                var isUnsupportedMedia = false
                 var story: Stories.Item?
                 var invoice: TelegramMediaInvoice?
                 for media in item.message.media {
@@ -367,8 +366,6 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         invoice = media
                     } else if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content, webEmbedType(content: content).supportsSeeking {
                         isSeekableWebMedia = true
-                    } else if media is TelegramMediaUnsupported {
-                        isUnsupportedMedia = true
                     } else if let storyMedia = media as? TelegramMediaStory {
                         if let value = item.message.associatedStories[storyMedia.storyId]?.get(Stories.StoredItem.self) {
                             if case let .item(storyValue) = value {
@@ -385,9 +382,6 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 } else if let story {
                     rawText = story.text
                     messageEntities = story.entities
-                } else if isUnsupportedMedia {
-                    rawText = item.presentationData.strings.Conversation_UnsupportedMediaPlaceholder
-                    messageEntities = [MessageTextEntity(range: 0..<rawText.count, type: .Italic)]
                 } else {
                     if let updatingMedia = item.attributes.updatingMedia {
                         rawText = updatingMedia.text
@@ -612,26 +606,12 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     attributedText = NSAttributedString(string: " ", font: textFont, textColor: messageTheme.primaryTextColor)
                 }
                 
-                if let entities = entities {
-                    let updatedString = NSMutableAttributedString(attributedString: attributedText)
-                    
-                    for entity in entities.sorted(by: { $0.range.lowerBound > $1.range.lowerBound }) {
-                        guard case let .CustomEmoji(_, fileId) = entity.type else {
-                            continue
-                        }
-                        
-                        let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
-                        
-                        let currentDict = updatedString.attributes(at: range.lowerBound, effectiveRange: nil)
-                        var updatedAttributes: [NSAttributedString.Key: Any] = currentDict
-                        updatedAttributes[ChatTextInputAttributes.customEmoji] = ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: item.message.associatedMedia[EngineMedia.Id(namespace: Namespaces.Media.CloudFile, id: fileId)] as? TelegramMediaFile)
-                        
-                        let insertString = NSAttributedString(string: updatedString.attributedSubstring(from: range).string, attributes: updatedAttributes)
-                        updatedString.replaceCharacters(in: range, with: insertString)
-                    }
-                    attributedText = updatedString
-                }
-                                
+                // The custom-emoji attribute is not re-applied here: `stringWithAppliedEntities`
+                // already attached it, using ranges adjusted for the substitutions it performs
+                // (`.FormattedDate` renders to text of a different length). An entity's own offsets
+                // index `rawText`, not the string above, so indexing with them lands on the wrong
+                // characters — or out of bounds.
+
                 var customTruncationToken: ((UIFont, Bool) -> NSAttributedString?)?
                 var maximumNumberOfLines: Int = 0
                 if item.presentationData.isPreview {

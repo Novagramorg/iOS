@@ -1114,6 +1114,46 @@ public extension ContainedViewLayoutTransition {
         }
     }
     
+    /// Per-corner radii — see `CornerRadii` and `CALayer.setCornerRadii`. Silently no-ops where the
+    /// underlying property is unavailable; check `CALayer.cornerRadiiSupported` if you need a
+    /// guaranteed clip and must fall back to a mask.
+    ///
+    func updateCornerRadii(layer: CALayer, cornerRadii radii: CornerRadii, completion: ((Bool) -> Void)? = nil) {
+        guard CALayer.cornerRadiiSupported else {
+            completion?(true)
+            return
+        }
+        let keyPath = layer.cornerRadiiKeyPath
+        if layer.cornerRadii == radii, layer.animation(forKey: keyPath) == nil {
+            completion?(true)
+            return
+        }
+
+        switch self {
+        case .immediate:
+            layer.removeAnimation(forKey: keyPath)
+            layer.setCornerRadii(radii)
+            completion?(true)
+        case let .animated(duration, curve):
+            // Resume from what is on screen when one animation interrupts another, exactly as the
+            // scalar `cornerRadius` path does.
+            let fromRadii: CornerRadii?
+            if layer.animation(forKey: keyPath) != nil, let presentationRadii = layer.presentation()?.cornerRadii {
+                fromRadii = presentationRadii
+            } else {
+                fromRadii = layer.cornerRadii
+            }
+            layer.setCornerRadii(radii)
+            guard let fromRadii else {
+                completion?(true)
+                return
+            }
+            layer.animate(from: fromRadii.boxedValue, to: radii.boxedValue, keyPath: keyPath, timingFunction: curve.timingFunction, duration: duration, mediaTimingFunction: curve.mediaTimingFunction, completion: { result in
+                completion?(result)
+            })
+        }
+    }
+
     func updateCornerRadius(layer: CALayer, cornerRadius: CGFloat, completion: ((Bool) -> Void)? = nil) {
         if layer.cornerRadius.isEqual(to: cornerRadius) {
             if let completion = completion {

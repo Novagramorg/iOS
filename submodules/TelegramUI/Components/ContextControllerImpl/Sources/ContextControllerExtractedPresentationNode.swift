@@ -355,11 +355,27 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
     
     private final class AnimatingOutState {
         var currentContentScreenFrame: CGRect
-        
+
+        /// Where the source's containing view sat in window space when the dismiss sampled its
+        /// landing rect, plus that animation's clock. Both exist for `retargetAnimatingOutContent`,
+        /// which re-aims the travel when the source item resizes mid-dismiss.
+        var sourceContainerOriginInWindow: CGPoint
+        let startTimestamp: Double
+        let duration: Double
+        let timingFunction: String
+
         init(
-            currentContentScreenFrame: CGRect
+            currentContentScreenFrame: CGRect,
+            sourceContainerOriginInWindow: CGPoint,
+            startTimestamp: Double,
+            duration: Double,
+            timingFunction: String
         ) {
             self.currentContentScreenFrame = currentContentScreenFrame
+            self.sourceContainerOriginInWindow = sourceContainerOriginInWindow
+            self.startTimestamp = startTimestamp
+            self.duration = duration
+            self.timingFunction = timingFunction
         }
     }
     
@@ -1676,6 +1692,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                     }
                     
                     if let _ = strongSelf.animatingOutState {
+                        strongSelf.retargetAnimatingOutContent()
                     } else {
                         strongSelf.requestUpdate(animation.transition)
                     }
@@ -1809,7 +1826,11 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             }
             
             self.animatingOutState = AnimatingOutState(
-                currentContentScreenFrame: currentContentScreenFrame
+                currentContentScreenFrame: currentContentScreenFrame,
+                sourceContainerOriginInWindow: itemContentNode?.containingItem.view.convert(CGPoint(), to: nil) ?? CGPoint(),
+                startTimestamp: CACurrentMediaTime(),
+                duration: duration,
+                timingFunction: timingFunction
             )
             
             let currentContentLocalFrame = convertFrame(contentRect, from: self.scrollNode.view, to: self.view)
@@ -1824,6 +1845,18 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 // height, leaving a `ch * (1 - scale)` residue that animates the content downward on dismiss.
                 if let contentNode = itemContentNode, contentNode.presentationScale != 1.0 {
                     animationInContentYDistance += contentNode.containingItem.contentRect.height * (1.0 - contentNode.presentationScale)
+                }
+                // The travel origin above is a MODEL value (`contentRect` -> `contentFrame`), and a
+                // `.none` relayout issued microseconds earlier may still be in flight: adding a reaction
+                // from the open menu makes the item re-lay out, `layoutUpdated` requests an animated
+                // update, and the dismissal then runs in the same runloop. At that moment the model
+                // already holds that animation's destination while the content is still rendered at its
+                // start, so the dismissal would begin from where the bubble is GOING rather than where it
+                // IS — an instant jump of the full relayout delta (the reaction row's height), then a
+                // correct animation to the chat. Fold the outstanding model-vs-presentation delta back in
+                // so the travel starts from the rendered position. Zero whenever nothing is in flight.
+                if let contentNode = itemContentNode, let presentation = contentNode.layer.presentation() {
+                    animationInContentYDistance += presentation.frame.origin.y - contentNode.frame.origin.y
                 }
             case .dismissWithoutContent:
                 animationInContentYDistance = 0.0
@@ -2125,6 +2158,111 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
         self.reactionContextNode?.cancelReactionAnimation()
     }
     
+    /// Re-aims an in-flight dismiss at the source item's current rest position.
+    ///
+    /// `animateOut` samples its landing geometry exactly once — into the staging wrapper's frame,
+    /// or into `offsetContainerNode.position` on the non-portal path — and `layoutUpdated` is
+    /// otherwise suppressed for the rest of the animation. A source item that resizes mid-flight
+    /// therefore leaves the travel aiming at a stale target: the bubble lands short and the
+    /// reparent in the travel's completion snaps it the remaining distance. That distance is the
+    /// item's own screen displacement, which for a chat bubble is the full height delta — the list
+    /// is bottom-anchored, so growth lifts the item's top, while the frozen wrapper keeps the
+    /// bubble's top where it was.
+    ///
+    /// Re-aim rather than relayout. Running a full layout pass here would drive the wrapper to the
+    /// *menu* rest: the wrapper sync in the layout pass is written for the animateIn direction,
+    /// where staging starts at the menu and the spring pulls it back to the chat, and animateOut
+    /// stages the opposite way round.
+    ///
+    /// The model moves to the item's new rest and the resulting visual discontinuity is carried by
+    /// an additive `bounds.origin.y` track that decays to zero over the dismiss's remaining time.
+    /// It rides `bounds.origin.y`, not `position.y`, for two reasons: its residual stays separable
+    /// from the primary travel animation, which shares this layer but owns `position.y`; and that
+    /// primary animation carries the completion that reparents the content, so it must not be
+    /// re-issued. Replacement rather than stacking, under a stable key, with `from` set to the full
+    /// remaining displacement (residual read off the presentation layer plus this pass's delta) —
+    /// the same shape as `CoreListNodeHostView`'s height compensation, and for the same reason: a
+    /// keyless additive re-issue stacks phase-shifted copies instead of superseding them.
+    private func retargetAnimatingOutContent() {
+        guard let animatingOutState = self.animatingOutState, let contentNode = self.itemContentNode else {
+            return
+        }
+        // `animatingOutState` is never cleared — the node is torn down with its controller — so this
+        // can still be reached after the travel's completion has reparented the content back into
+        // the chat and handed ownership of its geometry over. That completion clears the flag
+        // immediately after settling.
+        guard contentNode.containingItem.isExtractedToContextPreview else {
+            return
+        }
+
+        let containingItem = contentNode.containingItem
+        let sourceContainerOriginInWindow = containingItem.view.convert(CGPoint(), to: nil)
+
+        let animateLayer: CALayer
+        let modelDelta: CGFloat
+        let compensationScale: CGFloat
+        if let staging = contentNode.portalStaging, let wrapper = staging.wrapper, let surface = staging.surface {
+            // Recompute what `PortalTransitionStaging.enter` would produce now, so the wrapper also
+            // picks up a changed container size and a changed bubble offset within it, not just the
+            // vertical shift. The portal path is gated on `presentationScale == 1.0`.
+            let targetScreenRectInWindow = containingItem.view.convert(containingItem.contentRect, to: nil)
+            let wrapperOriginInWindow = CGPoint(
+                x: targetScreenRectInWindow.minX - containingItem.contentRect.minX,
+                y: targetScreenRectInWindow.minY - containingItem.contentRect.minY
+            )
+            let updatedWrapperFrame = surface.convert(CGRect(origin: wrapperOriginInWindow, size: containingItem.view.bounds.size), from: nil)
+            modelDelta = updatedWrapperFrame.minY - wrapper.frame.minY
+            wrapper.frame = updatedWrapperFrame
+            animateLayer = wrapper.layer
+            compensationScale = 1.0
+        } else {
+            modelDelta = sourceContainerOriginInWindow.y - animatingOutState.sourceContainerOriginInWindow.y
+            contentNode.offsetContainerNode.position = contentNode.offsetContainerNode.position.offsetBy(dx: 0.0, dy: modelDelta)
+            animateLayer = contentNode.offsetContainerNode.layer
+            // offsetContainerNode may carry the source's ancestor scale, and a bounds shift on a
+            // scaled layer displaces its children by that much times the scale.
+            compensationScale = contentNode.presentationScale
+        }
+
+        animatingOutState.sourceContainerOriginInWindow = sourceContainerOriginInWindow
+
+        guard !compensationScale.isZero else {
+            return
+        }
+        let residual: CGFloat
+        if let presentation = animateLayer.presentation() {
+            residual = presentation.bounds.origin.y - animateLayer.bounds.origin.y
+        } else {
+            residual = 0.0
+        }
+        let displacement = residual + modelDelta / compensationScale
+
+        var durationFactor = UIView.animationDurationFactor()
+        if durationFactor.isZero {
+            durationFactor = 1.0
+        }
+        let elapsed = (CACurrentMediaTime() - animatingOutState.startTimestamp) / durationFactor
+        let remainingDuration = max(0.0, animatingOutState.duration - elapsed)
+
+        let key = "animateOutRetarget"
+        if abs(displacement) < CGFloat.ulpOfOne || remainingDuration < Double.ulpOfOne {
+            // A `from == to` animation is one Core Animation never runs and never reports stopping,
+            // so drop the key instead of installing one.
+            animateLayer.removeAnimation(forKey: key)
+        } else {
+            animateLayer.animate(
+                from: displacement as NSNumber,
+                to: 0.0 as NSNumber,
+                keyPath: "bounds.origin.y",
+                timingFunction: animatingOutState.timingFunction,
+                duration: remainingDuration,
+                delay: 0.0,
+                additive: true,
+                key: key
+            )
+        }
+    }
+
     func addRelativeContentOffset(_ offset: CGPoint, transition: ContainedViewLayoutTransition) {
         if self.reactionContextNodeIsAnimatingOut, let reactionContextNode = self.reactionContextNode {
             reactionContextNode.bounds = reactionContextNode.bounds.offsetBy(dx: 0.0, dy: offset.y)

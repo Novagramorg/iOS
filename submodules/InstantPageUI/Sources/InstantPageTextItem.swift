@@ -23,6 +23,23 @@ public final class InstantPageUrlItem: Equatable {
     }
 }
 
+/// Payload of `InstantPageButtonActionAttribute`: a link-styled page button whose action is not a
+/// URL, so it cannot ride `TelegramTextAttributes.URL`.
+///
+/// A class, mirroring `InstantPageUrlItem` above, because attributed-string attribute values are
+/// objects and the run-extent lookup compares them.
+public final class InstantPageButtonActionItem: Equatable {
+    public let button: InstantPageButton
+
+    public init(button: InstantPageButton) {
+        self.button = button
+    }
+
+    public static func ==(lhs: InstantPageButtonActionItem, rhs: InstantPageButtonActionItem) -> Bool {
+        return lhs.button == rhs.button
+    }
+}
+
 struct InstantPageTextMarkedItem {
     let frame: CGRect
     let color: UIColor
@@ -432,7 +449,17 @@ public final class InstantPageTextItem: InstantPageItem {
 
     private func attributeRects(name: NSAttributedString.Key, at index: Int) -> [CGRect]? {
         var range = NSRange()
-        let _ = self.attributedString.attribute(name, at: index, effectiveRange: &range)
+        // `longestEffectiveRange`, NOT `effectiveRange`: the latter is explicitly not required to
+        // return the maximal range and in practice returns the current ATTRIBUTE RUN, so a link
+        // spanning runs — a button label of text + emoji, where the emoji placeholder carries a run
+        // delegate and the custom-emoji attribute the text does not, or any link with formatting
+        // inside it — highlighted only the run under the finger.
+        let _ = self.attributedString.attribute(
+            name,
+            at: index,
+            longestEffectiveRange: &range,
+            in: NSRange(location: 0, length: self.attributedString.length)
+        )
         if range.length != 0 {
             let boundsWidth = self.frame.width
             var rects: [CGRect] = []
@@ -483,7 +510,10 @@ public final class InstantPageTextItem: InstantPageItem {
                 TelegramTextAttributes.BotCommand,
                 TelegramTextAttributes.Hashtag,
                 TelegramTextAttributes.BankCard,
-                TelegramTextAttributes.Date
+                TelegramTextAttributes.Date,
+                // Omitting this costs the tap highlight AND the loading shimmer, silently:
+                // `linkProgressRects` in the chat bubble is computed from exactly these rects.
+                InstantPageButtonActionAttribute
             ]
             for key in interactiveKeys {
                 let attrKey = NSAttributedString.Key(rawValue: key)
@@ -734,6 +764,128 @@ final class InstantPageScrollableTextItem: InstantPageScrollableItem {
         }
         return nil
     }
+}
+
+/// True when `text` draws nothing but custom emoji (whitespace aside), used to decide whether a
+/// link-styled button gets the automatic link underline.
+///
+/// The recursion covers every wrapper that cannot itself ask for an underline. `.underline` is
+/// deliberately NOT among them: an explicitly underlined label keeps its underline, and answering
+/// `false` there is what preserves it. `.textDate` is excluded because it renders a formatted date
+/// string, not its inner text; `.image` / `.formula` / a nested `.textButton` draw real ink of their
+/// own. The switch is exhaustive on purpose — a new `RichText` case must make this decision rather
+/// than inherit it from a `default:` arm.
+private func richTextIsOnlyCustomEmoji(_ text: RichText) -> Bool {
+    var sawEmoji = false
+    func scan(_ text: RichText) -> Bool {
+        switch text {
+        case .empty:
+            return true
+        case let .plain(string):
+            return string.allSatisfy { $0.isWhitespace }
+        case .textCustomEmoji:
+            sawEmoji = true
+            return true
+        case let .bold(inner), let .italic(inner), let .strikethrough(inner), let .fixed(inner),
+             let .subscript(inner), let .superscript(inner), let .marked(inner):
+            return scan(inner)
+        case let .url(inner, _, _), let .email(inner, _), let .phone(inner, _), let .anchor(inner, _),
+             let .textMentionName(inner, _):
+            return scan(inner)
+        case let .textAutoEmail(inner), let .textAutoPhone(inner), let .textAutoUrl(inner),
+             let .textBankCard(inner), let .textBotCommand(inner), let .textCashtag(inner),
+             let .textHashtag(inner), let .textMention(inner), let .textSpoiler(inner):
+            return scan(inner)
+        case let .concat(texts):
+            return texts.allSatisfy(scan)
+        case .underline, .image, .formula, .textDate, .textButton:
+            return false
+        }
+    }
+    return scan(text) && sawEmoji
+}
+
+/// A `RichText.textButton` whose style carries `link:flags.3` — rendered as an ordinary link rather
+/// than a pill, which means leaving the attachment/pill-view path entirely and joining the text path.
+///
+/// It therefore produces no `InstantPageInlineButtonAttachment`, no `additionalItems` entry and no
+/// pill view, so none of the line-breaker's attachment handling (the re-break arm, the `lineAscent`
+/// discount) sees it. Two consequences worth knowing: the label becomes selectable and copyable, and
+/// it reveals character-by-character with its paragraph instead of popping in atomically.
+private func attributedStringForLinkStyleButton(
+    _ button: InstantPageButton,
+    styleStack: InstantPageTextStyleStack,
+    url: InstantPageUrlItem?,
+    inlineButtonMaxWidth: CGFloat?,
+    formatDate: ((Int32, MessageTextEntityType.DateTimeFormat) -> String)?
+) -> NSAttributedString {
+    // `.disabled` means a forward stripped the behaviour. Unlike a pill there is no control to grey
+    // out, and a link-coloured span that does nothing is worse than plain text — so render the label
+    // as ordinary text, with neither link styling nor a tap attribute.
+    if case .disabled = button.action {
+        return attributedStringForRichText(button.text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+    }
+
+    // A `.url` action IS a link, so it rides the ordinary URL attribute that the `.plain` arm
+    // attaches — buying the long-press menu, the concealed-URL confirmation, anchor scrolling and the
+    // link-progress shimmer with no new code. Every other action has no URL to open and instead
+    // carries the button itself, which the bubble routes into the bot-button dispatch.
+    //
+    // `.urlAuth` and `.openWebView` hold URLs but deliberately take the button route: their dispatch
+    // differs from opening a plain URL (`urlAuth` has its own confirmation flow).
+    let effectiveUrl: InstantPageUrlItem?
+    if case let .url(buttonUrl) = button.action {
+        effectiveUrl = InstantPageUrlItem(url: buttonUrl, webpageId: nil)
+    } else {
+        effectiveUrl = url
+    }
+
+    // Deliberately NO `.fontSize`/`.medium` push. A pill owns its typography; a link button inherits
+    // the paragraph's, which is what "lays out like all other links" means.
+    styleStack.push(.link(false))
+    let laidOutLabel = attributedStringForRichText(button.text, styleStack: styleStack, url: effectiveUrl, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+    styleStack.pop()
+
+    // Deliberately NOT `instantPageButtonLabelWithFittedEmoji`. That rewrite exists for a PILL, whose
+    // `clipsToBounds` capsule would shave a body-sized emoji; a link button is ordinary text in the
+    // paragraph and has no such box. Shrinking it here made a link button's emoji smaller than the very
+    // same emoji sitting beside it in the same paragraph — an inconsistency, not a fix: a body emoji
+    // already overhangs the chat bubble's 22pt row by exactly as much, so the special case never
+    // addressed the overlap it cited, it only made link buttons look different.
+    //
+    // With no `InstantPageEmojiSizeAttribute` stamped, `InstantPageV2Layout` falls back to the ordinary
+    // body size (`A - D + 4 * pointSize / 17`) — which IS the surrounding text's emoji size.
+    //
+    // A label of nothing but custom emoji drops the underline. The only underline reaching this string
+    // is the automatic one `InstantPageTextStyleStack.textAttributes()` adds when the link colour
+    // equals the body colour — a fallback so a link stays distinguishable in a theme whose accent
+    // matches its text (the chat-bubble themes do exactly that). There is no word to distinguish here:
+    // the rule just draws a stray line under the emoji, wider than the glyph and detached from it. An
+    // explicit `.underline` INSIDE the label survives, because `richTextIsOnlyCustomEmoji` answers
+    // `false` for that node. (An `.underline` wrapping the whole button, or a theme category that
+    // underlines its links, is stripped along with the fallback — an emoji should not be underlined by
+    // any of the three.)
+    let result: NSAttributedString
+    if richTextIsOnlyCustomEmoji(button.text) {
+        let stripped = laidOutLabel.mutableCopy() as! NSMutableAttributedString
+        stripped.removeAttribute(.underlineStyle, range: NSRange(location: 0, length: stripped.length))
+        result = stripped
+    } else {
+        result = laidOutLabel
+    }
+
+    if case .url = button.action {
+        return result
+    }
+    let mutable = result.mutableCopy() as! NSMutableAttributedString
+    if mutable.length != 0 {
+        mutable.addAttribute(
+            NSAttributedString.Key(rawValue: InstantPageButtonActionAttribute),
+            value: InstantPageButtonActionItem(button: button),
+            range: NSRange(location: 0, length: mutable.length)
+        )
+    }
+    return mutable
 }
 
 func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextStyleStack, url: InstantPageUrlItem? = nil, boundingWidth: CGFloat? = nil, inlineButtonMaxWidth: CGFloat? = nil, formatDate: ((Int32, MessageTextEntityType.DateTimeFormat) -> String)? = nil) -> NSAttributedString {
@@ -1021,6 +1173,11 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
                 return attributedStringForRichText(text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
             }
         case let .textButton(button):
+            // `richButtonStyle`'s link bit takes a completely different path: ordinary text, no
+            // attachment, no pill view. Everything below is the pill path and is unchanged.
+            if button.isLink {
+                return attributedStringForLinkStyleButton(button, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+            }
             // Inline attachment, built like an inline formula (:846): measure the label, reserve the
             // pill's full box via a CTRunDelegate reporting REAL ascent/descent so CoreText grows the
             // line box, and carry the measurement on the attribute for the V2 line-breaker.

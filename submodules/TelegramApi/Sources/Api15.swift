@@ -661,7 +661,7 @@ public extension Api {
     }
 }
 public extension Api {
-    indirect enum KeyboardButton: TypeConstructorDescription {
+    enum KeyboardButton: TypeConstructorDescription {
         public class Cons_keyboardButton: TypeConstructorDescription {
             public var flags: Int32
             public var style: Api.KeyboardButtonStyle?
@@ -677,40 +677,13 @@ public extension Api {
                 return ("keyboardButton", [("flags", ConstructorParameterDescription(self.flags)), ("style", ConstructorParameterDescription(self.style)), ("text", ConstructorParameterDescription(self.text)), ("type", ConstructorParameterDescription(self.type))])
             }
         }
-        public class Cons_keyboardInlineButton: TypeConstructorDescription {
-            public var flags: Int32
-            public var style: Api.KeyboardButtonStyle?
-            public var text: String
-            public var type: Api.InlineButtonType
-            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, type: Api.InlineButtonType) {
-                self.flags = flags
-                self.style = style
-                self.text = text
-                self.type = type
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("keyboardInlineButton", [("flags", ConstructorParameterDescription(self.flags)), ("style", ConstructorParameterDescription(self.style)), ("text", ConstructorParameterDescription(self.text)), ("type", ConstructorParameterDescription(self.type))])
-            }
-        }
         case keyboardButton(Cons_keyboardButton)
-        case keyboardInlineButton(Cons_keyboardInlineButton)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
             case .keyboardButton(let _data):
                 if boxed {
                     buffer.appendInt32(795322159)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 10) != 0 {
-                    _data.style!.serialize(buffer, true)
-                }
-                serializeString(_data.text, buffer: buffer, boxed: false)
-                _data.type.serialize(buffer, true)
-                break
-            case .keyboardInlineButton(let _data):
-                if boxed {
-                    buffer.appendInt32(-1675883435)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 10) != 0 {
@@ -726,8 +699,6 @@ public extension Api {
             switch self {
             case .keyboardButton(let _data):
                 return ("keyboardButton", [("flags", ConstructorParameterDescription(_data.flags)), ("style", ConstructorParameterDescription(_data.style)), ("text", ConstructorParameterDescription(_data.text)), ("type", ConstructorParameterDescription(_data.type))])
-            case .keyboardInlineButton(let _data):
-                return ("keyboardInlineButton", [("flags", ConstructorParameterDescription(_data.flags)), ("style", ConstructorParameterDescription(_data.style)), ("text", ConstructorParameterDescription(_data.text)), ("type", ConstructorParameterDescription(_data.type))])
             }
         }
 
@@ -752,32 +723,6 @@ public extension Api {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.KeyboardButton.keyboardButton(Cons_keyboardButton(flags: _1!, style: _2, text: _3!, type: _4!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_keyboardInlineButton(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Api.KeyboardButtonStyle?
-            if Int(_1 ?? 0) & Int(1 << 10) != 0 {
-                if let signature = reader.readInt32() {
-                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
-                }
-            }
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: Api.InlineButtonType?
-            if let signature = reader.readInt32() {
-                _4 = Api.parse(reader, signature: signature) as? Api.InlineButtonType
-            }
-            let _c1 = _1 != nil
-            let _c2 = (Int(_1 ?? 0) & Int(1 << 10) == 0) || _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.KeyboardButton.keyboardInlineButton(Cons_keyboardInlineButton(flags: _1!, style: _2, text: _3!, type: _4!))
             }
             else {
                 return nil
@@ -882,6 +827,126 @@ public extension Api {
             let _c2 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _2 != nil
             if _c1 && _c2 {
                 return Api.KeyboardButtonStyle.keyboardButtonStyle(Cons_keyboardButtonStyle(flags: _1!, icon: _2))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    indirect enum KeyboardInlineButton: TypeConstructorDescription {
+        public class Cons_keyboardInlineButton: TypeConstructorDescription {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
+            public var text: String
+            public var type: Api.InlineButtonType
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, type: Api.InlineButtonType) {
+                self.flags = flags
+                self.style = style
+                self.text = text
+                self.type = type
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("keyboardInlineButton", [("flags", ConstructorParameterDescription(self.flags)), ("style", ConstructorParameterDescription(self.style)), ("text", ConstructorParameterDescription(self.text)), ("type", ConstructorParameterDescription(self.type))])
+            }
+        }
+        case keyboardInlineButton(Cons_keyboardInlineButton)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .keyboardInlineButton(let _data):
+                if boxed {
+                    buffer.appendInt32(297902882)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
+                serializeString(_data.text, buffer: buffer, boxed: false)
+                _data.type.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .keyboardInlineButton(let _data):
+                return ("keyboardInlineButton", [("flags", ConstructorParameterDescription(_data.flags)), ("style", ConstructorParameterDescription(_data.style)), ("text", ConstructorParameterDescription(_data.text)), ("type", ConstructorParameterDescription(_data.type))])
+            }
+        }
+
+        public static func parse_keyboardInlineButton(_ reader: BufferReader) -> KeyboardInlineButton? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1 ?? 0) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Api.InlineButtonType?
+            if let signature = reader.readInt32() {
+                _4 = Api.parse(reader, signature: signature) as? Api.InlineButtonType
+            }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardInlineButton.keyboardInlineButton(Cons_keyboardInlineButton(flags: _1!, style: _2, text: _3!, type: _4!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum KeyboardInlineButtonRow: TypeConstructorDescription {
+        public class Cons_keyboardInlineButtonRow: TypeConstructorDescription {
+            public var buttons: [Api.KeyboardInlineButton]
+            public init(buttons: [Api.KeyboardInlineButton]) {
+                self.buttons = buttons
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("keyboardInlineButtonRow", [("buttons", ConstructorParameterDescription(self.buttons))])
+            }
+        }
+        case keyboardInlineButtonRow(Cons_keyboardInlineButtonRow)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .keyboardInlineButtonRow(let _data):
+                if boxed {
+                    buffer.appendInt32(423758582)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.buttons.count))
+                for item in _data.buttons {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .keyboardInlineButtonRow(let _data):
+                return ("keyboardInlineButtonRow", [("buttons", ConstructorParameterDescription(_data.buttons))])
+            }
+        }
+
+        public static func parse_keyboardInlineButtonRow(_ reader: BufferReader) -> KeyboardInlineButtonRow? {
+            var _1: [Api.KeyboardInlineButton]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.KeyboardInlineButton.self)
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.KeyboardInlineButtonRow.keyboardInlineButtonRow(Cons_keyboardInlineButtonRow(buttons: _1!))
             }
             else {
                 return nil

@@ -37,6 +37,9 @@ final class RTFImportCorpusTests: XCTestCase {
                 break
             case .details:
                 break
+            case .buttonRow:
+                // A button row holds no paragraph text; RTF import never produces one.
+                break
             }
         }
         return result

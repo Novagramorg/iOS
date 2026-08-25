@@ -16,6 +16,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/PhotoResources",
         "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/Svg",
         "//submodules/TelegramCore",
         "//submodules/TextFormat",
     ],

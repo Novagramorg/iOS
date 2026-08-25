@@ -13,6 +13,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/AccountContext",
         "//submodules/TelegramPresentationData",
+        "//submodules/PresentationDataUtils",
         "//submodules/ComponentFlow",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/Components/ViewControllerComponent",

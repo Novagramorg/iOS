@@ -33,7 +33,7 @@ extension DocumentCanvasView {
     /// Empty when the caret isn't in a table. `rect` is the hit/draw rect in canvas coordinates.
     func tableHandles() -> [(rect: CGRect, kind: TableStructuralSelection)] {
         guard let a = activeTable() else { return [] }
-        let b = TableBlockBox.border
+        let b = a.box.borderWidth   // 0 for an unbordered table, so the handles sit flush
         // The grip spans the active structural RANGE when one is selected, else the caret's single cell.
         let rowRange = structuralRowRange() ?? (a.row...a.row)
         let colRange = structuralColumnRange() ?? (a.col...a.col)
@@ -292,7 +292,7 @@ extension DocumentCanvasView {
     private func cellOutlineRect(_ rect: TableRect, in box: TableBlockBox) -> CGRect? {
         guard let lo = box.cellRect(row: rect.top, column: rect.left),
               let hi = box.cellRect(row: rect.bottom, column: rect.right) else { return nil }
-        return lo.union(hi).insetBy(dx: -TableBlockBox.border, dy: -TableBlockBox.border)
+        return lo.union(hi).insetBy(dx: -box.borderWidth, dy: -box.borderWidth)
             .offsetBy(dx: -box.contentOffsetX, dy: 0)
     }
 

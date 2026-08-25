@@ -132,10 +132,12 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                 }
             }
             var previousRichText: RichTextMessageAttribute?
+            var previousEphemeralReplacement: EphemeralReplacementMessageAttribute?
             for attribute in previous {
                 if let attribute = attribute as? RichTextMessageAttribute {
                     previousRichText = attribute
-                    break
+                } else if let attribute = attribute as? EphemeralReplacementMessageAttribute {
+                    previousEphemeralReplacement = attribute
                 }
             }
             
@@ -175,6 +177,9 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                         break
                     }
                 }
+            }
+            if let previousEphemeralReplacement, !updated.contains(where: { $0 is EphemeralReplacementMessageAttribute }) {
+                updated.append(previousEphemeralReplacement)
             }
         },
         decodeMessageThreadInfo: { entry in

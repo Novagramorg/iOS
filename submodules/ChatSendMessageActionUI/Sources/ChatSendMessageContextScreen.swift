@@ -1335,7 +1335,9 @@ final class ChatSendMessageContextScreenComponent: Component {
                 let reactionContextY = environment.statusBarHeight
                 let size = availableSize
                 var reactionsAnchorRect = messageItemFrame
-                if let mediaPreview {
+                if !isMessageVisible {
+                    reactionsAnchorRect.origin.y = actionsStackFrame.minY
+                } else if let mediaPreview {
                     switch mediaPreview.layoutType {
                     case .message, .media:
                         reactionsAnchorRect.size.width += 100.0

@@ -4,6 +4,7 @@ import Display
 import AccountContext
 import SwiftSignalKit
 import TelegramPresentationData
+import PresentationDataUtils
 import ComponentFlow
 import ViewControllerComponent
 import MultilineTextComponent
@@ -19,11 +20,13 @@ private final class WalletWordsScreenComponent: Component {
 
     let context: AccountContext
     let words: [String]
+    let mode: WalletWordsScreenMode
     let bottomInset: CGFloat
 
-    init(context: AccountContext, words: [String], bottomInset: CGFloat) {
+    init(context: AccountContext, words: [String], mode: WalletWordsScreenMode, bottomInset: CGFloat) {
         self.context = context
         self.words = words
+        self.mode = mode
         self.bottomInset = bottomInset
     }
 
@@ -32,6 +35,9 @@ private final class WalletWordsScreenComponent: Component {
             return false
         }
         if lhs.words != rhs.words {
+            return false
+        }
+        if lhs.mode != rhs.mode {
             return false
         }
         if lhs.bottomInset != rhs.bottomInset {
@@ -73,10 +79,20 @@ private final class WalletWordsScreenComponent: Component {
             let theme = environment.theme
             self.backgroundColor = .clear
 
-            //TODO:localize
-            let titleText = "Your Recovery Phrase"
-            //TODO:localize
-            let bodyText = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
+            let titleText: String
+            let bodyText: String
+            switch component.mode {
+            case .view, .verify:
+                //TODO:localize
+                titleText = "Your Recovery Phrase"
+                //TODO:localize
+                bodyText = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
+            case .replacement:
+                //TODO:localize
+                titleText = "New Secret Phrase"
+                //TODO:localize
+                bodyText = "A new recovery phrase for your wallet has been generated. Write it down and keep it secret."
+            }
             let sideInset = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             let contentWidth = max(0.0, min(430.0, availableSize.width - sideInset * 2.0))
             var contentHeight: CGFloat = 33.0
@@ -330,10 +346,12 @@ private final class WalletWordsSheetComponent: CombinedComponent {
 
     let context: AccountContext
     let words: [String]
+    let mode: WalletWordsScreenMode
 
-    init(context: AccountContext, words: [String]) {
+    init(context: AccountContext, words: [String], mode: WalletWordsScreenMode) {
         self.context = context
         self.words = words
+        self.mode = mode
     }
 
     static func ==(lhs: WalletWordsSheetComponent, rhs: WalletWordsSheetComponent) -> Bool {
@@ -341,6 +359,9 @@ private final class WalletWordsSheetComponent: CombinedComponent {
             return false
         }
         if lhs.words != rhs.words {
+            return false
+        }
+        if lhs.mode != rhs.mode {
             return false
         }
         return true
@@ -372,13 +393,21 @@ private final class WalletWordsSheetComponent: CombinedComponent {
             )
             let contentBottomInset = bottomInsets.bottom + 52.0 + 16.0
 
-            //TODO:localize
-            let buttonTitle = "Done"
+            let buttonTitle: String
+            switch context.component.mode {
+            case .view, .verify:
+                //TODO:localize
+                buttonTitle = "Done"
+            case .replacement:
+                //TODO:localize
+                buttonTitle = "Continue"
+            }
             let sheetComponent = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(WalletWordsScreenComponent(
                         context: context.component.context,
                         words: context.component.words,
+                        mode: context.component.mode,
                         bottomInset: contentBottomInset
                     )),
                     titleItem: nil,
@@ -458,20 +487,30 @@ private final class WalletWordsSheetComponent: CombinedComponent {
 public final class WalletWordsScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     private let words: [String]
-    private let verify: Bool
+    private let mode: WalletWordsScreenMode
     private let completion: (() -> Void)?
+    private let displayedAt = Date()
     private let idleTimerExtensionDisposable = MetaDisposable()
     private var isVerifying = false
-    
-    public init(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) {
+
+    public convenience init(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) {
+        self.init(
+            context: context,
+            words: words,
+            mode: verify ? .verify : .view,
+            completion: completion
+        )
+    }
+
+    public init(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) {
         self.context = context
         self.words = words
-        self.verify = verify
+        self.mode = mode
         self.completion = completion
 
         super.init(
             context: context,
-            component: WalletWordsSheetComponent(context: context, words: words),
+            component: WalletWordsSheetComponent(context: context, words: words, mode: mode),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
             theme: .default
@@ -496,7 +535,18 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
         guard !self.words.isEmpty, !self.isVerifying else {
             return
         }
-        if self.verify {
+        if self.mode == .replacement, Date().timeIntervalSince(self.displayedAt) < 10.0 {
+            //TODO:localize
+            self.present(textAlertController(
+                context: self.context,
+                title: "Sure done?",
+                text: "You didn't have enough time to write these words down.",
+                actions: [TextAlertAction(type: .defaultAction, title: "OK, sorry", action: {
+                })]
+            ), in: .window(.root))
+            return
+        }
+        if self.mode != .view {
             self.isVerifying = true
             let wordsController: ViewController = self
             let verificationController = self.context.sharedContext.makeWalletImportScreen(
@@ -517,6 +567,10 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
 
                     self.isVerifying = false
                     self.completion?()
+
+                    if self.mode == .replacement {
+                        return
+                    }
 
                     guard let navigationController, let remainingViewControllers else {
                         wordsController.dismiss()

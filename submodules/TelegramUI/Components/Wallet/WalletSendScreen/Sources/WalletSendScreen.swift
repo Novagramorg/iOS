@@ -497,7 +497,6 @@ private final class WalletSendScreenComponent: Component {
     final class View: UIView {
         private let controlButtons = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
-        private let recipientField = UITextField()
         private let amountField = WalletSendAmountField()
         private let emptyHint = ComponentView<Empty>()
         private let rateButton = ComponentView<Empty>()
@@ -527,23 +526,12 @@ private final class WalletSendScreenComponent: Component {
         private var currentFiatCurrency: WalletContext.FiatCurrency = .usd
         private var currentRate: Double?
         private var recipientAddress = ""
-        private var recipientIsResolved = false
         private var initialAddress: String?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
 
             self.addSubview(self.amountField)
-            self.recipientField.borderStyle = .none
-            self.recipientField.clearButtonMode = .whileEditing
-            self.recipientField.keyboardType = .asciiCapable
-            self.recipientField.autocorrectionType = .no
-            self.recipientField.autocapitalizationType = .none
-            self.recipientField.font = Font.regular(15.0)
-            self.recipientField.layer.cornerRadius = 18.0
-            self.recipientField.layer.masksToBounds = true
-            self.recipientField.addTarget(self, action: #selector(self.recipientTextChanged), for: .editingChanged)
-            self.addSubview(self.recipientField)
             self.amountField.amountUpdated = { [weak self] amount in
                 guard let self else {
                     return
@@ -580,13 +568,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         func isPanGestureEnabled() -> Bool {
-            return !self.amountField.isInputActive && !self.recipientField.isFirstResponder
-        }
-
-        @objc private func recipientTextChanged() {
-            self.recipientAddress = self.recipientField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            self.recipientIsResolved = false
-            self.componentState?.updated(transition: .immediate)
+            return !self.amountField.isInputActive
         }
 
         private func applyRecipient(_ value: String) {
@@ -606,8 +588,6 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
             self.recipientAddress = address
-            self.recipientIsResolved = !address.isEmpty
-            self.recipientField.text = address
             if !self.isUpdating {
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             }
@@ -767,7 +747,6 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
             guard !self.recipientAddress.isEmpty else {
-                self.recipientField.becomeFirstResponder()
                 return
             }
             self.isPreparingTransfer = true
@@ -902,8 +881,7 @@ private final class WalletSendScreenComponent: Component {
             self.backgroundColor = theme.list.plainBackgroundColor
 
             let peerName = component.peer?.compactDisplayTitle
-            let canDisplayAddressInTitle = self.recipientIsResolved || self.recipientAddress.count >= 48
-            let addressTitle = canDisplayAddressInTitle ? walletSendShortAddress(self.recipientAddress) : nil
+            let addressTitle = self.recipientAddress.isEmpty ? nil : walletSendShortAddress(self.recipientAddress)
             let recipientTitle = peerName ?? addressTitle
             let titlePrefix: String
             if recipientTitle == nil {
@@ -1013,25 +991,6 @@ private final class WalletSendScreenComponent: Component {
                 )
             }
 
-            let showsRecipient = component.peer == nil && !self.recipientIsResolved
-            self.recipientField.isHidden = !showsRecipient
-            self.recipientField.textColor = theme.list.itemPrimaryTextColor
-            self.recipientField.tintColor = theme.list.itemAccentColor
-            self.recipientField.backgroundColor = theme.list.itemInputField.backgroundColor
-            //TODO:localize
-            let addressPlaceholder = "TON address"
-            self.recipientField.attributedPlaceholder = NSAttributedString(
-                string: addressPlaceholder,
-                font: Font.regular(15.0),
-                textColor: theme.list.itemPlaceholderTextColor
-            )
-            self.recipientField.frame = CGRect(
-                x: environment.safeInsets.left + 24.0,
-                y: headerOriginY + headerButtonSize.height + 14.0,
-                width: max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 48.0),
-                height: 36.0
-            ).insetBy(dx: -10.0, dy: 0.0)
-
             let keyboardHeight = environment.inputHeight
             let effectiveBottomInset = max(
                 keyboardHeight,
@@ -1058,7 +1017,7 @@ private final class WalletSendScreenComponent: Component {
             }
             let amountWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 32.0)
             let amountCenterY = max(
-                headerOriginY + headerButtonSize.height + minimumAmountHeaderSpacing + (showsRecipient ? 40.0 : 0.0),
+                headerOriginY + headerButtonSize.height + minimumAmountHeaderSpacing,
                 min(availableSize.height * 0.39, usableBottom - amountBottomReserve)
             )
             let amountFrame = CGRect(
@@ -1441,17 +1400,14 @@ private final class WalletSendScreenComponent: Component {
                 && !self.walletIsLoading
                 && !isInsufficient
                 && self.walletBalance != nil
-            let sendFillColor = canSend || self.isPreparingTransfer
-                ? theme.list.itemCheckColors.fillColor
-                : theme.list.itemCheckColors.fillColor.desaturated().withMultipliedAlpha(0.55)
             let sendButtonSize = self.sendButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
                     background: ButtonComponent.Background(
                         style: .glass,
-                        color: sendFillColor,
+                        color: theme.list.itemCheckColors.fillColor,
                         foreground: theme.list.itemCheckColors.foregroundColor,
-                        pressedColor: sendFillColor.withMultipliedAlpha(0.9)
+                        pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
                     ),
                     content: AnyComponentWithIdentity(
                         id: "title",
@@ -1490,7 +1446,7 @@ private final class WalletSendScreenComponent: Component {
                         height: sendButtonSize.height
                     )
                 )
-                transition.setAlpha(view: sendButtonView, alpha: hasAmount ? 1.0 : 0.0)
+                transition.setAlpha(view: sendButtonView, alpha: hasAmount || component.initialAddress != nil ? 1.0 : 0.0)
                 sendButtonView.isUserInteractionEnabled = hasAmount
             }
 
@@ -1575,7 +1531,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }
 
-    public init(context: AccountContext, walletContext: WalletContext, address: String? = nil) {
+    public init(context: AccountContext, walletContext: WalletContext, address: String) {
         super.init(
             context: context,
             component: WalletSendScreenComponent(

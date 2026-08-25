@@ -3,9 +3,12 @@ import UIKit
 import Display
 import AccountContext
 import TelegramPresentationData
+import TelegramStringFormatting
+import TextFormat
 import ComponentFlow
 import ViewControllerComponent
 import ChatListHeaderComponent
+import BundleIconComponent
 import QrCodeUI
 import ContextUI
 import SwiftSignalKit
@@ -292,6 +295,216 @@ private final class LazySectionView: UIView {
     }
 }
 
+private final class WalletNavigationBalanceComponent: Component {
+    typealias EnvironmentType = Empty
+
+    let theme: PresentationTheme
+    let balance: Int64?
+    let fiatCurrency: WalletContext.FiatCurrency
+    let fiatRate: WalletContext.FiatRate?
+    let dateTimeFormat: PresentationDateTimeFormat
+
+    init(
+        theme: PresentationTheme,
+        balance: Int64?,
+        fiatCurrency: WalletContext.FiatCurrency,
+        fiatRate: WalletContext.FiatRate?,
+        dateTimeFormat: PresentationDateTimeFormat
+    ) {
+        self.theme = theme
+        self.balance = balance
+        self.fiatCurrency = fiatCurrency
+        self.fiatRate = fiatRate
+        self.dateTimeFormat = dateTimeFormat
+    }
+
+    static func ==(lhs: WalletNavigationBalanceComponent, rhs: WalletNavigationBalanceComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.balance != rhs.balance {
+            return false
+        }
+        if lhs.fiatCurrency != rhs.fiatCurrency || lhs.fiatRate != rhs.fiatRate {
+            return false
+        }
+        if lhs.dateTimeFormat != rhs.dateTimeFormat {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let balanceText = ComponentView<Empty>()
+        private let gramIcon = ComponentView<Empty>()
+        private let fiatText = ComponentView<Empty>()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(
+            component: WalletNavigationBalanceComponent,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<Empty>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let formattedBalance: String
+            if let balance = component.balance {
+                formattedBalance = formatTonAmountText(
+                    balance,
+                    dateTimeFormat: component.dateTimeFormat,
+                    maxDecimalPositions: 2
+                )
+            } else {
+                formattedBalance = "0"
+            }
+
+            let formattedFiatBalance: String
+            if let balance = component.balance, let fiatRate = component.fiatRate {
+                formattedFiatBalance = formatTonFiatValue(
+                    balance,
+                    divide: true,
+                    rate: fiatRate.unitsPerGram,
+                    currencySymbol: component.fiatCurrency.symbol,
+                    maxDecimalPositions: balance == 0 ? 0 : 2,
+                    dateTimeFormat: component.dateTimeFormat
+                )
+            } else {
+                formattedFiatBalance = "—"
+            }
+
+            let primaryColor = component.theme.rootController.navigationBar.primaryTextColor
+            let secondaryColor = component.theme.rootController.navigationBar.secondaryTextColor
+            let iconSize = self.gramIcon.update(
+                transition: transition,
+                component: AnyComponent(BundleIconComponent(
+                    name: "Wallet/TopGram",
+                    tintColor: nil,
+                    maxSize: CGSize(width: 20.0, height: 20.0)
+                )),
+                environment: {},
+                containerSize: CGSize(width: 20.0, height: 20.0)
+            )
+            let balanceSpacing: CGFloat = 2.0
+            let balanceSize = self.balanceText.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: formattedBalance,
+                        font: Font.semibold(17.0),
+                        textColor: primaryColor
+                    )),
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: CGSize(
+                    width: max(0.0, availableSize.width - balanceSpacing - iconSize.width),
+                    height: availableSize.height
+                )
+            )
+            let fiatSize = self.fiatText.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: formattedFiatBalance,
+                        font: Font.regular(13.0),
+                        textColor: secondaryColor
+                    )),
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+
+            let balanceRowSize = CGSize(
+                width: balanceSize.width + balanceSpacing + iconSize.width,
+                height: max(balanceSize.height, iconSize.height)
+            )
+            let verticalSpacing: CGFloat = 0.0
+            let size = CGSize(
+                width: max(balanceRowSize.width, fiatSize.width),
+                height: balanceRowSize.height + verticalSpacing + fiatSize.height
+            )
+
+            if let balanceTextView = self.balanceText.view {
+                if balanceTextView.superview == nil {
+                    self.addSubview(balanceTextView)
+                }
+                transition.setFrame(
+                    view: balanceTextView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: floor((size.width - balanceRowSize.width) * 0.5) + iconSize.width + balanceSpacing,
+                            y: floor((balanceRowSize.height - balanceSize.height) * 0.5)
+                        ),
+                        size: balanceSize
+                    )
+                )
+            }
+            if let gramIconView = self.gramIcon.view {
+                if gramIconView.superview == nil {
+                    self.addSubview(gramIconView)
+                }
+                transition.setFrame(
+                    view: gramIconView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: floor((size.width - balanceRowSize.width) * 0.5),
+                            y: floor((balanceRowSize.height - iconSize.height) * 0.5) - UIScreenPixel
+                        ),
+                        size: iconSize
+                    )
+                )
+            }
+            if let fiatTextView = self.fiatText.view {
+                if fiatTextView.superview == nil {
+                    self.addSubview(fiatTextView)
+                }
+                transition.setFrame(
+                    view: fiatTextView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: floor((size.width - fiatSize.width) * 0.5),
+                            y: balanceRowSize.height + verticalSpacing
+                        ),
+                        size: fiatSize
+                    )
+                )
+            }
+
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            state: state,
+            environment: environment,
+            transition: transition
+        )
+    }
+}
+
 private final class WalletScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -325,9 +538,18 @@ private final class WalletScreenComponent: Component {
             case collectibles
         }
 
+        private let cardCollapseThreshold: CGFloat = 44.0
+        private let cardCollapsedScale: CGFloat = 0.22
+        private let cardMinimumScrollScale: CGFloat = 0.9
+
         private let scrollView: ScrollView
         private let topEdgeEffectView: EdgeEffectView
         private let header = ComponentView<Empty>()
+        private let navigationTitle = ComponentView<Empty>()
+        private let navigationBalance = ComponentView<Empty>()
+        private let cardContainerView: UIView
+        private let cardScrollContainerView: UIView
+        private let cardVisualContainerView: UIView
         private let card = ComponentView<Empty>()
         private let addFundsButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
@@ -336,6 +558,7 @@ private final class WalletScreenComponent: Component {
         private let transactionsSection = LazySectionView()
         private let collectiblesSection = LazySectionView()
         private let emptyTransactionsInfo = ComponentView<Empty>()
+        private let emptyTransactionsFooter = ComponentView<Empty>()
 
         private var component: WalletScreenComponent?
         private var environment: EnvironmentType?
@@ -353,10 +576,18 @@ private final class WalletScreenComponent: Component {
         private var isGramTooltipPresentationPending = false
         private var didPresentGramTooltip = false
         private var selectedSection: SelectedSection = .transactions
+        private var isCardCollapsed = false
+        private var cardExpandedFrame: CGRect?
 
         override init(frame: CGRect) {
             self.scrollView = ScrollView()
             self.topEdgeEffectView = EdgeEffectView()
+            self.cardContainerView = UIView()
+            self.cardScrollContainerView = UIView()
+            self.cardVisualContainerView = UIView()
+            self.cardContainerView.clipsToBounds = false
+            self.cardScrollContainerView.clipsToBounds = false
+            self.cardVisualContainerView.clipsToBounds = false
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.scrollsToTop = true
@@ -374,12 +605,33 @@ private final class WalletScreenComponent: Component {
             self.topEdgeEffectView.alpha = 0.0
             self.topEdgeEffectView.isUserInteractionEnabled = false
 
+            self.cardContainerView.addSubview(self.cardScrollContainerView)
+            self.cardScrollContainerView.addSubview(self.cardVisualContainerView)
             self.addSubview(self.scrollView)
             self.addSubview(self.topEdgeEffectView)
+            self.insertSubview(self.cardContainerView, aboveSubview: self.topEdgeEffectView)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard let result = super.hitTest(point, with: event) else {
+                return nil
+            }
+            guard result.isDescendant(of: self.cardVisualContainerView) else {
+                return result
+            }
+
+            var currentView: UIView? = result
+            while let current = currentView, current !== self.cardVisualContainerView {
+                if current is UIControl {
+                    return result
+                }
+                currentView = current.superview
+            }
+            return self.scrollView
         }
 
         deinit {
@@ -389,6 +641,7 @@ private final class WalletScreenComponent: Component {
         }
 
         func scrollToTop() {
+            self.updateCardCollapsedState(false)
             self.scrollView.setContentOffset(CGPoint(), animated: true)
         }
 
@@ -396,11 +649,31 @@ private final class WalletScreenComponent: Component {
             guard scrollView === self.scrollView else {
                 return
             }
+            if !self.isUpdating {
+                self.updateCardCollapsedState(scrollView.contentOffset.y >= self.cardCollapseThreshold)
+            }
             self.updateScrolling(transition: .immediate)
             self.updateVisibleSections(transition: .immediate)
             if scrollView.contentOffset.y + scrollView.bounds.height > scrollView.contentSize.height - 240.0 {
                 self.loadMoreItemsIfNeeded()
             }
+        }
+
+        func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+            guard scrollView === self.scrollView else {
+                return
+            }
+            if targetContentOffset.pointee.y > 0.0 && targetContentOffset.pointee.y < self.cardCollapseThreshold {
+                targetContentOffset.pointee.y = 0.0
+            }
+        }
+
+        private func updateCardCollapsedState(_ isCollapsed: Bool) {
+            guard self.isCardCollapsed != isCollapsed else {
+                return
+            }
+            self.isCardCollapsed = isCollapsed
+            self.componentState?.updated(transition: .spring(duration: 0.35))
         }
 
         private func visibleBounds(for sectionFrame: CGRect, viewportSize: CGSize) -> CGRect {
@@ -442,6 +715,18 @@ private final class WalletScreenComponent: Component {
             })
         }
 
+        private func hideEmptyTransactionsFooter(transition: ComponentTransition) {
+            guard let footerView = self.emptyTransactionsFooter.view, footerView.superview != nil else {
+                return
+            }
+            transition.setAlpha(view: footerView, alpha: 0.0, completion: { [weak footerView] _ in
+                guard let footerView, footerView.alpha == 0.0 else {
+                    return
+                }
+                footerView.removeFromSuperview()
+            })
+        }
+
         private var walletInfo: WalletContext.WalletInfo? {
             guard let walletState = self.walletState else {
                 return nil
@@ -455,6 +740,7 @@ private final class WalletScreenComponent: Component {
         private func maybePresentGramTooltip(cardView: WalletCardComponent.View) {
             guard !self.isGramTooltipPresentationPending,
                   !self.didPresentGramTooltip,
+                  !self.isCardCollapsed,
                   self.environment?.isVisible == true,
                   self.walletInfo != nil,
                   !cardView.gramIconFrame.isEmpty else {
@@ -469,6 +755,7 @@ private final class WalletScreenComponent: Component {
                 self.isGramTooltipPresentationPending = false
 
                 guard !self.didPresentGramTooltip,
+                      !self.isCardCollapsed,
                       self.environment?.isVisible == true,
                       self.walletInfo != nil,
                       let component = self.component,
@@ -601,8 +888,8 @@ private final class WalletScreenComponent: Component {
                     ],
                     selectedTab: self.selectedSection == .transactions ? transactionsTabId : collectiblesTabId,
                     isEditing: false,
-                    layout: .fit,
-                    liftWhileSwitching: false
+                    layout: .fill,
+                    liftWhileSwitching: environment.deviceMetrics.type == .phone
                 )),
                 environment: {},
                 containerSize: CGSize(width: containerWidth, height: 40.0)
@@ -664,6 +951,31 @@ private final class WalletScreenComponent: Component {
         private func updateScrolling(transition: ComponentTransition) {
             let edgeEffectAlpha = max(0.0, min(1.0, self.scrollView.contentOffset.y / 20.0))
             transition.setAlpha(view: self.topEdgeEffectView, alpha: edgeEffectAlpha)
+            let headerTransitionFraction = max(0.0, min(1.0, self.scrollView.contentOffset.y / self.cardCollapseThreshold))
+            if let navigationTitleView = self.navigationTitle.view {
+                transition.setAlpha(view: navigationTitleView, alpha: 1.0 - headerTransitionFraction)
+                transition.setBlur(layer: navigationTitleView.layer, radius: headerTransitionFraction * 8.0)
+            }
+            if let cardExpandedFrame = self.cardExpandedFrame {
+                ComponentTransition.immediate.setFrame(
+                    view: self.cardContainerView,
+                    frame: cardExpandedFrame.offsetBy(dx: 0.0, dy: -self.scrollView.contentOffset.y)
+                )
+                let cardScrollFraction = max(0.0, min(1.0, self.scrollView.contentOffset.y / self.cardCollapseThreshold))
+                let cardScrollScale = 1.0 - (1.0 - self.cardMinimumScrollScale) * cardScrollFraction
+                let cardScrollOffset = cardExpandedFrame.height * (1.0 - cardScrollScale) * 0.5
+                var cardScrollTransform = CATransform3DMakeScale(
+                    cardScrollScale,
+                    cardScrollScale,
+                    1.0
+                )
+                cardScrollTransform.m42 = cardScrollOffset
+                self.cardScrollContainerView.layer.removeAnimation(forKey: "sublayerTransform")
+                ComponentTransition.immediate.setSublayerTransform(
+                    view: self.cardScrollContainerView,
+                    transform: cardScrollTransform
+                )
+            }
         }
 
         private func dismiss() {
@@ -753,6 +1065,22 @@ private final class WalletScreenComponent: Component {
             controller.push(component.context.sharedContext.makeWalletSettingsScreen(context: component.context))
         }
 
+        private func openTerms(url: String) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            component.context.sharedContext.openExternalUrl(
+                context: component.context,
+                urlContext: .generic,
+                url: url,
+                forceExternal: false,
+                presentationData: presentationData,
+                navigationController: controller.navigationController as? NavigationController,
+                dismissInput: {}
+            )
+        }
+
         private func openTransaction(_ transaction: WalletContext.Transaction) {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
@@ -798,48 +1126,196 @@ private final class WalletScreenComponent: Component {
                 //TODO:localize
                 (.rub, "Russian Ruble"),
                 //TODO:localize
-                (.cny, "Chinese Yuan")
+                (.cny, "Chinese Yuan"),
+                //TODO:localize
+                (.aed, "UAE Dirham"),
+                //TODO:localize
+                (.afn, "Afghan Afghani"),
+                //TODO:localize
+                (.all, "Albanian Lek"),
+                //TODO:localize
+                (.amd, "Armenian Dram"),
+                //TODO:localize
+                (.ars, "Argentine Peso"),
+                //TODO:localize
+                (.aud, "Australian Dollar"),
+                //TODO:localize
+                (.azn, "Azerbaijani Manat"),
+                //TODO:localize
+                (.bam, "Bosnia-Herzegovina Convertible Mark"),
+                //TODO:localize
+                (.bdt, "Bangladeshi Taka"),
+                //TODO:localize
+                (.bgn, "Bulgarian Lev"),
+                //TODO:localize
+                (.bhd, "Bahraini Dinar"),
+                //TODO:localize
+                (.bnd, "Brunei Dollar"),
+                //TODO:localize
+                (.bob, "Bolivian Boliviano"),
+                //TODO:localize
+                (.brl, "Brazilian Real"),
+                //TODO:localize
+                (.byn, "Belarusian Ruble"),
+                //TODO:localize
+                (.cad, "Canadian Dollar"),
+                //TODO:localize
+                (.chf, "Swiss Franc"),
+                //TODO:localize
+                (.clp, "Chilean Peso"),
+                //TODO:localize
+                (.cop, "Colombian Peso"),
+                //TODO:localize
+                (.crc, "Costa Rican Colón"),
+                //TODO:localize
+                (.czk, "Czech Koruna"),
+                //TODO:localize
+                (.dkk, "Danish Krone"),
+                //TODO:localize
+                (.dop, "Dominican Peso"),
+                //TODO:localize
+                (.dzd, "Algerian Dinar"),
+                //TODO:localize
+                (.egp, "Egyptian Pound"),
+                //TODO:localize
+                (.etb, "Ethiopian Birr"),
+                //TODO:localize
+                (.gbp, "British Pound"),
+                //TODO:localize
+                (.gel, "Georgian Lari"),
+                //TODO:localize
+                (.ghs, "Ghanaian Cedi"),
+                //TODO:localize
+                (.gtq, "Guatemalan Quetzal"),
+                //TODO:localize
+                (.hkd, "Hong Kong Dollar"),
+                //TODO:localize
+                (.hnl, "Honduran Lempira"),
+                //TODO:localize
+                (.hrk, "Croatian Kuna"),
+                //TODO:localize
+                (.huf, "Hungarian Forint"),
+                //TODO:localize
+                (.idr, "Indonesian Rupiah"),
+                //TODO:localize
+                (.ils, "Israeli New Shekel"),
+                //TODO:localize
+                (.inr, "Indian Rupee"),
+                //TODO:localize
+                (.iqd, "Iraqi Dinar"),
+                //TODO:localize
+                (.irr, "Iranian Rial"),
+                //TODO:localize
+                (.isk, "Icelandic Króna"),
+                //TODO:localize
+                (.jmd, "Jamaican Dollar"),
+                //TODO:localize
+                (.jod, "Jordanian Dinar"),
+                //TODO:localize
+                (.jpy, "Japanese Yen"),
+                //TODO:localize
+                (.kes, "Kenyan Shilling"),
+                //TODO:localize
+                (.kgs, "Kyrgyzstani Som"),
+                //TODO:localize
+                (.krw, "South Korean Won"),
+                //TODO:localize
+                (.kzt, "Kazakhstani Tenge"),
+                //TODO:localize
+                (.lbp, "Lebanese Pound"),
+                //TODO:localize
+                (.lkr, "Sri Lankan Rupee"),
+                //TODO:localize
+                (.mad, "Moroccan Dirham"),
+                //TODO:localize
+                (.mdl, "Moldovan Leu"),
+                //TODO:localize
+                (.mmk, "Myanmar Kyat"),
+                //TODO:localize
+                (.mnt, "Mongolian Tögrög"),
+                //TODO:localize
+                (.mop, "Macanese Pataca"),
+                //TODO:localize
+                (.mur, "Mauritian Rupee"),
+                //TODO:localize
+                (.mvr, "Maldivian Rufiyaa"),
+                //TODO:localize
+                (.mxn, "Mexican Peso"),
+                //TODO:localize
+                (.myr, "Malaysian Ringgit"),
+                //TODO:localize
+                (.mzn, "Mozambican Metical"),
+                //TODO:localize
+                (.ngn, "Nigerian Naira"),
+                //TODO:localize
+                (.nio, "Nicaraguan Córdoba"),
+                //TODO:localize
+                (.nok, "Norwegian Krone"),
+                //TODO:localize
+                (.npr, "Nepalese Rupee"),
+                //TODO:localize
+                (.nzd, "New Zealand Dollar"),
+                //TODO:localize
+                (.pab, "Panamanian Balboa"),
+                //TODO:localize
+                (.pen, "Peruvian Sol"),
+                //TODO:localize
+                (.php, "Philippine Peso"),
+                //TODO:localize
+                (.pkr, "Pakistani Rupee"),
+                //TODO:localize
+                (.pln, "Polish Złoty"),
+                //TODO:localize
+                (.pyg, "Paraguayan Guaraní"),
+                //TODO:localize
+                (.qar, "Qatari Riyal"),
+                //TODO:localize
+                (.ron, "Romanian Leu"),
+                //TODO:localize
+                (.rsd, "Serbian Dinar"),
+                //TODO:localize
+                (.sar, "Saudi Riyal"),
+                //TODO:localize
+                (.sek, "Swedish Krona"),
+                //TODO:localize
+                (.sgd, "Singapore Dollar"),
+                //TODO:localize
+                (.syp, "Syrian Pound"),
+                //TODO:localize
+                (.thb, "Thai Baht"),
+                //TODO:localize
+                (.tjs, "Tajikistani Somoni"),
+                //TODO:localize
+                (.tryCurrency, "Turkish Lira"),
+                //TODO:localize
+                (.ttd, "Trinidad and Tobago Dollar"),
+                //TODO:localize
+                (.twd, "New Taiwan Dollar"),
+                //TODO:localize
+                (.tzs, "Tanzanian Shilling"),
+                //TODO:localize
+                (.uah, "Ukrainian Hryvnia"),
+                //TODO:localize
+                (.ugx, "Ugandan Shilling"),
+                //TODO:localize
+                (.uyu, "Uruguayan Peso"),
+                //TODO:localize
+                (.uzs, "Uzbekistani Som"),
+                //TODO:localize
+                (.vnd, "Vietnamese Đồng"),
+                //TODO:localize
+                (.yer, "Yemeni Rial"),
+                //TODO:localize
+                (.zar, "South African Rand")
             ]
             let selectedCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
-            var currencyItems: [ContextMenuItem] = [
-                .action(ContextMenuActionItem(
-                    text: presentationData.strings.Common_Back,
-                    icon: { theme in
-                        return generateTintedImage(
-                            image: UIImage(bundleImageName: "Chat/Context Menu/Back"),
-                            color: theme.contextMenu.primaryColor
-                        )
-                    },
-                    iconPosition: .left,
-                    action: { contextController, _ in
-                        contextController?.popItems()
-                    }
-                )),
-                .separator
-            ]
-            currencyItems.append(contentsOf: currencies.map { currency -> ContextMenuItem in
-                return .action(ContextMenuActionItem(
-                    text: currency.currency.rawValue,
-                    textLayout: .secondLineWithValue(currency.name),
-                    icon: { _ in
-                        return nil
-                    },
-                    additionalLeftIcon: { theme in
-                        if currency.currency == selectedCurrency {
-                            return generateTintedImage(
-                                image: UIImage(bundleImageName: "Chat/Context Menu/Check"),
-                                color: theme.contextMenu.primaryColor
-                            )
-                        } else {
-                            return UIImage()
-                        }
-                    },
-                    action: { [weak self] _, dismiss in
-                        self?.component?.walletContext.setFiatCurrency(currency.currency)
-                        dismiss(.default)
-                    }
-                ))
-            })
+            var orderedCurrencies = currencies
+            let topCurrencies: Set<WalletContext.FiatCurrency> = [.usd, .eur, .rub, .cny, .aed]
+            if !topCurrencies.contains(selectedCurrency),
+               let selectedCurrencyIndex = orderedCurrencies.firstIndex(where: { $0.currency == selectedCurrency }) {
+                let selectedCurrencyItem = orderedCurrencies.remove(at: selectedCurrencyIndex)
+                orderedCurrencies.insert(selectedCurrencyItem, at: 0)
+            }
 
             let items: [ContextMenuItem] = [
                 .action(ContextMenuActionItem(
@@ -851,7 +1327,41 @@ private final class WalletScreenComponent: Component {
                     additionalLeftIcon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Arrow"), color: theme.contextMenu.primaryColor)
                     },
-                    action: { contextController, _ in
+                    action: { [weak self] contextController, _ in
+                        let searchQueryPromise = ValuePromise<String>("")
+                        let currencyItems: [ContextMenuItem] = [
+                            .action(ContextMenuActionItem(
+                                text: presentationData.strings.Common_Back,
+                                icon: { theme in
+                                    return generateTintedImage(
+                                        image: UIImage(bundleImageName: "Chat/Context Menu/Back"),
+                                        color: theme.contextMenu.primaryColor
+                                    )
+                                },
+                                iconPosition: .left,
+                                action: { contextController, _ in
+                                    contextController?.popItems()
+                                }
+                            )),
+                            .separator,
+                            .custom(WalletCurrencySearchContextItem(
+                                context: component.context,
+                                placeholder: presentationData.strings.Common_Search,
+                                valueChanged: { value in
+                                    searchQueryPromise.set(value)
+                                }
+                            ), false),
+                            .separator,
+                            .custom(WalletCurrencyListContextItem(
+                                context: component.context,
+                                currencies: orderedCurrencies,
+                                selectedCurrency: selectedCurrency,
+                                searchQuery: searchQueryPromise.get(),
+                                currencySelected: { [weak self] currency in
+                                    self?.component?.walletContext.setFiatCurrency(currency)
+                                }
+                            ), false)
+                        ]
                         contextController?.pushItems(items: .single(ContextController.Items(content: .list(currencyItems))))
                     }
                 )),
@@ -953,6 +1463,22 @@ private final class WalletScreenComponent: Component {
                 })
             }
 
+            let transactions = (self.walletState?.transactions.items ?? []).filter {
+                $0.isVisibleInWalletHistory && $0.kind != .deployContract
+            }
+            let collectibles = self.walletState?.collectibles.items ?? []
+            if collectibles.isEmpty && self.selectedSection == .collectibles {
+                self.selectedSection = .transactions
+            }
+            let hasEmptyTransactions = self.selectedSection == .transactions && transactions.isEmpty
+            if hasEmptyTransactions {
+                self.isCardCollapsed = false
+                if self.scrollView.contentOffset != CGPoint() {
+                    self.scrollView.setContentOffset(CGPoint(), animated: false)
+                }
+            }
+            self.scrollView.isScrollEnabled = !hasEmptyTransactions
+
             //TODO:localize
             let title = "Wallet"
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
@@ -985,7 +1511,7 @@ private final class WalletScreenComponent: Component {
                 )
             ]
             let primaryContent = ChatListHeaderComponent.Content(
-                title: title,
+                title: "",
                 navigationBackTitle: nil,
                 titleComponent: nil,
                 chatListTitle: nil,
@@ -1026,7 +1552,7 @@ private final class WalletScreenComponent: Component {
             }
             if let headerView = self.header.view {
                 if headerView.superview == nil {
-                    self.addSubview(headerView)
+                    self.insertSubview(headerView, aboveSubview: self.cardContainerView)
                 }
                 transition.setFrame(
                     view: headerView,
@@ -1034,6 +1560,72 @@ private final class WalletScreenComponent: Component {
                         origin: CGPoint(x: 0.0, y: headerOriginY),
                         size: headerSize
                     )
+                )
+            }
+
+            self.navigationTitle.parentState = state
+            let navigationTitleSize = self.navigationTitle.update(
+                transition: transition,
+                component: AnyComponent(Text(
+                    text: title,
+                    font: Font.semibold(17.0),
+                    color: environment.theme.rootController.navigationBar.primaryTextColor
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width, height: headerSize.height)
+            )
+            if let navigationTitleView = self.navigationTitle.view {
+                if navigationTitleView.superview == nil {
+                    navigationTitleView.isUserInteractionEnabled = false
+                    self.insertSubview(navigationTitleView, belowSubview: self.cardContainerView)
+                }
+                transition.setFrame(
+                    view: navigationTitleView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: floor((availableSize.width - navigationTitleSize.width) * 0.5),
+                            y: headerOriginY + floor((headerSize.height - navigationTitleSize.height) * 0.5)
+                        ),
+                        size: navigationTitleSize
+                    )
+                )
+            }
+
+            self.navigationBalance.parentState = state
+            let navigationBalanceSize = self.navigationBalance.update(
+                transition: transition,
+                component: AnyComponent(WalletNavigationBalanceComponent(
+                    theme: environment.theme,
+                    balance: self.walletState?.balance.currentValue,
+                    fiatCurrency: self.walletState?.fiat.selectedCurrency ?? .usd,
+                    fiatRate: self.walletState?.fiat.selectedRate,
+                    dateTimeFormat: environment.dateTimeFormat
+                )),
+                environment: {},
+                containerSize: CGSize(
+                    width: max(0.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 200.0),
+                    height: headerSize.height
+                )
+            )
+            if let navigationBalanceView = self.navigationBalance.view {
+                if navigationBalanceView.superview == nil {
+                    navigationBalanceView.isUserInteractionEnabled = false
+                    self.insertSubview(navigationBalanceView, belowSubview: self.cardContainerView)
+                }
+                transition.setFrame(
+                    view: navigationBalanceView,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: floor((availableSize.width - navigationBalanceSize.width) * 0.5),
+                            y: headerOriginY + floor((headerSize.height - navigationBalanceSize.height) * 0.5)
+                        ),
+                        size: navigationBalanceSize
+                    )
+                )
+                transition.setAlpha(view: navigationBalanceView, alpha: self.isCardCollapsed ? 1.0 : 0.0)
+                transition.setSublayerTransform(
+                    view: navigationBalanceView,
+                    transform: CATransform3DMakeTranslation(0.0, self.isCardCollapsed ? 0.0 : 6.0, 0.0)
                 )
             }
 
@@ -1078,17 +1670,44 @@ private final class WalletScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: cardWidth, height: availableSize.height)
             )
+            let cardSpacing: CGFloat = 12.0
+            let cardCollapseOffset = max(0.0, cardSize.height + cardSpacing - self.cardCollapseThreshold)
+            self.cardExpandedFrame = CGRect(
+                origin: CGPoint(
+                    x: environment.safeInsets.left + sideInset,
+                    y: cardOriginY
+                ),
+                size: cardSize
+            )
+            ComponentTransition.immediate.setFrame(
+                view: self.cardScrollContainerView,
+                frame: CGRect(origin: CGPoint(), size: cardSize)
+            )
+            transition.setFrame(
+                view: self.cardVisualContainerView,
+                frame: CGRect(
+                    origin: CGPoint(x: 0.0, y: self.isCardCollapsed ? -cardCollapseOffset : 0.0),
+                    size: cardSize
+                )
+            )
+            transition.setAlpha(view: self.cardVisualContainerView, alpha: self.isCardCollapsed ? 0.0 : 1.0)
+            transition.setSublayerTransform(
+                view: self.cardVisualContainerView,
+                transform: CATransform3DMakeScale(
+                    self.isCardCollapsed ? self.cardCollapsedScale : 1.0,
+                    self.isCardCollapsed ? self.cardCollapsedScale : 1.0,
+                    1.0
+                )
+            )
+            self.cardContainerView.isUserInteractionEnabled = !self.isCardCollapsed
             if let cardView = self.card.view {
-                if cardView.superview == nil {
-                    self.scrollView.addSubview(cardView)
+                if cardView.superview !== self.cardVisualContainerView {
+                    self.cardVisualContainerView.addSubview(cardView)
                 }
                 transition.setFrame(
                     view: cardView,
                     frame: CGRect(
-                        origin: CGPoint(
-                            x: environment.safeInsets.left + sideInset,
-                            y: cardOriginY
-                        ),
+                        origin: CGPoint(),
                         size: cardSize
                     )
                 )
@@ -1104,7 +1723,7 @@ private final class WalletScreenComponent: Component {
             let buttonsSpacing: CGFloat = 10.0
             let addFundsButtonWidth = floorToScreenPixels((cardWidth - buttonsSpacing) * 0.5)
             let sendButtonWidth = cardWidth - buttonsSpacing - addFundsButtonWidth
-            let buttonsOriginY = cardOriginY + cardSize.height + 12.0
+            let buttonsOriginY = cardOriginY + (self.isCardCollapsed ? self.cardCollapseThreshold : cardSize.height + cardSpacing)
             let buttonBackground = ButtonComponent.Background(
                 style: .glass,
                 color: environment.theme.list.itemCheckColors.fillColor,
@@ -1183,11 +1802,6 @@ private final class WalletScreenComponent: Component {
             let buttonsHeight = max(addFundsButtonSize.height, sendButtonSize.height)
             var contentHeight = buttonsOriginY + buttonsHeight
 
-            let transactions = (self.walletState?.transactions.items ?? []).filter(\.isVisibleInWalletHistory)
-            let collectibles = self.walletState?.collectibles.items ?? []
-            if collectibles.isEmpty && self.selectedSection == .collectibles {
-                self.selectedSection = .transactions
-            }
             if !collectibles.isEmpty {
                 let transactionTabsOriginY = contentHeight + 12.0
                 let transactionTabsSize = self.updateTransactionTabs(
@@ -1284,6 +1898,7 @@ private final class WalletScreenComponent: Component {
                         emptyTransactionsInfoView?.removeFromSuperview()
                     })
                 }
+                self.hideEmptyTransactionsFooter(transition: transition)
                 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.blocksBackgroundColor)
             } else if self.selectedSection == .collectibles {
@@ -1291,6 +1906,7 @@ private final class WalletScreenComponent: Component {
                 if let emptyTransactionsInfoView = self.emptyTransactionsInfo.view {
                     emptyTransactionsInfoView.removeFromSuperview()
                 }
+                self.hideEmptyTransactionsFooter(transition: transition)
 
                 let itemContext = component.context
                 let itemTheme = environment.theme
@@ -1451,6 +2067,80 @@ private final class WalletScreenComponent: Component {
                     )
                 }
                 contentHeight = emptyTransactionsOriginY + emptyTransactionsInfoSize.height
+
+                //TODO:localize
+                let termsString = "By using Wallet you agree to Terms of Service."
+                let termsLink = "Terms of Service"
+                let termsText = NSMutableAttributedString(
+                    string: termsString,
+                    attributes: [
+                        .font: Font.regular(13.0),
+                        .foregroundColor: textColor
+                    ]
+                )
+                let termsLinkRange = (termsString as NSString).range(of: termsLink)
+                termsText.addAttributes(
+                    [
+                        .foregroundColor: accentColor,
+                        NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
+                    ],
+                    range: termsLinkRange
+                )
+
+                self.emptyTransactionsFooter.parentState = state
+                let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(
+                    transition: transition,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(termsText),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0,
+                        highlightColor: accentColor.withAlphaComponent(0.2),
+                        highlightAction: { attributes in
+                            if attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] != nil {
+                                return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                            } else {
+                                return nil
+                            }
+                        },
+                        tapAction: { [weak self] attributes, _ in
+                            guard let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String else {
+                                return
+                            }
+                            self?.openTerms(url: url)
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: cardWidth, height: 10000.0)
+                )
+                let emptyTransactionsFooterOriginY = max(
+                    contentHeight + 24.0,
+                    availableSize.height - environment.safeInsets.bottom - emptyTransactionsFooterSize.height - 16.0
+                )
+                if let emptyTransactionsFooterView = self.emptyTransactionsFooter.view {
+                    var wasVisible = true
+                    if emptyTransactionsFooterView.superview == nil {
+                        wasVisible = false
+                        self.addSubview(emptyTransactionsFooterView)
+                    }
+                    if !transition.animation.isImmediate && !wasVisible {
+                        transition.animateAlpha(view: emptyTransactionsFooterView, from: 0.0, to: 1.0)
+                    } else {
+                        transition.setAlpha(view: emptyTransactionsFooterView, alpha: 1.0)
+                    }
+
+                    let layoutTransition: ComponentTransition = wasVisible ? transition : .immediate
+                    layoutTransition.setFrame(
+                        view: emptyTransactionsFooterView,
+                        frame: CGRect(
+                            origin: CGPoint(
+                                x: floor((availableSize.width - emptyTransactionsFooterSize.width) * 0.5),
+                                y: emptyTransactionsFooterOriginY
+                            ),
+                            size: emptyTransactionsFooterSize
+                        )
+                    )
+                }
+                contentHeight = emptyTransactionsFooterOriginY + emptyTransactionsFooterSize.height
                 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.plainBackgroundColor)
             }
@@ -1462,7 +2152,7 @@ private final class WalletScreenComponent: Component {
             contentHeight += 24.0 + environment.safeInsets.bottom
             let contentSize = CGSize(
                 width: availableSize.width,
-                height: max(contentHeight, availableSize.height + 1.0)
+                height: max(contentHeight, availableSize.height + self.cardCollapseThreshold + 1.0)
             )
             if self.scrollView.contentSize != contentSize {
                 self.scrollView.contentSize = contentSize
@@ -1542,6 +2232,8 @@ public final class WalletScreen: ViewControllerComponentContainer {
 
 private final class WalletContextReferenceContentSource: ContextReferenceContentSource {
     private let sourceView: UIView
+
+    let forceDisplayBelowKeyboard = true
 
     init(sourceView: UIView) {
         self.sourceView = sourceView

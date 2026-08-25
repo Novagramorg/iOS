@@ -2371,12 +2371,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return presentAddMembersImpl(context: context, updatedPresentationData: updatedPresentationData, parentController: parentController, groupPeer: groupPeer, selectAddMemberDisposable: selectAddMemberDisposable, addMemberDisposable: addMemberDisposable)
     }
     
-    public func makeChatMessagePreviewItem(context: AccountContext, messages: [Message], theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder, forcedResourceStatus: FileMediaResourceStatus?, tapMessage: ((Message) -> Void)?, clickThroughMessage: ((UIView?, CGPoint?) -> Void)? = nil, backgroundNode: ASDisplayNode?, availableReactions: AvailableReactions?, accountPeer: Peer?, isCentered: Bool, isPreview: Bool, isStandalone: Bool, rank: String?, rankRole: ChatRankInfoScreenRole?) -> ListViewItem {
+    public func makeChatMessagePreviewItem(context: AccountContext, messages: [Message], theme: PresentationTheme, strings: PresentationStrings, wallpaper: TelegramWallpaper, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, dateTimeFormat: PresentationDateTimeFormat, nameOrder: PresentationPersonNameOrder, forcedResourceStatus: FileMediaResourceStatus?, tapMessage: ((Message) -> Void)?, clickThroughMessage: ((UIView?, CGPoint?) -> Void)? = nil, backgroundNode: ASDisplayNode?, availableReactions: AvailableReactions?, accountPeer: Peer?, isCentered: Bool, isPreview: Bool, isStandalone: Bool, rank: String?, rankRole: ChatRankInfoScreenRole?, isGiftMessageComposerPreview: Bool) -> ListViewItem {
         let controllerInteraction: ChatControllerInteraction
 
         controllerInteraction = ChatControllerInteraction(
-            openMessage: { _, _ in
-                return false
+            openMessage: { message, _ in
+                guard isGiftMessageComposerPreview, let tapMessage else {
+                    return false
+                }
+                tapMessage(message)
+                return true
             },
             openPeer: { _, _, _, _ in },
             openPeerMention: { _, _ in },
@@ -2392,7 +2396,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             },
             navigateToThreadMessage: { _, _, _ in
             },
-            tapMessage: { message in
+            tapMessage: isGiftMessageComposerPreview ? nil : { message in
                 tapMessage?(message)
             },
             clickThroughMessage: { view, location in
@@ -2539,7 +2543,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             },
             openJoinLink: { _ in
             },
-            openWebView: { _, _, _, _ in
+            openWebView: { _, _, _, _, _ in
             },
             activateAdAction: { _, _, _, _ in
             },
@@ -2619,6 +2623,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         
         var entryAttributes = ChatMessageEntryAttributes()
         entryAttributes.isCentered = isCentered
+        entryAttributes.isGiftMessageComposerPreview = isGiftMessageComposerPreview
         if let rank {
             switch rankRole {
             case .creator:
@@ -4223,6 +4228,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController {
         return WalletWordsScreen(context: context, words: words, verify: verify, completion: completion)
     }
+
+    public func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletWordsScreen(context: context, words: words, mode: mode, completion: completion)
+    }
     
     public func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
         return WalletInfoScreen(context: context, mode: mode, completion: completion)
@@ -4418,6 +4427,18 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController {
         return incomingMessagePrivacyScreen(context: context, value: value, exceptions: exceptions, update: update)
+    }
+
+    public func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool) {
+        ChatControllerImpl.presentBotApp(
+            context: context,
+            parentController: parentController,
+            botApp: botApp,
+            botPeer: botPeer,
+            payload: payload,
+            mode: mode,
+            isOnramp: isOnramp
+        )
     }
     
     public func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?) {
