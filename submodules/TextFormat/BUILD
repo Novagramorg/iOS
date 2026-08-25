@@ -52,7 +52,7 @@ ios_test_runner(
 
 ios_unit_test(
     name = "TextFormatTests",
-    minimum_os_version = "13.0",
+    minimum_os_version = "15.0",
     runner = ":TextFormatTestRunner",
     deps = [
         ":TextFormatTestsLib",

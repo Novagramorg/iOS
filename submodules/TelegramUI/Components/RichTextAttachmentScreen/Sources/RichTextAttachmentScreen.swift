@@ -324,6 +324,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
+        preuploadPeerId: EnginePeer.Id? = nil,
         presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
@@ -335,6 +336,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
             },
             syncContent: syncContent,
             sendContextActions: sendContextActions,
+            preuploadPeerId: preuploadPeerId,
             presentAttachmentMenu: presentAttachmentMenu,
             presentFormulaEditor: presentFormulaEditor
         )
@@ -346,6 +348,9 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
         syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
         sendContextActions: RichTextAttachmentScreenSendContextActions? = nil,
+        /// Peer whose chat this content will be sent to. Media attached here pre-uploads against it;
+        /// nil disables pre-upload (no peer to run `messages.uploadMedia` against).
+        preuploadPeerId: EnginePeer.Id? = nil,
         presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?,
         pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)? = nil
@@ -361,6 +366,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
             context: context,
             mode: mode,
             sendContextActions: sendContextActions,
+            preuploadPeerId: preuploadPeerId,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu,
             presentFormulaEditor: presentFormulaEditor,
@@ -560,15 +566,17 @@ final class RichTextAttachmentScreenComponent: Component {
     let mode: RichTextAttachmentScreen.Mode
     let sendContextActions: RichTextAttachmentScreenSendContextActions?
     let overNavigationContainer: UIView
+    let preuploadPeerId: EnginePeer.Id?
     let presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?
     let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     let pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?
 
-    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?, pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?) {
+    init(context: AccountContext, mode: RichTextAttachmentScreen.Mode, sendContextActions: RichTextAttachmentScreenSendContextActions?, preuploadPeerId: EnginePeer.Id?, overNavigationContainer: UIView, presentAttachmentMenu: ((_ request: RichTextAttachmentScreen.MediaRequest, @escaping ([RichTextAttachmentScreen.RichTextAttachment]) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?, pastedMarkdownParser: ((AccountContext, String) -> ChatInputContent?)?) {
         self.context = context
         self.mode = mode
         self.sendContextActions = sendContextActions
         self.overNavigationContainer = overNavigationContainer
+        self.preuploadPeerId = preuploadPeerId
         self.presentAttachmentMenu = presentAttachmentMenu
         self.presentFormulaEditor = presentFormulaEditor
         self.pastedMarkdownParser = pastedMarkdownParser
@@ -596,6 +604,129 @@ final class RichTextAttachmentScreenComponent: Component {
 
         /// Picked media keyed by the opaque `mediaID` handed to the editor. Read by `donePressed`.
         private var attachedMedia: [String: Media] = [:]
+
+        /// Held for as long as this screen is open. Reconciled from the LIVE document, so removing a
+        /// medium (or undoing its insertion) releases its need and the upload is grace-cancelled.
+        private var preuploadNeeds: MediaPreuploadNeeds?
+        /// One progress subscription per medium currently in the document.
+        private var preuploadObservers: [EngineMedia.Id: Disposable] = [:]
+
+        deinit {
+            for (_, disposable) in self.preuploadObservers {
+                disposable.dispose()
+            }
+        }
+
+        /// Every `mediaID` the document references, including inside tables, quotes and details.
+        private static func mediaIDs(in blocks: [Block], into result: inout [String]) {
+            for block in blocks {
+                switch block {
+                case let .media(mediaBlock):
+                    for item in mediaBlock.items {
+                        result.append(item.mediaID)
+                    }
+                case let .blockQuote(quote):
+                    mediaIDs(in: quote.children, into: &result)
+                case let .details(details):
+                    mediaIDs(in: details.children, into: &result)
+                case let .table(table):
+                    for row in table.rows {
+                        for cell in row.cells {
+                            mediaIDs(in: cell.blocks, into: &result)
+                        }
+                    }
+                case .paragraph, .code, .pullQuote, .buttonRow:
+                    break
+                }
+            }
+        }
+
+        /// Bring the set of uploading media in line with what the document currently references,
+        /// and (re)bind a progress subscription for each. Cheap enough to run on every edit: it is a
+        /// walk of the block tree plus dictionary work, no conversion.
+        private func reconcilePreupload() {
+            guard let component = self.component, let peerId = component.preuploadPeerId else {
+                return
+            }
+
+            var ids: [String] = []
+            Self.mediaIDs(in: self.editor.document.blocks, into: &ids)
+
+            var media: [EngineMedia] = []
+            var live = Set<EngineMedia.Id>()
+            for mediaID in ids {
+                guard let value = self.attachedMedia[mediaID], let id = value.id, !live.contains(id) else {
+                    continue
+                }
+                live.insert(id)
+                media.append(EngineMedia(value))
+            }
+
+            let needs: MediaPreuploadNeeds
+            if let existing = self.preuploadNeeds {
+                needs = existing
+            } else {
+                needs = component.context.engine.messages.makeMediaPreuploadNeeds()
+                self.preuploadNeeds = needs
+            }
+            needs.update(peerId: peerId, media: media)
+
+            for (id, disposable) in self.preuploadObservers where !live.contains(id) {
+                disposable.dispose()
+                self.preuploadObservers.removeValue(forKey: id)
+            }
+            for id in live where self.preuploadObservers[id] == nil {
+                self.preuploadObservers[id] = (component.context.engine.messages.mediaPreuploadState(id: id)
+                |> deliverOnMainQueue).start(next: { [weak self] state in
+                    self?.applyPreuploadState(state, for: id)
+                })
+            }
+        }
+
+        /// Apply one medium's pre-upload state.
+        ///
+        /// On `.done` the local `Media` is REPLACED BY the cloud one **at the key the document
+        /// already references** — the editor addresses media by an opaque `mediaID` string, so the
+        /// value swap promotes the medium everywhere downstream with no document mutation, no undo
+        /// entry and no relayout. Re-deriving the key from the cloud media would be a bug: promotion
+        /// changes the `MediaId`, so the new key is one the document does not reference and the
+        /// medium would silently vanish on read-back.
+        private func applyPreuploadState(_ state: EngineMediaPreuploadState?, for id: EngineMedia.Id) {
+            guard let component = self.component else {
+                return
+            }
+            switch state {
+            case .progress:
+                // Progress display is owned by RichTextMediaContentComponent, which subscribes to the
+                // same state itself. This observer exists ONLY for the promotion write-back below.
+                return
+            case let .done(cloudMedia):
+                let raw = cloudMedia._asMedia()
+                guard let key = self.attachedMedia.first(where: { $0.value.id == id })?.key,
+                      let localMedia = self.attachedMedia[key] else {
+                    return
+                }
+                // Let the already-downloaded local bytes serve the cloud resource, so the promoted
+                // medium does not flash a placeholder.
+                if let localResource = preuploadPrimaryResource(localMedia), let cloudResource = preuploadPrimaryResource(raw) {
+                    component.context.engine.resources.moveResourceData(
+                        from: EngineMediaResource.Id(localResource.id),
+                        to: EngineMediaResource.Id(cloudResource.id),
+                        synchronous: true
+                    )
+                }
+                self.attachedMedia[key] = raw
+            case .failed, .none:
+                return
+            }
+            // Guarded like `editor.onChange`: this can land during a layout pass (the first progress
+            // value often arrives synchronously on subscribe), and re-entering `update` from inside
+            // it is what the composer's requestLayout re-entry guard exists to prevent.
+            guard !self.isUpdating else {
+                return
+            }
+            self.componentState?.updated(transition: .immediate)
+        }
 
         /// The picked media map, keyed by the editor's `mediaID`. Read by the controller's `donePressed`.
         var currentMedia: [String: Media] {
@@ -714,6 +845,10 @@ final class RichTextAttachmentScreenComponent: Component {
                     self.attachedMedia[mediaID] = media
                     results.append((mediaID, naturalSize, kind, []))
                 }
+                // Called here as well as from onChange: attachedMedia is populated in this closure,
+                // so the need is held from the earliest possible moment. The onChange reconcile that
+                // follows the insert is then a no-op for these ids.
+                self.reconcilePreupload()
                 completion(results)
             })
         }
@@ -1558,6 +1693,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 editor.onChange = { [weak self] in
                     guard let self, !self.isUpdating else { return }
                     self.componentState?.updated(transition: .spring(duration: 0.4))
+                    self.reconcilePreupload()
                 }
 
                 self.addSubview(editor)
@@ -2072,4 +2208,16 @@ private final class RichTextActionContextReferenceSource: ContextReferenceConten
             insets: UIEdgeInsets(top: -4.0, left: 0.0, bottom: -4.0, right: 0.0),
             actionsPosition: self.actionsPosition)
     }
+}
+
+/// The resource carrying a medium's main bytes — the one whose data is worth moving when a local
+/// medium is promoted to its cloud twin.
+private func preuploadPrimaryResource(_ media: Media) -> MediaResource? {
+    if let image = media as? TelegramMediaImage {
+        return largestImageRepresentation(image.representations)?.resource
+    }
+    if let file = media as? TelegramMediaFile {
+        return file.resource
+    }
+    return nil
 }

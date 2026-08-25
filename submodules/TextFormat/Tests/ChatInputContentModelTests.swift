@@ -744,4 +744,28 @@ final class ChatInputContentModelTests: XCTestCase {
         let data = try AdaptedPostboxEncoder().encode(content)
         XCTAssertEqual(try AdaptedPostboxDecoder().decode(ChatInputContent.self, from: data).blocks.count, 2)
     }
+
+    func testAllMediaFindsNestedMedia() {
+        let image = TelegramMediaImage(
+            imageId: EngineMedia.Id(namespace: Namespaces.Media.LocalImage, id: 1),
+            representations: [],
+            immediateThumbnailData: nil,
+            reference: nil,
+            partialReference: nil,
+            flags: []
+        )
+        let mediaBlock = ChatInputBlock.media(ChatInputMedia(
+            media: image,
+            kind: .image,
+            naturalSize: ChatInputSize(width: 10.0, height: 10.0)
+        ))
+        let quoted = ChatInputBlock.blockQuote(ChatInputBlockQuote(
+            content: ChatInputContent(blocks: [mediaBlock]),
+            collapsed: false
+        ))
+        let content = ChatInputContent(blocks: [quoted])
+
+        XCTAssertEqual(content.allMedia.count, 1)
+        XCTAssertEqual(content.allMedia.first?.id, image.imageId)
+    }
 }

@@ -674,13 +674,11 @@ public func lastTextLineFrameIfLastItemIsText(in layout: InstantPageV2Layout) ->
 /// rich-message bubble to overlay the date/status as an image-style pill on the media's bottom-right
 /// corner instead of reserving a status strip below the content. The "full-width" gate excludes a
 /// rare narrow/centered trailing media, which keeps the below-content bubble status.
-public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
-    guard let bottomItem = layout.items.max(by: { $0.frame.maxY < $1.frame.maxY }) else {
-        return nil
-    }
-    switch bottomItem {
+/// Whether a laid-out item is visual media the overlaid date pill is designed to sit on.
+private func isOverlayEligibleMedia(_ item: InstantPageV2LaidOutItem) -> Bool {
+    switch item {
     case .mediaImage, .mediaVideo, .mediaCoverImage, .mediaMap, .slideshow:
-        break
+        return true
     case let .mediaPlaceholder(placeholder):
         // Only a still-loading image/video placeholder should get the overlaid pill (so the style
         // doesn't flip when it resolves). Web/post-embed, channel-banner, and audio placeholders must
@@ -688,14 +686,39 @@ public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
         // detector doesn't externalize their reactions, which would otherwise make reactions vanish.
         switch placeholder.kind {
         case .image, .video:
-            break
+            return true
         default:
-            return nil
+            return false
         }
     default:
+        return false
+    }
+}
+
+public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
+    guard let bottomEdge = layout.items.map({ $0.frame.maxY }).max() else {
         return nil
     }
-    let frame = bottomItem.frame
+    // Consider the whole bottom ROW, not just the single bottom-most item. A `.collage` lays out one
+    // media item PER CELL, so a mosaic ends in several items side by side rather than one full-width
+    // item; taking only the bottom-most would see a half-width cell, fail the full-width gate below,
+    // and fall back to the inline text-time style even though the message plainly ends with media.
+    // (`.slideshow` never needed this — it is a single full-width item.)
+    //
+    // The tolerance is deliberately tiny: cells in a mosaic row share a bottom edge to within
+    // rounding, whereas a caption or text line below media sits a whole line-height lower and so
+    // stays out of the band — which is what keeps a captioned collage on the text-time style.
+    let bottomBandTolerance: CGFloat = 2.0
+    let bottomItems = layout.items.filter { $0.frame.maxY >= bottomEdge - bottomBandTolerance }
+    guard let firstBottomItem = bottomItems.first else {
+        return nil
+    }
+    // EVERY item on the bottom row must be eligible media: one text item down there means the
+    // message ends with text, wherever the media sits.
+    guard bottomItems.allSatisfy(isOverlayEligibleMedia) else {
+        return nil
+    }
+    let frame = bottomItems.dropFirst().reduce(firstBottomItem.frame) { $0.union($1.frame) }
     // Full-width gate: the media must span (approximately) the content width. The tolerance absorbs
     // the right-margin inset that `contentSize.width` reserves (see the `fitToWidth` maxX computation).
     if frame.width >= layout.contentSize.width - 12.0 {

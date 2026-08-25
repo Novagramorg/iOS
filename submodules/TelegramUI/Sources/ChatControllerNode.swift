@@ -3713,6 +3713,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             let updateInputTextState = self.chatPresentationInterfaceState.interfaceState.effectiveInputState != chatPresentationInterfaceState.interfaceState.effectiveInputState
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
+
+            self.updateRichMediaPreuploadNeeds()
             
             self.navigateButtons.update(theme: chatPresentationInterfaceState.theme, preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode)
             
@@ -4716,6 +4718,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                     )
                 } : nil),
+                preuploadPeerId: self.chatLocation.peerId,
                 presentAttachmentMenu: { [weak self] request, completion in
                     guard let self else {
                         return
@@ -4735,6 +4738,30 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             editorScreen.navigationPresentation = .modal
             self.controller?.push(editorScreen)
         }
+    }
+
+    /// Keeps rich-draft media uploading across the gap between the expanded editor closing and the
+    /// draft-sync operation picking the draft up. The DURABLE holder is the persisted draft
+    /// (ManagedSynchronizeChatInputStateOperations); this only covers the handoff.
+    private var richMediaPreuploadNeeds: MediaPreuploadNeeds?
+
+    private func updateRichMediaPreuploadNeeds() {
+        guard let peerId = self.chatLocation.peerId else {
+            return
+        }
+        let media = self.chatPresentationInterfaceState.interfaceState.composeInputState.content.allMedia
+        // Keeps a plain-text chat, which never touches rich media, from allocating anything.
+        if media.isEmpty && self.richMediaPreuploadNeeds == nil {
+            return
+        }
+        let needs: MediaPreuploadNeeds
+        if let existing = self.richMediaPreuploadNeeds {
+            needs = existing
+        } else {
+            needs = self.context.engine.messages.makeMediaPreuploadNeeds()
+            self.richMediaPreuploadNeeds = needs
+        }
+        needs.update(peerId: peerId, media: media)
     }
 
     func openAICompose() {

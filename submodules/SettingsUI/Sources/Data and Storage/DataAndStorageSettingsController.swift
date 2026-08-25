@@ -651,7 +651,8 @@ private func dataAndStorageControllerEntries(context: AccountContext, state: Dat
         switch activeServer.connection {
             case .socks5:
                 proxyValue = presentationData.strings.ChatSettings_ConnectionType_UseSocks5
-            case .mtp:
+            // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+            case .mtp, .web:
                 proxyValue = presentationData.strings.SocksProxySetup_ProxyTelegram
         }
     } else {

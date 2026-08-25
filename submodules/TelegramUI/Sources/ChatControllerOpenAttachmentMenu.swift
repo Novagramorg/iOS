@@ -1097,6 +1097,7 @@ extension ChatControllerImpl {
                                     }
                                 )
                             } : nil),
+                            preuploadPeerId: strongSelf.chatLocation.peerId,
                             presentAttachmentMenu: { [weak self] request, completion in
                                 guard let self else {
                                     return

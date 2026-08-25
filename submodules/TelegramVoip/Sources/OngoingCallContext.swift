@@ -946,6 +946,11 @@ public final class OngoingCallContext {
                         voipProxyServer = VoipProxyServerWebrtc(host: proxyServer.host, port: proxyServer.port, username: username, password: password)
                     case .mtp:
                         break
+                    case .web:
+                        // A web proxy is secret-based (see ProxySettings.mtProxySettings) and cannot
+                        // back a VoipProxyServerWebrtc, which needs host/port/user/pass — same as .mtp.
+                        // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                        break
                     }
                 }
                 
