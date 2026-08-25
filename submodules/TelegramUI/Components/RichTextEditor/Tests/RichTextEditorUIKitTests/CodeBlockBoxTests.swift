@@ -10,10 +10,12 @@ final class CodeBlockBoxTests: XCTestCase {
                      mapper: AttributedStringMapper(), width: 300)
     }
 
-    func test_codeBox_nodeSizeIsLengthPlusTwo() {
-        let box = makeBox("a\nbb")                 // 4 UTF-16 units
-        XCTAssertEqual(box.nodeSize, 4 + 2)
+    /// A code block is a CONTAINER of [languagePara, codePara]: container(2) + (lang + 2) + (code + 2).
+    func test_codeBox_nodeSizeCountsBothChildren() {
+        let box = makeBox("a\nbb")                 // 4 UTF-16 units of code, "swift" = 5 of language
+        XCTAssertEqual(box.nodeSize, 4 + 5 + 6)
         XCTAssertEqual(box.textLength, 4)
+        XCTAssertEqual(box.languageLength, 5)
     }
 
     func test_codeBox_textRefIsCode() {
@@ -70,13 +72,17 @@ final class CodeBlockBoxTests: XCTestCase {
         XCTAssertEqual(cb.language, "ruby")
     }
 
-    func test_codeBox_leafRegionsHasOneRegionSpanningText() {
+    /// TWO regions, in DOCUMENT order: the language line above, then the code text.
+    func test_codeBox_leafRegionsAreLanguageThenText() {
         let box = makeBox("a\nb"); box.globalStart = 5
         let regions = box.leafRegions()
-        XCTAssertEqual(regions.count, 1)
-        XCTAssertEqual(regions[0].globalStart, 5)
-        XCTAssertEqual(regions[0].length, 3)
-        XCTAssertEqual(regions[0].ref, .code(BlockID("c1")))
+        XCTAssertEqual(regions.count, 2)
+        XCTAssertEqual(regions[0].globalStart, 6)          // nodeStart + 1
+        XCTAssertEqual(regions[0].length, 5)               // "swift"
+        XCTAssertEqual(regions[0].ref, .codeLanguage(BlockID("c1")))
+        XCTAssertEqual(regions[1].globalStart, box.textStart)
+        XCTAssertEqual(regions[1].length, 3)
+        XCTAssertEqual(regions[1].ref, .code(BlockID("c1")))
     }
 
     /// The code text sits at the block's own leading edge — the paragraph column — not inset by the
@@ -119,31 +125,40 @@ final class CodeBlockBoxTests: XCTestCase {
         XCTAssertTrue(canvas.blockQuoteFillRects().isEmpty)
     }
 
-    /// The language line is bold, lowercased, and takes the BODY size — the quote author's spec —
-    /// rather than the old absolute 11pt monospace.
-    func test_codeBox_languageLineIsBoldBodySizedAndLowercased() {
+    /// The language line is bold and takes the BODY size — the quote author's spec — rather than the old
+    /// absolute 11pt monospace. It is shown AS TYPED: the line became an editable field, so lowercasing it
+    /// here would fight the author's own keystrokes. The renderer still lowercases at display
+    /// (`instantPageV2CodeLanguageDisplayText`), which is where casing is a display concern.
+    func test_codeBox_languageLineIsBoldBodySizedAndAsTyped() {
         let box = makeBox("x", language: "Swift")
-        guard let line = box.languageLine else { return XCTFail("expected a language line") }
+        let line = box.languageLayout.attributedString
 
-        XCTAssertEqual(line.string, "swift")
+        XCTAssertEqual(line.string, "Swift")
         let font = line.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
         XCTAssertEqual(font?.pointSize ?? 0, StyleSheet.default.metrics.body.size, accuracy: 0.5)
         XCTAssertTrue(font?.fontDescriptor.symbolicTraits.contains(.traitBold) ?? false)
     }
 
-    /// No language, and an empty language, both mean no line and no reserved height.
-    func test_codeBox_noLanguageLineWhenAbsent() {
-        XCTAssertNil(makeBox("x", language: nil).languageLine)
-        XCTAssertNil(makeBox("x", language: "").languageLine)
+    /// No language, and an empty language, are the same state — an EMPTY but present region. The field is
+    /// always visible (that is where the "Language" placeholder draws), so unlike the old display-only
+    /// label it is never absent and always reserves its line.
+    func test_codeBox_languageLineIsPresentButEmptyWhenAbsent() {
+        for box in [makeBox("x", language: nil), makeBox("x", language: "")] {
+            XCTAssertEqual(box.languageLength, 0)
+            XCTAssertEqual(box.languageLayout.attributedString.string, "")
+            XCTAssertGreaterThan(box.languageLineExtent, StyleSheet.default.metrics.code.languageSpacing)
+            XCTAssertNil(box.currentCode().language)
+        }
     }
 
-    /// A labelled block is exactly one language line plus its gap taller than an unlabelled one.
-    func test_codeBox_languageLineAddsItsHeight() {
+    /// A labelled and an unlabelled block are the SAME height: both reserve the always-visible language
+    /// line. (Before the field was editable, the label appeared only when set and added its height.)
+    func test_codeBox_languageLineIsReservedWhetherOrNotItIsSet() {
         let plain = makeBox("x", language: nil)
         let labelled = makeBox("x", language: "swift")
-        let delta = labelled.measuredHeight(forWidth: 300) - plain.measuredHeight(forWidth: 300)
 
-        XCTAssertGreaterThan(delta, StyleSheet.default.metrics.code.languageSpacing)
+        XCTAssertEqual(labelled.measuredHeight(forWidth: 300), plain.measuredHeight(forWidth: 300), accuracy: 0.5)
+        XCTAssertGreaterThan(plain.measuredHeight(forWidth: 300), plain.topInset + plain.bottomInset)
     }
 
     func test_codeBox_factoryProducesCodeBlockBox() {

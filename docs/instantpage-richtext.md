@@ -160,6 +160,54 @@ The message hosts pass `codeBlockBackgroundColor` the same value they give `tabl
 
 Design record: `docs/superpowers/specs/2026-08-18-code-block-edge-to-edge-design.md`.
 
+### Syntax highlighting (added 2026-08-25)
+
+V2 code blocks are syntax-highlighted from the **same cache regular text bubbles use**: libprisma behind
+`Syntaxer`, `CachedMessageSyntaxHighlight` keyed by `Spec(language, text)`, generated off the main queue and
+applied synchronously from cache. Nothing highlights on a layout path; a MISS renders plain and the colours
+arrive on the next layout after the async job lands. `layoutCodeBlock` overlays the cached entities onto the
+string it just built (`applyInstantPageSyntaxHighlight`), and `ChatMessageRichDataBubbleContentNode` drives
+generation exactly as the text bubble does — extract specs, read
+`DerivedDataMessageAttribute.data["code"]`, start `asyncUpdateMessageSyntaxHighlight`.
+
+**Three pre-existing, silent defects had to be fixed before any of this was visible:**
+
+- **`InstantPageBlock(apiBlock:)` hard-coded `language: nil`** when decoding `pageBlockPreformatted`,
+  discarding the field the outgoing `apiBlock()` correctly sends. Every page decoded from the API came back
+  language-less, so a code block's language survived the send and was lost on the echo — which disabled
+  highlighting for every rich message AND every web Instant View article, and showed an empty language field
+  when editing a sent message. Nothing could author a language for a rich block before, so nothing surfaced
+  it.
+- **`generateMessageSyntaxHighlight` handed libprisma the raw language.** `LanguageTree::find` is an exact
+  `std::map` lookup with lowercase keys, so `"Swift"` — or `" swift "` — resolved to no grammar, returned
+  the text untokenized, and produced zero entities. Silent: no error, just a block that never highlights.
+  Measured: `"swift"` → 3 entities, `"Swift"` → 0. Normalizing at that one call fixes every caller.
+- **V2 never read `cachedMessageSyntaxHighlight`**, though it has been a parameter of `instantPageV2Layout`
+  and a field on its `LayoutContext` since V2 was written. V1's `attributedStringForPreformattedText` did
+  apply it, so web articles highlighted and V2 did not.
+
+**Non-obvious invariants**
+
+- **Extraction and application must normalize the language the same way.** `instantPageSyntaxHighlightSpecs`
+  (hoisted out of `BrowserUI` into `TextFormat`, where three consumers can reach it) and the V2 apply both
+  run it through `normalizedCodeBlockLanguage`. A page storing under `"swift"` and looking up `"Swift"`
+  misses every time, silently.
+- **That extractor's recursion previously ended in `default: break`, so code nested in a `blockQuote` was
+  collected by NOBODY** — unhighlighted even in the browser. Rich messages nest code in quotes routinely.
+- **A cached highlight can outlive the text it described** (it is persisted per message), so every apply
+  validates each range against the current string and drops the WHOLE highlight on any mismatch. Applying
+  one partially colours arbitrary spans of unrelated code.
+- **The rich bubble's cached-layout key includes the highlight.** It otherwise keys on `messageStableVersion`,
+  and whether a `storeLocallyDerivedData` write bumps that is Postbox's business — without the clause a
+  newly-arrived highlight can be computed, persisted, and never painted, because the node keeps serving the
+  layout it cached before the job finished.
+- **The palette is libprisma's LIGHT one everywhere**, including dark mode, because that is what the message
+  path has always baked and it keeps the editor WYSIWYG against the sent message. libprisma ships a dark
+  palette that nothing uses.
+
+The editor half — the authorable language field and the host-provided highlighter seam — is in the
+RichTextEditor's own `CLAUDE.md`.
+
 ## InstantPage V2 block media — flush (edge-to-edge), un-rounded
 
 Every V2 block-media kind lays out **flush** with the bubble interior (0 inset, full bounding width) and **un-rounded** (cornerRadius 0). The bubble's existing rounded clipping container rounds any media that meets the bubble's top/bottom edge. V1 (`InstantPageLayout.swift`) is unchanged. (Audio is **also** full-width / x = 0 as of the V2 audio port, but it does not use this helper — it has its own `layoutAudio` arm; the wrapped `InstantPageAudioNode` supplies its own 17pt internal content inset. See the "InstantPage V2 audio/music" section below.)

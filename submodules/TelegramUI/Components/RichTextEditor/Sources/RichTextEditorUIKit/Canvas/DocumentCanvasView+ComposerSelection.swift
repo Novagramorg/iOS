@@ -73,8 +73,12 @@ extension DocumentCanvasView {
                     if bq.collapsed { emitAtom(box) } else { walk(bq.children.boxes) }
                     continue
                 }
+                // The box's PRIMARY text region (the one starting at `textStart`), NOT `leafRegions().first`:
+                // a code box's first region is its LANGUAGE line, which is off the flat composer axis (the
+                // same rule that keeps a pull quote's author off it — `.first` there is the pull text).
+                // Taking `.first` blindly would flatten a code block to its language and drop the code.
                 guard (box is BlockBox || box is CodeBlockBox || box is PullQuoteBox),
-                      let region = box.leafRegions().first else { continue }
+                      let region = box.leafRegions().first(where: { $0.globalStart == box.textStart }) else { continue }
                 if !result.isEmpty { flat += 1 }   // "\n" joining this paragraph to the previous one
                 let atoms = composerInlineAtomOccurrences(in: region)
                 let flatLength = region.length + atoms.reduce(0) { $0 + ($1.flatLen - 1) }

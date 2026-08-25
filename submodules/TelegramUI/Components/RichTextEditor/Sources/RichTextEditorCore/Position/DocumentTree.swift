@@ -39,10 +39,19 @@ public enum DocumentTree {
                 })
             })
         case .code(let cb):
-            // A code block reuses the paragraph node shape (content + 2 tokens); only the ref
-            // distinguishes it so position mapping can identify it as code.
-            return .paragraph(id: cb.id,
-                              children: [.text(length: cb.utf16Count, ref: .code(cb.id))])
+            // A code block is a CONTAINER of two paragraph children: the always-present language line and
+            // the code text. `.blockQuote` is reused purely as a TOKEN SHAPE (`PositionMapping` /
+            // `PositionResolver` are generic over `children`/`nodeSize`/`isLeaf` and special-case only
+            // `.text`), exactly as `.pullQuote` reuses it for [text, author]. Canvas-side
+            // `isInsideBlockQuote(_:)` tests `box is BlockQuoteBox`, so this does NOT make code positions
+            // read as "inside a block quote".
+            // The language child is NEVER content-gated — unlike a quote author, which appears only once
+            // its quote has content. The field is always visible, so it is always on the axis, and the
+            // code text's offset therefore does not shift when a language is added or cleared.
+            return .blockQuote(id: cb.id, children: [
+                .paragraph(id: cb.id, children: [.text(length: cb.languageUTF16Count, ref: .codeLanguage(cb.id))]),
+                .paragraph(id: cb.id, children: [.text(length: cb.utf16Count, ref: .code(cb.id))]),
+            ])
         case .pullQuote(let pq):
             // Always a `.blockQuote` container so the pull text stays at nodeStart+1 whether the author is
             // shown or hidden. The trailing author paragraph is present only when the quote has content

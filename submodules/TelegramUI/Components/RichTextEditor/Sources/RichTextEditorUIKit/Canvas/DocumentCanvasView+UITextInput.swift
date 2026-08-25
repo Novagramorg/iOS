@@ -158,6 +158,9 @@ extension DocumentCanvasView: UITextInput {
             // An empty code block types the monospace code attributes, not the body default — without this the
             // first character typed into a just-created (empty) code block lands non-monospace at body size.
             if case .code = region.ref { return CodeBlockBox.codeAttributes(textColor: self.mapper.theme.primaryText) }
+            // An empty LANGUAGE line types the language attributes (bold, body size) — without this the
+            // first character lands 17pt body-styled and read-back writes that string into the model.
+            if case .codeLanguage = region.ref { return CodeBlockBox.languageAttributes(mapper: self.mapper) }
             // An empty pull quote types the italic/centered pull-quote attributes — without this the first
             // character typed into an empty pull quote lands body-upright-left instead of italic/centered.
             if case .pullQuote = region.ref { return PullQuoteBox.pullQuoteTypingAttributes(mapper) }
@@ -570,6 +573,16 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         if text == "\n" {
+            // Return in a code block's LANGUAGE line moves the caret to the start of the code text. It
+            // inserts nothing and splits nothing: a `.Pre` language has no second line. (The quote author
+            // splits instead, because it is a TRAILING region — the tail becomes a paragraph after the
+            // quote. A leading region has no such tail.)
+            if selFrom == selTo, let (region, _) = leafRegion(containingGlobal: head),
+               case let .codeLanguage(id) = region.ref,
+               let owner = stackContainingCodeBox(id: id) {
+                setCaret(global: owner.box.textStart)
+                return
+            }
             // Return in a quote AUTHOR line splits the author at the caret (like a media caption): the head runs
             // stay as the author, the tail runs become a NEW body paragraph immediately after the quote (caret
             // there). Handled here, at the TOP of the "\n" dispatch, because a caret in the author resolves
@@ -667,6 +680,18 @@ extension DocumentCanvasView: UIKeyInput {
         // as an in-cell edit does below.
         if let (region, _) = leafRegion(containingGlobal: head), case .quoteAuthor = region.ref {
             editing(coalescing: .typing) { applyLeafReplaceOutcome(globalFrom: selFrom, globalTo: selTo, text: text) }
+            return
+        }
+        // A collapsed caret in a code block's LANGUAGE line: like the quote author, it is a second leaf
+        // region outside the box's primary `textStart`/`textLength` extent, so `activeStack` resolves nil
+        // and `applyReplaceOutcome` would drop the keystroke. Route it through the region-aware path.
+        // Newlines are stripped: a `.Pre` language is a single-line string, and a multi-line paste
+        // (which reaches this path flattened — `insertingFragment` refuses a language locus, so the
+        // clipboard falls back to plain text) would otherwise put interior "\n"s in the model, where
+        // `currentCode()`'s edge-trim cannot reach them.
+        if let (region, _) = leafRegion(containingGlobal: head), case .codeLanguage = region.ref {
+            let flat = text.replacingOccurrences(of: "\n", with: " ")
+            editing(coalescing: .typing) { applyLeafReplaceOutcome(globalFrom: selFrom, globalTo: selTo, text: flat) }
             return
         }
         // A collapsed caret that resolves to a table or block-quote box (e.g. before a leading
@@ -910,6 +935,41 @@ extension DocumentCanvasView: UIKeyInput {
         if selFrom == selTo, let (region, local) = leafRegion(containingGlobal: head),
            case .quoteAuthor = region.ref, local == 0 {
             setCaret(global: prevTextPosition(before: region.globalStart))
+            return
+        }
+        // Backspace with a collapsed caret at the START of a code block's LANGUAGE line. The language is
+        // the block's FIRST position, so there is nothing inside the block to merge into:
+        //   • a WHOLLY empty block (no language, no code) is un-made to a body paragraph — today's
+        //     empty-code rule, relocated to the block's new first position;
+        //   • otherwise the caret steps OUT to the previous block's end, deleting nothing. When the code
+        //     block is the document's first block there is nowhere to step, so it is a no-op.
+        // Never merges the language into the previous block; never deletes a block that has content.
+        if selFrom == selTo, let (region, local) = leafRegion(containingGlobal: head),
+           case let .codeLanguage(id) = region.ref, local == 0,
+           let owner = stackContainingCodeBox(id: id) {
+            if region.length == 0, owner.box.textLength == 0 {
+                editing {
+                    let body = BlockBox(paragraph: ParagraphBlock(id: owner.box.id, style: .body, runs: []),
+                                        mapper: mapper, width: effectiveWidth)
+                    var newBoxes = owner.stack.boxes
+                    newBoxes.replaceSubrange(owner.index...owner.index, with: [body])
+                    owner.stack.boxes = newBoxes
+                    recomputeSpans()
+                    return .caret(at: body.textStart)
+                }
+                return
+            }
+            let prev = prevTextPosition(before: region.globalStart)
+            if prev != head { setCaret(global: prev) }
+            return
+        }
+        // Backspace INSIDE a code block's language line (text before the caret): delete that grapheme in
+        // the language region. `activeStack` resolves nil there by design, so the generic paths below
+        // would mis-route it. Mirrors the block-quote author/child branch.
+        if selFrom == selTo, let (region, local) = leafRegion(containingGlobal: head),
+           case .codeLanguage = region.ref, local > 0 {
+            let n = graphemeClusterLengthBeforeCaret(global: head)
+            editing(coalescing: .deleting) { applyLeafReplaceOutcome(globalFrom: head - n, globalTo: head, text: "") }
             return
         }
         if selFrom != selTo {

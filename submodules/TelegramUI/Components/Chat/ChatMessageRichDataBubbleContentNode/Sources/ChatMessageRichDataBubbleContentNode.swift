@@ -110,6 +110,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                     pendingEditKey: ObjectIdentifier?,
                                     richPageKey: ResolvedRichDataPageKey,
                                     showMoreExpanded: Bool,
+                                    codeHighlight: CachedMessageSyntaxHighlight?,
                                     layout: InstantPageV2Layout)?
     private var currentExpandedDetails: [Int: Bool] = [:]
     /// Quotes the reader expanded, keyed by structural block path. Lives on the content node, so
@@ -544,7 +545,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         fatalError("init(coder:) has not been implemented")
     }
     
+    /// The syntax-highlight job in flight for this node, so an identical spec set is not re-run on every
+    /// layout pass. Mirrors `ChatMessageTextBubbleContentNode.codeHighlightState`.
+    private var codeHighlightState: (id: EngineMessage.Id, specs: [CachedMessageSyntaxHighlight.Spec], disposable: MetaDisposable)?
+
     deinit {
+        self.codeHighlightState?.disposable.dispose()
         self.linkProgressDisposable?.dispose()
         self.relativeDateTimer?.timer.invalidate()
         self.requestFullRichTextDisposable?.dispose()
@@ -588,6 +594,11 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
 
                 var boundingSize = CGSize(width: suggestedBoundingWidth, height: 0.0)
 
+                /// Syntax-highlight specs for this message's code blocks, and the answer already stored
+                /// on the message. Declared HERE, in the measure scope the apply closure captures, so the
+                /// apply step can drive the async job from them.
+                var codeHighlightSpecs: [CachedMessageSyntaxHighlight.Spec] = []
+                var cachedMessageSyntaxHighlight: CachedMessageSyntaxHighlight?
                 var pageLayout: InstantPageV2Layout?
                 // Built alongside pageLayout so the apply closure can hand it to ensurePageView.
                 var pageWebpage: TelegramMediaWebpage?
@@ -779,6 +790,21 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     pageStructure = instantPageStructureFingerprint(instantPage)
                     pageResolvedInstantPage = instantPage
 
+                    // The code in a RICH message lives in InstantPageBlock.preformatted, not in a `.Pre`
+                    // entity, so the entity-based `extractMessageSyntaxHighlightSpecs` the text bubble
+                    // uses cannot see it — this walks the page instead. Declared in the outer scope
+                    // (beside `pageLayout`) because the APPLY closure drives the job from them.
+                    codeHighlightSpecs = instantPageSyntaxHighlightSpecs(for: instantPage.blocks)
+                    if !codeHighlightSpecs.isEmpty {
+                        for attribute in item.message.attributes {
+                            if let attribute = attribute as? DerivedDataMessageAttribute {
+                                if let value = attribute.data["code"]?.get(CachedMessageSyntaxHighlight.self) {
+                                    cachedMessageSyntaxHighlight = value
+                                }
+                            }
+                        }
+                    }
+
                     let presentationThemeIdentity = ObjectIdentifier(item.presentationData.theme.theme)
                     let currentMessageStableVersion = item.message.stableVersion
                     let currentPendingEditKey = (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) })
@@ -791,6 +817,12 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                        current.messageStableVersion == currentMessageStableVersion,
                        current.pendingEditKey == currentPendingEditKey,
                        current.richPageKey == resolvedContent.key,
+                       // LOAD-BEARING. The guard keys on `messageStableVersion`, and whether a
+                       // `storeLocallyDerivedData` write bumps that is Postbox's business, not this
+                       // node's. Without this clause a newly-arrived highlight could be computed,
+                       // persisted, and never painted, because the node would keep serving the layout it
+                       // cached before the job finished.
+                       current.codeHighlight == cachedMessageSyntaxHighlight,
                        current.layout.formattedDateUpdatePeriod == nil {
                         // Reuse the cached layout only when it has no relative `textDate`. A relative
                         // date's formatted string ("N minutes ago") is baked into the laid-out text at
@@ -809,7 +841,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             theme: pageTheme,
                             strings: item.presentationData.strings,
                             dateTimeFormat: item.presentationData.dateTimeFormat,
-                            cachedMessageSyntaxHighlight: nil,
+                            cachedMessageSyntaxHighlight: cachedMessageSyntaxHighlight,
                             expandedDetails: currentExpandedDetails,
                             expandedQuotePaths: currentExpandedQuotePaths,
                             fitToWidth: true,
@@ -1229,6 +1261,26 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             self.statusNode?.pressed = nil
                         }
 
+                        // Kick the highlight job for any spec set we do not already have an answer for.
+                        // Persisting mutates the message, which re-lays-out this bubble into a cache hit.
+                        // Mirrors ChatMessageTextBubbleContentNode's codeHighlightState loop.
+                        if !codeHighlightSpecs.isEmpty {
+                            if let current = self.codeHighlightState, current.id == item.message.id, current.specs == codeHighlightSpecs {
+                            } else {
+                                if let codeHighlightState = self.codeHighlightState {
+                                    self.codeHighlightState = nil
+                                    codeHighlightState.disposable.dispose()
+                                }
+                                let disposable = MetaDisposable()
+                                self.codeHighlightState = (item.message.id, codeHighlightSpecs, disposable)
+                                disposable.set(asyncUpdateMessageSyntaxHighlight(engine: item.context.engine, messageId: item.message.id, current: cachedMessageSyntaxHighlight, specs: codeHighlightSpecs).startStrict(completed: {
+                                }))
+                            }
+                        } else if let codeHighlightState = self.codeHighlightState {
+                            self.codeHighlightState = nil
+                            codeHighlightState.disposable.dispose()
+                        }
+
                         if let pageLayout, let pageWebpage, let resolvedContent {
                             self.currentPageLayout = (
                                 suggestedBoundingWidth,
@@ -1239,6 +1291,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                 (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }),
                                 resolvedContent.key,
                                 showMoreExpanded,
+                                cachedMessageSyntaxHighlight,
                                 pageLayout
                             )
                             let pageView = self.ensurePageView(

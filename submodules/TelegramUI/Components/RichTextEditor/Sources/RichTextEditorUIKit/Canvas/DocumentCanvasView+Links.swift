@@ -38,6 +38,9 @@ extension DocumentCanvasView {
 
     /// Sets `url` as the link over the selection, with the render-only blue styling (no underline).
     func setLink(_ url: String) {
+        // A code block's language is a plain string on the wire — a link there would be dropped on
+        // read-back (an inert edit that still dirties the model).
+        if selectionIsEntirelyInCodeLanguageRegion() { return }
         applyCharacterAttribute { storage, range in
             storage.addAttribute(.link, value: url, range: range)
             storage.addAttribute(.foregroundColor, value: self.mapper.theme.accent, range: range)

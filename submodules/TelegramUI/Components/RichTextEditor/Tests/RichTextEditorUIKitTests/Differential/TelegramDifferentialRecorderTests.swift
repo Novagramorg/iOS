@@ -507,7 +507,7 @@ final class TelegramDifferentialRecorderTests: XCTestCase {
         XCTAssertFalse(trace.isEmpty, "stock's storage does post edit notifications")
     }
 
-    /// `traits` is declined because four of the ten `UITextInputTraits` members do not exist on the
+    /// `traits` is declined because three of the ten `UITextInputTraits` members do not exist on the
     /// editor, so the ten-key census the contract compares cannot be formed at all. What CAN be read
     /// is published under a diagnostic name, so the decline costs no measurement.
     func test_traitsIsDeclinedForTelegramButTheReadableSubsetIsStillPublished() throws {
@@ -522,7 +522,11 @@ final class TelegramDifferentialRecorderTests: XCTestCase {
         XCTAssertEqual(Set(readable.keys), Set([
             "autocorrectionType", "spellCheckingType", "smartQuotesType",
             "smartDashesType", "smartInsertDeleteType", "inlinePredictionType",
-        ]), "the six the canvas implements; the census changed: \(readable.keys.sorted())")
+            // The seventh, added with the code-block language line: the canvas answers `.none` there
+            // (a language name is an identifier) and `.sentences` — UIKit's own unimplemented default
+            // — everywhere else.
+            "autocapitalizationType",
+        ]), "the seven the canvas implements; the census changed: \(readable.keys.sorted())")
         let unapplied = try XCTUnwrap(state["telegramUnappliedTraits"] as? [String: String])
         XCTAssertFalse(unapplied.isEmpty, "the host's construction-time census must travel with the snapshot")
     }

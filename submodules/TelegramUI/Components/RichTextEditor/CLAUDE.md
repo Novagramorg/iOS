@@ -475,6 +475,90 @@ flat-mapping counts a code block's interior. Full SwiftPM suite green (Core 102 
 and the position axis were the load-bearing reuse points — code blocks added zero new invariants there. Spec/plan:
 `docs/superpowers/{specs/2026-06-19-richtext-code-block-design.md,plans/2026-06-19-richtext-code-block.md}`.
 
+**Code-block LANGUAGE field + syntax highlighting (added 2026-08-25).** A code block's language is
+**authored in an always-visible, editable line at the top of the band**, and code is syntax-highlighted in
+both editor hosts. `CodeBlock.language` and its whole serialization path already existed; this added the
+authoring UI and wired the highlighter.
+
+**The language line is a second LEAF REGION on `CodeBlockBox`** — its own `BlockLayoutEngine`
+(`languageLayout`), its own `TextNodeRef.codeLanguage`, and a `DocumentTree` shape change: `.code` maps to a
+CONTAINER of two paragraph children, `[language, code]`. It mirrors a pull quote's `[text, author]`, with
+the extra region LEADING and **never content-gated** (a quote author appears only once its quote has
+content; the language field is always visible, which is also what keeps the code text's offset stable).
+`nodeSize` is `len + langLen + 6`; the language text sits at `nodeStart + 1`, the code text at
+`nodeStart + langLen + 3`. The value is stored AS TYPED, trimmed, empty → nil; only the renderer lowercases.
+
+- **`textStart`/`textLength`/`textRef` still mean the CODE region, and `activeStack` resolves a box by that
+  PRIMARY region** (`leafRegions().first(where: { $0.globalStart == b.textStart })`, plus a fallback that
+  refuses a position inside one of the box's own non-primary regions). This is the load-bearing part: a
+  caret in the language line otherwise resolved to the code box with a LANGUAGE-relative offset, which
+  callers applied to the CODE layout — `insertCodeBlockNewline` spliced a newline into the code at the
+  wrong offset. It compiles and reads correctly at every call site. With the guard, every legacy
+  `box is CodeBlockBox` branch is inert in the language line **by construction** rather than by each site
+  remembering to ask which region it is in. NB the naive `pos >= textStart, pos <= textStart + textLength`
+  is NOT equivalent — containers report a degenerate `textStart == nodeStart`, so it would newly match them.
+- **`leafRegions()` is DOCUMENT order** (navigation indexes `allLeafRegions()` positionally), so a code
+  box's `.first` is now its LANGUAGE line. Every consumer that means "the box's primary text" must use
+  `textStart`. `+ComposerSelection`'s flat mapping did not, and flattened a code block to its language,
+  dropping the code from the composer axis entirely.
+- **A range edit inside the language line routes region-aware.** iOS delivers a backspace there as a RANGE,
+  which resolves to no `activeStack`, so the top-level engine returned `.unchanged` — the character was
+  selected and never deleted. `applySelectionReplaceOutcome` asks `regionIsOffTheTopLevelEngine(_:)`
+  (exhaustive over `TextNodeRef`, no `default`) and routes author AND language through
+  `applyLeafReplaceOutcome`.
+- **Editing semantics:** Return moves to the code start (a `.Pre` language has no second line — this is
+  where it diverges from the trailing author, which splits); Backspace at the start un-makes a wholly-empty
+  block or steps out without deleting; inline formats, emoji and links are inert; text services are off in
+  BOTH code regions (`caretIsInCodeRegion`), because iOS capitalizes `let` to `Let` and autocorrects
+  identifiers. That made `autocapitalizationType` the SEVENTH `UITextInputTraits` member the canvas
+  implements — the differential harness censuses that set, so adding one moves those tests. UIKit caches
+  traits, so `refreshSelectionUI` reloads them when the caret crosses into or out of a code block.
+- **`sameOwningStack` needed its own resolver.** It asked `activeStack` "which box + local" when it only
+  wanted "which stack", so once the guard above refused author/language positions, Select-All over a pull
+  quote (whose end endpoint lands on the empty author region) stopped toggling. `owningStack(at:)` answers
+  the narrower question. This is now the third narrow resolver in the `resolveBox` family the tech-debt
+  note above describes — the generalization it asks for is still owed.
+
+**Syntax highlighting is HOST-PROVIDED, because this package cannot see the highlighter.**
+`RichTextEditorUIKit` depends only on `RichTextEditorCore`, `AppBundle` and `MosaicLayout`, and must keep
+doing so to stay SwiftPM-testable and to keep the Demo app buildable — libprisma lives behind
+`TextFormat`/`TelegramCore`. So the editor owns detection, debounce, cache and apply, and the host answers
+`(language, text) -> [RichTextSyntaxToken]` through `registerSyntaxHighlighter(_:)`, the same seam pattern
+as `registerEmojiViewProvider` / `mapper.formulaRenderer`. Package tests inject a stub, so `swift test`
+never needs libprisma. Both hosts answer via `asyncStanaloneSyntaxHighlight`, baking the LIGHT palette —
+the palette decision lives host-side, so what the editor shows is what the sent message shows.
+
+- **Highlighting is inert until a language is typed** (an empty one is skipped), and an unknown language
+  yields an empty token list that is cached like any other answer, so it is attempted once per
+  (language, text) rather than every pass.
+- **The pass is debounced ~300ms** from `performEditing` and `setBlocks`, never from a selection change: the
+  caret moving through code changes no spec.
+- **`CodeBlockBox.applySyntaxHighlight` rebuilds the block's string with the colours baked in**, which is
+  lossless HERE ONLY because a code block's runs are plain by construction — no link, emoji, inline-code or
+  spoiler attribute lives inside one. It re-assigns `layout.attributedString` only when the result differs
+  (the idempotence rule), and drops a token set WHOLE when any range no longer fits the text. Colours never
+  reach `Document`: `currentCode()` reads the plain string back.
+- **Repaint the BLOCK VIEW, not the canvas.** A code block draws into a pooled `BlockBackingView`, so
+  `setNeedsDisplay()` on the canvas leaves its bitmap stale until some unrelated layout pass happens to run
+  `syncBlockViews()`. That is why highlighting first appeared only after the caret left the block. The pass
+  calls `blockViews[box.id]?.setNeedsDisplay()` and deliberately does NOT call `notifyContentSizeChanged()`
+  — colours never change metrics, and firing it would ask the host to re-lay-out on every arrival.
+- **A rebuild re-applies from cache SYNCHRONOUSLY.** A theme / quote-style change or an undo restore
+  reconstructs every box from the model, which carries no colours, so waiting for the debounced pass showed
+  a plain frame — the "text loses highlight when the device changes theme" report. `setBlocks` calls
+  `reapplyCachedSyntaxHighlights()` before the new boxes are first laid out.
+- **Painting rebuilds the block's text storage**, which would pull the rug from under an IME composition.
+  Safe today only because marked text is confined to top-level body paragraphs
+  (`isBodyParagraphPosition` requires `box is BlockBox`); if IME support ever reaches code blocks, that
+  needs a guard.
+
+Three defects OUTSIDE this package had to be fixed before any of it was visible, all pre-existing and all
+silent: `InstantPageBlock(apiBlock:)` hard-coded `language: nil` when decoding `pageBlockPreformatted`, so
+every page decoded from the API came back language-less; `generateMessageSyntaxHighlight` passed the raw
+language to libprisma, whose grammar lookup is an exact lowercase-keyed map, so `"Swift"` produced zero
+tokens; and V2's `layoutCodeBlock` never read the `cachedMessageSyntaxHighlight` its layout context has
+always carried. See `docs/instantpage-richtext.md`.
+
 **Floating cursor — hold-spacebar-to-move-cursor (added 2026-06-23, runtime-verified 2026-06-24, `feature/richtext-floating-cursor`, phase 1 of 2).**
 The iOS keyboard-as-trackpad gesture is implemented on the canvas (the bare sole `UITextInput`, which own-draws
 everything and installs NO `UITextSelectionDisplayInteraction`) via the three optional `UITextInput` methods
@@ -1643,6 +1727,18 @@ package or this repo, and each produced a **green result that meant nothing** un
   where the text projection emits one `"\n"`. Offsets are NOT character indices. `positionFromPosition:offset:`
   does raw arithmetic then snaps, so aiming at a character index lands one character early past every
   boundary. See `DocumentCanvasView+ComposerSelection.swift` for the existing global↔flat mapper.
+- **`BlockLayoutEngine.attributedString` returns the LIVE storage.** `let before = layout.attributedString`
+  and comparing it after a mutation compares the object with ITSELF, so the assertion passes no matter what
+  happened. A formatting lock-out test passed before its guard existed this way; only a control asserting
+  the same gesture DOES change an unguarded block caught it. Copy first
+  (`NSAttributedString(attributedString:)`), and commit the control alongside.
+- **A canvas nobody retains is deallocated before a debounced pass fires.** `_ = makeCanvas(...)` in a test
+  leaves the scheduled work item's `[weak self]` nil, so the pass never runs — and a test asserting
+  "nothing was requested" then passes against a dead canvas rather than against the rule. Hold the canvas,
+  and give any "nothing happens" test a positive control in the same document.
+- **`DispatchQueue.main.async { fulfill }` is not a way to wait for `asyncAfter`.** The timer-backed work
+  can land after the plain async block, so the wait returns before the pass has run. Spin the runloop
+  (`RunLoop.current.run(until:)`).
 - **Never `pgrep -f "<pattern>"` from a watcher whose own command line contains that pattern** — it matches
   itself and the loop never exits. Wait on a PID or a sentinel file. (Cost 42 minutes once.)
 

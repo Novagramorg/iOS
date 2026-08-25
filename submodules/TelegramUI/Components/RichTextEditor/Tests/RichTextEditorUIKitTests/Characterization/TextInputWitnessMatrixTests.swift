@@ -219,6 +219,7 @@ final class TextInputWitnessMatrixTests: XCTestCase {
         let regions = v.allLeafRegions()
         let region: LeafTextRegion
         switch kind {
+        case .codeBlock:          region = regions[1]                 // [0] = language line, [1] = code text
         case .detailsBody:        region = regions[1]                 // [0] = title, [1] = body
         case .tableCellCrossCell: region = regions[1]                 // cell B
         case .buttonRow:          region = regions[0]                 // ButtonRowBox has NO leaf region

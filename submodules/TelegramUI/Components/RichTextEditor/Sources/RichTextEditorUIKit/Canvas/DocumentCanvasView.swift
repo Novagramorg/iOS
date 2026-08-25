@@ -1127,6 +1127,26 @@ final class DocumentCanvasView: UIView {
     /// no `draw(_:)` and is parent-driven, so suppressing the host layout keeps the block views unchanged.
     var suppressHostChangeNotification = false
 
+    /// Last known value of `caretIsInCodeRegion`, so a crossing can be detected and the keyboard told to
+    /// re-read its cached traits. See `refreshCodeInputTraitsIfNeeded`.
+    private var lastCaretWasInCodeRegion = false
+
+    /// Host-supplied syntax highlighter: (language, text, completion). nil disables highlighting entirely.
+    /// The editor cannot call libprisma itself — see `RichTextSyntaxToken`.
+    var syntaxHighlighter: ((String, String, @escaping ([RichTextSyntaxToken]) -> Void) -> Void)?
+    /// Answers, keyed by (normalized language, exact text). In-memory and per-canvas; nothing persists.
+    var syntaxHighlightCache: [CodeHighlightSpec: [RichTextSyntaxToken]] = [:]
+    /// Specs already requested and not yet answered, so a second pass does not re-ask.
+    var inFlightSyntaxHighlightSpecs: Set<CodeHighlightSpec> = []
+    /// Debounce for the highlight pass. Tests set 0 to fire on the next runloop turn.
+    var syntaxHighlightDebounceInterval: TimeInterval = 0.3
+    /// The scheduled pass, cancelled and replaced by each new edit. Internal (not `private`) so the
+    /// `+SyntaxHighlight` extension in another file can reach it.
+    var pendingSyntaxHighlightWork: DispatchWorkItem?
+    /// Counts block-view repaints caused by a colour change; read by tests through
+    /// `codeHighlightRepaintCountForTesting`.
+    var codeHighlightRepaintCount: Int = 0
+
     /// Token for the input-language-change observer (see init); removed in deinit.
     private var inputModeObserver: NSObjectProtocol?
 
@@ -1568,6 +1588,11 @@ final class DocumentCanvasView: UIView {
         applyCaretOutcome(.range(min(anchor, documentSize), min(head, documentSize)))
         bumpDocumentRevision()   // a whole-document replacement is a content mutation
         notifyContentSizeChanged(); setNeedsDisplay()
+        // Re-apply what we already know BEFORE the first layout of the new boxes: a rebuild (theme /
+        // quote style / undo restore) reconstructs them from the model, which carries no colours, and
+        // waiting for the debounced pass would show a plain frame first.
+        reapplyCachedSyntaxHighlights()
+        scheduleSyntaxHighlightPass()   // a document seed / undo restore changes every spec
         lastCheckedCaret = nil   // a fresh document: nothing checked until the caret traverses it
     }
 
@@ -1958,7 +1983,8 @@ final class DocumentCanvasView: UIView {
     func blockID(ofRef ref: TextNodeRef) -> BlockID {
         switch ref {
         case .paragraph(let id), .caption(let id), .code(let id),
-             .pullQuote(let id), .quoteAuthor(let id), .detailsTitle(let id): return id
+             .pullQuote(let id), .quoteAuthor(let id), .detailsTitle(let id),
+             .codeLanguage(let id): return id
         }
     }
 
@@ -2670,7 +2696,31 @@ final class DocumentCanvasView: UIView {
         updateCaretView()
         updateSelectionHandleViews()
         syncSpoilers()
+        refreshCodeInputTraitsIfNeeded()
         inputBackend.checkOnSelectionChange()   // TASK 34 (D37): selection-driven check (native-parity)
+    }
+
+    /// True when the caret sits ANYWHERE in a code block — its code text or its language line. Read by the
+    /// text-input traits: both regions are identifiers, not prose, so autocorrect, autocapitalization,
+    /// spell checking and inline predictions are all off there. Otherwise iOS capitalizes `let` to `Let`
+    /// and autocorrects identifiers into English words. (Smart quotes / dashes / insert-delete need no
+    /// gating: they are already `.no` editor-wide — see `+NativeTextCheckingClient`.)
+    var caretIsInCodeRegion: Bool {
+        guard let (region, _) = leafRegion(containingGlobal: head) else { return false }
+        if case .code = region.ref { return true }
+        if case .codeLanguage = region.ref { return true }
+        return false
+    }
+
+    /// Reload the keyboard's cached traits when the caret enters or leaves a code block. UIKit caches
+    /// `UITextInputTraits` and only re-reads them on `reloadInputViews()` — the same reason the
+    /// spell-checking toggle calls it. Called from `refreshSelectionUI`, the funnel every selection mover
+    /// already goes through; the `!=` guard keeps it a cheap no-op for ordinary caret movement.
+    func refreshCodeInputTraitsIfNeeded() {
+        let now = caretIsInCodeRegion
+        guard now != lastCaretWasInCodeRegion else { return }
+        lastCaretWasInCodeRegion = now
+        reloadInputViews()
     }
 
     /// Positions the two own-drawn selection-handle views at the ranged selection's endpoints — each hosted

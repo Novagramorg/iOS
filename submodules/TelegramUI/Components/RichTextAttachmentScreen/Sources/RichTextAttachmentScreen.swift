@@ -1362,7 +1362,7 @@ final class RichTextAttachmentScreenComponent: Component {
             defer { self.isUpdating = false }
 
             if self.component == nil {
-                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode, detailsTitle: environment.strings.RichText_PlaceholderDetailTitle)
+                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode, codeLanguage: environment.strings.RichText_PlaceholderCodeLanguage, detailsTitle: environment.strings.RichText_PlaceholderDetailTitle)
                 
                 // The screen paints `list.plainBackgroundColor` (below); clear the editor's opaque default
                 // `.systemBackground` so that themed surface shows through.
@@ -1497,6 +1497,23 @@ final class RichTextAttachmentScreenComponent: Component {
                 // custom emoji carried in from the chat composer renders, and its file survives back out.
                 emojiKeyboard.seedEmojiFiles(initialEmojiFiles)
 
+                // The host owns "(language, text) -> colours": `asyncStanaloneSyntaxHighlight` runs libprisma off
+                // the main queue and returns the same cache model the message path stores, baking the LIGHT
+                // palette — so what the editor shows is what the sent message will show. The editor cannot do
+                // this itself; it cannot see TextFormat or libprisma.
+                editor.registerSyntaxHighlighter { language, text, completion in
+                    let spec = CachedMessageSyntaxHighlight.Spec(language: language, text: text)
+                    let _ = (asyncStanaloneSyntaxHighlight(current: nil, specs: [spec])
+                    |> deliverOnMainQueue).start(next: { result in
+                        let entities = result.values[spec]?.entities ?? []
+                        completion(entities.map { entity in
+                            RichTextSyntaxToken(
+                                range: NSRange(location: entity.range.lowerBound,
+                                               length: entity.range.upperBound - entity.range.lowerBound),
+                                color: UIColor(rgb: UInt32(bitPattern: entity.color)))
+                        })
+                    })
+                }
                 editor.registerEmojiViewProvider { [weak self] id, size in
                     return self?.emojiKeyboard?.customEmojiView(forId: id, size: size)
                 }

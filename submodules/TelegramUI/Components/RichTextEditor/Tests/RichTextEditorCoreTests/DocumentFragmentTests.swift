@@ -319,18 +319,20 @@ final class DocumentFragmentTests: XCTestCase {
     }
 
     func test_insert_intoCodeBlock_flattensFragmentToText() {
-        // A code block "let x" — text axis: open@0, text@1..6, close@6. Caret after "let " (global 5).
+        // A code block is a container of [languagePara, codePara], so its code text starts past the whole
+        // language child — derived here rather than hard-coded, since that offset moves with the language.
         let host = Document(blocks: [code("c", "let x")])
+        let codeStart = host.globalTextStart(ofBlockAt: 0)
         let frag = doc(para("p", "AA"), para("q", "BB"))   // two paragraphs
-        let r = host.insertingFragment(frag, atGlobal: 5)!
+        let r = host.insertingFragment(frag, atGlobal: codeStart + 4)!   // caret after "let "
         guard case .code(let c) = r.document.blocks[0] else { return XCTFail() }
         XCTAssertEqual(c.text, "let AA\nBBx")   // paragraphs joined by "\n", inserted inline
-        XCTAssertEqual(r.caret, 5 + ("AA\nBB" as NSString).length)
+        XCTAssertEqual(r.caret, codeStart + 4 + ("AA\nBB" as NSString).length)
     }
 
     func test_insert_intoCodeBlock_keepsCodeBlockIdentity() {
         let host = Document(blocks: [code("c", "ab")])
-        let r = host.insertingFragment(doc(para("p", "X")), atGlobal: 2)!
+        let r = host.insertingFragment(doc(para("p", "X")), atGlobal: host.globalTextStart(ofBlockAt: 0) + 2)!
         XCTAssertEqual(r.document.blocks.count, 1)
         XCTAssertEqual(r.document.blocks[0].id, BlockID("c"))
     }

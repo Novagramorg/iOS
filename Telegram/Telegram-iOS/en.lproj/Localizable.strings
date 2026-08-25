@@ -16599,6 +16599,7 @@ Error: %8$@";
 "RichText.PlaceholderBody" = "Type something...";
 "RichText.PlaceholderQuote" = "Type a quote here";
 "RichText.PlaceholderCode" = "Type code here";
+"RichText.PlaceholderCodeLanguage" = "Language";
 "RichText.PlaceholderDetailTitle" = "Title";
 
 "TextProcessing.TitleAICompose" = "Create with AI";

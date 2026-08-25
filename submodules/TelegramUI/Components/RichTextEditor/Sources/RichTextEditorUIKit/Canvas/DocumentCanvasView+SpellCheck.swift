@@ -5,11 +5,12 @@ import RichTextEditorCore
 @available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// The block key for a CHECKABLE region, else nil. Prose is checked (`paragraph`/`caption`/`pullQuote`);
-    /// code and quote-author regions are skipped (author is metadata, not prose).
+    /// code, code-LANGUAGE and quote-author regions are skipped (a language name is an identifier, not
+    /// prose — iOS would underline `kotlin`; author is metadata).
     func spellCheckableRef(_ ref: TextNodeRef) -> BlockID? {
         switch ref {
         case .paragraph(let id), .caption(let id), .pullQuote(let id), .detailsTitle(let id): return id
-        case .code, .quoteAuthor: return nil
+        case .code, .quoteAuthor, .codeLanguage: return nil
         }
     }
 

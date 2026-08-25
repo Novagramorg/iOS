@@ -406,6 +406,7 @@ extension DocumentCanvasView {
         // (restyle no-ops on empty storage); the guard inside makes it a cheap no-op when nothing changed.
         refreshEmptyBoxWritingDirections()
         setNeedsDisplay()
+        scheduleSyntaxHighlightPass()   // debounced; a burst of keystrokes fires one pass
         if !suppressHostChangeNotification {
             refreshSelectionUI()   // step 1 of a two-step paste keeps the caret at its prior spot (no caret blink to the raw-text end); step 2 moves it to the final position
             notifyContentSizeChanged()
@@ -572,6 +573,17 @@ extension DocumentCanvasView {
         if start.index == end.index {
             let b = start.box
             let attrs = typingAttributesAtGlobal(b.textStart + start.local)
+            // A replace whose range covers a CODE block's whole node — its LEADING language line as well as
+            // its code — must not strand the old language on the block. `activeStack`/`resolveBox` collapse
+            // both endpoints onto the code region (the language is a second leaf region, off their radar),
+            // so the replace below only touches the code layout and the language survives a selection the
+            // user made over it. Same failure the pull/block-quote author has in
+            // `applySelectionReplaceOutcome`'s exact-content-span branch, from the other end of the box.
+            // Delete is already covered there and by the whole-document reset; this is the type-over case.
+            if let code = b as? CodeBlockBox, lo <= coverableContentStart(b), hi >= coverableContentEnd(b) {
+                code.languageLayout.replace(start: 0, end: code.languageLength,
+                                            with: NSAttributedString(string: ""))
+            }
             b.textLayout.replace(start: start.local, end: end.local,
                                  with: NSAttributedString(string: text, attributes: attrs))
             recomputeSpans()
@@ -810,9 +822,24 @@ extension DocumentCanvasView {
                 if let t = b as? TableBlockBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
                     return t.cellStack(containing: pos)
                 }
-                // A leaf text box (paragraph/code/pullQuote/media-caption): match by its single leaf region.
-                if let first = b.leafRegions().first, pos >= first.globalStart, pos <= first.globalStart + first.length {
-                    return (stack, b, pos - first.globalStart, i)
+                // A leaf text box (paragraph/code/pullQuote/media-caption): match by its PRIMARY text
+                // region — the one starting at `textStart` — NOT by `leafRegions().first`. A code box's
+                // FIRST region is its LANGUAGE line, and resolving a language position here would hand
+                // every caller a language-relative `local` to apply to the box's CODE layout
+                // (`insertCodeBlockNewline` would splice a newline into the code at the wrong offset —
+                // demonstrated, not hypothesised). Selecting by `textStart` makes a language position
+                // return nil instead, exactly as a quote-author position already does (see the fallback's
+                // note below), which leaves every existing `box is CodeBlockBox` branch inert in the
+                // language line by construction rather than by each site remembering to ask.
+                //
+                // NB the naive `pos >= b.textStart, pos <= b.textStart + b.textLength` is NOT equivalent:
+                // container boxes (block quote / details / table) report a degenerate
+                // `textStart == nodeStart, textLength == 0`, so that form would newly match them at
+                // exactly `nodeStart` and return a container with `local == 0`, where today that position
+                // correctly falls through to the fallback (which refuses containers).
+                if let primary = b.leafRegions().first(where: { $0.globalStart == b.textStart }),
+                   pos >= primary.globalStart, pos <= primary.globalStart + primary.length {
+                    return (stack, b, pos - primary.globalStart, i)
                 }
             }
             return nil
@@ -825,6 +852,16 @@ extension DocumentCanvasView {
         // top-level block that `resolveBox` mis-resolves it to. Genuine top-level boundaries pass through.
         guard !isInsideBlockQuote(pos), !isInsideTable(pos), !isInsideDetails(pos),
               let r = resolveBox(at: pos), !(r.box is TableBlockBox), !(r.box is BlockQuoteBox), !(r.box is DetailsBox) else { return nil }
+        // The fallback snaps STRUCTURAL boundaries (before the first leaf, past the last, inter-block
+        // gaps). A position inside one of the box's own NON-PRIMARY regions — a code block's language
+        // line — is not a boundary, and `resolveBox` maps it to the box with a clamped `local` that
+        // callers would apply to `box.textLayout`, the PRIMARY (code) layout. Refuse it, so such a
+        // position resolves to no active stack at all, as a quote author's already does.
+        if let (region, _) = leafRegion(containingGlobal: pos),
+           region.globalStart != r.box.textStart,
+           r.box.leafRegions().contains(where: { $0.globalStart == region.globalStart }) {
+            return nil
+        }
         return (root, r.box, r.local, r.index)
     }
 
@@ -842,13 +879,57 @@ extension DocumentCanvasView {
         return true
     }
 
+    /// The stack, box and index of the `CodeBlockBox` with `id`, searched recursively (a code block can sit
+    /// inside a block quote, a detail block, or a table cell). Needed because a caret in a code block's
+    /// LANGUAGE line resolves to no `activeStack` — by design — so a language-line branch cannot get at its
+    /// own box the usual way.
+    func stackContainingCodeBox(id: BlockID) -> (stack: BlockStack, box: CodeBlockBox, index: Int)? {
+        func search(_ stack: BlockStack) -> (stack: BlockStack, box: CodeBlockBox, index: Int)? {
+            for (i, b) in stack.boxes.enumerated() {
+                if let c = b as? CodeBlockBox, c.id == id { return (stack, c, i) }
+                if let bq = b as? BlockQuoteBox, let hit = search(bq.children) { return hit }
+                if let d = b as? DetailsBox, let hit = search(d.children) { return hit }
+                if let t = b as? TableBlockBox {
+                    for cell in t.cells.flatMap({ $0 }) { if let hit = search(cell) { return hit } }
+                }
+            }
+            return nil
+        }
+        return search(root)
+    }
+
     /// True when both positions resolve to the **same** owning `BlockStack` — either the same table
     /// cell's stack, or the same block-quote child stack — so the full (stack-scoped) `applyReplaceOutcome`
     /// engine can edit within that container, exactly like top-level. Generalizes the former
     /// table-only `bothInSameCellStack`.
     func sameOwningStack(_ a: Int, _ b: Int) -> Bool {
-        guard let sa = activeStack(at: a), let sb = activeStack(at: b) else { return false }
-        return sa.stack === sb.stack
+        guard let sa = owningStack(at: a), let sb = owningStack(at: b) else { return false }
+        return sa === sb
+    }
+
+    /// The `BlockStack` that owns `pos`, tolerating a NON-PRIMARY leaf region — a quote author, a code
+    /// block's language line. `activeStack` deliberately refuses those (its `local` would be meaningless
+    /// against the box's PRIMARY layout), but stack ownership is well-defined for every region, and a
+    /// caller that only needs "which stack is this position in" must not inherit that refusal. Select-All
+    /// over a pull quote lands its end endpoint on the (empty) author region, which is how this surfaced.
+    func owningStack(at pos: Int) -> BlockStack? {
+        if let active = activeStack(at: pos) { return active.stack }
+        func search(_ stack: BlockStack) -> BlockStack? {
+            for b in stack.boxes {
+                // Containers first, so a NESTED box's region reports its own stack rather than the outer
+                // one (a container's `leafRegions()` includes its children's).
+                if let bq = b as? BlockQuoteBox, let hit = search(bq.children) { return hit }
+                if let d = b as? DetailsBox, let hit = search(d.children) { return hit }
+                if let t = b as? TableBlockBox {
+                    for cell in t.cells.flatMap({ $0 }) { if let hit = search(cell) { return hit } }
+                }
+                if b.leafRegions().contains(where: { pos >= $0.globalStart && pos <= $0.globalStart + $0.length }) {
+                    return stack
+                }
+            }
+            return nil
+        }
+        return search(root)
     }
 
     /// THE single routing point for replacing a (non-empty) selection `[from, to)` with `text`. A
@@ -924,12 +1005,14 @@ extension DocumentCanvasView {
         }) {
             return replaceMediaWithEmptyParagraphOutcome(at: i)
         }
-        // A replace whose (expanded) range lies entirely within ONE quote AUTHOR region — a selection-replace
-        // inside the author, or a system word-replace (autocorrect / dictation) via replace(_:withText:). The
-        // author is a SECOND leaf region on the box (off activeStack's radar), so the same-stack applyReplaceOutcome
-        // below would mis-resolve BOTH endpoints to the following block. Route it region-aware, like a cell.
+        // A replace whose (expanded) range lies entirely within ONE region the top-level engine cannot
+        // resolve — a quote AUTHOR line, or a code block's LANGUAGE line. Both are a SECOND leaf region on
+        // their box, off `activeStack`'s radar, so `applyReplaceOutcome` below either mis-resolves both
+        // endpoints to the following block or refuses them outright and returns `.unchanged`. Either way
+        // the edit silently does nothing: iOS delivers a backspace inside such a field as a RANGE, so the
+        // character was selected and then never deleted. Route it region-aware, like a cell.
         if let (rf, _) = leafRegion(containingGlobal: clampGlobal(min(globalFrom, globalTo))),
-           case .quoteAuthor = rf.ref,
+           regionIsOffTheTopLevelEngine(rf),
            let (rt, _) = leafRegion(containingGlobal: clampGlobal(max(globalFrom, globalTo))),
            rt.globalStart == rf.globalStart {
             return applyLeafReplaceOutcome(globalFrom: globalFrom, globalTo: globalTo, text: text)
@@ -938,6 +1021,21 @@ extension DocumentCanvasView {
             return applyReplaceOutcome(globalFrom: globalFrom, globalTo: globalTo, text: text)
         } else {
             return applyMultiRegionClearOutcome(globalFrom: globalFrom, globalTo: globalTo, text: text)
+        }
+    }
+
+    /// True for a leaf region the TOP-LEVEL replace engine cannot resolve: a second region on its box,
+    /// outside the box's primary `textStart`/`textLength` extent and off `activeStack`'s radar. A range
+    /// inside one must be edited through `applyLeafReplaceOutcome` or it silently no-ops.
+    ///
+    /// Exhaustive on purpose — no `default`. A new `TextNodeRef` case must state which side it is on here,
+    /// because getting it wrong produces an edit that quietly does nothing rather than a build error.
+    func regionIsOffTheTopLevelEngine(_ region: LeafTextRegion) -> Bool {
+        switch region.ref {
+        case .quoteAuthor, .codeLanguage:
+            return true
+        case .paragraph, .caption, .code, .pullQuote, .detailsTitle:
+            return false
         }
     }
 

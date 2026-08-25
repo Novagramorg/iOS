@@ -2784,7 +2784,16 @@ private func layoutCodeBlock(
     // exactly 15pt at page scale, and shrinks inside a quote rather than leaving code at full size
     // while everything around it scales.
     styleStack.push(.fontSize(context.metrics.codeBlockFontSize))
-    let attributedString = attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
+    // `attributedStringForRichText` returns an immutable `NSAttributedString`, so take a mutable copy to
+    // overlay onto — the same move V1's `attributedStringForPreformattedText` makes.
+    let highlightedString = (attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
+        .mutableCopy() as! NSMutableAttributedString)
+    // Overlay the cached syntax highlight. `cachedMessageSyntaxHighlight` has been stored on the layout
+    // context — and read by nothing — since V2 was written, so V2 code blocks rendered plain while V1's
+    // (`attributedStringForPreformattedText`) highlighted. A miss changes nothing.
+    applyInstantPageSyntaxHighlight(to: highlightedString, language: language,
+                                    cache: context.cachedMessageSyntaxHighlight)
+    let attributedString: NSAttributedString = highlightedString
 
     // The text measure is the paragraph measure at this level — the same width a sibling paragraph
     // gets, which is what makes the two align on BOTH edges.

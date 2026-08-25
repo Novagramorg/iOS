@@ -12,6 +12,9 @@ extension DocumentCanvasView {
     /// inline place to put the emoji). Wrapped in `editing { }` (one undo step).
     func insertEmoji(id: String, altText: String?) {
         guard !boxes.isEmpty else { return }
+        // A code block's language is a plain string on the wire; a custom-emoji U+FFFC there would survive
+        // into the model as part of the language name.
+        if selectionIsEntirelyInCodeLanguageRegion() { return }
         let ref = EmojiRef(id: id, instanceID: BlockID.generate().rawValue, altText: altText)
         editing {
             // THE CLAIM IS APPLIED HERE, ON THE NEXT INSTRUCTION — never batched to the end of this

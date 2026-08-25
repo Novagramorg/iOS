@@ -19,11 +19,14 @@ public struct RichTextEditorPlaceholders: Equatable {
     public var blockQuote: String
     /// Shown in an empty code block.
     public var codeBlock: String
+    /// Shown on a code block's EMPTY language line (the line is always visible).
+    public var codeLanguage: String
     /// Shown in an empty detail-block title (summary) line.
     public var detailsTitle: String
 
     public init(body: String, listEnd: String, listOutdent: String, pullQuote: String = "Type a quote here",
                 blockQuote: String = "Type a quote here", codeBlock: String = "Type code here",
+                codeLanguage: String = "Language",
                 detailsTitle: String = "Title") {
         self.body = body
         self.listEnd = listEnd
@@ -31,6 +34,7 @@ public struct RichTextEditorPlaceholders: Equatable {
         self.pullQuote = pullQuote
         self.blockQuote = blockQuote
         self.codeBlock = codeBlock
+        self.codeLanguage = codeLanguage
         self.detailsTitle = detailsTitle
     }
 
@@ -41,6 +45,7 @@ public struct RichTextEditorPlaceholders: Equatable {
         pullQuote: "Type a quote here",
         blockQuote: "Type a quote here",
         codeBlock: "Type code here",
+        codeLanguage: "Language",
         detailsTitle: "Title"
     )
 }

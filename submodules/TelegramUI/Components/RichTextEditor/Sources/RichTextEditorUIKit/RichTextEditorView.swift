@@ -593,6 +593,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Registers the closure that turns an emoji `id` (+ requested square size) into a FRESH, non-
     /// interactive view. The editor owns/positions/removes it, makes it ride scrolling, and keeps its
     /// `dynamicColor` synced to the current text color (so a template custom emoji tints to the text).
+    /// Register the host's syntax highlighter. The editor detects which code blocks need highlighting,
+    /// debounces, caches answers and applies them; the host only turns (language, text) into colours and
+    /// calls `completion` on the main queue whenever it is ready. Answering late is expected; never
+    /// answering leaves the block plain. The editor cannot do this itself — it cannot see libprisma.
+    public func registerSyntaxHighlighter(
+        _ provider: ((_ language: String, _ text: String,
+                      _ completion: @escaping ([RichTextSyntaxToken]) -> Void) -> Void)?
+    ) {
+        self.canvas.syntaxHighlighter = provider
+        self.canvas.scheduleSyntaxHighlightPass()
+    }
+
     public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)?) {
         canvas.emojiViewProvider = provider
     }

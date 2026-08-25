@@ -239,7 +239,11 @@ extension InstantPageBlock {
                 self = .paragraph(RichText(apiText: text))
             case let .pageBlockPreformatted(pageBlockPreformattedData):
                 let text = pageBlockPreformattedData.text
-                self = .preformatted(text: RichText(apiText: text), language: nil)
+                // The wire carries the code block's language and this dropped it, hard-coding nil, while
+                // the outgoing side below sends it — so a page survived a send and came back
+                // language-less. Empty means "none", matching what `apiBlock()` writes for nil.
+                let language = pageBlockPreformattedData.language
+                self = .preformatted(text: RichText(apiText: text), language: language.isEmpty ? nil : language)
             case let .pageBlockFooter(pageBlockFooterData):
                 let text = pageBlockFooterData.text
                 self = .footer(RichText(apiText: text))

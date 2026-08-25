@@ -175,6 +175,11 @@ extension Document {
     }
 }
 
+/// The global offset from a top-level block's own start to its editable CODE text. A code block is a
+/// container of [languagePara, codePara] (see `DocumentTree.node(for:)`), so its code text sits three
+/// tokens past where a bare paragraph's would: language open + language text + language close + code open.
+func codeTextStartOffset(_ code: CodeBlock) -> Int { 4 + code.languageUTF16Count }
+
 /// Plain text of a paragraph/code/blockQuote block (empty for media/table). Used for the code-destination flatten.
 public func blockPlainText(_ block: Block) -> String {
     switch block {
@@ -211,7 +216,10 @@ extension Document {
             case .paragraph(let p):
                 if caret >= textStart && caret <= textStart + p.utf16Count { return (i, caret - textStart) }
             case .code(let c):
-                if caret >= textStart && caret <= textStart + c.utf16Count { return (i, caret - textStart) }
+                // The LANGUAGE line is deliberately not a locus here: a fragment paste into it falls
+                // through to the caller's plain-text flatten, which is what the language line accepts.
+                let codeStart = cursor + codeTextStartOffset(c)
+                if caret >= codeStart && caret <= codeStart + c.utf16Count { return (i, caret - codeStart) }
             default: break
             }
             cursor += size
@@ -237,8 +245,9 @@ extension Document {
                 if firstStart == nil { firstStart = textStart }
                 lastTextEnd = textStart + p.utf16Count
             case .code(let c):
-                if firstStart == nil { firstStart = textStart }
-                lastTextEnd = textStart + c.utf16Count
+                let codeStart = cursor + codeTextStartOffset(c)
+                if firstStart == nil { firstStart = codeStart }
+                lastTextEnd = codeStart + c.utf16Count
             default: break
             }
             cursor += size
@@ -254,14 +263,19 @@ extension Document {
     }
 
     /// The global position of the first editable text offset of the top-level block at `index`.
-    /// A paragraph/code block's text sits one token in (the block's own container-open token) —
-    /// `cursor + 1`. A pull quote is a `.blockQuote(children: [pullTextPara, authorPara])`
-    /// container (see `DocumentTree.node(for:)`), so its pull text is nested one level deeper —
-    /// `cursor + 2` (the pull-quote container's open token, THEN the pull-text paragraph's own).
+    /// A paragraph's text sits one token in (the block's own container-open token) — `cursor + 1`. A pull
+    /// quote is a `.blockQuote(children: [pullTextPara, authorPara])` container (see
+    /// `DocumentTree.node(for:)`), so its pull text is nested one level deeper — `cursor + 2` (the
+    /// pull-quote container's open token, THEN the pull-text paragraph's own). A CODE block is likewise a
+    /// container, `[languagePara, codePara]`, and its editable code text sits past the whole language
+    /// child — `cursor + 4 + languageUTF16Count`.
     public func globalTextStart(ofBlockAt index: Int) -> Int {
         let cursor = DocumentTree.documentSize(Document(blocks: Array(blocks[..<index])))
         if case .pullQuote = blocks[index] {
             return cursor + 2
+        }
+        if case .code(let c) = blocks[index] {
+            return cursor + codeTextStartOffset(c)
         }
         return cursor + 1
     }
@@ -429,9 +443,13 @@ extension Document {
                                                           paragraph: p.paragraph, list: p.list, runs: r)))
                 }
             case .code(let c):
-                let a = max(lo, textStart), b = min(hi, textStart + c.utf16Count)
+                // Container now, like a pull quote: the code text starts past the language line, NOT at
+                // the shared `textStart`. A partial copy carries the language, which is block metadata
+                // rather than flat text — the same rule the pull quote applies to its author.
+                let codeStart = cursor + codeTextStartOffset(c)
+                let a = max(lo, codeStart), b = min(hi, codeStart + c.utf16Count)
                 if a < b {
-                    let r = sliceRuns(c.runs, fromUTF16: a - textStart, toUTF16: b - textStart)
+                    let r = sliceRuns(c.runs, fromUTF16: a - codeStart, toUTF16: b - codeStart)
                     out.append(.code(CodeBlock(id: .generate(), language: c.language, runs: r)))
                 }
                 // Note: empty code blocks (utf16Count == 0) are intentionally not captured — they

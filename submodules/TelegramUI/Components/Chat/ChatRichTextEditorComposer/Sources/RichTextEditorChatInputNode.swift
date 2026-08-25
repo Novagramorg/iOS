@@ -4,6 +4,7 @@ import AsyncDisplayKit
 import Display
 import AppBundle
 import Postbox
+import SwiftSignalKit
 import TextFormat
 import TelegramCore
 import RichTextEditorCore
@@ -171,7 +172,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, detailsTitle: self.strings.RichText_PlaceholderDetailTitle)
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, codeLanguage: self.strings.RichText_PlaceholderCodeLanguage, detailsTitle: self.strings.RichText_PlaceholderDetailTitle)
         // The composer sits over the input panel's own background — clear the editor's document "page"
         // background (`.systemBackground`, opaque white in light mode) so the panel shows through. `nil`
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
@@ -292,6 +293,23 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // renderer fallback. The closure reads `self.emojiViewProvider` lazily, so the panel may set it after
         // this registration. `size` is ignored: the host renderer picks its own point size and the editor
         // frames the returned view to the glyph rect.
+        // The host owns "(language, text) -> colours": `asyncStanaloneSyntaxHighlight` runs libprisma off
+        // the main queue and returns the same cache model the message path stores, baking the LIGHT
+        // palette — so what the editor shows is what the sent message will show. The editor cannot do
+        // this itself; it cannot see TextFormat or libprisma.
+        self.editorView.registerSyntaxHighlighter { language, text, completion in
+            let spec = CachedMessageSyntaxHighlight.Spec(language: language, text: text)
+            let _ = (asyncStanaloneSyntaxHighlight(current: nil, specs: [spec])
+            |> deliverOnMainQueue).start(next: { result in
+                let entities = result.values[spec]?.entities ?? []
+                completion(entities.map { entity in
+                    RichTextSyntaxToken(
+                        range: NSRange(location: entity.range.lowerBound,
+                                       length: entity.range.upperBound - entity.range.lowerBound),
+                        color: UIColor(rgb: UInt32(bitPattern: entity.color)))
+                })
+            })
+        }
         self.editorView.registerEmojiViewProvider { [weak self] id, _ in
             guard let self, let fileId = Int64(id), let provider = self.emojiViewProvider else { return nil }
             let attribute = self.customEmojiAttributes[fileId]

@@ -243,27 +243,35 @@ final class TelegramDifferentialHostTests: XCTestCase {
         // editor's fixed one does not already equal — so the assertion names a scenario, not a
         // universal set.
         //
-        // FOUR are absent outright: every `UITextInputTraits` member is `@optional`, `UIView`
-        // implements none, and `DocumentCanvasView` implements six of the ten. Sending them
+        // THREE are absent outright: every `UITextInputTraits` member is `@optional`, `UIView`
+        // implements none, and `DocumentCanvasView` implements seven of the ten. Sending them
         // unguarded — which is exactly what the vendored original does — would raise
         // `unrecognized selector`.
         //
-        // ONE is a no-op setter: this family asks for `inlinePredictionType: 1` (No) and the canvas
-        // answers a fixed `2` (Yes). That is the second, quieter failure mode, and it is why the
-        // census reads each trait BACK instead of trusting `-respondsToSelector:`.
+        // TWO are no-op setters: this family asks for `inlinePredictionType: 1` (No) and the canvas
+        // answers a fixed `2` (Yes), and it asks for an `autocapitalizationType` the canvas likewise
+        // answers with its own fixed value. That is the second, quieter failure mode, and it is why
+        // the census reads each trait BACK instead of trusting `-respondsToSelector:`.
+        // `autocapitalizationType` became the SEVENTH implemented trait when the code-block language
+        // line landed: a language name is an identifier, so the canvas answers `.none` while the
+        // caret is in that region and `.sentences` — UIKit's own default for an unimplemented trait,
+        // so nothing moved elsewhere — everywhere else.
         //
         // `spellCheckingType` is absent from the census — it sticks, because the factory routes it
         // through the editor's own `isSpellCheckingEnabled` knob before this generic pass runs. The
         // `UITextInputTraits` setter alone would not have.
-        let absent = Set(["autocapitalizationType", "keyboardType", "returnKeyType", "secureTextEntry"])
-        XCTAssertEqual(Set(telegram.id_unappliedTraits.keys), absent.union(["inlinePredictionType"]),
+        let absent = Set(["keyboardType", "returnKeyType", "secureTextEntry"])
+        let noOpSetters = Set(["inlinePredictionType", "autocapitalizationType"])
+        XCTAssertEqual(Set(telegram.id_unappliedTraits.keys), absent.union(noOpSetters),
                        "the unapplied-trait census changed: \(telegram.id_unappliedTraits)")
         for name in absent {
             XCTAssertTrue(telegram.id_unappliedTraits[name]?.contains("implements neither") == true,
                           "\(name) should be reported as absent, not as a no-op setter")
         }
-        XCTAssertTrue(telegram.id_unappliedTraits["inlinePredictionType"]?.contains("did not take") == true,
-                      "inlinePredictionType should be reported as a no-op setter, not as absent")
+        for name in noOpSetters {
+            XCTAssertTrue(telegram.id_unappliedTraits[name]?.contains("did not take") == true,
+                          "\(name) should be reported as a no-op setter, not as absent")
+        }
         XCTAssertNil(telegram.id_unappliedTraits["spellCheckingType"],
                      "spellCheckingType is applied through the editor's own knob and must stick")
     }

@@ -8,14 +8,27 @@ import RichTextEditorCore
 // (and they're standard for a text editor). inlinePredictionType opts in to the iOS 17+ feature.
 @available(iOS 13.0, *)
 extension DocumentCanvasView {
-    var autocorrectionType: UITextAutocorrectionType { get { .yes } set { } }
-    var spellCheckingType: UITextSpellCheckingType { get { isSpellCheckingEnabled ? .yes : .no } set { } }
+    var autocorrectionType: UITextAutocorrectionType {
+        get { caretIsInCodeRegion ? .no : .yes } set { }
+    }
+    var autocapitalizationType: UITextAutocapitalizationType {
+        // `.sentences` is UIKit's default for an unimplemented trait, so this changes nothing outside a
+        // code block — inside one, iOS would capitalize `let` for you.
+        get { caretIsInCodeRegion ? .none : .sentences } set { }
+    }
+    var spellCheckingType: UITextSpellCheckingType {
+        // The own-drawn underline pass already skips code (`spellCheckableRef`); this turns off the OS's
+        // own checking there too, which is what feeds the keyboard's correction candidates.
+        get { caretIsInCodeRegion ? .no : (isSpellCheckingEnabled ? .yes : .no) } set { }
+    }
 }
 
 // `UITextInlinePredictionType` is iOS 17+; below it the trait simply isn't offered (no inline predictions).
 @available(iOS 17.0, *)
 extension DocumentCanvasView {
-    var inlinePredictionType: UITextInlinePredictionType { get { .yes } set { } }
+    var inlinePredictionType: UITextInlinePredictionType {
+        get { caretIsInCodeRegion ? .no : .yes } set { }
+    }
 }
 
 @available(iOS 13.0, *)
