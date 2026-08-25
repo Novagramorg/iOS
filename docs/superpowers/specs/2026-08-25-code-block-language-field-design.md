@@ -127,9 +127,9 @@ All of these mirror the author line unless the **leading** position forces other
 | Paste into the region | Plain text; formatting dropped, newlines stripped. |
 | Return | Move the caret to the start of the code text. No newline, no split. (Diverges from the author, which splits — the author is trailing, the language is leading, and a `.Pre` language has no second line.) |
 | Backspace at the start of the region | If the whole block is empty (no language text **and** no code text) → convert to a body paragraph. This is today's empty-code rule relocated to the block's new first position. Otherwise → step the caret out to the previous block's end via `prevTextPosition`; when the code block is the document's first block there is nowhere to step, so it is a no-op. Never merges the language into anything; never deletes a non-empty block. |
-| Forward-delete at the end of the region | Move the caret to the code start; no text change. It must not pull the first code character up into the language. |
+| Forward-delete at the end of the region | **Nothing to build.** There is no forward-delete primitive in this editor (`+Editing.swift`: "No forward-delete primitive exists; UIKit never sends it to this canvas today"), so the rule is vacuous. Recorded so a future forward-delete implementation knows the intent: move the caret to the code start, never pull the first code character up into the language. |
 | Arrow keys | Nothing bespoke: two ordered leaf regions traverse generically. **The empty language region is NOT skipped** — unlike `isEmptyAuthorRegion`, which makes an empty author line arrow-unreachable. The language line is always present and always visible, so skipping it when empty would leave it reachable only by tap. This is the one deliberate divergence from the author's navigation treatment. |
-| Spell check / text services | No `.codeLanguage` case in `+SpellCheck`'s `blockID(for:)` (so it is skipped, as `.code` already is), and the region reports no-autocapitalize / no-autocorrect traits — otherwise iOS turns `swift` into `Swift`. |
+| Spell check / text services | `spellCheckableRef(_:)` in `+SpellCheck` switches **exhaustively** over `TextNodeRef`, so `.codeLanguage` must be added explicitly — to its `nil` arm, beside `.code` and `.quoteAuthor`. The region also reports no-autocapitalize / no-autocorrect traits, or iOS turns `swift` into `Swift`. UIKit caches `UITextInputTraits`, so crossing into or out of the region must call `reloadInputViews()` — the canvas already does this for `isSpellCheckingEnabled`. |
 | Code toggle **off** (`Format ▸ Code` on an existing code block) | The language is dropped; the code text becomes the paragraph's text. |
 | Code toggle **on** | New block starts with `language == nil` and the caret **in the code text**, not in the language line. |
 
@@ -189,14 +189,23 @@ remembering to ask which region. The new language-line semantics in §5 are impl
 
 **Sites that must still be re-pointed or re-read explicitly:**
 
-- `DocumentCanvasView:1961` — `blockID(for:)` gains the `.codeLanguage` case.
+- **`DocumentFragment.swift` — four sites hard-code a code block's text start as `cursor + 1`**
+  (`topLevelTextLocus`, `nearestTopLevelTextPosition`, `globalTextStart(ofBlockAt:)`, `extractFragment`).
+  A container's code text is three tokens deeper (`cursor + 4 + languageLength`). This is exactly the
+  correction the pull quote already carries as `cursor + 2`, with a comment at `extractFragment`'s
+  `.pullQuote` arm spelling out the failure: the wrong base slices the wrong UTF-16 range. Miss one and
+  copy/paste through a code block corrupts silently. `TextNodeRef` itself has **no consumers outside this
+  package**, so `swift test` — not the app build — is what surfaces the enum fallout.
+- `DocumentCanvasView:1958` — `blockID(ofRef:)` gains the `.codeLanguage` case (also exhaustive).
 - `+ParagraphFormat:80` (code creation) and any `…leafRegions().first?.globalStart` used to park a caret
   "at the start of this box": for a code box that is now the **language** line. Every such site that means
   "start typing code here" must use the code region explicitly.
 - `+ComposerSelection:77` — decide explicitly whether the composer's selection mapping covers the language
   region (it should follow the plainText-axis decision: it does not).
-- `+Editing:588-591` / `coverableContentStart(_:)` / `coverableContentEnd(_:)` — whole-block coverage must
-  span the language region, or a select-all-then-type over a code block leaves an orphan language.
+- `+Editing:588-591` / `coverableContentStart(_:)` / `coverableContentEnd(_:)` — **verify, don't change**:
+  `coverableContentStart` is the box's `nodeStart`, which precedes the leading language region, so whole-block
+  coverage already spans it (unlike the pull quote's TRAILING author, which is deliberately excluded). A
+  characterization test pins this rather than code.
 - `+State:56` `isCodeBlock` — stays true with the caret in the language line (it is still a code block),
   but the format menu's character-format items must be disabled there per §5.
 - `+Lists:55` — code→list conversion reads the code text; confirm it ignores the language.
@@ -246,7 +255,10 @@ RichTextEditor CLAUDE.md).
    `textRef` are the **primary region**. For the code box these differ — that is the whole hazard of §6.
 2. `.code`'s DocNode container is a token shape only; it must not make code positions read as
    "inside a block quote" (verified: `isInsideBlockQuote` is box-class based).
-3. The language region is off the flat plainText axis (mirrors the author).
+3. The language region is off the flat plainText axis (mirrors the author). Nothing enforces this — it
+   falls out of the language not being `runs` — so a paste into the region arrives flattened via the
+   clipboard's plain-text fallback, and the insert path must strip newlines (`currentCode()` only trims
+   the edges).
 4. The empty language region is navigable (deliberately unlike the empty author region).
 5. The renderer is untouched; the editor is intentionally taller than the rendered message for a
    language-less code block.
