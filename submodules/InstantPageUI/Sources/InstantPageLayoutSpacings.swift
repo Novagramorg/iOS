@@ -81,6 +81,8 @@ extension InstantPageBlock {
             } else {
                 return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true, flushBelow: true)
             }
+        case .preformatted:
+            return InstantPageBlockSpacing(verticalPadding: metrics.blockVerticalPadding, flushAbove: true)
         case .unsupported:
             // Unreachable — the guard above answers for it — but kept so the rhythm is still
             // written where a reader looks for it.
