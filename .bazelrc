@@ -39,3 +39,9 @@ common:index_build --noannounce_rc
 common:index_build --noshow_timestamps
 common:index_build --curses=no
 common:index_build --color=no
+
+# Fenixuz: cap the --disk_cache. Bazel never evicts from it by default, so ~/telegram-bazel-cache/cas
+# grew to 42 GB and filled the disk mid-build (2026-08-27). These make Bazel garbage-collect the
+# cache down to 20 GB, dropping entries untouched for 14 days, 5 minutes after it goes idle.
+build --experimental_disk_cache_gc_max_size=20G
+build --experimental_disk_cache_gc_max_age=14d

@@ -1220,6 +1220,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return .single(sharedApplicationContext)
         })
 
+        // Fenixuz: mirror the "Deleted messages" toggle into the App Group suite. The
+        // NotificationService extension handles the MESSAGE_DELETED push while the app is
+        // backgrounded, and a plain UserDefaults suite is per-process so it cannot read the app's
+        // own copy. Running this every launch also backfills users who had the toggle on before
+        // the mirror existed.
+        FenixSharedDefaults.syncShowDeletedMessages()
+
         // Fenixuz Analytics — once the shared context is ready, count this device (once per
         // physical device) and observe account contexts to count new account registrations.
         _ = (self.sharedContextPromise.get()

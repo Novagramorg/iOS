@@ -253,6 +253,60 @@ public struct FenixuzL10n {
         pick(en: "Removed", uz: "O'chirilgan", ru: "Удалено")
     }
 
+    // MARK: - Phone number context menu
+
+    // Shown instead of "not on Telegram" when the lookup itself failed, so the app stops
+    // reporting an unanswered request as a fact about the number.
+    public var phoneMenu_lookupFailed: String {
+        pick(
+            en: "Couldn't check this number. Check your connection and try again.",
+            uz: "Bu raqamni tekshirib bo'lmadi. Internetni tekshirib, qayta urinib ko'ring.",
+            ru: "Не удалось проверить номер. Проверьте соединение и повторите попытку."
+        )
+    }
+
+    public var phoneMenu_retry: String {
+        pick(en: "Try Again", uz: "Qayta urinish", ru: "Повторить")
+    }
+
+    // MARK: - Round video from gallery
+
+    public var roundVideo_preparing: String {
+        pick(
+            en: "Preparing video…",
+            uz: "Video tayyorlanmoqda…",
+            ru: "Подготовка видео…"
+        )
+    }
+
+    public var roundVideo_preparingText: String {
+        pick(
+            en: "Copying the video out of your photo library. If it is stored in iCloud it has to be downloaded first, which can take a while.",
+            uz: "Video galereyadan nusxalanmoqda. Agar u iCloud'da saqlangan boʻlsa, avval yuklab olinadi — bu biroz vaqt olishi mumkin.",
+            ru: "Видео копируется из медиатеки. Если оно хранится в iCloud, сначала будет загружено — это может занять время."
+        )
+    }
+
+    public var roundVideo_cancel: String {
+        pick(en: "Cancel", uz: "Bekor qilish", ru: "Отмена")
+    }
+
+    public var roundVideo_failedTitle: String {
+        pick(en: "Couldn't send", uz: "Yuborib bo'lmadi", ru: "Не удалось отправить")
+    }
+
+    public var roundVideo_failedText: String {
+        pick(
+            en: "This video couldn't be prepared. It may still be downloading from iCloud — try again once it is on this device.",
+            uz: "Bu videoni tayyorlab bo'lmadi. U hali iCloud'dan yuklanayotgan bo'lishi mumkin — qurilmaga tushgach qayta urinib ko'ring.",
+            ru: "Не удалось подготовить это видео. Возможно, оно ещё загружается из iCloud — попробуйте снова, когда оно будет на устройстве."
+        )
+    }
+
+    public var roundVideo_ok: String {
+        pick(en: "OK", uz: "OK", ru: "OK")
+    }
+
     public var settings_chat_footer: String {
         pick(
             en: "Changes apply to all chats immediately.",
@@ -438,9 +492,9 @@ public struct FenixuzL10n {
 
     public var settings_chat_roundVideoGallery_subtitle: String {
         pick(
-            en: "Adds a \"Photos\" option to the video-message camera menu to send any gallery video as a round video",
-            uz: "Video xabar kamera menyusiga \"Galereya\" qoʻshib, istalgan videoni dumaloq video qilib yuborish",
-            ru: "Добавляет \"Галерею\" в меню камеры для отправки любого видео кружком"
+            en: "Adds a \"Photos\" option to the video-message camera menu to send any gallery video as a round video. Max 1 minute — a longer video is cut to its first minute.",
+            uz: "Video xabar kamera menyusiga \"Galereya\" qoʻshib, istalgan videoni dumaloq video qilib yuborish. Eng koʻpi 1 daqiqa — uzunroq video birinchi daqiqasigacha kesiladi.",
+            ru: "Добавляет \"Галерею\" в меню камеры для отправки любого видео кружком. Максимум 1 минута — более длинное видео обрезается до первой минуты."
         )
     }
 
