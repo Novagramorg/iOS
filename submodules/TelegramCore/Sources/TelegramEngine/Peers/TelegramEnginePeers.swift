@@ -239,6 +239,13 @@ public extension TelegramEngine {
             }
         }
         
+        /// Fenixuz: drop the device-local pins that "Unlimited Pins" added, leaving exactly the set
+        /// the server already knows about. Called when the toggle goes off — clearing the store on
+        /// its own would leave those chats pinned in Postbox with nothing left to maintain them.
+        public func fenixuzTrimPinnedChatsToServerLimit() -> Signal<Never, NoError> {
+            return _internal_fenixuzTrimPinnedChatsToServerLimit(postbox: self.account.postbox, accountPeerId: self.account.peerId)
+        }
+
         public func resolvePeerByPhone(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EnginePeer?, NoError> {
             return self.resolvePeerByPhoneWithStatus(phone: phone, ageLimit: ageLimit)
             |> map { result -> EnginePeer? in

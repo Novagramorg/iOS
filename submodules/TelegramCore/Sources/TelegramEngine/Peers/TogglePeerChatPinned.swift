@@ -55,9 +55,12 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
             } else {
                 limitCount = Int(userLimitsConfiguration.maxArchivedPinnedChatCount)
             }
-            // Fenixuz: unlimited pins — upstream swallows pin-sync server errors, so pins above
-            // the server limit simply stay local to this device
-            if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "unlimited_pins") ?? false {
+            // Fenixuz: unlimited pins. Raising the gate is only half of it — the pins past the
+            // server's limit have to be remembered separately, or the next sync overwrites this
+            // list with the server's shorter one and they disappear (see FenixuzLocalPins).
+            let fenixServerLimit = limitCount
+            let fenixUnlimitedPins = FenixuzLocalPins.isEnabled
+            if fenixUnlimitedPins {
                 limitCount = 1000
             }
             
@@ -69,6 +72,22 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
                     itemIds.remove(at: index)
                 } else {
                     itemIds.insert(itemId, at: 0)
+                }
+                // Fenixuz: the list is newest-first and the server keeps its head, so whatever sits
+                // past the server's limit is the device-local tail. Record it before the sync runs.
+                if fenixUnlimitedPins {
+                    var overflow: [PeerId] = []
+                    if itemIds.count > fenixServerLimit {
+                        for item in itemIds[fenixServerLimit...] {
+                            if case let .peer(peerId) = item {
+                                overflow.append(peerId)
+                            }
+                        }
+                    }
+                    FenixuzLocalPins.setOverflowPeerIds(overflow, accountPeerId: accountPeerId, groupId: groupId)
+                } else if case let .peer(peerId) = itemId {
+                    // Toggle is off: keep the store from holding an id the user just unpinned.
+                    FenixuzLocalPins.removePeerId(peerId, accountPeerId: accountPeerId, groupId: groupId)
                 }
                 addSynchronizePinnedChatsOperation(transaction: transaction, groupId: groupId)
                 transaction.setPinnedItemIds(groupId: groupId, itemIds: itemIds)
