@@ -240,13 +240,37 @@ public extension TelegramEngine {
         }
         
         public func resolvePeerByPhone(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EnginePeer?, NoError> {
-            return _internal_resolvePeerByPhone(account: self.account, phone: phone, ageLimit: ageLimit)
-            |> mapToSignal { peerId -> Signal<EnginePeer?, NoError> in
-                guard let peerId = peerId else {
-                    return .single(nil)
+            return self.resolvePeerByPhoneWithStatus(phone: phone, ageLimit: ageLimit)
+            |> map { result -> EnginePeer? in
+                switch result {
+                case let .peer(peer):
+                    return peer
+                case .notRegistered, .failed:
+                    return nil
                 }
-                return self.account.postbox.transaction { transaction -> EnginePeer? in
-                    return transaction.getPeer(peerId).flatMap(EnginePeer.init)
+            }
+        }
+
+        /// Same lookup as `resolvePeerByPhone`, but keeps "the server says this number is not on
+        /// Telegram" separate from "the lookup itself did not go through". Callers that show the
+        /// user a verdict about the number should use this one — collapsing the two states makes
+        /// the app state a failed request as fact.
+        public func resolvePeerByPhoneWithStatus(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EngineResolvedPeerByPhone, NoError> {
+            return _internal_resolvePeerByPhoneWithStatus(account: self.account, phone: phone, ageLimit: ageLimit)
+            |> mapToSignal { result -> Signal<EngineResolvedPeerByPhone, NoError> in
+                switch result {
+                case .failed:
+                    return .single(.failed)
+                case let .answered(peerId):
+                    guard let peerId = peerId else {
+                        return .single(.notRegistered)
+                    }
+                    return self.account.postbox.transaction { transaction -> EngineResolvedPeerByPhone in
+                        guard let peer = transaction.getPeer(peerId).flatMap(EnginePeer.init) else {
+                            return .notRegistered
+                        }
+                        return .peer(peer)
+                    }
                 }
             }
         }

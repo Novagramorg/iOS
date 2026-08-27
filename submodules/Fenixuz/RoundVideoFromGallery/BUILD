@@ -19,6 +19,8 @@ swift_library(
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/AccountContext:AccountContext",
+        # Fenixuz: localized strings for the export-progress alert and the failure alert (2026-08-27).
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/LocalMediaResources:LocalMediaResources",
         "//submodules/TelegramUI/Components/MediaEditor:MediaEditor",
     ],

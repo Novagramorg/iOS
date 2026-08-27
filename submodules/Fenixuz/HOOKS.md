@@ -8,7 +8,7 @@ This file is the **source of truth** for every line of Fenixuz code that lives o
 
 On every `git pull upstream master`, an AI assistant uses this file to re-apply hooks if upstream code moved. **Fenixuz hooks always win** against upstream changes; surrounding upstream code is taken as-is.
 
-> Last verified: 2026-05-19 against upstream commit `9ed152eb6b` (Fenixuz master). 2026-05-16 added DeviceAccess contacts-consent hook for Apple Review 5.1.2 rejection fix. 2026-05-19 added ApplicationContext.swift hook to defer the silent post-login contacts auto-prompt by 1 second (initial attempt that day silenced the auto-prompt entirely; that was reverted the same day after the user reported the consent + iOS alerts never appeared — the deferred version restores both alerts while still letting the Chats tab finish its layout before the alert presents). 2026-05-19 (later same day) replaced the `InAppPurchaseManager.swift` runtime gate with a complete rewrite that removes the StoreKit code path entirely (`SKPaymentQueue`, `SKProductsRequest`, `SKPayment`, `SKReceipt*` no longer reachable); also dropped the now-unused `import StoreKit` from `AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift`, and in `TelegramUI/Sources/AppDelegate.swift` both dropped the import and replaced the iOS 15+ `AppStore.showManageSubscriptions(in:)` Manage Subscriptions sheet with the web fallback URL (no StoreKit-backed subscriptions exist on this fork so the system sheet would be empty anyway). 2026-07-17 added the "Deleted messages (anti-delete)" section documenting `DeletedMessageAttribute` (new TelegramCore file) plus its five Telegram-owned hook sites (AccountManager registration, AccountStateManagementUtils delete interception, ChatHistoryEntriesForView display filter, StringForMessageTimestampStatus label, ChatHistoryListNode reactivity gate) — this feature previously had zero HOOKS.md coverage despite touching 5 upstream files, a merge risk now closed. 2026-07-17 (same day, Wave 2) updated that section: `DeletedMessageAttribute` gained a `timestamp: Int32` payload (key `"t"`, backward-compatible decode), `AccountStateManagementUtils.swift`'s delete interception is now itself gated on `show_deleted_messages` (capture+retain only when ON, real delete when OFF — previously capture was unconditional and only display was gated), and `StringForMessageTimestampStatus.swift`'s label now renders the captured deletion time. Also flagged (not fixed) a pre-existing gap: `AccountManager.swift:247`'s `declareEncodable` factory still ignores its decoder argument, so the persisted timestamp does not currently survive a disk decode round-trip — see the ⚠️ note in that section. 2026-07-17 (later same day) added the "Bot token login" section documenting the new `submodules/TelegramCore/Sources/FenixuzBotAuthorization.swift` file plus three `AuthorizationUI` hook sites (`AuthorizationSequencePhoneEntryController(+Node)` secondary button, `AuthorizationSequenceController` screen wiring) and the `AuthorizationUI/BUILD` dep — login-only, additive, existing phone-login path untouched. 2026-07-17 (later same day) added the "Novagram banner ads" section documenting the OURS-FIRST `.link` `ChatListNotice` injection in `GlobalControlPanelsContext.swift` (producer branch + dismiss branch) and the click-report branch in `ChatListUI/Sources/ChatListControllerNode.swift`, plus the `GlobalControlPanelsContext/BUILD` dep addition (`ChatListUI/BUILD` and `NovagramAds/BUILD` needed no change — already satisfied by the earlier search-ads/chat-ads hooks).
+> Last verified: 2026-05-19 against upstream commit `9ed152eb6b` (Fenixuz master). 2026-05-16 added DeviceAccess contacts-consent hook for Apple Review 5.1.2 rejection fix. 2026-05-19 added ApplicationContext.swift hook to defer the silent post-login contacts auto-prompt by 1 second (initial attempt that day silenced the auto-prompt entirely; that was reverted the same day after the user reported the consent + iOS alerts never appeared — the deferred version restores both alerts while still letting the Chats tab finish its layout before the alert presents). 2026-05-19 (later same day) replaced the `InAppPurchaseManager.swift` runtime gate with a complete rewrite that removes the StoreKit code path entirely (`SKPaymentQueue`, `SKProductsRequest`, `SKPayment`, `SKReceipt*` no longer reachable); also dropped the now-unused `import StoreKit` from `AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift`, and in `TelegramUI/Sources/AppDelegate.swift` both dropped the import and replaced the iOS 15+ `AppStore.showManageSubscriptions(in:)` Manage Subscriptions sheet with the web fallback URL (no StoreKit-backed subscriptions exist on this fork so the system sheet would be empty anyway). 2026-07-17 added the "Deleted messages (anti-delete)" section documenting `DeletedMessageAttribute` (new TelegramCore file) plus its five Telegram-owned hook sites (AccountManager registration, AccountStateManagementUtils delete interception, ChatHistoryEntriesForView display filter, StringForMessageTimestampStatus label, ChatHistoryListNode reactivity gate) — this feature previously had zero HOOKS.md coverage despite touching 5 upstream files, a merge risk now closed. 2026-07-17 (same day, Wave 2) updated that section: `DeletedMessageAttribute` gained a `timestamp: Int32` payload (key `"t"`, backward-compatible decode), `AccountStateManagementUtils.swift`'s delete interception is now itself gated on `show_deleted_messages` (capture+retain only when ON, real delete when OFF — previously capture was unconditional and only display was gated), and `StringForMessageTimestampStatus.swift`'s label now renders the captured deletion time. Also flagged (not fixed) a pre-existing gap: `AccountManager.swift:247`'s `declareEncodable` factory still ignores its decoder argument, so the persisted timestamp does not currently survive a disk decode round-trip — see the ⚠️ note in that section. 2026-07-17 (later same day) added the "Bot token login" section documenting the new `submodules/TelegramCore/Sources/FenixuzBotAuthorization.swift` file plus three `AuthorizationUI` hook sites (`AuthorizationSequencePhoneEntryController(+Node)` secondary button, `AuthorizationSequenceController` screen wiring) and the `AuthorizationUI/BUILD` dep — login-only, additive, existing phone-login path untouched. 2026-07-17 (later same day) added the "Novagram banner ads" section documenting the OURS-FIRST `.link` `ChatListNotice` injection in `GlobalControlPanelsContext.swift` (producer branch + dismiss branch) and the click-report branch in `ChatListUI/Sources/ChatListControllerNode.swift`, plus the `GlobalControlPanelsContext/BUILD` dep addition (`ChatListUI/BUILD` and `NovagramAds/BUILD` needed no change — already satisfied by the earlier search-ads/chat-ads hooks). 2026-08-26 (Wave 3) closed two remaining gaps in the "Deleted messages" feature: `AccountManager.swift`'s `declareEncodable` factory now honors its decoder so the persisted `timestamp` survives a disk decode / app relaunch (previously flagged in Wave 2 as a known gap, now fixed — line moved `:247` → `:251`), `SyncCore_StandaloneAccountTransaction.swift` gained a `DeletedMessageAttribute` carry-forward (same shape as the existing `EditedMessageHistoryAttribute` one, fixing the same groups/channels re-sync loss), and — the actual P0 fix — `Telegram/NotificationService/Sources/NotificationService.swift` received its first-ever Fenixuz hook: the notification extension's silent `MESSAGE_DELETED` handling is now gated on the toggle too, via a new shared/App-Group-aware helper (`submodules/TelegramCore/Sources/Fenixuz/FenixuzShowDeletedMessages.swift`, also wired into `AccountStateManagementUtils.swift`'s two capture-gate call sites) — this fixes anti-delete silently doing nothing whenever the app was backgrounded, which is when a peer's delete most commonly arrives. 2026-08-27 added two independent hooks: `ResolvePeerByName.swift` gained a `ResolvedPeerByPhone`/`EngineResolvedPeerByPhone` split so `TelegramEnginePeers.swift`'s new `resolvePeerByPhoneWithStatus(phone:ageLimit:)` (and `ChatControllerOpenPhoneContextMenu.swift`, which now calls it) can tell a failed RPC apart from a genuine "not on Telegram" answer — the phone context menu previously collapsed both into the same "This number is not on Telegram" text, now a failed lookup gets a "Try Again" action (no "Invite to Telegram") and an honest `phoneMenu_lookupFailed` message instead; and `TelegramPresentationData/BUILD` + `PresentationData.swift`'s `dictFromLocalization` now run every server-delivered language-pack string through the new `FenixuzBrandStrings.applyBrand(to:)` (`submodules/Fenixuz/Brand/Sources/FenixuzBrandStrings.swift`), rewriting "Telegram"/"TELEGRAM" to "Novagram"/"NOVAGRAM" everywhere except a `protectedPhrases` allowlist (Premium/Stars/Business/Passport/Desktop/Web/App/Terms/Team) — this is the fix for the 286 hand-rebranded strings in the bundled `en.lproj/Localizable.strings` never reaching a logged-in user, since `PresentationStrings` is actually built from the server's `langpack.getLangPack`, not the bundle.
 
 ---
 
@@ -1201,8 +1201,17 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `TelegramCore/Sources/PendingMessages/RequestEditMessage.swift` (2026-07-21) | +3 lines × 4 update branches | call `fenixuzAppendEditHistory(...)` in the own-edit result handler so a user's OWN first edit is recorded — the previous code replaced the message with the server copy (dropping the attribute) before the state-manager path could see a text change, so history only began at the SECOND edit |
 | `TelegramCore/Sources/SyncCore/SyncCore_StandaloneAccountTransaction.swift` (`mergeMessageAttributes`, 2026-07-21) | +19 lines | carry `EditedMessageHistoryAttribute` forward across message re-add/replace (`.InsertExistingMessage` → `justUpdate`), like the existing `AudioTranscription`/`DerivedData`/`RichText` entries. Without it, channel & group messages re-arriving via `getChannelDifference` newMessages dropped the captured history — this is why History worked in **private chats but not groups/channels** |
 | `TelegramCore/Sources/Account/AccountManager.swift` (line ~246) | +1 line | `declareEncodable(EditedMessageHistoryAttribute.self, ...)` Postbox type registration |
+| `Telegram/NotificationService/Sources/NotificationService.swift` (`.deleteMessage(ids)`, ~line 2434; 2026-08-26) | +1 comment block, +1 gate read, capture loop replaces unconditional delete (~30 lines) | anti-delete P0 fix: retain (don't erase) messages on silent MESSAGE_DELETED push while app is backgrounded, when `show_deleted_messages` is on — first-ever Fenixuz hook in this file |
+| `TelegramCore/Sources/Fenixuz/FenixuzShowDeletedMessages.swift` (fork-ADDED file; 2026-08-26) | whole file (~36 lines) | `isFenixuzShowDeletedMessagesEnabled` — App-Group-aware toggle read (local suite first, then App Group fallback) so the NotificationService extension sees the same value as the main app |
+| `TelegramCore/Sources/SyncCore/SyncCore_StandaloneAccountTransaction.swift` (`mergeMessageAttributes`, 2026-08-26) | +23 lines | carry `DeletedMessageAttribute` forward across message re-add/replace, same shape as the existing `EditedMessageHistoryAttribute` entry above — without it, retained messages lost their 🗑 marker on group/channel re-sync |
+| `TelegramUI/Sources/AppDelegate.swift` (line ~1228; 2026-08-26) | +1 line | `FenixSharedDefaults.syncShowDeletedMessages()` — backfill the App Group mirror on every launch for users who had the toggle on before Wave 3 shipped |
+| `TelegramCore/Sources/TelegramEngine/Peers/ResolvePeerByName.swift` (2026-08-27) | new enum `ResolvedPeerByPhone`, RPC body renamed to `_internal_resolvePeerByPhoneWithStatus`, old function now a 9-line `map` wrapper, +1 new enum `EngineResolvedPeerByPhone` | distinguish a failed phone lookup (RPC error) from a genuine "not on Telegram" server answer |
+| `TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift` (2026-08-27) | `resolvePeerByPhone` reimplemented (~8 lines), +1 new method `resolvePeerByPhoneWithStatus` (~16 lines) | engine-facade equivalent of the same distinction; existing callers of `resolvePeerByPhone` unaffected |
+| `TelegramUI/Sources/Chat/ChatControllerOpenPhoneContextMenu.swift` (2026-08-27) | +1 import, ~18-line result-branch, +1 "Try Again" menu action, 1 footer-text ternary | phone context menu offers "Try Again" (no "Invite to Telegram") + an honest failure message instead of stating a failed lookup as "not on Telegram" |
+| `TelegramPresentationData/BUILD` (2026-08-27) | +1 line (dep) | wire FenixuzBrand into TelegramPresentationData |
+| `TelegramPresentationData/Sources/PresentationData.swift` (2026-08-27) | +1 import, 7 assignment sites in `dictFromLocalization` wrapped | rewrite "Telegram"/"TELEGRAM" → "Novagram"/"NOVAGRAM" in every server-delivered language-pack string (the bundled `Localizable.strings` rebrand never reached a logged-in user) |
 
-**Total Telegram-owned files modified: 24** (6 BUILD + 16 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
+**Total Telegram-owned files modified: 46** (7 BUILD + 36 Swift + 1 Objective-C + 1 sqlcipher + 1 Privacy manifest). Recounted 2026-08-27 by adding this changeset's 5 newly-hooked files (1 BUILD + 4 Swift: `ResolvePeerByName.swift`, `TelegramEnginePeers.swift`, `ChatControllerOpenPhoneContextMenu.swift`, `TelegramPresentationData/BUILD`, `PresentationData.swift`) to the 2026-08-26 total of 41 (6 BUILD + 32 Swift + 1 Objective-C + 1 sqlcipher + 1 Privacy manifest). All Fenixuz logic itself lives in:
 - `submodules/Fenixuz/AppleReview/` — demo-code fetcher + iOS alert
 - `submodules/Fenixuz/AppStoreIAP/` — Apple 3.1.1 IAP gate (May 2026 rejection fix)
 - `submodules/Fenixuz/Brand/` — central colour palette
@@ -2830,7 +2839,7 @@ active contacts, monogram for never-opened senders.
 
 ---
 
-## 📌 Deleted messages (anti-delete) — 2026-07-17 (Wave 2 same day: capture gating + real timestamp)
+## 📌 Deleted messages (anti-delete) — 2026-07-17 (Wave 2 same day: capture gating + real timestamp) · Wave 3 2026-08-26 (persisted-timestamp decode fix + notification-extension P0 gate)
 
 NovagramPro feature: instead of letting a peer's message deletion actually remove the message
 from the local Postbox, the fork can retain it (marked with a `DeletedMessageAttribute` that now
@@ -2887,23 +2896,25 @@ Before (Wave 1) this was a zero-payload marker: empty `init()`, empty `init(deco
 `encode(_:)`, `==` always `true`. Wave 2 adds a stored `timestamp: Int32` (the deletion time,
 `Date().timeIntervalSince1970` at capture time — see the `AccountStateManagementUtils.swift` hook
 below), encoded under key `"t"`. The parameterless `convenience init()` is kept so any code still
-constructing the old way (and the `AccountManager.swift:247` registration factory, see below) keeps
-compiling, defaulting to `timestamp: 0`. `decodeInt32ForKey("t", orElse: 0)` makes decoding
-**backward-compatible**: an attribute encoded by Wave 1 (no `"t"` key present in its bytes) decodes
-to `timestamp: 0` instead of throwing/crashing.
+constructing the old way keeps compiling, defaulting to `timestamp: 0` — until Wave 3 (2026-08-26,
+see below) this included the `AccountManager.swift` registration factory itself, which called this
+parameterless init on every decode; Wave 3 switched it to call `init(decoder:)` instead.
+`decodeInt32ForKey("t", orElse: 0)` makes decoding **backward-compatible**: an attribute encoded by
+Wave 1 (no `"t"` key present in its bytes) decodes to `timestamp: 0` instead of throwing/crashing.
 
-⚠️ **Known gap, flagged not fixed by this doc update:** `AccountManager.swift:247`'s registration
-factory (`declareEncodable(DeletedMessageAttribute.self, f: { _ in DeletedMessageAttribute() })`)
-still ignores the decoder it's handed and always constructs a fresh `DeletedMessageAttribute()`
-(i.e. `timestamp: 0`). Postbox's heterogeneous-attribute decode path
+✅ **Fixed 2026-08-26 (Wave 3):** `AccountManager.swift:251`'s registration factory used to ignore
+the decoder it's handed and always construct a fresh `DeletedMessageAttribute()` (i.e.
+`timestamp: 0`). Postbox's heterogeneous-attribute decode path
 (`PostboxDecoder.decodeRootObject()` → `decodeObjectForKey("_")` → `typeStore.decode(hash,
 decoder:)` in `submodules/Postbox/Sources/Coding.swift`) calls **this factory**, not
-`DeletedMessageAttribute.init(decoder:)` directly — so every time a message is re-decoded from the
-on-disk store (`MessageHistoryTable.swift`'s `decodeRootObject()` call sites), the persisted
-timestamp is discarded and replaced with `0`, even for freshly-encoded Wave 2 data. The in-memory
-instance created at capture time (in `AccountStateManagementUtils.swift`) holds the correct
-timestamp until the next disk round-trip (app relaunch, or any history-view rebuild that re-decodes
-from Postbox). One-line fix if wanted: `f: { DeletedMessageAttribute(decoder: $0) }`.
+`DeletedMessageAttribute.init(decoder:)` directly — so every re-decode from the on-disk store
+(`MessageHistoryTable.swift`'s `decodeRootObject()` call sites) discarded the persisted timestamp
+and replaced it with `0`, even for freshly-encoded Wave 2 data: the in-memory instance created at
+capture time (in `AccountStateManagementUtils.swift`) held the correct timestamp only until the
+next disk round-trip (app relaunch, or any history-view rebuild that re-decodes from Postbox) — the
+"🗑 Deleted · <time>" label would then silently lose its time and fall back to the bare "🗑 Deleted"
+text. Wave 3 applies the one-line fix that was flagged (but deliberately left unapplied) here since
+Wave 2 — see the updated `AccountManager.swift:251` entry below for the fix itself.
 
 Reason: a marker attribute — its presence flags a message as retained-after-delete; its (now
 non-zero) payload records when that happened. Lives in `TelegramCore` (not a Fenixuz module)
@@ -2916,22 +2927,32 @@ the field addition needed no BUILD edit.
 
 ---
 
-### `submodules/TelegramCore/Sources/Account/AccountManager.swift:247` (unchanged by Wave 2)
+### `submodules/TelegramCore/Sources/Account/AccountManager.swift:251` (Wave 3: FIXED 2026-08-26 — decoder now honored)
 
 Inside the `declaredEncodables` static-let block, alongside every other `declareEncodable(...)`
 call for a `MessageAttribute`/`Codable` type:
 
 ```swift
-declareEncodable(DeletedMessageAttribute.self, f: { _ in DeletedMessageAttribute() })
+declareEncodable(DeletedMessageAttribute.self, f: { DeletedMessageAttribute(decoder: $0) })
 ```
+
+Before Wave 3 (unchanged since Wave 1, when this line lived at `:247`): `f: { _ in
+DeletedMessageAttribute() }` — the underscore discards the `PostboxDecoder` argument and always
+built a fresh zero-payload instance. The line number moved `:247` → `:251` between Wave 2 and
+Wave 3 because upstream added unrelated `declareEncodable(...)` calls above it in the interim
+(always re-grep `DeletedMessageAttribute.self` here rather than trusting a cached line number).
 
 Reason: every `PostboxCoding` type must be registered here or Postbox cannot decode it back out of
 the on-disk keyed archive on next launch — an unregistered attribute silently vanishes across app
-relaunches (the exact bug this line prevents). This line was **not touched** by Wave 2: it still
-reads `{ _ in DeletedMessageAttribute() }`, a leftover from when the attribute carried no payload
-(Wave 1). Now that `DeletedMessageAttribute` has a real `timestamp` field, this factory ignoring
-the decoder means the persisted timestamp does not survive a disk decode — see the ⚠️ note in the
-`DeletedMessageAttribute.swift` entry above for the full mechanism and the one-line fix.
+relaunches (the exact bug this line prevents for the attribute's *presence*). But until Wave 3, the
+factory ignoring its decoder meant the attribute's *timestamp* did not survive that same
+round-trip: the "🗑 Deleted · <time>" label lost its time on every app relaunch (or any
+history-view rebuild that re-decodes from Postbox) and fell back to the bare "🗑 Deleted" text,
+even though the in-memory copy created at capture time (`AccountStateManagementUtils.swift`) held
+the correct value the whole time. Wave 3 applies the fix flagged (but deliberately left unapplied)
+back in Wave 2: `f: { DeletedMessageAttribute(decoder: $0) }` forwards the decoder into
+`DeletedMessageAttribute.init(decoder:)` — the same initializer already used everywhere else
+Postbox decodes this type — so the persisted `"t"` key is now read back correctly.
 
 ---
 
@@ -3078,8 +3099,9 @@ its `timestamp`. When `timestamp > 0` (a real deletion time was captured — see
 `stringForMessageTimestamp(...)` helper already used elsewhere in this function for the message's
 own `dateText`, separated by `" · "`. When `timestamp == 0` — either genuinely old data encoded
 before Wave 2 (see the backward-compat note in the `DeletedMessageAttribute.swift` entry above), or
-a decode that hit the `AccountManager.swift:247` gap also noted above — it falls back to the Wave 1
-label with no time, so no "🗑 Deleted · Jan 1, 1970" ever renders.
+(pre-2026-08-26 only — the gap was fixed in Wave 3, see the `AccountManager.swift:251` entry above)
+a decode that hit the old factory-ignores-decoder bug — it falls back to the Wave 1 label with no
+time, so no "🗑 Deleted · Jan 1, 1970" ever renders.
 
 Reason: the localized "Deleted" label (+ now, time) shown next to the timestamp when a
 retained-but-deleted message is visible (only reachable when `show_deleted_messages` is on — see
@@ -3175,6 +3197,335 @@ gained branches) — no new files, no new imports, no new deps:
   `AccountStateManagementUtils.swift`.
 - `ChatMessageDateAndStatusNode/BUILD` already depends on
   `//submodules/Fenixuz/Localization:FenixuzLocalization`.
+
+---
+
+## 📌 Deleted messages (anti-delete) — Wave 3, 2026-08-26 (persisted-timestamp decode fix + notification-extension P0 gate)
+
+Two more gaps in the same feature, found and closed the same day. The `AccountManager.swift`
+decode fix is documented above (rewritten in place, following this file's per-wave convention of
+updating a file's one canonical entry rather than duplicating it). The rest of Wave 3 is new: a
+shared, App-Group-aware toggle helper (`FenixuzShowDeletedMessages.swift`), the two
+`AccountStateManagementUtils.swift` capture-gate call sites switched over to it, a
+`DeletedMessageAttribute` carry-forward in `SyncCore_StandaloneAccountTransaction.swift` (same bug
+shape the `EditedMessageHistoryAttribute` carry-forward fixed on 2026-07-21 — re-synced
+group/channel messages silently dropped the marker), and — the actual P0 — the toggle now gates the
+NotificationService extension's own delete handling, the code path that runs while the app is
+backgrounded and was, until today, completely unaware the "Deleted messages" toggle existed.
+
+### `submodules/TelegramCore/Sources/Fenixuz/FenixuzShowDeletedMessages.swift` (Wave 3: NEW file)
+
+The whole file:
+
+```swift
+import Foundation
+
+// Fenixuz "Deleted messages" (anti-delete) — single source of truth for the gate.
+//
+// The interesting part is WHERE this gets read. AccountStateManagementUtils runs in two
+// processes: the main app, and the NotificationService extension (via standaloneStateManager /
+// standalonePollDifference). `UserDefaults(suiteName: "pro_messager")` is a plain suite, not an
+// App Group one, so it resolves to a *per-process* preferences container — the extension reading
+// it always got `false`, took the vanilla delete path, and permanently erased the message from
+// the shared Postbox before the app ever woke up. That is why the feature looked like it worked
+// with the app open and silently did nothing with the app backgrounded.
+//
+// So: read the local suite first (authoritative in the main app, and the fast path), then fall
+// back to the App Group suite, which the main app mirrors on every launch and on every toggle
+// flip (see FenixSharedDefaults in FenixuzProMessager). Both bundle-id shapes are tried because
+// the app is "uz.fenixuz.app" while the extension is "uz.fenixuz.app.NotificationService" —
+// the App Group is named after the former in both processes.
+@inline(__always)
+internal var isFenixuzShowDeletedMessagesEnabled: Bool {
+    if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") == true {
+        return true
+    }
+    guard let bundleId = Bundle.main.bundleIdentifier, !bundleId.isEmpty else {
+        return false
+    }
+    if UserDefaults(suiteName: "group.\(bundleId)")?.bool(forKey: "show_deleted_messages") == true {
+        return true
+    }
+    if let lastDotRange = bundleId.range(of: ".", options: [.backwards]) {
+        let baseBundleId = String(bundleId[..<lastDotRange.lowerBound])
+        if UserDefaults(suiteName: "group.\(baseBundleId)")?.bool(forKey: "show_deleted_messages") == true {
+            return true
+        }
+    }
+    return false
+}
+```
+
+Reason: `AccountStateManagementUtils.swift`'s delete-interception cases (below) run in both the
+main app and the NotificationService extension, but a plain `UserDefaults(suiteName:)` container is
+per-process — the extension reading `"pro_messager"` directly always got `false` and took the real
+delete path. This computed var centralizes the read: local suite first (fast path, authoritative in
+the main app), then the App Group suite as fallback, trying both `group.<bundleId>` and
+`group.<bundleId minus last component>` since the main app's bundle id (`uz.fenixuz.app`) and the
+extension's (`uz.fenixuz.app.NotificationService`) differ but share one App Group named after the
+former. This is a new fork-added file directly under `submodules/TelegramCore/Sources/Fenixuz/`,
+joining `FenixuzGhostMode.swift` and `FenixuzGhostReadOnSend.swift` as small standalone
+markers/gates that live in TelegramCore because their consumers (`AccountStateManagementUtils.swift`
+chief among them) already depend on TelegramCore — a Fenixuz module would need to become a new
+dependency of every consumer instead. No BUILD change needed: `TelegramCore/BUILD` globs
+`Sources/**/*.swift`.
+
+---
+
+### `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift:4434,4492` (Wave 3: capture gate reads the shared helper)
+
+Both `fenixShowDeleted` reads — `.DeleteMessagesWithGlobalIds(ids)` at `:4434` and
+`.DeleteMessages(ids)` at `:4492` (line numbers shifted from Wave 2's `:4449`/`:4507` for the same
+upstream-churn reason noted in the `AccountManager.swift` entry above) — change from:
+
+```swift
+let fenixShowDeleted = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+```
+
+to:
+
+```swift
+let fenixShowDeleted = isFenixuzShowDeletedMessagesEnabled
+```
+
+Everything else in both cases (the capture-and-retain loop, the `actuallyDeletedIds` /
+`retainedMessageIds` split, the ON/OFF branching documented in the Wave 2 entry above) is
+unchanged — only the toggle read itself moved into the shared helper.
+
+Reason: in the main app this is a behavior-preserving refactor (`isFenixuzShowDeletedMessagesEnabled`
+checks the same `"pro_messager"` suite first). The actual fix is for the path where this same
+function runs *inside* the NotificationService extension (`standaloneStateManager` /
+`standalonePollDifference` — see the file header comment on `FenixuzShowDeletedMessages.swift`):
+before Wave 3, that process always read `false` here and fell through to the real delete,
+regardless of the user's toggle. This is a different code path from the next hook (in
+`NotificationService.swift` itself), which intercepts the silent `MESSAGE_DELETED` push directly,
+before it ever reaches this shared state-application switch. Both were real, independent gaps;
+closing only one would still have left the other silently dropping retained messages.
+
+---
+
+### `submodules/TelegramCore/Sources/SyncCore/SyncCore_StandaloneAccountTransaction.swift` (Wave 3: `DeletedMessageAttribute` carry-forward)
+
+Inside the `mergeMessageAttributes:` seed-configuration closure, right after the existing
+`EditedMessageHistoryAttribute` carry-forward block:
+
+```swift
+// Fenixuz: DeletedMessageAttribute is local-only too (the anti-delete marker we write
+// instead of really deleting). Same re-sync path as the edit history above would strip
+// it, so a retained message silently loses its 🗑 label — or, with the toggle off,
+// reappears as an ordinary message. Carry it forward.
+var previousDeleted: DeletedMessageAttribute?
+for attribute in previous {
+    if let attribute = attribute as? DeletedMessageAttribute {
+        previousDeleted = attribute
+        break
+    }
+}
+if let previousDeleted {
+    var found = false
+    for i in 0 ..< updated.count {
+        if let _ = updated[i] as? DeletedMessageAttribute {
+            found = true
+            break
+        }
+    }
+    if !found {
+        updated.append(previousDeleted)
+    }
+}
+```
+
+Reason: exactly the same bug shape that broke Edited-history in groups/channels (see the
+`EditedMessageHistoryAttribute` entry, 2026-07-21, above): `DeletedMessageAttribute` is a
+local-only marker the server never sends, so a message re-arriving via `getChannelDifference`
+newMessages (`.InsertExistingMessage` → `justUpdate`) would get replaced by the server's copy —
+which has no `DeletedMessageAttribute` — silently dropping the retention marker. With the toggle
+on, a previously-retained message would pop back to looking like an ordinary (never-deleted)
+message the next time its group/channel re-synced. Carrying it forward, unconditionally (matching
+the unconditional style of the `AudioTranscription`/`DerivedData`/`RichText` entries already in
+this closure), keeps the marker — and its timestamp — intact across re-syncs, consistent with "a
+retained message stays retained until explicitly restored." No BUILD change: `TelegramCore/BUILD`
+globs `Sources/**/*.swift`.
+
+---
+
+### `Telegram/NotificationService/Sources/NotificationService.swift:2434` (Wave 3 — THE P0 FIX, first-ever Fenixuz hook in this file)
+
+Inside `case let .deleteMessage(ids):` (the handler for a silent `MESSAGE_DELETED` push), right
+before the existing `stateManager.postbox.transaction { ... }` delete call:
+
+```swift
+let mediaBox = stateManager.postbox.mediaBox
+// Fenixuz: anti-delete ("Deleted messages" toggle). Telegram sends a silent
+// MESSAGE_DELETED push and THIS extension is what removes the message from the
+// shared Postbox whenever the app is backgrounded — so the app-side gate in
+// AccountStateManagementUtils never gets to see the delete at all. Read the
+// toggle from the App Group suite (the "pro_messager" suite is per-process and
+// always reads false here) and, when it is on, mark the message instead of
+// deleting it, with the same logic as the in-app path. Delivered-banner removal
+// below is unchanged either way — the peer did delete it, we only keep the row.
+let fenixShowDeleted = UserDefaults(suiteName: appGroupName)?.bool(forKey: "show_deleted_messages") ?? false
+let _ = (stateManager.postbox.transaction { transaction -> Void in
+    if fenixShowDeleted {
+        var actuallyDeletedIds: [MessageId] = []
+        for id in ids {
+            guard let message = transaction.getMessage(id) else {
+                actuallyDeletedIds.append(id)
+                continue
+            }
+            if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                // Already marked — don't overwrite the original deletion time.
+                continue
+            }
+            var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+            newAttributes.append(DeletedMessageAttribute(timestamp: Int32(Date().timeIntervalSince1970)))
+
+            let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+            transaction.updateMessage(id, update: { _ in
+                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
+            })
+        }
+        if !actuallyDeletedIds.isEmpty {
+            _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: actuallyDeletedIds, deleteMedia: true)
+        }
+    } else {
+        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+    }
+}
+|> deliverOn(strongSelf.queue)).start(completed: {
+    // ... unchanged: delivered-notification removal logic
+```
+
+`appGroupName` is the existing local (`"group.\(baseAppBundleId)"`) declared at the top of this
+handler's `init?` around line 791 — already in scope this deep in, since the whole notification
+pipeline is one long nested-closure chain off that `init?`. No new import: `TelegramCore` (for
+`DeletedMessageAttribute`, `_internal_deleteMessages`, `StoreMessage`, …) was already imported at
+the top of this file. No BUILD change: `Telegram/NotificationService/BUILD` already depends on
+`//submodules/TelegramCore:TelegramCore` (this file uses TelegramCore extensively already,
+unrelated to Fenixuz).
+
+Reason: **this is the actual root cause of the bug, not `AccountStateManagementUtils.swift`.**
+Telegram delivers a delete as a silent push (`MESSAGE_DELETED`), iOS wakes `NotificationService`
+to process it, and — until this hook — the extension's `case let .deleteMessage(ids):` branch
+called `_internal_deleteMessages(...)` unconditionally, erasing the message from the shared
+Postbox before the main app's own delete-interception gate (in `AccountStateManagementUtils.swift`)
+ever got a chance to run. So "anti-delete" only ever worked while the app was open in the
+foreground — a peer deleting a message while this user had the app backgrounded (the common case)
+silently defeated the feature every time, with no error and no indication anything was skipped.
+`NotificationService.swift` had **zero** Fenixuz hooks before this change; it is now a
+Telegram-owned file the fork touches, and this entry is its first line in `HOOKS.md`. The
+delivered-notification-removal logic that follows is unchanged either way — the peer did delete the
+message from their side regardless of the toggle, so the local push banner for it is always
+cleared; the toggle only decides whether the *message itself* survives in Postbox.
+
+---
+
+### `submodules/Fenixuz/ProMessager/Sources/FenixShowDeletedGate.swift` (Wave 3: `FenixSharedDefaults` mirror — Fenixuz-owned, not itself a hook)
+
+Appended to the existing file (which already held `fenixShowDeletedChanged` +
+`FenixShowDeletedGate.reloadSignal`, documented under Wave 1/2 above):
+
+```swift
+// MARK: - App Group mirror (so the notification extension can see the toggle)
+
+/// The "Deleted messages" flag has to be readable from the NotificationService extension: Telegram
+/// pushes a silent `MESSAGE_DELETED` and the extension is what actually removes the message from
+/// the (shared) Postbox, long before the app's own state manager ever sees the delete.
+///
+/// `UserDefaults(suiteName: "pro_messager")` is a plain suite, so it resolves to a *per-process*
+/// container — the extension reading it always gets `false`. Mirror the value into the App Group
+/// suite, which both processes really do share.
+public enum FenixSharedDefaults {
+    /// Key is deliberately the same as in the `pro_messager` suite so the two stay easy to trace.
+    public static let showDeletedMessagesKey = "show_deleted_messages"
+
+    /// Main-app side only. The extension derives its own name by stripping its bundle-id suffix.
+    public static var appGroupName: String? {
+        guard let bundleId = Bundle.main.bundleIdentifier, !bundleId.isEmpty else {
+            return nil
+        }
+        return "group.\(bundleId)"
+    }
+
+    /// Copies the current `show_deleted_messages` value into the App Group suite. Safe to call
+    /// repeatedly; also acts as the backfill for users who had the toggle on before this shipped.
+    public static func syncShowDeletedMessages() {
+        guard let appGroupName = self.appGroupName, let shared = UserDefaults(suiteName: appGroupName) else {
+            return
+        }
+        let value = UserDefaults(suiteName: "pro_messager")?.bool(forKey: self.showDeletedMessagesKey) ?? false
+        shared.set(value, forKey: self.showDeletedMessagesKey)
+    }
+}
+```
+
+Reason: the write-side counterpart to `FenixuzShowDeletedMessages.swift`'s read-side fallback above
+— instead of making every reader re-derive both App Group name shapes, the main app proactively
+copies its `"pro_messager"` value into the App Group suite whenever it might have changed (see the
+two call sites below). Fenixuz-owned file (`submodules/Fenixuz/ProMessager/`), so this entry is
+reference-only, listed here because it is the necessary counterpart to the two genuine hooks that
+call it (`FenixSettingsController.swift` and `AppDelegate.swift`, both below). No BUILD change:
+`ProMessager/BUILD` globs `Sources/**/*.swift`, and this is the same file `FenixShowDeletedGate`
+already lives in, so no new dependency anywhere that already imports `FenixuzProMessager`.
+
+---
+
+### `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift:1600-1604` (Wave 3: sync on toggle flip — Fenixuz-owned, not itself a hook)
+
+The `updateShowDeletedMessages` argument closure gained one line:
+
+```swift
+}, updateShowDeletedMessages: { value in
+    UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
+    // The notification extension can only see the App Group suite, and it is the process that
+    // handles the MESSAGE_DELETED push while the app is backgrounded.
+    FenixSharedDefaults.syncShowDeletedMessages()
+    NotificationCenter.default.post(name: .fenixShowDeletedChanged, object: nil)
+```
+
+Reason: the moment the user flips the toggle is the moment the App Group mirror can go stale, so
+sync immediately rather than waiting for the next launch. Fenixuz-owned file, not a hook — listed
+for context, same as the `NotificationCenter.default.post(...)` line right after it (already
+documented under Wave 1/2 above).
+
+---
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift:1223-1228` (Wave 3: launch backfill)
+
+Just before the existing "Fenixuz Analytics" launch block:
+
+```swift
+// Fenixuz: mirror the "Deleted messages" toggle into the App Group suite. The
+// NotificationService extension handles the MESSAGE_DELETED push while the app is
+// backgrounded, and a plain UserDefaults suite is per-process so it cannot read the app's
+// own copy. Running this every launch also backfills users who had the toggle on before
+// the mirror existed.
+FenixSharedDefaults.syncShowDeletedMessages()
+```
+
+Reason: covers the gap `FenixSettingsController.swift`'s on-flip sync (above) can't: a user who
+turned the toggle on *before* Wave 3 shipped has a `"pro_messager"` value with no corresponding App
+Group mirror yet, and won't touch the Settings toggle again just to create one. Running the sync
+unconditionally on every launch is idempotent (same value in, same value out, most days) and
+guarantees the mirror exists before the user backgrounds the app and a delete push arrives.
+`import FenixuzProMessager` was already present in this file (line 7, added 2026-06-27 for
+`FenixShowAdsGate`) — `FenixSharedDefaults` lives in the same module, so no new import or BUILD dep.
+
+---
+
+### BUILD changes for Wave 3: none
+
+Every file Wave 3 touches already had its required dependency wired in from an earlier hook batch,
+or globs its sources:
+- `TelegramCore/BUILD` globs `Sources/**/*.swift` — covers the new `FenixuzShowDeletedMessages.swift`
+  and the edited `AccountManager.swift` / `AccountStateManagementUtils.swift` /
+  `SyncCore_StandaloneAccountTransaction.swift`.
+- `ProMessager/BUILD` globs `Sources/**/*.swift` — covers the `FenixShowDeletedGate.swift` addition.
+- `TelegramUI/BUILD` already depends on `//submodules/Fenixuz/ProMessager:FenixuzProMessager` (added
+  2026-06-27) — covers `AppDelegate.swift`'s `FenixSharedDefaults` call.
+- `Telegram/NotificationService/BUILD` already depends on `//submodules/TelegramCore:TelegramCore` —
+  covers the new hook's `DeletedMessageAttribute` / `_internal_deleteMessages` / `StoreMessage`
+  references; this file uses TelegramCore throughout, independent of Fenixuz.
 
 ---
 
@@ -4089,3 +4440,478 @@ table above, map each hit to its nearest owning `BUILD`, and patch those — or 
 waves tell you. The current list is whatever `git log -S DeprecatedDeclaration` shows.
 
 ### BUILD changes: `Telegram/BUILD` (variable + widget genrule) and 39 module BUILD files
+
+---
+
+## 📌 Phone-number context menu — honest lookup failures (2026-08-27)
+
+Reported by real users on the App Store build: a dropped connection, a frozen account, or a
+rejected method all made the phone context menu state, as fact, "This number is not on
+Telegram" — because `_internal_resolvePeerByPhone` collapsed every RPC error into `nil`, the
+same value it returned for a genuine "no such user" server answer.
+
+### `submodules/TelegramCore/Sources/TelegramEngine/Peers/ResolvePeerByName.swift`
+
+**Immediately after `_internal_resolvePeerByName`.** Find:
+
+```swift
+func _internal_resolvePeerByPhone(account: Account, phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<PeerId?, NoError> {
+    var normalizedPhone = phone
+    if normalizedPhone.hasPrefix("+") {
+        normalizedPhone = String(normalizedPhone[normalizedPhone.index(after: normalizedPhone.startIndex)...])
+    }
+    
+    let accountPeerId = account.peerId
+    
+    return account.postbox.transaction { transaction -> CachedResolvedByPhonePeer? in
+        return transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.resolvedByPhonePeers, key: CachedResolvedByPhonePeer.key(name: normalizedPhone)))?.get(CachedResolvedByPhonePeer.self)
+    } |> mapToSignal { cachedEntry -> Signal<PeerId?, NoError> in
+        let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+        if let cachedEntry = cachedEntry, cachedEntry.timestamp <= timestamp && cachedEntry.timestamp >= timestamp - ageLimit {
+            return .single(cachedEntry.peerId)
+        } else {
+            return account.network.request(Api.functions.contacts.resolvePhone(phone: normalizedPhone))
+            |> mapError { _ -> Void in
+                return Void()
+            }
+            |> mapToSignal { result -> Signal<PeerId?, Void> in
+                return account.postbox.transaction { transaction -> PeerId? in
+                    // ...parse resolvedPeer, update peerId...
+                    return peerId
+                }
+                |> castError(Void.self)
+            }
+            |> `catch` { _ -> Signal<PeerId?, NoError> in
+                return .single(nil)
+            }
+        }
+    }
+}
+```
+
+Replace with a new result enum, the renamed RPC function returning it, and a thin wrapper that
+keeps the old name and signature:
+
+```swift
+// A phone lookup has three outcomes, and collapsing the last two loses real information:
+// the server answered and knows the user, the server answered and does not, or the request never
+// got an answer at all (no connection, a frozen or bot session, a rejected method). The UI used to
+// render all three as "this number is not on Telegram", which is a confident lie in the third case.
+public enum ResolvedPeerByPhone {
+    /// The server answered. `nil` means it genuinely reports no such user.
+    case answered(PeerId?)
+    /// The request failed. We do not know whether the number is on Telegram.
+    case failed
+}
+
+func _internal_resolvePeerByPhoneWithStatus(account: Account, phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<ResolvedPeerByPhone, NoError> {
+    // ...identical cache lookup + RPC as before, but every success wraps in .answered(...)...
+    |> `catch` { _ -> Signal<ResolvedPeerByPhone, NoError> in
+        // Nothing is cached here on purpose: a failed request must not poison the 48h
+        // cache with a "not on Telegram" answer the server never actually gave.
+        return .single(.failed)
+    }
+}
+
+func _internal_resolvePeerByPhone(account: Account, phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<PeerId?, NoError> {
+    return _internal_resolvePeerByPhoneWithStatus(account: account, phone: phone, ageLimit: ageLimit)
+    |> map { result -> PeerId? in
+        switch result {
+        case let .answered(peerId):
+            return peerId
+        case .failed:
+            return nil
+        }
+    }
+}
+```
+
+**At the bottom of the file.** Add:
+
+```swift
+/// Engine-level outcome of a phone lookup. Kept separate from `ResolvedPeerByPhone` so consumers
+/// never see a raw `PeerId` and never have to guess what a `nil` meant.
+public enum EngineResolvedPeerByPhone {
+    /// The server resolved the number to this user.
+    case peer(EnginePeer)
+    /// The server answered and reports the number is not a Telegram account.
+    case notRegistered
+    /// The lookup did not complete. Whether the number is on Telegram is unknown.
+    case failed
+}
+```
+
+Reason: the RPC body moves into `_internal_resolvePeerByPhoneWithStatus`, which returns
+`ResolvedPeerByPhone` (`.answered(PeerId?)` vs `.failed`) instead of a bare `PeerId?`.
+`_internal_resolvePeerByPhone` is kept with its exact original name and signature, reimplemented as
+a `map` wrapper over the new function, so its three other existing callers need no changes. The
+`.failed` `catch` branch deliberately writes NOTHING to the 48-hour `CachedResolvedByPhonePeer`
+cache — a failed request can no longer poison it with a "not on Telegram" answer the server never
+gave. `EngineResolvedPeerByPhone` is the `TelegramEngine`-facing equivalent, consumed by the new
+method in `TelegramEnginePeers.swift` below.
+
+---
+
+### `submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift`
+
+**`TelegramEngine.Peers.resolvePeerByPhone(phone:ageLimit:)`.** Find:
+
+```swift
+public func resolvePeerByPhone(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EnginePeer?, NoError> {
+    return _internal_resolvePeerByPhone(account: self.account, phone: phone, ageLimit: ageLimit)
+    |> mapToSignal { peerId -> Signal<EnginePeer?, NoError> in
+        guard let peerId = peerId else {
+            return .single(nil)
+        }
+        return self.account.postbox.transaction { transaction -> EnginePeer? in
+            return transaction.getPeer(peerId).flatMap(EnginePeer.init)
+        }
+    }
+}
+```
+
+Replace with the same signature reimplemented on top of a new sibling method:
+
+```swift
+public func resolvePeerByPhone(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EnginePeer?, NoError> {
+    return self.resolvePeerByPhoneWithStatus(phone: phone, ageLimit: ageLimit)
+    |> map { result -> EnginePeer? in
+        switch result {
+        case let .peer(peer):
+            return peer
+        case .notRegistered, .failed:
+            return nil
+        }
+    }
+}
+
+/// Same lookup as `resolvePeerByPhone`, but keeps "the server says this number is not on
+/// Telegram" separate from "the lookup itself did not go through". Callers that show the
+/// user a verdict about the number should use this one — collapsing the two states makes
+/// the app state a failed request as fact.
+public func resolvePeerByPhoneWithStatus(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EngineResolvedPeerByPhone, NoError> {
+    return _internal_resolvePeerByPhoneWithStatus(account: self.account, phone: phone, ageLimit: ageLimit)
+    |> mapToSignal { result -> Signal<EngineResolvedPeerByPhone, NoError> in
+        switch result {
+        case .failed:
+            return .single(.failed)
+        case let .answered(peerId):
+            guard let peerId = peerId else {
+                return .single(.notRegistered)
+            }
+            return self.account.postbox.transaction { transaction -> EngineResolvedPeerByPhone in
+                guard let peer = transaction.getPeer(peerId).flatMap(EnginePeer.init) else {
+                    return .notRegistered
+                }
+                return .peer(peer)
+            }
+        }
+    }
+}
+```
+
+Reason: `resolvePeerByPhone` keeps its exact old public signature and behaviour (collapses
+`.notRegistered` and `.failed` back to `nil`) so its existing callers are unaffected.
+`resolvePeerByPhoneWithStatus` is the new engine-facade method that
+`ChatControllerOpenPhoneContextMenu.swift` calls when it needs to distinguish the two.
+
+---
+
+### `submodules/TelegramUI/Sources/Chat/ChatControllerOpenPhoneContextMenu.swift`
+
+**Top of file — imports block.** Add as the last `import` line:
+
+```swift
+import FenixuzLocalization
+```
+
+**The lookup call and the start of its `next:` closure.** Find:
+
+```swift
+let _ = (self.context.engine.peers.resolvePeerByPhone(phone: number)
+|> deliverOnMainQueue).start(next: { [weak self] peer in
+    guard let self else {
+        return
+    }
+    params.progress?.set(.single(false))
+    
+    var firstName = ""
+```
+
+Replace with:
+
+```swift
+let _ = (self.context.engine.peers.resolvePeerByPhoneWithStatus(phone: number)
+|> deliverOnMainQueue).start(next: { [weak self] resolveResult in
+    guard let self else {
+        return
+    }
+    params.progress?.set(.single(false))
+
+    // A failed lookup is not the same as "this number is not on Telegram" — a frozen or
+    // bot session, a dropped connection or a rejected method all land here. Treat it as
+    // unknown rather than telling the user something we were never told.
+    let peer: EnginePeer?
+    let lookupFailed: Bool
+    switch resolveResult {
+    case let .peer(value):
+        peer = value
+        lookupFailed = false
+    case .notRegistered:
+        peer = nil
+        lookupFailed = false
+    case .failed:
+        peer = nil
+        lookupFailed = true
+    }
+    
+    var firstName = ""
+```
+
+**The `else` branch offering "Invite to Telegram" when there is no resolved peer.** Find:
+
+```swift
+} else {
+    items.append(
+        .action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Context_Phone_InviteToTelegram, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Telegram"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
+        f(.default)
+        
+        guard let self else {
+            return
+        }
+        self.inviteToTelegram(numbers: [number])
+    }))
+    )
+}
+```
+
+Add a new branch immediately before it (the `InviteToTelegram` branch itself is unchanged):
+
+```swift
+} else if lookupFailed {
+    // No "Invite to Telegram" here: inviting someone who may well already be on
+    // Telegram is exactly the wrong action to suggest when we do not know.
+    items.append(
+        .action(ContextMenuActionItem(text: FenixuzL10n(self.presentationData.strings).phoneMenu_retry, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reload"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
+        f(.default)
+
+        guard let self else {
+            return
+        }
+        self.openPhoneContextMenu(number: number, params: params)
+    }))
+    )
+} else {
+    // unchanged InviteToTelegram branch
+}
+```
+
+**The footer row shown when there is no resolved peer.** Find:
+
+```swift
+let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+items.append(
+    .action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Context_Phone_NotOnTelegram, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction))
+)
+```
+
+Replace with:
+
+```swift
+let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+let footerText = lookupFailed
+    ? FenixuzL10n(self.presentationData.strings).phoneMenu_lookupFailed
+    : self.presentationData.strings.Chat_Context_Phone_NotOnTelegram
+items.append(
+    .action(ContextMenuActionItem(text: footerText, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction))
+)
+```
+
+Reason: this view previously called `resolvePeerByPhone`, which cannot report a failure — every
+non-match rendered the same "Invite to Telegram" + "This number is not on Telegram" pair, even
+when the lookup itself never got an answer. It now calls `resolvePeerByPhoneWithStatus` and
+branches on `EngineResolvedPeerByPhone`: a genuine `.notRegistered` keeps the existing UI
+unchanged, while `.failed` swaps in a "Try Again" action (recursively re-invokes
+`openPhoneContextMenu`) and a `phoneMenu_lookupFailed` footer — deliberately with no invite
+option, since inviting someone who may already be on Telegram is the wrong suggestion when the
+lookup status is unknown. Strings come from `FenixuzL10n` (new `phoneMenu_lookupFailed` /
+`phoneMenu_retry` keys, en/uz/ru, in `submodules/Fenixuz/Localization/Sources/FenixuzL10n.swift`)
+per the existing convention that Fenixuz strings stay in a Fenixuz module. No BUILD change was
+needed — `TelegramUI/BUILD` already depends on `FenixuzLocalization`.
+
+---
+
+## 📌 Brand rewrite for server-delivered localization (2026-08-27)
+
+Investigated while checking why the app still said "Telegram" post-login: the 286 rebranded
+"Novagram" strings already hand-edited into `Telegram/Telegram-iOS/en.lproj/Localizable.strings`
+never reach a logged-in user. `PresentationStrings` is built from `LocalizationSettings`, whose
+entries come from Telegram's own language pack (`langpack.getLangPack`); the bundled file is only
+the pre-login fallback. `ru.lproj`/`uz.lproj` do not even ship a `Localizable.strings` — they are
+100% server-sourced. Net effect: the entire previous rebranding effort was dead code for anyone
+past the login screen.
+
+### `submodules/TelegramPresentationData/BUILD`
+
+In the `deps = [...]` list, prepend:
+
+```python
+# Fenixuz: brand rewrite for server-delivered localization (FenixuzBrand has no deps of
+# its own, so this cannot create a cycle with FenixuzLocalization, which depends on us).
+"//submodules/Fenixuz/Brand:FenixuzBrand",
+```
+
+Reason: `PresentationData.swift`'s `dictFromLocalization` needs `FenixuzBrandStrings.applyBrand(to:)`.
+`FenixuzBrand` has `deps = []`, so depending on it from `TelegramPresentationData` cannot create a
+cycle with `FenixuzLocalization`, which itself depends on `TelegramPresentationData` (for
+`PresentationStrings`).
+
+---
+
+### `submodules/TelegramPresentationData/Sources/PresentationData.swift`
+
+**Top of file — imports block.** Add after `import Foundation`:
+
+```swift
+import FenixuzBrand
+```
+
+**`dictFromLocalization(_:)` — every assignment wrapped in the brand rewrite.** Find:
+
+```swift
+    for entry in value.entries {
+        switch entry {
+            case let .string(key, value):
+                dict[key] = value
+            case let .pluralizedString(key, zero, one, two, few, many, other):
+                if let zero = zero {
+                    dict["\(key)_zero"] = zero
+                }
+                if let one = one {
+                    dict["\(key)_1"] = one
+                }
+                if let two = two {
+                    dict["\(key)_2"] = two
+                }
+                if let few = few {
+                    dict["\(key)_3_10"] = few
+                }
+                if let many = many {
+                    dict["\(key)_many"] = many
+                }
+                dict["\(key)_any"] = other
+        }
+    }
+```
+
+Replace with:
+
+```swift
+    for entry in value.entries {
+        switch entry {
+            case let .string(key, value):
+                // Fenixuz: every string the app renders passes through here, so this is the one
+                // place where the server's language pack can be rebranded for all languages at
+                // once. See FenixuzBrandStrings for what is deliberately left as "Telegram".
+                dict[key] = FenixuzBrandStrings.applyBrand(to: value)
+            case let .pluralizedString(key, zero, one, two, few, many, other):
+                if let zero = zero {
+                    dict["\(key)_zero"] = FenixuzBrandStrings.applyBrand(to: zero)
+                }
+                if let one = one {
+                    dict["\(key)_1"] = FenixuzBrandStrings.applyBrand(to: one)
+                }
+                if let two = two {
+                    dict["\(key)_2"] = FenixuzBrandStrings.applyBrand(to: two)
+                }
+                if let few = few {
+                    dict["\(key)_3_10"] = FenixuzBrandStrings.applyBrand(to: few)
+                }
+                if let many = many {
+                    dict["\(key)_many"] = FenixuzBrandStrings.applyBrand(to: many)
+                }
+                dict["\(key)_any"] = FenixuzBrandStrings.applyBrand(to: other)
+        }
+    }
+```
+
+Reason: `dictFromLocalization` builds the `[String: String]` dictionary backing `PresentationStrings`
+for both the `.string` case and all six pluralised forms (`_zero`, `_1`, `_2`, `_3_10`, `_many`,
+`_any`), and runs on every entry the server sends. Wrapping every assignment site here rebrands
+every string the logged-in app renders, in every language — including `ru`/`uz`, which are 100%
+server-sourced and never had a bundled rebrand to begin with.
+
+**What `FenixuzBrandStrings.applyBrand(to:)` actually does** (new file,
+`submodules/Fenixuz/Brand/Sources/FenixuzBrandStrings.swift`, in the existing `FenixuzBrand`
+target — no new BUILD target needed):
+
+```swift
+public enum FenixuzBrandStrings {
+    public static let brandName = "Novagram"
+
+    /// Longest-first: `Telegram Stars` has to be claimed before `Telegram Star` can split it.
+    private static let protectedPhrases: [String] = [
+        "Telegram Passport",
+        "Telegram Business",
+        "Telegram Desktop",
+        "Telegram Premium",
+        "Telegram Terms",
+        "Telegram Stars",
+        "Telegram Star",
+        "Telegram Team",
+        "Telegram Web",
+        "Telegram App"
+    ]
+
+    /// U+0000 cannot occur in a language-pack string, so it is safe as a placeholder marker.
+    private static let marker = "\u{0}"
+
+    public static func applyBrand(to value: String) -> String {
+        guard value.contains("Telegram") || value.contains("TELEGRAM") else {
+            return value
+        }
+
+        var result = value
+        for (index, phrase) in protectedPhrases.enumerated() {
+            guard result.contains(phrase) else { continue }
+            result = result.replacingOccurrences(of: phrase, with: "\(marker)\(index)\(marker)")
+        }
+
+        result = result.replacingOccurrences(of: "TELEGRAM", with: brandName.uppercased())
+        result = result.replacingOccurrences(of: "Telegram", with: brandName)
+
+        for (index, phrase) in protectedPhrases.enumerated() {
+            let placeholder = "\(marker)\(index)\(marker)"
+            guard result.contains(placeholder) else { continue }
+            result = result.replacingOccurrences(of: placeholder, with: phrase)
+        }
+        return result
+    }
+}
+```
+
+- **Product decision — Telegram's own products stay "Telegram".** We do not sell Premium, Stars,
+  Business or Gifts (the Apple 3.1.1 IAP gate — see the "App Store IAP gate" section above — blocks
+  purchasing them in-app and deep-links to the official Telegram app instead), so "Novagram
+  Premium" would advertise a subscription that does not exist on this fork. Passport is a
+  Telegram-hosted service; Desktop/Web/App name the official clients; Terms and Team are legal /
+  organisational references to the real company. All ten are matched **longest-first** so
+  `Telegram Stars` is claimed before the shorter `Telegram Star` can match the substring inside it.
+- **The carve-out is phrase-based, not key-prefix-based, on purpose.** Language-pack keys like
+  `Settings.Business` or `MESSAGE_GIFTCODE` carry a product name under an unrelated key prefix —
+  matching the literal phrase inside the string's *value* is what determines what it actually says;
+  a key-prefix rule would either miss those or need constant re-syncing against the server's key set.
+- **The U+0000 placeholder technique** avoids a two-pass ambiguity: protected phrases are swapped
+  for a `\u{0}<index>\u{0}` marker (NUL cannot occur in a language-pack string) before the blanket
+  `"Telegram"` → `"Novagram"` replacement runs, then swapped back afterward — so a protected
+  phrase's own literal `"Telegram"` substring is never touched by the blanket pass.
+- **Case sensitivity is deliberate.** Only capitalised `Telegram`/`TELEGRAM` are rewritten; lowercase
+  `telegram` is left alone because it only ever appears inside URLs — all 41 occurrences found are
+  `telegram.org` — so matching case-sensitively keeps every link intact without needing a URL parser.
+
+⚠️ **Caveat for future maintainers:** this hook rewrites EVERY string the app renders, in EVERY
+language, unconditionally, once it contains "Telegram"/"TELEGRAM". Any future upstream string that
+legitimately needs to keep saying "Telegram" — a new product name, a new legal reference, anything
+in the spirit of the existing `protectedPhrases` entries — must be added to that list in
+`FenixuzBrandStrings.swift`, or it will silently get rebranded to "Novagram" the next time the
+server sends it.

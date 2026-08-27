@@ -10,6 +10,7 @@ import TelegramCore
 import AccountContext
 import LocalMediaResources
 import MediaEditor
+import FenixuzLocalization
 
 // Fenixuz: pick a regular video from the photo library and send it as a round video note
 // (the circular "instant video" message). Mirrors how VideoMessageCameraScreen builds a
@@ -43,7 +44,7 @@ public final class FenixRoundVideoFromGallery {
         configuration.selectionLimit = 1
 
         let picker = PHPickerViewController(configuration: configuration)
-        let delegate = PickerDelegate(context: context, peerId: peerId, threadId: threadId, replySubject: replySubject)
+        let delegate = PickerDelegate(context: context, peerId: peerId, threadId: threadId, replySubject: replySubject, parentController: parentController)
         picker.delegate = delegate
         activeDelegate = delegate
 
@@ -177,17 +178,73 @@ private final class PickerDelegate: NSObject, PHPickerViewControllerDelegate {
     private let peerId: EnginePeer.Id
     private let threadId: Int64?
     private let replySubject: EngineMessageReplySubject?
+    private weak var parentController: ViewController?
 
-    init(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, replySubject: EngineMessageReplySubject?) {
+    init(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?, replySubject: EngineMessageReplySubject?, parentController: ViewController?) {
         self.context = context
         self.peerId = peerId
         self.threadId = threadId
         self.replySubject = replySubject
+        self.parentController = parentController
+    }
+
+    // Exporting the pick out of Photos can take several seconds — an iCloud-hosted video is
+    // downloaded in full first, then copied out of the provider's temp file. The picker sheet is
+    // already gone by then, so without this the user is left staring at the chat with nothing
+    // happening until the round note suddenly appears.
+    //
+    // A plain spinner overlay was tried first and rejected: it showed no progress, and tapping
+    // anywhere outside it silently cancelled the send. A UIAlertController is modal (a stray tap
+    // cannot dismiss it), and the item provider hands us a real `Progress`, so show the actual
+    // percentage with an explicit Cancel instead.
+    private static func topPresenter(for parentController: ViewController?) -> UIViewController? {
+        guard let window = parentController?.view.window else {
+            return nil
+        }
+        var presenter = window.rootViewController
+        while let presented = presenter?.presentedViewController {
+            presenter = presented
+        }
+        return presenter
+    }
+
+    private static func presentProgressAlert(on parentController: ViewController?, title: String, text: String, cancelTitle: String, onCancel: @escaping () -> Void) -> (alert: UIAlertController, progressView: UIProgressView)? {
+        guard let presenter = topPresenter(for: parentController) else {
+            return nil
+        }
+        // The trailing blank lines reserve the strip the progress bar is pinned into; without them
+        // the bar would overlap the message label.
+        let alert = UIAlertController(title: title, message: text + "\n\n", preferredStyle: .alert)
+
+        let progressView = UIProgressView(progressViewStyle: .default)
+        progressView.translatesAutoresizingMaskIntoConstraints = false
+        progressView.progress = 0.0
+        alert.view.addSubview(progressView)
+        NSLayoutConstraint.activate([
+            progressView.leadingAnchor.constraint(equalTo: alert.view.leadingAnchor, constant: 24.0),
+            progressView.trailingAnchor.constraint(equalTo: alert.view.trailingAnchor, constant: -24.0),
+            progressView.bottomAnchor.constraint(equalTo: alert.view.bottomAnchor, constant: -56.0)
+        ])
+
+        alert.addAction(UIAlertAction(title: cancelTitle, style: .cancel, handler: { _ in
+            onCancel()
+        }))
+        presenter.present(alert, animated: true)
+        return (alert, progressView)
+    }
+
+    private static func presentAlert(on parentController: ViewController?, title: String, text: String, ok: String) {
+        guard let presenter = topPresenter(for: parentController) else {
+            return
+        }
+        let alert = UIAlertController(title: title, message: text, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: ok, style: .default, handler: nil))
+        presenter.present(alert, animated: true)
     }
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        picker.dismiss(animated: true)
         guard let result = results.first else {
+            picker.dismiss(animated: true)
             FenixRoundVideoFromGallery.clearDelegate()
             return
         }
@@ -196,30 +253,88 @@ private final class PickerDelegate: NSObject, PHPickerViewControllerDelegate {
         let peerId = self.peerId
         let threadId = self.threadId
         let replySubject = self.replySubject
+        let parentController = self.parentController
         let typeIdentifier = UTType.movie.identifier
 
-        _ = result.itemProvider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, _ in
-            guard let url else {
-                Queue.mainQueue().async {
-                    FenixRoundVideoFromGallery.clearDelegate()
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let l10n = FenixuzL10n(presentationData.strings)
+
+        // Everything runs from the dismissal completion: presenting on a controller that is still
+        // animating away silently does nothing, so the progress alert would never appear.
+        picker.dismiss(animated: true, completion: {
+            // Cancelling is a user action, not a failure — it must not raise the error alert.
+            let wasCancelled = Atomic<Bool>(value: false)
+            var loadProgress: Progress?
+
+            let presented = PickerDelegate.presentProgressAlert(
+                on: parentController,
+                title: l10n.roundVideo_preparing,
+                text: l10n.roundVideo_preparingText,
+                cancelTitle: l10n.roundVideo_cancel,
+                onCancel: {
+                    let _ = wasCancelled.swap(true)
+                    loadProgress?.cancel()
                 }
-                return
-            }
-            // The provided URL is a temporary file removed after this closure returns, so copy it out first.
-            let destination = NSTemporaryDirectory() + "fenix_round_\(Int64.random(in: 0 ... Int64.max)).mp4"
-            try? FileManager.default.removeItem(atPath: destination)
-            do {
-                try FileManager.default.copyItem(at: url, to: URL(fileURLWithPath: destination))
-            } catch {
+            )
+            // Held until `finish` runs; releasing it earlier would stop the percentage updating.
+            var progressObservation: NSKeyValueObservation?
+            let didFinish = Atomic<Bool>(value: false)
+
+            // Called from whichever queue the item provider replies on, so hop to main first.
+            let finish: (String?) -> Void = { videoPath in
                 Queue.mainQueue().async {
-                    FenixRoundVideoFromGallery.clearDelegate()
+                    // loadFileRepresentation can report both a cancellation and a failure; only
+                    // the first one should drive the UI.
+                    if didFinish.swap(true) {
+                        return
+                    }
+                    progressObservation?.invalidate()
+                    progressObservation = nil
+
+                    let continueAfterDismiss: () -> Void = {
+                        if let videoPath {
+                            FenixRoundVideoFromGallery.sendAsRoundVideo(context: context, peerId: peerId, threadId: threadId, replySubject: replySubject, videoPath: videoPath)
+                        } else if !wasCancelled.with({ $0 }) {
+                            PickerDelegate.presentAlert(on: parentController, title: l10n.roundVideo_failedTitle, text: l10n.roundVideo_failedText, ok: l10n.roundVideo_ok)
+                        }
+                        FenixRoundVideoFromGallery.clearDelegate()
+                    }
+
+                    if let alert = presented?.alert {
+                        // The failure alert has to wait for this one to be gone, or it never shows.
+                        alert.dismiss(animated: true, completion: continueAfterDismiss)
+                    } else {
+                        continueAfterDismiss()
+                    }
                 }
-                return
             }
-            Queue.mainQueue().async {
-                FenixRoundVideoFromGallery.sendAsRoundVideo(context: context, peerId: peerId, threadId: threadId, replySubject: replySubject, videoPath: destination)
-                FenixRoundVideoFromGallery.clearDelegate()
+
+            let itemProgress = result.itemProvider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, _ in
+                guard let url else {
+                    finish(nil)
+                    return
+                }
+                // The provided URL is a temporary file removed once this closure returns, so copy it out first.
+                let destination = NSTemporaryDirectory() + "fenix_round_\(Int64.random(in: 0 ... Int64.max)).mp4"
+                try? FileManager.default.removeItem(atPath: destination)
+                do {
+                    try FileManager.default.copyItem(at: url, to: URL(fileURLWithPath: destination))
+                } catch {
+                    finish(nil)
+                    return
+                }
+                finish(destination)
             }
-        }
+            loadProgress = itemProgress
+
+            if let progressView = presented?.progressView {
+                progressObservation = itemProgress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
+                    let value = Float(progress.fractionCompleted)
+                    Queue.mainQueue().async {
+                        progressView.setProgress(value, animated: true)
+                    }
+                }
+            }
+        })
     }
 }

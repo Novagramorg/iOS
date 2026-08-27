@@ -1599,6 +1599,9 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
     }, updateShowDeletedMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
+        // The notification extension can only see the App Group suite, and it is the process that
+        // handles the MESSAGE_DELETED push while the app is backgrounded.
+        FenixSharedDefaults.syncShowDeletedMessages()
         NotificationCenter.default.post(name: .fenixShowDeletedChanged, object: nil)
         updateState { state in
             var state = state

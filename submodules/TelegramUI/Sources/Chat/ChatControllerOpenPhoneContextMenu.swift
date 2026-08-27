@@ -14,6 +14,7 @@ import UndoUI
 import MessageUI
 import PeerInfoUI
 import ChatControllerInteraction
+import FenixuzLocalization
 
 extension ChatControllerImpl: MFMessageComposeViewControllerDelegate {
     func openPhoneContextMenu(number: String, params: ChatControllerInteraction.LongTapParams) -> Void {
@@ -41,12 +42,29 @@ extension ChatControllerImpl: MFMessageComposeViewControllerDelegate {
         
         params.progress?.set(.single(true))
         
-        let _ = (self.context.engine.peers.resolvePeerByPhone(phone: number)
-        |> deliverOnMainQueue).start(next: { [weak self] peer in
+        let _ = (self.context.engine.peers.resolvePeerByPhoneWithStatus(phone: number)
+        |> deliverOnMainQueue).start(next: { [weak self] resolveResult in
             guard let self else {
                 return
             }
             params.progress?.set(.single(false))
+
+            // A failed lookup is not the same as "this number is not on Telegram" — a frozen or
+            // bot session, a dropped connection or a rejected method all land here. Treat it as
+            // unknown rather than telling the user something we were never told.
+            let peer: EnginePeer?
+            let lookupFailed: Bool
+            switch resolveResult {
+            case let .peer(value):
+                peer = value
+                lookupFailed = false
+            case .notRegistered:
+                peer = nil
+                lookupFailed = false
+            case .failed:
+                peer = nil
+                lookupFailed = true
+            }
             
             var firstName = ""
             var lastName = ""
@@ -113,6 +131,19 @@ extension ChatControllerImpl: MFMessageComposeViewControllerDelegate {
                         }))
                     )
                 }
+            } else if lookupFailed {
+                // No "Invite to Telegram" here: inviting someone who may well already be on
+                // Telegram is exactly the wrong action to suggest when we do not know.
+                items.append(
+                    .action(ContextMenuActionItem(text: FenixuzL10n(self.presentationData.strings).phoneMenu_retry, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reload"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
+                        f(.default)
+
+                        guard let self else {
+                            return
+                        }
+                        self.openPhoneContextMenu(number: number, params: params)
+                    }))
+                )
             } else {
                 items.append(
                     .action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Context_Phone_InviteToTelegram, icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Telegram"), color: theme.contextMenu.primaryColor) }, action: { [weak self]  _, f in
@@ -177,8 +208,11 @@ extension ChatControllerImpl: MFMessageComposeViewControllerDelegate {
                 )
             } else {
                 let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+                let footerText = lookupFailed
+                    ? FenixuzL10n(self.presentationData.strings).phoneMenu_lookupFailed
+                    : self.presentationData.strings.Chat_Context_Phone_NotOnTelegram
                 items.append(
-                    .action(ContextMenuActionItem(text: self.presentationData.strings.Chat_Context_Phone_NotOnTelegram, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction))
+                    .action(ContextMenuActionItem(text: footerText, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction))
                 )
             }
             

@@ -4431,7 +4431,7 @@ func replayFinalState(
                     }
                 }
             case let .DeleteMessagesWithGlobalIds(ids):
-                let fenixShowDeleted = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+                let fenixShowDeleted = isFenixuzShowDeletedMessagesEnabled
                 if fenixShowDeleted {
                     let messageIds = transaction.messageIdsForGlobalIds(ids)
                     var retainedMessageIds: Set<MessageId> = []
@@ -4489,7 +4489,7 @@ func replayFinalState(
                 }
 
             case let .DeleteMessages(ids):
-                let fenixShowDeleted = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+                let fenixShowDeleted = isFenixuzShowDeletedMessagesEnabled
                 if fenixShowDeleted {
                     var actuallyDeletedIds: [MessageId] = []
                     var retainedMessageIds: Set<MessageId> = []

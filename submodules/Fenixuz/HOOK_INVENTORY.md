@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 46
+- **Total hooks:** 55
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 28
+- **Non-critical hooks:** 37
 
 ---
 
@@ -91,6 +91,15 @@
 | `submodules/TelegramUI/Sources/SharedWakeupManager.swift` | `pinned-accounts-always-online` | ⚪ | multi-account | `fenixuzPinnedIds, shouldBeServiceTaskMaster .always` | Keep pinned non-primary accounts live (shouldBeServiceTaskMaster = .always, 2026-06-09) |
 | `submodules/TelegramCore/Sources/State/ManagedSynchronizeMarkAllUnseenPersonalMessagesOperations.swift` | `ghost-reaction-suppress` | ⚪ | Ghost | `isFenixuzGhostModeActive, synchronizeMarkAllUnseenReactions` | Suppress readReactions sync when Ghost is active (2026-06-09) |
 | `submodules/TelegramCore/Sources/State/AccountViewTracker.swift` | `ghost-view-counter-suppress` | ⚪ | Ghost | `isFenixuzGhostModeActive, increment boolFalse/boolTrue` | Don't bump channel post view counters when Ghost is active (user still sees them, 2026-06-09) |
+| `Telegram/NotificationService/Sources/NotificationService.swift` | `nse-antidelete-gate` | ⚪ | anti-delete | `fenixShowDeleted = UserDefaults(suiteName: appGroupName)` | Gate the notification extension's silent MESSAGE_DELETED handling on the "Deleted messages" toggle — retain instead of erase while the app is backgrounded (P0 fix, 2026-08-26) |
+| `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` | `coreshowdeleted-shared-gate` | ⚪ | anti-delete | `isFenixuzShowDeletedMessagesEnabled` | Read the shared, App-Group-aware toggle helper instead of a bare `pro_messager` UserDefaults read in the delete-interception capture gate (2026-08-26) |
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_StandaloneAccountTransaction.swift` | `mergeattrs-deleted-carryforward` | ⚪ | anti-delete | `previousDeleted` | Carry `DeletedMessageAttribute` forward across message re-add/replace so retained-message markers survive group/channel re-sync (2026-08-26) |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-shareddefaults-mirror` | ⚪ | anti-delete | `FenixSharedDefaults.syncShowDeletedMessages()` | Backfill the App Group mirror of "Deleted messages" on every launch for users who had the toggle on before Wave 3 (2026-08-26) |
+| `submodules/TelegramCore/Sources/TelegramEngine/Peers/ResolvePeerByName.swift` | `resolvephone-status-internal` | ⚪ | phone-lookup-honesty | `ResolvedPeerByPhone, EngineResolvedPeerByPhone` | New `ResolvedPeerByPhone`/`EngineResolvedPeerByPhone` enums + `_internal_resolvePeerByPhoneWithStatus` so a failed RPC is distinguishable from a genuine "not on Telegram" server answer (2026-08-27) |
+| `submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift` | `resolvephone-status-engine` | ⚪ | phone-lookup-honesty | `resolvePeerByPhoneWithStatus` | New engine-facade method exposing the same failed/not-registered/peer distinction; existing `resolvePeerByPhone` reimplemented on top, unchanged for its callers (2026-08-27) |
+| `submodules/TelegramUI/Sources/Chat/ChatControllerOpenPhoneContextMenu.swift` | `phonemenu-honest-failure` | ⚪ | phone-lookup-honesty | `resolvePeerByPhoneWithStatus, lookupFailed, phoneMenu_lookupFailed` | Phone context menu shows "Try Again" (no "Invite to Telegram") + an honest failure message instead of "not on Telegram" when the lookup itself failed (2026-08-27) |
+| `submodules/TelegramPresentationData/BUILD` | `presentationdata-brand-dep` | ⚪ | brand | `FenixuzBrand` | Wire FenixuzBrand into TelegramPresentationData deps (2026-08-27) |
+| `submodules/TelegramPresentationData/Sources/PresentationData.swift` | `presentationdata-brand-rewrite` | ⚪ | brand | `FenixuzBrandStrings.applyBrand` | Rewrite "Telegram"/"TELEGRAM" → "Novagram"/"NOVAGRAM" in every server-delivered language-pack string via `dictFromLocalization` — fixes the bundled `Localizable.strings` rebrand never reaching a logged-in user (2026-08-27) |
 
 ---
 

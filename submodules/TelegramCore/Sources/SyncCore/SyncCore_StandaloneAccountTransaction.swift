@@ -200,6 +200,30 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     updated.append(previousEditedHistory)
                 }
             }
+
+            // Fenixuz: DeletedMessageAttribute is local-only too (the anti-delete marker we write
+            // instead of really deleting). Same re-sync path as the edit history above would strip
+            // it, so a retained message silently loses its 🗑 label — or, with the toggle off,
+            // reappears as an ordinary message. Carry it forward.
+            var previousDeleted: DeletedMessageAttribute?
+            for attribute in previous {
+                if let attribute = attribute as? DeletedMessageAttribute {
+                    previousDeleted = attribute
+                    break
+                }
+            }
+            if let previousDeleted {
+                var found = false
+                for i in 0 ..< updated.count {
+                    if let _ = updated[i] as? DeletedMessageAttribute {
+                        found = true
+                        break
+                    }
+                }
+                if !found {
+                    updated.append(previousDeleted)
+                }
+            }
         },
         decodeMessageThreadInfo: { entry in
             guard let data = entry.get(MessageHistoryThreadData.self) else {
