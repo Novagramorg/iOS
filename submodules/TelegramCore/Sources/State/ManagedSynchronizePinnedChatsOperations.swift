@@ -225,7 +225,13 @@ private func synchronizePinnedChats(transaction: Transaction, postbox: Postbox, 
             return postbox.transaction { transaction -> Signal<Void, NoError> in
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                 
-                transaction.setPinnedItemIds(groupId: groupId, itemIds: resultingItemIds)
+                // Fenixuz: unlimited pins. The reconciliation above treats every local/remote
+                // divergence as "the server changed" — it reads a LOCAL snapshot as
+                // initialRemoteItemIds — which is only sound while local never exceeds the server
+                // limit. This toggle breaks that invariant, so the device-local overflow reads as
+                // "pins the server removed" and gets dropped. Re-apply it after the reconciliation.
+                let fenixResultingItemIds = FenixuzLocalPins.merged(serverItemIds: resultingItemIds, accountPeerId: accountPeerId, groupId: groupId)
+                transaction.setPinnedItemIds(groupId: groupId, itemIds: fenixResultingItemIds)
                 
                 transaction.updateCurrentPeerNotificationSettings(notificationSettings)
                 

@@ -1676,6 +1676,17 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
         }
     }, updateUnlimitedPins: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "unlimited_pins")
+        if !value {
+            // Turning it off drops the device-local pins outright. Keeping them while the feature
+            // is off would mean tracking a list that quietly drifts from reality — chats unpinned
+            // on another device, deleted, archived — for no benefit. The synced ones are untouched.
+            //
+            // Clearing the store is not enough on its own: those chats are still pinned in Postbox
+            // and nothing would ever unpin them, so the user would watch an "off" that changed
+            // nothing. Trim the list back to what the server already holds.
+            let _ = context.engine.peers.fenixuzTrimPinnedChatsToServerLimit().startStandalone()
+            FenixuzLocalPins.clearAllAccounts()
+        }
         updateState { state in
             var state = state
             state.unlimitedPins = value

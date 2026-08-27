@@ -481,7 +481,11 @@ public struct FenixuzL10n {
         pick(en: "Unlimited Pins", uz: "Cheksiz pin", ru: "Безлимитные закрепы")
     }
     public var settings_interface_unlimitedPins_subtitle: String {
-        pick(en: "Pin more than 5 chats — extra pins stay on this device", uz: "5 tadan ortiq chatni pin qilish — ortiqchasi shu qurilmada saqlanadi", ru: "Закрепляйте больше 5 чатов — сверх лимита остаются на этом устройстве")
+        pick(
+            en: "Pin up to 1000 chats. Only the first few sync to Telegram — the rest live on this iPhone only and will not appear on Android, Web or Desktop. Turning this off removes them.",
+            uz: "1000 tagacha chat pin qiling. Faqat dastlabki bir nechtasi Telegram bilan sinxronlanadi — qolganlari faqat shu iPhone'da, Android, Web va Desktop'da koʻrinmaydi. Oʻchirsangiz ular olib tashlanadi.",
+            ru: "Закрепляйте до 1000 чатов. С Telegram синхронизируются только первые несколько — остальные живут только на этом iPhone и не появятся в Android, Web и Desktop. При отключении они удаляются."
+        )
     }
     public var profile_idCopied: String {
         pick(en: "ID copied", uz: "ID nusxalandi", ru: "ID скопирован")
