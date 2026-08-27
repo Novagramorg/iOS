@@ -123,7 +123,9 @@ func _internal_resetAccountState(postbox: Postbox, network: Network, accountPeer
                 }
                 
                 if let replacePinnedItemIds = fetchedChats.pinnedItemIds {
-                    transaction.setPinnedItemIds(groupId: .root, itemIds: replacePinnedItemIds.map(PinnedItemId.peer))
+                    // Fenixuz: unlimited pins — same reason as the chat-list hole path.
+                    let fenixItemIds = FenixuzLocalPins.merged(serverItemIds: replacePinnedItemIds.map(PinnedItemId.peer), accountPeerId: accountPeerId, groupId: .root)
+                    transaction.setPinnedItemIds(groupId: .root, itemIds: fenixItemIds)
                 }
                 
                 for (peerId, summary) in fetchedChats.mentionTagSummaries {

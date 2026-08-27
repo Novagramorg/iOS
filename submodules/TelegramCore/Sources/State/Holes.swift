@@ -1266,7 +1266,11 @@ func fetchChatListHole(postbox: Postbox, network: Network, accountPeerId: PeerId
             }
             
             if let replacePinnedItemIds = fetchedChats.pinnedItemIds {
-                transaction.setPinnedItemIds(groupId: groupId, itemIds: replacePinnedItemIds.map(PinnedItemId.peer))
+                // Fenixuz: unlimited pins — this list is the server's, capped at dialogs_pinned_limit.
+                // Writing it verbatim deletes the device-local overflow for real (an absent peer
+                // gets inclusion.withoutPinningIndex()), so put those ids back first.
+                let fenixItemIds = FenixuzLocalPins.merged(serverItemIds: replacePinnedItemIds.map(PinnedItemId.peer), accountPeerId: accountPeerId, groupId: groupId)
+                transaction.setPinnedItemIds(groupId: groupId, itemIds: fenixItemIds)
             }
             
             for (peerId, summary) in fetchedChats.mentionTagSummaries {

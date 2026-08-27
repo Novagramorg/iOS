@@ -40,8 +40,9 @@ common:index_build --noshow_timestamps
 common:index_build --curses=no
 common:index_build --color=no
 
-# Fenixuz: cap the --disk_cache. Bazel never evicts from it by default, so ~/telegram-bazel-cache/cas
-# grew to 42 GB and filled the disk mid-build (2026-08-27). These make Bazel garbage-collect the
-# cache down to 20 GB, dropping entries untouched for 14 days, 5 minutes after it goes idle.
-build --experimental_disk_cache_gc_max_size=20G
-build --experimental_disk_cache_gc_max_age=14d
+# Fenixuz: do NOT enable --experimental_disk_cache_gc_* here. run.sh passes
+# --disk_cache="$CACHE_DIR" (the ROOT ~/telegram-bazel-cache) while --repository_cache and
+# bazel-user-root/external live INSIDE that same root, so the disk-cache GC prunes the repo cache
+# and the extracted external repos too. That corrupted bazel_skylib three times on 2026-08-27
+# ("Every .bzl file must have a corresponding package"). Cap the cache by hand instead, or first
+# move --disk_cache to its own subdirectory in run.sh.
