@@ -20,16 +20,24 @@ public protocol StreamingSocketFactory: Sendable {
 
 /// Live Toncenter streaming over `URLSessionWebSocketTask`, available at the iOS 13 floor.
 public struct URLSessionStreamingSocketFactory: StreamingSocketFactory {
-    let url: URL
+    let urlProvider: @Sendable () async throws -> URL
     let session: URLSession
 
     public init(url: URL, session: URLSession = .shared) {
-        self.url = url
+        self.urlProvider = { url }
+        self.session = session
+    }
+
+    public init(
+        urlProvider: @Sendable @escaping () async throws -> URL,
+        session: URLSession = .shared
+    ) {
+        self.urlProvider = urlProvider
         self.session = session
     }
 
     public func makeSocket() -> any StreamingSocket {
-        URLSessionStreamingSocket(url: url, session: session)
+        URLSessionStreamingSocket(urlProvider: urlProvider, session: session)
     }
 }
 
@@ -39,16 +47,18 @@ public struct URLSessionStreamingSocketFactory: StreamingSocketFactory {
 /// across a suspension. Reentrancy is wanted here — a `send` must be able to proceed while the
 /// read loop is parked in `receive()`, which is where it spends nearly all its time.
 actor URLSessionStreamingSocket: StreamingSocket {
-    private let url: URL
+    private let urlProvider: @Sendable () async throws -> URL
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
 
-    init(url: URL, session: URLSession) {
-        self.url = url
+    init(urlProvider: @Sendable @escaping () async throws -> URL, session: URLSession) {
+        self.urlProvider = urlProvider
         self.session = session
     }
 
     func connect() async throws {
+        let url = try await urlProvider()
+        try Task.checkCancellation()
         let task = session.webSocketTask(with: url)
         self.task = task
         task.resume()

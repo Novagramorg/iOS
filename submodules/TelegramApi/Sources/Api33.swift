@@ -1,4 +1,104 @@
 public extension Api.auth {
+    enum ExportedAuthorization: TypeConstructorDescription {
+        public class Cons_exportedAuthorization: TypeConstructorDescription {
+            public var id: Int64
+            public var bytes: Buffer
+            public init(id: Int64, bytes: Buffer) {
+                self.id = id
+                self.bytes = bytes
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("exportedAuthorization", [("id", ConstructorParameterDescription(self.id)), ("bytes", ConstructorParameterDescription(self.bytes))])
+            }
+        }
+        case exportedAuthorization(Cons_exportedAuthorization)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .exportedAuthorization(let _data):
+                if boxed {
+                    buffer.appendInt32(-1271602504)
+                }
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                serializeBytes(_data.bytes, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .exportedAuthorization(let _data):
+                return ("exportedAuthorization", [("id", ConstructorParameterDescription(_data.id)), ("bytes", ConstructorParameterDescription(_data.bytes))])
+            }
+        }
+
+        public static func parse_exportedAuthorization(_ reader: BufferReader) -> ExportedAuthorization? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Buffer?
+            _2 = parseBytes(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.auth.ExportedAuthorization.exportedAuthorization(Cons_exportedAuthorization(id: _1!, bytes: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.auth {
+    enum FirebasePnvIntent: TypeConstructorDescription {
+        public class Cons_firebasePnvIntent: TypeConstructorDescription {
+            public var nonce: String
+            public var digitalCredentialPayload: String
+            public init(nonce: String, digitalCredentialPayload: String) {
+                self.nonce = nonce
+                self.digitalCredentialPayload = digitalCredentialPayload
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("firebasePnvIntent", [("nonce", ConstructorParameterDescription(self.nonce)), ("digitalCredentialPayload", ConstructorParameterDescription(self.digitalCredentialPayload))])
+            }
+        }
+        case firebasePnvIntent(Cons_firebasePnvIntent)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .firebasePnvIntent(let _data):
+                if boxed {
+                    buffer.appendInt32(-547700724)
+                }
+                serializeString(_data.nonce, buffer: buffer, boxed: false)
+                serializeString(_data.digitalCredentialPayload, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .firebasePnvIntent(let _data):
+                return ("firebasePnvIntent", [("nonce", ConstructorParameterDescription(_data.nonce)), ("digitalCredentialPayload", ConstructorParameterDescription(_data.digitalCredentialPayload))])
+            }
+        }
+
+        public static func parse_firebasePnvIntent(_ reader: BufferReader) -> FirebasePnvIntent? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.auth.FirebasePnvIntent.firebasePnvIntent(Cons_firebasePnvIntent(nonce: _1!, digitalCredentialPayload: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.auth {
     enum LoggedOut: TypeConstructorDescription {
         public class Cons_loggedOut: TypeConstructorDescription {
             public var flags: Int32
@@ -1452,158 +1552,6 @@ public extension Api.channels {
         }
         public static func parse_channelParticipantsNotModified(_ reader: BufferReader) -> ChannelParticipants? {
             return Api.channels.ChannelParticipants.channelParticipantsNotModified
-        }
-    }
-}
-public extension Api.channels {
-    enum SendAsPeers: TypeConstructorDescription {
-        public class Cons_sendAsPeers: TypeConstructorDescription {
-            public var peers: [Api.SendAsPeer]
-            public var chats: [Api.Chat]
-            public var users: [Api.User]
-            public init(peers: [Api.SendAsPeer], chats: [Api.Chat], users: [Api.User]) {
-                self.peers = peers
-                self.chats = chats
-                self.users = users
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("sendAsPeers", [("peers", ConstructorParameterDescription(self.peers)), ("chats", ConstructorParameterDescription(self.chats)), ("users", ConstructorParameterDescription(self.users))])
-            }
-        }
-        case sendAsPeers(Cons_sendAsPeers)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .sendAsPeers(let _data):
-                if boxed {
-                    buffer.appendInt32(-191450938)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.peers.count))
-                for item in _data.peers {
-                    item.serialize(buffer, true)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.chats.count))
-                for item in _data.chats {
-                    item.serialize(buffer, true)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.users.count))
-                for item in _data.users {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .sendAsPeers(let _data):
-                return ("sendAsPeers", [("peers", ConstructorParameterDescription(_data.peers)), ("chats", ConstructorParameterDescription(_data.chats)), ("users", ConstructorParameterDescription(_data.users))])
-            }
-        }
-
-        public static func parse_sendAsPeers(_ reader: BufferReader) -> SendAsPeers? {
-            var _1: [Api.SendAsPeer]?
-            if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.SendAsPeer.self)
-            }
-            var _2: [Api.Chat]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
-            }
-            var _3: [Api.User]?
-            if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.channels.SendAsPeers.sendAsPeers(Cons_sendAsPeers(peers: _1!, chats: _2!, users: _3!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.channels {
-    enum SponsoredMessageReportResult: TypeConstructorDescription {
-        public class Cons_sponsoredMessageReportResultChooseOption: TypeConstructorDescription {
-            public var title: String
-            public var options: [Api.SponsoredMessageReportOption]
-            public init(title: String, options: [Api.SponsoredMessageReportOption]) {
-                self.title = title
-                self.options = options
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("sponsoredMessageReportResultChooseOption", [("title", ConstructorParameterDescription(self.title)), ("options", ConstructorParameterDescription(self.options))])
-            }
-        }
-        case sponsoredMessageReportResultAdsHidden
-        case sponsoredMessageReportResultChooseOption(Cons_sponsoredMessageReportResultChooseOption)
-        case sponsoredMessageReportResultReported
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .sponsoredMessageReportResultAdsHidden:
-                if boxed {
-                    buffer.appendInt32(1044107055)
-                }
-                break
-            case .sponsoredMessageReportResultChooseOption(let _data):
-                if boxed {
-                    buffer.appendInt32(-2073059774)
-                }
-                serializeString(_data.title, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.options.count))
-                for item in _data.options {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .sponsoredMessageReportResultReported:
-                if boxed {
-                    buffer.appendInt32(-1384544183)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .sponsoredMessageReportResultAdsHidden:
-                return ("sponsoredMessageReportResultAdsHidden", [])
-            case .sponsoredMessageReportResultChooseOption(let _data):
-                return ("sponsoredMessageReportResultChooseOption", [("title", ConstructorParameterDescription(_data.title)), ("options", ConstructorParameterDescription(_data.options))])
-            case .sponsoredMessageReportResultReported:
-                return ("sponsoredMessageReportResultReported", [])
-            }
-        }
-
-        public static func parse_sponsoredMessageReportResultAdsHidden(_ reader: BufferReader) -> SponsoredMessageReportResult? {
-            return Api.channels.SponsoredMessageReportResult.sponsoredMessageReportResultAdsHidden
-        }
-        public static func parse_sponsoredMessageReportResultChooseOption(_ reader: BufferReader) -> SponsoredMessageReportResult? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: [Api.SponsoredMessageReportOption]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.SponsoredMessageReportOption.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.channels.SponsoredMessageReportResult.sponsoredMessageReportResultChooseOption(Cons_sponsoredMessageReportResultChooseOption(title: _1!, options: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_sponsoredMessageReportResultReported(_ reader: BufferReader) -> SponsoredMessageReportResult? {
-            return Api.channels.SponsoredMessageReportResult.sponsoredMessageReportResultReported
         }
     }
 }

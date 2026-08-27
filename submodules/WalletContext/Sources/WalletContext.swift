@@ -8,11 +8,19 @@ import TONCrypto
 import TONToncenter
 import TONWalletKit
 
-private let walletApiKey = "84f56a3a13a49c973bba18b3b69e5589c0a87c5227631629941155ef6ab0b555"
 private let walletFiatRatesRefreshInterval: TimeInterval = 15.0 * 60.0
 private let walletMetadataCachedItemLimit = 10
 private let walletPreparedBackupDisableLifetime: TimeInterval = 60.0 * 60.0
 private let walletKeyRotationMessageLifetime: TimeInterval = 5.0 * 60.0
+private let walletServerRefreshInterval: TimeInterval = 30.0
+
+private struct WalletReadOnlySigner: WalletSigner {
+    let publicKey: Data
+
+    func sign(_ data: Data) async throws -> Data {
+        throw WalletContext.WalletError.unavailable
+    }
+}
 
 public final class WalletContext {
     public enum FiatCurrency: String, CaseIterable, Codable, Hashable {
@@ -225,17 +233,26 @@ public final class WalletContext {
         public let address: String
         public let publicKey: String
         public let version: WalletVersion
+        public let backupEnabled: Bool
+        public let canExportPhrase: Bool
+        public let canSign: Bool
         public let canDisableBackup: Bool
 
         public init(
             address: String,
             publicKey: String,
             version: WalletVersion,
+            backupEnabled: Bool = false,
+            canExportPhrase: Bool = false,
+            canSign: Bool = true,
             canDisableBackup: Bool = false
         ) {
             self.address = address
             self.publicKey = publicKey
             self.version = version
+            self.backupEnabled = backupEnabled
+            self.canExportPhrase = canExportPhrase
+            self.canSign = canSign
             self.canDisableBackup = canDisableBackup
         }
     }
@@ -431,6 +448,27 @@ public final class WalletContext {
         public enum Status: String, Codable, Equatable {
             case completed
             case pending
+            case failed
+        }
+
+        public enum Peer: Codable, Equatable {
+            case user(id: EnginePeer.Id, displayName: String)
+            case address(String)
+            case unsupported
+
+            public var address: String? {
+                if case let .address(value) = self {
+                    return value
+                }
+                return nil
+            }
+
+            public var displayName: String? {
+                if case let .user(_, displayName) = self {
+                    return displayName
+                }
+                return nil
+            }
         }
 
         public struct CollectibleTransfer: Codable, Equatable {
@@ -477,8 +515,7 @@ public final class WalletContext {
         public let direction: Direction
         public let amount: Int64
         public let fee: Int64
-        public let counterparty: String?
-        public let counterpartyName: String?
+        public let peer: Peer
         public let comment: String?
         public let currency: Currency
         public let collectible: CollectibleTransfer?
@@ -493,8 +530,7 @@ public final class WalletContext {
             direction: Direction,
             amount: Int64,
             fee: Int64,
-            counterparty: String?,
-            counterpartyName: String? = nil,
+            peer: Peer,
             comment: String?,
             currency: Currency = .ton,
             collectible: CollectibleTransfer? = nil,
@@ -510,8 +546,7 @@ public final class WalletContext {
             self.direction = direction
             self.amount = amount
             self.fee = fee
-            self.counterparty = counterparty
-            self.counterpartyName = counterpartyName
+            self.peer = peer
             self.comment = comment
             self.currency = currency
             self.collectible = collectible
@@ -528,6 +563,7 @@ public final class WalletContext {
             case direction
             case amount
             case fee
+            case peer
             case counterparty
             case counterpartyName
             case comment
@@ -547,8 +583,13 @@ public final class WalletContext {
             self.direction = try container.decode(Direction.self, forKey: .direction)
             self.amount = try container.decode(Int64.self, forKey: .amount)
             self.fee = try container.decode(Int64.self, forKey: .fee)
-            self.counterparty = try container.decodeIfPresent(String.self, forKey: .counterparty)
-            self.counterpartyName = try container.decodeIfPresent(String.self, forKey: .counterpartyName)
+            if let peer = try container.decodeIfPresent(Peer.self, forKey: .peer) {
+                self.peer = peer
+            } else if let counterparty = try container.decodeIfPresent(String.self, forKey: .counterparty) {
+                self.peer = .address(counterparty)
+            } else {
+                self.peer = .unsupported
+            }
             self.comment = try container.decodeIfPresent(String.self, forKey: .comment)
             self.currency = try container.decodeIfPresent(Currency.self, forKey: .currency) ?? .ton
             self.collectible = try container.decodeIfPresent(CollectibleTransfer.self, forKey: .collectible)
@@ -566,8 +607,7 @@ public final class WalletContext {
             try container.encode(self.direction, forKey: .direction)
             try container.encode(self.amount, forKey: .amount)
             try container.encode(self.fee, forKey: .fee)
-            try container.encodeIfPresent(self.counterparty, forKey: .counterparty)
-            try container.encodeIfPresent(self.counterpartyName, forKey: .counterpartyName)
+            try container.encode(self.peer, forKey: .peer)
             try container.encodeIfPresent(self.comment, forKey: .comment)
             try container.encode(self.currency, forKey: .currency)
             try container.encodeIfPresent(self.collectible, forKey: .collectible)
@@ -575,6 +615,9 @@ public final class WalletContext {
         }
 
         public var isVisibleInWalletHistory: Bool {
+            if self.status == .failed {
+                return true
+            }
             if self.kind == .deployContract {
                 return true
             }
@@ -768,6 +811,7 @@ public final class WalletContext {
 
     public enum Phase: Equatable {
         case restoring
+        case provisioning
         case empty
         case wallet(WalletInfo)
         case failed(FatalStorageError)
@@ -1009,7 +1053,7 @@ public final class WalletContext {
             return
         }
         self.withMainQueue { [weak self] in
-            guard let self, self.secretRecord != nil else {
+            guard let self, self.canSignCurrentWallet else {
                 return
             }
             if !self.pendingTonConnectUrls.contains(value) {
@@ -1017,6 +1061,51 @@ public final class WalletContext {
             }
             self.evaluateRuntimeDemand()
             self.processPendingTonConnectUrlIfPossible()
+        }
+    }
+
+    public func resolveUserAddresses(
+        userIds: [EnginePeer.Id]
+    ) -> Signal<[EnginePeer.Id: String], WalletError> {
+        return Signal { [weak self] subscriber in
+            guard let self else {
+                subscriber.putError(.unavailable)
+                return EmptyDisposable
+            }
+            let cancellation = WalletOperationCancellation()
+            let task = Task { @MainActor [weak self] in
+                guard let self else {
+                    subscriber.putError(.unavailable)
+                    return
+                }
+                do {
+                    let uniqueIds = Array(Set(userIds))
+                    var result: [EnginePeer.Id: String] = [:]
+                    var index = 0
+                    while index < uniqueIds.count {
+                        try Task.checkCancellation()
+                        let upperBound = min(index + 100, uniqueIds.count)
+                        let chunk = Array(uniqueIds[index ..< upperBound])
+                        let addresses = try await WalletToncenterRequestContext<[WalletUserAddress]>().run(
+                            self.engine.wallet.getUserAddresses(userIds: chunk)
+                        )
+                        for address in addresses {
+                            result[address.userId] = address.address
+                        }
+                        index = upperBound
+                    }
+                    subscriber.putNext(result)
+                    subscriber.putCompletion()
+                } catch is CancellationError {
+                    subscriber.putError(.unavailable)
+                } catch {
+                    subscriber.putError(walletError(error))
+                }
+            }
+            cancellation.setTask(task)
+            return ActionDisposable {
+                cancellation.cancel()
+            }
         }
     }
 
@@ -1030,6 +1119,7 @@ public final class WalletContext {
             self.withMainQueue { [weak self] in
                 guard let self,
                       self.canUseNetworkRuntime,
+                      self.canSignCurrentWallet,
                       self.currentState.activeOperation != .disablingBackup,
                       self.secretRecord?.pendingKeyRotation == nil,
                       let pending = self.pendingTonConnectRequests.first,
@@ -1089,6 +1179,7 @@ public final class WalletContext {
             self.withMainQueue { [weak self] in
                 guard let self,
                       self.canUseNetworkRuntime,
+                      self.canSignCurrentWallet,
                       self.currentState.activeOperation != .disablingBackup,
                       self.secretRecord?.pendingKeyRotation == nil,
                       let pending = self.pendingTonConnectRequests.first,
@@ -1247,8 +1338,20 @@ public final class WalletContext {
     private var streamSnapshotTask: Task<Void, Never>?
     private var streamingTask: Task<Void, Never>?
     private var isStreamingConnected = false
+    private var serverStateTask: Task<Void, Never>?
+    private var serverStateRetryTask: Task<Void, Never>?
+    private var credentialExportTask: Task<Void, Never>?
+    private var credentialExportGeneration: Int?
+    private var identityResetTask: Task<Void, Error>?
+    private var serverStateRetryAttempt = 0
+    private var serverStateGeneration = 0
+    private var serverStateRequestGeneration: Int?
+    private var serverWalletState: TelegramCore.WalletState?
+    private var serverTransactionsNextOffset: String?
+    private var serverLastRefreshAt: Date?
 
     private let environmentDisposable = MetaDisposable()
+    private let walletStateUpdatesDisposable = MetaDisposable()
     private var isApplicationInForeground = false
     private var isAccountCurrent = false
     private var isNetworkAvailable = false
@@ -1270,6 +1373,13 @@ public final class WalletContext {
     private var fiatRatesRefreshTask: Task<Void, Never>?
     private var fiatRatesRequestGeneration = 0
     private var fiatRatesLastSuccessfulAt: Int32?
+    private var supportsLocalWalletMutations: Bool { false }
+    private var canSignCurrentWallet: Bool {
+        if case let .wallet(info) = self.currentState.phase {
+            return info.canSign
+        }
+        return false
+    }
 
     public init(
         engine: TelegramEngine,
@@ -1295,63 +1405,51 @@ public final class WalletContext {
 
         do {
             self.secretRecord = try self.vault.readSecret(SecretRecord.self)
-            if self.secretRecord == nil {
-                self.metadataRecord = nil
-                self.currentState = State(
-                    phase: .empty,
-                    balance: .idle,
-                    transactions: initialState.transactions,
-                    pendingTransfers: [],
-                    activeOperation: nil
-                )
-                self.statePromise.set(self.currentState)
+            self.metadataRecord = try self.vault.readMetadata(MetadataRecord.self) ?? MetadataRecord(
+                schemaVersion: 1,
+                pendingTransfers: []
+            )
+            let cachedBalance: Resource<Int64>
+            if let balance = self.metadataRecord?.balance {
+                cachedBalance = .value(balance, updatedAt: self.metadataRecord?.balanceUpdatedAt ?? 0)
             } else {
-                self.metadataRecord = try self.vault.readMetadata(MetadataRecord.self) ?? MetadataRecord(
-                    schemaVersion: 1,
-                    pendingTransfers: []
-                )
-                let cachedBalance: Resource<Int64>
-                if let balance = self.metadataRecord?.balance {
-                    cachedBalance = .value(balance, updatedAt: self.metadataRecord?.balanceUpdatedAt ?? 0)
-                } else {
-                    cachedBalance = .idle
-                }
-                let cachedTransactions = Array((self.metadataRecord?.transactions ?? []).prefix(walletMetadataCachedItemLimit))
-                let cachedCollectibles = Array((self.metadataRecord?.collectibles ?? []).prefix(walletMetadataCachedItemLimit))
-                let cachedFiatRates: Resource<[FiatCurrency: FiatRate]>
-                if let fiatRates = self.metadataRecord?.fiatRates {
-                    cachedFiatRates = .value(fiatRates, updatedAt: self.metadataRecord?.fiatRatesUpdatedAt ?? 0)
-                } else {
-                    cachedFiatRates = .idle
-                }
-                self.balanceLastSuccessfulAt = self.metadataRecord?.balanceUpdatedAt
-                self.fiatRatesLastSuccessfulAt = self.metadataRecord?.fiatRatesUpdatedAt
-                self.currentState = State(
-                    phase: .restoring,
-                    balance: cachedBalance,
-                    transactions: TransactionsState(
-                        items: cachedTransactions,
-                        offset: cachedTransactions.count,
-                        canLoadMore: false,
-                        isLoadingMore: false,
-                        error: nil
-                    ),
-                    collectibles: CollectiblesState(
-                        items: cachedCollectibles,
-                        offset: cachedCollectibles.count,
-                        canLoadMore: false,
-                        isLoadingMore: false,
-                        error: nil
-                    ),
-                    pendingTransfers: self.metadataRecord?.pendingTransfers ?? [],
-                    activeOperation: nil,
-                    fiat: FiatState(
-                        selectedCurrency: self.metadataRecord?.selectedFiatCurrency ?? .usd,
-                        rates: cachedFiatRates
-                    )
-                )
-                self.statePromise.set(self.currentState)
+                cachedBalance = .idle
             }
+            let cachedTransactions = Array((self.metadataRecord?.transactions ?? []).prefix(walletMetadataCachedItemLimit))
+            let cachedCollectibles = Array((self.metadataRecord?.collectibles ?? []).prefix(walletMetadataCachedItemLimit))
+            let cachedFiatRates: Resource<[FiatCurrency: FiatRate]>
+            if let fiatRates = self.metadataRecord?.fiatRates {
+                cachedFiatRates = .value(fiatRates, updatedAt: self.metadataRecord?.fiatRatesUpdatedAt ?? 0)
+            } else {
+                cachedFiatRates = .idle
+            }
+            self.balanceLastSuccessfulAt = self.metadataRecord?.balanceUpdatedAt
+            self.fiatRatesLastSuccessfulAt = self.metadataRecord?.fiatRatesUpdatedAt
+            self.currentState = State(
+                phase: .restoring,
+                balance: cachedBalance,
+                transactions: TransactionsState(
+                    items: cachedTransactions,
+                    offset: cachedTransactions.count,
+                    canLoadMore: false,
+                    isLoadingMore: false,
+                    error: nil
+                ),
+                collectibles: CollectiblesState(
+                    items: cachedCollectibles,
+                    offset: cachedCollectibles.count,
+                    canLoadMore: false,
+                    isLoadingMore: false,
+                    error: nil
+                ),
+                pendingTransfers: self.metadataRecord?.pendingTransfers ?? [],
+                activeOperation: nil,
+                fiat: FiatState(
+                    selectedCurrency: self.metadataRecord?.selectedFiatCurrency ?? .usd,
+                    rates: cachedFiatRates
+                )
+            )
+            self.statePromise.set(self.currentState)
         } catch let error as WalletKeychainVault.Error {
             let storageError = fatalStorageError(error)
             self.currentState = State(
@@ -1373,6 +1471,21 @@ public final class WalletContext {
             self.statePromise.set(self.currentState)
         }
 
+        self.walletStateUpdatesDisposable.set((self.engine.wallet.stateUpdates()
+        |> deliverOnMainQueue).start(next: { [weak self] state in
+            guard let self else {
+                return
+            }
+            self.serverStateTask?.cancel()
+            self.serverStateTask = nil
+            self.serverStateRequestGeneration = nil
+            self.credentialExportTask?.cancel()
+            self.credentialExportTask = nil
+            self.credentialExportGeneration = nil
+            self.serverStateGeneration &+= 1
+            self.applyServerWalletState(state)
+        }))
+
         self.environmentDisposable.set(combineLatest(queue: Queue.mainQueue(),
             applicationInForeground |> distinctUntilChanged,
             accountIsCurrent |> distinctUntilChanged,
@@ -1390,6 +1503,11 @@ public final class WalletContext {
 
     deinit {
         self.environmentDisposable.dispose()
+        self.walletStateUpdatesDisposable.dispose()
+        self.serverStateTask?.cancel()
+        self.serverStateRetryTask?.cancel()
+        self.credentialExportTask?.cancel()
+        self.identityResetTask?.cancel()
         self.walletInitializationTask?.cancel()
         self.runtimeTask?.cancel()
         self.tonConnectEventsTask?.cancel()
@@ -1435,7 +1553,7 @@ public final class WalletContext {
     }
 
     public func isMnemonicValid(words: [String]) -> Bool {
-        return (try? validatedMnemonicWords(words)) != nil
+        return (try? validatedWalletMnemonic(words)) != nil
     }
 
     public func containsMnemonicWord(_ word: String) -> Signal<Bool, WalletError> {
@@ -1446,19 +1564,22 @@ public final class WalletContext {
 
     public func validateMnemonic(words: [String]) -> Signal<Bool, WalletError> {
         return self.performUtility { _ in
-            let words = try validatedMnemonicWords(words)
-            return try Mnemonic.validate(words)
+            _ = try validatedWalletMnemonic(words)
+            return true
         }
     }
 
     public func generateMnemonic() -> Signal<[String], WalletError> {
         return self.performUtility { _ in
-            return try Mnemonic.generate(wordCount: 12)
+            return try RotationMnemonic.generate().anchor
         }
     }
 
     public func createWallet() -> Signal<CreatedWallet, WalletError> {
         return self.performOperation(.creating, cancelOnDispose: false) { context in
+            guard context.supportsLocalWalletMutations else {
+                throw WalletError.unavailable
+            }
             guard case .empty = context.currentState.phase, context.secretRecord == nil else {
                 throw WalletError.walletAlreadyExists
             }
@@ -1472,13 +1593,10 @@ public final class WalletContext {
 
             let kit = try await context.initializedKit()
             try Task.checkCancellation()
-            let words = normalizedMnemonicWords(try Mnemonic.generate(wordCount: 12))
-            guard words.count == 12 else {
-                throw WalletError.invalidMnemonic
-            }
-            let signer = try InMemorySigner(mnemonic: words)
+            let mnemonic = try RotationMnemonic.generate()
+            let words = mnemonic.anchor
             let walletVersion = WalletContext.defaultWalletVersion
-            let nativeWallet = try context.makeWallet(version: walletVersion, signer: signer)
+            let nativeWallet = try Wallet(v5Experimental: mnemonic, network: .mainnet)
             let address = nativeWallet.address.toString(bounceable: false)
             let publicKey = nativeWallet.publicKey.hexString
             let secret = SecretRecord(
@@ -1557,18 +1675,17 @@ public final class WalletContext {
 
     public func inspectImport(words: [String]) -> Signal<ImportInspection, WalletError> {
         return self.performOperation(.inspectingImport) { context in
+            guard context.supportsLocalWalletMutations else {
+                throw WalletError.unavailable
+            }
             guard case .empty = context.currentState.phase, context.secretRecord == nil else {
                 throw WalletError.walletAlreadyExists
             }
-            let words = try validatedMnemonicWords(words)
-            guard try Mnemonic.validate(words) else {
-                throw WalletError.invalidMnemonic
-            }
+            let mnemonic = try validatedWalletMnemonic(words)
             let kit = try await context.initializedKit()
-            let signer = try InMemorySigner(mnemonic: words)
-            let candidates = try await context.inspectImportCandidates(signer: signer, kit: kit)
+            let candidates = try await context.inspectImportCandidates(mnemonic: mnemonic, kit: kit)
             let suggestedVersion = context.suggestedImportVersion(candidates: candidates)
-            return ImportInspection(wordsCount: words.count, candidates: candidates, suggestedVersion: suggestedVersion)
+            return ImportInspection(wordsCount: mnemonic.words.count, candidates: candidates, suggestedVersion: suggestedVersion)
         }
     }
 
@@ -1582,6 +1699,9 @@ public final class WalletContext {
 
     private func importWallet(words: [String], requestedVersion: WalletVersion?) -> Signal<WalletInfo, WalletError> {
         return self.performOperation(.importing, cancelOnDispose: false) { context in
+            guard context.supportsLocalWalletMutations else {
+                throw WalletError.unavailable
+            }
             guard case .empty = context.currentState.phase, context.secretRecord == nil else {
                 throw WalletError.walletAlreadyExists
             }
@@ -1592,23 +1712,20 @@ public final class WalletContext {
             context.walletInitializationTask = nil
             context.runtimeTask?.cancel()
             context.runtimeTask = nil
-            let words = try validatedMnemonicWords(words)
+            let mnemonic = try validatedWalletMnemonic(words)
+            let words = mnemonic.words
             let kit = try await context.initializedKit()
-            guard try Mnemonic.validate(words) else {
-                throw WalletError.invalidMnemonic
-            }
-            let signer = try InMemorySigner(mnemonic: words)
             let version: WalletVersion
             if let requestedVersion {
                 version = requestedVersion
             } else {
-                let candidates = try await context.inspectImportCandidates(signer: signer, kit: kit)
+                let candidates = try await context.inspectImportCandidates(mnemonic: mnemonic, kit: kit)
                 guard let suggestedVersion = context.suggestedImportVersion(candidates: candidates) else {
                     throw WalletError.network
                 }
                 version = suggestedVersion
             }
-            let nativeWallet = try context.makeWallet(version: version, signer: signer)
+            let nativeWallet = try context.makeWallet(mnemonic: mnemonic, version: version)
 
             let address = nativeWallet.address.toString(bounceable: false)
             let publicKey = nativeWallet.publicKey.hexString
@@ -1690,19 +1807,50 @@ public final class WalletContext {
         return Signal { [weak self] subscriber in
             assert(Queue.mainQueue().isCurrent())
             guard let self,
-                  let secret = self.secretRecord,
-                  secret.pendingKeyRotation == nil else {
-                subscriber.putError(.noWallet)
+                  let serverWalletState = self.serverWalletState,
+                  case let .ready(_, canExportPhrase, addressString, publicKey, _) = serverWalletState,
+                  canExportPhrase,
+                  let address = try? Address.parse(addressString) else {
+                subscriber.putError(.unavailable)
                 return EmptyDisposable
             }
-            subscriber.putNext(secret.words)
-            subscriber.putCompletion()
-            return EmptyDisposable
+            let cancellation = WalletOperationCancellation()
+            let generation = self.serverStateGeneration
+            let task = Task { @MainActor [weak self] in
+                guard let self else {
+                    subscriber.putError(.unavailable)
+                    return
+                }
+                do {
+                    let words = try await WalletToncenterRequestContext<[String]>().run(
+                        self.engine.wallet.exportSecretPhrase()
+                    )
+                    try await self.installServerCredentials(
+                        words: words,
+                        address: address,
+                        publicKey: publicKey,
+                        generation: generation
+                    )
+                    subscriber.putNext(normalizedMnemonicWords(words))
+                    subscriber.putCompletion()
+                } catch is CancellationError {
+                    subscriber.putError(.unavailable)
+                } catch {
+                    subscriber.putError(walletError(error))
+                }
+            }
+            cancellation.setTask(task)
+            return ActionDisposable {
+                cancellation.cancel()
+            }
         }
     }
 
     public func prepareDisableBackup() -> Signal<PreparedBackupDisable, WalletError> {
         return self.performOperation(.preparingBackupDisable) { context in
+            guard context.supportsLocalWalletMutations else {
+                throw WalletError.unavailable
+            }
             guard let secret = context.secretRecord,
                   secret.walletVersion == .v5Experimental,
                   secret.originalPublicKey == nil,
@@ -1718,10 +1866,11 @@ public final class WalletContext {
                 throw WalletError.unavailable
             }
 
-            let words = normalizedMnemonicWords(try Mnemonic.generate(wordCount: 24))
-            guard words.count == 24 else {
-                throw WalletError.invalidMnemonic
+            guard case let .rotation(_, currentMnemonic) = try validatedWalletMnemonic(secret.words) else {
+                throw WalletError.storage(.corrupted)
             }
+            let replacementMnemonic = try RotationMnemonic.generate()
+            let words = currentMnemonic.rotated(to: replacementMnemonic).words
             let message = try await context.makeKeyRotationMessage(
                 wallet: wallet,
                 currentPublicKey: secret.publicKey,
@@ -1755,6 +1904,9 @@ public final class WalletContext {
             cancelOnDispose: false,
             cancelOnEnvironmentLoss: false
         ) { context in
+            guard context.supportsLocalWalletMutations else {
+                throw WalletError.unavailable
+            }
             guard context.approvingTonConnectRequestIds.isEmpty else {
                 throw WalletError.operationInProgress
             }
@@ -1840,6 +1992,9 @@ public final class WalletContext {
 
     public func prepareTransfer(address: String, amount: Int64, comment: String?) -> Signal<PreparedTransfer, WalletError> {
         return self.performOperation(.preparingTransfer) { context in
+            guard context.canSignCurrentWallet else {
+                throw WalletError.unavailable
+            }
             guard let secret = context.secretRecord, context.metadataRecord != nil else {
                 throw WalletError.noWallet
             }
@@ -1898,6 +2053,9 @@ public final class WalletContext {
         comment: String?
     ) -> Signal<PreparedTransfer, WalletError> {
         return self.performOperation(.preparingTransfer) { context in
+            guard context.canSignCurrentWallet else {
+                throw WalletError.unavailable
+            }
             guard let secret = context.secretRecord, context.metadataRecord != nil else {
                 throw WalletError.noWallet
             }
@@ -1972,6 +2130,9 @@ public final class WalletContext {
 
     public func submitTransfer(_ prepared: PreparedTransfer) -> Signal<SubmittedTransfer, WalletError> {
         return self.performOperation(.submittingTransfer, cancelOnDispose: false) { context in
+            guard context.canSignCurrentWallet else {
+                throw WalletError.unavailable
+            }
             guard let secret = context.secretRecord, let metadata = context.metadataRecord else {
                 throw WalletError.noWallet
             }
@@ -2107,11 +2268,10 @@ public final class WalletContext {
                 context.synchronizationTask = nil
                 context.synchronizationRequested = true
             }
-            let wallet = try await context.initializedWallet()
-            let requestOffset = context.currentState.transactions.offset
+            let requestOffset = context.serverTransactionsNextOffset ?? ""
             let loadingState = TransactionsState(
                 items: context.currentState.transactions.items,
-                offset: requestOffset,
+                offset: context.currentState.transactions.items.count,
                 canLoadMore: context.currentState.transactions.canLoadMore,
                 isLoadingMore: true,
                 error: context.currentState.transactions.error
@@ -2124,57 +2284,38 @@ public final class WalletContext {
                 activeOperation: context.currentState.activeOperation
             )
             do {
-                guard let client = context.toncenterClient else {
-                    throw WalletError.unavailable
-                }
-                let response = try await client.getTracesPage(
-                    account: wallet.address.toString(),
-                    limit: walletTransactionFetchLimit,
-                    offset: requestOffset
+                let response = try await WalletToncenterRequestContext<TelegramCore.WalletTransactions>().run(
+                    context.engine.wallet.getTransactions(
+                        inbound: true,
+                        outbound: true,
+                        offset: requestOffset,
+                        limit: Int32(walletTransactionFetchLimit)
+                    )
                 )
                 try Task.checkCancellation()
                 guard context.canUseNetworkRuntime else {
                     throw WalletError.unavailable
                 }
-                await context.resolveUsdtJettonWalletAddressIfNeeded(wallet: wallet)
-                try Task.checkCancellation()
-                guard context.canUseNetworkRuntime else {
-                    throw WalletError.unavailable
-                }
-                let activities = try WalletActivityExtractor.activities(
-                    from: response,
-                    walletAddress: wallet.address
+                let page = walletTransactions(from: response.items)
+                let items = mergeTransactions(
+                    existing: context.currentState.transactions.items,
+                    new: page
                 )
-                let collectibleMetadata = try await context.resolvedWalletActionCollectibles(
-                    addresses: collectibleAddresses(in: activities),
-                    client: client
-                )
-                let decodedPage = try walletTransactions(
-                    from: activities,
-                    usdtJettonWalletAddress: context.usdtJettonWalletRawAddress,
-                    collectibles: collectibleMetadata
-                )
-                let page = await context.resolvedCounterpartyNames(in: decodedPage, client: client)
-                let currentTransactions = context.currentState.transactions
-                let existingItems = context.transactionsByReconcilingStreamOverlays(
-                    in: currentTransactions.items,
-                    traceIDs: Set(response.traces.flatMap { trace in
-                        [trace.traceID, trace.externalHash].compactMap { $0 }.map(transactionTraceKey)
-                    })
-                )
-                let items = mergeTransactions(existing: existingItems, new: page)
+                context.serverTransactionsNextOffset = response.nextOffset
+                let updatedAt = currentTimestamp()
+                context.balanceLastSuccessfulAt = updatedAt
                 let state = TransactionsState(
                     items: items,
-                    offset: max(currentTransactions.offset, requestOffset + response.traces.count),
-                    canLoadMore: response.traces.count == walletTransactionFetchLimit,
+                    offset: items.count,
+                    canLoadMore: response.nextOffset != nil,
                     isLoadingMore: false,
                     error: nil
                 )
                 context.replaceState(
                     phase: context.currentState.phase,
-                    balance: context.currentState.balance,
+                    balance: .value(response.balance, updatedAt: updatedAt),
                     transactions: state,
-                    pendingTransfers: context.currentState.pendingTransfers,
+                    pendingTransfers: context.confirmPendingTransfers(with: items),
                     activeOperation: context.currentState.activeOperation
                 )
                 return Void()
@@ -2216,7 +2357,7 @@ public final class WalletContext {
                 context.synchronizationTask = nil
                 context.synchronizationRequested = true
             }
-            let wallet = try await context.initializedWallet()
+            let wallet = try await context.initializedWallet(requireSigner: false)
             let requestOffset = context.currentState.collectibles.offset
             let loadingState = CollectiblesState(
                 items: context.currentState.collectibles.items,
@@ -2306,6 +2447,9 @@ public final class WalletContext {
             cancelOnDispose: false,
             cancelOnEnvironmentLoss: false
         ) { context in
+            guard context.supportsLocalWalletMutations else {
+                throw WalletError.unavailable
+            }
             guard context.secretRecord?.pendingKeyRotation == nil else {
                 throw WalletError.operationInProgress
             }
@@ -2548,6 +2692,15 @@ public final class WalletContext {
     private func handleTonConnectConnectionRequest(_ request: ConnectionRequest) {
         assert(Queue.mainQueue().isCurrent())
 
+        guard self.canSignCurrentWallet else {
+            self.rejectTonConnectConnectionRequest(
+                request,
+                reason: "Wallet is read-only",
+                errorText: "Wallet signing is unavailable."
+            )
+            return
+        }
+
         if request.dApp.manifestFailure != nil {
             //TODO:localize
             let errorText = "The app information could not be verified. Connection was cancelled."
@@ -2624,7 +2777,7 @@ public final class WalletContext {
         let reject: (String, String) -> Void = { [weak self] reason, errorText in
             self?.rejectTonConnectTransactionRequest(request, reason: reason, errorText: errorText)
         }
-        guard let wallet = self.wallet, let secret = self.secretRecord else {
+        guard self.canSignCurrentWallet, let wallet = self.wallet, let secret = self.secretRecord else {
             //TODO:localize
             reject("Wallet is unavailable", "The transaction could not be opened because Wallet is unavailable.")
             return
@@ -2840,6 +2993,7 @@ public final class WalletContext {
     private func processPendingTonConnectUrlIfPossible() {
         guard self.tonConnectUrlTask == nil,
               self.canUseNetworkRuntime,
+              self.canSignCurrentWallet,
               self.wallet != nil,
               let kit = self.kit,
               let url = self.pendingTonConnectUrls.first else {
@@ -2878,6 +3032,453 @@ public final class WalletContext {
         }
     }
 
+    private func requestServerWalletState() {
+        guard self.canUseNetworkRuntime, self.serverStateTask == nil else {
+            return
+        }
+        let generation = self.serverStateGeneration
+        self.serverStateRequestGeneration = generation
+        self.serverStateTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            defer {
+                if self.serverStateRequestGeneration == generation {
+                    self.serverStateTask = nil
+                    self.serverStateRequestGeneration = nil
+                }
+            }
+            do {
+                let state = try await WalletToncenterRequestContext<TelegramCore.WalletState>().run(
+                    self.engine.wallet.getState()
+                )
+                guard self.canUseNetworkRuntime, self.serverStateGeneration == generation else {
+                    return
+                }
+                self.credentialExportTask?.cancel()
+                self.credentialExportTask = nil
+                self.credentialExportGeneration = nil
+                self.serverStateGeneration &+= 1
+                self.serverStateRetryAttempt = 0
+                self.applyServerWalletState(state)
+            } catch is CancellationError {
+            } catch {
+                guard self.serverStateGeneration == generation else {
+                    return
+                }
+                self.logSynchronizationFailure(scope: "wallet_state", error: error)
+                self.scheduleServerStateRetry()
+            }
+        }
+    }
+
+    private func scheduleServerStateRetry() {
+        guard self.canUseNetworkRuntime, self.serverStateRetryTask == nil else {
+            return
+        }
+        let delays: [TimeInterval] = [1.0, 2.0, 5.0, 10.0, 30.0]
+        let delay = delays[min(self.serverStateRetryAttempt, delays.count - 1)]
+        self.serverStateRetryAttempt = min(self.serverStateRetryAttempt + 1, delays.count - 1)
+        self.serverStateRetryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000.0))
+            } catch {
+                return
+            }
+            guard let self else {
+                return
+            }
+            self.serverStateRetryTask = nil
+            self.requestServerWalletState()
+        }
+    }
+
+    private func applyServerWalletState(_ state: TelegramCore.WalletState) {
+        assert(Queue.mainQueue().isCurrent())
+        self.serverWalletState = state
+        switch state {
+        case let .empty(provisioning):
+            self.cancelPendingTonConnectRequests()
+            self.activeOperationCancellation?.cancel()
+            self.lifecycleGeneration &+= 1
+            self.synchronizationTask?.cancel()
+            self.synchronizationTask = nil
+            self.pendingPollTask?.cancel()
+            self.pendingPollTask = nil
+            self.stopStreaming()
+            self.wallet = nil
+            if let kit = self.kit {
+                Task { await kit.stop() }
+            }
+            self.kit = nil
+            self.toncenterClient = nil
+            self.tonConnectEventsTask?.cancel()
+            self.tonConnectEventsTask = nil
+            self.serverTransactionsNextOffset = nil
+            self.serverLastRefreshAt = nil
+            self.replaceState(
+                phase: provisioning ? .provisioning : .empty,
+                balance: .idle,
+                transactions: TransactionsState(
+                    items: [],
+                    offset: 0,
+                    canLoadMore: false,
+                    isLoadingMore: false,
+                    error: nil
+                ),
+                collectibles: .empty,
+                pendingTransfers: [],
+                activeOperation: self.currentState.activeOperation
+            )
+            self.scheduleServerStateRetry()
+        case let .ready(backupEnabled, canExportPhrase, address, publicKey, balance):
+            self.serverStateRetryTask?.cancel()
+            self.serverStateRetryTask = nil
+            self.serverStateRetryAttempt = 0
+            do {
+                let parsedAddress = try Address.parse(address)
+                guard publicKey.count == 32 else {
+                    throw WalletError.storage(.identityMismatch)
+                }
+
+                let previousAddress = self.metadataRecord?.walletAddress ?? self.secretRecord?.address
+                let hasUnscopedWalletMetadata = previousAddress == nil && (
+                    self.metadataRecord?.balance != nil
+                    || !(self.metadataRecord?.pendingTransfers.isEmpty ?? true)
+                    || !(self.metadataRecord?.transactions?.isEmpty ?? true)
+                    || !(self.metadataRecord?.collectibles?.isEmpty ?? true)
+                )
+                let identityChanged = (previousAddress != nil && !walletAddressesEqual(previousAddress, address))
+                    || hasUnscopedWalletMetadata
+                if identityChanged {
+                    try self.resetForServerIdentityChange(address: address)
+                } else if self.metadataRecord?.walletAddress != address {
+                    self.metadataRecord?.walletAddress = address
+                    if let metadataRecord = self.metadataRecord {
+                        do {
+                            try self.vault.writeMetadata(metadataRecord)
+                        } catch let error as WalletKeychainVault.Error {
+                            throw WalletError.storage(fatalStorageError(error))
+                        }
+                    }
+                }
+
+                let activeWallet: Wallet
+                let walletVersion: WalletVersion
+                let canSign: Bool
+                if let secretWallet = self.validatedSecretWallet(
+                    serverAddress: parsedAddress,
+                    serverPublicKey: publicKey
+                ) {
+                    activeWallet = secretWallet
+                    walletVersion = self.secretRecord?.walletVersion ?? .v5Experimental
+                    canSign = true
+                } else {
+                    let readOnlySigner = WalletReadOnlySigner(publicKey: publicKey)
+                    let compatibleVersions: [WalletVersion] = [.v5Experimental, .v5R1, .v4R2]
+                    guard let readOnlyMatch = compatibleVersions.lazy.compactMap({ version -> (WalletVersion, Wallet)? in
+                        guard let wallet = try? self.makeWallet(
+                            version: version,
+                            signer: readOnlySigner,
+                            workchain: parsedAddress.workchain
+                        ), wallet.address == parsedAddress else {
+                            return nil
+                        }
+                        return (version, wallet)
+                    }).first else {
+                        throw WalletError.storage(.identityMismatch)
+                    }
+                    walletVersion = readOnlyMatch.0
+                    activeWallet = readOnlyMatch.1
+                    canSign = false
+                }
+
+                self.wallet = activeWallet
+                self.balanceLastSuccessfulAt = currentTimestamp()
+                let info = WalletInfo(
+                    address: address,
+                    publicKey: publicKey.hexString,
+                    version: walletVersion,
+                    backupEnabled: backupEnabled,
+                    canExportPhrase: canExportPhrase,
+                    canSign: canSign,
+                    canDisableBackup: false
+                )
+                self.replaceState(
+                    phase: .wallet(info),
+                    balance: .value(balance, updatedAt: self.balanceLastSuccessfulAt ?? currentTimestamp()),
+                    transactions: self.currentState.transactions,
+                    pendingTransfers: self.metadataRecord?.pendingTransfers ?? [],
+                    activeOperation: self.currentState.activeOperation
+                )
+
+                let generation = self.serverStateGeneration
+                if self.canUseNetworkRuntime && !canSign && canExportPhrase {
+                    self.exportServerCredentialsIfNeeded(
+                        address: parsedAddress,
+                        publicKey: publicKey,
+                        generation: generation
+                    )
+                }
+                Task { @MainActor [weak self] in
+                    guard let self, self.canUseNetworkRuntime, self.serverStateGeneration == generation else {
+                        return
+                    }
+                    do {
+                        if let identityResetTask = self.identityResetTask {
+                            try await identityResetTask.value
+                            self.identityResetTask = nil
+                        }
+                        let kit = try await self.initializedKit()
+                        guard let walletToRegister = self.wallet,
+                              walletToRegister.address == parsedAddress,
+                              self.serverStateGeneration == generation else {
+                            return
+                        }
+                        await kit.register(wallet: walletToRegister)
+                        self.synchronizationRequested = true
+                        self.requestSynchronization()
+                        self.startPendingPollingIfNeeded()
+                    } catch let error as WalletTonConnectStorage.Error {
+                        self.replaceState(
+                            phase: .failed(fatalStorageError(error)),
+                            balance: self.currentState.balance,
+                            transactions: self.currentState.transactions,
+                            pendingTransfers: self.currentState.pendingTransfers,
+                            activeOperation: self.currentState.activeOperation
+                        )
+                    } catch {
+                        self.logSynchronizationFailure(scope: "wallet_runtime", error: error)
+                    }
+                }
+            } catch let error as WalletError {
+                if case let .storage(storageError) = error {
+                    self.replaceState(
+                        phase: .failed(storageError),
+                        balance: self.currentState.balance,
+                        transactions: self.currentState.transactions,
+                        pendingTransfers: [],
+                        activeOperation: self.currentState.activeOperation
+                    )
+                }
+            } catch {
+                self.replaceState(
+                    phase: .failed(.identityMismatch),
+                    balance: self.currentState.balance,
+                    transactions: self.currentState.transactions,
+                    pendingTransfers: [],
+                    activeOperation: self.currentState.activeOperation
+                )
+            }
+        }
+    }
+
+    private func validatedSecretWallet(
+        serverAddress: Address,
+        serverPublicKey: Data
+    ) -> Wallet? {
+        guard let secret = self.secretRecord,
+              secret.pendingKeyRotation == nil,
+              secret.network == Network.mainnet.chainId,
+              walletAddressesEqual(secret.address, serverAddress.toString(bounceable: false)),
+              secret.publicKey.lowercased() == serverPublicKey.hexString.lowercased() else {
+            return nil
+        }
+        guard let wallet = try? self.restoredWallet(secret: secret),
+              wallet.publicKey == serverPublicKey,
+              wallet.address == serverAddress else {
+            return nil
+        }
+        return wallet
+    }
+
+    private func resetForServerIdentityChange(address: String) throws {
+        self.cancelPendingTonConnectRequests()
+        self.pendingTonConnectUrls.removeAll()
+        self.tonConnectUrlTask?.cancel()
+        self.tonConnectUrlTask = nil
+        self.activeOperationCancellation?.cancel()
+        self.lifecycleGeneration &+= 1
+        self.walletInitializationTask?.cancel()
+        self.walletInitializationTask = nil
+        self.runtimeTask?.cancel()
+        self.runtimeTask = nil
+        self.synchronizationTask?.cancel()
+        self.synchronizationTask = nil
+        self.retryTask?.cancel()
+        self.retryTask = nil
+        self.pendingPollTask?.cancel()
+        self.pendingPollTask = nil
+        self.streamSnapshotTask?.cancel()
+        self.streamSnapshotTask = nil
+        self.stopStreaming()
+        self.wallet = nil
+        self.preparedTransfers.removeAll()
+        self.preparedBackupDisables.removeAll()
+        self.serverTransactionsNextOffset = nil
+        self.serverLastRefreshAt = nil
+        self.streamTransactionOverlaysByTrace.removeAll()
+        self.invalidatedStreamTraceHashes.removeAll()
+        self.collectibleMetadataCache.removeAll()
+        self.usdtJettonWalletRawAddress = nil
+        var metadata = self.metadataRecord ?? MetadataRecord(schemaVersion: 1, pendingTransfers: [])
+        metadata.walletAddress = address
+        metadata.pendingTransfers = []
+        metadata.balance = nil
+        metadata.balanceUpdatedAt = nil
+        metadata.transactions = nil
+        metadata.collectibles = nil
+        self.metadataRecord = metadata
+        do {
+            try self.vault.writeMetadata(metadata)
+        } catch let error as WalletKeychainVault.Error {
+            throw WalletError.storage(fatalStorageError(error))
+        }
+        self.balanceLastSuccessfulAt = nil
+        self.replaceState(
+            phase: .restoring,
+            balance: .idle,
+            transactions: TransactionsState(
+                items: [],
+                offset: 0,
+                canLoadMore: false,
+                isLoadingMore: false,
+                error: nil
+            ),
+            collectibles: .empty,
+            pendingTransfers: [],
+            activeOperation: self.currentState.activeOperation
+        )
+        let previousKit = self.kit
+        self.kit = nil
+        self.toncenterClient = nil
+        self.tonConnectEventsTask?.cancel()
+        self.tonConnectEventsTask = nil
+        self.identityResetTask?.cancel()
+        self.identityResetTask = Task { [tonConnectStorage = self.tonConnectStorage] in
+            if let previousKit {
+                await previousKit.stop()
+            }
+            try await tonConnectStorage.clear()
+        }
+    }
+
+    private func exportServerCredentialsIfNeeded(
+        address: Address,
+        publicKey: Data,
+        generation: Int
+    ) {
+        guard self.credentialExportTask == nil else {
+            return
+        }
+        self.credentialExportGeneration = generation
+        self.credentialExportTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            defer {
+                if self.credentialExportGeneration == generation {
+                    self.credentialExportTask = nil
+                    self.credentialExportGeneration = nil
+                }
+            }
+            do {
+                let words = try await WalletToncenterRequestContext<[String]>().run(
+                    self.engine.wallet.exportSecretPhrase()
+                )
+                try await self.installServerCredentials(
+                    words: words,
+                    address: address,
+                    publicKey: publicKey,
+                    generation: generation
+                )
+            } catch is CancellationError {
+            } catch {
+                self.logSynchronizationFailure(scope: "wallet_secret_export", error: error)
+            }
+        }
+    }
+
+    private func installServerCredentials(
+        words: [String],
+        address: Address,
+        publicKey: Data,
+        generation: Int
+    ) async throws {
+        let mnemonic = try validatedWalletMnemonic(words)
+        let normalizedWords = mnemonic.words
+        let compatibleVersions: [WalletVersion]
+        switch mnemonic {
+        case .ton:
+            compatibleVersions = [.v5R1, .v4R2]
+        case .rotation:
+            compatibleVersions = [.v5R1]
+        }
+        guard let match = compatibleVersions.lazy.compactMap({ version -> (WalletVersion, Wallet)? in
+            let wallet = try? self.makeWallet(
+                mnemonic: mnemonic,
+                version: version,
+                workchain: address.workchain
+            )
+            
+            if let wallet, wallet.publicKey == publicKey, wallet.address == address {
+                return (version, wallet)
+            } else {
+                return nil
+            }            
+        }).first, self.serverStateGeneration == generation else {
+            throw WalletError.storage(.identityMismatch)
+        }
+        let (walletVersion, wallet) = match
+        let originalPublicKey: String?
+        switch mnemonic {
+        case .ton:
+            originalPublicKey = nil
+        case let .rotation(_, rotation):
+            let anchorPublicKey = try rotation.anchorKeyPair().publicKey
+            originalPublicKey = anchorPublicKey == publicKey ? nil : anchorPublicKey.hexString
+        }
+        let secret = SecretRecord(
+            schemaVersion: 1,
+            words: normalizedWords,
+            walletVersion: walletVersion,
+            network: Network.mainnet.chainId,
+            walletId: Int(wallet.contractWalletID),
+            workchain: Int(wallet.address.workchain),
+            address: address.toString(bounceable: false),
+            publicKey: publicKey.hexString,
+            originalPublicKey: originalPublicKey
+        )
+        do {
+            try self.vault.writeSecret(secret)
+        } catch let error as WalletKeychainVault.Error {
+            throw WalletError.storage(fatalStorageError(error))
+        }
+        self.secretRecord = secret
+        self.wallet = wallet
+        if let kit = self.kit {
+            await kit.register(wallet: wallet)
+        }
+        if case let .wallet(info) = self.currentState.phase {
+            self.replaceState(
+                phase: .wallet(WalletInfo(
+                    address: info.address,
+                    publicKey: info.publicKey,
+                    version: walletVersion,
+                    backupEnabled: info.backupEnabled,
+                    canExportPhrase: info.canExportPhrase,
+                    canSign: true,
+                    canDisableBackup: false
+                )),
+                balance: self.currentState.balance,
+                transactions: self.currentState.transactions,
+                pendingTransfers: self.currentState.pendingTransfers,
+                activeOperation: self.currentState.activeOperation
+            )
+        }
+        self.processPendingTonConnectUrlIfPossible()
+    }
+
     private func environmentDidChange() {
         if !self.canUseNetworkRuntime {
             self.cancelPendingTonConnectRequests()
@@ -2890,6 +3491,15 @@ public final class WalletContext {
             self.activeOperationCancellation?.cancel()
             self.synchronizationTask?.cancel()
             self.synchronizationTask = nil
+            self.serverStateGeneration &+= 1
+            self.serverStateTask?.cancel()
+            self.serverStateTask = nil
+            self.serverStateRequestGeneration = nil
+            self.serverStateRetryTask?.cancel()
+            self.serverStateRetryTask = nil
+            self.credentialExportTask?.cancel()
+            self.credentialExportTask = nil
+            self.credentialExportGeneration = nil
             self.retryTask?.cancel()
             self.retryTask = nil
             self.pendingPollTask?.cancel()
@@ -2949,7 +3559,10 @@ public final class WalletContext {
     }
 
     private var hasTonConnectRuntimeDemand: Bool {
-        return self.secretRecord != nil
+        if case let .wallet(info) = self.currentState.phase {
+            return info.canSign
+        }
+        return false
     }
 
     private var hasRuntimeDemand: Bool {
@@ -2966,79 +3579,29 @@ public final class WalletContext {
         } else {
             self.stopWalletDataRuntime()
         }
-        guard self.secretRecord != nil else {
-            return
-        }
-        if self.wallet == nil, self.runtimeTask == nil {
-            let generation = self.lifecycleGeneration
-            self.runtimeTask = Task { @MainActor [weak self] in
-                guard let self else {
-                    return
-                }
-                defer {
-                    if self.lifecycleGeneration == generation {
-                        self.runtimeTask = nil
-                    }
-                }
-                do {
-                    _ = try await self.initializedWallet()
-                    guard self.lifecycleGeneration == generation, self.secretRecord != nil else {
-                        return
-                    }
-                    self.retryAttempt = 0
-                    if self.hasWalletDataRuntimeDemand {
-                        self.synchronizationRequested = true
-                        self.requestSynchronization()
-                        self.startPendingPollingIfNeeded()
-                    }
-                    self.processPendingTonConnectUrlIfPossible()
-                } catch let error as WalletError {
-                    guard self.lifecycleGeneration == generation else {
-                        return
-                    }
-                    if case let .storage(storageError) = error {
-                        self.replaceState(
-                            phase: .failed(storageError),
-                            balance: self.currentState.balance,
-                            transactions: self.currentState.transactions,
-                            pendingTransfers: self.currentState.pendingTransfers,
-                            activeOperation: self.currentState.activeOperation
-                        )
-                    } else {
-                        let syncError = synchronizationError(error)
-                        self.logSynchronizationFailure(
-                            scope: "runtime_restore",
-                            error: error,
-                            category: syncError
-                        )
-                        self.markSynchronizationUnavailable(error: syncError)
-                        if syncError.isRetryable {
-                            self.scheduleRetry()
-                        }
-                    }
-                } catch {
-                    guard self.lifecycleGeneration == generation else {
-                        return
-                    }
-                    let syncError = synchronizationError(error)
-                    self.logSynchronizationFailure(
-                        scope: "runtime_restore",
-                        error: error,
-                        category: syncError
-                    )
-                    self.markSynchronizationUnavailable(error: syncError)
-                    if syncError.isRetryable {
-                        self.scheduleRetry()
-                    }
-                }
-            }
+        if let serverWalletState = self.serverWalletState, case .ready = serverWalletState {
         } else {
-            if self.hasWalletDataRuntimeDemand {
-                self.requestSynchronization()
-                self.startPendingPollingIfNeeded()
-            }
-            self.processPendingTonConnectUrlIfPossible()
+            self.requestServerWalletState()
         }
+        if self.wallet == nil, let state = self.serverWalletState {
+            self.applyServerWalletState(state)
+        }
+        if !self.canSignCurrentWallet,
+           let serverWalletState = self.serverWalletState,
+           case let .ready(_, canExportPhrase, address, publicKey, _) = serverWalletState,
+           canExportPhrase,
+           let parsedAddress = try? Address.parse(address) {
+            self.exportServerCredentialsIfNeeded(
+                address: parsedAddress,
+                publicKey: publicKey,
+                generation: self.serverStateGeneration
+            )
+        }
+        if self.wallet != nil, self.hasWalletDataRuntimeDemand {
+            self.requestSynchronization()
+            self.startPendingPollingIfNeeded()
+        }
+        self.processPendingTonConnectUrlIfPossible()
     }
 
     private func stopWalletDataRuntime() {
@@ -3251,12 +3814,18 @@ public final class WalletContext {
             transferValidityWindow: 300,
             emulateBeforeApproval: true
         )
-        let client = ToncenterClient(network: .mainnet, apiKey: walletApiKey, timeout: 30.0)
+        let client = ToncenterClient(
+            network: .mainnet,
+            transport: WalletToncenterTransport(engine: self.engine)
+        )
+        let streamingURLProvider = WalletToncenterStreamingURLProvider(engine: self.engine)
         let kit = TonWalletKit(
             configuration: configuration,
             storage: self.tonConnectStorage,
             clients: [.mainnet: client],
-            streamingAPIKey: walletApiKey
+            streamingURLProvider: { _ in
+                return try await streamingURLProvider.url()
+            }
         )
         let events = await kit.eventStream()
         guard self.canUseNetworkRuntime, self.lifecycleGeneration == generation else {
@@ -3274,44 +3843,20 @@ public final class WalletContext {
         return kit
     }
 
-    private func initializedWallet() async throws -> Wallet {
+    private func initializedWallet(requireSigner: Bool = true) async throws -> Wallet {
         guard self.canUseNetworkRuntime else {
             throw WalletError.unavailable
         }
         if let wallet = self.wallet {
-            return wallet
-        }
-        if let task = self.walletInitializationTask {
-            let generation = self.lifecycleGeneration
-            let wallet = try await task.value
-            guard self.canUseNetworkRuntime, self.lifecycleGeneration == generation else {
-                throw WalletError.unavailable
+            if requireSigner {
+                guard case let .wallet(info) = self.currentState.phase, info.canSign else {
+                    throw WalletError.unavailable
+                }
             }
             return wallet
         }
-        let generation = self.lifecycleGeneration
-        let task: Task<Wallet, Error> = Task { @MainActor [weak self] in
-            guard let self else {
-                throw WalletError.unavailable
-            }
-            return try await self.restoreWallet(generation: generation)
-        }
-        self.walletInitializationTask = task
-        do {
-            let wallet = try await task.value
-            if self.lifecycleGeneration == generation {
-                self.walletInitializationTask = nil
-            }
-            guard self.canUseNetworkRuntime, self.lifecycleGeneration == generation else {
-                throw WalletError.unavailable
-            }
-            return wallet
-        } catch {
-            if self.lifecycleGeneration == generation {
-                self.walletInitializationTask = nil
-            }
-            throw error
-        }
+        self.requestServerWalletState()
+        throw WalletError.unavailable
     }
 
     private func restoreWallet(generation: Int) async throws -> Wallet {
@@ -3423,16 +3968,42 @@ public final class WalletContext {
         }
     }
 
+    private func makeWallet(
+        mnemonic: ValidatedWalletMnemonic,
+        version: WalletVersion,
+        workchain: Int8 = 0
+    ) throws -> Wallet {
+        switch mnemonic {
+        case let .ton(words):
+            guard version != .v5Experimental else {
+                throw WalletError.invalidMnemonic
+            }
+            return try self.makeWallet(
+                version: version,
+                signer: InMemorySigner(mnemonic: words),
+                workchain: workchain
+            )
+        case let .rotation(_, mnemonic):
+            if version == .v5R1 {
+                return try self.makeWallet(
+                    version: version,
+                    signer: InMemorySigner(mnemonic: mnemonic.anchor),
+                    workchain: workchain
+                )
+            }
+            guard version == .v5Experimental || version == .v5R1 else {
+                throw WalletError.invalidMnemonic
+            }
+            return try Wallet(v5Experimental: mnemonic, network: .mainnet, workchain: workchain)
+        }
+    }
+
     private func restoredWallet(secret: SecretRecord) throws -> Wallet {
-        let words: [String]
+        let mnemonic: ValidatedWalletMnemonic
         do {
-            words = try validatedMnemonicWords(secret.words)
+            mnemonic = try validatedWalletMnemonic(secret.words)
         } catch {
             throw WalletError.storage(.corrupted)
-        }
-        let signer = try InMemorySigner(mnemonic: words)
-        guard signer.publicKey.hexString == secret.publicKey else {
-            throw WalletError.storage(.identityMismatch)
         }
 
         let workchain: Int8
@@ -3453,24 +4024,52 @@ public final class WalletContext {
         } else {
             walletID = nil
         }
-        let originalPublicKey: Data?
+        let storedOriginalPublicKey: Data?
         if let value = secret.originalPublicKey {
             guard secret.walletVersion == .v5Experimental,
                   let data = Data(hexString: value),
                   data.count == 32 else {
                 throw WalletError.storage(.corrupted)
             }
-            originalPublicKey = data
+            storedOriginalPublicKey = data
         } else {
-            originalPublicKey = nil
+            storedOriginalPublicKey = nil
         }
-        let wallet = try self.makeWallet(
-            version: secret.walletVersion,
-            signer: signer,
-            walletID: walletID,
-            workchain: workchain,
-            originalPublicKey: originalPublicKey
-        )
+
+        let wallet: Wallet
+        switch mnemonic {
+        case let .ton(words):
+            guard secret.walletVersion != .v5Experimental,
+                  storedOriginalPublicKey == nil else {
+                throw WalletError.storage(.corrupted)
+            }
+            wallet = try self.makeWallet(
+                version: secret.walletVersion,
+                signer: InMemorySigner(mnemonic: words),
+                walletID: walletID,
+                workchain: workchain
+            )
+        case let .rotation(_, rotation):
+            guard secret.walletVersion == .v5Experimental else {
+                throw WalletError.storage(.corrupted)
+            }
+            let anchorPublicKey = try rotation.anchorKeyPair().publicKey
+            let signingKeys = try rotation.signingKeyPair()
+            if let storedOriginalPublicKey, storedOriginalPublicKey != anchorPublicKey {
+                throw WalletError.storage(.identityMismatch)
+            }
+            if let walletID {
+                wallet = try Wallet(
+                    v5ExperimentalRotated: InMemorySigner(keyPair: signingKeys),
+                    originalPublicKey: anchorPublicKey,
+                    network: .mainnet,
+                    walletID: walletID,
+                    workchain: workchain
+                )
+            } else {
+                wallet = try Wallet(v5Experimental: rotation, network: .mainnet, workchain: workchain)
+            }
+        }
         guard wallet.address.toString(bounceable: false) == secret.address,
               wallet.publicKey.hexString == secret.publicKey else {
             throw WalletError.storage(.identityMismatch)
@@ -3497,13 +4096,11 @@ public final class WalletContext {
             throw WalletError.storage(.identityMismatch)
         }
 
-        let words = try validatedMnemonicWords(newWords)
-        let newKeys = try Mnemonic.keyPair(from: words)
-        let rotation = try KeyRotation.make(
-            address: wallet.address,
-            newPublicKey: newKeys.publicKey,
-            newSecretKey: newKeys.secretKey
-        )
+        guard case let .rotation(_, mnemonic) = try validatedWalletMnemonic(newWords) else {
+            throw WalletError.invalidMnemonic
+        }
+        let newKeys = try mnemonic.signingKeyPair()
+        let rotation = try wallet.keyRotation(to: mnemonic)
         guard try rotation.isProofValid(for: wallet.address) else {
             throw WalletError.previewFailed
         }
@@ -3687,26 +4284,31 @@ public final class WalletContext {
         secret: SecretRecord,
         pending: PendingKeyRotation
     ) throws -> SecretRecord {
-        let words: [String]
+        let mnemonic: RotationMnemonic
         do {
-            words = try validatedMnemonicWords(pending.words)
+            guard case let .rotation(_, value) = try validatedWalletMnemonic(pending.words) else {
+                throw WalletError.storage(.corrupted)
+            }
+            mnemonic = value
         } catch {
             throw WalletError.storage(.corrupted)
         }
-        let signer = try InMemorySigner(mnemonic: words)
-        guard signer.publicKey.hexString == pending.publicKey else {
+        let signingPublicKey = try mnemonic.signingKeyPair().publicKey
+        let anchorPublicKey = try mnemonic.anchorKeyPair().publicKey
+        guard signingPublicKey.hexString == pending.publicKey,
+              anchorPublicKey.hexString == secret.publicKey else {
             throw WalletError.storage(.identityMismatch)
         }
         let finalized = SecretRecord(
             schemaVersion: secret.schemaVersion,
-            words: words,
+            words: mnemonic.words,
             walletVersion: secret.walletVersion,
             network: secret.network,
             walletId: secret.walletId,
             workchain: secret.workchain,
             address: secret.address,
             publicKey: pending.publicKey,
-            originalPublicKey: secret.publicKey,
+            originalPublicKey: anchorPublicKey.hexString,
             pendingKeyRotation: nil
         )
         do {
@@ -3776,21 +4378,33 @@ public final class WalletContext {
     }
 
     private func inspectImportCandidates(
-        signer: any WalletSigner,
+        mnemonic: ValidatedWalletMnemonic,
         kit: TonWalletKit
     ) async throws -> [ImportCandidate] {
         var candidates: [ImportCandidate] = []
-        candidates.reserveCapacity(3)
-        for version in [WalletVersion.v4R2, .v5R1, .v5Experimental] {
-            let wallet = try self.makeWallet(version: version, signer: signer)
+        let versions: [WalletVersion]
+        switch mnemonic {
+        case .ton:
+            versions = [.v4R2, .v5R1]
+        case .rotation:
+            versions = [.v5Experimental]
+        }
+        candidates.reserveCapacity(versions.count)
+        for version in versions {
+            let wallet = try self.makeWallet(mnemonic: mnemonic, version: version)
             candidates.append(try await self.inspectCandidate(version: version, wallet: wallet, kit: kit))
         }
         return candidates
     }
 
     private func suggestedImportVersion(candidates: [ImportCandidate]) -> WalletVersion? {
-        guard candidates.count == WalletContext.importVersionPriority.count,
-              candidates.allSatisfy({ $0.isActive != nil }) else {
+        guard !candidates.isEmpty else {
+            return nil
+        }
+        if candidates.count == 1 {
+            return candidates[0].version
+        }
+        guard candidates.allSatisfy({ $0.isActive != nil }) else {
             return nil
         }
         for version in WalletContext.importVersionPriority {
@@ -3798,7 +4412,9 @@ public final class WalletContext {
                 return version
             }
         }
-        return WalletContext.defaultWalletVersion
+        return WalletContext.importVersionPriority.first(where: { version in
+            candidates.contains(where: { $0.version == version })
+        })
     }
 
     private func inspectCandidate(
@@ -3957,35 +4573,7 @@ public final class WalletContext {
         in transactions: [Transaction],
         client: ToncenterClient
     ) async -> [Transaction] {
-        var names: [String: String] = [:]
-        let unresolved = transactions.compactMap { transaction in
-            transaction.counterpartyName == nil ? transaction.counterparty : nil
-        }
-        for address in Set(unresolved) {
-            if let name = try? await client.reverseResolveDNS(address: address), !name.isEmpty {
-                names[address] = name
-            }
-        }
-        guard !names.isEmpty else { return transactions }
-        return transactions.map { transaction in
-            Transaction(
-                id: transaction.id,
-                transactionHash: transaction.transactionHash,
-                externalMessageHash: transaction.externalMessageHash,
-                logicalTime: transaction.logicalTime,
-                timestamp: transaction.timestamp,
-                direction: transaction.direction,
-                amount: transaction.amount,
-                fee: transaction.fee,
-                counterparty: transaction.counterparty,
-                counterpartyName: transaction.counterpartyName
-                    ?? transaction.counterparty.flatMap { names[$0] },
-                comment: transaction.comment,
-                currency: transaction.currency,
-                collectible: transaction.collectible,
-                status: transaction.status
-            )
-        }
+        return transactions
     }
 
     private func resolveUsdtJettonWalletAddressIfNeeded(wallet: Wallet) async {
@@ -4026,16 +4614,9 @@ public final class WalletContext {
         }
         self.synchronizationRequested = false
         let lifecycleGeneration = self.lifecycleGeneration
-        let previousBalance = self.currentState.balance.currentValue
-        let balanceState: Resource<Int64>
-        if case .stale = self.currentState.balance {
-            balanceState = self.currentState.balance
-        } else {
-            balanceState = .loading(previous: previousBalance)
-        }
         self.replaceState(
             phase: self.currentState.phase,
-            balance: balanceState,
+            balance: self.currentState.balance,
             transactions: TransactionsState(
                 items: self.currentState.transactions.items,
                 offset: self.currentState.transactions.offset,
@@ -4059,150 +4640,74 @@ public final class WalletContext {
             }
             var hadError = false
             var shouldRetry = false
-            do {
-                guard let kit = self.kit else {
-                    throw WalletError.unavailable
-                }
-                let balance = try await kit.balance(of: wallet.id)
-                try Task.checkCancellation()
-                guard self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
-                      self.wallet?.address == wallet.address else {
+            let shouldRefreshServer = self.serverLastRefreshAt.map {
+                Date().timeIntervalSince($0) >= walletServerRefreshInterval
+            } ?? true
+            if shouldRefreshServer {
+                do {
+                    let response = try await WalletToncenterRequestContext<TelegramCore.WalletTransactions>().run(
+                        self.engine.wallet.getTransactions(
+                            inbound: true,
+                            outbound: true,
+                            offset: "",
+                            limit: Int32(walletTransactionFetchLimit)
+                        )
+                    )
+                    try Task.checkCancellation()
+                    guard self.lifecycleGeneration == lifecycleGeneration,
+                          self.wallet?.address == wallet.address else {
+                        return
+                    }
+                    let transactions = walletTransactions(from: response.items)
+                    self.serverTransactionsNextOffset = response.nextOffset
+                    self.serverLastRefreshAt = Date()
+                    let updatedAt = currentTimestamp()
+                    self.balanceLastSuccessfulAt = updatedAt
+                    let state = TransactionsState(
+                        items: transactions,
+                        offset: transactions.count,
+                        canLoadMore: response.nextOffset != nil,
+                        isLoadingMore: false,
+                        error: nil
+                    )
+                    self.replaceState(
+                        phase: self.currentState.phase,
+                        balance: .value(response.balance, updatedAt: updatedAt),
+                        transactions: state,
+                        pendingTransfers: self.confirmPendingTransfers(with: transactions),
+                        activeOperation: self.currentState.activeOperation
+                    )
+                } catch is CancellationError {
                     return
+                } catch {
+                    guard !Task.isCancelled,
+                          self.lifecycleGeneration == lifecycleGeneration,
+                          self.wallet?.address == wallet.address else {
+                        return
+                    }
+                    hadError = true
+                    let syncError = synchronizationError(error)
+                    self.logSynchronizationFailure(
+                        scope: "transactions_snapshot",
+                        error: error,
+                        category: syncError
+                    )
+                    shouldRetry = shouldRetry || syncError.isRetryable
+                    let state = TransactionsState(
+                        items: self.currentState.transactions.items,
+                        offset: self.currentState.transactions.items.count,
+                        canLoadMore: self.serverTransactionsNextOffset != nil,
+                        isLoadingMore: false,
+                        error: syncError
+                    )
+                    self.replaceState(
+                        phase: self.currentState.phase,
+                        balance: self.currentState.balance,
+                        transactions: state,
+                        pendingTransfers: self.currentState.pendingTransfers,
+                        activeOperation: self.currentState.activeOperation
+                    )
                 }
-                guard let value = Int64(String(balance)) else {
-                    throw WalletError.sdk("Balance is outside Int64 range")
-                }
-                let updatedAt = currentTimestamp()
-                self.balanceLastSuccessfulAt = updatedAt
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: .value(value, updatedAt: updatedAt),
-                    transactions: self.currentState.transactions,
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled,
-                      self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
-                      self.wallet?.address == wallet.address else {
-                    return
-                }
-                hadError = true
-                let syncError = synchronizationError(error)
-                self.logSynchronizationFailure(
-                    scope: "balance_snapshot",
-                    error: error,
-                    category: syncError
-                )
-                shouldRetry = shouldRetry || syncError.isRetryable
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: .stale(
-                        previous: self.currentState.balance.currentValue,
-                        error: syncError,
-                        lastSuccessfulAt: self.currentState.balance.lastSuccessfulAt ?? self.balanceLastSuccessfulAt
-                    ),
-                    transactions: self.currentState.transactions,
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
-            }
-
-            do {
-                guard let client = self.toncenterClient else {
-                    throw WalletError.unavailable
-                }
-                let response = try await client.getTracesPage(
-                    account: wallet.address.toString(),
-                    limit: walletTransactionFetchLimit,
-                    offset: 0
-                )
-                try Task.checkCancellation()
-                guard self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
-                      self.wallet?.address == wallet.address else {
-                    return
-                }
-                await self.resolveUsdtJettonWalletAddressIfNeeded(wallet: wallet)
-                try Task.checkCancellation()
-                guard self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
-                      self.wallet?.address == wallet.address else {
-                    return
-                }
-                let activities = try WalletActivityExtractor.activities(
-                    from: response,
-                    walletAddress: wallet.address
-                )
-                let collectibleMetadata = try await self.resolvedWalletActionCollectibles(
-                    addresses: collectibleAddresses(in: activities),
-                    client: client
-                )
-                let decodedTransactions = try walletTransactions(
-                    from: activities,
-                    usdtJettonWalletAddress: self.usdtJettonWalletRawAddress,
-                    collectibles: collectibleMetadata
-                )
-                let transactions = await self.resolvedCounterpartyNames(
-                    in: decodedTransactions,
-                    client: client
-                )
-                let authoritativeExisting = self.transactionsByReconcilingStreamOverlays(
-                    in: self.currentState.transactions.items,
-                    traceIDs: Set(response.traces.flatMap { trace in
-                        [trace.traceID, trace.externalHash].compactMap { $0 }.map(transactionTraceKey)
-                    })
-                )
-                let merged = mergeTransactions(existing: authoritativeExisting, new: transactions)
-                let state = TransactionsState(
-                    items: merged,
-                    offset: max(self.currentState.transactions.offset, response.traces.count),
-                    canLoadMore: response.traces.count == walletTransactionFetchLimit || self.currentState.transactions.canLoadMore,
-                    isLoadingMore: false,
-                    error: nil
-                )
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: self.currentState.balance,
-                    transactions: state,
-                    pendingTransfers: self.confirmPendingTransfers(with: transactions),
-                    activeOperation: self.currentState.activeOperation
-                )
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled,
-                      self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
-                      self.wallet?.address == wallet.address else {
-                    return
-                }
-                hadError = true
-                let syncError = synchronizationError(error)
-                self.logSynchronizationFailure(
-                    scope: "transactions_snapshot",
-                    error: error,
-                    category: syncError
-                )
-                shouldRetry = shouldRetry || syncError.isRetryable
-                let state = TransactionsState(
-                    items: self.currentState.transactions.items,
-                    offset: self.currentState.transactions.offset,
-                    canLoadMore: self.currentState.transactions.canLoadMore,
-                    isLoadingMore: false,
-                    error: syncError
-                )
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: self.currentState.balance,
-                    transactions: state,
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
             }
 
             do {
@@ -4213,7 +4718,6 @@ public final class WalletContext {
                 let nfts = try await kit.nfts(of: wallet.id, limit: refreshLimit, offset: 0)
                 try Task.checkCancellation()
                 guard self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
                       self.wallet?.address == wallet.address else {
                     return
                 }
@@ -4223,7 +4727,6 @@ public final class WalletContext {
                 )
                 try Task.checkCancellation()
                 guard self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
                       self.wallet?.address == wallet.address else {
                     return
                 }
@@ -4247,7 +4750,6 @@ public final class WalletContext {
             } catch {
                 guard !Task.isCancelled,
                       self.lifecycleGeneration == lifecycleGeneration,
-                      self.secretRecord != nil,
                       self.wallet?.address == wallet.address else {
                     return
                 }
@@ -4366,6 +4868,7 @@ public final class WalletContext {
 
                 self.synchronizationRequested = true
                 self.requestSynchronization()
+                await self.refreshPendingTransferConfirmations()
 
                 let delay: UInt64 = self.currentState.pendingTransfers.contains(where: {
                     now - Int64($0.createdAt) < 60
@@ -4409,25 +4912,10 @@ public final class WalletContext {
                         break
                     }
                     switch event {
-                    case let .balance(update):
-                        guard update.address == wallet.address,
-                              let balance = Int64(String(update.balance)) else { continue }
-                        let updatedAt = currentTimestamp()
-                        self.balanceLastSuccessfulAt = updatedAt
-                        self.replaceState(
-                            phase: self.currentState.phase,
-                            balance: .value(balance, updatedAt: updatedAt),
-                            transactions: self.currentState.transactions,
-                            pendingTransfers: self.currentState.pendingTransfers,
-                            activeOperation: self.currentState.activeOperation
-                        )
+                    case .balance:
+                        self.scheduleCoalescedStreamSnapshot()
                     case let .transactions(update):
                         guard update.address == wallet.address else { continue }
-                        let traceKey = transactionTraceKey(update.traceHash)
-                        if let current = self.streamTransactionOverlaysByTrace[traceKey],
-                           update.finality < current.status {
-                            continue
-                        }
                         if update.isInvalidated {
                             if self.currentState.pendingTransfers.contains(where: {
                                 normalizedMessageHashesEqual($0.normalizedHash, update.traceHash)
@@ -4435,73 +4923,33 @@ public final class WalletContext {
                             }) {
                                 self.invalidatedStreamTraceHashes.insert(update.traceHash.lowercased())
                             }
-                            let items = self.transactionsByRemovingStreamOverlay(
-                                for: traceKey,
-                                from: self.currentState.transactions.items
-                            )
-                            let state = TransactionsState(
-                                items: items,
-                                offset: self.currentState.transactions.offset,
-                                canLoadMore: self.currentState.transactions.canLoadMore,
-                                isLoadingMore: self.currentState.transactions.isLoadingMore,
-                                error: self.currentState.transactions.error
-                            )
                             self.replaceState(
                                 phase: self.currentState.phase,
                                 balance: self.currentState.balance,
-                                transactions: state,
+                                transactions: self.currentState.transactions,
                                 pendingTransfers: self.invalidatePendingTransfer(
                                     normalizedHash: update.traceHash
                                 ),
                                 activeOperation: self.currentState.activeOperation
                             )
-                            self.scheduleCoalescedStreamSnapshot()
-                            continue
-                        }
-                        do {
-                            let activities = try WalletActivityExtractor.activities(
-                                from: update.transactions,
-                                traceID: update.traceHash,
-                                externalMessageHash: update.traceHash,
-                                walletAddress: wallet.address,
-                                status: update.finality == .pending ? .pending : .completed
-                            )
-                            let transactions = try walletTransactions(
-                                from: activities,
-                                usdtJettonWalletAddress: self.usdtJettonWalletRawAddress,
-                                collectibles: [:]
-                            )
-                            let keys = Set(transactions.map(transactionBlockchainKey))
-                            let existingItems = self.transactionsByRemovingStreamOverlay(
-                                for: traceKey,
-                                from: self.currentState.transactions.items
-                            )
-                            self.streamTransactionOverlaysByTrace[traceKey] = StreamTransactionOverlay(
-                                status: update.finality,
-                                transactionKeys: keys
-                            )
-                            let merged = mergeTransactions(existing: existingItems, new: transactions)
-                            let state = TransactionsState(
-                                items: merged,
-                                offset: self.currentState.transactions.offset,
-                                canLoadMore: self.currentState.transactions.canLoadMore,
-                                isLoadingMore: self.currentState.transactions.isLoadingMore,
-                                error: nil
-                            )
+                        } else if update.finality != .pending {
+                            if self.currentState.pendingTransfers.contains(where: {
+                                normalizedMessageHashesEqual($0.normalizedHash, update.traceHash)
+                                    || ($0.status == .broadcasting && $0.normalizedHash == nil)
+                            }) {
+                                self.invalidatedStreamTraceHashes.insert(update.traceHash.lowercased())
+                            }
                             self.replaceState(
                                 phase: self.currentState.phase,
                                 balance: self.currentState.balance,
-                                transactions: state,
-                                pendingTransfers: update.finality == .pending
-                                    ? self.currentState.pendingTransfers
-                                    : self.confirmPendingTransfers(with: transactions),
+                                transactions: self.currentState.transactions,
+                                pendingTransfers: self.invalidatePendingTransfer(
+                                    normalizedHash: update.traceHash
+                                ),
                                 activeOperation: self.currentState.activeOperation
                             )
-                            self.scheduleCoalescedStreamSnapshot()
-                        } catch {
-                            self.logSynchronizationFailure(scope: "transactions_stream_decode", error: error)
-                            self.scheduleCoalescedStreamSnapshot()
                         }
+                        self.scheduleCoalescedStreamSnapshot()
                     case .jettons:
                         self.scheduleCoalescedStreamSnapshot()
                     case let .connectionChanged(isConnected):
@@ -4602,9 +5050,12 @@ public final class WalletContext {
         guard self.streamSnapshotTask == nil else {
             return
         }
+        let refreshDelay = self.serverLastRefreshAt.map {
+            max(0.75, walletServerRefreshInterval - Date().timeIntervalSince($0))
+        } ?? 0.75
         self.streamSnapshotTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(nanoseconds: 750_000_000)
+                try await Task.sleep(nanoseconds: UInt64(refreshDelay * 1_000_000_000.0))
             } catch {
                 return
             }
@@ -4614,6 +5065,33 @@ public final class WalletContext {
             self.streamSnapshotTask = nil
             self.synchronizationRequested = true
             self.requestSynchronization()
+        }
+    }
+
+    private func refreshPendingTransferConfirmations() async {
+        guard let client = self.toncenterClient else {
+            return
+        }
+        let hashes = Set(self.currentState.pendingTransfers.compactMap(\.normalizedHash))
+        for hash in hashes {
+            do {
+                let page = try await client.getTransactionsByMessageHash(hash)
+                try Task.checkCancellation()
+                if page.transactions.contains(where: { !$0.isFailed }) {
+                    let pendingTransfers = self.invalidatePendingTransfer(normalizedHash: hash)
+                    self.replaceState(
+                        phase: self.currentState.phase,
+                        balance: self.currentState.balance,
+                        transactions: self.currentState.transactions,
+                        pendingTransfers: pendingTransfers,
+                        activeOperation: self.currentState.activeOperation
+                    )
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                self.logSynchronizationFailure(scope: "pending_confirmation", error: error)
+            }
         }
     }
 
@@ -4645,7 +5123,7 @@ public final class WalletContext {
     private func transaction(_ transaction: Transaction, confirms pending: PendingTransfer) -> Bool {
         guard transaction.status == .completed,
               transaction.direction == .outgoing,
-              walletAddressesEqual(transaction.counterparty, pending.recipient) else {
+              walletAddressesEqual(transaction.peer.address, pending.recipient) else {
             return false
         }
 

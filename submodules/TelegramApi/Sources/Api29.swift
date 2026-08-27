@@ -2598,6 +2598,15 @@ public extension Api {
                 return ("updateUserTyping", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("topMsgId", ConstructorParameterDescription(self.topMsgId)), ("action", ConstructorParameterDescription(self.action))])
             }
         }
+        public class Cons_updateWalletState: TypeConstructorDescription {
+            public var state: Api.WalletState
+            public init(state: Api.WalletState) {
+                self.state = state
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("updateWalletState", [("state", ConstructorParameterDescription(self.state))])
+            }
+        }
         public class Cons_updateWebBrowserException: TypeConstructorDescription {
             public var flags: Int32
             public var openExternalBrowser: Api.Bool?
@@ -2803,6 +2812,7 @@ public extension Api {
         case updateUserPhone(Cons_updateUserPhone)
         case updateUserStatus(Cons_updateUserStatus)
         case updateUserTyping(Cons_updateUserTyping)
+        case updateWalletState(Cons_updateWalletState)
         case updateWebBrowserException(Cons_updateWebBrowserException)
         case updateWebBrowserSettings(Cons_updateWebBrowserSettings)
         case updateWebPage(Cons_updateWebPage)
@@ -4334,6 +4344,12 @@ public extension Api {
                 }
                 _data.action.serialize(buffer, true)
                 break
+            case .updateWalletState(let _data):
+                if boxed {
+                    buffer.appendInt32(1791226538)
+                }
+                _data.state.serialize(buffer, true)
+                break
             case .updateWebBrowserException(let _data):
                 if boxed {
                     buffer.appendInt32(335872721)
@@ -4691,6 +4707,8 @@ public extension Api {
                 return ("updateUserStatus", [("userId", ConstructorParameterDescription(_data.userId)), ("status", ConstructorParameterDescription(_data.status))])
             case .updateUserTyping(let _data):
                 return ("updateUserTyping", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("topMsgId", ConstructorParameterDescription(_data.topMsgId)), ("action", ConstructorParameterDescription(_data.action))])
+            case .updateWalletState(let _data):
+                return ("updateWalletState", [("state", ConstructorParameterDescription(_data.state))])
             case .updateWebBrowserException(let _data):
                 return ("updateWebBrowserException", [("flags", ConstructorParameterDescription(_data.flags)), ("openExternalBrowser", ConstructorParameterDescription(_data.openExternalBrowser)), ("exception", ConstructorParameterDescription(_data.exception))])
             case .updateWebBrowserSettings(let _data):
@@ -7724,6 +7742,19 @@ public extension Api {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.Update.updateUserTyping(Cons_updateUserTyping(flags: _1!, userId: _2!, topMsgId: _3, action: _4!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updateWalletState(_ reader: BufferReader) -> Update? {
+            var _1: Api.WalletState?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.WalletState
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.Update.updateWalletState(Cons_updateWalletState(state: _1!))
             }
             else {
                 return nil

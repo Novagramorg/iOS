@@ -1092,7 +1092,8 @@ public extension Api {
             public var savedMusic: Api.Document?
             public var note: Api.TextWithEntities?
             public var botManagerId: Int64?
-            public init(flags: Int32, flags2: Int32, id: Int64, about: String?, settings: Api.PeerSettings, personalPhoto: Api.Photo?, profilePhoto: Api.Photo?, fallbackPhoto: Api.Photo?, notifySettings: Api.PeerNotifySettings, botInfo: Api.BotInfo?, pinnedMsgId: Int32?, commonChatsCount: Int32, folderId: Int32?, ttlPeriod: Int32?, theme: Api.ChatTheme?, privateForwardName: String?, botGroupAdminRights: Api.ChatAdminRights?, botBroadcastAdminRights: Api.ChatAdminRights?, wallpaper: Api.WallPaper?, stories: Api.PeerStories?, businessWorkHours: Api.BusinessWorkHours?, businessLocation: Api.BusinessLocation?, businessGreetingMessage: Api.BusinessGreetingMessage?, businessAwayMessage: Api.BusinessAwayMessage?, businessIntro: Api.BusinessIntro?, birthday: Api.Birthday?, personalChannelId: Int64?, personalChannelMessage: Int32?, stargiftsCount: Int32?, starrefProgram: Api.StarRefProgram?, botVerification: Api.BotVerification?, sendPaidMessagesStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?, starsRating: Api.StarsRating?, starsMyPendingRating: Api.StarsRating?, starsMyPendingRatingDate: Int32?, mainTab: Api.ProfileTab?, savedMusic: Api.Document?, note: Api.TextWithEntities?, botManagerId: Int64?) {
+            public var gramAddress: String?
+            public init(flags: Int32, flags2: Int32, id: Int64, about: String?, settings: Api.PeerSettings, personalPhoto: Api.Photo?, profilePhoto: Api.Photo?, fallbackPhoto: Api.Photo?, notifySettings: Api.PeerNotifySettings, botInfo: Api.BotInfo?, pinnedMsgId: Int32?, commonChatsCount: Int32, folderId: Int32?, ttlPeriod: Int32?, theme: Api.ChatTheme?, privateForwardName: String?, botGroupAdminRights: Api.ChatAdminRights?, botBroadcastAdminRights: Api.ChatAdminRights?, wallpaper: Api.WallPaper?, stories: Api.PeerStories?, businessWorkHours: Api.BusinessWorkHours?, businessLocation: Api.BusinessLocation?, businessGreetingMessage: Api.BusinessGreetingMessage?, businessAwayMessage: Api.BusinessAwayMessage?, businessIntro: Api.BusinessIntro?, birthday: Api.Birthday?, personalChannelId: Int64?, personalChannelMessage: Int32?, stargiftsCount: Int32?, starrefProgram: Api.StarRefProgram?, botVerification: Api.BotVerification?, sendPaidMessagesStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?, starsRating: Api.StarsRating?, starsMyPendingRating: Api.StarsRating?, starsMyPendingRatingDate: Int32?, mainTab: Api.ProfileTab?, savedMusic: Api.Document?, note: Api.TextWithEntities?, botManagerId: Int64?, gramAddress: String?) {
                 self.flags = flags
                 self.flags2 = flags2
                 self.id = id
@@ -1133,9 +1134,10 @@ public extension Api {
                 self.savedMusic = savedMusic
                 self.note = note
                 self.botManagerId = botManagerId
+                self.gramAddress = gramAddress
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("userFull", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("about", ConstructorParameterDescription(self.about)), ("settings", ConstructorParameterDescription(self.settings)), ("personalPhoto", ConstructorParameterDescription(self.personalPhoto)), ("profilePhoto", ConstructorParameterDescription(self.profilePhoto)), ("fallbackPhoto", ConstructorParameterDescription(self.fallbackPhoto)), ("notifySettings", ConstructorParameterDescription(self.notifySettings)), ("botInfo", ConstructorParameterDescription(self.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(self.pinnedMsgId)), ("commonChatsCount", ConstructorParameterDescription(self.commonChatsCount)), ("folderId", ConstructorParameterDescription(self.folderId)), ("ttlPeriod", ConstructorParameterDescription(self.ttlPeriod)), ("theme", ConstructorParameterDescription(self.theme)), ("privateForwardName", ConstructorParameterDescription(self.privateForwardName)), ("botGroupAdminRights", ConstructorParameterDescription(self.botGroupAdminRights)), ("botBroadcastAdminRights", ConstructorParameterDescription(self.botBroadcastAdminRights)), ("wallpaper", ConstructorParameterDescription(self.wallpaper)), ("stories", ConstructorParameterDescription(self.stories)), ("businessWorkHours", ConstructorParameterDescription(self.businessWorkHours)), ("businessLocation", ConstructorParameterDescription(self.businessLocation)), ("businessGreetingMessage", ConstructorParameterDescription(self.businessGreetingMessage)), ("businessAwayMessage", ConstructorParameterDescription(self.businessAwayMessage)), ("businessIntro", ConstructorParameterDescription(self.businessIntro)), ("birthday", ConstructorParameterDescription(self.birthday)), ("personalChannelId", ConstructorParameterDescription(self.personalChannelId)), ("personalChannelMessage", ConstructorParameterDescription(self.personalChannelMessage)), ("stargiftsCount", ConstructorParameterDescription(self.stargiftsCount)), ("starrefProgram", ConstructorParameterDescription(self.starrefProgram)), ("botVerification", ConstructorParameterDescription(self.botVerification)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("disallowedGifts", ConstructorParameterDescription(self.disallowedGifts)), ("starsRating", ConstructorParameterDescription(self.starsRating)), ("starsMyPendingRating", ConstructorParameterDescription(self.starsMyPendingRating)), ("starsMyPendingRatingDate", ConstructorParameterDescription(self.starsMyPendingRatingDate)), ("mainTab", ConstructorParameterDescription(self.mainTab)), ("savedMusic", ConstructorParameterDescription(self.savedMusic)), ("note", ConstructorParameterDescription(self.note)), ("botManagerId", ConstructorParameterDescription(self.botManagerId))])
+                return ("userFull", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("about", ConstructorParameterDescription(self.about)), ("settings", ConstructorParameterDescription(self.settings)), ("personalPhoto", ConstructorParameterDescription(self.personalPhoto)), ("profilePhoto", ConstructorParameterDescription(self.profilePhoto)), ("fallbackPhoto", ConstructorParameterDescription(self.fallbackPhoto)), ("notifySettings", ConstructorParameterDescription(self.notifySettings)), ("botInfo", ConstructorParameterDescription(self.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(self.pinnedMsgId)), ("commonChatsCount", ConstructorParameterDescription(self.commonChatsCount)), ("folderId", ConstructorParameterDescription(self.folderId)), ("ttlPeriod", ConstructorParameterDescription(self.ttlPeriod)), ("theme", ConstructorParameterDescription(self.theme)), ("privateForwardName", ConstructorParameterDescription(self.privateForwardName)), ("botGroupAdminRights", ConstructorParameterDescription(self.botGroupAdminRights)), ("botBroadcastAdminRights", ConstructorParameterDescription(self.botBroadcastAdminRights)), ("wallpaper", ConstructorParameterDescription(self.wallpaper)), ("stories", ConstructorParameterDescription(self.stories)), ("businessWorkHours", ConstructorParameterDescription(self.businessWorkHours)), ("businessLocation", ConstructorParameterDescription(self.businessLocation)), ("businessGreetingMessage", ConstructorParameterDescription(self.businessGreetingMessage)), ("businessAwayMessage", ConstructorParameterDescription(self.businessAwayMessage)), ("businessIntro", ConstructorParameterDescription(self.businessIntro)), ("birthday", ConstructorParameterDescription(self.birthday)), ("personalChannelId", ConstructorParameterDescription(self.personalChannelId)), ("personalChannelMessage", ConstructorParameterDescription(self.personalChannelMessage)), ("stargiftsCount", ConstructorParameterDescription(self.stargiftsCount)), ("starrefProgram", ConstructorParameterDescription(self.starrefProgram)), ("botVerification", ConstructorParameterDescription(self.botVerification)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("disallowedGifts", ConstructorParameterDescription(self.disallowedGifts)), ("starsRating", ConstructorParameterDescription(self.starsRating)), ("starsMyPendingRating", ConstructorParameterDescription(self.starsMyPendingRating)), ("starsMyPendingRatingDate", ConstructorParameterDescription(self.starsMyPendingRatingDate)), ("mainTab", ConstructorParameterDescription(self.mainTab)), ("savedMusic", ConstructorParameterDescription(self.savedMusic)), ("note", ConstructorParameterDescription(self.note)), ("botManagerId", ConstructorParameterDescription(self.botManagerId)), ("gramAddress", ConstructorParameterDescription(self.gramAddress))])
             }
         }
         case userFull(Cons_userFull)
@@ -1144,7 +1146,7 @@ public extension Api {
             switch self {
             case .userFull(let _data):
                 if boxed {
-                    buffer.appendInt32(114026053)
+                    buffer.appendInt32(2145859780)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt32(_data.flags2, buffer: buffer, boxed: false)
@@ -1254,6 +1256,9 @@ public extension Api {
                 if Int(_data.flags2) & Int(1 << 25) != 0 {
                     serializeInt64(_data.botManagerId!, buffer: buffer, boxed: false)
                 }
+                if Int(_data.flags2) & Int(1 << 27) != 0 {
+                    serializeString(_data.gramAddress!, buffer: buffer, boxed: false)
+                }
                 break
             }
         }
@@ -1261,7 +1266,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .userFull(let _data):
-                return ("userFull", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("settings", ConstructorParameterDescription(_data.settings)), ("personalPhoto", ConstructorParameterDescription(_data.personalPhoto)), ("profilePhoto", ConstructorParameterDescription(_data.profilePhoto)), ("fallbackPhoto", ConstructorParameterDescription(_data.fallbackPhoto)), ("notifySettings", ConstructorParameterDescription(_data.notifySettings)), ("botInfo", ConstructorParameterDescription(_data.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(_data.pinnedMsgId)), ("commonChatsCount", ConstructorParameterDescription(_data.commonChatsCount)), ("folderId", ConstructorParameterDescription(_data.folderId)), ("ttlPeriod", ConstructorParameterDescription(_data.ttlPeriod)), ("theme", ConstructorParameterDescription(_data.theme)), ("privateForwardName", ConstructorParameterDescription(_data.privateForwardName)), ("botGroupAdminRights", ConstructorParameterDescription(_data.botGroupAdminRights)), ("botBroadcastAdminRights", ConstructorParameterDescription(_data.botBroadcastAdminRights)), ("wallpaper", ConstructorParameterDescription(_data.wallpaper)), ("stories", ConstructorParameterDescription(_data.stories)), ("businessWorkHours", ConstructorParameterDescription(_data.businessWorkHours)), ("businessLocation", ConstructorParameterDescription(_data.businessLocation)), ("businessGreetingMessage", ConstructorParameterDescription(_data.businessGreetingMessage)), ("businessAwayMessage", ConstructorParameterDescription(_data.businessAwayMessage)), ("businessIntro", ConstructorParameterDescription(_data.businessIntro)), ("birthday", ConstructorParameterDescription(_data.birthday)), ("personalChannelId", ConstructorParameterDescription(_data.personalChannelId)), ("personalChannelMessage", ConstructorParameterDescription(_data.personalChannelMessage)), ("stargiftsCount", ConstructorParameterDescription(_data.stargiftsCount)), ("starrefProgram", ConstructorParameterDescription(_data.starrefProgram)), ("botVerification", ConstructorParameterDescription(_data.botVerification)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("disallowedGifts", ConstructorParameterDescription(_data.disallowedGifts)), ("starsRating", ConstructorParameterDescription(_data.starsRating)), ("starsMyPendingRating", ConstructorParameterDescription(_data.starsMyPendingRating)), ("starsMyPendingRatingDate", ConstructorParameterDescription(_data.starsMyPendingRatingDate)), ("mainTab", ConstructorParameterDescription(_data.mainTab)), ("savedMusic", ConstructorParameterDescription(_data.savedMusic)), ("note", ConstructorParameterDescription(_data.note)), ("botManagerId", ConstructorParameterDescription(_data.botManagerId))])
+                return ("userFull", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("settings", ConstructorParameterDescription(_data.settings)), ("personalPhoto", ConstructorParameterDescription(_data.personalPhoto)), ("profilePhoto", ConstructorParameterDescription(_data.profilePhoto)), ("fallbackPhoto", ConstructorParameterDescription(_data.fallbackPhoto)), ("notifySettings", ConstructorParameterDescription(_data.notifySettings)), ("botInfo", ConstructorParameterDescription(_data.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(_data.pinnedMsgId)), ("commonChatsCount", ConstructorParameterDescription(_data.commonChatsCount)), ("folderId", ConstructorParameterDescription(_data.folderId)), ("ttlPeriod", ConstructorParameterDescription(_data.ttlPeriod)), ("theme", ConstructorParameterDescription(_data.theme)), ("privateForwardName", ConstructorParameterDescription(_data.privateForwardName)), ("botGroupAdminRights", ConstructorParameterDescription(_data.botGroupAdminRights)), ("botBroadcastAdminRights", ConstructorParameterDescription(_data.botBroadcastAdminRights)), ("wallpaper", ConstructorParameterDescription(_data.wallpaper)), ("stories", ConstructorParameterDescription(_data.stories)), ("businessWorkHours", ConstructorParameterDescription(_data.businessWorkHours)), ("businessLocation", ConstructorParameterDescription(_data.businessLocation)), ("businessGreetingMessage", ConstructorParameterDescription(_data.businessGreetingMessage)), ("businessAwayMessage", ConstructorParameterDescription(_data.businessAwayMessage)), ("businessIntro", ConstructorParameterDescription(_data.businessIntro)), ("birthday", ConstructorParameterDescription(_data.birthday)), ("personalChannelId", ConstructorParameterDescription(_data.personalChannelId)), ("personalChannelMessage", ConstructorParameterDescription(_data.personalChannelMessage)), ("stargiftsCount", ConstructorParameterDescription(_data.stargiftsCount)), ("starrefProgram", ConstructorParameterDescription(_data.starrefProgram)), ("botVerification", ConstructorParameterDescription(_data.botVerification)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("disallowedGifts", ConstructorParameterDescription(_data.disallowedGifts)), ("starsRating", ConstructorParameterDescription(_data.starsRating)), ("starsMyPendingRating", ConstructorParameterDescription(_data.starsMyPendingRating)), ("starsMyPendingRatingDate", ConstructorParameterDescription(_data.starsMyPendingRatingDate)), ("mainTab", ConstructorParameterDescription(_data.mainTab)), ("savedMusic", ConstructorParameterDescription(_data.savedMusic)), ("note", ConstructorParameterDescription(_data.note)), ("botManagerId", ConstructorParameterDescription(_data.botManagerId)), ("gramAddress", ConstructorParameterDescription(_data.gramAddress))])
             }
         }
 
@@ -1464,6 +1469,10 @@ public extension Api {
             if Int(_2 ?? 0) & Int(1 << 25) != 0 {
                 _40 = reader.readInt64()
             }
+            var _41: String?
+            if Int(_2 ?? 0) & Int(1 << 27) != 0 {
+                _41 = parseString(reader)
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -1504,8 +1513,9 @@ public extension Api {
             let _c38 = (Int(_2 ?? 0) & Int(1 << 21) == 0) || _38 != nil
             let _c39 = (Int(_2 ?? 0) & Int(1 << 22) == 0) || _39 != nil
             let _c40 = (Int(_2 ?? 0) & Int(1 << 25) == 0) || _40 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 && _c25 && _c26 && _c27 && _c28 && _c29 && _c30 && _c31 && _c32 && _c33 && _c34 && _c35 && _c36 && _c37 && _c38 && _c39 && _c40 {
-                return Api.UserFull.userFull(Cons_userFull(flags: _1!, flags2: _2!, id: _3!, about: _4, settings: _5!, personalPhoto: _6, profilePhoto: _7, fallbackPhoto: _8, notifySettings: _9!, botInfo: _10, pinnedMsgId: _11, commonChatsCount: _12!, folderId: _13, ttlPeriod: _14, theme: _15, privateForwardName: _16, botGroupAdminRights: _17, botBroadcastAdminRights: _18, wallpaper: _19, stories: _20, businessWorkHours: _21, businessLocation: _22, businessGreetingMessage: _23, businessAwayMessage: _24, businessIntro: _25, birthday: _26, personalChannelId: _27, personalChannelMessage: _28, stargiftsCount: _29, starrefProgram: _30, botVerification: _31, sendPaidMessagesStars: _32, disallowedGifts: _33, starsRating: _34, starsMyPendingRating: _35, starsMyPendingRatingDate: _36, mainTab: _37, savedMusic: _38, note: _39, botManagerId: _40))
+            let _c41 = (Int(_2 ?? 0) & Int(1 << 27) == 0) || _41 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 && _c25 && _c26 && _c27 && _c28 && _c29 && _c30 && _c31 && _c32 && _c33 && _c34 && _c35 && _c36 && _c37 && _c38 && _c39 && _c40 && _c41 {
+                return Api.UserFull.userFull(Cons_userFull(flags: _1!, flags2: _2!, id: _3!, about: _4, settings: _5!, personalPhoto: _6, profilePhoto: _7, fallbackPhoto: _8, notifySettings: _9!, botInfo: _10, pinnedMsgId: _11, commonChatsCount: _12!, folderId: _13, ttlPeriod: _14, theme: _15, privateForwardName: _16, botGroupAdminRights: _17, botBroadcastAdminRights: _18, wallpaper: _19, stories: _20, businessWorkHours: _21, businessLocation: _22, businessGreetingMessage: _23, businessAwayMessage: _24, businessIntro: _25, birthday: _26, personalChannelId: _27, personalChannelMessage: _28, stargiftsCount: _29, starrefProgram: _30, botVerification: _31, sendPaidMessagesStars: _32, disallowedGifts: _33, starsRating: _34, starsMyPendingRating: _35, starsMyPendingRatingDate: _36, mainTab: _37, savedMusic: _38, note: _39, botManagerId: _40, gramAddress: _41))
             }
             else {
                 return nil
@@ -2223,90 +2233,185 @@ public extension Api {
     }
 }
 public extension Api {
-    enum WebAuthorization: TypeConstructorDescription {
-        public class Cons_webAuthorization: TypeConstructorDescription {
-            public var hash: Int64
-            public var botId: Int64
-            public var domain: String
-            public var browser: String
-            public var platform: String
-            public var dateCreated: Int32
-            public var dateActive: Int32
-            public var ip: String
-            public var region: String
-            public init(hash: Int64, botId: Int64, domain: String, browser: String, platform: String, dateCreated: Int32, dateActive: Int32, ip: String, region: String) {
-                self.hash = hash
-                self.botId = botId
-                self.domain = domain
-                self.browser = browser
-                self.platform = platform
-                self.dateCreated = dateCreated
-                self.dateActive = dateActive
-                self.ip = ip
-                self.region = region
+    enum WalletState: TypeConstructorDescription {
+        public class Cons_walletState: TypeConstructorDescription {
+            public var flags: Int32
+            public var address: String
+            public var publicKey: Buffer
+            public var balance: Int64
+            public init(flags: Int32, address: String, publicKey: Buffer, balance: Int64) {
+                self.flags = flags
+                self.address = address
+                self.publicKey = publicKey
+                self.balance = balance
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("webAuthorization", [("hash", ConstructorParameterDescription(self.hash)), ("botId", ConstructorParameterDescription(self.botId)), ("domain", ConstructorParameterDescription(self.domain)), ("browser", ConstructorParameterDescription(self.browser)), ("platform", ConstructorParameterDescription(self.platform)), ("dateCreated", ConstructorParameterDescription(self.dateCreated)), ("dateActive", ConstructorParameterDescription(self.dateActive)), ("ip", ConstructorParameterDescription(self.ip)), ("region", ConstructorParameterDescription(self.region))])
+                return ("walletState", [("flags", ConstructorParameterDescription(self.flags)), ("address", ConstructorParameterDescription(self.address)), ("publicKey", ConstructorParameterDescription(self.publicKey)), ("balance", ConstructorParameterDescription(self.balance))])
             }
         }
-        case webAuthorization(Cons_webAuthorization)
+        public class Cons_walletStateEmpty: TypeConstructorDescription {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("walletStateEmpty", [("flags", ConstructorParameterDescription(self.flags))])
+            }
+        }
+        case walletState(Cons_walletState)
+        case walletStateEmpty(Cons_walletStateEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
-            case .webAuthorization(let _data):
+            case .walletState(let _data):
                 if boxed {
-                    buffer.appendInt32(-1493633966)
+                    buffer.appendInt32(-1782238101)
                 }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                serializeInt64(_data.botId, buffer: buffer, boxed: false)
-                serializeString(_data.domain, buffer: buffer, boxed: false)
-                serializeString(_data.browser, buffer: buffer, boxed: false)
-                serializeString(_data.platform, buffer: buffer, boxed: false)
-                serializeInt32(_data.dateCreated, buffer: buffer, boxed: false)
-                serializeInt32(_data.dateActive, buffer: buffer, boxed: false)
-                serializeString(_data.ip, buffer: buffer, boxed: false)
-                serializeString(_data.region, buffer: buffer, boxed: false)
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.address, buffer: buffer, boxed: false)
+                serializeBytes(_data.publicKey, buffer: buffer, boxed: false)
+                serializeInt64(_data.balance, buffer: buffer, boxed: false)
+                break
+            case .walletStateEmpty(let _data):
+                if boxed {
+                    buffer.appendInt32(-1665551636)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 break
             }
         }
 
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
-            case .webAuthorization(let _data):
-                return ("webAuthorization", [("hash", ConstructorParameterDescription(_data.hash)), ("botId", ConstructorParameterDescription(_data.botId)), ("domain", ConstructorParameterDescription(_data.domain)), ("browser", ConstructorParameterDescription(_data.browser)), ("platform", ConstructorParameterDescription(_data.platform)), ("dateCreated", ConstructorParameterDescription(_data.dateCreated)), ("dateActive", ConstructorParameterDescription(_data.dateActive)), ("ip", ConstructorParameterDescription(_data.ip)), ("region", ConstructorParameterDescription(_data.region))])
+            case .walletState(let _data):
+                return ("walletState", [("flags", ConstructorParameterDescription(_data.flags)), ("address", ConstructorParameterDescription(_data.address)), ("publicKey", ConstructorParameterDescription(_data.publicKey)), ("balance", ConstructorParameterDescription(_data.balance))])
+            case .walletStateEmpty(let _data):
+                return ("walletStateEmpty", [("flags", ConstructorParameterDescription(_data.flags))])
             }
         }
 
-        public static func parse_webAuthorization(_ reader: BufferReader) -> WebAuthorization? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: String?
-            _4 = parseString(reader)
-            var _5: String?
-            _5 = parseString(reader)
-            var _6: Int32?
-            _6 = reader.readInt32()
-            var _7: Int32?
-            _7 = reader.readInt32()
+        public static func parse_walletState(_ reader: BufferReader) -> WalletState? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Buffer?
+            _3 = parseBytes(reader)
+            var _4: Int64?
+            _4 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.WalletState.walletState(Cons_walletState(flags: _1!, address: _2!, publicKey: _3!, balance: _4!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_walletStateEmpty(_ reader: BufferReader) -> WalletState? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.WalletState.walletStateEmpty(Cons_walletStateEmpty(flags: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum WalletTransaction: TypeConstructorDescription {
+        public class Cons_walletTransaction: TypeConstructorDescription {
+            public var flags: Int32
+            public var id: String
+            public var amount: Int64
+            public var fee: Int64
+            public var date: Int32
+            public var peer: Api.WalletTransactionPeer
+            public var comment: String?
+            public var txHash: String?
+            public init(flags: Int32, id: String, amount: Int64, fee: Int64, date: Int32, peer: Api.WalletTransactionPeer, comment: String?, txHash: String?) {
+                self.flags = flags
+                self.id = id
+                self.amount = amount
+                self.fee = fee
+                self.date = date
+                self.peer = peer
+                self.comment = comment
+                self.txHash = txHash
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("walletTransaction", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("amount", ConstructorParameterDescription(self.amount)), ("fee", ConstructorParameterDescription(self.fee)), ("date", ConstructorParameterDescription(self.date)), ("peer", ConstructorParameterDescription(self.peer)), ("comment", ConstructorParameterDescription(self.comment)), ("txHash", ConstructorParameterDescription(self.txHash))])
+            }
+        }
+        case walletTransaction(Cons_walletTransaction)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .walletTransaction(let _data):
+                if boxed {
+                    buffer.appendInt32(1872332449)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.id, buffer: buffer, boxed: false)
+                serializeInt64(_data.amount, buffer: buffer, boxed: false)
+                serializeInt64(_data.fee, buffer: buffer, boxed: false)
+                serializeInt32(_data.date, buffer: buffer, boxed: false)
+                _data.peer.serialize(buffer, true)
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    serializeString(_data.comment!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    serializeString(_data.txHash!, buffer: buffer, boxed: false)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .walletTransaction(let _data):
+                return ("walletTransaction", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("amount", ConstructorParameterDescription(_data.amount)), ("fee", ConstructorParameterDescription(_data.fee)), ("date", ConstructorParameterDescription(_data.date)), ("peer", ConstructorParameterDescription(_data.peer)), ("comment", ConstructorParameterDescription(_data.comment)), ("txHash", ConstructorParameterDescription(_data.txHash))])
+            }
+        }
+
+        public static func parse_walletTransaction(_ reader: BufferReader) -> WalletTransaction? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Int64?
+            _4 = reader.readInt64()
+            var _5: Int32?
+            _5 = reader.readInt32()
+            var _6: Api.WalletTransactionPeer?
+            if let signature = reader.readInt32() {
+                _6 = Api.parse(reader, signature: signature) as? Api.WalletTransactionPeer
+            }
+            var _7: String?
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
+                _7 = parseString(reader)
+            }
             var _8: String?
-            _8 = parseString(reader)
-            var _9: String?
-            _9 = parseString(reader)
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                _8 = parseString(reader)
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            let _c7 = _7 != nil
-            let _c8 = _8 != nil
-            let _c9 = _9 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
-                return Api.WebAuthorization.webAuthorization(Cons_webAuthorization(hash: _1!, botId: _2!, domain: _3!, browser: _4!, platform: _5!, dateCreated: _6!, dateActive: _7!, ip: _8!, region: _9!))
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.WalletTransaction.walletTransaction(Cons_walletTransaction(flags: _1!, id: _2!, amount: _3!, fee: _4!, date: _5!, peer: _6!, comment: _7, txHash: _8))
             }
             else {
                 return nil
@@ -2315,197 +2420,82 @@ public extension Api {
     }
 }
 public extension Api {
-    enum WebDocument: TypeConstructorDescription {
-        public class Cons_webDocument: TypeConstructorDescription {
-            public var url: String
-            public var accessHash: Int64
-            public var size: Int32
-            public var mimeType: String
-            public var attributes: [Api.DocumentAttribute]
-            public init(url: String, accessHash: Int64, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute]) {
-                self.url = url
-                self.accessHash = accessHash
-                self.size = size
-                self.mimeType = mimeType
-                self.attributes = attributes
+    enum WalletTransactionPeer: TypeConstructorDescription {
+        public class Cons_walletTransactionPeerAddress: TypeConstructorDescription {
+            public var address: String
+            public init(address: String) {
+                self.address = address
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("webDocument", [("url", ConstructorParameterDescription(self.url)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("size", ConstructorParameterDescription(self.size)), ("mimeType", ConstructorParameterDescription(self.mimeType)), ("attributes", ConstructorParameterDescription(self.attributes))])
+                return ("walletTransactionPeerAddress", [("address", ConstructorParameterDescription(self.address))])
             }
         }
-        public class Cons_webDocumentNoProxy: TypeConstructorDescription {
-            public var url: String
-            public var size: Int32
-            public var mimeType: String
-            public var attributes: [Api.DocumentAttribute]
-            public init(url: String, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute]) {
-                self.url = url
-                self.size = size
-                self.mimeType = mimeType
-                self.attributes = attributes
+        public class Cons_walletTransactionPeerUser: TypeConstructorDescription {
+            public var userId: Int64
+            public init(userId: Int64) {
+                self.userId = userId
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("webDocumentNoProxy", [("url", ConstructorParameterDescription(self.url)), ("size", ConstructorParameterDescription(self.size)), ("mimeType", ConstructorParameterDescription(self.mimeType)), ("attributes", ConstructorParameterDescription(self.attributes))])
+                return ("walletTransactionPeerUser", [("userId", ConstructorParameterDescription(self.userId))])
             }
         }
-        case webDocument(Cons_webDocument)
-        case webDocumentNoProxy(Cons_webDocumentNoProxy)
+        case walletTransactionPeerAddress(Cons_walletTransactionPeerAddress)
+        case walletTransactionPeerUnsupported
+        case walletTransactionPeerUser(Cons_walletTransactionPeerUser)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
-            case .webDocument(let _data):
+            case .walletTransactionPeerAddress(let _data):
                 if boxed {
-                    buffer.appendInt32(475467473)
+                    buffer.appendInt32(2104446653)
                 }
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
-                serializeInt32(_data.size, buffer: buffer, boxed: false)
-                serializeString(_data.mimeType, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.attributes.count))
-                for item in _data.attributes {
-                    item.serialize(buffer, true)
+                serializeString(_data.address, buffer: buffer, boxed: false)
+                break
+            case .walletTransactionPeerUnsupported:
+                if boxed {
+                    buffer.appendInt32(1921772890)
                 }
                 break
-            case .webDocumentNoProxy(let _data):
+            case .walletTransactionPeerUser(let _data):
                 if boxed {
-                    buffer.appendInt32(-104284986)
+                    buffer.appendInt32(-645113722)
                 }
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                serializeInt32(_data.size, buffer: buffer, boxed: false)
-                serializeString(_data.mimeType, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.attributes.count))
-                for item in _data.attributes {
-                    item.serialize(buffer, true)
-                }
+                serializeInt64(_data.userId, buffer: buffer, boxed: false)
                 break
             }
         }
 
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
-            case .webDocument(let _data):
-                return ("webDocument", [("url", ConstructorParameterDescription(_data.url)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("size", ConstructorParameterDescription(_data.size)), ("mimeType", ConstructorParameterDescription(_data.mimeType)), ("attributes", ConstructorParameterDescription(_data.attributes))])
-            case .webDocumentNoProxy(let _data):
-                return ("webDocumentNoProxy", [("url", ConstructorParameterDescription(_data.url)), ("size", ConstructorParameterDescription(_data.size)), ("mimeType", ConstructorParameterDescription(_data.mimeType)), ("attributes", ConstructorParameterDescription(_data.attributes))])
+            case .walletTransactionPeerAddress(let _data):
+                return ("walletTransactionPeerAddress", [("address", ConstructorParameterDescription(_data.address))])
+            case .walletTransactionPeerUnsupported:
+                return ("walletTransactionPeerUnsupported", [])
+            case .walletTransactionPeerUser(let _data):
+                return ("walletTransactionPeerUser", [("userId", ConstructorParameterDescription(_data.userId))])
             }
         }
 
-        public static func parse_webDocument(_ reader: BufferReader) -> WebDocument? {
+        public static func parse_walletTransactionPeerAddress(_ reader: BufferReader) -> WalletTransactionPeer? {
             var _1: String?
             _1 = parseString(reader)
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: String?
-            _4 = parseString(reader)
-            var _5: [Api.DocumentAttribute]?
-            if let _ = reader.readInt32() {
-                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.DocumentAttribute.self)
-            }
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.WebDocument.webDocument(Cons_webDocument(url: _1!, accessHash: _2!, size: _3!, mimeType: _4!, attributes: _5!))
+            if _c1 {
+                return Api.WalletTransactionPeer.walletTransactionPeerAddress(Cons_walletTransactionPeerAddress(address: _1!))
             }
             else {
                 return nil
             }
         }
-        public static func parse_webDocumentNoProxy(_ reader: BufferReader) -> WebDocument? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: [Api.DocumentAttribute]?
-            if let _ = reader.readInt32() {
-                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.DocumentAttribute.self)
-            }
+        public static func parse_walletTransactionPeerUnsupported(_ reader: BufferReader) -> WalletTransactionPeer? {
+            return Api.WalletTransactionPeer.walletTransactionPeerUnsupported
+        }
+        public static func parse_walletTransactionPeerUser(_ reader: BufferReader) -> WalletTransactionPeer? {
+            var _1: Int64?
+            _1 = reader.readInt64()
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.WebDocument.webDocumentNoProxy(Cons_webDocumentNoProxy(url: _1!, size: _2!, mimeType: _3!, attributes: _4!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum WebDomainException: TypeConstructorDescription {
-        public class Cons_webDomainException: TypeConstructorDescription {
-            public var flags: Int32
-            public var domain: String
-            public var url: String
-            public var title: String
-            public var favicon: Int64?
-            public init(flags: Int32, domain: String, url: String, title: String, favicon: Int64?) {
-                self.flags = flags
-                self.domain = domain
-                self.url = url
-                self.title = title
-                self.favicon = favicon
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("webDomainException", [("flags", ConstructorParameterDescription(self.flags)), ("domain", ConstructorParameterDescription(self.domain)), ("url", ConstructorParameterDescription(self.url)), ("title", ConstructorParameterDescription(self.title)), ("favicon", ConstructorParameterDescription(self.favicon))])
-            }
-        }
-        case webDomainException(Cons_webDomainException)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .webDomainException(let _data):
-                if boxed {
-                    buffer.appendInt32(-1824741993)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeString(_data.domain, buffer: buffer, boxed: false)
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                serializeString(_data.title, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeInt64(_data.favicon!, buffer: buffer, boxed: false)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .webDomainException(let _data):
-                return ("webDomainException", [("flags", ConstructorParameterDescription(_data.flags)), ("domain", ConstructorParameterDescription(_data.domain)), ("url", ConstructorParameterDescription(_data.url)), ("title", ConstructorParameterDescription(_data.title)), ("favicon", ConstructorParameterDescription(_data.favicon))])
-            }
-        }
-
-        public static func parse_webDomainException(_ reader: BufferReader) -> WebDomainException? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: String?
-            _4 = parseString(reader)
-            var _5: Int64?
-            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
-                _5 = reader.readInt64()
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.WebDomainException.webDomainException(Cons_webDomainException(flags: _1!, domain: _2!, url: _3!, title: _4!, favicon: _5))
+            if _c1 {
+                return Api.WalletTransactionPeer.walletTransactionPeerUser(Cons_walletTransactionPeerUser(userId: _1!))
             }
             else {
                 return nil

@@ -183,6 +183,45 @@ public struct Wallet: Sendable {
         )
     }
 
+    /// Builds a `wallet-v5-experimental` wallet from a rotation mnemonic (TEP-0003 §3.3).
+    ///
+    /// This is the form to prefer for this contract. The mnemonic already carries both
+    /// keys, so the two cases a caller would otherwise have to distinguish — before and
+    /// after rotation — collapse into one call: the address always derives from the anchor
+    /// half, and signing always uses the signing half. Before rotation those are the same
+    /// key, and the user holds a single 12-word phrase.
+    ///
+    /// Using ``init(v5Experimental:network:workchain:)`` with a raw signer instead is still
+    /// correct for a wallet that will never rotate, but it cannot express a rotated one.
+    public init(
+        v5Experimental mnemonic: RotationMnemonic,
+        network: Network,
+        workchain: Int8 = 0
+    ) throws {
+        guard let globalId = Int32(network.chainId) else {
+            throw WalletKitError.validationFailed(
+                reason: "Network chainId \(network.chainId) is not numeric"
+            )
+        }
+        let walletID = WalletV5Experimental.walletID(globalId: globalId, workchain: workchain)
+        let anchorKey: Data
+        let signingKeys: KeyPair
+        do {
+            anchorKey = try mnemonic.anchorKeyPair().publicKey
+            signingKeys = try mnemonic.signingKeyPair()
+        } catch {
+            throw WalletKitError.cryptoFailure(underlying: error)
+        }
+
+        try self.init(
+            v5ExperimentalRotated: InMemorySigner(keyPair: signingKeys),
+            originalPublicKey: anchorKey,
+            network: network,
+            walletID: walletID,
+            workchain: workchain
+        )
+    }
+
     /// A wallet whose one-time key rotation has already happened.
     ///
     /// After a rotation the account's address and its signing key no longer agree: the
@@ -360,6 +399,26 @@ public struct Wallet: Sendable {
         }
 
         throw WalletKitError.validationFailed(reason: "Wallet has no contract")
+    }
+
+    /// Builds the rotation that replaces this wallet's signing key with `newSigning`'s.
+    ///
+    /// The replacement is a fresh 12-word BIP-39 half; the user's new 24-word phrase is
+    /// their existing anchor half followed by it — see ``RotationMnemonic/rotated(to:)``.
+    /// Deriving the key here rather than accepting a raw key pair is what keeps a rotated
+    /// wallet recoverable from a phrase: a rotation to some ad-hoc key succeeds on chain
+    /// and leaves the account unrecoverable from any mnemonic.
+    public func keyRotation(to newSigning: RotationMnemonic) throws -> KeyRotation {
+        do {
+            let keys = try newSigning.signingKeyPair()
+            return try KeyRotation.make(
+                address: address,
+                newPublicKey: keys.publicKey,
+                newSecretKey: keys.secretKey
+            )
+        } catch {
+            throw WalletKitError.cryptoFailure(underlying: error)
+        }
     }
 
     /// Signs a one-time public-key rotation, without broadcasting it.

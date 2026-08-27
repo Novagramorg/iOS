@@ -94,7 +94,7 @@ private final class WalletSetupScreenComponent: Component {
             }
 
             switch walletState.phase {
-            case .restoring, .wallet, .failed:
+            case .restoring, .provisioning, .wallet, .failed:
                 break
             case .empty:
                 return
@@ -120,7 +120,7 @@ private final class WalletSetupScreenComponent: Component {
             }
 
             switch walletState.phase {
-            case .restoring, .wallet, .failed:
+            case .restoring, .provisioning, .wallet, .failed:
                 break
             case .empty:
                 return
@@ -306,17 +306,17 @@ private final class WalletSetupScreenComponent: Component {
             let accentColor = environment.theme.list.itemCheckColors.fillColor
             let primaryForegroundColor = environment.theme.list.itemCheckColors.foregroundColor
             let canStartSetupOperation = self.canStartSetupOperation
-            let displaysSetupControls: Bool
-            if let walletState = self.walletState, case .empty = walletState.phase {
-                displaysSetupControls = true
-            } else {
-                displaysSetupControls = self.isCreateFlowActive
-            }
+            let displaysSetupControls = !"".isEmpty
             let isRestoring: Bool
-            if let walletState = self.walletState, case .restoring = walletState.phase {
-                isRestoring = true
+            if let walletState = self.walletState {
+                switch walletState.phase {
+                case .restoring, .provisioning, .empty:
+                    isRestoring = true
+                case .wallet, .failed:
+                    isRestoring = false
+                }
             } else {
-                isRestoring = self.walletState == nil
+                isRestoring = true
             }
 
             self.createButton.parentState = state
@@ -337,7 +337,7 @@ private final class WalletSetupScreenComponent: Component {
                             color: primaryForegroundColor
                         ))
                     ),
-                    isEnabled: canStartSetupOperation,
+                    isEnabled: canStartSetupOperation && displaysSetupControls,
                     displaysProgress: self.isCreating || isRestoring,
                     action: { [weak self] in
                         self?.createWallet()
@@ -379,7 +379,7 @@ private final class WalletSetupScreenComponent: Component {
                             color: accentColor
                         ))
                     ),
-                    isEnabled: canStartSetupOperation,
+                    isEnabled: canStartSetupOperation && displaysSetupControls,
                     action: { [weak self] in
                         self?.openImport()
                     }

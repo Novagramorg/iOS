@@ -77,7 +77,6 @@ import GiftOptionsScreen
 import GiftViewScreen
 import StarsIntroScreen
 import WalletScreen
-import WalletSetupScreen
 import WalletReceiveScreen
 import WalletImportScreen
 import WalletSettingsScreen
@@ -4160,50 +4159,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             fatalError()
         }
         switch walletContext.stateValue.phase {
-        case .empty:
-            return self.makeWalletSetupEntryScreen(context: context, walletContext: walletContext)
-        case .restoring, .wallet, .failed:
+        case .restoring, .provisioning, .empty, .wallet, .failed:
             return self.makeWalletContentScreen(context: context, walletContext: walletContext)
         }
-    }
-
-    private func makeWalletSetupEntryScreen(context: AccountContext, walletContext: WalletContext) -> ViewController {
-        return WalletSetupScreen(
-            context: context,
-            walletContext: walletContext,
-            routeToWallet: { [weak self, weak context] sourceController in
-                guard let self, let context,
-                      let navigationController = sourceController.navigationController as? NavigationController else {
-                    return false
-                }
-                guard navigationController.viewControllers.contains(where: { $0 === sourceController }) else {
-                    return false
-                }
-                navigationController.replaceController(
-                    sourceController,
-                    with: self.makeWalletContentScreen(context: context, walletContext: walletContext),
-                    animated: false
-                )
-                return true
-            }
-        )
     }
 
     private func makeWalletContentScreen(context: AccountContext, walletContext: WalletContext) -> ViewController {
         return WalletScreen(
             context: context,
             walletContext: walletContext,
-            routeToSetup: { [weak self, weak context] sourceController in
-                guard let self, let context,
-                      let navigationController = sourceController.navigationController as? NavigationController else {
-                    return
-                }
-                navigationController.replaceController(
-                    sourceController,
-                    with: self.makeWalletSetupEntryScreen(context: context, walletContext: walletContext),
-                    animated: false
-                )
-            }
+            routeToSetup: nil
         )
     }
 

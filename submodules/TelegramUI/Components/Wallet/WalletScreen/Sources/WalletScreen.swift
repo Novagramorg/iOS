@@ -572,7 +572,6 @@ private final class WalletScreenComponent: Component {
         private var accountName = ""
         private var accountPeerDisposable: Disposable?
         private var isUpdating = false
-        private var didRequestSetup = false
         private var isGramTooltipPresentationPending = false
         private var didPresentGramTooltip = false
         private var selectedSection: SelectedSection = .transactions
@@ -782,27 +781,6 @@ private final class WalletScreenComponent: Component {
                     }
                 )
                 controller.present(tooltipScreen, in: .current)
-            }
-        }
-
-        private func routeToSetupIfNeeded() {
-            guard !self.didRequestSetup,
-                  let walletState = self.walletState,
-                  case .empty = walletState.phase,
-                  let component = self.component,
-                  let routeToSetup = component.routeToSetup,
-                  let controller = self.environment?.controller() else {
-                return
-            }
-            self.didRequestSetup = true
-            Queue.mainQueue().after(0.0) { [weak self, weak controller] in
-                guard let self, let controller,
-                      let walletState = self.walletState,
-                      case .empty = walletState.phase else {
-                    self?.didRequestSetup = false
-                    return
-                }
-                routeToSetup(controller)
             }
         }
 
@@ -1030,7 +1008,7 @@ private final class WalletScreenComponent: Component {
         private func openSend(address: String? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  self.walletInfo != nil else {
+                  self.walletInfo?.canSign == true else {
                 return
             }
             if let address {
@@ -1434,7 +1412,6 @@ private final class WalletScreenComponent: Component {
                         return
                     }
                     self.walletState = walletState
-                    self.routeToSetupIfNeeded()
                     if !self.isUpdating {
                         self.componentState?.updated(transition: .easeInOut(duration: 0.25))
                     }
@@ -1776,6 +1753,7 @@ private final class WalletScreenComponent: Component {
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
                     ),
+                    isEnabled: self.walletInfo?.canSign == true,
                     action: { [weak self] in
                         self?.openSend()
                     }

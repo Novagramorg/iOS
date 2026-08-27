@@ -17,8 +17,8 @@ public final class TelegramEngine {
         return Payments(account: self.account)
     }()
 
-    public lazy var ton: Ton = {
-        return Ton(account: self.account)
+    public lazy var wallet: Wallet = {
+        return Wallet(account: self.account)
     }()
 
     public lazy var peers: Peers = {

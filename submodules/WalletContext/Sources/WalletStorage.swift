@@ -50,6 +50,7 @@ extension WalletContext {
 
     struct MetadataRecord: Codable, Equatable {
         var schemaVersion: Int
+        var walletAddress: String?
         var pendingTransfers: [PendingTransfer]
         var balance: Int64?
         var balanceUpdatedAt: Int32?
@@ -61,6 +62,7 @@ extension WalletContext {
 
         init(
             schemaVersion: Int,
+            walletAddress: String? = nil,
             pendingTransfers: [PendingTransfer],
             balance: Int64? = nil,
             balanceUpdatedAt: Int32? = nil,
@@ -71,6 +73,7 @@ extension WalletContext {
             collectibles: [Collectible]? = nil
         ) {
             self.schemaVersion = schemaVersion
+            self.walletAddress = walletAddress
             self.pendingTransfers = pendingTransfers
             self.balance = balance
             self.balanceUpdatedAt = balanceUpdatedAt
@@ -83,6 +86,7 @@ extension WalletContext {
 
         private enum CodingKeys: String, CodingKey {
             case schemaVersion
+            case walletAddress
             case pendingTransfers
             case balance
             case balanceUpdatedAt
@@ -96,6 +100,7 @@ extension WalletContext {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            self.walletAddress = try container.decodeIfPresent(String.self, forKey: .walletAddress)
             self.pendingTransfers = try container.decode([PendingTransfer].self, forKey: .pendingTransfers)
             self.balance = try? container.decode(Int64.self, forKey: .balance)
             self.balanceUpdatedAt = try? container.decode(Int32.self, forKey: .balanceUpdatedAt)
@@ -109,6 +114,7 @@ extension WalletContext {
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(self.schemaVersion, forKey: .schemaVersion)
+            try container.encodeIfPresent(self.walletAddress, forKey: .walletAddress)
             try container.encode(self.pendingTransfers, forKey: .pendingTransfers)
             try container.encodeIfPresent(self.balance, forKey: .balance)
             try container.encodeIfPresent(self.balanceUpdatedAt, forKey: .balanceUpdatedAt)
@@ -258,16 +264,44 @@ func normalizedMnemonicWords(_ words: [String]) -> [String] {
     return words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty }
 }
 
-func validatedMnemonicWords(_ words: [String]) throws -> [String] {
+enum ValidatedWalletMnemonic {
+    case ton(words: [String])
+    case rotation(words: [String], mnemonic: RotationMnemonic)
+
+    var words: [String] {
+        switch self {
+        case let .ton(words), let .rotation(words, _):
+            return words
+        }
+    }
+}
+
+func validatedWalletMnemonic(_ words: [String]) throws -> ValidatedWalletMnemonic {
     let normalized = words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
     guard !normalized.contains(where: { $0.isEmpty }) else {
         throw WalletContext.WalletError.invalidMnemonic
     }
-    guard normalized.count == 12 || normalized.count == 24 else {
+    switch normalized.count {
+    case RotationMnemonic.halfWordCount:
+        // A 12-word phrase is the pre-rotation BIP-39 form. TON mnemonics used by
+        // V4R2/V5R1 are intentionally accepted only in their 24-word form.
+        do {
+            return .rotation(words: normalized, mnemonic: try RotationMnemonic(words: normalized))
+        } catch {
+            throw WalletContext.WalletError.invalidMnemonic
+        }
+    case RotationMnemonic.rotationWordCount:
+        // Twenty-four words are ambiguous. Prefer the TON scheme; only if it rejects
+        // the whole phrase, try the two independently checksummed BIP-39 halves.
+        if (try? Mnemonic.validate(normalized)) == true {
+            return .ton(words: normalized)
+        }
+        do {
+            return .rotation(words: normalized, mnemonic: try RotationMnemonic(words: normalized))
+        } catch {
+            throw WalletContext.WalletError.invalidMnemonic
+        }
+    default:
         throw WalletContext.WalletError.unsupportedMnemonicLength
     }
-    guard (try? Mnemonic.validate(normalized)) == true else {
-        throw WalletContext.WalletError.invalidMnemonic
-    }
-    return normalized
 }

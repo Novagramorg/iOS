@@ -2634,7 +2634,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                             direction: .incoming,
                             amount: 1_344_020_000_000,
                             fee: 5_000_000,
-                            counterparty: address,
+                            peer: .address(address),
                             comment: "Test transfer"
                         ))
                     )
