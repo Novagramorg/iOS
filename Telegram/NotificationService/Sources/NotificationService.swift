@@ -2434,8 +2434,41 @@ private final class NotificationServiceHandler {
                         case let .deleteMessage(ids):
                             Logger.shared.log("NotificationService \(episode)", "Will delete messages \(ids)")
                             let mediaBox = stateManager.postbox.mediaBox
+                            // Fenixuz: anti-delete ("Deleted messages" toggle). Telegram sends a silent
+                            // MESSAGE_DELETED push and THIS extension is what removes the message from the
+                            // shared Postbox whenever the app is backgrounded — so the app-side gate in
+                            // AccountStateManagementUtils never gets to see the delete at all. Read the
+                            // toggle from the App Group suite (the "pro_messager" suite is per-process and
+                            // always reads false here) and, when it is on, mark the message instead of
+                            // deleting it, with the same logic as the in-app path. Delivered-banner removal
+                            // below is unchanged either way — the peer did delete it, we only keep the row.
+                            let fenixShowDeleted = UserDefaults(suiteName: appGroupName)?.bool(forKey: "show_deleted_messages") ?? false
                             let _ = (stateManager.postbox.transaction { transaction -> Void in
-                                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+                                if fenixShowDeleted {
+                                    var actuallyDeletedIds: [MessageId] = []
+                                    for id in ids {
+                                        guard let message = transaction.getMessage(id) else {
+                                            actuallyDeletedIds.append(id)
+                                            continue
+                                        }
+                                        if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                                            // Already marked — don't overwrite the original deletion time.
+                                            continue
+                                        }
+                                        var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+                                        newAttributes.append(DeletedMessageAttribute(timestamp: Int32(Date().timeIntervalSince1970)))
+
+                                        let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                                        transaction.updateMessage(id, update: { _ in
+                                            return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
+                                        })
+                                    }
+                                    if !actuallyDeletedIds.isEmpty {
+                                        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: actuallyDeletedIds, deleteMedia: true)
+                                    }
+                                } else {
+                                    _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+                                }
                             }
                             |> deliverOn(strongSelf.queue)).start(completed: {
                                 UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in

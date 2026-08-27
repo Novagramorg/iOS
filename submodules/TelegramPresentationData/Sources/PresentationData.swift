@@ -1,4 +1,5 @@
 import Foundation
+import FenixuzBrand
 import UIKit
 import SwiftSignalKit
 import Postbox
@@ -129,24 +130,27 @@ public func dictFromLocalization(_ value: Localization) -> [String: String] {
     for entry in value.entries {
         switch entry {
             case let .string(key, value):
-                dict[key] = value
+                // Fenixuz: every string the app renders passes through here, so this is the one
+                // place where the server's language pack can be rebranded for all languages at
+                // once. See FenixuzBrandStrings for what is deliberately left as "Telegram".
+                dict[key] = FenixuzBrandStrings.applyBrand(to: value)
             case let .pluralizedString(key, zero, one, two, few, many, other):
                 if let zero = zero {
-                    dict["\(key)_zero"] = zero
+                    dict["\(key)_zero"] = FenixuzBrandStrings.applyBrand(to: zero)
                 }
                 if let one = one {
-                    dict["\(key)_1"] = one
+                    dict["\(key)_1"] = FenixuzBrandStrings.applyBrand(to: one)
                 }
                 if let two = two {
-                    dict["\(key)_2"] = two
+                    dict["\(key)_2"] = FenixuzBrandStrings.applyBrand(to: two)
                 }
                 if let few = few {
-                    dict["\(key)_3_10"] = few
+                    dict["\(key)_3_10"] = FenixuzBrandStrings.applyBrand(to: few)
                 }
                 if let many = many {
-                    dict["\(key)_many"] = many
+                    dict["\(key)_many"] = FenixuzBrandStrings.applyBrand(to: many)
                 }
-                dict["\(key)_any"] = other
+                dict["\(key)_any"] = FenixuzBrandStrings.applyBrand(to: other)
         }
     }
     return dict
