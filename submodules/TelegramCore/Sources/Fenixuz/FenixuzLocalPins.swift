@@ -112,27 +112,38 @@ public enum FenixuzLocalPins {
 // Turning the toggle off has to actually unpin the overflow, not just forget it. Clearing the
 // store alone only stops the merge from re-adding those ids — the pinned list in Postbox still
 // holds them, so the user sees every pin survive an "off" that promised to remove them.
+//
+// This removes exactly the ids this feature added, read back from the store. An earlier version
+// trimmed by `prefix(serverLimit)` instead, which is guesswork: it assumes the stored order still
+// matches the server's, and on a mismatch it unpins chats the server actually holds. Removing the
+// recorded ids can only ever touch pins this device added.
 func _internal_fenixuzTrimPinnedChatsToServerLimit(postbox: Postbox, accountPeerId: PeerId) -> Signal<Never, NoError> {
     return postbox.transaction { transaction -> Void in
-        let isPremium = transaction.getPeer(accountPeerId)?.isPremium ?? false
-        let appConfiguration = transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? .defaultValue
-        let userLimitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: isPremium)
-
         for groupId in [PeerGroupId.root, Namespaces.PeerGroup.archive] {
-            let limit: Int
-            if case .root = groupId {
-                limit = Int(userLimitsConfiguration.maxPinnedChatCount)
-            } else {
-                limit = Int(userLimitsConfiguration.maxArchivedPinnedChatCount)
-            }
-            let itemIds = transaction.getPinnedItemIds(groupId: groupId)
-            guard itemIds.count > limit else {
+            // Read the store directly: `overflowPeerIds` returns nothing once the toggle is off,
+            // and by this point it already is.
+            guard let defaults = UserDefaults(suiteName: "pro_messager"),
+                  let raw = defaults.array(forKey: "unlimited_pins_local_\(accountPeerId.toInt64())_\(groupId.rawValue)") as? [NSNumber],
+                  !raw.isEmpty
+            else {
                 continue
             }
-            // The list is newest-first and the server keeps its head, so keeping the first `limit`
-            // leaves exactly what is already synced and drops only the device-local tail.
-            transaction.setPinnedItemIds(groupId: groupId, itemIds: Array(itemIds.prefix(limit)))
+            let overflow = Set(raw.map { PeerId($0.int64Value) })
+
+            let itemIds = transaction.getPinnedItemIds(groupId: groupId)
+            let remaining = itemIds.filter { item in
+                if case let .peer(peerId) = item {
+                    return !overflow.contains(peerId)
+                }
+                return true
+            }
+            guard remaining.count != itemIds.count else {
+                continue
+            }
+            // Order matters: the sync operation snapshots the CURRENT list as its idea of what the
+            // server holds, so it has to run before the write, exactly as TogglePeerChatPinned does.
             addSynchronizePinnedChatsOperation(transaction: transaction, groupId: groupId)
+            transaction.setPinnedItemIds(groupId: groupId, itemIds: remaining)
         }
 
         FenixuzLocalPins.clearAll(accountPeerId: accountPeerId)
