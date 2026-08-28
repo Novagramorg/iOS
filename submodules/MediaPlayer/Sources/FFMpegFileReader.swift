@@ -239,7 +239,11 @@ public final class FFMpegFileReader {
     private var lastReadPts: (streamIndex: Int, pts: Int64)?
     private var isWaitingForMoreData: Bool = false
     
-    public init?(source: SourceDescription, passthroughDecoder: Bool = false, useHardwareAcceleration: Bool, selectedStream: SelectedStream, seek: Seek?, maxReadablePts: (streamIndex: Int, pts: Int64, isEnded: Bool)?) {
+    public convenience init?(source: SourceDescription, passthroughDecoder: Bool = false, useHardwareAcceleration: Bool, selectedStream: SelectedStream, seek: Seek?, maxReadablePts: (streamIndex: Int, pts: Int64, isEnded: Bool)?) {
+        self.init(source: source, passthroughDecoder: passthroughDecoder, useHardwareAcceleration: useHardwareAcceleration, selectedStream: selectedStream, seek: seek, maxReadablePts: maxReadablePts, ignoreEditList: false)
+    }
+
+    init?(source: SourceDescription, passthroughDecoder: Bool = false, useHardwareAcceleration: Bool, selectedStream: SelectedStream, seek: Seek?, maxReadablePts: (streamIndex: Int, pts: Int64, isEnded: Bool)?, ignoreEditList: Bool) {
         let _ = FFMpegMediaFrameSourceContextHelpers.registerFFMpegGlobals
         
         switch source {
@@ -265,7 +269,7 @@ public final class FFMpegFileReader {
         
         avFormatContext.setIO(self.avIoContext!)
         
-        if !avFormatContext.openInput(withDirectFilePath: nil) {
+        if !avFormatContext.openInput(withDirectFilePath: nil, ignoreEditList: ignoreEditList) {
             self.readingError = true
             return nil
         }

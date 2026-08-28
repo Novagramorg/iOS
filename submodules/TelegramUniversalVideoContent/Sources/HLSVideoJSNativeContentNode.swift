@@ -1834,7 +1834,7 @@ private final class SourceBuffer {
                         let item = ChunkMediaPlayerPart(
                             startTime: fragmentInfo.startTime.seconds,
                             endTime: fragmentInfo.startTime.seconds + fragmentInfo.duration.seconds,
-                            content: ChunkMediaPlayerPart.TempFile(file: tempFile),
+                            content: ChunkMediaPlayerPart.TempFile(file: tempFile, ignoreAudioEditList: true),
                             codecName: videoCodecName,
                             offsetTime: 0.0
                         )

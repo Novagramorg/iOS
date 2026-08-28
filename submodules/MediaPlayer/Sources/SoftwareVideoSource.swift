@@ -396,7 +396,11 @@ public final class SoftwareAudioSource {
         return self.audioStream != nil
     }
     
-    public init(path: String) {
+    public convenience init(path: String) {
+        self.init(path: path, ignoreEditList: false)
+    }
+
+    init(path: String, ignoreEditList: Bool) {
         let _ = FFMpegMediaFrameSourceContextHelpers.registerFFMpegGlobals
         
         var s = stat()
@@ -421,7 +425,7 @@ public final class SoftwareAudioSource {
         
         avFormatContext.setIO(self.avIoContext!)
         
-        if !avFormatContext.openInput(withDirectFilePath: nil) {
+        if !avFormatContext.openInput(withDirectFilePath: nil, ignoreEditList: ignoreEditList) {
             self.readingError = true
             return
         }
