@@ -35,7 +35,7 @@ final class DetailsNestedHostingTests: XCTestCase {
         let v = canvasWithNestedTable()
         let table = nestedTableBox(v)
         let cellStart = table.cellTextStart(row: 0, column: 0)!
-        v.anchor = cellStart; v.head = cellStart
+        v.setSelectionForTesting(anchor: cellStart, head: cellStart)
         guard let a = v.activeTable() else { return XCTFail("activeTable must resolve a nested table") }
         XCTAssertTrue(a.box === table)
         XCTAssertFalse(v.tableHandles().isEmpty, "control handles must be present for a nested table")
@@ -47,7 +47,7 @@ final class DetailsNestedHostingTests: XCTestCase {
     func test_nestedTable_convertToText_replacesInDetailsBody() {
         let v = canvasWithNestedTable()
         let table = nestedTableBox(v)
-        v.anchor = table.cellTextStart(row: 0, column: 0)!; v.head = v.anchor
+        v.setSelectionForTesting(anchor: table.cellTextStart(row: 0, column: 0)!, head: table.cellTextStart(row: 0, column: 0)!)
         v.convertCurrentTableToText()
         let details = v.boxes.first { $0 is DetailsBox } as! DetailsBox
         XCTAssertFalse(details.children.boxes.contains { $0 is TableBlockBox }, "the nested table must be converted to text in place")
@@ -212,7 +212,7 @@ final class DetailsNestedHostingTests: XCTestCase {
                                            children: [media, empty], expanded: true))], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 800); v.layoutIfNeeded()
         let emptyBox = (v.boxes.first { $0 is DetailsBox } as! DetailsBox).children.boxes.first { ($0 as? BlockBox)?.id == BlockID("e") } as! BlockBox
-        v.anchor = emptyBox.textStart; v.head = emptyBox.textStart
+        v.setSelectionForTesting(anchor: emptyBox.textStart, head: emptyBox.textStart)
         v.deleteBackward()
         let details = v.boxes.first { $0 is DetailsBox } as! DetailsBox
         XCTAssertFalse(details.children.boxes.contains { ($0 as? BlockBox)?.id == BlockID("e") }, "the empty paragraph must be removed")

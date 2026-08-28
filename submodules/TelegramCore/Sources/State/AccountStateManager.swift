@@ -429,7 +429,7 @@ public final class AccountStateManager {
         }
         
         public func reset() {
-            self.queue.async {
+            self.queue.async { [self] in
                 if self.updateService == nil {
                     self.updateService = UpdateMessageService(peerId: self.accountPeerId)
                     self.updateServiceDisposable.set(self.updateService!.pipe.signal().start(next: { [weak self] groups in

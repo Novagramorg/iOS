@@ -545,7 +545,7 @@ final class CanvasImageEditTests: XCTestCase {
     // code / collapsed quote) as an object-replacement RANGE running from the atom's text end to the empty
     // paragraph's start — the same offset-geometry pattern as the code-block case. The range-form branch in
     // deleteBackward() must handle all atoms via isNonParagraphAtom, not just CodeBlockBox. Before the fix
-    // the branch was code-only, so an empty paragraph after an IMAGE fell through to applySelectionReplace
+    // the branch was code-only, so an empty paragraph after an IMAGE fell through to applySelectionReplaceOutcome
     // and was stranded (block count stayed 3; the empty paragraph was not removed).
     func test_backspaceObjectReplacementRangeAfterImage_removesEmptyParagraph() {
         let v = DocumentCanvasView()

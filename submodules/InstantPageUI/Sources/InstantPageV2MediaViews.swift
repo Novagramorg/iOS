@@ -363,11 +363,38 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
         registerInRootRegistry(wrapper: self, mediaIndex: self.item.media.index)
     }
 
+    /// The rect the inline player should occupy.
+    ///
+    /// The poster (`wrappedNode`) renders aspect-FIT over a blurred backdrop whenever `item.fit` is set,
+    /// which single media does: `instantPageV2MediaFrame` caps a portrait item's height at its display
+    /// width, so the box deliberately stops matching the media aspect. The player is layered ABOVE that
+    /// poster, so sizing it to the full bounds both squashes the video into the capped box and hides the
+    /// blurred backdrop — which is why video appeared square and stretched while images did not.
+    ///
+    /// Collage cells construct the item WITHOUT `fit`, so they keep filling their bounds (crop-to-fill,
+    /// matching image cells and the 1pt-bleed clipping note at the construction site).
+    private func inlineVideoFrame(in bounds: CGRect) -> CGRect {
+        guard self.item.fit,
+              case let .file(file) = self.item.media.media,
+              let dimensions = file.dimensions,
+              dimensions.width > 0, dimensions.height > 0 else {
+            return bounds
+        }
+        let fitted = dimensions.cgSize.aspectFitted(bounds.size)
+        return CGRect(
+            x: floorToScreenPixels((bounds.width - fitted.width) / 2.0),
+            y: floorToScreenPixels((bounds.height - fitted.height) / 2.0),
+            width: fitted.width,
+            height: fitted.height
+        )
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         self.wrappedNode.frame = self.bounds
-        self.videoNode?.frame = self.bounds
-        self.videoNode?.updateLayout(size: self.bounds.size, transition: .immediate)
+        let videoFrame = self.inlineVideoFrame(in: self.bounds)
+        self.videoNode?.frame = videoFrame
+        self.videoNode?.updateLayout(size: videoFrame.size, transition: .immediate)
         if let overlay = self.spoilerOverlay {
             overlay.updateLayout(size: self.bounds.size)
             if let blurNode = overlay.blurredImageNode {
@@ -485,7 +512,7 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
             // they draw into `boundingSize == bounds.size`). Clipping here rather than on `self` keeps
             // the wrapper's own `clipsToBounds` tied to `cornerRadius`, as the image view's is.
             videoNode.clipsToBounds = true
-            videoNode.frame = self.bounds
+            videoNode.frame = self.inlineVideoFrame(in: self.bounds)
             self.addSubview(videoNode.view)
             self.videoNode = videoNode
             self.videoNodeMediaId = mediaId

@@ -123,8 +123,12 @@ extension DocumentCanvasView {
 
     /// Removes one item (by index) from a media container, leaving the rest. If only one item remains,
     /// removes the WHOLE block instead — routes to `deleteMediaBlock` (`+Editing.swift`), which already
-    /// owns its own `editing { }` (one undo step) and turns the block into an empty paragraph via
-    /// `deleteImageBox`. Otherwise rebuilds the box with the item removed, in place, mirroring the
+    /// owns its own `editing { }` (one undo step) and REMOVES the block from its own stack, appending an
+    /// empty paragraph only if that stack would otherwise be left with none. (Corrected Task 36c fix
+    /// round: this said "turns the block into an empty paragraph via `deleteImageBoxOutcome`" — wrong
+    /// about both the effect and the callee. `deleteImageBoxOutcome` has no callers at all; see its own
+    /// doc comment, which is where that class of mis-attribution is described.) Otherwise rebuilds the
+    /// box with the item removed, in place, mirroring the
     /// caption-split rebuild in `insertParagraphBreak` (`+Editing.swift` ~line 670): read the current
     /// `MediaBlock` off the box, mutate `items`, build a fresh `MediaBlockBox` reusing the old box's
     /// mapper/horizontalBleed/width, splice it into `boxes` in place, `recomputeSpans()` — all inside
@@ -148,6 +152,7 @@ extension DocumentCanvasView {
                                        horizontalBleed: mediaBox.horizontalBleed)
             stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
+            return .unchanged
         }
     }
 
@@ -168,6 +173,7 @@ extension DocumentCanvasView {
                                        horizontalBleed: mediaBox.horizontalBleed)
             stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
+            return .unchanged
         }
     }
 
@@ -195,6 +201,7 @@ extension DocumentCanvasView {
                                        horizontalBleed: mediaBox.horizontalBleed)
             stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
+            return .unchanged
         }
     }
 
@@ -214,6 +221,7 @@ extension DocumentCanvasView {
                                        horizontalBleed: mediaBox.horizontalBleed)
             stack.boxes[index] = newBox   // splice into the box's OWN stack (top-level or a container body)
             recomputeSpans()
+            return .unchanged
         }
     }
 

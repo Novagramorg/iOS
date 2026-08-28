@@ -357,7 +357,7 @@ func presentLegacyMediaPickerGallery(
                 
                 let _ = (sendWhenOnlineAvailable
                 |> take(1)
-                |> deliverOnMainQueue).start(next: { sendWhenOnlineAvailable in
+                |> deliverOnMainQueue).start(next: { [model] sendWhenOnlineAvailable in
                     let dismissImpl = { [weak model] in
                         model?.dismiss(true, false)
                         dismissAll()

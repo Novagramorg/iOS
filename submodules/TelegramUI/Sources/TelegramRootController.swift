@@ -382,7 +382,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     return nil
                 }
             },
-            completion: { result, resultTransition, storyRemainingCount, dismissed in
+            completion: { [weak self] result, resultTransition, storyRemainingCount, dismissed in
                 let subject: Signal<MediaEditorScreenImpl.Subject?, NoError> = result
                 |> map { value -> MediaEditorScreenImpl.Subject? in
                     func editorPIPPosition(_ position: CameraScreenImpl.PIPPosition) -> MediaEditorScreenImpl.PIPPosition {

@@ -18,7 +18,7 @@ final class DetailsBodyEditTests: XCTestCase {
         v.becomeFirstResponder()
         let box = v.boxes.first { $0 is DetailsBox } as! DetailsBox
         let bodyStart = box.leafRegions()[1].globalStart        // [0] = title, [1] = body
-        v.head = bodyStart; v.anchor = bodyStart
+        v.setSelectionForTesting(anchor: bodyStart, head: bodyStart)
         return v
     }
     private func detailsBody(_ v: DocumentCanvasView) -> [Block] {

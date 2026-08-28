@@ -133,7 +133,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         }
     }
     
-    private var fetchDisposable: Disposable?
+    private let fetchDisposable = MetaDisposable()
+    private var currentAnimationSourceId: String?
+    private var hasAnimationSource = false
     private var setupTimestamp: Double?
     
     private var cachedTonImage: (UIImage, UIColor)?
@@ -289,7 +291,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
     }
     
     deinit {
-        self.fetchDisposable?.dispose()
+        self.fetchDisposable.dispose()
         self.currentProgressDisposable?.dispose()
     }
     
@@ -538,10 +540,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         let cachedTonImage = self.cachedTonImage
         let cachedGiftMessageBackgroundImage = self.cachedGiftMessageBackgroundImage
         
-        return { item, layoutConstants, _, _, _, _ in
+        return { [weak self] item, layoutConstants, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: true, headerSpacing: 0.0, hidesBackground: .always, forceFullCorners: false, forceAlignment: .center)
                         
-            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
+            return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { [weak self] constrainedSize, position in
                 var giftSize = CGSize(width: 220.0, height: 240.0)
                 
                 let incoming: Bool
@@ -556,8 +558,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 var primaryTextColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper).primaryText
                                 
                 var months: Int32 = 3
-                var animationName: String = ""
                 var animationFile: TelegramMediaFile?
+                var stickerPackAnimation: (reference: StickerPackReference, sourceId: String, file: TelegramMediaFile)?
                 var uniqueGift: StarGift.UniqueGift?
                 var title = item.presentationData.strings.Notification_PremiumGift_Title
                 var text = ""
@@ -944,19 +946,30 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 switch months {
                 case 1000:
-                    animationName = "GiftDiamond1"
+                    if let item = item.associatedData.tonGiftStickers[0] {
+                        stickerPackAnimation = (.tonGifts, "ton", item.file._parse())
+                    }
                 case 2000:
-                    animationName = "GiftDiamond2"
+                    if let item = item.associatedData.tonGiftStickers[10] {
+                        stickerPackAnimation = (.tonGifts, "ton", item.file._parse())
+                    }
                 case 3000:
-                    animationName = "GiftDiamond3"
-                case 12:
-                    animationName = "Gift12"
-                case 6:
-                    animationName = "Gift6"
-                case 3:
-                    animationName = "Gift3"
+                    if let item = item.associatedData.tonGiftStickers[50] {
+                        stickerPackAnimation = (.tonGifts, "ton", item.file._parse())
+                    }
                 default:
-                    animationName = "Gift3"
+                    let premiumGiftMonths: Int32
+                    switch months {
+                    case 12:
+                        premiumGiftMonths = 12
+                    case 6:
+                        premiumGiftMonths = 6
+                    default:
+                        premiumGiftMonths = 3
+                    }
+                    if let item = item.associatedData.premiumGiftStickers[premiumGiftMonths] {
+                        stickerPackAnimation = (.premiumGifts, "premium", item.file._parse())
+                    }
                 }
 
                 let isGiftMessageComposerPreview = item.attributes.isGiftMessageComposerPreview
@@ -1210,7 +1223,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                     backgroundSize.height += 4.0
                 }
                 
-                return (backgroundSize.width, { boundingWidth in
+                return (backgroundSize.width, { [weak self] boundingWidth in
                     return (backgroundSize, { [weak self] animation, synchronousLoads, info in
                         if let strongSelf = self {
                             let isFirstTime = strongSelf.item == nil
@@ -1229,6 +1242,16 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             let imageFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((boundingWidth - giftSize.width) / 2.0), y: hasServiceMessage ? labelLayout.size.height + 13.0 : 0.0), size: giftSize)
                             let mediaBackgroundFrame = imageFrame.insetBy(dx: -2.0, dy: -2.0)
                             
+                            let displayedAnimationFile = animationFile ?? stickerPackAnimation?.file
+                            let isStickerPackAnimation = animationFile == nil && stickerPackAnimation != nil
+                            let animationSourceId: String?
+                            if let displayedAnimationFile {
+                                let sourceId = isStickerPackAnimation ? stickerPackAnimation?.sourceId ?? "pack" : "message"
+                                animationSourceId = "\(sourceId):\(displayedAnimationFile.resource.id.stringRepresentation)"
+                            } else {
+                                animationSourceId = nil
+                            }
+                            
                             var iconSize = CGSize(width: 160.0, height: 160.0)
                             var iconOffset: CGFloat = 0.0
                             if let _ = animationFile {
@@ -1237,7 +1260,8 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                             let animationFrame = CGRect(origin: CGPoint(x: mediaBackgroundFrame.minX + floorToScreenPixels((mediaBackgroundFrame.width - iconSize.width) / 2.0), y: mediaBackgroundFrame.minY - 16.0 + iconOffset), size: iconSize)
                             strongSelf.animationNode.frame = animationFrame
-                            strongSelf.animationNode.isHidden = isStoryEntity
+                            strongSelf.animationNode.isHidden = isStoryEntity || animationSourceId == nil
+                            strongSelf.placeholderNode.isHidden = animationSourceId == nil
                             
                             strongSelf.buttonNode.isHidden = buttonTitle.isEmpty
                             strongSelf.buttonNode.isUserInteractionEnabled = !item.presentationData.isPreview || isGiftMessageComposerPreview
@@ -1263,22 +1287,33 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 }
                                 
                                 strongSelf.animationNode.autoplay = true
+                            }
+                            
+                            if !isStoryEntity && uniqueGift == nil && strongSelf.currentAnimationSourceId != animationSourceId {
+                                strongSelf.currentAnimationSourceId = animationSourceId
+                                strongSelf.fetchDisposable.set(nil)
                                 
-                                if let file = animationFile {
-                                    strongSelf.animationNode.setup(source: AnimatedStickerResourceSource(account: item.context.account, resource: file.resource, isVideo: file.mimeType == "video/webm"), width: 384, height: 384, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
-                                    if strongSelf.fetchDisposable == nil {
-                                        strongSelf.fetchDisposable = freeMediaFileResourceInteractiveFetched(postbox: item.context.account.postbox, userLocation: .other, fileReference: .message(message: MessageReference(item.message), media: file), resource: file.resource).start()
+                                if let file = displayedAnimationFile {
+                                    if isStickerPackAnimation {
+                                        strongSelf.animationNode.setup(source: AnimatedStickerResourceSource(account: item.context.account, resource: file.resource, isVideo: file.mimeType == "video/webm"), width: 384, height: 384, playbackMode: .still(.end), mode: .direct(cachePathPrefix: nil))
+                                    } else {
+                                        strongSelf.animationNode.setup(source: AnimatedStickerResourceSource(account: item.context.account, resource: file.resource, isVideo: file.mimeType == "video/webm"), width: 384, height: 384, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
+                                    }
+                                    
+                                    if isStickerPackAnimation, let stickerPackAnimation {
+                                        strongSelf.fetchDisposable.set(freeMediaFileResourceInteractiveFetched(postbox: item.context.account.postbox, userLocation: .other, fileReference: .stickerPack(stickerPack: stickerPackAnimation.reference, media: file), resource: file.resource).start())
+                                    } else {
+                                        strongSelf.fetchDisposable.set(freeMediaFileResourceInteractiveFetched(postbox: item.context.account.postbox, userLocation: .other, fileReference: .message(message: MessageReference(item.message), media: file), resource: file.resource).start())
                                     }
                                     
                                     if let immediateThumbnailData = file.immediateThumbnailData {
                                         let shimmeringColor = bubbleVariableColor(variableColor: item.presentationData.theme.theme.chat.message.stickerPlaceholderShimmerColor, wallpaper: item.presentationData.theme.wallpaper)
                                         strongSelf.placeholderNode.update(backgroundColor: nil, foregroundColor: overlayColor, shimmeringColor: shimmeringColor, data: immediateThumbnailData, size: animationFrame.size, enableEffect: item.context.sharedContext.energyUsageSettings.fullTranslucency)
                                     }
-                                } else if animationName.hasPrefix("Gift") {
-                                    strongSelf.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: animationName), width: 384, height: 384, playbackMode: .still(.end), mode: .direct(cachePathPrefix: nil))
                                 }
                             }
                             strongSelf.giftMessageSelectionControlColor = uniqueBackgroundColor
+                            strongSelf.hasAnimationSource = animationSourceId != nil
                             strongSelf.item = item
                             strongSelf.isStarGift = isStarGift
                             
@@ -1936,11 +1971,11 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
         }
         self.buttonIconNode?.visibility = isPlaying
         
-        if isPlaying && self.setupTimestamp == nil {
+        if isPlaying && self.hasAnimationSource && self.setupTimestamp == nil {
             self.setupTimestamp = CACurrentMediaTime()
         }
         
-        if isPlaying {
+        if isPlaying && self.hasAnimationSource {
             var alreadySeen = true
             
             if let action = item.message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case .setChatTheme = action.action {

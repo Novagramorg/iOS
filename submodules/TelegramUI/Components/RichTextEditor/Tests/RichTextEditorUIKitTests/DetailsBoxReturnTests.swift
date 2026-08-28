@@ -20,7 +20,7 @@ final class DetailsBoxReturnTests: XCTestCase {
         let v = seeded(body: [.paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "note")]))])
         let bodyRegion = detailsBox(v).leafRegions()[1]                 // [0] = title, [1] = body
         let end = bodyRegion.globalStart + bodyRegion.length
-        v.head = end; v.anchor = end
+        v.setSelectionForTesting(anchor: end, head: end)
         v.insertText("\n")                                             // 1st Return: adds an empty body line
         v.insertText("\n")                                             // 2nd Return: escapes
         let blocks = v.currentBlocks()
@@ -36,7 +36,7 @@ final class DetailsBoxReturnTests: XCTestCase {
     func test_doubleReturnInEmptyBody_firstAddsLine_secondEscapes() {
         let v = seeded(body: [.paragraph(ParagraphBlock(id: BlockID("b"), runs: []))])
         let bodyRegion = detailsBox(v).leafRegions()[1]
-        v.head = bodyRegion.globalStart; v.anchor = v.head
+        v.setSelectionForTesting(anchor: bodyRegion.globalStart, head: bodyRegion.globalStart)
         v.insertText("\n")                                             // 1st Return: adds a line, NO escape
         XCTAssertEqual(v.currentBlocks().count, 1)                     // still only the details
         guard case .details(let mid) = v.currentBlocks()[0] else { return XCTFail() }

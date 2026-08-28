@@ -239,7 +239,7 @@ class GiftOptionItemNode: ItemListRevealOptionsItemNode {
         
         let currentItem = self.layoutParams?.0
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let titleFont: UIFont
             switch item.titleFont {
             case .regular:

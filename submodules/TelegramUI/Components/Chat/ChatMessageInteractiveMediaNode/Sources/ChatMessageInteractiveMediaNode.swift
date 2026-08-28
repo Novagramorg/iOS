@@ -1872,7 +1872,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                     
                     let imageApply = imageLayout(arguments)
                     
-                    return (boundingSize, { transition, synchronousLoads in
+                    return (boundingSize, { [context] transition, synchronousLoads in
                         if let strongSelf = self {
                             strongSelf.context = context
                             strongSelf.message = message

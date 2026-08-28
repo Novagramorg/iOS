@@ -118,7 +118,7 @@ final class WalletTransactionAmountComponent: Component {
                     regularTextColor = component.theme.list.itemDisclosureActions.constructive.fillColor
                 }
             case .outgoing:
-                amountText = "−\(formattedAmount)"
+                amountText = "\(formattedAmount)".replacingOccurrences(of: "-", with: "−")
                 regularTextColor = component.theme.actionSheet.primaryTextColor
             case .unknown:
                 amountText = formattedAmount

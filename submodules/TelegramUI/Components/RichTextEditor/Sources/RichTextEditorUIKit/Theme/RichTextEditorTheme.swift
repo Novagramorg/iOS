@@ -52,6 +52,11 @@ public struct RichTextEditorTheme {
     /// Quote AUTHOR (attribution) line placeholder ("Add author") color. Defaults to `placeholder` until a
     /// host sets a distinct value.
     public var quoteAuthorPlaceholder: UIColor
+    /// A code block's language-line text colour. Defaults to `containerPlaceholder` — the colour the
+    /// display-only language label already used — so making the line editable changes nothing visually.
+    public var codeLanguageText: UIColor
+    /// The "Language" placeholder colour on an EMPTY language line. Mirrors `quoteAuthorPlaceholder`.
+    public var codeLanguagePlaceholder: UIColor
     /// Fill of a default-coloured (neutral) button pill. Mirrors `instantPageButtonColors`' `.none` arm.
     public var buttonNeutralFill: UIColor
     /// Label colour of a default-coloured button pill. Defaults to `accent`.
@@ -77,6 +82,8 @@ public struct RichTextEditorTheme {
         shadowCursor: UIColor = UIColor(white: 0.7, alpha: 1.0),
         quoteAuthorText: UIColor? = nil,
         quoteAuthorPlaceholder: UIColor? = nil,
+        codeLanguageText: UIColor? = nil,
+        codeLanguagePlaceholder: UIColor? = nil,
         misspellingUnderline: UIColor = .systemRed,
         grammarUnderline: UIColor = .systemGreen,
         correctionUnderline: UIColor = UIColor(red: 153.0/255.0, green: 172.0/255.0, blue: 235.0/255.0, alpha: 1.0),
@@ -100,6 +107,8 @@ public struct RichTextEditorTheme {
         self.shadowCursor = shadowCursor
         self.quoteAuthorText = quoteAuthorText ?? secondaryText
         self.quoteAuthorPlaceholder = quoteAuthorPlaceholder ?? placeholder
+        self.codeLanguageText = codeLanguageText ?? containerPlaceholder
+        self.codeLanguagePlaceholder = codeLanguagePlaceholder ?? placeholder
         self.misspellingUnderline = misspellingUnderline
         self.grammarUnderline = grammarUnderline
         self.correctionUnderline = correctionUnderline

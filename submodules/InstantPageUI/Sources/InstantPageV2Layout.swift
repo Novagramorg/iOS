@@ -169,21 +169,28 @@ public enum InstantPageV2LaidOutItem {
 public struct InstantPageV2TextItem {
     public var frame: CGRect
     public let textItem: InstantPageTextItem   // V1 type reused as payload
+    /// Height DRAWN below `frame` that the layout does not reserve — normally zero.
+    ///
+    /// A collapsed quote sets it so the lines past its three-line preview stay rendered while
+    /// contributing nothing to the quote's height. Nothing outside the quote may see them, and
+    /// nothing does: the only producer is `instantPageV2QuoteBudgetedItems`, which sets it solely for
+    /// the item sitting at a collapsed quote's bottom edge — the item the fade mask covers. The mask
+    /// is what clips the overflow, and because the mask ANIMATES, collapsing sweeps those lines away
+    /// instead of blinking them out. See `InstantPageV2QuoteCollapse.swift`.
+    public var overflowHeight: CGFloat = 0.0
 }
 
 public struct InstantPageV2CodeBlockItem {
     public var frame: CGRect
-    public let accentColor: UIColor
-    public let barWidth: CGFloat
-    public let cornerRadius: CGFloat
-    public let fillAlpha: CGFloat
-    public let barOnTrailing: Bool
+    /// Plain, flat band fill. Sourced from `InstantPageTheme.codeBlockBackgroundColor`, which the
+    /// message hosts set to the same value they give `tableHeaderColor` — a code block reads as a
+    /// highlighted table row, not as an accent-tinted quote.
+    public let backgroundColor: UIColor
     public let language: String?
-    public let languageLabelColor: UIColor
-    /// Point size for the language label the VIEW builds at render time. It has to travel on the
-    /// item because it is the only font in the V2 renderer not baked into an attributed string at
-    /// layout time — so it is the only place the content scale could leak past the layout.
-    public let languageFontSize: CGFloat
+    /// The language line, laid out at LAYOUT time in block-local coordinates. It used to be built by
+    /// the view from a bare point size, which made it the only font in the V2 renderer that could
+    /// leak past the layout's content scale.
+    public let languageItem: InstantPageTextItem?
     public let textItem: InstantPageTextItem
     public let inset: UIEdgeInsets
 }
@@ -246,6 +253,13 @@ public struct InstantPageV2QuoteFrameItem {
     public let cornerRadius: CGFloat
     public let fillAlpha: CGFloat
     public let barOnTrailing: Bool   // RTL: bar on the trailing (right) edge → mirror the fill
+    /// Whether this quote shows an expand control, and which way it points. `.notCollapsible` means the
+    /// author did not mark it collapsed, or it is not longer than its own preview.
+    let collapseState: InstantPageV2QuoteCollapseState
+    /// The quote's structural block path — the identity its expanded/collapsed state is keyed by, and
+    /// the same addressing `checkboxTapped` uses. Deliberately NOT an ordinal: blocks are appended
+    /// during AI streaming, which would shift ordinals under the state.
+    let path: [Int]
 }
 
 public enum InstantPageV2ShapeKind {
@@ -490,6 +504,9 @@ public func layoutInstantPageV2(
     dateTimeFormat: PresentationDateTimeFormat,
     cachedMessageSyntaxHighlight: CachedMessageSyntaxHighlight?,
     expandedDetails: [Int: Bool],
+    /// Quotes the reader has expanded. Defaulted so the four non-chat V2 call sites are unchanged: a
+    /// preview surface renders the author's collapsed state and offers no way to expand it.
+    expandedQuotePaths: Set<[Int]> = [],
     fitToWidth: Bool,
     computeRevealCharacterRects: Bool = false,
     /// Points trimmed from the TOP-LEVEL sequence's leading and trailing spacing (clamped at 0).
@@ -556,7 +573,8 @@ public func layoutInstantPageV2(
         edgeSpacingReduction: edgeSpacingReduction,
         mediaIndexCounter: 0,
         detailsIndexCounter: 0,
-        expandedDetails: expandedDetails
+        expandedDetails: expandedDetails,
+        expandedQuotePaths: expandedQuotePaths
     )
 
     var result = layoutBlockSequence(
@@ -656,13 +674,11 @@ public func lastTextLineFrameIfLastItemIsText(in layout: InstantPageV2Layout) ->
 /// rich-message bubble to overlay the date/status as an image-style pill on the media's bottom-right
 /// corner instead of reserving a status strip below the content. The "full-width" gate excludes a
 /// rare narrow/centered trailing media, which keeps the below-content bubble status.
-public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
-    guard let bottomItem = layout.items.max(by: { $0.frame.maxY < $1.frame.maxY }) else {
-        return nil
-    }
-    switch bottomItem {
+/// Whether a laid-out item is visual media the overlaid date pill is designed to sit on.
+private func isOverlayEligibleMedia(_ item: InstantPageV2LaidOutItem) -> Bool {
+    switch item {
     case .mediaImage, .mediaVideo, .mediaCoverImage, .mediaMap, .slideshow:
-        break
+        return true
     case let .mediaPlaceholder(placeholder):
         // Only a still-loading image/video placeholder should get the overlaid pill (so the style
         // doesn't flip when it resolves). Web/post-embed, channel-banner, and audio placeholders must
@@ -670,14 +686,39 @@ public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
         // detector doesn't externalize their reactions, which would otherwise make reactions vanish.
         switch placeholder.kind {
         case .image, .video:
-            break
+            return true
         default:
-            return nil
+            return false
         }
     default:
+        return false
+    }
+}
+
+public func lastFullWidthMediaFrame(in layout: InstantPageV2Layout) -> CGRect? {
+    guard let bottomEdge = layout.items.map({ $0.frame.maxY }).max() else {
         return nil
     }
-    let frame = bottomItem.frame
+    // Consider the whole bottom ROW, not just the single bottom-most item. A `.collage` lays out one
+    // media item PER CELL, so a mosaic ends in several items side by side rather than one full-width
+    // item; taking only the bottom-most would see a half-width cell, fail the full-width gate below,
+    // and fall back to the inline text-time style even though the message plainly ends with media.
+    // (`.slideshow` never needed this — it is a single full-width item.)
+    //
+    // The tolerance is deliberately tiny: cells in a mosaic row share a bottom edge to within
+    // rounding, whereas a caption or text line below media sits a whole line-height lower and so
+    // stays out of the band — which is what keeps a captioned collage on the text-time style.
+    let bottomBandTolerance: CGFloat = 2.0
+    let bottomItems = layout.items.filter { $0.frame.maxY >= bottomEdge - bottomBandTolerance }
+    guard let firstBottomItem = bottomItems.first else {
+        return nil
+    }
+    // EVERY item on the bottom row must be eligible media: one text item down there means the
+    // message ends with text, wherever the media sits.
+    guard bottomItems.allSatisfy(isOverlayEligibleMedia) else {
+        return nil
+    }
+    let frame = bottomItems.dropFirst().reduce(firstBottomItem.frame) { $0.union($1.frame) }
     // Full-width gate: the media must span (approximately) the content width. The tolerance absorbs
     // the right-margin inset that `contentSize.width` reserves (see the `fitToWidth` maxX computation).
     if frame.width >= layout.contentSize.width - 12.0 {
@@ -697,6 +738,10 @@ private struct LayoutContext {
     var theme: InstantPageTheme
     /// Geometry constants for the CURRENT content scale. Swapped alongside `theme`.
     var metrics: InstantPageMetrics
+    /// How far a full-bleed child may extend past its content column to reach THIS container's
+    /// interior edges. Set and restored by each container, exactly like `theme` and `metrics` above.
+    /// `layoutCodeBlock` is the only consumer today.
+    var childBleed: InstantPageV2ChildBleed = .none
     /// The theme and metrics quoted content uses, computed ONCE for the page.
     ///
     /// Precomputed rather than derived on entry so that nesting is idempotent by construction: a
@@ -722,6 +767,9 @@ private struct LayoutContext {
     var detailsIndexCounter: Int = 0
 
     let expandedDetails: [Int: Bool]
+    /// Quotes the reader has expanded, keyed by structural block path. Mirrors `expandedDetails`, which
+    /// is the same idea keyed by the details block's ordinal index.
+    let expandedQuotePaths: Set<[Int]>
 }
 
 // MARK: - Driver
@@ -738,6 +786,17 @@ private func layoutBlockSequence(
     var detailsIndices: [Int] = []
     var contentHeight: CGFloat = 0.0
     var previousBlock: InstantPageBlock?
+
+    // A top-level block's container is the page itself, so a full-bleed child may give back exactly
+    // the page inset on each side. Every OTHER sequence — a table cell, a table title, a details
+    // body — is a band inside a container that has not opted in, and must therefore RESET the bleed
+    // rather than inherit it: an inherited page-level bleed would send a code band punching out
+    // through the container's own edge. Restored on exit so this never leaks upward either.
+    let savedChildBleed = context.childBleed
+    defer { context.childBleed = savedChildBleed }
+    context.childBleed = kind == .topLevel
+        ? InstantPageV2ChildBleed(minXSide: horizontalInset, maxXSide: horizontalInset)
+        : .none
 
     // One pill per run of undecodable blocks, everywhere a sequence is laid out. Indices are
     // skipped rather than filtered out of `blocks`, so `i` below still addresses the original
@@ -800,11 +859,21 @@ private func layoutBlockSequence(
         // reserves a right margin equal to the left inset. Without this, the longest text item's
         // right edge equals contentSize.width, and the bubble's containerNode (sized to
         // boundingSize.width - 2) clips the last 2pt of text.
+        //
+        // A code band contributes its INNER content rather than its own frame: the band is as wide as
+        // its container by construction, so its frame would clamp every page containing one to the
+        // full bounding width. Its text is nested inside the item rather than sitting in `items`, so
+        // dropping the band outright would drop the code text from the shrink too — and a message
+        // whose widest content is its code would get a bubble narrower than the width that text was
+        // laid out against, clipping it. See `instantPageV2FitWidthMaxX`.
         var maxX: CGFloat = 0.0
         for item in items {
-            maxX = max(maxX, ceil(item.frame.maxX) + horizontalInset)
+            maxX = max(maxX, ceil(instantPageV2FitWidthMaxX(item)) + horizontalInset)
         }
         contentSize.width = min(maxX, boundingWidth)
+        // Then re-widen the bands to the width that SURVIVED the shrink — the same reason
+        // `centerBlockFormulas` below runs after `contentSize` rather than before it.
+        instantPageV2StretchCodeBands(in: &items, contentWidth: contentSize.width)
     }
 
     centerBlockFormulas(in: &items, contentWidth: contentSize.width, horizontalInset: horizontalInset)
@@ -932,8 +1001,10 @@ private func layoutBlock(
         return layoutCodeBlock(text, language: language, boundingWidth: boundingWidth,
                                horizontalInset: horizontalInset, context: &context)
 
-    case let .blockQuote(blocks, caption, _):
-        return layoutBlockQuote(blocks: blocks, caption: caption,
+    case let .blockQuote(blocks, caption, collapsed):
+        // `collapsed` is optional on the model: nil means the wire form carried no flag, which is
+        // "not collapsed".
+        return layoutBlockQuote(blocks: blocks, caption: caption, authorCollapsed: collapsed == true,
                                 boundingWidth: boundingWidth, horizontalInset: horizontalInset, kind: kind,
                                 isLast: isLast, pathPrefix: pathPrefix, context: &context)
     case let .pullQuote(text, caption):
@@ -1133,6 +1204,19 @@ private func layoutBlock(
             horizontalInset: horizontalInset, context: &context)
 
     case let .collage(items, caption):
+        // A collage carrying a block this build cannot decode is unsupported as a whole: the mosaic
+        // reserves a slot for it and draws nothing there, so the tiles that DO resolve are laid out
+        // around a hole. One pill replaces the entire block, caption included — the caption
+        // describes content that is not being shown.
+        if blockRendersAsUnsupported(block) {
+            return layoutUnsupportedBlock(
+                boundingWidth: boundingWidth,
+                horizontalInset: horizontalInset,
+                strings: UnsupportedContentPillStrings(strings: context.strings),
+                colors: context.theme.unsupportedPillColors,
+                isTopLevel: pathPrefix.count == 1
+            )
+        }
         return layoutCollage(items: items, caption: caption, isCover: isCover,
                              boundingWidth: boundingWidth, horizontalInset: horizontalInset, context: &context)
 
@@ -2670,6 +2754,16 @@ private func layoutDivider(
 
 // MARK: - Code block layout (ported from V1 InstantPageLayout.swift lines 329–351)
 
+/// Lowercased display form of a code block's language, or nil when there is nothing to show.
+/// Lowercasing happens here rather than in the view so the model's casing ("Swift", "SWIFT") cannot
+/// reach the screen.
+func instantPageV2CodeLanguageDisplayText(_ language: String?) -> String? {
+    guard let language = language, !language.isEmpty else {
+        return nil
+    }
+    return language.lowercased()
+}
+
 private func layoutCodeBlock(
     _ text: RichText,
     language: String?,
@@ -2677,11 +2771,12 @@ private func layoutCodeBlock(
     horizontalInset: CGFloat,
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
-    // Editor parity: plain monospace 15pt (NO syntax highlighting), accent bar + accent-tinted fill,
-    // inset to the content column; leading text inset 16 / trailing 22 / vertical 8.
+    // A plain band spanning the container's interior, with the code text at the paragraph inset of
+    // this nesting level — so the band's interior side padding IS the paragraph inset, never a
+    // code-block constant of its own. See
+    // docs/superpowers/specs/2026-08-18-code-block-edge-to-edge-design.md.
     let verticalInset = context.metrics.codeBlockVerticalInset
-    let leadingInset = context.metrics.codeBlockHorizontalInset
-    let trailingInset = context.metrics.codeBlockHorizontalInset
+    let bleed = context.childBleed
 
     let styleStack = InstantPageTextStyleStack()
     setupStyleStack(styleStack, theme: context.theme, category: .codeBlock, link: false)
@@ -2689,9 +2784,48 @@ private func layoutCodeBlock(
     // exactly 15pt at page scale, and shrinks inside a quote rather than leaving code at full size
     // while everything around it scales.
     styleStack.push(.fontSize(context.metrics.codeBlockFontSize))
-    let attributedString = attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
+    // `attributedStringForRichText` returns an immutable `NSAttributedString`, so take a mutable copy to
+    // overlay onto — the same move V1's `attributedStringForPreformattedText` makes.
+    let highlightedString = (attributedStringForRichText(text, styleStack: styleStack, formatDate: context.formatDate)
+        .mutableCopy() as! NSMutableAttributedString)
+    // Overlay the cached syntax highlight. `cachedMessageSyntaxHighlight` has been stored on the layout
+    // context — and read by nothing — since V2 was written, so V2 code blocks rendered plain while V1's
+    // (`attributedStringForPreformattedText`) highlighted. A miss changes nothing.
+    applyInstantPageSyntaxHighlight(to: highlightedString, language: language,
+                                    cache: context.cachedMessageSyntaxHighlight)
+    let attributedString: NSAttributedString = highlightedString
 
-    let innerWidth = boundingWidth - horizontalInset * 2.0 - leadingInset - trailingInset
+    // The text measure is the paragraph measure at this level — the same width a sibling paragraph
+    // gets, which is what makes the two align on BOTH edges.
+    let innerWidth = boundingWidth - horizontalInset * 2.0
+
+    // The bold language line, when present. It mirrors the QUOTE AUTHOR's derivation — the caption
+    // category's family and colour, pushed to bold at the paragraph size — rather than carrying a
+    // font of its own, so the editor's copy of it cannot be set to something different.
+    var languageItem: InstantPageTextItem?
+    var languageHeight: CGFloat = 0.0
+    var languageOverheadTop: CGFloat = 0.0
+    var hasLanguageLine = false
+    if let display = instantPageV2CodeLanguageDisplayText(language) {
+        let languageStack = InstantPageTextStyleStack()
+        setupStyleStack(languageStack, theme: context.theme, category: .caption, link: false)
+        languageStack.push(.bold)
+        languageStack.push(.fontSize(context.theme.textCategories.paragraph.font.size))
+        let string = attributedStringForRichText(.plain(display), styleStack: languageStack, formatDate: context.formatDate)
+        languageOverheadTop = instantPageV2TextBoxOverheads(string).top
+        let (item, _, size) = layoutTextItem(
+            string,
+            boundingWidth: innerWidth,
+            alignment: context.rtl ? .right : .natural,
+            offset: CGPoint(x: 0.0, y: 0.0),
+            fitToWidth: context.fitToWidth,
+            computeRevealCharacterRects: context.computeRevealCharacterRects
+        )
+        languageItem = item
+        languageHeight = size.height
+        hasLanguageLine = item != nil
+    }
+
     let (textItem, _, textSize) = layoutTextItem(
         attributedString,
         boundingWidth: innerWidth,
@@ -2702,34 +2836,38 @@ private func layoutCodeBlock(
     )
     guard let textItem = textItem else { return [] }
     textItem.markdownContext = InstantPageMarkdownBlockContext(kind: .code(language: language))
-    // The text item is the true font line box (ascent headroom above the caps + descent below the
-    // last baseline). Subtract that overhead so the VISIBLE gap from the fill to the glyphs equals
-    // `verticalInset` (6pt) on top and bottom (the 9pt horizontal inset reads heavier vertically).
-    let overheads = instantPageV2TextBoxOverheads(attributedString)
-    let topPad = max(0.0, verticalInset - overheads.top)
-    let bottomPad = max(0.0, verticalInset - overheads.bottom)
-    textItem.frame = CGRect(
-        x: context.rtl ? trailingInset : leadingInset,
-        y: topPad,
-        width: textItem.frame.width,
-        height: textItem.frame.height
-    )
 
-    let blockHeight = topPad + textSize.height + bottomPad
-    let blockFrame = CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: blockHeight)
+    // The text items are true font line boxes (ascent headroom above the caps, descent below the
+    // last baseline). Subtract that overhead so the VISIBLE gap from the band to the glyphs equals
+    // `verticalInset` on both edges. The TOP overhead belongs to whichever line is first.
+    let codeOverheads = instantPageV2TextBoxOverheads(attributedString)
+    let topPad = max(0.0, verticalInset - (hasLanguageLine ? languageOverheadTop : codeOverheads.top))
+    let bottomPad = max(0.0, verticalInset - codeOverheads.bottom)
+
+    // The code text's x is the PARAGRAPH inset measured from the band's leading edge, which the
+    // bleed moved outward. Both text items are in block-local coordinates.
+    let bandFrame = instantPageV2CodeBandFrame(boundingWidth: boundingWidth, horizontalInset: horizontalInset,
+                                               bleed: bleed, height: 0.0)
+    let localTextX = horizontalInset - bandFrame.minX
+
+    var y = topPad
+    if let item = languageItem {
+        item.frame = CGRect(x: localTextX, y: y, width: item.frame.width, height: item.frame.height)
+        y += languageHeight + context.metrics.codeBlockLanguageSpacing
+    }
+    textItem.frame = CGRect(x: localTextX, y: y, width: textItem.frame.width, height: textItem.frame.height)
+    y += textSize.height
+
+    let blockHeight = y + bottomPad
+    let blockFrame = CGRect(x: bandFrame.minX, y: 0.0, width: bandFrame.width, height: blockHeight)
 
     return [.codeBlock(InstantPageV2CodeBlockItem(
         frame: blockFrame,
-        accentColor: context.theme.quoteAccentColor,
-        barWidth: 3.0,
-        cornerRadius: 6.0,
-        fillAlpha: 0.10,
-        barOnTrailing: context.rtl,
+        backgroundColor: context.theme.codeBlockBackgroundColor,
         language: language,
-        languageLabelColor: context.theme.textCategories.caption.color,
-        languageFontSize: context.metrics.codeBlockLanguageFontSize,
+        languageItem: languageItem,
         textItem: textItem,
-        inset: UIEdgeInsets(top: topPad, left: leadingInset, bottom: bottomPad, right: trailingInset)
+        inset: UIEdgeInsets(top: topPad, left: localTextX, bottom: bottomPad, right: localTextX)
     ))]
 }
 
@@ -2797,6 +2935,7 @@ private func layoutThinking(
 private func layoutBlockQuote(
     blocks: [InstantPageBlock],
     caption: RichText,
+    authorCollapsed: Bool,
     boundingWidth: CGFloat,
     horizontalInset: CGFloat,
     kind: BlockSequenceKind,
@@ -2806,10 +2945,10 @@ private func layoutBlockQuote(
 ) -> [InstantPageV2LaidOutItem] {
     // Quoted content lays out one typographic step below body. Assign, never multiply: a nested
     // quote takes the same precomputed values rather than compounding (see `LayoutContext`).
-    let savedTheme = context.theme, savedMetrics = context.metrics
+    let savedTheme = context.theme, savedMetrics = context.metrics, savedChildBleed = context.childBleed
     context.theme = context.quoteTheme
     context.metrics = context.quoteMetrics
-    defer { context.theme = savedTheme; context.metrics = savedMetrics }
+    defer { context.theme = savedTheme; context.metrics = savedMetrics; context.childBleed = savedChildBleed }
 
     // These are the QUOTE's own insets, and they read the already-swapped metrics on purpose: a
     // 15pt quote carrying 17pt-tuned padding is the mismatch this scale exists to remove.
@@ -2840,8 +2979,27 @@ private func layoutBlockQuote(
     let bandWidth = innerBoundingWidth - innerHorizontalInset * 2.0
     let bandX = innerHorizontalInset + bandOffsetX
 
+    // The quote's interior, expressed as how far a full-bleed child may reach past the child band.
+    // GEOMETRIC sides: in RTL the bar moves to the max-x edge, so the two swap. The quote's own fill
+    // spans [horizontalInset, boundingWidth - horizontalInset] and its bar is `quoteBarWidth` wide on
+    // the leading side; a child bleeds to just INSIDE the bar so the bar stays continuous down the
+    // whole quote rather than being interrupted for the child's height.
+    let quoteFillMinX = horizontalInset
+    let quoteFillMaxX = boundingWidth - horizontalInset
+    let bandMaxX = bandX + bandWidth
+    context.childBleed = context.rtl
+        ? InstantPageV2ChildBleed(minXSide: bandX - quoteFillMinX,
+                                  maxXSide: (quoteFillMaxX - instantPageV2QuoteBarWidth) - bandMaxX)
+        : InstantPageV2ChildBleed(minXSide: bandX - (quoteFillMinX + instantPageV2QuoteBarWidth),
+                                  maxXSide: quoteFillMaxX - bandMaxX)
+
     var result: [InstantPageV2LaidOutItem] = []
+    // Two running heights, equal except inside a COLLAPSED quote: `contentHeight` is what the quote
+    // reserves (and therefore how tall it is), `drawnHeight` is where the next child is positioned.
+    // They diverge past the three-line cut, where children are still painted — for the mask to sweep
+    // away — but no longer counted. See `instantPageV2QuoteBudgetedItems`.
     var contentHeight: CGFloat = verticalInset
+    var drawnHeight: CGFloat = verticalInset
 
     // A quote's children are spaced by the page's own rhythm, like every other block sequence
     // (`layoutBlockSequence`, details bodies, table cells, list sub-blocks): a quote is a container,
@@ -2861,6 +3019,28 @@ private func layoutBlockQuote(
     // `previousBlock` advances only when a child actually contributed height, mirroring
     // `layoutBlockSequence` — a zero-height child (an anchor, an unresolvable medium) has to stay
     // transparent to spacing rather than open a gap against nothing.
+    // A collapsed quote previews the first `instantPageV2CollapsedQuoteLineBudget` text lines. The
+    // budget is applied AS children are laid out, not as a post-pass: the siblings after a truncated
+    // item do not exist yet, so nothing needs re-positioning and `contentHeight` is right by
+    // construction.
+    //
+    // `totalTextLines` keeps counting past the budget because the collapsible decision needs the
+    // UNtruncated total — a quote no longer than its own preview shows no control. `linesEmitted`
+    // counts only what survived.
+    let quoteIsExpanded = context.expandedQuotePaths.contains(pathPrefix)
+    let applyBudget = authorCollapsed && !quoteIsExpanded
+    // Whether the cut lines may stay DRAWN below the truncated item, for the animated mask to sweep
+    // away as the quote closes. Safe only when nothing follows them inside the quote: once the budget
+    // is exhausted every later child is dropped, so the one thing that can still sit underneath is
+    // the caption, which is emitted below and is not budgeted.
+    var keepQuoteOverflow = false
+    if case .empty = caption {
+        keepQuoteOverflow = true
+    }
+    var totalTextLines = 0
+    var linesEmitted = 0
+    var budgetExhausted = false
+
     var previousBlock: InstantPageBlock?
     for (i, child) in blocks.enumerated() {
         let spacing: CGFloat = previousBlock == nil
@@ -2877,17 +3057,53 @@ private func layoutBlockQuote(
             pathPrefix: pathPrefix + [i],
             context: &context
         )
-        let dy = contentHeight + spacing
-        let offsetItems = childItems.map { $0.offsetBy(CGPoint(x: bandX, y: dy)) }
-        var childMaxY: CGFloat = 0.0
-        for item in offsetItems {
-            if item.frame.maxY > childMaxY {
-                childMaxY = item.frame.maxY
+        for item in childItems {
+            totalTextLines += instantPageV2TextLineCount(item)
+        }
+        // `reservedCount` splits this child's items into the ones the quote takes height for and the
+        // ones that are merely drawn. Everything is drawn at its natural position either way, so a
+        // child's coordinates do not move when the reader toggles the quote — only the quote's own
+        // height and its mask do. That is what stops a medium below the cut from being torn down and
+        // rebuilt (a blink) rather than swept away by the closing fade.
+        var effectiveChildItems = childItems
+        var reservedCount = childItems.count
+        if applyBudget {
+            if budgetExhausted {
+                effectiveChildItems = keepQuoteOverflow ? childItems : []
+                reservedCount = 0
+            } else {
+                let budgeted = instantPageV2QuoteBudgetedItems(
+                    childItems,
+                    remainingLines: instantPageV2CollapsedQuoteLineBudget - linesEmitted,
+                    keepingOverflow: keepQuoteOverflow
+                )
+                effectiveChildItems = budgeted.reserved + budgeted.overflow
+                reservedCount = budgeted.reserved.count
+                linesEmitted += budgeted.linesConsumed
+                if linesEmitted >= instantPageV2CollapsedQuoteLineBudget || budgeted.reserved.count + budgeted.overflow.count < childItems.count {
+                    budgetExhausted = true
+                }
             }
         }
-        if childMaxY > contentHeight {
-            contentHeight = childMaxY
+
+        // Positioned from `drawnHeight`, which advances over everything painted; the quote's own
+        // height (`contentHeight`) advances only over what is reserved.
+        let dy = drawnHeight + spacing
+        let offsetItems = effectiveChildItems.map { $0.offsetBy(CGPoint(x: bandX, y: dy)) }
+        var childDrawnMaxY: CGFloat = 0.0
+        var childReservedMaxY: CGFloat = 0.0
+        for (index, item) in offsetItems.enumerated() {
+            childDrawnMaxY = max(childDrawnMaxY, instantPageV2DrawnMaxY(item))
+            if index < reservedCount {
+                childReservedMaxY = max(childReservedMaxY, item.frame.maxY)
+            }
+        }
+        if childDrawnMaxY > drawnHeight {
+            drawnHeight = childDrawnMaxY
             previousBlock = child
+        }
+        if childReservedMaxY > contentHeight {
+            contentHeight = childReservedMaxY
         }
         result.append(contentsOf: offsetItems)
     }
@@ -2938,10 +3154,39 @@ private func layoutBlockQuote(
 
     contentHeight += verticalInset
 
+    let collapseState = instantPageV2QuoteCollapseState(totalTextLines: totalTextLines,
+                                                        authorCollapsed: authorCollapsed,
+                                                        isExpanded: quoteIsExpanded)
+
+    // Room for the EXPANDED chevron. A COLLAPSED quote needs none — its bottom fade already clears
+    // the corner the arrow sits in — but an expanded one would otherwise draw the arrow straight over
+    // whatever its last row put there. `InteractiveTextComponent` widens the last line first and only
+    // grows the block if that does not fit; a V2 quote's width is the band's and cannot stretch, so
+    // only the grow branch survives the port.
+    if collapseState == .expanded {
+        let quoteFrame = CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight)
+        let lastRowTop = contentHeight - verticalInset - instantPageV2QuoteChevronClearance
+        var chevronCornerOccupied = false
+        for item in result {
+            guard item.frame.maxY > lastRowTop else {
+                continue
+            }
+            if instantPageV2QuoteChevronSideInset(item, quoteFrame: quoteFrame, rtl: context.rtl) < instantPageV2QuoteChevronClearance {
+                chevronCornerOccupied = true
+                break
+            }
+        }
+        if chevronCornerOccupied {
+            contentHeight += instantPageV2QuoteChevronExtraHeight
+        }
+    }
+
     // Accent bar + accent-tinted rounded fill spanning the whole quote band (behind child content).
     let frameItem = InstantPageV2QuoteFrameItem(
         frame: CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight),
-        accentColor: context.theme.quoteAccentColor, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl)
+        accentColor: context.theme.quoteAccentColor, barWidth: instantPageV2QuoteBarWidth, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
+        collapseState: collapseState,
+        path: pathPrefix)
     result.insert(.quoteFrame(frameItem), at: 0)
     result.append(instantPageV2BlockQuoteIcon(boundingWidth: boundingWidth, horizontalInset: horizontalInset, color: context.theme.quoteAccentColor, rtl: context.rtl))
 
@@ -3093,9 +3338,13 @@ private func layoutQuoteText(
             imageName: "RichText/QuoteClose", color: accent, rotated: false)))
     } else {
         // Accent bar + accent-tinted rounded fill spanning the whole quote band (behind the text).
+        // Never collapsible: this function serves `.pullQuote`, which carries no `collapsed` in the
+        // model. Every `.blockQuote` — including a single-paragraph one — goes through
+        // `layoutBlockQuote`, which is where the collapse budget lives.
         let frameItem = InstantPageV2QuoteFrameItem(
             frame: CGRect(x: horizontalInset, y: 0.0, width: boundingWidth - horizontalInset * 2.0, height: contentHeight),
-            accentColor: accent, barWidth: 3.0, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl)
+            accentColor: accent, barWidth: instantPageV2QuoteBarWidth, cornerRadius: 6.0, fillAlpha: 0.10, barOnTrailing: context.rtl,
+            collapseState: .notCollapsible, path: [])
         result.insert(.quoteFrame(frameItem), at: 0)
         result.append(instantPageV2BlockQuoteIcon(boundingWidth: boundingWidth, horizontalInset: horizontalInset, color: accent, rtl: context.rtl))
     }
@@ -3128,6 +3377,15 @@ private func layoutList(
     pathPrefix: [Int] = [],
     context: inout LayoutContext
 ) -> [InstantPageV2LaidOutItem] {
+    // A list item's sub-blocks lay out against a band of their own (`layoutBlock` with
+    // `horizontalInset: 0`), reached WITHOUT going through `layoutBlockSequence` — so the reset
+    // that function performs never runs for them and has to happen here. Conservative for this
+    // cycle: a full-bleed child stays in its content column rather than bleeding under the marker
+    // gutter. Restored on exit.
+    let savedChildBleed = context.childBleed
+    defer { context.childBleed = savedChildBleed }
+    context.childBleed = .none
+
     // Determine marker characteristics.
     var maxIndexWidth: CGFloat = 0.0
     // hasNums: at least one ordered item carries an explicit `num` — in which case items

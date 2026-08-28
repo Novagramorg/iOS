@@ -59,10 +59,13 @@ public enum BlockLayoutBackend {
     /// Force the TextKit-1 engine. Set this manually (e.g. from a debug hook) to `true` before the editor
     /// builds its blocks — it's read at block-construction time, so reopen the composer to apply.
     public static var forceTextKit1: Bool = {
-        #if DEBUG && false
+        #if RTE_TK1
         return true
         #else
-        return false
+        // Test/debug override. `TEST_RUNNER_RTE_FORCE_TK1=1` on the xcodebuild line reaches the test
+        // process as `RTE_FORCE_TK1`. Production sets nothing, so this reads false — identical to the
+        // dead `#if DEBUG && false` it replaces. Keep this the ONLY environment read in Sources/.
+        return ProcessInfo.processInfo.environment["RTE_FORCE_TK1"] == "1"
         #endif
     }()
 }
@@ -143,7 +146,7 @@ extension BlockLayoutEngine {
 }
 
 /// Constructs the active layout engine. `RTE_TK1` (the back-port build) forces TextKit 1; otherwise the
-/// runtime `BlockLayoutBackend.forceTextKit1` override wins, else TextKit 2 on iOS 17+ / TextKit 1 below.
+/// runtime `BlockLayoutBackend.forceTextKit1` override wins, else TextKit 2 on iOS 16+ / TextKit 1 below.
 func makeBlockLayout(attributedString: NSAttributedString, width: CGFloat) -> BlockLayoutEngine {
     #if RTE_TK1
     return BlockLayoutTK1(attributedString: attributedString, width: width)

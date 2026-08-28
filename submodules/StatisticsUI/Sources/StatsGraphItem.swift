@@ -163,7 +163,7 @@ public final class StatsGraphItemNode: ListViewItemNode {
         let currentItem = self.item
         let currentVisibilityHeight = self.visibilityHeight
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset = params.leftInset
             let rightInset: CGFloat = params.rightInset
             let errorTextFont = Font.regular(item.presentationData.fontSize.itemListBaseLabelFontSize / 14.0 * 16.0)

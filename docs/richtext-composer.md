@@ -463,10 +463,67 @@ The cloud draft uploads its inline media (the last media-less path, now closed).
 "need" reusing the existing `subscribers: Bag`); the last released need starts a **1 s grace timer** that
 cancels + evicts the upload unless re-added; a live/in-grace context is reused, never restarted (this also
 fixes a context leak — `LegacyLiveUploadInterface` holds its token until `deinit`). `synchronizeChatInputState`
-resolves the rich message through `uploadedRichMessage` and holds a per-peer need on each local draft file
-resource (reconciled per save, **add-before-dispose** so a surviving resource never drops to 0 holders), so the
-bytes upload **once** and are shared with the eventual send. Images de-dup via the content-hash
-`cachedSentMediaReference` cache (not registered).
+resolves the rich message through `uploadedRichMessage`, so the bytes upload **once** and are shared with the
+eventual send.
+
+> Since **media pre-upload** (below) the per-peer need `updatePeerMediaNeeds` holds is **media-level** and
+> covers every uploadable medium, not byte-level over `TelegramMediaFile`s with a `localIdForResource`. That
+> older form silently excluded images entirely, and excluded videos and iCloud files (whose resources have no
+> local id) — those were re-uploaded on every draft save *and* again at send.
+
+## 6a. Media pre-upload
+
+Media attached in the editor starts uploading **immediately**, and the client takes over the result at send,
+at draft save, and across the editor being closed and reopened. Architecture and the full behavioural matrix
+are in the design doc (kept on branch `feature/richtext-media-preupload`, not on master).
+
+**One registry, two layers, on the existing `MessageMediaPreuploadManager`.** Its byte layer
+(`uploadContexts: [Int64: …]`, keyed by `localIdForResource`) is unchanged. A new media layer
+(`mediaContexts`, keyed by `MediaId`) parks a **cloud `EngineMedia`** and runs bytes →
+`messages.uploadMedia` → cloud media via the shared `uploadMediaToCloud`. The media layer's byte step goes
+through the manager's own `upload(...)`, so the two share one transfer wherever `localIdForResource`
+resolves; where it does not — video, iCloud files — the media layer is the only dedup there is, which is
+why it must key on `MediaId`. The ref-counting itself lives in a standalone, unit-tested module,
+`submodules/MediaPreuploadRegistry` (21 tests).
+
+**Two holders, both reconciling through the same `MediaPreuploadNeeds`:**
+
+```
+DURABLE    ManagedSynchronizeChatInputStateOperations.updatePeerMediaNeeds
+           reconciles from the PERSISTED draft — survives closing the editor AND leaving the chat
+TRANSIENT  RichTextAttachmentScreen  — from its live document, covering attach-before-first-save
+           ChatControllerNode        — from composeInputState.content, covering the editor handoff
+```
+
+### Load-bearing invariants
+
+- **Needs and subscribers are counted separately.** A *need* keeps an upload alive; an *observer* only
+  watches. Grace fires when needs hit zero regardless of observers, so a passive UI subscriber can never
+  pin an orphaned upload. `join` (the send path) holds a need for its subscription, which is what stops a
+  send in flight being evicted when the editor that started it closes.
+- **A context must never leave a subscriber waiting.** Every eviction path — failure, cancellation, grace
+  expiry — notifies subscribers with a terminal state *before* removing the context. A subscriber that only
+  ever sees `.progress` is a hang on Send, not a slow upload.
+- **The promotion write-back is a map-value swap under the UNCHANGED key.** The editor addresses media by an
+  opaque `mediaID` string (`resolveMedia: { media[mediaID] }`), so replacing the value promotes the medium
+  everywhere downstream with no document mutation, no undo entry and no relayout. Re-deriving the key from
+  the cloud media is a bug: promotion changes the `MediaId`, so the medium would silently vanish on
+  read-back. `moveResourceData` points the local bytes at the cloud resource so nothing flashes a placeholder.
+- **`isPreuploadableMedia` answers "is this worth pre-uploading?", NOT "can the send path use this?"** It
+  returns `false` for already-cloud media. Gating the *send* on it fails every promoted medium outright —
+  which is exactly what broke sending after a successful pre-upload. The send path asks
+  `uploadedRichMedia(from:)` instead, which answers the second question, and handles image and file
+  symmetrically.
+- **`forceReupload` must bypass the whole registry**, evicting first. It is set by `PendingMessageManager`'s
+  `FILEREF_INVALID` / `FILE_REFERENCE_*_EXPIRED` retry, so a parked result — or the already-cloud fast path —
+  would resend the very reference the server just rejected, and only one retry is permitted. Residual gap: if
+  the bytes are no longer on disk (fresh device, cache eviction), the forced re-upload still fails; the
+  correct fix is reference revalidation.
+- **Progress is owned by the media view, not pushed to it.** `syncMediaItemViews` re-invokes the media-view
+  provider only when a block's `itemsSignature` changes, and upload progress is not — and cannot be — part of
+  that signature. `RichTextMediaContentComponent.View` therefore subscribes to `mediaPreuploadState(id:)`
+  itself and updates its status node **directly**, never via `state.updated()` (which re-enters `update`, and
+  `update` re-issues the image fetch unconditionally).
 
 ### Re-login restore
 

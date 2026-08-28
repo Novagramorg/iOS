@@ -87,7 +87,7 @@ class InviteLinkInviteManageItemNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: InviteLinkInviteManageItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let contentSize = CGSize(width: params.width, height: 70.0)
             let layout = ListViewItemNodeLayout(contentSize: contentSize, insets: UIEdgeInsets())
             

@@ -414,7 +414,7 @@ public final class PendingMessageManager {
     func updatePendingMessageIds(_ messageIds: Set<MessageId>) {
         Logger.shared.log("PendingMessageManager", "update on postboxQueue: \(messageIds)")
 
-        self.queue.async {
+        self.queue.async { [self] in
             Logger.shared.log("PendingMessageManager", "update: \(messageIds)")
             
             let addedMessageIds = messageIds.subtracting(self.pendingMessageIds)

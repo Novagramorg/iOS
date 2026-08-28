@@ -10,7 +10,7 @@ final class DetailsBoxInsertTests: XCTestCase {
         let v = DocumentCanvasView()
         v.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p")))], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
-        v.head = v.boxes[0].textStart; v.anchor = v.head
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[0].textStart)
         v.insertDetailsBlock()
         let blocks = v.currentBlocks()
         guard blocks.count == 1, case .details(let d) = blocks[0] else { return XCTFail("expected one details block") }
@@ -27,7 +27,7 @@ final class DetailsBoxInsertTests: XCTestCase {
         let v = DocumentCanvasView()
         v.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p")))], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
-        v.head = v.boxes[0].textStart; v.anchor = v.head
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[0].textStart)
         v.insertDetailsBlock()
         // The body child's nodeStart must be assigned (DetailsBox.recompute ran via recomputeSpans), so
         // leaf regions come out in ascending globalStart order — else nextTextPosition builds an inverted
@@ -41,7 +41,7 @@ final class DetailsBoxInsertTests: XCTestCase {
         let v = DocumentCanvasView()
         v.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "abcd")]))], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
-        v.head = v.boxes[0].textStart + 2; v.anchor = v.head          // caret mid-text ("ab|cd")
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart + 2, head: v.boxes[0].textStart + 2)   // caret mid-text ("ab|cd")
         v.insertDetailsBlock()
         let blocks = v.currentBlocks()
         XCTAssertEqual(blocks.count, 3)                               // upper "ab", details, lower "cd"
@@ -62,12 +62,12 @@ final class DetailsBoxInsertTests: XCTestCase {
         // Type into the title (leaf region 0).
         let box = v.boxes.first { $0 is DetailsBox } as! DetailsBox
         let titleStart = box.leafRegions()[0].globalStart
-        v.head = titleStart; v.anchor = titleStart
+        v.setSelectionForTesting(anchor: titleStart, head: titleStart)
         v.insertText("Hi")
         // Type into the body (leaf region 1) — re-fetch, the box/positions were rebuilt by the edit.
         let box2 = v.boxes.first { $0 is DetailsBox } as! DetailsBox
         let bodyStart = box2.leafRegions()[1].globalStart
-        v.head = bodyStart; v.anchor = bodyStart
+        v.setSelectionForTesting(anchor: bodyStart, head: bodyStart)
         v.insertText("Yo")
         guard case .details(let out) = v.currentBlocks()[0] else { return XCTFail("expected details first") }
         XCTAssertEqual(out.title.map(\.text).joined(), "Hi")        // title got the text
@@ -85,7 +85,7 @@ final class DetailsBoxInsertTests: XCTestCase {
             width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
         let table = v.boxes.first { $0 is TableBlockBox } as! TableBlockBox
-        v.head = table.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
+        v.setSelectionForTesting(anchor: table.cellTextStart(row: 0, column: 0)!, head: table.cellTextStart(row: 0, column: 0)!)
         let before = v.currentBlocks()
         v.insertDetailsBlock()
         XCTAssertEqual(v.currentBlocks(), before)                    // no-op inside a table

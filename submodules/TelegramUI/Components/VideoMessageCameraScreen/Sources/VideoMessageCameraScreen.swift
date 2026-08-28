@@ -1519,12 +1519,9 @@ public class VideoMessageCameraScreen: ViewController {
             let previewSide = min(369.0, layout.size.width - 24.0)
             let previewFrame: CGRect
             if layout.metrics.isTablet {
-                let statusBarOrientation: UIInterfaceOrientation
-                if #available(iOS 13.0, *) {
-                    statusBarOrientation = UIApplication.shared.windows.first?.windowScene?.interfaceOrientation ?? .portrait
-                } else {
-                    statusBarOrientation = UIApplication.shared.statusBarOrientation
-                }
+                // Use the scene this view actually lives in; `connectedScenes` is unordered and a
+                // tablet can have several window scenes.
+                let statusBarOrientation = self.containerView.window?.windowScene?.interfaceOrientation ?? .portrait
                 
                 if statusBarOrientation == .landscapeLeft {
                     previewFrame = CGRect(origin: CGPoint(x: layout.size.width - 44.0 - previewSide, y: floorToScreenPixels((layout.size.height - previewSide) / 2.0)), size: CGSize(width: previewSide, height: previewSide))

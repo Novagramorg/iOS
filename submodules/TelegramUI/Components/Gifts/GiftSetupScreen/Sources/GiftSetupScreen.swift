@@ -687,7 +687,7 @@ private final class GiftSetupScreenComponent: Component {
                 let _ = (self.optionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
-                |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                |> deliverOnMainQueue).startStandalone(next: { [weak self, starsContext] options in
                     guard let self, let component = self.component, let controller = self.environment?.controller() else {
                         return
                     }
@@ -835,7 +835,7 @@ private final class GiftSetupScreenComponent: Component {
                     targetFrame.origin.y = availableSize.height
                     transition.setFrame(view: inputMediaNode.view, frame: targetFrame, completion: { [weak inputMediaNode] _ in
                         if let inputMediaNode {
-                            Queue.mainQueue().after(0.3) {
+                            Queue.mainQueue().after(0.3) { [inputMediaNode] in
                                 inputMediaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { [weak inputMediaNode] _ in
                                     inputMediaNode?.view.removeFromSuperview()
                                 })

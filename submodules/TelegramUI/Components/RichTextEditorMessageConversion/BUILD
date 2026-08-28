@@ -45,7 +45,10 @@ ios_test_runner(
 
 ios_unit_test(
     name = "RichTextEditorMessageConversionTests",
-    minimum_os_version = "13.0",
+    # 15.0, matching //submodules/TextFormat:TextFormatTests and the app's deployment target since the
+    # 13 -> 15 bump. At 13.0 this target does not build on the iOS 27 SDK: libc++'s availability.h errors
+    # with "The selected platform is no longer supported by libc++" for any C++ in the graph.
+    minimum_os_version = "15.0",
     runner = ":RichTextEditorMessageConversionTestRunner",
     deps = [
         ":RichTextEditorMessageConversionTestsLib",

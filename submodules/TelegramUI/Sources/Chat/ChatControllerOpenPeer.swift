@@ -123,7 +123,11 @@ import ForumCreateTopicScreen
 
 extension ChatControllerImpl {
     func openPeer(peer: EnginePeer?, navigation: ChatControllerInteractionNavigateToPeer, fromMessage: MessageReference?, fromReactionMessageId: EngineMessage.Id? = nil, expandAvatar: Bool = false, peerTypes: ReplyMarkupButtonAction.PeerTypes? = nil, skipAgeVerification: Bool = false) {
-        let _ = self.presentVoiceMessageDiscardAlert(action: {
+        let _ = self.presentVoiceMessageDiscardAlert(action: { [weak self] in
+            guard let self else {
+                return
+            }
+
             if case let .peer(currentPeerId) = self.chatLocation, peer?.id == currentPeerId {
                 switch navigation {
                     case let .info(params):

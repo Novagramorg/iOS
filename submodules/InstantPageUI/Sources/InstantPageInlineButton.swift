@@ -3,6 +3,7 @@ import UIKit
 import CoreText
 import TelegramCore
 import TextFormat
+import RichTextButtonIcons
 
 /// A measured inline button. Mirrors `InstantPageMathAttachment` (`InstantPageMath.swift:18`): the
 /// attribute payload carries both the model and the metrics, because the V2 line-breaker raises the
@@ -24,8 +25,13 @@ public final class InstantPageInlineButtonAttachment: NSObject {
     /// layout re-measures such a pill at `instantPageBlockButtonMinimumHorizontalPadding` to win the
     /// difference back as label room; see `instantPageBlockButtonMeasure`.
     public let isTruncated: Bool
+    /// Trailing width inside `size` held for an inline type icon — `richTextInlineButtonIconReserve`
+    /// when the action has one, 0 otherwise (and always 0 for a block pill, whose badge is a corner
+    /// overlay rather than a width). LOAD-BEARING for the same reason as `horizontalPadding`: the
+    /// label's ink width is recovered as `size.width − 2 × padding − iconReserve`.
+    public let iconReserve: CGFloat
 
-    public init(button: InstantPageButton, labelString: NSAttributedString, size: CGSize, ascent: CGFloat, descent: CGFloat, horizontalPadding: CGFloat, isTruncated: Bool = false) {
+    public init(button: InstantPageButton, labelString: NSAttributedString, size: CGSize, ascent: CGFloat, descent: CGFloat, horizontalPadding: CGFloat, isTruncated: Bool = false, iconReserve: CGFloat = 0.0) {
         self.button = button
         self.labelString = labelString
         self.size = size
@@ -33,7 +39,18 @@ public final class InstantPageInlineButtonAttachment: NSObject {
         self.descent = descent
         self.horizontalPadding = horizontalPadding
         self.isTruncated = isTruncated
+        self.iconReserve = iconReserve
     }
+}
+
+/// Where a pill draws its type icon, which differs by pill kind and is fixed at measurement time.
+public enum InstantPageButtonIconPlacement {
+    /// Trailing the label, on the same optical line, with the pill widened to hold it. The only shape
+    /// that fits an inline pill: it is the label's ink box plus 2pt, far too short for a corner badge.
+    case inlineTrailing
+    /// A badge in the pill's top-right corner, overlaying the fill. A block-row pill is 40pt tall and
+    /// has the room; its clearance comes from the row layout's side inset, not from the pill's width.
+    case blockBadge
 }
 
 /// Padding between the label's ink and the pill edge. Starting values — tune at the visual pass.
@@ -209,16 +226,27 @@ private func instantPageButtonTruncatedLabel(_ labelString: NSAttributedString, 
 /// `maxWidth` caps the whole pill. A pill wider than the line it sits on cannot be moved anywhere by
 /// the line-breaker's re-break (that path requires the line to hold more than the pill), so the label
 /// is truncated with an ellipsis instead of overflowing. Pass nil for no cap.
-public func instantPageInlineButtonAttachment(button: InstantPageButton, labelString: NSAttributedString, maxWidth: CGFloat? = nil, horizontalPadding: CGFloat = instantPageInlineButtonHorizontalPadding) -> InstantPageInlineButtonAttachment {
+public func instantPageInlineButtonAttachment(button: InstantPageButton, labelString: NSAttributedString, maxWidth: CGFloat? = nil, horizontalPadding: CGFloat = instantPageInlineButtonHorizontalPadding, iconPlacement: InstantPageButtonIconPlacement = .inlineTrailing) -> InstantPageInlineButtonAttachment {
     let hPad = horizontalPadding
     let vPad = instantPageInlineButtonVerticalPadding
+    // Only an inline pill pays width for its icon. A block pill's badge overlays the fill, and the row
+    // layout keeps it clear of the label with a side inset instead — charging both would double it.
+    let iconReserve: CGFloat
+    switch iconPlacement {
+    case .inlineTrailing:
+        iconReserve = richTextButtonIconName(for: button.action) != nil ? richTextInlineButtonIconReserve : 0.0
+    case .blockBadge:
+        iconReserve = 0.0
+    }
 
     // MUST run before truncation and before measurement: the ellipsis cut and the returned
     // size/ascent/descent are all computed against the rewritten delegates.
     var effectiveLabel = instantPageButtonLabelWithFittedEmoji(labelString)
     var truncated = false
     if let maxWidth {
-        (effectiveLabel, truncated) = instantPageButtonTruncatedLabel(effectiveLabel, availableWidth: max(0.0, maxWidth - hPad * 2.0))
+        // The reserve is real width, so it comes out of the label's room like the padding does —
+        // otherwise a capped pill overflows its line by exactly the icon.
+        (effectiveLabel, truncated) = instantPageButtonTruncatedLabel(effectiveLabel, availableWidth: max(0.0, maxWidth - hPad * 2.0 - iconReserve))
     }
 
     let line = CTLineCreateWithAttributedString(effectiveLabel)
@@ -228,12 +256,46 @@ public func instantPageInlineButtonAttachment(button: InstantPageButton, labelSt
     return InstantPageInlineButtonAttachment(
         button: button,
         labelString: effectiveLabel,
-        size: CGSize(width: labelWidth + hPad * 2.0, height: labelAscent + labelDescent + vPad * 2.0),
+        size: CGSize(width: labelWidth + hPad * 2.0 + iconReserve, height: labelAscent + labelDescent + vPad * 2.0),
         ascent: labelAscent + vPad,
         descent: labelDescent + vPad,
         horizontalPadding: hPad,
-        isTruncated: truncated
+        isTruncated: truncated,
+        iconReserve: iconReserve
     )
+}
+
+/// Where an inline pill draws its type icon, in pill-local coordinates. Meaningless for a pill whose
+/// `iconReserve` is 0 — the caller decides whether there is an icon at all.
+///
+/// Derived from `instantPageButtonLabelOrigin` rather than from the pill's trailing edge, so the icon
+/// travels with the label when a row column stretches the pill, exactly as the emoji squares do.
+///
+/// Vertically it centres on the label's CAP box — `capHeight` above the baseline — and NOT on the pill
+/// box. The two differ by ~0.6pt at 15pt: the pill's box is asymmetric around the text because it also
+/// holds the descender, so centring on it sits the icon visibly low against the letters it follows.
+func instantPageInlineButtonIconFrame(attachment: InstantPageInlineButtonAttachment, pillSize: CGSize) -> CGRect {
+    let origin = instantPageButtonLabelOrigin(attachment: attachment, pillSize: pillSize)
+    let labelWidth = attachment.size.width - attachment.horizontalPadding * 2.0 - attachment.iconReserve
+    let font = instantPageButtonLabelFont(attachment.labelString)
+    return CGRect(
+        origin: CGPoint(
+            x: origin.x + labelWidth + richTextInlineButtonIconSpacing,
+            y: origin.y - font.capHeight / 2.0 - richTextButtonIconSize.height / 2.0
+        ),
+        size: richTextButtonIconSize
+    )
+}
+
+/// The face a button label is drawn in, read off the label itself. An empty label — a button whose
+/// text is blank, or one truncated to nothing — still needs a face to derive metrics from, and the
+/// inline pill's own typography is the right default there.
+private func instantPageButtonLabelFont(_ labelString: NSAttributedString) -> UIFont {
+    guard labelString.length != 0,
+          let font = labelString.attribute(.font, at: 0, effectiveRange: nil) as? UIFont else {
+        return UIFont.systemFont(ofSize: instantPageInlineButtonFontSize, weight: .semibold)
+    }
+    return font
 }
 
 /// True when `string`'s first (respectively last) character carries a pill. Asked of the *rendered*
@@ -292,8 +354,12 @@ func instantPageInlineButtonSpacerString(attributes: [NSAttributedString.Key: An
 func instantPageButtonLabelOrigin(attachment: InstantPageInlineButtonAttachment, pillSize: CGSize) -> CGPoint {
     // Horizontally centre the label: for an inline pill this equals the padding, but a row pill's
     // frame is stretched to an equal column width, so the label must centre within it.
-    let labelWidth = attachment.size.width - attachment.horizontalPadding * 2.0
-    let x = max(attachment.horizontalPadding, (pillSize.width - labelWidth) / 2.0)
+    //
+    // The icon's reserve is trailing room that belongs to the GROUP, not to the label: it is taken off
+    // the recovered ink width, and the group (label + gap + icon) is what centres. Centring the label
+    // alone would slide it right by half the reserve and drag the emoji squares with it.
+    let labelWidth = attachment.size.width - attachment.horizontalPadding * 2.0 - attachment.iconReserve
+    let x = max(attachment.horizontalPadding, (pillSize.width - labelWidth - attachment.iconReserve) / 2.0)
     // Vertically: `attachment.ascent` is the baseline's distance from the pill top for an inline
     // pill. A row pill has a fixed taller height, so centre the label's box instead.
     let labelBoxHeight = attachment.ascent + attachment.descent

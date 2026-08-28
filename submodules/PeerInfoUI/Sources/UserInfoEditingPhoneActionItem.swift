@@ -111,7 +111,7 @@ class UserInfoEditingPhoneActionItemNode: ListViewItemNode {
         
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let titleFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
             
             var updatedTheme: PresentationTheme?

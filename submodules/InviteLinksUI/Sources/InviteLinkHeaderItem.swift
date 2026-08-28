@@ -115,7 +115,7 @@ class InviteLinkHeaderItemNode: ListViewItemNode {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let makeTextLayout = TextNodeWithEntities.asyncLayout(self.textNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let leftInset: CGFloat = 24.0 + params.leftInset
             let iconSize: CGSize
             if params.width > params.availableHeight && params.width > 320.0 {

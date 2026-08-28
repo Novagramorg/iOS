@@ -87,7 +87,9 @@ public struct TelegramMessageReadMetric {
 
 public extension TelegramEngine {
     final class Messages {
-        private let account: Account
+        // Module-internal rather than private: the MediaPreupload facade lives in its own file and
+        // needs the account's network/postbox/preupload manager.
+        let account: Account
 
         init(account: Account) {
             self.account = account

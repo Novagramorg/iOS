@@ -49,7 +49,7 @@ final class ButtonRowBackingView: BlockBackingView {
             // which is an INLINE pill's height). Shrinking it to the ink box made block rows read as
             // inline pills even though the packing had allocated the right space; the capsule radius is
             // `bounds.height / 2`, so it shrank too.
-            view.configure(attachment: attachment)
+            view.configure(attachment: attachment, metrics: canvas.mapper.styleSheet.metrics.button)
             view.frame = box.pillFrames[index]
             view.syncEmoji(provider: canvas.emojiViewProvider, dynamicColor: attachment.colors.label)
         }

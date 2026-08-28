@@ -170,7 +170,7 @@ class ChatListFilterPresetCategoryItemNode: ItemListRevealOptionsItemNode, ItemL
         
         let currentItem = self.item
         
-        return { item, params, neighbors, headerAtTop in
+        return { [weak self] item, params, neighbors, headerAtTop in
             var updatedTheme: PresentationTheme?
             
             let titleFont = Font.medium(item.presentationData.fontSize.itemListBaseFontSize)
@@ -224,7 +224,7 @@ class ChatListFilterPresetCategoryItemNode: ItemListRevealOptionsItemNode, ItemL
             let layout = ListViewItemNodeLayout(contentSize: contentSize, insets: insets)
             let layoutSize = layout.size
             
-            let hadAvatarImage = self.avatarNode.image != nil
+            let hadAvatarImage = self?.avatarNode.image != nil
             
             return (layout, { [weak self] synchronousLoad, animated in
                 if let strongSelf = self {

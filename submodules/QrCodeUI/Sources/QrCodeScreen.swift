@@ -508,6 +508,10 @@ public final class QrCodeScreen: ViewControllerComponentContainer {
                     if let password, !password.isEmpty {
                         link += "&pass=\(password.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")"
                     }
+                case .web:
+                    // No t.me link scheme is defined for a web proxy; a proxy/socks link would not work.
+                    // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                    link = ""
                 }
                 return link
             }

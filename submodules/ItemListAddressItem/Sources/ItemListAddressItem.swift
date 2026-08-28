@@ -159,7 +159,7 @@ public class ItemListAddressItemNode: ListViewItemNode {
         
         let selectionNodeLayout = ItemListSelectableControlNode.asyncLayout(self.selectionNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updatedTheme: PresentationTheme?
             if currentItem?.theme !== item.theme {
                 updatedTheme = item.theme

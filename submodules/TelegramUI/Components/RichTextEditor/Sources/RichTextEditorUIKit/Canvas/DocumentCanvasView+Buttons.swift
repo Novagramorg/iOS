@@ -7,7 +7,7 @@ import RichTextEditorCore
 /// A row is TEXT-FREE, and that is the whole problem this file exists to solve. `prevTextPosition`
 /// walks back to the nearest position that carries text, so with N adjacent rows it skips over ALL of
 /// them — and iOS delivers Backspace as an object-replacement RANGE anchored there. Left to the generic
-/// selection-replace, `applyReplace`'s `replaceSubrange(start.index ... end.index)` then drops every row
+/// selection-replace, `applyReplaceOutcome`'s `replaceSubrange(start.index ... end.index)` then drops every row
 /// in between at once (the reported "Backspace deletes the whole sequence" bug).
 @available(iOS 13.0, *)
 extension DocumentCanvasView {
@@ -61,6 +61,23 @@ extension DocumentCanvasView {
     /// park at, or nil when the row could not be located.
     ///
     /// Called inside `editing { }` by the caller, so it registers as one undo step.
+    ///
+    /// **TASK 38 — the two caret writes below are the only ones in this task's six files that sit in
+    /// no `editing { }` of their own, and Task 37's rule is that being in no bracket is NOT what
+    /// makes a site safe** (`applyCaretOutcome`, `+Editing.swift`). Asked of the CALLERS: both are
+    /// `deleteButtonPillIfNeeded`'s `editing { deleteButtonPill(…) }`, so every reachable call runs
+    /// under `performEditing`, whose tail already delivers `refreshSelectionUI()` +
+    /// `onSelectionChange?()`. A `setSelection` here would therefore be a SECOND host selection
+    /// report per transaction, inside the delegate bracket — Class 1 of that measurement, verbatim.
+    /// One level further out (`legacyDeleteBackward` ← the backend's `deleteBackward()`) adds no
+    /// publish of its own: that witness is forwarded BARE (`+Deletion.swift`).
+    ///
+    /// They apply through `applyCaretOutcome` rather than becoming this function's return value.
+    /// Both mechanisms would be behaviour-identical (nothing between these writes and the end of the
+    /// enclosing body reads the caret back), so the deciding argument is scope: the `Bool` return is
+    /// a DIFFERENT signal — "the row could not be located" — and an outcome cannot carry it, while
+    /// R22 forbids keeping `@discardableResult` on an outcome-returning declaration. This task adds
+    /// no API; it converts writes.
     @discardableResult
     func deleteButtonPill(row: ButtonRowBox, index: Int) -> Bool {
         guard let (stack, boxIndex) = owningStack(ofBlockID: row.id) else { return false }
@@ -73,7 +90,7 @@ extension DocumentCanvasView {
             newBoxes.remove(at: boxIndex)
             stack.boxes = newBoxes
             recomputeSpans()
-            anchor = caret; head = caret
+            applyCaretOutcome(.caret(at: caret))
             return true
         }
 
@@ -83,7 +100,7 @@ extension DocumentCanvasView {
         // repeated Backspaces walk leftwards through the row.
         let remaining = max(1, row.buttons.count)
         let landing = row.nodeStart + 1 + min(index, remaining - 1)
-        anchor = landing; head = landing
+        applyCaretOutcome(.caret(at: landing))
         return true
     }
 
@@ -99,13 +116,13 @@ extension DocumentCanvasView {
     func deleteButtonPillIfNeeded() -> Bool {
         if selFrom == selTo {
             guard let (row, index) = buttonRowPill(at: selTo) else { return false }
-            editing { deleteButtonPill(row: row, index: index) }
+            editing { deleteButtonPill(row: row, index: index); return .unchanged }
             return true
         }
         guard selFrom >= prevTextPosition(before: selTo),
               let (row, index) = lastButtonPill(in: selFrom, selTo)
         else { return false }
-        editing { deleteButtonPill(row: row, index: index) }
+        editing { deleteButtonPill(row: row, index: index); return .unchanged }
         return true
     }
 
@@ -122,8 +139,15 @@ extension DocumentCanvasView {
         guard !boxes.isEmpty, !isInsideTable(head), !isInsideBlockQuote(head),
               let a = activeStack(at: head), a.box is BlockBox else { return }
         editing {
-            if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
-            guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return }
+            // THE CLAIM IS APPLIED HERE, ON THE NEXT INSTRUCTION — never batched to the end of this
+            // transaction's own `return`: the next statement's `activeStack(at: head)` reads the caret back. A deferred claim re-resolves at the
+            // pre-delete caret and silently produces a DIFFERENT document. Why, and the full list of
+            // fourteen such sites: `applyReplaceOutcome`'s doc in `+Editing.swift`. Pinned by
+            // `CaretLandingCharacterizationTests.test_insertButtonRowOverAMidParagraphSelectionSplitsTheParagraph`.
+            if selFrom != selTo {
+                applyCaretOutcome(applySelectionReplaceOutcome(globalFrom: selFrom, globalTo: selTo, text: ""))
+            }
+            guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return .unchanged }
             let model = ButtonRowBlock(id: BlockID.generate(),
                                        buttons: [ButtonRef(label: [], action: .url(""))],
                                        alignment: .justify)
@@ -148,7 +172,7 @@ extension DocumentCanvasView {
             active.stack.boxes = newBoxes
             recomputeSpans()
             let caret = rowBox.nodeStart + 1
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -171,11 +195,11 @@ extension DocumentCanvasView {
                                               attributes: mapper.attributes(for: attributes, style: .body))
             let lo = min(selFrom, selTo) - region.globalStart
             let hi = max(selFrom, selTo) - region.globalStart
-            guard lo >= 0, hi <= region.layout.attributedString.length else { return }
+            guard lo >= 0, hi <= region.layout.attributedString.length else { return .unchanged }
             region.layout.replace(start: lo, end: hi, with: fragment)
             recomputeSpans()
             let caret = region.globalStart + lo + fragment.length
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -198,7 +222,7 @@ extension DocumentCanvasView {
             }
             recomputeSpans()
             let caret = region.globalStart + local + (button == nil ? 0 : 1)
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -212,7 +236,7 @@ extension DocumentCanvasView {
             appended = row.appendButton(ButtonRef(label: [], action: .url("")))
             recomputeSpans()
             let caret = row.nodeStart + 1 + appended
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
         guard let buttonEditRequested, row.buttons.indices.contains(appended) else { return }
         let appendedIndex = appended
@@ -228,6 +252,7 @@ extension DocumentCanvasView {
                     liveRow.replaceButton(at: appendedIndex, with: updated)
                 }
                 self.recomputeSpans()
+                return .unchanged
             }
         }
     }
@@ -239,6 +264,7 @@ extension DocumentCanvasView {
         editing {
             row.setAlignment(alignment)
             recomputeSpans()
+            return .unchanged
         }
     }
 
@@ -252,7 +278,7 @@ extension DocumentCanvasView {
             newBoxes.remove(at: index)
             stack.boxes = newBoxes
             recomputeSpans()
-            anchor = caret; head = caret
+            return .caret(at: caret)
         }
     }
 
@@ -301,6 +327,7 @@ extension DocumentCanvasView {
                         liveRow.replaceButton(at: index, with: updated)
                     }
                     self.recomputeSpans()
+                    return .unchanged
                 }
             }
             return true

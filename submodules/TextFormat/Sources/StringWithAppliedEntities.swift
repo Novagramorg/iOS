@@ -100,7 +100,13 @@ private func generateMessageSyntaxHighlight(spec: CachedMessageSyntaxHighlight.S
     guard let syntaxHighlighter else {
         return MessageSyntaxHighlight(entities: [])
     }
-    guard let highlightedString = syntaxHighlighter.syntax(spec.text, language: spec.language, theme: theme) else {
+    // NORMALIZE before the engine sees it. libprisma's grammar lookup (`LanguageTree::find`) is an exact
+    // std::map lookup and its keys are lowercase, so "Swift" or " swift " resolves to NO grammar, returns
+    // the text untokenized, and silently yields zero entities — a code block that simply never highlights.
+    // Languages historically arrived lowercase from markdown fences, which is why this stayed hidden; a
+    // code block's language field carries what its author typed.
+    let engineLanguage = normalizedCodeBlockLanguage(spec.language) ?? spec.language
+    guard let highlightedString = syntaxHighlighter.syntax(spec.text, language: engineLanguage, theme: theme) else {
         return MessageSyntaxHighlight(entities: [])
     }
     guard highlightedString.length == expectedLength else {

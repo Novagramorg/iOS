@@ -60,6 +60,20 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host code-block geometry (vertical inset, language-line gap). Both fields default to nil,
+    /// meaning "use the shared render metrics" — so an unset host matches the InstantPage V2 renderer.
+    /// Side padding is deliberately not a knob: it is the paragraph inset at the block's nesting level.
+    public var codeStyle: CodeStyle = .default {
+        didSet {
+            guard codeStyle != oldValue else { return }
+            canvas.applyCodeStyle(codeStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
     /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
     /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob
@@ -437,6 +451,24 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func wrapInBlockQuote() { canvas.wrapInBlockQuote() }
     public func unwrapBlockQuoteLevel() { canvas.unwrapBlockQuoteLevel() }
 
+    // TASK 39b — **these two deliberately do NOT wrap `synchronizingExternalChange`, and that is the
+    // whole ruling, not an omission.** `effectiveUndoManager?.undo()` INVOKES `registerUndo`'s closure
+    // (`DocumentCanvasView+Editing.swift`), which carries the bracket; wrapping here as well would emit
+    // TWO external changes for one user-visible undo. The closure is also the only placement that emits
+    // exactly once on BOTH entry paths — this facade one and the responder's system Cmd-Z, which never
+    // passes through here at all.
+    //
+    // The task brief specified `.commitBeforeChange` for this path, on the grounds that
+    // `canvas.finalizeMarkedText()` below IS commit-before-change. It is — and the two policies are
+    // INDISTINGUISHABLE in the backend anyway: `.discard` and `.commitBeforeChange` are the same
+    // statement (`markedRangeStorage = nil`) in `reconcileMarkedTextForExternalChange`, so swapping
+    // either the bodies or the case labels is a textual no-op nothing in the package can see. That is
+    // the load-bearing half of the argument (review fix round 1). The weaker half, still true: by the
+    // time the closure runs there is no marked text left to commit, so the two describe the identical
+    // state here. The policy value DESCRIBES what happened to the marked range; on this path
+    // the answer is "already finalized upstream". Making the facade's intent visible to a
+    // self-re-registering `UndoManager` closure would need a transient flag for zero behavioural
+    // difference. Pinned by `ExternalSynchronizationTests.test_theFacadeUndoPathSynchronizesExactlyOnce`.
     public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo(); onChange?() }
     public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo(); onChange?() }
     // The trailing `onChange?()` is load-bearing for a host toolbar's undo/redo availability. The undo/redo
@@ -498,8 +530,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// The current selection as global position offsets, or `nil` when the selection is collapsed. Used by a
     /// host (the attachment screen's AI-edit-on-selection) to scope an edit to the selected range.
     public func selectedGlobalRange() -> (from: Int, to: Int)? {
-        guard let range = canvas.selectedTextRange as? DocumentTextRange else { return nil }
-        let from = range.from.offset, to = range.to.offset
+        // TASK 44: was `canvas.selectedTextRange as? DocumentTextRange`, then two `.offset` reads.
+        // `canonicalSelection` IS the store that getter builds its range from
+        // (`LegacyRichTextInputBackend.selectedTextRange`'s getter returns
+        // `LegacyTextRange(anchor, head)` verbatim, unordered, on every path), so this reads the same
+        // two numbers one hop earlier and the facade names no identity type. The `min`/`max` normalise
+        // here, exactly as before — an unordered pair is load-bearing INSIDE the seam, not at this
+        // public boundary, whose contract is `(from, to)` ascending.
+        let selection = canvas.canonicalSelection
+        let from = selection.anchor.utf16Offset, to = selection.head.utf16Offset
         guard from != to else { return nil }
         return (min(from, to), max(from, to))
     }
@@ -554,6 +593,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Registers the closure that turns an emoji `id` (+ requested square size) into a FRESH, non-
     /// interactive view. The editor owns/positions/removes it, makes it ride scrolling, and keeps its
     /// `dynamicColor` synced to the current text color (so a template custom emoji tints to the text).
+    /// Register the host's syntax highlighter. The editor detects which code blocks need highlighting,
+    /// debounces, caches answers and applies them; the host only turns (language, text) into colours and
+    /// calls `completion` on the main queue whenever it is ready. Answering late is expected; never
+    /// answering leaves the block plain. The editor cannot do this itself — it cannot see libprisma.
+    public func registerSyntaxHighlighter(
+        _ provider: ((_ language: String, _ text: String,
+                      _ completion: @escaping ([RichTextSyntaxToken]) -> Void) -> Void)?
+    ) {
+        self.canvas.syntaxHighlighter = provider
+        self.canvas.scheduleSyntaxHighlightPass()
+    }
+
     public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> (UIView & RichTextEmojiView)?) {
         canvas.emojiViewProvider = provider
     }
@@ -562,6 +613,22 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// and drawing stay outside this package.
     public func registerFormulaRenderer(_ provider: @escaping (RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?) {
         canvas.mapper.formulaRenderer = provider
+        let blocks = canvas.currentBlocks()
+        if !blocks.isEmpty {
+            canvas.reload(blocks, width: canvas.effectiveWidth)
+            performLayout(size: bounds.size)
+        }
+    }
+
+    /// Registers a host-provided button type icon. The icon depends on the button's ACTION, and this
+    /// package's Telegram-free model carries every action it cannot name as an opaque blob — only the
+    /// host can decode that back into the action its InstantPage V2 counterpart resolves an icon from.
+    ///
+    /// It is geometry as much as decoration: an inline pill grows by `inlineIconReserve` to hold its
+    /// icon, so registering (or not) moves the line break of any paragraph holding a button. Register it
+    /// alongside the other providers, before the first reload, exactly as with the formula renderer.
+    public func registerButtonIconProvider(_ provider: @escaping (ButtonAction) -> RichTextButtonIcon?) {
+        canvas.mapper.buttonIconProvider = provider
         let blocks = canvas.currentBlocks()
         if !blocks.isEmpty {
             canvas.reload(blocks, width: canvas.effectiveWidth)
@@ -673,9 +740,17 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Demo helper: tap the first hidden spoiler (drives the reveal — text shows + dust dissolves).
     public func revealFirstSpoiler() { canvas.tapFirstSpoilerForTesting() }
 
+    /// Selects the whole STRUCTURAL range, `[0, documentSize]`.
+    ///
+    /// TASK 44 note, because the obvious "cleanup" here is a behaviour change: this is deliberately
+    /// NOT `canvas.documentEndOffset`. That is the last RENDERABLE slot (`snapToRenderable`
+    /// backwards from the close token) and is strictly less than `documentSizeValue` whenever the
+    /// document ends in a structural token — `selectAllText()` (`+SelectionActions.swift`) is the
+    /// renderable-bounded variant and even it falls back to the structural range for a degenerate
+    /// document. The facade's Select-All has always been the structural one; the endpoints are
+    /// unchanged, only the object construction moved behind the backend.
     public func selectAll() {
-        canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(0),
-                                                     DocumentTextPosition(canvas.documentSizeValue))
+        canvas.setSelectedGlobalRange(from: 0, to: canvas.documentSizeValue)
     }
 
     /// Collapses the selection to a caret at the last renderable position (end of the document). A host uses
@@ -683,8 +758,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// sits at offset 0 (a structural slot that touches no paragraph), so a command applied there no-ops /
     /// lands at the start. `endOfDocument` already snaps past the closing structural token to a real slot.
     public func moveCaretToDocumentEnd() {
-        guard let end = canvas.endOfDocument as? DocumentTextPosition else { return }
-        canvas.selectedTextRange = DocumentTextRange(end, end)
+        // TASK 44: was `guard let end = canvas.endOfDocument as? DocumentTextPosition else { return }`
+        // followed by `DocumentTextRange(end, end)`. `documentEndOffset` is that same downcast of that
+        // same member, and the `guard` is preserved rather than collapsed — under the legacy backend
+        // it is unreachable, but under any other one it is the difference between doing nothing (what
+        // this method has always done) and jumping the caret to offset 0 (fix round 1, review Minor 2).
+        // The write takes the identical `selectedTextRange` path it took before.
+        guard let end = canvas.documentEndOffset else { return }
+        canvas.setSelectedGlobalRange(from: end, to: end)
     }
 
     @discardableResult
@@ -696,13 +777,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// scroll mutates `contentOffset` mid-flight, and a second arrow then computes its destination against
     /// that in-flux state → non-deterministic arrow results (the reported "random" behaviour). Only scrolls
     /// when the caret is actually outside the visible band, so in-screen nav/typing never churns the scroll.
-    private func scrollCaretIntoView(animated: Bool = false) {
+    /// Access widened `private` → internal (Task 18) so `TelegramPresentationInputClient.requestReveal`
+    /// can call it directly as the "outer vertical reveal" authority, alongside the canvas's own
+    /// `scrollCaretIntoViewIfNeeded()` (table-cell horizontal reveal) — the existing two-authority split
+    /// this method's doc-comment above describes is preserved verbatim, not repaired. No behavior change:
+    /// every existing call site (`onSelectionChange` below) is unaffected by the wider access.
+    func scrollCaretIntoView(animated: Bool = false) {
         guard canvas.isFirstResponder else { return }
         // Lay the canvas out explicitly so `caretRect` + the scrollable extent reflect the latest edit
         // before we measure/scroll — the editor convention is parent-driven layout, so we don't rely on a
         // pending self-scheduled pass. Idempotent for arrow nav (content unchanged → same layout).
         performLayout(size: bounds.size)
-        var caret = canvas.caretRect(for: DocumentTextPosition(canvas.head))
+        var caret = canvas.caretRect(atGlobal: canvas.head)
         guard caret != .zero, !caret.isNull else { return }
         // An image-gap caret is full-image-height; its whole rect would never fit the visible band (→ always
         // scroll) and would jump/oscillate. Track a short band at its top edge instead.

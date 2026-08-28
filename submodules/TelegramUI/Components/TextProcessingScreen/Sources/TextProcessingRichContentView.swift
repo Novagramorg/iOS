@@ -153,11 +153,8 @@ private func textProcessingInstantPageTheme(theme: PresentationTheme) -> Instant
     let secondary = theme.list.itemSecondaryTextColor
     let accent = theme.list.itemAccentColor
 
-    let codeBlockBackgroundColor: UIColor
     if isDark {
-        codeBlockBackgroundColor = UIColor(white: 0.0, alpha: 0.25)
     } else {
-        codeBlockBackgroundColor = accent.withMultipliedAlpha(0.1)
     }
 
     let textCategories = InstantPageTextCategories.chatMessage(
@@ -169,7 +166,8 @@ private func textProcessingInstantPageTheme(theme: PresentationTheme) -> Instant
         pageBackgroundColor: .clear,
         textCategories: textCategories,
         serif: false,
-        codeBlockBackgroundColor: codeBlockBackgroundColor,
+        // Matches the bubble: the highlighted-table-cell fill, not an accent tint.
+        codeBlockBackgroundColor: primary.withMultipliedAlpha(0.05),
         linkColor: accent,
         textHighlightColor: accent.withMultipliedAlpha(0.1),
         linkHighlightColor: accent.withMultipliedAlpha(0.1),

@@ -90,7 +90,7 @@ final class CanvasTableBackspaceSelectTests: XCTestCase {
         let v = canvas(botText: "Bot")
         let before = v.documentSizeValue
         // iOS object-replacement range: [tableLastCellEnd … paragraphStart].
-        v.anchor = tableLastCellEnd(v); v.head = botStart(v)
+        v.setSelectionForTesting(anchor: tableLastCellEnd(v), head: botStart(v))
         v.deleteBackward()
         XCTAssertEqual(v.documentSizeValue, before, "range-form first Backspace deletes nothing")
         XCTAssertNotNil(v.tableSelection, "the whole table is structurally selected")
@@ -99,7 +99,7 @@ final class CanvasTableBackspaceSelectTests: XCTestCase {
 
     func test_firstBackspace_rangeForm_emptyParagraph_removesParagraph_andSelectsTable() {
         let v = canvas(botText: "")
-        v.anchor = tableLastCellEnd(v); v.head = botStart(v)
+        v.setSelectionForTesting(anchor: tableLastCellEnd(v), head: botStart(v))
         v.deleteBackward()
         XCTAssertNotNil(v.tableSelection, "the whole table is structurally selected")
         XCTAssertFalse(v.currentBlocks().contains {
@@ -110,8 +110,7 @@ final class CanvasTableBackspaceSelectTests: XCTestCase {
     func test_genuineSelectionSpanningTable_stillDeletesAndMerges_notSelect() {
         let v = canvas(botText: "Bot")
         let top = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("top")) }!
-        v.anchor = top.globalStart + 1        // inside "Top" (after "T") — well before the table
-        v.head = botStart(v) + 1              // inside "Bot" (after "B"), local 1 (not the paragraph start)
+        v.setSelectionForTesting(anchor: top.globalStart + 1, head: botStart(v) + 1)   // inside "Top" (after "T") — well before the table inside "Bot" (after "B"), local 1 (not the paragraph start)
         v.deleteBackward()
         XCTAssertNil(v.tableSelection, "a genuine spanning selection must not become a whole-table selection")
         XCTAssertFalse(hasTable(v), "the spanning delete drops the table and merges endpoints")

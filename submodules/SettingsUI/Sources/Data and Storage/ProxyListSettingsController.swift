@@ -285,7 +285,8 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
             switch server.connection {
                 case .socks5:
                     text = strings.ChatSettings_ConnectionType_UseSocks5
-                case .mtp:
+                // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                case .mtp, .web:
                     text = strings.SocksProxySetup_ProxyTelegram
             }
             switch status {
@@ -551,6 +552,11 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
                         if let username = username, let password = password {
                             string += "&user=\((username as NSString).addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")&pass=\((password as NSString).addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")"
                         }
+                    case .web:
+                        // No t.me link scheme is defined for a web proxy. Emitting a proxy/socks link
+                        // would hand out one that does not work, so this server is omitted from the share.
+                        // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                        string = ""
                     }
                     
                     result += string

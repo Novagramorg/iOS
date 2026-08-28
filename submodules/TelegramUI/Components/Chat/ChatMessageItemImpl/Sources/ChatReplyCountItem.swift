@@ -127,7 +127,7 @@ public class ChatReplyCountItemNode: ListViewItemNode {
         
         let layoutConstants = self.layoutConstants
         
-        return { item, params, dateAtBottom in
+        return { [weak self] item, params, dateAtBottom in
             let text: String
             if item.count == 0 {
                 text = item.presentationData.strings.Conversation_DiscussionNotStarted

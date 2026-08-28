@@ -44,6 +44,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ShimmeringMask:ShimmeringMask",
         "//submodules/TelegramUI/Components/UnsupportedContentPill",
         "//submodules/TelegramUI/Components/TextLoadingEffect:TextLoadingEffect",
+        "//submodules/TelegramUI/Components/RichTextButtonIcons",
     ],
     visibility = [
         "//visibility:public",
@@ -65,6 +66,8 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TextFormat:TextFormat",
         "//submodules/TelegramUI/Components/UnsupportedContentPill",
+        "//submodules/TelegramUI/Components/RichTextButtonIcons",
+        "//submodules/TelegramUI/Components/RichTextEditorMessageConversion",
     ],
 )
 
@@ -78,7 +81,11 @@ ios_test_runner(
 
 ios_unit_test(
     name = "InstantPageUITests",
-    minimum_os_version = "13.0",
+    # 15.0, matching //submodules/TextFormat:TextFormatTests and the app's own deployment target since the
+    # 13 -> 15 bump. At 13.0 this target does not build AT ALL on the iOS 27 SDK: libc++'s
+    # `availability.h` errors with "The selected platform is no longer supported by libc++" for any C++ in
+    # the dependency graph, which the -Werror config turns fatal.
+    minimum_os_version = "15.0",
     runner = ":InstantPageUITestRunner",
     deps = [
         ":InstantPageUITestsLib",

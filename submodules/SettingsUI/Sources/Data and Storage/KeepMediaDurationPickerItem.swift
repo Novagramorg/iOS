@@ -165,7 +165,7 @@ private final class KeepMediaDurationPickerItemNode: ListViewItemNode {
             makeTextLayouts.append(TextNode.asyncLayout(textNode))
         }
 
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var themeUpdated = false
             if currentItem?.theme !== item.theme {
                 themeUpdated = true

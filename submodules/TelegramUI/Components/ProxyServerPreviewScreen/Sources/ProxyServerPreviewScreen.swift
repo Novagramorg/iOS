@@ -314,7 +314,9 @@ private final class ProxyServerPreviewSheetContent: CombinedComponent {
                         )
                     ))
                 }
-            case .mtp:
+            // A web proxy is secret-based like .mtp, so it previews the same masked secret row.
+            // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+            case .mtp, .web:
                 tableItems.append(.init(
                     id: "secret",
                     title: strings.SocksProxySetup_Secret,

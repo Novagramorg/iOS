@@ -413,7 +413,7 @@ class Download: NSObject, MTRequestMessageServiceDelegate {
     
     func rawRequest(_ data: (FunctionDescription, Buffer, (Buffer) -> Any?), automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil, failOnServerErrors: Bool = false, logPrefix: String = "", expectedResponseSize: Int32? = nil) -> Signal<(Any, NetworkResponseInfo), (MTRpcError, Double)> {
         let requestService = self.requestService
-        return Signal { subscriber in
+        return Signal { [requestService] subscriber in
             let request = MTRequest()
             request.expectedResponseSize = expectedResponseSize ?? 0
             

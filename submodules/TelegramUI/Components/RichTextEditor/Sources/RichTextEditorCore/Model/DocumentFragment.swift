@@ -2,12 +2,27 @@ import Foundation
 
 // MARK: - Task 3: insertingFragment helpers
 
-/// True for a fragment block that pastes by folding its runs INLINE into the host paragraph
-/// (plain body / headings, not a list item). Quotes, list items, and code blocks paste as own block.
-public func isInlineMergeable(_ block: Block) -> Bool {
-    guard case .paragraph(let p) = block else { return false }
+/// True for a fragment block that pastes by folding its runs INLINE into the host paragraph, which
+/// keeps the HOST's paragraph style. Quotes, list items, and code blocks always paste as their own
+/// block.
+///
+/// **The two directions are not symmetric, and treating them as one destroys headings.** Folding
+/// discards the fragment paragraph's own style, so it is lossless only when the fragment has no style
+/// to lose:
+///   - a plain BODY paragraph carries no block structure → always folds. This is the case that MUST
+///     keep folding: pasting text into a heading has to stay in the heading.
+///   - a HEADING paragraph loses its level when folded → folds only into a host that is already that
+///     same style (`# X` pasted inside an H1 should not shatter it into three blocks). Anywhere else
+///     it stands as its own block, and the caller's split-and-assemble path places it.
+///
+/// This used to accept every heading level unconditionally, so a fragment beginning (or ending) with a
+/// heading folded into the body paragraph it was pasted into — the reported "pasting a copied rich
+/// message loses its headings", since the chat composer's host paragraph is always body.
+public func isInlineMergeable(_ block: Block, intoHostStyle hostStyle: ParagraphStyleName) -> Bool {
+    guard case .paragraph(let p) = block, p.list == nil else { return false }
     switch p.style {
-    case .body, .heading1, .heading2, .heading3, .heading4, .heading5, .heading6: return p.list == nil
+    case .body: return true
+    case .heading1, .heading2, .heading3, .heading4, .heading5, .heading6: return p.style == hostStyle
     case .caption, .pullQuote: return false
     }
 }
@@ -90,7 +105,7 @@ extension Document {
         let (headHalf, tailHalf) = host.split(at: locus.local, newID: .generate())
 
         // Single inline-mergeable paragraph → fold its runs into the host paragraph.
-        if frag.count == 1, isInlineMergeable(frag[0]), case .paragraph(let only) = frag[0] {
+        if frag.count == 1, isInlineMergeable(frag[0], intoHostStyle: host.style), case .paragraph(let only) = frag[0] {
             let merged = ParagraphBlock(id: host.id, style: host.style, paragraph: host.paragraph,
                                         list: host.list, runs: headHalf.runs + only.runs + tailHalf.runs)
             newBlocks[locus.index] = .paragraph(merged)
@@ -104,11 +119,12 @@ extension Document {
                                       list: host.list, runs: tailHalf.runs)
         var caretInTail = 0
 
-        if let first = middle.first, isInlineMergeable(first), case .paragraph(let fp) = first {
+        // Both split halves carry the host's style, so both ends test against it.
+        if let first = middle.first, isInlineMergeable(first, intoHostStyle: host.style), case .paragraph(let fp) = first {
             headBlock = .paragraph(headHalf.merging(fp))
             middle.removeFirst()
         }
-        if let last = middle.last, isInlineMergeable(last), case .paragraph(let lp) = last {
+        if let last = middle.last, isInlineMergeable(last, intoHostStyle: host.style), case .paragraph(let lp) = last {
             tailPara = ParagraphBlock(id: tailPara.id, style: tailPara.style, paragraph: tailPara.paragraph,
                                       list: tailPara.list, runs: lp.runs + tailPara.runs)
             caretInTail = lp.utf16Count
@@ -159,6 +175,11 @@ extension Document {
     }
 }
 
+/// The global offset from a top-level block's own start to its editable CODE text. A code block is a
+/// container of [languagePara, codePara] (see `DocumentTree.node(for:)`), so its code text sits three
+/// tokens past where a bare paragraph's would: language open + language text + language close + code open.
+func codeTextStartOffset(_ code: CodeBlock) -> Int { 4 + code.languageUTF16Count }
+
 /// Plain text of a paragraph/code/blockQuote block (empty for media/table). Used for the code-destination flatten.
 public func blockPlainText(_ block: Block) -> String {
     switch block {
@@ -195,7 +216,10 @@ extension Document {
             case .paragraph(let p):
                 if caret >= textStart && caret <= textStart + p.utf16Count { return (i, caret - textStart) }
             case .code(let c):
-                if caret >= textStart && caret <= textStart + c.utf16Count { return (i, caret - textStart) }
+                // The LANGUAGE line is deliberately not a locus here: a fragment paste into it falls
+                // through to the caller's plain-text flatten, which is what the language line accepts.
+                let codeStart = cursor + codeTextStartOffset(c)
+                if caret >= codeStart && caret <= codeStart + c.utf16Count { return (i, caret - codeStart) }
             default: break
             }
             cursor += size
@@ -221,8 +245,9 @@ extension Document {
                 if firstStart == nil { firstStart = textStart }
                 lastTextEnd = textStart + p.utf16Count
             case .code(let c):
-                if firstStart == nil { firstStart = textStart }
-                lastTextEnd = textStart + c.utf16Count
+                let codeStart = cursor + codeTextStartOffset(c)
+                if firstStart == nil { firstStart = codeStart }
+                lastTextEnd = codeStart + c.utf16Count
             default: break
             }
             cursor += size
@@ -238,14 +263,19 @@ extension Document {
     }
 
     /// The global position of the first editable text offset of the top-level block at `index`.
-    /// A paragraph/code block's text sits one token in (the block's own container-open token) —
-    /// `cursor + 1`. A pull quote is a `.blockQuote(children: [pullTextPara, authorPara])`
-    /// container (see `DocumentTree.node(for:)`), so its pull text is nested one level deeper —
-    /// `cursor + 2` (the pull-quote container's open token, THEN the pull-text paragraph's own).
+    /// A paragraph's text sits one token in (the block's own container-open token) — `cursor + 1`. A pull
+    /// quote is a `.blockQuote(children: [pullTextPara, authorPara])` container (see
+    /// `DocumentTree.node(for:)`), so its pull text is nested one level deeper — `cursor + 2` (the
+    /// pull-quote container's open token, THEN the pull-text paragraph's own). A CODE block is likewise a
+    /// container, `[languagePara, codePara]`, and its editable code text sits past the whole language
+    /// child — `cursor + 4 + languageUTF16Count`.
     public func globalTextStart(ofBlockAt index: Int) -> Int {
         let cursor = DocumentTree.documentSize(Document(blocks: Array(blocks[..<index])))
         if case .pullQuote = blocks[index] {
             return cursor + 2
+        }
+        if case .code(let c) = blocks[index] {
+            return cursor + codeTextStartOffset(c)
         }
         return cursor + 1
     }
@@ -413,9 +443,13 @@ extension Document {
                                                           paragraph: p.paragraph, list: p.list, runs: r)))
                 }
             case .code(let c):
-                let a = max(lo, textStart), b = min(hi, textStart + c.utf16Count)
+                // Container now, like a pull quote: the code text starts past the language line, NOT at
+                // the shared `textStart`. A partial copy carries the language, which is block metadata
+                // rather than flat text — the same rule the pull quote applies to its author.
+                let codeStart = cursor + codeTextStartOffset(c)
+                let a = max(lo, codeStart), b = min(hi, codeStart + c.utf16Count)
                 if a < b {
-                    let r = sliceRuns(c.runs, fromUTF16: a - textStart, toUTF16: b - textStart)
+                    let r = sliceRuns(c.runs, fromUTF16: a - codeStart, toUTF16: b - codeStart)
                     out.append(.code(CodeBlock(id: .generate(), language: c.language, runs: r)))
                 }
                 // Note: empty code blocks (utf16Count == 0) are intentionally not captured — they

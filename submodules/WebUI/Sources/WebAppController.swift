@@ -191,6 +191,12 @@ private let registeredProtocols: Void = {
 }()
 #endif
 
+// A single shared probe used only to read authorization state. The iOS 14 replacements for
+// `CLLocationManager.authorizationStatus()` are instance properties, and allocating a manager
+// per subscription (on whichever queue happened to subscribe) is both wasteful and at odds
+// with CLLocationManager's threading guidance, so keep exactly one.
+private let sharedLocationAuthorizationManager = CLLocationManager()
+
 public final class WebAppController: ViewController, AttachmentContainable {
     public var requestAttachmentMenuExpansion: () -> Void = { }
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
@@ -1011,7 +1017,11 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 }
                 
                 if previousLayout != nil && (previousLayout?.inputHeight ?? 0.0).isZero, let inputHeight = layout.inputHeight, inputHeight > 44.0, transition.isAnimated {
-                    Queue.mainQueue().after(0.4, {
+                    Queue.mainQueue().after(0.4, { [weak self] in
+                        guard let self else {
+                            return
+                        }
+
                         if let inputHeight = self.validLayout?.0.inputHeight, inputHeight > 44.0 {
                             webView.scrollToActiveElement(layout: layout, completion: { [weak self] contentOffset in
                                 let _ = self
@@ -2793,7 +2803,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 var effectiveIsAbsolute = false
                 let referenceFrame: CMAttitudeReferenceFrame
                 
-                if absolute && [.authorizedWhenInUse, .authorizedAlways].contains(CLLocationManager.authorizationStatus()) && CMMotionManager.availableAttitudeReferenceFrames().contains(.xTrueNorthZVertical) {
+                if absolute && [.authorizedWhenInUse, .authorizedAlways].contains(sharedLocationAuthorizationManager.authorizationStatus) && CMMotionManager.availableAttitudeReferenceFrames().contains(.xTrueNorthZVertical) {
                     referenceFrame = .xTrueNorthZVertical
                     effectiveIsAbsolute = true
                 } else if absolute && CMMotionManager.availableAttitudeReferenceFrames().contains(.xMagneticNorthZVertical) {
@@ -3036,7 +3046,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                         undoText: self.presentationData.strings.WebApp_Download_Cancel
                     )
                 },
-                completion: { [weak self] resultUrl, _ in
+                completion: { [weak self, controller] resultUrl, _ in
                     if let resultUrl, let self {
                         removeImpl?()
                         
@@ -4032,7 +4042,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 
                 let context = self.context
                 let _ = (cachedWebAppTermsPage(context: context)
-                |> deliverOnMainQueue).startStandalone(next: { resolvedUrl in
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] resolvedUrl in
                     context.sharedContext.openResolvedUrl(resolvedUrl, context: context, urlContext: .generic, navigationController: navigationController, forceExternal: true, forceUpdate: false, openPeer: { peer, navigation in
                     }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak self] c, arguments in
                         self?.push(c)

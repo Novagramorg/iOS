@@ -283,7 +283,7 @@ final class DeleteAccountPhoneItemNode: ListViewItemNode, ItemListItemNode {
     func asyncLayout() -> (_ item: DeleteAccountPhoneItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
         let currentItem = self.item
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             var updatedCountryButtonBackground: UIImage?
             var updatedCountryButtonHighlightedBackground: UIImage?
             var updatedPhoneBackground: UIImage?

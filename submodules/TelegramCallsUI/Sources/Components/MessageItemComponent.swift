@@ -448,7 +448,11 @@ final class MessageItemComponent: Component {
                 }
                 
                 if let reactionItem {
-                    Queue.mainQueue().justDispatch {
+                    Queue.mainQueue().justDispatch { [weak self] in
+                        guard let self else {
+                            return
+                        }
+
                         guard let listView = self.superview else {
                             return
                         }

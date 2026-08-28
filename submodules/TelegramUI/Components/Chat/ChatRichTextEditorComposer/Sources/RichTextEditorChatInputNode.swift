@@ -4,10 +4,12 @@ import AsyncDisplayKit
 import Display
 import AppBundle
 import Postbox
+import SwiftSignalKit
 import TextFormat
 import TelegramCore
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextButtonIcons
 import ChatInputTextNode
 import CheckNode
 import TelegramPresentationData
@@ -150,6 +152,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         }
     }
 
+    /// A button pill's type icon. Registered unconditionally rather than proxied through a host hook
+    /// like the formula renderer: the mapping is a pure function of the action, and it is GEOMETRY —
+    /// an inline pill grows by `inlineIconReserve` to hold its icon, so a composer that skipped it
+    /// would wrap a paragraph differently from the message it sends.
+    private func updateButtonIconProvider() {
+        self.editorView.registerButtonIconProvider(richTextEditorButtonIcon)
+    }
+
     public override func didLoad() {
         super.didLoad()
         // Model A: this node is the wrapper (the panel frames `asNode` to fill the clipping container);
@@ -162,7 +172,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, detailsTitle: self.strings.RichText_PlaceholderDetailTitle)
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, codeLanguage: self.strings.RichText_PlaceholderCodeLanguage, detailsTitle: self.strings.RichText_PlaceholderDetailTitle)
         // The composer sits over the input panel's own background — clear the editor's document "page"
         // background (`.systemBackground`, opaque white in light mode) so the panel shows through. `nil`
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
@@ -185,6 +195,17 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             topInset: 3.0,
             bottomInset: 3.0
         )
+        // Code-block geometry for the compact composer. The band does NOT bleed at all here: the
+        // editor sits inside the input field's rounded background (inset by the panel's
+        // `textInputViewInternalInsets`, 12 left / 11 right) and its right content margin also
+        // reserves room for the accessory + send buttons, so ANY outward bleed reads as spilling past
+        // what the field shows. The band therefore spans exactly the text column, and the code is
+        // indented within it instead — the inward counterpart of the renderer's outward bleed. A
+        // small radius keeps the band from fighting the field's own rounding.
+        //
+        // Deliberately NOT WYSIWYG against the sent bubble, which is full-bleed and square: a compact
+        // field is a different container shape from a message bubble.
+        self.editorView.codeStyle = CodeStyle(horizontalBleed: 0.0, horizontalInset: 8.0, cornerRadius: 4.0)
         // Media (image/video/location/audio) insets like the text paragraphs in the compact composer
         // (the document/article editor keeps the default edge-to-edge bleed).
         self.editorView.mediaBlockStyle = MediaBlockStyle(horizontalBleed: 0.0)
@@ -272,6 +293,23 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // renderer fallback. The closure reads `self.emojiViewProvider` lazily, so the panel may set it after
         // this registration. `size` is ignored: the host renderer picks its own point size and the editor
         // frames the returned view to the glyph rect.
+        // The host owns "(language, text) -> colours": `asyncStanaloneSyntaxHighlight` runs libprisma off
+        // the main queue and returns the same cache model the message path stores, baking the LIGHT
+        // palette — so what the editor shows is what the sent message will show. The editor cannot do
+        // this itself; it cannot see TextFormat or libprisma.
+        self.editorView.registerSyntaxHighlighter { language, text, completion in
+            let spec = CachedMessageSyntaxHighlight.Spec(language: language, text: text)
+            let _ = (asyncStanaloneSyntaxHighlight(current: nil, specs: [spec])
+            |> deliverOnMainQueue).start(next: { result in
+                let entities = result.values[spec]?.entities ?? []
+                completion(entities.map { entity in
+                    RichTextSyntaxToken(
+                        range: NSRange(location: entity.range.lowerBound,
+                                       length: entity.range.upperBound - entity.range.lowerBound),
+                        color: UIColor(rgb: UInt32(bitPattern: entity.color)))
+                })
+            })
+        }
         self.editorView.registerEmojiViewProvider { [weak self] id, _ in
             guard let self, let fileId = Int64(id), let provider = self.emojiViewProvider else { return nil }
             let attribute = self.customEmojiAttributes[fileId]
@@ -287,6 +325,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Formula rendering is owned by the chat host; math-rendering dependencies live above this module.
         // Reinstalling when the provider arrives after `didLoad` reloads already-present formula atoms.
         self.updateFormulaRenderer()
+
+        self.updateButtonIconProvider()
 
         // Media rendering. The editor hosts each `.media` block via this provider, asking by the opaque host
         // `mediaID` (the node's own key, recorded in `mediaByID` by `registerMediaValue`). Resolve it back to
@@ -554,7 +594,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             accent: colors.accent,
             tableBorder: colors.tableBorder,
             tableHeaderBackground: colors.tableHeaderBackground,
-            codeBackground: colors.tableHeaderBackground,  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
+            codeBackground: colors.tableHeaderBackground,  // a code band reads as a highlighted table row — the same fill, deliberately
             containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8),
             shadowCursor: colors.shadowCursor,
             quoteAuthorText: colors.quoteAuthorText,

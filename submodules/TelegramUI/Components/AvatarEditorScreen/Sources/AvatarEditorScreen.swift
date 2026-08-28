@@ -1481,7 +1481,7 @@ final class AvatarEditorScreenComponent: Component {
                     }
                 }
                 
-                Queue.mainQueue().async {
+                Queue.mainQueue().async { [controller] in
                     guard let image else {
                         return
                     }

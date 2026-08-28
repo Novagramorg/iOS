@@ -362,7 +362,7 @@ class ItemListStickerPackItemNode: ItemListRevealOptionsItemNode {
         
         let currentItem = self.layoutParams?.0
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let titleFont = Font.bold(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
             let statusFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 14.0 / 17.0))
             

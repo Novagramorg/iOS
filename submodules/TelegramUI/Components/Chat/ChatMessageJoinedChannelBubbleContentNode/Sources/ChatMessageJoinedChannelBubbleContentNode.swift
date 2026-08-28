@@ -157,7 +157,7 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
 
         let cachedMaskBackgroundImage = self.cachedMaskBackgroundImage
 
-        return { item, layoutConstants, _, _, constrainedSize, _ in
+        return { [weak self] item, layoutConstants, _, _, constrainedSize, _ in
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: true, headerSpacing: 0.0, hidesBackground: .always, forceFullCorners: false, forceAlignment: .center)
                         
             let unboundWidth: CGFloat = constrainedSize.width - 10.0 * 2.0
@@ -329,7 +329,7 @@ public class ChatMessageJoinedChannelBubbleContentNode: ChatMessageBubbleContent
                     theme: item.presentationData.theme.theme,
                     strings: item.presentationData.strings,
                     peers: recommendedChannels,
-                    action: { peer in
+                    action: { [weak self] peer in
                         if let peer {
                             var jsonString: String = "{"
                             jsonString += "\"ref_channel_id\": \"\(item.message.id.peerId.id._internalGetInt64Value())\","

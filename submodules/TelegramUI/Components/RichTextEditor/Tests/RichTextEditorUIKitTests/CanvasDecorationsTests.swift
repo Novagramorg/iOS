@@ -12,19 +12,74 @@ final class CanvasDecorationsTests: XCTestCase {
         return v
     }
 
-    func test_codeBlock_contributesItsOwnBackgroundRun() {
+    /// A code block paints its OWN band and is deliberately absent from the quote underlay's feed.
+    /// It used to be that feed's only producer — which is why a code block nested in a quote or a
+    /// table cell had no fill at all: the feed walked top-level boxes only.
+    func test_codeBlock_paintsItsOwnBandAndFeedsNoQuoteUnderlay() {
         let v = canvas([
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body")])),
             .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")])),
         ])
-        let decs = v.blockquoteDecorations()
-        XCTAssertEqual(decs.count, 1, "only the code block makes a decoration run")
-        let codeBox = v.boxes.first(where: { $0 is CodeBlockBox })!
-        let codeDec = decs.first(where: { $0.fill == codeBox.frame })!
-        XCTAssertEqual(codeDec.fill.minY, codeBox.frame.minY, accuracy: 0.5)   // fill spans the code block
-        XCTAssertEqual(codeDec.fill.maxY, codeBox.frame.maxY, accuracy: 0.5)
-        XCTAssertEqual(codeDec.bar.minX, codeBox.frame.minX, accuracy: 0.5)     // bar at the block's left edge
-        XCTAssertEqual(codeDec.bar.width, v.quoteStyle.barWidth, accuracy: 0.5) // bar width tracks the quote bar
+        XCTAssertTrue(v.blockQuoteFillRects().isEmpty, "no quotes ⇒ nothing for the quote underlay")
+    }
+
+    /// The compact-composer shape: NO bleed (the band spans exactly the text column, so it cannot
+    /// spill past the input field) and the code indented WITHIN it instead — the inward counterpart
+    /// of the renderer's outward bleed.
+    func test_codeBlock_compactHostIndentsTheTextInsteadOfBleedingTheBand() {
+        let width: CGFloat = 300
+        let v = DocumentCanvasView()
+        v.applyCodeStyle(CodeStyle(horizontalBleed: 0, horizontalInset: 8, cornerRadius: 4))
+        v.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body")])),
+            .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")])),
+        ], width: width)
+        v.frame = CGRect(x: 0, y: 0, width: width, height: 600); v.layoutIfNeeded()
+
+        let code = v.boxes.first(where: { $0 is CodeBlockBox }) as! CodeBlockBox
+        let body = v.boxes.first(where: { $0 is BlockBox })!
+
+        XCTAssertEqual(code.blockViewFrame, code.frame, "no bleed ⇒ the band is exactly the text column")
+        XCTAssertEqual(code.blockViewFrame.minX, body.frame.minX, accuracy: 0.5,
+                       "band's leading edge aligns with the paragraph column")
+        XCTAssertEqual(code.textOrigin.x, code.frame.minX + 8, accuracy: 0.5,
+                       "code text is indented inside the band")
+        XCTAssertEqual(v.mapper.styleSheet.codeCornerRadius, 4, accuracy: 0.01)
+    }
+
+    /// The indent narrows the text MEASURE too, not just its origin — otherwise the code would wrap
+    /// at the band's full width and overrun its trailing edge.
+    func test_codeBlock_horizontalInsetNarrowsTheTextMeasure() {
+        let width: CGFloat = 300
+        let plain = DocumentCanvasView()
+        let indented = DocumentCanvasView()
+        indented.applyCodeStyle(CodeStyle(horizontalInset: 8))
+        for v in [plain, indented] {
+            v.setBlocks([.code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")]))], width: width)
+            v.frame = CGRect(x: 0, y: 0, width: width, height: 600); v.layoutIfNeeded()
+        }
+        let a = plain.boxes.first as! CodeBlockBox
+        let b = indented.boxes.first as! CodeBlockBox
+
+        XCTAssertEqual(b.layout.containerWidth, a.layout.containerWidth - 16, accuracy: 0.5,
+                       "the measure loses the inset on BOTH sides")
+    }
+
+    /// The band runs edge to edge across the canvas while the code TEXT stays in the paragraph
+    /// column — the whole point of the redesign, and the only place the root bleed wiring is
+    /// exercised end to end.
+    func test_codeBlock_bandSpansTheCanvasWhileTextKeepsTheParagraphColumn() {
+        let width: CGFloat = 300
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body")])),
+            .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")])),
+        ], width: width)
+        let code = v.boxes.first(where: { $0 is CodeBlockBox }) as! CodeBlockBox
+        let body = v.boxes.first(where: { $0 is BlockBox })!
+
+        XCTAssertEqual(code.blockViewFrame.minX, 0, accuracy: 0.5, "band reaches the canvas leading edge")
+        XCTAssertEqual(code.blockViewFrame.maxX, width, accuracy: 0.5, "band reaches the canvas trailing edge")
+        XCTAssertEqual(code.textOrigin.x, body.frame.minX, accuracy: 0.5, "code text sits in the paragraph column")
     }
 
     func test_typeSomethingPlaceholder_onlyWhenSoleBlock() {

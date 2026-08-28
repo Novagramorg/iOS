@@ -1220,7 +1220,11 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
     }
     
     func requestSaveToFiles() {
-        self.webView.evaluateJavaScript("document.contentType") { result, _ in
+        self.webView.evaluateJavaScript("document.contentType") { [weak self] result, _ in
+            guard let self else {
+                return
+            }
+
             guard let contentType = result as? String else {
                 return
             }

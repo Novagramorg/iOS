@@ -80,6 +80,7 @@ final class ButtonRowBox {
             availableWidth: max(0.0, width - (showsMenuAffordance ? ButtonRowBox.menuButtonReserve : 0.0)),
             metrics: mapper.styleSheet.metrics.button,
             isRTL: mapper.baseWritingDirection == .rightToLeft,
+            hasIcon: { [mapper] button in mapper.buttonHasIcon(button.action) },
             measure: { [mapper] button, maxWidth, padding in
                 mapper.buttonAttachment(button: button, isBlockPill: true, maxWidth: maxWidth,
                                         horizontalPadding: padding)
@@ -222,6 +223,7 @@ extension ButtonRowBox: CanvasBlock {
             availableWidth: max(0.0, width - (showsMenuAffordance ? ButtonRowBox.menuButtonReserve : 0.0)),
             metrics: mapper.styleSheet.metrics.button,
             isRTL: mapper.baseWritingDirection == .rightToLeft,
+            hasIcon: { [mapper] button in mapper.buttonHasIcon(button.action) },
             measure: { [mapper] button, maxWidth, padding in
                 mapper.buttonAttachment(button: button, isBlockPill: true, maxWidth: maxWidth,
                                         horizontalPadding: padding)

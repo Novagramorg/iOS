@@ -114,7 +114,7 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
     override public func asyncLayoutContent() -> (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))) {
         let interactiveImageLayout = self.interactiveImageNode.asyncLayout()
         
-        return { item, layoutConstants, preparePosition, selection, constrainedSize, _ in
+        return { [weak self] item, layoutConstants, preparePosition, selection, constrainedSize, _ in
             var selectedMedia: EngineRawMedia?
             var selectedMediaIndex: Int?
             var extendedMedia: TelegramExtendedMedia?

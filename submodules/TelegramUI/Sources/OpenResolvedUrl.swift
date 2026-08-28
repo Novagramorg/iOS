@@ -606,7 +606,7 @@ func openResolvedUrlImpl(
             })
             dismissInput()
         case let .share(url, text, to):
-            let continueWithPeer: (PeerId, Int64?) -> Void = { peerId, threadId in
+            let continueWithPeer: (PeerId, Int64?) -> Void = { [navigationController] peerId, threadId in
                 let textInputState: ChatTextInputState?
                 if let text = text, !text.isEmpty {
                     if let url = url, !url.isEmpty {
@@ -1496,7 +1496,7 @@ func openResolvedUrlImpl(
                     return false
                 }
             }
-            |> deliverOnMainQueue).startStandalone(next: { exists in
+            |> deliverOnMainQueue).startStandalone(next: { [navigationController] exists in
                 if exists {
                     let storyContent = SingleStoryContentContextImpl(context: context, storyId: StoryId(peerId: peerId, id: id), readGlobally: true)
                     let _ = (storyContent.state

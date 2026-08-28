@@ -16,7 +16,7 @@ import SettingsUI
 import OpenSSLEncryptionProvider
 import AppLock
 import Intents
-import MobileCoreServices
+import UniformTypeIdentifiers
 import OverlayStatusController
 import PresentationDataUtils
 import ChatImportUI
@@ -622,9 +622,9 @@ public class ShareRootControllerImpl {
                         var canSendInHighQuality = false
                         if let inputItems = self?.getExtensionContext()?.inputItems, inputItems.count == 1, let item = inputItems[0] as? NSExtensionItem, let attachments = item.attachments {
                             for attachment in attachments {
-                                if attachment.hasItemConformingToTypeIdentifier(kUTTypeImage as String) {
+                                if attachment.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                                     canSendInHighQuality = true
-                                } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
+                                } else if attachment.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
                                 } else {
                                     canShareToStory = false
                                 }
@@ -648,9 +648,9 @@ public class ShareRootControllerImpl {
                                     
                                     for attachment in attachments {
                                         let fileIndex = index
-                                        if attachment.hasItemConformingToTypeIdentifier(kUTTypeImage as String) {
+                                        if attachment.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                                             dispatchGroup.enter()
-                                            attachment.loadFileRepresentation(forTypeIdentifier: kUTTypeImage as String, completionHandler: { url, _ in
+                                            attachment.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier, completionHandler: { url, _ in
                                                 if let url, let imageData = try? Data(contentsOf: url) {
                                                     let filePath = storiesPath + "/\(fileIndex).jpg"
                                                     try? FileManager.default.removeItem(atPath: filePath)
@@ -663,9 +663,9 @@ public class ShareRootControllerImpl {
                                                 }
                                                 dispatchGroup.leave()
                                             })
-                                        } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
+                                        } else if attachment.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
                                             dispatchGroup.enter()
-                                            attachment.loadFileRepresentation(forTypeIdentifier: kUTTypeMovie as String, completionHandler: { url, _ in
+                                            attachment.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier, completionHandler: { url, _ in
                                                 if let url {
                                                     let filePath = storiesPath + "/\(fileIndex).mp4"
                                                     try? FileManager.default.removeItem(atPath: filePath)
@@ -720,8 +720,8 @@ public class ShareRootControllerImpl {
                     
                     if let strongSelf = self, let inputItems = strongSelf.getExtensionContext()?.inputItems, inputItems.count == 1, let item = inputItems[0] as? NSExtensionItem, let attachments = item.attachments {
                         for attachment in attachments {
-                            if attachment.hasItemConformingToTypeIdentifier(kUTTypeFileURL as String) {
-                                attachment.loadItem(forTypeIdentifier: kUTTypeFileURL as String, completionHandler: { result, error in
+                            if attachment.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                                attachment.loadItem(forTypeIdentifier: UTType.fileURL.identifier, completionHandler: { result, error in
                                     Queue.mainQueue().async {
                                         guard let url = result as? URL, url.isFileURL else {
                                             beginShare()
@@ -990,7 +990,7 @@ private func attemptChatImport(
         initialPresentationDataAndSettings,
         networkInitializationArguments
     )
-    |> deliverOnMainQueue).start(next: { context in
+    |> deliverOnMainQueue).start(next: { [mainWindow] context in
         context.account.resetStateManagement()
         context.account.shouldBeServiceTaskMaster.set(.single(.now))
         

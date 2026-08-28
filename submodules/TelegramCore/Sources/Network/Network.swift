@@ -1,4 +1,5 @@
 import Foundation
+import WebProxyTransport
 import Postbox
 import TelegramApi
 import SwiftSignalKit
@@ -525,6 +526,17 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                     }
                 }
             }
+
+            let baseTcpConnectionInterfaceFactory = context.makeTcpConnectionInterface
+            let isAppExtension = Bundle.main.bundlePath.hasSuffix(".appex")
+            let initialActiveServer = proxySettings?.effectiveActiveServer
+            let initialWebProxyConfiguration = initialActiveServer?.webProxyConfiguration
+            WebProxyTransport.shared.apply(configuration: isAppExtension ? nil : initialWebProxyConfiguration)
+            if initialActiveServer?.isWebProxy == true {
+                context.makeTcpConnectionInterface = { delegate, delegateQueue in
+                    return WebProxyTransport.shared.makeConnectionInterface(delegate: delegate, delegateQueue: delegateQueue)
+                }
+            }
             
             let seedAddressList: [Int: [String]]
             
@@ -653,7 +665,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 useExperimentalFeatures = false
             }
             
-            let network = Network(queue: queue, datacenterId: datacenterId, context: context, mtProto: mtProto, requestService: requestService, connectionStatusDelegate: connectionStatusDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures)
+            let network = Network(queue: queue, datacenterId: datacenterId, context: context, mtProto: mtProto, requestService: requestService, connectionStatusDelegate: connectionStatusDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension)
             
             if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {
                 network.updateNetworkSpeedLimitedEventNotifyInterval(value: notifyInterval)
@@ -813,6 +825,8 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     let basePath: String
     private let connectionStatusDelegate: MTProtoConnectionStatusDelegate
     private let useRequestTimeoutTimers: Bool
+    private let baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?
+    private let isAppExtension: Bool
     public let useBetaFeatures: Bool
     public let useExperimentalFeatures: Bool
     
@@ -864,7 +878,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         return "Network context: \(self.context)"
     }
     
-    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, mtProto: MTProto, requestService: MTRequestMessageService, connectionStatusDelegate: MTProtoConnectionStatusDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool) {
+    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, mtProto: MTProto, requestService: MTRequestMessageService, connectionStatusDelegate: MTProtoConnectionStatusDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool) {
         self.encryptionProvider = encryptionProvider
         
         self.queue = queue
@@ -878,6 +892,8 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         self.appDataDisposable = appDataDisposable
         self.basePath = basePath
         self.useRequestTimeoutTimers = useRequestTimeoutTimers
+        self.baseTcpConnectionInterfaceFactory = baseTcpConnectionInterfaceFactory
+        self.isAppExtension = isAppExtension
         self.useBetaFeatures = useBetaFeatures
         self.useExperimentalFeatures = useExperimentalFeatures
         
@@ -971,6 +987,35 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
                 }
             }
         }))
+    }
+
+    func updateProxySettings(_ activeServer: ProxyServerSettings?) {
+        let webConfiguration = activeServer?.webProxyConfiguration
+        WebProxyTransport.shared.apply(configuration: self.isAppExtension ? nil : webConfiguration)
+        if activeServer?.isWebProxy == true {
+            self.context.makeTcpConnectionInterface = { delegate, delegateQueue in
+                return WebProxyTransport.shared.makeConnectionInterface(delegate: delegate, delegateQueue: delegateQueue)
+            }
+        } else {
+            self.context.makeTcpConnectionInterface = self.baseTcpConnectionInterfaceFactory
+        }
+
+        let updated = activeServer?.mtProxySettings
+        self.context.updateApiEnvironment { environment in
+            let current = environment?.socksProxySettings
+            let updateNetwork: Bool
+            if let current, let updated {
+                updateNetwork = !current.isEqual(updated)
+            } else {
+                updateNetwork = (current != nil) != (updated != nil)
+            }
+            if updateNetwork {
+                self.dropConnectionStatus()
+                return environment?.withUpdatedSocksProxySettings(updated)
+            } else {
+                return nil
+            }
+        }
     }
     
     deinit {
@@ -1085,7 +1130,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     
     public func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
         let requestService = self.requestService
-        return Signal { subscriber in
+        return Signal { [requestService] subscriber in
             let request = MTRequest()
             
             request.setPayload(data.1.makeData() as Data, metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag), shortMetadata: WrappedRequestShortMetadata(shortMetadata: WrappedShortFunctionDescription(data.0)), responseParser: { response in
@@ -1157,7 +1202,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     
     public func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
         let requestService = self.requestService
-        return Signal { subscriber in
+        return Signal { [requestService] subscriber in
             let request = MTRequest()
             
             request.setPayload(data.1.makeData() as Data, metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag), shortMetadata: WrappedRequestShortMetadata(shortMetadata: WrappedShortFunctionDescription(data.0)), responseParser: { response in

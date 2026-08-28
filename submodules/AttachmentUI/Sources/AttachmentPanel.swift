@@ -1361,7 +1361,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                     captionIsAboveMedia |> take(1),
                     ChatSendMessageContextScreen.initialData(context: strongSelf.context, currentMessageEffectId: nil)
                 )
-                |> deliverOnMainQueue).start(next: { [weak strongSelf] _, captionIsAboveMedia, initialData in
+                |> deliverOnMainQueue).start(next: { [weak strongSelf, textInputPanelNode] _, captionIsAboveMedia, initialData in
                     guard let strongSelf else {
                         return
                     }
@@ -2386,7 +2386,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         self.animatingTransition = true
         self.dismissed = dismissed
 
-        let action = {
+        let action = { [self, inputNodeSnapshotView] in
             guard let menuIconSnapshotView = inputTransition.menuIconNode.view.snapshotView(afterScreenUpdates: false), let menuTextSnapshotView = inputTransition.menuTextNode.view.snapshotView(afterScreenUpdates: false) else {
                 return
             }

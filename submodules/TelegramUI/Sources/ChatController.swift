@@ -6,7 +6,7 @@ import Display
 import AsyncDisplayKit
 import TelegramCore
 import SafariServices
-import MobileCoreServices
+import UniformTypeIdentifiers
 import Intents
 import LegacyComponents
 import TelegramPresentationData
@@ -9487,7 +9487,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func openPeerMention(_ name: String, navigation: ChatControllerInteractionNavigateToPeer = .default, sourceMessageId: MessageId? = nil, progress: Promise<Bool>? = nil) {
-        let _ = self.presentVoiceMessageDiscardAlert(action: {
+        let _ = self.presentVoiceMessageDiscardAlert(action: { [weak self] in
+            guard let self else {
+                return
+            }
+
             let disposable: MetaDisposable
             if let resolvePeerByNameDisposable = self.resolvePeerByNameDisposable {
                 disposable = resolvePeerByNameDisposable
@@ -9556,7 +9560,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func openHashtag(_ hashtag: String, peerName: String?) {
-        let _ = self.presentVoiceMessageDiscardAlert(action: {
+        let _ = self.presentVoiceMessageDiscardAlert(action: { [weak self] in
+            guard let self else {
+                return
+            }
+
             if self.resolvePeerByNameDisposable == nil {
                 self.resolvePeerByNameDisposable = MetaDisposable()
             }
@@ -9949,7 +9957,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     @available(iOSApplicationExtension 11.0, iOS 11.0, *)
     public func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
-        return session.hasItemsConforming(toTypeIdentifiers: [kUTTypeImage as String])
+        return session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
     }
     
     @available(iOSApplicationExtension 11.0, iOS 11.0, *)
@@ -10742,7 +10750,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 discard = true
             }
             alertAction?()
-            Queue.mainQueue().after(delay ? 0.2 : 0.0) {
+            Queue.mainQueue().after(delay ? 0.2 : 0.0) { [weak self] in
+                guard let self else {
+                    return
+                }
+
                 let alertController = textAlertController(
                     context: self.context,
                     updatedPresentationData: self.updatedPresentationData,

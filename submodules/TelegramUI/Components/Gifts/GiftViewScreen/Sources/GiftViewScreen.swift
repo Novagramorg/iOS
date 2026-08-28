@@ -676,7 +676,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.dismissAllTooltips()
             
             let context = self.context
-            let action = {
+            let action = { [navigationController] in
                 if gifts {
                     let profileGifts = ProfileGiftsContext(account: context.account, peerId: peer.id)
                     let _ = (profileGifts.state
@@ -941,7 +941,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             
             if let navigationController = controller.navigationController as? NavigationController {
-                Queue.mainQueue().after(0.5) {
+                Queue.mainQueue().after(0.5) { [navigationController] in
                     if let lastController = navigationController.viewControllers.last as? ViewController, let animationFile {
                         let resultController = UndoOverlayController(
                             presentationData: presentationData,
@@ -1239,7 +1239,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let _ = (self.starsTopUpOptionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
-                |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                |> deliverOnMainQueue).startStandalone(next: { [weak self, starsContext] options in
                     guard let self, let controller = self.getController() else {
                         return
                     }
@@ -1952,7 +1952,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let strings = presentationData.strings
                 
                 if let reference = arguments.reference, case .unique = arguments.gift, let togglePinnedToTop = controller.togglePinnedToTop, let pinnedToTop = arguments.pinnedToTop {
-                    items.append(.action(ContextMenuActionItem(text: pinnedToTop ? strings.PeerInfo_Gifts_Context_Unpin : strings.PeerInfo_Gifts_Context_Pin , icon: { theme in generateTintedImage(image: UIImage(bundleImageName: pinnedToTop ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
+                    items.append(.action(ContextMenuActionItem(text: pinnedToTop ? strings.PeerInfo_Gifts_Context_Unpin : strings.PeerInfo_Gifts_Context_Pin , icon: { theme in generateTintedImage(image: UIImage(bundleImageName: pinnedToTop ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.contextMenu.primaryColor) }, action: { [weak self, weak controller] c, f in
                         c?.dismiss(completion: { [weak self, weak controller] in
                             guard let self, let controller else {
                                 return
@@ -2318,7 +2318,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 controllers.append(chatController)
                                 navigationController.setViewControllers(controllers, animated: true)
                                 
-                                Queue.mainQueue().after(0.5, {
+                                Queue.mainQueue().after(0.5, { [navigationController] in
                                     let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
                                     |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
                                         if let peer, let lastController = navigationController?.viewControllers.last as? ViewController, let animationFile {
@@ -2429,7 +2429,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
                         
-            let proceed: (Int64?) -> Void = { [weak self] formId in
+            let proceed: (Int64?) -> Void = { [weak self, starsContext] formId in
                 guard let self, let controller = self.getController() as? GiftViewScreen else {
                     return
                 }
@@ -2525,7 +2525,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     let _ = (self.starsTopUpOptionsPromise.get()
                     |> filter { $0 != nil }
                     |> take(1)
-                    |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self, starsContext] options in
                         guard let self, let controller = self.getController() else {
                             return
                         }
@@ -2605,7 +2605,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
             let context = self.context
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let proceed: () -> Void = { [weak self, weak starsContext] in
+            let proceed: () -> Void = { [weak self, weak starsContext, controller] in
                 guard let self else {
                     return
                 }
@@ -2693,7 +2693,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let _ = (self.starsTopUpOptionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
-                |> deliverOnMainQueue).startStandalone(next: { [weak self, weak controller] options in
+                |> deliverOnMainQueue).startStandalone(next: { [weak self, weak controller, starsContext] options in
                     guard let self, let controller else {
                         return
                     }
@@ -2741,7 +2741,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 guard let self, let peer else {
                     return
                 }
-                let buyController = self.context.sharedContext.makeStarsWithdrawalScreen(context: self.context, subject: .starGiftOffer(peer: peer, gift: uniqueGift, completion: { [weak self] amount, duration in
+                let buyController = self.context.sharedContext.makeStarsWithdrawalScreen(context: self.context, subject: .starGiftOffer(peer: peer, gift: uniqueGift, completion: { [weak self, controller] amount, duration in
                     guard let self else {
                         return
                     }
@@ -2806,7 +2806,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 let _ = (self.starsTopUpOptionsPromise.get()
                  |> filter { $0 != nil }
                  |> take(1)
-                 |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
+                 |> deliverOnMainQueue).startStandalone(next: { [weak self, starsContext] options in
                     guard let self, let controller = self.getController() else {
                         return
                     }
@@ -3082,9 +3082,11 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
 
             let giftMessagePeer: EnginePeer?
-            if giftMessageText?.isEmpty == false && !giftMessageNameHidden {
+            if giftMessageText?.isEmpty == false {
                 if let messageGiftSenderPeerId = subject.messageGiftSenderPeerId {
                     giftMessagePeer = state.peerMap[messageGiftSenderPeerId]
+                } else if case let .profileGift(_, gift) = subject, let fromPeer = gift.fromPeer {
+                    giftMessagePeer = fromPeer
                 } else if let fromPeerId = subject.arguments?.fromPeerId {
                     giftMessagePeer = state.peerMap[fromPeerId]
                 } else if case let .message(message) = subject, !message.flags.contains(.Incoming) {
@@ -4222,7 +4224,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     context: component.context,
                                     theme: theme,
                                     peer: giftMessagePeer,
-                                    overrideImage: giftMessageNameHidden ? .anonymousSavedMessagesIcon(isColored: true) : nil
+                                    overrideImage: nil
                                 ),
                                 environment: {},
                                 availableSize: avatarSize,

@@ -20,6 +20,7 @@ let package = Package(
         .package(name: "Postbox", path: "../Postbox"),
         .package(name: "SSignalKit", path: "../SSignalKit"),
         .package(name: "MtProtoKit", path: "../MtProtoKit"),
+        .package(name: "WebProxyTransport", path: "../WebProxyTransport"),
         .package(name: "TelegramApi", path: "../TelegramApi"),
         .package(name: "CryptoUtils", path: "../CryptoUtils"),
         .package(name: "NetworkLogging", path: "../NetworkLogging"),
@@ -36,6 +37,7 @@ let package = Package(
             dependencies: [.product(name: "Postbox", package: "Postbox", condition: nil),
                             .product(name: "SwiftSignalKit", package: "SSignalKit", condition: nil),
                             .product(name: "MtProtoKit", package: "MtProtoKit", condition: nil),
+                           .product(name: "WebProxyTransport", package: "WebProxyTransport", condition: nil),
                            .product(name: "TelegramApi", package: "TelegramApi", condition: nil),
                            .product(name: "CryptoUtils", package: "CryptoUtils", condition: nil),
                            .product(name: "NetworkLogging", package: "NetworkLogging", condition: nil),
@@ -47,5 +49,10 @@ let package = Package(
                            .product(name: "EncryptionProvider", package: "EncryptionProvider", condition: nil)],
             path: "Sources",
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]),
+        .testTarget(
+            name: "TelegramCoreTests",
+            dependencies: ["TelegramCore"],
+            path: "Tests"
+        ),
     ]
 )

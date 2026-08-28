@@ -982,7 +982,7 @@ public final class ChatMessageAttachedContentNode: ASDisplayNode {
                         }
                     }
                     
-                    return (actualSize, { animation, synchronousLoads, applyInfo in
+                    return (actualSize, { [controllerInteraction] animation, synchronousLoads, applyInfo in
                         guard let self else {
                             return
                         }

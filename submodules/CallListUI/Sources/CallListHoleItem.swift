@@ -89,7 +89,7 @@ class CallListHoleItemNode: ListViewItemNode {
     func asyncLayout() -> (_ item: CallListHoleItem, _ params: ListViewItemLayoutParams, _ first: Bool, _ last: Bool) -> (ListViewItemNodeLayout, () -> Void) {
         let labelNodeLayout = TextNode.asyncLayout(self.labelNode)
         
-        return { item, params, first, last in
+        return { [weak self] item, params, first, last in
             let baseWidth = params.width - params.leftInset - params.rightInset
             
             let (labelLayout, labelApply) = labelNodeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: "", font: titleFont, textColor: item.theme.chatList.messageTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: baseWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))

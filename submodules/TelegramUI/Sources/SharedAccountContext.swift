@@ -840,7 +840,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         })
         
         if let mainWindow = mainWindow, applicationBindings.isMainApp {
-            let callManager = PresentationCallManagerImpl(accountManager: self.accountManager, getDeviceAccessData: {
+            let callManager = PresentationCallManagerImpl(accountManager: self.accountManager, getDeviceAccessData: { [self] in
                 return (self.currentPresentationData.with { $0 }, { [weak self] c, a in
                     self?.presentGlobalController(c, a)
                 }, {
@@ -2667,6 +2667,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 subject: nil,
                 contactsPeerIds: Set(),
                 animatedEmojiStickers: [:],
+                premiumGiftStickers: context.premiumGiftStickersValue,
+                tonGiftStickers: context.tonGiftStickersValue,
                 forcedResourceStatus: forcedResourceStatus,
                 availableReactions: availableReactions,
                 availableMessageEffects: nil,
@@ -3222,7 +3224,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 settingsPromise = Promise()
                 settingsPromise.set(.single(nil) |> then(context.engine.privacy.requestAccountPrivacySettings() |> map(Optional.init)))
             }
-            let birthdayController = BirthdayPickerScreen(context: context, settings: settingsPromise.get(), openSettings: {
+            let birthdayController = BirthdayPickerScreen(context: context, settings: settingsPromise.get(), openSettings: { [controller] in
                 context.sharedContext.makeBirthdayPrivacyController(context: context, settings: settingsPromise, openedFromBirthdayScreen: true, present: { [weak controller] c in
                     controller?.push(c)
                 })
@@ -3413,7 +3415,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 settingsPromise = Promise()
                 settingsPromise.set(.single(nil) |> then(context.engine.privacy.requestAccountPrivacySettings() |> map(Optional.init)))
             }
-            let birthdayController = BirthdayPickerScreen(context: context, settings: settingsPromise.get(), openSettings: {
+            let birthdayController = BirthdayPickerScreen(context: context, settings: settingsPromise.get(), openSettings: { [controller] in
                 context.sharedContext.makeBirthdayPrivacyController(context: context, settings: settingsPromise, openedFromBirthdayScreen: true, present: { [weak controller] c in
                     controller?.push(c)
                 })
@@ -3433,7 +3435,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             }
             let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
             if currentTime > canExportDate {
-                let alertController = giftWithdrawAlertController(context: context, gift: gift, commit: {
+                let alertController = giftWithdrawAlertController(context: context, gift: gift, commit: { [controller] in
                     let _ = (context.engine.payments.checkStarGiftWithdrawalAvailability(reference: reference)
                     |> deliverOnMainQueue).start(error: { [weak controller] error in
                         switch error {

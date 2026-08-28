@@ -15,8 +15,7 @@ final class ChecklistInteractionTests: XCTestCase {
 
     func test_setList_checklist_seedsUncheckedState() {
         let v = canvas([ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Buy milk")])])
-        v.anchor = v.boxes[0].textStart
-        v.head = v.boxes[0].textStart + 1
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[0].textStart + 1)
         v.setList(.checklist)
         let m = (v.boxes[0] as! BlockBox).listMembership
         XCTAssertEqual(m?.marker, .checklist)
@@ -25,7 +24,7 @@ final class ChecklistInteractionTests: XCTestCase {
 
     func test_setList_checklist_preservesCheckedState_onReapply() {
         let v = canvas([ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Buy milk")])])
-        v.anchor = v.boxes[0].textStart; v.head = v.boxes[0].textStart + 1
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[0].textStart + 1)
         v.setList(.checklist)
         (v.boxes[0] as! BlockBox).listMembership = ListMembership(marker: .checklist, level: 0, checked: true)
         v.setList(.checklist)   // re-apply must NOT uncheck
@@ -120,7 +119,7 @@ extension ChecklistInteractionTests {
         let v = canvas([ParagraphBlock(id: BlockID("a"),
                                        list: ListMembership(marker: .checklist, level: 0, checked: true),
                                        runs: [TextRun(text: "Task")])])
-        v.anchor = v.boxes[0].textStart; v.head = v.boxes[0].textStart
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[0].textStart)
         v.indent()
         XCTAssertEqual((v.boxes[0] as! BlockBox).listMembership?.level, 1)
         XCTAssertEqual((v.boxes[0] as! BlockBox).listMembership?.checked, true, "indent must preserve checked")
@@ -234,7 +233,7 @@ extension ChecklistInteractionTests {
                            runs: [TextRun(text: "Task")])])
         v.syncChecklistMarkerViews()
         XCTAssertEqual(v.checklistMarkerViews.count, 1)
-        v.anchor = v.boxes[0].textStart; v.head = v.boxes[0].textStart + 1
+        v.setSelectionForTesting(anchor: v.boxes[0].textStart, head: v.boxes[0].textStart + 1)
         v.setList(nil)
         v.syncChecklistMarkerViews()
         XCTAssertEqual(v.checklistMarkerViews.count, 0)

@@ -105,4 +105,31 @@ final class UnsupportedContentPillViewTests: XCTestCase {
         view.update(layout: layout, colors: testColors, strings: testStrings, size: size, wallpaperBackgroundNode: nil, animation: .None)
         XCTAssertEqual(view.subviews.count, countAfterFirst)
     }
+
+    /// A touch inside the button must hit-test to the BUTTON, not to the label sitting on top of
+    /// it. Telegram's bubble-wide tap recognizer bails out of arbitration only when the hit-test
+    /// result *is* a `UIButton` (`TapLongTapOrDoubleTapGestureRecognizer.touchesBegan`); with an
+    /// interactive label on top the recognizer instead claims the touch and cancels the button's
+    /// tracking, so `touchUpInside` never fires and the pill reads as dead.
+    func testHitTestInsideTheButtonResolvesToTheButton() {
+        let (view, layout, size) = makeUpdatedPill()
+
+        let buttonCentre = CGPoint(x: size.width - pillContentInsets.right - layout.buttonSize.width / 2.0, y: size.height / 2.0)
+        let hit = view.hitTest(buttonCentre, with: nil)
+        XCTAssertTrue(hit is UIButton, "expected the button, got \(String(describing: hit.map { type(of: $0) }))")
+    }
+
+    /// `actionFrame(in:)` is what a host that arbitrates taps from the LAYOUT alone (no view) tests
+    /// against, so it must be the same rect the view positions its button at.
+    func testActionFrameFromTheLayoutMatchesWhereTheViewPutsTheButton() {
+        let (view, layout, size) = makeUpdatedPill()
+
+        guard let control = view.subviews.compactMap({ $0 as? UIControl }).first else {
+            return XCTFail("the pill has no UIControl")
+        }
+        XCTAssertEqual(control.frame, layout.actionFrame(in: size))
+        // And the two tap-arbitration entry points agree with each other.
+        let frame = layout.actionFrame(in: size)
+        XCTAssertTrue(view.actionContains(CGPoint(x: frame.midX, y: frame.midY)))
+    }
 }

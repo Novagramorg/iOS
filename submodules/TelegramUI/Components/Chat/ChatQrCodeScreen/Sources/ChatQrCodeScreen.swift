@@ -389,7 +389,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
         super.selected()
         
         if let animatedStickerNode = self.animatedStickerNode {
-            Queue.mainQueue().after(0.1) {
+            Queue.mainQueue().after(0.1) { [animatedStickerNode, weak self] in
                 if !wasSelected {
                     animatedStickerNode.seekTo(.frameIndex(0))
                     animatedStickerNode.play(firstFrame: false, fromIndex: nil)
@@ -1201,7 +1201,11 @@ private class ChatQrCodeScreenNode: ViewControllerTracingNode, ASScrollViewDeleg
             let themeCrossfadeDuration: Double = 0.3
             let themeCrossfadeDelay: Double = 0.25
             
-            Queue.mainQueue().after(themeCrossfadeDelay) {
+            Queue.mainQueue().after(themeCrossfadeDelay) { [weak self] in
+                guard let self else {
+                    return
+                }
+
                 self.switchThemeIconAnimator = DisplayLinkAnimator(duration: themeCrossfadeDuration * UIView.animationDurationFactor(), from: 0.0, to: 1.0, update: { [weak self] value in
                     self?.animationNode.setColors(colors: interpolateColors(from: previousIconColors, to: newIconColors, fraction: value))
                 }, completion: { [weak self] in

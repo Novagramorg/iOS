@@ -3506,7 +3506,7 @@ final class VideoChatScreenComponent: Component {
                     }
                     transition.setFrame(view: inputMediaNode.view, frame: targetFrame, completion: { [weak inputMediaNode] _ in
                         if let inputMediaNode {
-                            Queue.mainQueue().after(0.2) {
+                            Queue.mainQueue().after(0.2) { [inputMediaNode] in
                                 inputMediaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak inputMediaNode] _ in
                                     inputMediaNode?.view.removeFromSuperview()
                                 })
@@ -3697,7 +3697,7 @@ final class VideoChatScreenComponent: Component {
                     }
                     transition.setFrame(view: inputMediaNode.view, frame: targetFrame, completion: { [weak inputMediaNode] _ in
                         if let inputMediaNode {
-                            Queue.mainQueue().after(0.2) {
+                            Queue.mainQueue().after(0.2) { [inputMediaNode] in
                                 inputMediaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak inputMediaNode] _ in
                                     inputMediaNode?.view.removeFromSuperview()
                                 })

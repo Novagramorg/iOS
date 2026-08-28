@@ -269,6 +269,13 @@ func proxyServerSettingsController(sharedContext: SharedAccountContext, context:
             case let .mtp(secret):
                 currentSecret = hexString(secret)
                 currentMode = .mtp
+            case let .web(secret):
+                // ProxyServerSettingsControllerMode has no .web; a web proxy is secret-based, so it
+                // displays as the MTProto mode. WARNING: saving from this editor therefore REWRITES a
+                // web proxy as an mtp proxy. Adding a real .web mode is the proper fix.
+                // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                currentSecret = hexString(secret)
+                currentMode = .mtp
         }
     } else {
         if let proxy = parseProxyUrl(sharedContext: sharedContext, url: UIPasteboard.general.string ?? "") {
@@ -310,6 +317,10 @@ func proxyServerSettingsController(sharedContext: SharedAccountContext, context:
                     case let .mtp(secret):
                         state.mode = .mtp
                         state.secret = hexString(secret)
+                    case .web:
+                        // Unreachable in practice: parseProxyUrl only yields .socks5 / .mtp.
+                        // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                        break
                 }
                 return state
             }

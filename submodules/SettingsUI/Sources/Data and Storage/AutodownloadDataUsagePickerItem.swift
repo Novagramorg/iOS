@@ -184,7 +184,7 @@ private final class AutodownloadDataUsagePickerItemNode: ListViewItemNode, ItemL
         let makeHighTextLayout = TextNode.asyncLayout(self.highTextNode)
         let makeCustomTextLayout = TextNode.asyncLayout(self.customTextNode)
         
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let contentSize: CGSize
             let insets: UIEdgeInsets
             let separatorHeight = UIScreenPixel
