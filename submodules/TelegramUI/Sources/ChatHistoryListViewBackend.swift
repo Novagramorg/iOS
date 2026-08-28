@@ -112,6 +112,14 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     var endedInteractiveDragging: (CGPoint) -> Void { get set }
     var didEndScrolling: ((Bool) -> Void)? { get set }
     var didEndScrollingWithOverscroll: (() -> Void)? { get set }
+    // Consulted once at each interactive release, with the release velocity, BEFORE the backend decides
+    // whether momentum follows; `true` releases the list as if the finger had come to rest, while an
+    // overscrolled release still springs back. Pre-existing on `ListViewImpl`
+    // (`Display/Source/ListView.swift:266`, and the chat list already installs one), so this is a
+    // widening of the contract rather than new behavior on that backend — nothing installs one here
+    // unless the CoreList backend is active. See `ChatControllerNode.dismissedInputByCurrentGesture`
+    // for the one predicate the chat supplies.
+    var shouldStopScrolling: ((CGFloat) -> Bool)? { get set }
     var updateFloatingHeaderOffset: ((CGFloat, ContainedViewLayoutTransition) -> Void)? { get set }
     var didScrollWithOffset: ((CGFloat, ContainedViewLayoutTransition, ListViewItemNode?, Bool) -> Void)? { get set }
     var addContentOffset: ((CGFloat, ListViewItemNode?) -> Void)? { get set }

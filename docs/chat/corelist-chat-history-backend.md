@@ -392,6 +392,57 @@ automated coverage; it was **manually verified working** (2026-07-28) on the Cor
 the only kind of evidence available for it. Before the fix the history visibly moved by roughly twice the
 finger's travel as the keyboard was dragged away.
 
+### The dismissing flick must not also fling (`shouldStopScrolling`)
+
+The same simultaneity that causes the double-offset above has a second consequence at the *release*.
+A downward flick over the history can end by dismissing the keyboard, and the list would then fling on
+its own momentum on top of that — two motions from one gesture.
+
+The two dismissals have separate owners and both are decided in **touch delivery**:
+
+- the system keyboard, in `Window1.panGestureEnded`'s `canDismiss` branch
+  (`Display/Source/WindowContent.swift`);
+- the entity keyboard (the input node), in `ChatControllerNode.panGestureEnded`'s.
+
+`WindowPanRecognizer` invokes its `began`/`moved`/`ended` closures inline from `touchesEnded(_:with:)`
+rather than through target/action, and touch delivery precedes gesture ACTION dispatch — which is where
+`PhysicsScrollEngine.handlePan(.ended)` → `startDeceleration()` → `launchFlight()` runs, and equally
+where `UIScrollView` calls `scrollViewWillEndDragging`. (This is the same ordering fact
+`PhysicsScrollEngine.noteTouchDown` relies on, documented at `PhysicsScrollEngine.swift:163`.) So the
+answer is already settled by the time the list asks for it, and the coordination can be a **pull**:
+
+- `ChatControllerNode.dismissedInputByCurrentGesture` combines the two halves. The entity-keyboard half
+  is a latch on the node itself; the system-keyboard half is `WindowHost.dismissedKeyboardByCurrentGesture`,
+  because `Window1` owns that gesture. Both are set at their dismissal and cleared when their recognizer
+  next sees a touch sequence begin.
+- `ChatControllerImpl.setupChatHistoryNode` installs that as `historyNode.shouldStopScrolling`, and the
+  backend forwards it to `CoreVirtualListView.shouldStopScrolling` →
+  `ScrollEngine.shouldStopScrollingOnRelease`, consulted once in `applyPanUpdate(.ended)`.
+
+Three things are load-bearing:
+
+- **It is not `dismissedInputByDragging`.** That flag (`ChatControllerNode.swift:1393`) asks the same
+  question but is derived in `containerLayoutUpdated`, i.e. from a completed layout pass — which happens
+  after the release, and for the system keyboard only once the dismissal has run its ~0.38s spring. It is
+  the right concept at the wrong time; using it would halt a flight that had already been playing.
+- **Suppression is a zero-velocity release, not a skipped one.** See the CoreList `CLAUDE.md`
+  scroll-engine seam: `.stop` still springs back from an overscrolled release, and it expires the
+  repeated-flick streak exactly as a slow release would.
+- **It is installed only under the CoreList backend.** `ListViewImpl` implements the identical hook and
+  would honour it, but this is a deliberate behaviour change on an experimental backend: today a
+  dismissing flick also flings the history, and the only thing that stops it is the snap-back at
+  `ChatControllerNode.swift:2461` — which needs the drag to have begun at the newest message
+  (`didInteractivelyDragFromTopOrigin`) and lands a keyboard animation late. Under the new predicate that
+  snap-back still runs, but it now springs from where the finger left the content rather than from
+  wherever a fling had carried it.
+
+`shouldStopScrolling` therefore joins the `ChatHistoryListViewBackend` contract as a member both
+backends implement honestly — `ListViewImpl` already had it (`Display/Source/ListView.swift:266`, and
+the chat list installs one of its own), so the contract widened without new behavior there.
+
+Covered by `CoreListDemoTests/ReleaseSuppressionTests` (6 tests) on the CoreList side. The chat-side
+wiring — that a real dismissing flick no longer flings — has no automated coverage.
+
 ### Gesture arbitration
 
 **`PhysicsScrollEngine` grants no gesture simultaneity to anything, and declares no failure

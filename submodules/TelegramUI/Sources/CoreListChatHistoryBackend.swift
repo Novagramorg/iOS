@@ -269,6 +269,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     var endedInteractiveDragging: (CGPoint) -> Void = { _ in }
     var didEndScrolling: ((Bool) -> Void)? = nil
     var didEndScrollingWithOverscroll: (() -> Void)? = nil
+    // Straight through to the scroll engine's own release hook — no state of ours in between, so the
+    // predicate is evaluated at the release rather than at some earlier moment we cached.
+    var shouldStopScrolling: ((CGFloat) -> Bool)? {
+        get { self.coreList.shouldStopScrolling }
+        set { self.coreList.shouldStopScrolling = newValue }
+    }
     var updateFloatingHeaderOffset: ((CGFloat, ContainedViewLayoutTransition) -> Void)? = nil
     var didScrollWithOffset: ((CGFloat, ContainedViewLayoutTransition, ListViewItemNode?, Bool) -> Void)? = nil
     var addContentOffset: ((CGFloat, ListViewItemNode?) -> Void)? = nil

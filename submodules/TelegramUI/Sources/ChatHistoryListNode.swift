@@ -5564,6 +5564,10 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         get { self.listView.didEndScrollingWithOverscroll }
         set { self.listView.didEndScrollingWithOverscroll = newValue }
     }
+    public var shouldStopScrolling: ((CGFloat) -> Bool)? {
+        get { self.listView.shouldStopScrolling }
+        set { self.listView.shouldStopScrolling = newValue }
+    }
     public var updateFloatingHeaderOffset: ((CGFloat, ContainedViewLayoutTransition) -> Void)? {
         get { self.listView.updateFloatingHeaderOffset }
         set { self.listView.updateFloatingHeaderOffset = newValue }

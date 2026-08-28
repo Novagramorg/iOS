@@ -359,6 +359,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var upperInputPositionBound: CGFloat?
     private var keyboardGestureBeginLocation: CGPoint?
     private var keyboardGestureAccessoryHeight: CGFloat?
+    // The entity-keyboard half of `dismissedInputByCurrentGesture` (the system-keyboard half lives on
+    // `WindowHost`, because `Window1` owns that gesture). Written only from the WindowPanRecognizer
+    // touch-delivery closures below: cleared when a touch sequence begins, set when that sequence's
+    // release dismisses the input node.
+    private var dismissedInputNodeByCurrentGestureValue = false
     
     private var derivedLayoutState: ChatControllerNodeDerivedLayoutState?
     
@@ -4505,6 +4510,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     private func panGestureBegan(location: CGPoint) {
+        // A new touch sequence: whatever the previous one did to the input node is no longer "current".
+        // Cleared BEFORE the guards below, so a sequence that never becomes an input-node drag still
+        // clears a `true` left by the one before it.
+        self.dismissedInputNodeByCurrentGestureValue = false
+        
         guard let derivedLayoutState = self.derivedLayoutState, let (validLayout, _) = self.validLayout else {
             return
         }
@@ -4570,6 +4580,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if canDismiss, let inputHeight = derivedLayoutState.inputNodeHeight, currentLocation.y + (self.keyboardGestureAccessoryHeight ?? 0.0) > validLayout.size.height - inputHeight {
+            // This release spent the finger's downward motion on the entity keyboard. Published for the
+            // rest of the touch sequence so the history list — dragged by the SAME finger, and told of
+            // its own release later, in gesture action dispatch — can decline to also fling.
+            self.dismissedInputNodeByCurrentGestureValue = true
             self.upperInputPositionBound = nil
             self.dismissInput()
         } else {
@@ -4578,7 +4592,23 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
     
+    /// Whether the touch sequence currently being delivered has already had its downward motion claimed
+    /// by an interactive input dismissal — the entity keyboard (this node's own `WindowPanRecognizer`)
+    /// or the system keyboard (`Window1`'s).
+    ///
+    /// Both dismissals are decided in touch DELIVERY, which precedes the gesture action dispatch where a
+    /// scroll backend reports its release, so this is already settled by the time the history list asks.
+    /// It is NOT the same question as `dismissedInputByDragging` in `containerLayoutUpdated`: that one is
+    /// derived from a completed layout pass, which happens after the release and would answer too late.
+    var dismissedInputByCurrentGesture: Bool {
+        if self.dismissedInputNodeByCurrentGestureValue {
+            return true
+        }
+        return self.view.windowHost?.dismissedKeyboardByCurrentGesture ?? false
+    }
+    
     func cancelInteractiveKeyboardGestures() {
+        self.dismissedInputNodeByCurrentGestureValue = false
         self.panRecognizer?.isEnabled = false
         self.panRecognizer?.isEnabled = true
         

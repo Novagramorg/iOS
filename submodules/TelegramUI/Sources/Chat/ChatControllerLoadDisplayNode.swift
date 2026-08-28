@@ -5628,6 +5628,25 @@ extension ChatControllerImpl {
             return false
         }
         
+        // A flick that dismisses the keyboard (or the entity keyboard) is spent on that dismissal; the
+        // history must not also fling. Both dismissals are decided during touch delivery, so by the time
+        // this predicate is consulted — at the backend's release, in gesture action dispatch — the answer
+        // is already known. See `ChatControllerNode.dismissedInputByCurrentGesture`.
+        //
+        // Installed only for the CoreList backend. `ListViewImpl` has the same hook and would honour it
+        // identically, but that is the shipping list and this is a deliberate behaviour change: today a
+        // dismissing flick also flings the history, and the only thing that stops it is the snap-back at
+        // `ChatControllerNode.containerLayoutUpdated` — which needs the drag to have begun at the newest
+        // message, and lands a keyboard-animation later.
+        if self.context.sharedContext.immediateExperimentalUISettings.coreListChatBackend {
+            historyNode.shouldStopScrolling = { [weak self] _ in
+                guard let self, self.isNodeLoaded else {
+                    return false
+                }
+                return self.chatDisplayNode.dismissedInputByCurrentGesture
+            }
+        }
+        
         historyNode.beganDragging = { [weak self] in
             guard let self else {
                 return
