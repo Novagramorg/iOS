@@ -417,7 +417,7 @@ public final class WalletTransactionItemComponent: Component {
             self.setCustomContentHidden(true)
 
             let isDeployContract = transaction.kind == .deployContract
-            let subtitleText: String
+            var subtitleText: String
             let formattedAmountValue: Int64
             let showAmountPlus: Bool
             var amountColor: UIColor
@@ -481,6 +481,12 @@ public final class WalletTransactionItemComponent: Component {
             if isPending {
                 amountColor = component.theme.list.itemSecondaryTextColor
                 amountIconColor = component.theme.list.itemSecondaryTextColor
+            }
+            if transaction.status == .failed {
+                //TODO:localize
+                subtitleText = "Failed"
+                amountColor = component.theme.list.itemDestructiveColor
+                amountIconColor = component.theme.list.itemDestructiveColor
             }
 
             let avatarSize = CGSize(width: 40.0, height: 40.0)
@@ -671,14 +677,20 @@ public final class WalletTransactionItemComponent: Component {
                 textAvailableWidth - amountContentWidth - (displaysAmount ? titleToAmountSpacing : 0.0)
             )
 
+            let peerTitle: String
+            switch transaction.peer {
+            case let .user(_, displayName):
+                peerTitle = displayName
+            case let .address(address):
+                peerTitle = walletTransactionCounterparty(address)
+            case .unsupported:
+                peerTitle = walletTransactionCounterparty(nil)
+            }
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: isDeployContract
-                            ? walletTransactionCounterparty(transaction.counterparty)
-                            : (transaction.counterpartyName
-                                ?? walletTransactionCounterparty(transaction.counterparty)),
+                        string: peerTitle,
                         font: Font.semibold(17.0),
                         textColor: component.theme.list.itemPrimaryTextColor
                     )),

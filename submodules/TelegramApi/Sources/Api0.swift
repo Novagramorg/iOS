@@ -25,6 +25,7 @@ public enum Api {
     public enum updates {}
     public enum upload {}
     public enum users {}
+    public enum wallet {}
     public enum functions {
         public enum account {}
         public enum aicompose {}
@@ -52,6 +53,7 @@ public enum Api {
         public enum updates {}
         public enum upload {}
         public enum users {}
+        public enum wallet {}
     }
 }
 
@@ -1340,6 +1342,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[88680979] = { return Api.Update.parse_updateUserPhone($0) }
     dict[-440534818] = { return Api.Update.parse_updateUserStatus($0) }
     dict[706199388] = { return Api.Update.parse_updateUserTyping($0) }
+    dict[1791226538] = { return Api.Update.parse_updateWalletState($0) }
     dict[335872721] = { return Api.Update.parse_updateWebBrowserException($0) }
     dict[-1013306658] = { return Api.Update.parse_updateWebBrowserSettings($0) }
     dict[2139689491] = { return Api.Update.parse_updateWebPage($0) }
@@ -1356,7 +1359,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1020666860] = { return Api.UrlAuthResult.parse_urlAuthResultRequest($0) }
     dict[-1313289085] = { return Api.User.parse_user($0) }
     dict[-742634630] = { return Api.User.parse_userEmpty($0) }
-    dict[114026053] = { return Api.UserFull.parse_userFull($0) }
+    dict[2145859780] = { return Api.UserFull.parse_userFull($0) }
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
     dict[1326562017] = { return Api.UserProfilePhoto.parse_userProfilePhotoEmpty($0) }
     dict[164646985] = { return Api.UserStatus.parse_userStatusEmpty($0) }
@@ -1372,6 +1375,13 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1539849235] = { return Api.WallPaper.parse_wallPaper($0) }
     dict[-528465642] = { return Api.WallPaper.parse_wallPaperNoFile($0) }
     dict[925826256] = { return Api.WallPaperSettings.parse_wallPaperSettings($0) }
+    dict[-1782238101] = { return Api.WalletState.parse_walletState($0) }
+    dict[-1665551636] = { return Api.WalletState.parse_walletStateEmpty($0) }
+    dict[1872332449] = { return Api.WalletTransaction.parse_walletTransaction($0) }
+    dict[2104446653] = { return Api.WalletTransactionPeer.parse_walletTransactionPeerAddress($0) }
+    dict[1921772890] = { return Api.WalletTransactionPeer.parse_walletTransactionPeerUnsupported($0) }
+    dict[-645113722] = { return Api.WalletTransactionPeer.parse_walletTransactionPeerUser($0) }
+    dict[484442376] = { return Api.WalletUserAddress.parse_walletUserAddress($0) }
     dict[-1493633966] = { return Api.WebAuthorization.parse_webAuthorization($0) }
     dict[475467473] = { return Api.WebDocument.parse_webDocument($0) }
     dict[-104284986] = { return Api.WebDocument.parse_webDocumentNoProxy($0) }
@@ -1726,6 +1736,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[997004590] = { return Api.users.UserFull.parse_userFull($0) }
     dict[1658259128] = { return Api.users.Users.parse_users($0) }
     dict[828000628] = { return Api.users.Users.parse_usersSlice($0) }
+    dict[-1120186479] = { return Api.wallet.SecretPhrase.parse_secretPhrase($0) }
+    dict[1126356389] = { return Api.wallet.Transactions.parse_transactions($0) }
     return dict
 }()
 
@@ -2564,6 +2576,14 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.WallPaperSettings:
             _1.serialize(buffer, boxed)
+        case let _1 as Api.WalletState:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.WalletTransaction:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.WalletTransactionPeer:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.WalletUserAddress:
+            _1.serialize(buffer, boxed)
         case let _1 as Api.WebAuthorization:
             _1.serialize(buffer, boxed)
         case let _1 as Api.WebDocument:
@@ -3027,6 +3047,10 @@ public extension Api {
         case let _1 as Api.users.UserFull:
             _1.serialize(buffer, boxed)
         case let _1 as Api.users.Users:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.SecretPhrase:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.Transactions:
             _1.serialize(buffer, boxed)
         default:
             break

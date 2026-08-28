@@ -258,4 +258,74 @@ final class WalletV5ExperimentalKitTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Rotation mnemonics (TEP-0003 §3.3)
+
+    private static let anchorHalf =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+    private static let signingHalf = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong"
+
+    /// Before rotation the user holds one 12-word phrase, and both keys are the same.
+    func testWalletFromPreRotationMnemonic() throws {
+        let m = try RotationMnemonic.parse(Self.anchorHalf)
+        let w = try Wallet(v5Experimental: m, network: .testnet)
+
+        XCTAssertEqual(w.version, .v5experimental)
+        XCTAssertEqual(w.publicKey, try m.anchorKeyPair().publicKey)
+
+        // Identical to building it from the anchor key directly.
+        let direct = try Wallet(
+            v5Experimental: InMemorySigner(keyPair: try m.anchorKeyPair()), network: .testnet
+        )
+        XCTAssertEqual(w.address, direct.address)
+    }
+
+    /// After rotation the address still comes from the anchor half, the signature from the
+    /// signing half. Getting this backwards names an account that does not exist.
+    func testWalletFromRotatedMnemonicKeepsTheAnchorAddress() throws {
+        let before = try RotationMnemonic.parse(Self.anchorHalf)
+        let after = try RotationMnemonic.parse("\(Self.anchorHalf) \(Self.signingHalf)")
+
+        let w0 = try Wallet(v5Experimental: before, network: .testnet)
+        let w1 = try Wallet(v5Experimental: after, network: .testnet)
+
+        XCTAssertEqual(w1.address, w0.address, "rotation must not move the wallet")
+        XCTAssertEqual(w1.publicKey, try after.signingKeyPair().publicKey)
+        XCTAssertNotEqual(w1.publicKey, w0.publicKey)
+
+        // The signing half alone would name a different, non-existent account.
+        let wrong = try Wallet(
+            v5Experimental: try RotationMnemonic.parse(Self.signingHalf), network: .testnet
+        )
+        XCTAssertNotEqual(wrong.address, w1.address)
+    }
+
+    /// A rotation built from a phrase must match one built from the raw derived key.
+    func testKeyRotationFromMnemonicMatchesTheDerivedKey() async throws {
+        let w = try Wallet(v5Experimental: try RotationMnemonic.parse(Self.anchorHalf),
+                           network: .testnet)
+        let replacement = try RotationMnemonic.parse(Self.signingHalf)
+
+        let rotation = try w.keyRotation(to: replacement)
+        XCTAssertEqual(rotation.newPublicKey, try replacement.signingKeyPair().publicKey)
+        XCTAssertTrue(try rotation.isProofValid(for: w.address))
+
+        // And the contract-level guard accepts it.
+        let boc = try await w.signedKeyRotation(
+            rotation, seqno: 3, isDeployed: true, validUntil: 1_800_000_000)
+        XCTAssertFalse(boc.isEmpty)
+    }
+
+    /// After the rotation settles, the post-rotation phrase reproduces the same wallet.
+    func testPostRotationPhraseReproducesTheWallet() throws {
+        let before = try RotationMnemonic.parse(Self.anchorHalf)
+        let replacement = try RotationMnemonic.parse(Self.signingHalf)
+        let after = before.rotated(to: replacement)
+
+        let w = try Wallet(v5Experimental: after, network: .testnet)
+        XCTAssertEqual(w.address, try Wallet(v5Experimental: before, network: .testnet).address)
+        XCTAssertEqual(w.publicKey, try replacement.signingKeyPair().publicKey)
+        XCTAssertEqual(after.words.count, 24)
+    }
+
 }

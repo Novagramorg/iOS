@@ -270,7 +270,7 @@ private final class WalletTransactionContentComponent: Component {
                 direction: .outgoing,
                 amount: preparedTransfer.amount,
                 fee: preparedTransfer.fee,
-                counterparty: preparedTransfer.recipient,
+                peer: .address(preparedTransfer.recipient),
                 comment: walletTransactionComment(self.inputExternalState.text.string) ?? preparedTransfer.comment,
                 collectible: preparedTransfer.collectible.map(walletTransactionCollectible)
             )
@@ -484,7 +484,7 @@ private final class WalletTransactionContentComponent: Component {
                 guard !self.baselineTransactionIds.contains("\(transaction.id):\(transaction.logicalTime)"),
                       transaction.status == .completed,
                       transaction.direction == .outgoing,
-                      let counterparty = transaction.counterparty,
+                      let counterparty = transaction.peer.address,
                       walletTransactionAddressesEqual(counterparty, pendingTransfer.recipient) else {
                     return false
                 }
@@ -798,7 +798,7 @@ private final class WalletTransactionContentComponent: Component {
                             amount: transaction.amount,
                             direction: transaction.direction,
                             currency: transaction.currency,
-                            pending: self.isPreview ? false : self.amountPending
+                            pending: self.isPreview ? false : (transaction.status == .pending || self.amountPending)
                         )),
                         automaticHighlight: false,
                         action: { [weak self] in
@@ -865,7 +865,8 @@ private final class WalletTransactionContentComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - 64.0, height: 24.0)
                 )
-                let displaysTestProcessing = !self.isPreview && self.amountPending
+                let displaysTransactionStatus = !self.isPreview
+                    && (transaction.status == .pending || transaction.status == .failed || self.amountPending)
                 let dotSize = self.processingDot.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
@@ -880,14 +881,16 @@ private final class WalletTransactionContentComponent: Component {
                     containerSize: CGSize(width: 20.0, height: 24.0)
                 )
                 //TODO:localize
-                let processingLabel = "Processing..."
+                let processingLabel = transaction.status == .failed ? "Failed" : "Processing..."
                 let processingSize = self.processingText.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: processingLabel,
                             font: Font.regular(15.0),
-                            textColor: theme.actionSheet.controlAccentColor
+                            textColor: transaction.status == .failed
+                                ? theme.list.itemDestructiveColor
+                                : theme.actionSheet.controlAccentColor
                         )),
                         maximumNumberOfLines: 1
                     )),
@@ -897,7 +900,7 @@ private final class WalletTransactionContentComponent: Component {
                 let usdToDotSpacing: CGFloat = 6.0
                 let dotToProcessingSpacing: CGFloat = 4.0
                 let processingWidth = usdToDotSpacing + dotSize.width + dotToProcessingSpacing + processingSize.width
-                let combinedWidth = usdSize.width + (displaysTestProcessing ? processingWidth : 0.0)
+                let combinedWidth = usdSize.width + (displaysTransactionStatus ? processingWidth : 0.0)
                 let combinedX = floorToScreenPixels((availableSize.width - combinedWidth) / 2.0)
                 if let usdView = self.usdValue.view {
                     if usdView.superview == nil {
@@ -911,7 +914,7 @@ private final class WalletTransactionContentComponent: Component {
                         self.addSubview(dotView)
                     }
                     transition.setFrame(view: dotView, frame: CGRect(x: combinedX + usdSize.width + usdToDotSpacing, y: contentHeight, width: dotSize.width, height: dotSize.height))
-                    transition.setAlpha(view: dotView, alpha: displaysTestProcessing ? 1.0 : 0.0)
+                    transition.setAlpha(view: dotView, alpha: displaysTransactionStatus ? 1.0 : 0.0)
                 }
                 if let processingView = self.processingText.view {
                     if processingView.superview == nil {
@@ -923,7 +926,7 @@ private final class WalletTransactionContentComponent: Component {
                         width: processingSize.width,
                         height: processingSize.height
                     ))
-                    transition.setAlpha(view: processingView, alpha: displaysTestProcessing ? 1.0 : 0.0)
+                    transition.setAlpha(view: processingView, alpha: displaysTransactionStatus ? 1.0 : 0.0)
                 }
                 contentHeight += usdSize.height
             }
@@ -1003,12 +1006,12 @@ private final class WalletTransactionContentComponent: Component {
                     counterpartyTitle = "Address"
                 }
             }
-            let counterpartyName = transaction.counterpartyName.flatMap { value -> String? in
+            let counterpartyName = transaction.peer.displayName.flatMap { value -> String? in
                 let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 return value.isEmpty ? nil : value
             }
             let addressComponent: AnyComponent<Empty>?
-            if let counterparty = transaction.counterparty {
+            if let counterparty = transaction.peer.address {
                 addressComponent = AnyComponent(Button(
                     content: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
@@ -1243,7 +1246,13 @@ private final class WalletTransactionContentComponent: Component {
                 //TODO:localize
                 actionTitle = "OK"
             }
-            let actionIsEnabled = !self.isPreview || self.previewOperation == .ready || self.previewOperation == .confirmed
+            let canSign: Bool
+            if let latestWalletState = self.latestWalletState, case let .wallet(walletInfo) = latestWalletState.phase {
+                canSign = walletInfo.canSign
+            } else {
+                canSign = false
+            }
+            let actionIsEnabled = !self.isPreview || self.isConfirmedPreview || (self.previewOperation == .ready && canSign)
             let actionSize = self.actionButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(

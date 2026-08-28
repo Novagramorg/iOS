@@ -97,14 +97,27 @@ extension TonWalletKit {
     /// The streaming client for a network, created on first use.
     private func streamingClient(for network: Network) -> ToncenterStreaming {
         if let existing = streamingClients[network] { return existing }
-        let client = ToncenterStreaming(
-            factory: streamingFactory?(network) ?? URLSessionStreamingSocketFactory(
+        let factory: any StreamingSocketFactory
+        if let streamingFactory {
+            factory = streamingFactory(network)
+        } else if let streamingURLProvider {
+            factory = URLSessionStreamingSocketFactory(
+                urlProvider: {
+                    return try await streamingURLProvider(network)
+                },
+                session: urlSession
+            )
+        } else {
+            factory = URLSessionStreamingSocketFactory(
                 url: ToncenterStreaming.endpoint(
                     network: network,
                     apiKey: streamingAPIKey
                 ),
                 session: urlSession
-            ),
+            )
+        }
+        let client = ToncenterStreaming(
+            factory: factory,
             configuration: streamingConfiguration
         )
         streamingClients[network] = client

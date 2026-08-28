@@ -14770,3 +14770,71 @@ public extension Api.functions.users {
         })
     }
 }
+public extension Api.functions.wallet {
+    static func exportSecretPhrase(flags: Int32, password: Api.InputCheckPasswordSRP?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.SecretPhrase>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1222160750)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            password!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "wallet.exportSecretPhrase", parameters: [("flags", ConstructorParameterDescription(flags)), ("password", ConstructorParameterDescription(password))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.SecretPhrase? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.SecretPhrase?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.SecretPhrase
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func getState() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WalletState>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1417432262)
+        return (FunctionDescription(name: "wallet.getState", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WalletState? in
+            let reader = BufferReader(buffer)
+            var result: Api.WalletState?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.WalletState
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func getTransactions(flags: Int32, offset: String, limit: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.Transactions>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1467807101)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(offset, buffer: buffer, boxed: false)
+        serializeInt32(limit, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.getTransactions", parameters: [("flags", ConstructorParameterDescription(flags)), ("offset", ConstructorParameterDescription(offset)), ("limit", ConstructorParameterDescription(limit))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.Transactions? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.Transactions?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.Transactions
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func getUserAddresses(id: [Api.InputUser]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1212803253)
+        buffer.appendInt32(481674261)
+        buffer.appendInt32(Int32(id.count))
+        for item in id {
+            item.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.WalletUserAddress]? in
+            let reader = BufferReader(buffer)
+            var result: [Api.WalletUserAddress]?
+            if let _ = reader.readInt32() {
+                result = Api.parseVector(reader, elementSignature: 0, elementType: Api.WalletUserAddress.self)
+            }
+            return result
+        })
+    }
+}

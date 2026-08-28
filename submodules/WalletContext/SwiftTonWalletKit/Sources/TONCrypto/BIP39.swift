@@ -24,6 +24,99 @@ public enum BIP39 {
         )
     }
 
+    // MARK: - Word encoding and checksum
+
+    public enum BIP39Error: Error, CustomStringConvertible {
+        case invalidWordCount(Int)
+        case unknownWord(String)
+        case checksumMismatch
+        case invalidEntropyLength(Int)
+
+        public var description: String {
+            switch self {
+            case .invalidWordCount(let n):
+                return "BIP-39 mnemonic must be 12, 15, 18, 21 or 24 words, got \(n)"
+            case .unknownWord(let w):
+                return "Word \"\(w)\" is not in the BIP-39 English list"
+            case .checksumMismatch:
+                return "BIP-39 checksum does not match the entropy"
+            case .invalidEntropyLength(let n):
+                return "BIP-39 entropy must be 16, 20, 24, 28 or 32 bytes, got \(n)"
+            }
+        }
+    }
+
+    /// Word counts BIP-39 defines, and the entropy length each encodes.
+    ///
+    /// Every word carries 11 bits and BIP-39 appends one checksum bit per 32 bits of
+    /// entropy, so `words * 11 == entropyBits + entropyBits / 32`.
+    static let entropyBytesByWordCount: [Int: Int] = [12: 16, 15: 20, 18: 24, 21: 28, 24: 32]
+
+    /// Decodes a mnemonic to its entropy, verifying the checksum.
+    ///
+    /// Unlike ``Mnemonic`` — TON's own scheme, which has no embedded checksum and instead
+    /// tests a PBKDF2 property of the whole phrase — BIP-39 carries its checksum inside the
+    /// words. A single mistyped word almost always fails here.
+    public static func entropy(from words: [String]) throws -> Data {
+        let normalized = words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard let entropyBytes = entropyBytesByWordCount[normalized.count] else {
+            throw BIP39Error.invalidWordCount(normalized.count)
+        }
+
+        var bits = ""
+        bits.reserveCapacity(normalized.count * 11)
+        for word in normalized {
+            guard let index = MnemonicWordlist.index(of: word) else {
+                throw BIP39Error.unknownWord(word)
+            }
+            bits += String(repeating: "0", count: 11 - String(index, radix: 2).count)
+                  + String(index, radix: 2)
+        }
+
+        let entropyBits = entropyBytes * 8
+        var entropy = Data(capacity: entropyBytes)
+        for byte in 0..<entropyBytes {
+            let start = bits.index(bits.startIndex, offsetBy: byte * 8)
+            let end = bits.index(start, offsetBy: 8)
+            entropy.append(UInt8(bits[start..<end], radix: 2) ?? 0)
+        }
+
+        // The trailing bits must equal the leading bits of SHA-256(entropy).
+        let checksumBits = entropyBits / 32
+        let expected = Hashing.sha256(entropy)[0]
+        let actualStart = bits.index(bits.startIndex, offsetBy: entropyBits)
+        let actual = String(bits[actualStart...])
+        var expectedBits = ""
+        for i in 0..<checksumBits { expectedBits += (expected & (0x80 >> UInt8(i))) != 0 ? "1" : "0" }
+        guard actual == expectedBits else { throw BIP39Error.checksumMismatch }
+
+        return entropy
+    }
+
+    /// Encodes entropy into a mnemonic. The inverse of ``entropy(from:)``.
+    public static func mnemonic(fromEntropy entropy: Data) throws -> [String] {
+        guard let wordCount = entropyBytesByWordCount.first(where: { $0.value == entropy.count })?.key
+        else { throw BIP39Error.invalidEntropyLength(entropy.count) }
+
+        var bits = entropy.map { String(repeating: "0", count: 8 - String($0, radix: 2).count)
+                                 + String($0, radix: 2) }.joined()
+        let checksum = Hashing.sha256(entropy)[0]
+        for i in 0..<(entropy.count * 8 / 32) {
+            bits += (checksum & (0x80 >> UInt8(i))) != 0 ? "1" : "0"
+        }
+
+        return (0..<wordCount).map { i in
+            let start = bits.index(bits.startIndex, offsetBy: i * 11)
+            let end = bits.index(start, offsetBy: 11)
+            return MnemonicWordlist.words[Int(bits[start..<end], radix: 2) ?? 0]
+        }
+    }
+
+    /// Whether a phrase is a well-formed BIP-39 mnemonic.
+    public static func validate(_ words: [String]) -> Bool {
+        (try? entropy(from: words)) != nil
+    }
+
     /// Derives the TON key pair from a BIP-39 mnemonic.
     public static func keyPair(from words: [String], passphrase: String = "") throws -> KeyPair {
         let seedBytes = try seed(from: words, passphrase: passphrase)

@@ -580,7 +580,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     direction: direction,
                     amount: transfer.amount,
                     fee: 0,
-                    counterparty: nil,
+                    peer: .unsupported,
                     comment: comment
                 )
                 let controller = item.context.sharedContext.makeWalletTransactionScreen(

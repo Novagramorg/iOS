@@ -1,8 +1,9 @@
 import Foundation
+import TelegramCore
 import TONCore
 import TONWalletKit
 
-let walletTransactionFetchLimit = 30
+let walletTransactionFetchLimit = 50
 let walletPreparedTransferLifetime: TimeInterval = 5.0 * 60.0
 let walletPendingTransferLifetime: Int64 = 10 * 60
 let walletUsdtJettonMasterAddress = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
@@ -45,6 +46,53 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
 
 enum WalletDataError: Error {
     case invalidData
+}
+
+func walletTransactions(
+    from transactions: [TelegramCore.WalletTransaction]
+) -> [WalletContext.Transaction] {
+    return transactions.map { transaction in
+        let peer: WalletContext.Transaction.Peer
+        switch transaction.peer {
+        case let .user(enginePeer):
+            switch enginePeer {
+            case let .user(user):
+                let displayName = !user.nameOrPhone.isEmpty
+                    ? user.nameOrPhone
+                    : (user.username.map { "@\($0)" } ?? "Telegram User")
+                peer = .user(id: user.id, displayName: displayName)
+            default:
+                peer = .unsupported
+            }
+        case let .address(address):
+            peer = .address(address)
+        case .unsupported:
+            peer = .unsupported
+        }
+
+        let status: WalletContext.Transaction.Status
+        if transaction.failed {
+            status = .failed
+        } else if transaction.pending {
+            status = .pending
+        } else {
+            status = .completed
+        }
+        let logicalTime = transaction.id.split(separator: ":", maxSplits: 1).first.map(String.init)
+            ?? transaction.id
+        return WalletContext.Transaction(
+            id: transaction.id,
+            transactionHash: transaction.txHash,
+            logicalTime: logicalTime,
+            timestamp: transaction.date,
+            direction: transaction.incoming ? .incoming : .outgoing,
+            amount: transaction.amount,
+            fee: transaction.fee,
+            peer: peer,
+            comment: transaction.comment,
+            status: status
+        )
+    }
 }
 
 func walletTransactions(
@@ -132,8 +180,7 @@ func walletTransactions(
             direction: direction,
             amount: amount,
             fee: fee,
-            counterparty: counterparty,
-            counterpartyName: activity.counterpartyName,
+            peer: counterparty.map { .address($0) } ?? .unsupported,
             comment: activity.comment,
             currency: currency,
             collectible: collectible,
@@ -223,8 +270,8 @@ func transactionKey(_ transaction: WalletContext.Transaction) -> String {
     }
     let blockchainKey = transactionHashKey(transactionHash)
     if transaction.kind == .deployContract {
-        let addressKey = transaction.counterparty.flatMap { rawAddress($0) }
-            ?? transaction.counterparty.map(transactionHashKey)
+        let addressKey = transaction.peer.address.flatMap { rawAddress($0) }
+            ?? transaction.peer.address.map(transactionHashKey)
             ?? "unknown"
         return "transaction:\(blockchainKey):deploy:\(addressKey)"
     }
@@ -246,7 +293,7 @@ private func preferredTransaction(
 
 private func transactionInformationScore(_ transaction: WalletContext.Transaction) -> Int {
     var score = transaction.status == .completed ? 100 : 0
-    if transaction.counterpartyName != nil { score += 4 }
+    if transaction.peer.displayName != nil { score += 4 }
     if let collectible = transaction.collectible {
         if collectible.name != "NFT" { score += 2 }
         if collectible.imageUrl != nil { score += 1 }

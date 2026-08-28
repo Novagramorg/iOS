@@ -44,6 +44,8 @@ public actor TonWalletKit {
     /// Key for the streaming endpoint. Separate from the `ApiClient`'s because that one lives
     /// behind the client seam, which a host app may have replaced entirely.
     let streamingAPIKey: String?
+    /// Supplies a fresh streaming endpoint when a socket connects or reconnects.
+    let streamingURLProvider: (@Sendable (Network) async throws -> URL)?
     let streamingConfiguration: ToncenterStreaming.Configuration
     /// Overrides socket construction, for tests.
     let streamingFactory: (@Sendable (Network) -> any StreamingSocketFactory)?
@@ -65,6 +67,7 @@ public actor TonWalletKit {
         manifests: any ManifestFetching = URLSessionManifestFetcher(),
         urlSession: URLSession = .shared,
         streamingAPIKey: String? = nil,
+        streamingURLProvider: (@Sendable (Network) async throws -> URL)? = nil,
         streamingConfiguration: ToncenterStreaming.Configuration = .default,
         streamingFactory: (@Sendable (Network) -> any StreamingSocketFactory)? = nil,
         assetCache: AssetCache = AssetCache(),
@@ -72,6 +75,7 @@ public actor TonWalletKit {
     ) {
         self.assetCache = assetCache
         self.streamingAPIKey = streamingAPIKey
+        self.streamingURLProvider = streamingURLProvider
         self.streamingConfiguration = streamingConfiguration
         self.streamingFactory = streamingFactory
         self.configuration = configuration

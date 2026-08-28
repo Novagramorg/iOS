@@ -515,10 +515,13 @@ private final class WalletSettingsScreenComponent: Component {
             let sectionWidth = availableSize.width - sideInset * 2.0
             var contentHeight = environment.navigationHeight + 16.0
             let canDisableBackup: Bool
+            let canExportPhrase: Bool
             if let phase = self.walletState?.phase, case let .wallet(info) = phase {
                 canDisableBackup = info.canDisableBackup
+                canExportPhrase = info.canExportPhrase
             } else {
                 canDisableBackup = false
+                canExportPhrase = false
             }
 
             self.recoverySection.parentState = self.state
@@ -565,7 +568,7 @@ private final class WalletSettingsScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: sectionWidth, height: 10000.0)
             )
-            if let recoverySectionView = self.recoverySection.view {
+            if canExportPhrase, let recoverySectionView = self.recoverySection.view {
                 if recoverySectionView.superview == nil {
                     self.scrollView.addSubview(recoverySectionView)
                 }
@@ -576,9 +579,11 @@ private final class WalletSettingsScreenComponent: Component {
                         size: recoverySectionSize
                     )
                 )
+                contentHeight += recoverySectionSize.height
+                contentHeight += sectionSpacing
+            } else {
+                self.recoverySection.view?.removeFromSuperview()
             }
-            contentHeight += recoverySectionSize.height
-            contentHeight += sectionSpacing
 
             if canDisableBackup {
                 self.backupSection.parentState = self.state
