@@ -1684,8 +1684,13 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
             // Clearing the store is not enough on its own: those chats are still pinned in Postbox
             // and nothing would ever unpin them, so the user would watch an "off" that changed
             // nothing. Trim the list back to what the server already holds.
-            let _ = context.engine.peers.fenixuzTrimPinnedChatsToServerLimit().startStandalone()
-            FenixuzLocalPins.clearAllAccounts()
+            // Order matters. startStandalone only QUEUES the transaction, and the trim has to read
+            // the store back to know which ids it added. Clearing the store synchronously here
+            // emptied it first, so the trim found nothing and silently unpinned nothing. Clear the
+            // remaining accounts only once it has finished; it clears the active account itself.
+            let _ = context.engine.peers.fenixuzTrimPinnedChatsToServerLimit().startStandalone(completed: {
+                FenixuzLocalPins.clearAllAccounts()
+            })
         }
         updateState { state in
             var state = state
