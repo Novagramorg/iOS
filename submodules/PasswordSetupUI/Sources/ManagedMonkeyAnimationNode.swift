@@ -130,7 +130,7 @@ final class ManagedMonkeyAnimationNode: ManagedAnimationNode {
             case .eyesClosed:
                 break
             case .peeking:
-                self.trackTo(item: ManagedAnimationItem(source: .local("TwoFactorSetupMonkeyPeek"), frames: .range(startFrame: 0, endFrame: 14), duration: 0.3))
+                self.trackTo(item: ManagedAnimationItem(source: .local("IntroPassword"), frames: .range(startFrame: 0, endFrame: 14), duration: 0.3))
             case let .tracking(value):
                 self.trackTo(item: ManagedAnimationItem(source: .local("TwoFactorSetupMonkeyClose"), frames: .range(startFrame: 41, endFrame: 0), duration: 0.3))
                 enqueueTracking(value)
@@ -141,7 +141,7 @@ final class ManagedMonkeyAnimationNode: ManagedAnimationNode {
                 self.trackTo(item: ManagedAnimationItem(source: .local("TwoFactorSetupMonkeyCloseAndPeek"), frames: .range(startFrame: 41, endFrame: 0), duration: 0.3))
                 self.enqueueIdle(idle)
             case .eyesClosed:
-                self.trackTo(item: ManagedAnimationItem(source: .local("TwoFactorSetupMonkeyPeek"), frames: .range(startFrame: 14, endFrame: 0), duration: 0.3))
+                self.trackTo(item: ManagedAnimationItem(source: .local("IntroPassword"), frames: .range(startFrame: 14, endFrame: 0), duration: 0.3))
             case .peeking:
                 break
             case let .tracking(value):

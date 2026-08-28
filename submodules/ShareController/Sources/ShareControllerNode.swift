@@ -275,7 +275,7 @@ private final class ShareContentInfoView: UIView {
         let iconSize = self.icon.update(
             transition: .immediate,
             component: AnyComponent(LottieComponent(
-                content: LottieComponent.AppBundleContent(name: "ToastCollectibleUsernameEmoji"),
+                content: LottieComponent.AppBundleContent(name: "anim_collectible_username"),
                 loop: false
             )),
             environment: {},
