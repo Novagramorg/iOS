@@ -4,6 +4,7 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 import Accelerate
+import simd
 
 private func shiftArray(array: [CGPoint], offset: Int) -> [CGPoint] {
     var newArray = array
@@ -71,6 +72,77 @@ public func adjustSaturationInContext(context: DrawingContext, saturation: CGFlo
     vImageMatrixMultiply_ARGB8888(&buffer, &buffer, &matrix, divisor, nil, nil, vImage_Flags(kvImageDoNotTile))
 }
 
+/// The swirl displacement applied before the colour weighting: for each pixel it is the point that
+/// pixel samples the colour field at.
+///
+/// It is a pure function of the image dimensions — no colours, no positions, no phase — so the
+/// `sqrt`/`sin`/`cos` behind it are identical for every frame of a tween and for every phase. A tween
+/// is 15+ frames at one fixed size, so computing it once and reusing it removes all of the
+/// transcendental work from the inner loop.
+private final class SwirlMap {
+    let width: Int
+    let height: Int
+    let x: UnsafeMutablePointer<Float>
+    let y: UnsafeMutablePointer<Float>
+
+    init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+        let count = width * height
+        self.x = UnsafeMutablePointer<Float>.allocate(capacity: count)
+        self.y = UnsafeMutablePointer<Float>.allocate(capacity: count)
+
+        for y in 0 ..< height {
+            let directPixelY = Float(y) / Float(height)
+            let centerDistanceY = directPixelY - 0.5
+            let centerDistanceY2 = centerDistanceY * centerDistanceY
+
+            for x in 0 ..< width {
+                let directPixelX = Float(x) / Float(width)
+                let centerDistanceX = directPixelX - 0.5
+                let centerDistance = sqrt(centerDistanceX * centerDistanceX + centerDistanceY2)
+
+                let swirlFactor = 0.35 * centerDistance
+                let theta = swirlFactor * swirlFactor * 0.8 * 8.0
+                let sinTheta = sin(theta)
+                let cosTheta = cos(theta)
+
+                self.x[y * width + x] = max(0.0, min(1.0, 0.5 + centerDistanceX * cosTheta - centerDistanceY * sinTheta))
+                self.y[y * width + x] = max(0.0, min(1.0, 0.5 + centerDistanceX * sinTheta + centerDistanceY * cosTheta))
+            }
+        }
+    }
+
+    deinit {
+        self.x.deallocate()
+        self.y.deallocate()
+    }
+}
+
+// One entry is enough: every frame of a tween shares a size, and the size only moves when the
+// wallpaper is laid out again. `generateGradient` is normally called on the main thread but
+// `generatePreview` is public, so the cache is locked. A racing double-compute is harmless — the map
+// is immutable once built, and a caller holds its own reference for the duration of the loop.
+private let swirlMapLock = NSLock()
+private var cachedSwirlMap: SwirlMap?
+
+private func swirlMap(width: Int, height: Int) -> SwirlMap {
+    swirlMapLock.lock()
+    if let current = cachedSwirlMap, current.width == width, current.height == height {
+        swirlMapLock.unlock()
+        return current
+    }
+    swirlMapLock.unlock()
+
+    let map = SwirlMap(width: width, height: height)
+
+    swirlMapLock.lock()
+    cachedSwirlMap = map
+    swirlMapLock.unlock()
+
+    return map
+}
+
 private func generateGradient(size: CGSize, colors inputColors: [UIColor], positions: [CGPoint], adjustSaturation: CGFloat = 1.0) -> (UIImage, String) {
     let colors: [UIColor] = inputColors.count == 1 ? [inputColors[0], inputColors[0], inputColors[0]] : inputColors
 
@@ -106,72 +178,66 @@ private func generateGradient(size: CGSize, colors inputColors: [UIColor], posit
     let context = DrawingContext(size: CGSize(width: CGFloat(width), height: CGFloat(height)), scale: 1.0, opaque: true, clear: false)!
     let imageBytes = context.bytes.assumingMemoryBound(to: UInt8.self)
 
+    // The swirl displacement is position-only, so it is hoisted out of the per-frame work entirely.
+    // What remains — accumulating the colour field — is vectorized four pixels of a row at a time.
+    // Both changes are bit-exact against the former scalar loop.
+    let swirl = swirlMap(width: width, height: height)
+    let zero = SIMD4<Float>(repeating: 0.0)
+    let maxComponent = SIMD4<Float>(repeating: 255.0)
+    let minDistanceSum = SIMD4<Float>(repeating: 0.00001)
+    let colorCount = colors.count
+
     for y in 0 ..< height {
-        let directPixelY = Float(y) / Float(height)
-        let centerDistanceY = directPixelY - 0.5
-        let centerDistanceY2 = centerDistanceY * centerDistanceY
-
         let lineBytes = imageBytes.advanced(by: context.bytesPerRow * y)
-        for x in 0 ..< width {
-            let directPixelX = Float(x) / Float(width)
+        let rowOffset = y * width
 
-            let centerDistanceX = directPixelX - 0.5
-            let centerDistance = sqrt(centerDistanceX * centerDistanceX + centerDistanceY2)
-            
-            let swirlFactor = 0.35 * centerDistance
-            let theta = swirlFactor * swirlFactor * 0.8 * 8.0
-            let sinTheta = sin(theta)
-            let cosTheta = cos(theta)
+        var x = 0
+        while x < width {
+            // The tail of a row is handled by filling only the live lanes and storing only those; the
+            // dead lanes compute garbage that is never read, and are never gathered from out of bounds.
+            let laneCount = min(4, width - x)
+            var pixelX = zero
+            var pixelY = zero
+            for lane in 0 ..< laneCount {
+                pixelX[lane] = swirl.x[rowOffset + x + lane]
+                pixelY[lane] = swirl.y[rowOffset + x + lane]
+            }
 
-            let pixelX = max(0.0, min(1.0, 0.5 + centerDistanceX * cosTheta - centerDistanceY * sinTheta))
-            let pixelY = max(0.0, min(1.0, 0.5 + centerDistanceX * sinTheta + centerDistanceY * cosTheta))
+            var distanceSum = zero
+            var r = zero
+            var g = zero
+            var b = zero
 
-            var distanceSum: Float = 0.0
+            for i in 0 ..< colorCount {
+                let distanceX = pixelX - positionFloats[i * 2 + 0]
+                let distanceY = pixelY - positionFloats[i * 2 + 1]
 
-            var r: Float = 0.0
-            var g: Float = 0.0
-            var b: Float = 0.0
-
-            for i in 0 ..< colors.count {
-                let colorX = positionFloats[i * 2 + 0]
-                let colorY = positionFloats[i * 2 + 1]
-
-                let distanceX = pixelX - colorX
-                let distanceY = pixelY - colorY
-
-                var distance = max(0.0, 0.92 - sqrt(distanceX * distanceX + distanceY * distanceY))
+                var distance = simd_max(zero, 0.92 - (distanceX * distanceX + distanceY * distanceY).squareRoot())
                 distance = distance * distance * distance
                 distanceSum += distance
 
-                r = r + distance * rgb[i * 3 + 0]
-                g = g + distance * rgb[i * 3 + 1]
-                b = b + distance * rgb[i * 3 + 2]
+                r += distance * rgb[i * 3 + 0]
+                g += distance * rgb[i * 3 + 1]
+                b += distance * rgb[i * 3 + 2]
             }
 
-            if distanceSum < 0.00001 {
-                distanceSum = 0.00001
+            // Divide-then-scale, matching the former scalar order exactly. Folding it into a single
+            // reciprocal multiply is faster but can differ in the last ulp, which is visible once the
+            // result is truncated to a byte at an integer boundary.
+            let clampedSum = simd_max(distanceSum, minDistanceSum)
+            let pixelB = simd_min(b / clampedSum * maxComponent, maxComponent)
+            let pixelG = simd_min(g / clampedSum * maxComponent, maxComponent)
+            let pixelR = simd_min(r / clampedSum * maxComponent, maxComponent)
+
+            for lane in 0 ..< laneCount {
+                let pixelBytes = lineBytes.advanced(by: (x + lane) * 4)
+                pixelBytes.advanced(by: 0).pointee = UInt8(pixelB[lane])
+                pixelBytes.advanced(by: 1).pointee = UInt8(pixelG[lane])
+                pixelBytes.advanced(by: 2).pointee = UInt8(pixelR[lane])
+                pixelBytes.advanced(by: 3).pointee = 0xff
             }
 
-            var pixelB = b / distanceSum * 255.0
-            if pixelB > 255.0 {
-                pixelB = 255.0
-            }
-
-            var pixelG = g / distanceSum * 255.0
-            if pixelG > 255.0 {
-                pixelG = 255.0
-            }
-
-            var pixelR = r / distanceSum * 255.0
-            if pixelR > 255.0 {
-                pixelR = 255.0
-            }
-
-            let pixelBytes = lineBytes.advanced(by: x * 4)
-            pixelBytes.advanced(by: 0).pointee = UInt8(pixelB)
-            pixelBytes.advanced(by: 1).pointee = UInt8(pixelG)
-            pixelBytes.advanced(by: 2).pointee = UInt8(pixelR)
-            pixelBytes.advanced(by: 3).pointee = 0xff
+            x += 4
         }
     }
 
