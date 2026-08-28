@@ -177,6 +177,7 @@ public final class WindowHostView {
     var invalidatePrefersOnScreenNavigationHidden: (() -> Void)?
     var invalidateSupportedOrientations: (() -> Void)?
     var cancelInteractiveKeyboardGestures: (() -> Void)?
+    var dismissedKeyboardByCurrentGesture: (() -> Bool)?
     var forEachController: (((ContainableController) -> Void) -> Void)?
     var getAccessibilityElements: (() -> [Any]?)?
     
@@ -206,6 +207,19 @@ public protocol WindowHost {
     func invalidatePrefersOnScreenNavigationHidden()
     func invalidateSupportedOrientations()
     func cancelInteractiveKeyboardGestures()
+
+    /// Whether the touch sequence currently being delivered has already had its downward motion
+    /// claimed by the window's interactive keyboard dismissal (`panGestureEnded`'s `canDismiss`).
+    ///
+    /// The window decides this from `WindowPanRecognizer.touchesEnded`, i.e. during touch DELIVERY,
+    /// which precedes the action dispatch where a scroll view's own pan reports its release — so a
+    /// list release can read this and decline to start momentum the finger has already spent on the
+    /// keyboard. Set at that decision and cleared when the window's keyboard recognizer next sees a
+    /// touch sequence begin, so outside a release it means "the most recent such gesture dismissed the
+    /// keyboard", never "a keyboard is being dragged right now". A touch the recognizer's delegate
+    /// declines (the bottom 44pt of the window) does not clear it — nothing scrollable starts there in
+    /// the surfaces that read this.
+    var dismissedKeyboardByCurrentGesture: Bool { get }
 }
 
 public extension UIView {
@@ -280,6 +294,10 @@ public class Window1 {
     private var updatingLayout: UpdatingLayout?
     private var updatedContainerLayout: ContainerViewLayout?
     private var upperKeyboardInputPositionBound: CGFloat?
+    // See `WindowHost.dismissedKeyboardByCurrentGesture` for the contract. Written only from the
+    // `WindowPanRecognizer` touch-delivery closures: cleared when a touch sequence begins, set when
+    // that sequence's release dismisses the keyboard.
+    private var dismissedKeyboardByCurrentGestureValue = false
     
     private let presentationContext: PresentationContext
     private let overlayPresentationContext: GlobalOverlayPresentationContext
@@ -462,6 +480,10 @@ public class Window1 {
         
         self.hostView.cancelInteractiveKeyboardGestures = { [weak self] in
             self?.cancelInteractiveKeyboardGestures()
+        }
+        
+        self.hostView.dismissedKeyboardByCurrentGesture = { [weak self] in
+            return self?.dismissedKeyboardByCurrentGestureValue ?? false
         }
         
         self.hostView.forEachController = { [weak self] f in
@@ -834,6 +856,11 @@ public class Window1 {
                 $0.update(upperKeyboardInputPositionBound: nil, transition: .animated(duration: 0.25, curve: .spring), overrideTransition: false)
             }
         }
+        
+        // The re-enable above cancels the recognizer, which can run `panGestureEnded` and latch a
+        // dismissal that the `upperKeyboardInputPositionBound: nil` update just undid. Clear it so a
+        // keyboard that is staying put never suppresses a list's momentum.
+        self.dismissedKeyboardByCurrentGestureValue = false
         
         if self.keyboardGestureBeginLocation != nil {
             self.keyboardGestureBeginLocation = nil
@@ -1324,6 +1351,11 @@ public class Window1 {
     }
     
     private func panGestureBegan(location: CGPoint) {
+        // A new touch sequence: whatever the previous one did to the keyboard is no longer "current".
+        // Cleared BEFORE the guards below, so a sequence that never becomes a keyboard drag still
+        // clears a `true` left by the one before it.
+        self.dismissedKeyboardByCurrentGestureValue = false
+        
         if self.windowLayout.upperKeyboardInputPositionBound != nil {
             return
         }
@@ -1394,6 +1426,11 @@ public class Window1 {
         }
         
         if canDismiss, let inputHeight = self.windowLayout.inputHeight, currentLocation.y + (self.keyboardGestureAccessoryHeight ?? 0.0) > self.windowLayout.size.height - inputHeight {
+            // This release spent the finger's downward motion on the keyboard. Published for the
+            // duration of the touch sequence so a scroll view released by the SAME finger — its pan
+            // reports `.ended` later, in action dispatch — can decline to also fling its content.
+            self.dismissedKeyboardByCurrentGestureValue = true
+            
             let springDuration: CGFloat
             if #available(iOS 26.0, *) {
                 springDuration = 0.3832
