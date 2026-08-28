@@ -41,6 +41,13 @@ private extension ComponentTransition.Animation.Curve {
         case .linear: self = .linear
         case let .custom(a, b, c, d): self = .custom(a, b, c, d)
         case let .bounce(stiffness, damping): self = .bounce(stiffness: stiffness, damping: damping)
+        case .uiKitSmoothDeceleration:
+            // Lossy, and the only lossy arm here: ComponentFlow has no critically-damped-spring
+            // case, and its `.custom` is a cubic bezier, which is exactly what this curve is not.
+            // `.spring` is the nearest family. This bridge only feeds item-internal
+            // ContainedViewLayoutTransitions — the scroll itself is animated by CoreList from the
+            // real CASpringAnimation, so the approximation never reaches the offset.
+            self = .spring
         }
     }
 }
@@ -844,7 +851,20 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             case let .Spring(duration):
                 transition = .spring(duration: duration)
             case let .Default(duration):
-                transition = .easeInOut(duration: duration ?? 0.3)
+                // UIKit's **scroll-to-top** animation, not `setContentOffset(_:animated:)`.
+                //
+                // Both are real UIScrollView curves and they are nothing alike. `.uiKitScroll` is
+                // `sin²(t·π/2)` over a FIXED 0.3s regardless of distance, which is right for a short
+                // `scrollRectToVisible` nudge and reads as a snap over a chat-sized jump — which is
+                // exactly why UIKit does not use it for scroll-to-top either. `.uiKitSmoothDeceleration`
+                // is the critically damped spring UIKit installs for a status-bar tap, and it is the
+                // one a "scroll there" gesture in a long list should feel like.
+                //
+                // A caller-supplied duration still wins; nil takes CoreList's 1.15s default (the
+                // same curve as UIKit's 1.6s settle, replayed ~1.39x faster — see
+                // `coreListSmoothDecelerationDefaultDuration`).
+                transition = duration.map { .uiKitSmoothDeceleration(duration: $0) }
+                    ?? .uiKitSmoothDeceleration()
             case let .Custom(duration, x1, y1, x2, y2):
                 transition = .init(animation: .curve(duration: duration,
                                                      curve: .custom(x1, y1, x2, y2)))

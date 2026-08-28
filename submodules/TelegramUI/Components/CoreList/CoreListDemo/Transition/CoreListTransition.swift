@@ -36,7 +36,51 @@ public struct CoreListTransition: Equatable {
             case custom(Float, Float, Float, Float)
             case bounce(stiffness: CGFloat, damping: CGFloat)
 
+            /// UIKit's **scroll-to-top** curve — a critically damped spring, not a bezier.
+            ///
+            /// This is the one `UIScrollView` uses for a status-bar tap and for
+            /// `_setContentOffsetWithDecelerationAnimation:`, and it is a genuinely different family
+            /// from `.uiKitScroll`: distance-insensitive 0.3s `sin²` there, a critically damped
+            /// settle here. Constants and the closed form live in `CoreListSpringAnimation.swift`;
+            /// note the spring's NATURAL settle is UIKit's 1.6s while CoreList plays it at 1.15s, the
+            /// same unit curve at a different speed.
+            ///
+            /// Unlike `.uiKitScroll` this could NOT be spelled as a `.custom` bezier — a spring with
+            /// a long asymptotic tail is not a cubic — so it costs a real case, and therefore a
+            /// branch in every exhaustive switch over `Curve` (all compile-enforced, including the
+            /// `ComponentTransition` bridge in `CoreListChatHistoryBackend.swift`).
+            case uiKitSmoothDeceleration
+
             public static var slide: Curve { .custom(0.33, 0.52, 0.25, 0.99) }
+
+            /// `UIScrollView.setContentOffset(_:animated: true)`'s curve.
+            ///
+            /// UIKit does not use a bezier here at all. `setContentOffset:animated:` forwards to
+            /// `_setContentOffset:animated:animationCurve:` with curve **0**, and
+            /// `_animateScrollToContentOffset:…` installs a `UIScrollViewScrollAnimation` whose
+            /// `progressForFraction:` defers to `-[UIAnimation progressForFraction:]` whenever no
+            /// `_customAnimation` is set — which is the case for every plain animated scroll. That
+            /// function switches on `animationCurve & 0xf`, and case 0 computes
+            ///
+            ///     progress = sin(t · π/2)²     ≡  (1 − cos(π·t)) / 2
+            ///
+            /// (disassembly: `sin`, then `fmul s0, s0, s0`). Cases 1 and 2 are the half-angle
+            /// forms `sin(t·π/2)` and `1 − cos(t·π/2)`; anything ≥ 3 returns the input unchanged.
+            ///
+            /// The companion duration is `_contentOffsetAnimationDuration`, which
+            /// `-[UIScrollView initWithFrame:]` stores as the literal `0x3FD3333333333333` —
+            /// **0.3s**, fixed and independent of distance. `CoreListTransition.uiKitScroll(…)`
+            /// defaults to it.
+            ///
+            /// Since `sin²` is not expressible as a `CAMediaTimingFunction`, these control points
+            /// are the minimax cubic-bezier fit to it, which keeps CoreList on the
+            /// `CABasicAnimation` path and keeps `solve(at:)` and the render server evaluating the
+            /// *same* function (the analytic-first invariant — see `mediaTimingFunction`). The fit
+            /// is point-symmetric about (0.5, 0.5) exactly as the true curve is, and its peak error
+            /// is **1.97e-4** of the travel — 0.1pt over 500pt, well inside the `1/screenScale`
+            /// pixel grid that `-[UIScrollViewScrollAnimation setProgress:]` snaps UIKit's own
+            /// output to. `UIScrollViewCurveParityTests` pins both the fit and the provenance.
+            public static var uiKitScroll: Curve { .custom(0.3643, 0.0, 0.6357, 1.0) }
         }
 
         case none
@@ -79,6 +123,28 @@ public struct CoreListTransition: Equatable {
 
     public static func spring(duration: Double) -> CoreListTransition {
         CoreListTransition(animation: .curve(duration: duration, curve: .spring))
+    }
+
+    /// `UIScrollView.setContentOffset(_:animated: true)`, curve and duration together.
+    ///
+    /// The default is UIKit's own `_contentOffsetAnimationDuration` — 0.3s, fixed regardless of
+    /// distance. See `Curve.uiKitScroll` for the derivation.
+    public static func uiKitScroll(duration: Double = 0.3) -> CoreListTransition {
+        CoreListTransition(animation: .curve(duration: duration, curve: .uiKitScroll))
+    }
+
+    /// UIKit's **scroll-to-top** animation, curve and duration together.
+    ///
+    /// The default is `coreListSmoothDecelerationDefaultDuration` — **1.15s**, not UIKit's own 1.6s
+    /// settle. Passing any duration replays the identical unit curve at a different speed (that is
+    /// how `makeCoreListAnimation` maps every system spring onto a pass), so the shape, the critical
+    /// damping and the absence of overshoot are unchanged; only the clock moves. At 1.15s: half the
+    /// travel by ~0.115s, ~96% by ~0.35s, then the spring's asymptotic tail — which is what makes
+    /// this read as "smooth" rather than as a long animation.
+    public static func uiKitSmoothDeceleration(
+        duration: Double = coreListSmoothDecelerationDefaultDuration
+    ) -> CoreListTransition {
+        CoreListTransition(animation: .curve(duration: duration, curve: .uiKitSmoothDeceleration))
     }
 
     /// True when this transition must settle its target with no animation. Unlike ComponentFlow,
@@ -354,7 +420,11 @@ public extension CoreListTransition {
             options = [.curveEaseIn]
         case .spring:
             options = UIView.AnimationOptions(rawValue: 7 << 16)
-        case .easeInOut, .custom, .bounce:
+        case .easeInOut, .custom, .bounce, .uiKitSmoothDeceleration:
+            // `.uiKitSmoothDeceleration` degrades here for the same reason `.custom` does: a
+            // UIView block animation cannot take a spring's parameters without
+            // `CALayerSpringParametersOverride`, which is private API CoreList cannot reach. Layer
+            // animations (the path scrolling actually uses) get the real spring.
             options = [.curveEaseInOut]
         }
         if allowUserInteraction {
