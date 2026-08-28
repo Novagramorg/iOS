@@ -136,6 +136,33 @@ rebuilds when the node is missing, content is dirty, or the width changed, then 
 - **Fresh build:** when there is no node yet, it calls `listItem.nodeConfiguredForParams(...)` and adds
   the resulting `node.view`.
 
+### `synchronousLoads` is a property of the pass, not of the row
+
+The fresh-build path is reached by **every row that scrolls into view**, so the `synchronousLoads`
+argument it passes cannot be a constant. `ListViewImpl` reads it off the transaction's options
+(`.PreferSynchronousResourceLoading` → `nodeForItem`, `Display/Source/ListView.swift:2135`) and so
+applies it only to the nodes *that* transaction creates. The chat asks for it on two paths: the first
+view of a chat opened without an animation (`.Initial(fadeIn: false)`,
+`PreparedChatHistoryViewTransition.swift:94`) and the send animation
+(`Chat/ChatControllerLoadDisplayNode.swift:929`).
+
+`chatHistoryTransaction` therefore parks the option in
+`CoreListChatHistoryBackend.prefersSynchronousResourceLoading` for the duration of the transaction
+(`defer`-cleared), and both host views read it **live** at the moment they build a node —
+`CoreListNodeHostView.rebuild` for rows and `CoreListHeaderHostView.update(width:)` for headers,
+whose `ChatMessageAvatarHeader` forwards it into `AvatarNode.setPeer(..., synchronousLoad:)`.
+
+A live read rather than a value seeded at `view()` time (which is what the sibling
+`isFlashingOnScrolling` does): the question is *which pass is building this node*, and only the
+backend can answer it. Outside a transaction — a scroll rebalance, an overscroll hold — it is false,
+which is the right answer for every node those passes create. A re-entrant transaction that CoreList
+defers to its scheduler (`CoreVirtualListView.swift:964`) finds the flag already cleared and builds
+asynchronously; that is the safe direction, and the one `ListViewImpl` errs in too when a transaction
+queues behind another.
+
+Both were hard-coded `true` in the PoC, which decoded every arriving bubble's images — and every
+gutter avatar of every sender run — on the main thread mid-fling.
+
 Both paths drive the item **synchronously** (`async: { f in f() }`); this is sound because
 `ChatMessageItemImpl.updateNode`/`nodeConfiguredForParams` wrap work in `Queue.mainQueue().async`,
 which runs inline when already on the main queue (the transaction path is main-thread). CoreList owns

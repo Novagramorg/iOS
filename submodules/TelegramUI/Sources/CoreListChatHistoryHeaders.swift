@@ -103,7 +103,8 @@ final class CoreListHeaderAttachedItem: CoreListAttachedItem {
         return CoreListHeaderHostView(header: self.header,
                                       isFlashingOnScrolling: self.backend?.isFlashingHeaders ?? false,
                                       leftInset: self.leftInset,
-                                      rightInset: self.rightInset)
+                                      rightInset: self.rightInset,
+                                      backend: self.backend)
     }
 
     // Content equality, NOT instance equality. Chat rebuilds its header instances on every
@@ -165,11 +166,16 @@ final class CoreListHeaderHostView: UIView, CoreListAttachedItemView {
 
     var onContentDidChange: ((_ animated: Bool) -> Void)? = nil
 
-    init(header: ListViewItemHeader, isFlashingOnScrolling: Bool, leftInset: CGFloat, rightInset: CGFloat) {
+    // Held only to read `prefersSynchronousResourceLoading` at node-build time. Weak, like the
+    // reference on `CoreListHeaderAttachedItem` above and for the same reason.
+    private weak var backend: CoreListChatHistoryBackend?
+
+    init(header: ListViewItemHeader, isFlashingOnScrolling: Bool, leftInset: CGFloat, rightInset: CGFloat, backend: CoreListChatHistoryBackend?) {
         self.header = header
         self.isFlashingOnScrolling = isFlashingOnScrolling
         self.leftInset = leftInset
         self.rightInset = rightInset
+        self.backend = backend
         super.init(frame: .zero)
     }
 
@@ -209,7 +215,12 @@ final class CoreListHeaderHostView: UIView, CoreListAttachedItemView {
         if let existing = self.headerNode {
             headerNode = existing
         } else {
-            headerNode = self.header.node(synchronousLoad: true)
+            // The header half of the same pass-scoped question the row half asks — see
+            // `CoreListChatHistoryBackend.prefersSynchronousResourceLoading`. `ChatMessageAvatarHeader`
+            // forwards it into `AvatarNode.setPeer(..., synchronousLoad:)`
+            // (ChatMessageDateHeader.swift:944, :1025), so hard-coding `true` decoded a gutter avatar
+            // on the main thread for every sender run that scrolled in.
+            headerNode = self.header.node(synchronousLoad: self.backend?.prefersSynchronousResourceLoading ?? false)
             self.headerNode = headerNode
             self.addSubview(headerNode.view)
             // ListViewImpl seeds a new header node the same way

@@ -81,6 +81,26 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     
     private var nextStableVersion: Int = 1
 
+    // `ListViewDeleteAndInsertOptions.PreferSynchronousResourceLoading` for the pass that is running
+    // right now, read by the two host views at the moment they build a node
+    // (`CoreListNodeHostView.rebuild`, `CoreListHeaderHostView.update(width:)`).
+    //
+    // It is a property of the PASS and of nothing else — ListViewImpl reads it off the transaction's
+    // options and hands it to `nodeForItem`/`updateItemHeaders` for exactly the nodes that
+    // transaction creates (Display/Source/ListView.swift:2135, :3617). It means "the images in the
+    // nodes this transaction builds must already be decoded when it returns", which the chat asks for
+    // on two paths only: the first view of a chat opened without an animation
+    // (`.Initial(fadeIn: false)` — PreparedChatHistoryViewTransition.swift:94) and the send animation
+    // (Chat/ChatControllerLoadDisplayNode.swift:929). Everywhere else — every row scrolled into view
+    // — a synchronous decode is a main-thread stall for an image the async path would have delivered
+    // a frame later.
+    //
+    // Hence a live read rather than a value seeded into the view at `view()` time, which is what the
+    // sibling `isFlashingOnScrolling` does: the question is "which pass is building this node", and
+    // only the backend can answer it. Outside a transaction — a scroll rebalance, an overscroll hold
+    // — it is false, which is the correct answer for every node those passes create.
+    private(set) var prefersSynchronousResourceLoading: Bool = false
+
     // MARK: - Narrow scroll-view accessors
     var bounces: Bool = true
     var contentHeight: CGFloat { return self.coreList.settledContentHeight }
@@ -715,6 +735,19 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     ) {
         if let updateOpaqueState = updateOpaqueState {
             self.opaqueTransactionState = updateOpaqueState
+        }
+
+        // Scoped to the transaction, because that is the scope ListViewImpl gives it: nodes this pass
+        // builds load synchronously, nodes any later pass builds do not. See the property.
+        //
+        // The window build that consumes it runs inline inside `applyChanges` below. The one case
+        // where it does not is a re-entrant call, which CoreList defers to its scheduler
+        // (CoreVirtualListView.swift:964) — the deferred pass then finds the flag already cleared and
+        // builds asynchronously. That is the safe direction to be wrong in, and it is the same
+        // direction ListViewImpl errs in when a transaction is queued behind another.
+        self.prefersSynchronousResourceLoading = options.contains(.PreferSynchronousResourceLoading)
+        defer {
+            self.prefersSynchronousResourceLoading = false
         }
 
         // Evaluated HERE, before the new insets are installed below, because the predicate is "is the
@@ -1501,7 +1534,8 @@ private final class CoreListEntryItem: CoreListItem {
                                     neighbors: self.neighbors,
                                     leftInset: self.leftInset,
                                     rightInset: self.rightInset,
-                                    rotated: self.backend?.rotated ?? true)
+                                    rotated: self.backend?.rotated ?? true,
+                                    backend: self.backend)
     }
 
     // Content equality: the engine matches rows by `identity` (= stableId); this additionally compares
@@ -1563,14 +1597,20 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
     private var leftInset: CGFloat
     private var rightInset: CGFloat
 
-    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors, leftInset: CGFloat, rightInset: CGFloat, rotated: Bool) {
+    init(listItem: ListViewItem, neighbors: ListViewItemNeighbors, leftInset: CGFloat, rightInset: CGFloat, rotated: Bool, backend: CoreListChatHistoryBackend?) {
         self.listItem = listItem
         self.neighbors = neighbors
         self.leftInset = leftInset
         self.rightInset = rightInset
         self.rotated = rotated
+        self.backend = backend
         super.init(frame: .zero)
     }
+
+    // Held only to read `prefersSynchronousResourceLoading` at node-build time — see that property.
+    // Weak for the same reason `CoreListEntryItem`'s reference is: the backend owns the list that
+    // owns this view.
+    private weak var backend: CoreListChatHistoryBackend?
 
     // Construction-only, like `rotated` on the backend itself: which end of the node's box is the
     // reserved space a non-`spansMemberInsets` attachment must not ride over. Verbatim
@@ -1816,7 +1856,12 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         } else {
             var resolvedNode: ListViewItemNode?
             var applyClosure: (() -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void))?
-            self.listItem.nodeConfiguredForParams(async: { f in f() }, params: params, synchronousLoads: true, neighbors: self.neighbors, completion: { node, apply in
+            // `true` only for the pass that asked for it — the first view of a chat opened without an
+            // animation, and the send animation. This is a fresh-node path, so it is reached by every
+            // row that scrolls into view, and forcing it there decodes each arriving bubble's images
+            // on the main thread mid-fling instead of letting them land a frame later.
+            let synchronousLoads = self.backend?.prefersSynchronousResourceLoading ?? false
+            self.listItem.nodeConfiguredForParams(async: { f in f() }, params: params, synchronousLoads: synchronousLoads, neighbors: self.neighbors, completion: { node, apply in
                 resolvedNode = node
                 applyClosure = apply
             })
