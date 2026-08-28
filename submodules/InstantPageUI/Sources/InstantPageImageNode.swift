@@ -342,6 +342,22 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         // The file/video branch installs no status/fetchControls (video tap is ungated and uses
         // `self.media`, refreshed above), so no further work is needed for it.
     }
+
+    /// Re-points ONLY the `media` value — no reference, fetch-status or image-signal work.
+    ///
+    /// For a re-layout that keeps the same media id but changes the surrounding `InstantPageMedia`
+    /// (caption, credit, url, or a photo/file that compares unequal under the same id — a message
+    /// edit, or a server round-trip returning different representations). `self.media` is the value
+    /// the tap hands to `openInstantPageMedia`, which matches it against the CURRENT layout's
+    /// medias, and it is what `transitionNode` / `updateHiddenMedia` are matched against; letting it
+    /// drift means those lookups stop resolving and the gallery never opens.
+    ///
+    /// Distinct from `updateInteractiveMediaBinding`, which is for the Local→Cloud id flip and
+    /// additionally re-subscribes the fetch status — deliberately NOT done here, since re-arming
+    /// that subscription for an unchanged resource would flicker the status back through `.Remote`.
+    func updateMediaValue(_ media: InstantPageMedia) {
+        self.media = media
+    }
     
     private func loadExternalImage(resourceUrl: String) {
         self.externalImageLoadState = .loading
@@ -463,6 +479,16 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
                 default:
                     break
             }
+        }
+        // Re-attach before showing anything: the `.none` transition below detaches the node, so a
+        // status that goes back to `.Remote`/`.Fetching` — which happens when
+        // `updateInteractiveMediaBinding` re-points the subscription at a Cloud resource whose bytes
+        // are not local yet — would otherwise render its download/progress ring on a node that is no
+        // longer in the hierarchy. The tap then takes the `.Remote` branch (fetch instead of open)
+        // with NO visible indicator, reading as "tapping the image does nothing".
+        // Mirrors `updateExternalImageLoadState`.
+        if state != .none, self.statusNode.supernode == nil {
+            self.pinchContainerNode.contentNode.addSubnode(self.statusNode)
         }
         self.statusNode.transitionToState(state, completion: { [weak statusNode] in
             if state == .none {
