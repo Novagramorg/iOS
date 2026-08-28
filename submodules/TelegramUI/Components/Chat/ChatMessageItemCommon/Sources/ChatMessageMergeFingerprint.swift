@@ -45,6 +45,7 @@ public struct ChatMessageSourceAuthorKey: Equatable {
 public struct ChatMessageMergeFingerprint: Equatable {
     let peerId: EnginePeer.Id
     let isEphemeral: Bool
+    let isWelcomeMessage: Bool
     let rawAuthorId: EnginePeer.Id?
     let overriddenAuthorId: EnginePeer.Id?
     let hasBroadcastProfiles: Bool
@@ -66,6 +67,7 @@ public struct ChatMessageMergeFingerprint: Equatable {
     public init(message: EngineRawMessage, accountPeerId: EnginePeer.Id) {
         self.peerId = message.id.peerId
         self.isEphemeral = Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)
+        self.isWelcomeMessage = Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)
         self.rawAuthorId = message.author?.id
         self.timestamp = message.timestamp
         self.isEffectivelyIncoming = message.effectivelyIncoming(accountPeerId)
@@ -239,7 +241,9 @@ public func chatMessageMerge(upper: ChatMessageMergeFingerprint,
         isNonMergeablePaid = false
     }
 
-    if abs(upperEffectiveTimestamp - lowerEffectiveTimestamp) < Int32(10 * 60)
+    // Welcome templates can be created far apart, but recipients receive them as one batch.
+    let isWelcomeMessagePair = upper.isWelcomeMessage && lower.isWelcomeMessage
+    if (isWelcomeMessagePair || abs(upperEffectiveTimestamp - lowerEffectiveTimestamp) < Int32(10 * 60))
         && sameChat && sameAuthor && sameThread && !isNonMergeablePaid {
         if let groupChannelId = upper.groupChannelId,
            upperEffectiveAuthorId == groupChannelId,

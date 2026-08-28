@@ -453,7 +453,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             displayInputTextPanel = true
         }
         
-        if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(_, true) = chatHistoryState {
+        if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(_, true) = chatHistoryState, chatPresentationInterfaceState.interfaceState.editMessage == nil {
             if let currentPanel = (currentPanel as? ChatRestrictedInputPanelNode) ?? (currentSecondaryPanel as? ChatRestrictedInputPanelNode) {
                 return (currentPanel, nil)
             } else {

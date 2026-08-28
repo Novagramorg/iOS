@@ -475,7 +475,12 @@ private func performPreparedEphemeralMessageSend(account: Account, prepared: Pre
         switch content.content {
         case let .text(text):
             media = nil
-            richMessage = nil
+            if let richTextAttribute = prepared.message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
+                richMessage = richTextAttribute.apiInputRichMessage()
+                flags |= (1 << 4)
+            } else {
+                richMessage = nil
+            }
             messageText = text
         case let .media(inputMedia, text):
             media = inputMedia
