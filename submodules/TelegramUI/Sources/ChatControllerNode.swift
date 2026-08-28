@@ -3574,7 +3574,24 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if (self.context.sharedContext.currentPresentationData.with({ $0 })).reduceMotion {
                     return
                 }
-                if self.context.sharedContext.energyUsageSettings.fullTranslucency {
+                // A swipe-dismissal is the one inset jump that must NOT drive the wallpaper. The event is
+                // expensive at its start — it synthesizes the gradient tween and recomposes the pattern —
+                // and here that lands in the very runloop turn that commits the dismissal, so the chat
+                // lurches behind the keyboard.
+                //
+                // Only CoreList reaches this at all. `ListViewImpl` installs its insets one
+                // `Queue.mainQueue().async` hop later (ListView.swift, the `.LowLatency`/`.Synchronous`
+                // branch feeding `replayOperations`), so `listBottomInset` still reads the pre-pass value
+                // here and the delta is exactly zero; `CoreListChatHistoryBackend` installs them inline.
+                // Hence the backend gate: this suppresses a behavior that only exists under CoreList
+                // rather than removing one ListViewImpl has.
+                //
+                // `dismissedInputByDragging` (computed at the top of this pass) is the right question and
+                // is already settled by now: it means the PREVIOUS layout was interactively changing the
+                // input height and this one is not — i.e. this is the release pass, the same pass that
+                // carries the >80pt jump. Tap-to-dismiss and keyboard-open still animate.
+                let isSwipeDismissal = self.historyNode.usesCoreListBackend && dismissedInputByDragging
+                if self.context.sharedContext.energyUsageSettings.fullTranslucency && !isSwipeDismissal {
                     self.backgroundNode.animateEvent(transition: transition, extendAnimation: false)
                 }
             }
