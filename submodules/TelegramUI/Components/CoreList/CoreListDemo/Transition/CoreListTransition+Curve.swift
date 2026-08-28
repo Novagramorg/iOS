@@ -96,6 +96,11 @@ public extension CoreListTransition.Animation.Curve {
             return x
         case let .custom(c1x, c1y, c2x, c2y):
             return coreListBezierPoint(CGFloat(c1x), CGFloat(c1y), CGFloat(c2x), CGFloat(c2y), x)
+        case .uiKitSmoothDeceleration:
+            // Not a bezier at all — the closed form of the critically damped spring CA is rendering,
+            // so the model and the render server evaluate the same function. See
+            // `coreListSmoothDecelerationProgress`.
+            return coreListSmoothDecelerationProgress(phase: x)
         case .bounce:
             assertionFailure("`.bounce` is not a unit curve; CoreList samples `.spring` instead")
             let (x1, y1, x2, y2) = coreListAdjustedSpring

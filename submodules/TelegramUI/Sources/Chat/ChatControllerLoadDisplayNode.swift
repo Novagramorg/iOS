@@ -5567,9 +5567,9 @@ extension ChatControllerImpl {
             downPressed: buttonAction
         )
 
-        historyNode.openNextChannelToRead = { [weak self] peer, threadData, location in
+        historyNode.openNextChannelToRead = { [weak self] peer, threadData, location -> Bool in
             guard let strongSelf = self else {
-                return
+                return false
             }
             if let navigationController = strongSelf.effectiveNavigationController {
                 let _ = ApplicationSpecificNotice.incrementNextChatSuggestionTip(accountManager: strongSelf.context.sharedContext.accountManager).startStandalone()
@@ -5619,6 +5619,31 @@ extension ChatControllerImpl {
                 strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: strongSelf.context, chatLocation: chatLocation, animated: false, chatListFilter: nextFolderId, chatNavigationStack: updatedChatNavigationStack, completion: { nextController in
                     (nextController as! ChatControllerImpl).animateFromPreviousController(snapshotState: snapshotState)
                 }, customChatNavigationStack: strongSelf.customChatNavigationStack))
+                // Navigation started: the caller may keep the overscroll control frozen, and the
+                // snapshot taken above now owns it.
+                return true
+            }
+            // Declined — no navigation controller to push onto. Reporting this is what stops the
+            // caller stranding a frozen control on a chat that is staying put.
+            return false
+        }
+        
+        // A flick that dismisses the keyboard (or the entity keyboard) is spent on that dismissal; the
+        // history must not also fling. Both dismissals are decided during touch delivery, so by the time
+        // this predicate is consulted — at the backend's release, in gesture action dispatch — the answer
+        // is already known. See `ChatControllerNode.dismissedInputByCurrentGesture`.
+        //
+        // Installed only on the CoreList backend, asked of the node rather than re-derived from the
+        // selection policy. `ListViewImpl` has the same hook and would honour it identically, but this
+        // is a deliberate behaviour change: there a dismissing flick still flings, stopped only by the
+        // snap-back at `ChatControllerNode.containerLayoutUpdated` — which needs the drag to have begun
+        // at the newest message, and lands a keyboard-animation later.
+        if historyNode.usesCoreListBackend {
+            historyNode.shouldStopScrolling = { [weak self] _ in
+                guard let self, self.isNodeLoaded else {
+                    return false
+                }
+                return self.chatDisplayNode.dismissedInputByCurrentGesture
             }
         }
         

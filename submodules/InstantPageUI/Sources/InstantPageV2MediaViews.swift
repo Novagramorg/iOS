@@ -245,7 +245,8 @@ final class InstantPageV2MediaImageView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaImageItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
-        let previousMediaId = self.item.media.media.id
+        let previousMedia = self.item.media
+        let previousMediaId = previousMedia.media.id
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
@@ -260,6 +261,13 @@ final class InstantPageV2MediaImageView: UIView, InstantPageItemView {
         // reloaded (no blink).
         if item.media.media.id != previousMediaId {
             self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+        } else if item.media != previousMedia {
+            // Same medium, DIFFERENT surrounding value — caption/credit/url, or a photo that
+            // compares unequal under an unchanged id (a message edit, or the server round-trip
+            // returning different representations). The id check above does not cover it, and the
+            // node's `media` is the value a tap hands to the gallery's lookup, so letting it drift
+            // silently kills tap-to-open. See `updateMediaValue`.
+            self.wrappedNode.updateMediaValue(item.media)
         }
         self.updateSpoiler(renderContext: renderContext)
     }
@@ -405,7 +413,8 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaVideoItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
-        let previousMediaId = self.item.media.media.id
+        let previousMedia = self.item.media
+        let previousMediaId = previousMedia.media.id
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
@@ -417,6 +426,10 @@ final class InstantPageV2MediaVideoView: UIView, InstantPageItemView {
         // inline video node is rebuilt separately below (keyed by media id).
         if item.media.media.id != previousMediaId {
             self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+        } else if item.media != previousMedia {
+            // See the image view: same medium, drifted value. A video's tap is ungated by fetch
+            // status, so this lookup is the ONLY thing standing between the tap and the gallery.
+            self.wrappedNode.updateMediaValue(item.media)
         }
         self.updateSpoiler(renderContext: renderContext)
         self.updateInlineVideo(renderContext: renderContext)
@@ -598,12 +611,20 @@ final class InstantPageV2MediaMapView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaMapItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
+        let previousMedia = self.item.media
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
         let strings = renderContext.context.sharedContext.currentPresentationData.with { $0 }.strings
         self.wrappedNode.update(strings: strings, theme: theme)
         self.wrappedNode.captureProtected = renderContext.captureProtected
+        // A map tap opens LocationViewController straight from the tapped value, so it does not go
+        // through the gallery's lookup — but `transitionNode` / `updateHiddenMedia` still match
+        // against the node's `media`, so keep it in step. There is no id-flip branch here: a map has
+        // no uploadable resource, so its media id never changes under a reused view.
+        if item.media != previousMedia {
+            self.wrappedNode.updateMediaValue(item.media)
+        }
     }
 
     func instantPageTransitionNode(for media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
@@ -662,7 +683,8 @@ final class InstantPageV2MediaCoverImageView: UIView, InstantPageItemView {
     }
 
     func update(item: InstantPageV2MediaCoverImageItem, theme: InstantPageTheme, renderContext: InstantPageV2RenderContext) {
-        let previousMediaId = self.item.media.media.id
+        let previousMedia = self.item.media
+        let previousMediaId = previousMedia.media.id
         self.item = item
         self.layer.cornerRadius = item.cornerRadius
         self.clipsToBounds = item.cornerRadius > 0.0
@@ -672,6 +694,9 @@ final class InstantPageV2MediaCoverImageView: UIView, InstantPageItemView {
         // See the image view: refresh interactive bindings on the Local→Cloud send media-id flip.
         if item.media.media.id != previousMediaId {
             self.wrappedNode.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: item.media, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+        } else if item.media != previousMedia {
+            // See the image view: same medium, drifted value.
+            self.wrappedNode.updateMediaValue(item.media)
         }
     }
 

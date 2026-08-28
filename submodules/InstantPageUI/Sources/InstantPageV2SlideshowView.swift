@@ -179,6 +179,19 @@ final class InstantPageV2SlideshowView: UIView, InstantPageItemView, UIScrollVie
             for node in self.pageImageNodes {
                 node.update(strings: strings, theme: theme)
                 node.captureProtected = renderContext.captureProtected
+                // The reuse check above compares only the INDEX list, so a page keeps its node while
+                // its media value moves underneath it. The node's `media` is what a tap hands to the
+                // gallery's lookup, so it has to be re-pointed or tap-to-open silently stops working
+                // (see `InstantPageImageNode.updateMediaValue`). Matched by index rather than by
+                // position: a non-renderable media contributes a page but no node.
+                guard let updated = self.item.medias.first(where: { $0.index == node.media.index }), updated != node.media else {
+                    continue
+                }
+                if updated.media.id != node.media.media.id {
+                    node.updateInteractiveMediaBinding(sourceLocation: renderContext.sourceLocation, media: updated, imageReferenceForMedia: renderContext.imageReference, fileReferenceForMedia: renderContext.fileReference)
+                } else {
+                    node.updateMediaValue(updated)
+                }
             }
         }
         self.setNeedsLayout()

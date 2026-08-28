@@ -78,6 +78,18 @@ provides `offset`, programmatic `setOffset`/`applyShift`, edge declaration, user
 interval only**: neither fires for momentum, bounce or programmatic writes, so a host can maintain a
 `ListViewImpl.isTracking` equivalent from them.
 
+It also provides `shouldStopScrollingOnRelease`, consulted ONCE per release with the recognizer
+velocity, before the engine decides whether momentum follows. It exists for a host whose release was
+already claimed by something outside the list — the chat's history is dragged by the same finger that
+interactively dismisses the keyboard, and that dismissal is decided in touch DELIVERY, so it is known
+by the time the pan's `.ended` reaches the engine in action dispatch. **Suppression is expressed as a
+zero-velocity release, not as skipping the release:** `ReleaseDecision` answers `.stop` for a zero
+sample and expires the repeated-flick streak (what a genuinely slow release leaves behind), and `.stop`
+while overscrolled still installs the spring-back — skipping `endDrag` instead would strand an
+overscrolled list off its edge. `ListViewImpl.shouldStopScrolling` is the same hook on the other chat
+backend, and `UIKitScrollEngine` honours it the UIKit way, by projecting `targetContentOffset` onto the
+current offset. Covered by `ReleaseSuppressionTests`.
+
 - `UIKitScrollEngine` is the production default and the only list component that knows
   `UIScrollView`. It owns the private 10,000,000-point virtual canvas and prevents programmatic
   offset writes from re-entering the user-scroll callback.
@@ -282,7 +294,9 @@ caller-owned.
 edge transitions (above); `willBeginDragging` / `didEndDragging` fire on interactive drag start and end
 (forwarded from `ScrollEngine.onWillBeginDragging`/`onDidEndDragging`; the analogues of
 `ListViewImpl.beganInteractiveDragging`/`endedInteractiveDragging`, and together the finger-down
-interval a host needs to reproduce `ListViewImpl.isTracking`).
+interval a host needs to reproduce `ListViewImpl.isTracking`); `shouldStopScrolling` forwards to
+`ScrollEngine.shouldStopScrollingOnRelease` so a host can decline the momentum of a release it has
+already spent elsewhere (above).
 `loadedItemViews` is a **non-copying** `Sequence` over the settled window's item views in ascending
 index order — it walks `activeWindow.items` in place (a COW snapshot; no array built, no element
 copied, safe to mutate the list mid-iteration), the iterator-based analogue of
@@ -1183,15 +1197,30 @@ Animation an authority.
     releases above the threshold at ~0 pts/ms, below `Deceleration.velocityFloor` — and an overscrolled
     release already inside `settleTolerance`. Both settle inside the hand-off's own step, and building a
     `KeyframeFlight` from the resulting `.idle` core trips its precondition assert on device.
-    **The overscrolled one is an everyday gesture, and the pixel grid is why:** the spring's rest is
-    pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
-    release speed, comes to rest at exactly −1/3 pt. The content therefore sits overscrolled inside the
-    tolerance after any bounce, and the next tap or sub-threshold release springs back from there with
-    nothing left to play. At the tests' default scale 1 it rounds to −0.0 instead, so a fixture that
-    never sets a device scale cannot see it. `.stepped` absorbs both cases silently in its first link
-    callback, and `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this
-    lives only on the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through
-    `applyPanUpdate` (the seam) and at the core.
+    The overscrolled one used to be an everyday gesture, and the pixel grid was why: the spring's rest
+    is pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
+    release speed, came to rest at exactly −1/3 pt and STAYED there. **That is fixed — see the settle
+    clamp below — so a bounce now lands ON the edge and only a release made inside the tolerance
+    reaches this state.** The precondition itself is unchanged and still live. At the tests' default
+    scale 1 the old rest rounded to −0.0 instead, so a fixture that never sets a device scale could not
+    see it at all. `.stepped` absorbs both cases silently in its first link callback, and
+    `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this lives only on
+    the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through `applyPanUpdate`
+    (the seam) and at the core.
+- **A settle at an edge must land ON the edge — `Deceleration.settleIfNeeded` clamps it, and every
+  `step` exit goes through that rather than through `settled()`.** The tolerance is what lets the
+  spring stop in finite time (out of bounds, `settled()` accepts any rest within `settleTolerance`),
+  but it must not leave the offset where it stopped: a real `UIScrollView` bounce lands exactly on
+  `-contentInset`, and consumers are written against that guarantee. Unclamped, the ⅓pt grid parked
+  every bounce at −1/3 pt permanently (above), and the resting overscroll then read as a live
+  overscroll to anything with a tighter threshold. Measured on device: `ChatHistoryListNodeImpl` keeps
+  its next-channel control while `visibleContentOffset() < -0.1`, so a resting −0.333 pinned a
+  transparent 94pt host view over the bottom of every affected chat and swallowed taps there
+  **permanently** — no later emission corrected it, because the list was genuinely at rest and this
+  backend has no per-frame hook there. The control drew at zero expansion (`max(0.333 - 12, 0)`), so
+  nothing appeared to be on screen. Note how far the symptom sits from the cause: a third of a point
+  of physics residue, surfacing as dead touches in a chat. Anything downstream comparing an offset
+  against a small threshold is exposed the same way.
 - **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
   animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
   real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no

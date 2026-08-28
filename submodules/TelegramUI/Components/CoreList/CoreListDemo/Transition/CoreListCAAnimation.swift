@@ -51,7 +51,13 @@ func makeCoreListAnimation(fromValue: Any?,
     let animation: CABasicAnimation
     var isSystemSpring = false
 
-    if case .spring = curve {
+    if case .uiKitSmoothDeceleration = curve {
+        // A real CASpringAnimation, exactly as UIKit installs for scroll-to-top. It goes down the
+        // `isSystemSpring` path below so its natural 1.6s settle is mapped onto the pass duration as
+        // `speed`, the same way the two system springs are.
+        animation = makeCoreListSmoothDecelerationAnimation(keyPath)
+        isSystemSpring = true
+    } else if case .spring = curve {
         switch springKind {
         case .system26:
             animation = makeCoreList26SpringAnimation(keyPath, logicalDuration)
@@ -106,6 +112,12 @@ extension CoreListTransition.Animation.Curve {
             // Reached for `.spring`'s adjustedBezier branch, and for `.bounce`, which degrades to
             // the same adjusted curve.
             return CAMediaTimingFunction(controlPoints: 0.380, 0.700, 0.125, 1.000)
+        case .uiKitSmoothDeceleration:
+            // Unreachable from `makeCoreListAnimation` (that case emits a real CASpringAnimation
+            // before consulting this). Returns the timing function UIKit itself hangs on the
+            // animation, which UIKit also never evaluates — `progressForFraction:` computes it and
+            // then overwrites it from the CASpringAnimation branch.
+            return CAMediaTimingFunction(controlPoints: 0.0, 0.2, 1.0, 1.0)
         }
     }
 }

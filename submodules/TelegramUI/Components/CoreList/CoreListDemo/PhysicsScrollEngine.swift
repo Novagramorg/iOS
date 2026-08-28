@@ -128,6 +128,7 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     var onFlightChanged: ((ScrollFlight?) -> Void)?
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
+    var shouldStopScrollingOnRelease: ((CGFloat) -> Bool)?
     /// The physics scroll position, advanced once per frame by whichever driver is running — NEVER a sample of
     /// the flight. Consumers may read this as many times as they like within a frame and get one coherent
     /// value; a consumer that reads it twice around its own work (the list does, three times per mutation
@@ -200,6 +201,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         core.cancelDeceleration()
         core.setOffset(y)
     }
+    func reanchorDragToCurrentPosition() {
+        core.reanchorDragToCurrentPosition()
+    }
+
     func haltMotionInPlace() {
         // Same teardown as `setOffset` minus the offset write: `catchFlight` already snaps the physics and
         // the layer model to the live position and removes the animation, so the content does not move.
@@ -321,7 +326,15 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
             if forced, isIndirect, tr == 0, velocity.y == 0 { break }
             core.drag(translation: tr, velocity: velocity.y)
         case .ended, .cancelled:
-            if core.endDrag(recognizerVelocity: velocity.y, at: CACurrentMediaTime()) {
+            // A host may have already spent this release on something else (the chat's interactive
+            // keyboard dismissal, decided in touch delivery — which precedes this action dispatch).
+            // Release at zero rather than skipping `endDrag`: `ReleaseDecision` zeroes the sample,
+            // falls below its decelerate threshold and expires the repeated-flick streak, which is
+            // exactly the state a genuinely slow release leaves behind — and `.stop` still springs
+            // back when the content was released overscrolled, so the one motion that MUST happen
+            // still does. Skipping the call instead would strand an overscrolled list off its edge.
+            let releaseVelocity = (shouldStopScrollingOnRelease?(velocity.y) ?? false) ? 0.0 : velocity.y
+            if core.endDrag(recognizerVelocity: releaseVelocity, at: CACurrentMediaTime()) {
                 startDeceleration()
             }
             beganWasForced = false

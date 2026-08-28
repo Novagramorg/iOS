@@ -195,14 +195,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     /// round-trip to take effect, and carrying an expand state onto a same-indexed details block
     /// reads as reasonable rather than wrong.
     private func resetPageDerivedState() {
-        if let textSelectionNode = self.textSelectionNode {
-            // Built from the old view's `selectableTextItems()`; its rects are in the old page's
-            // coordinate space.
-            self.textSelectionNode = nil
-            self.textSelectionAdapter = nil
-            textSelectionNode.highlightAreaNode.removeFromSupernode()
-            textSelectionNode.removeFromSupernode()
-        }
+        // Built from the old view's `selectableTextItems()`; its rects are in the old page's
+        // coordinate space.
+        self.tearDownTextSelection(animated: false)
         self.linkProgressDisposable?.dispose()
         self.linkProgressDisposable = nil
         if self.linkProgressRects != nil {
@@ -706,6 +701,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     secondaryText: messageTheme.secondaryTextColor
                 )
                 let tableHeaderColor = isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.1) : UIColor(white: 0.0, alpha: 0.05)
+                
+                let checkboxFill = isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor
+                var checkboxForeground = isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.foregroundColor : item.presentationData.theme.theme.list.itemCheckColors.foregroundColor
+                if isDark && checkboxForeground == checkboxFill {
+                    checkboxForeground = messageTheme.mediaControlInnerBackgroundColor
+                }
+                
                 let pageTheme = InstantPageTheme(
                     type: isDark ? .dark : .light,
                     pageBackgroundColor: .clear,
@@ -734,8 +736,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     quoteAccentColor: mainColor,
                     buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
                     buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
-                    checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
-                    checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor,
+                    checkboxFill: checkboxFill,
+                    checkboxForeground: checkboxForeground,
                     neutralButtonBackgroundColor: tableHeaderColor,
                     neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor,
                     unsupportedPillFillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper),
@@ -2107,20 +2109,61 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     override public func updateSearchTextHighlightState(text: String?, messages: [EngineMessage.Index]?) {
     }
     
-    override public func willUpdateIsExtractedToContextPreview(_ value: Bool) {
-        if !value, let textSelectionNode = self.textSelectionNode {
-            self.textSelectionNode = nil
+    /// Removes the selection overlay built by `updateIsExtractedToContextPreview(true)`.
+    ///
+    /// LOAD-BEARING that every un-extract path reaches this. `TextSelectionNode.hitTest` claims
+    /// EVERY point inside its bounds (it is sized to `containerNode.bounds`), and it is the topmost
+    /// subnode of `containerNode` — so while it is attached it becomes the hit view for the whole
+    /// bubble content. UIKit collects a touch's gesture recognizers from the hit view UPWARD, and
+    /// the page's media taps live on recognizers INSIDE `pageView` — a sibling branch, not an
+    /// ancestor — so a leftover selection node silently kills tap-to-open on every image and video
+    /// in the message. Bubble-level taps (links, buttons, quote toggles) keep working, because that
+    /// recognizer sits on the item node, an ancestor of the hit view: the failure presents as
+    /// "only media stopped reacting".
+    ///
+    /// The adapter is removed from its supernode too. It is `isUserInteractionEnabled = false`, so
+    /// leaving it attached did not block touches — but it holds the whole page's attributed text.
+    private func tearDownTextSelection(animated: Bool) {
+        if let adapter = self.textSelectionAdapter {
             self.textSelectionAdapter = nil
+            adapter.removeFromSupernode()
+        }
+        guard let textSelectionNode = self.textSelectionNode else {
+            return
+        }
+        self.textSelectionNode = nil
+        if animated {
             textSelectionNode.highlightAreaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
             textSelectionNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak textSelectionNode] _ in
                 textSelectionNode?.highlightAreaNode.removeFromSupernode()
                 textSelectionNode?.removeFromSupernode()
             })
+        } else {
+            textSelectionNode.highlightAreaNode.removeFromSupernode()
+            textSelectionNode.removeFromSupernode()
+        }
+    }
+
+    override public func willUpdateIsExtractedToContextPreview(_ value: Bool) {
+        if !value {
+            self.tearDownTextSelection(animated: true)
         }
     }
 
     override public func updateIsExtractedToContextPreview(_ value: Bool) {
-        guard value, self.textSelectionNode == nil, let messageItem = self.item, self.currentPageLayout?.layout != nil, let pageView = self.pageView, let rootNode = messageItem.controllerInteraction.chatControllerNode() else {
+        // The un-extract must be handled HERE as well as in `willUpdate…`, because the two hooks are
+        // separate closures on the item node (`ChatMessageBubbleItemNode`'s
+        // `willUpdateIsExtractedToContextPreview` vs `isExtractedToContextPreviewUpdated`) and the
+        // SEND ANIMATION only fires the second one: `ChatMessageTransitionNode` sets
+        // `isExtractedToContextPreview` + calls `isExtractedToContextPreviewUpdated?(true/false)`
+        // and never touches `willUpdate…`. Handling `false` only in `willUpdate…` therefore left the
+        // selection overlay attached on every message sent from the composer. This mirrors
+        // `ChatMessageTextBubbleContentNode`, which tears down in both hooks for the same reason.
+        if !value {
+            self.tearDownTextSelection(animated: true)
+            return
+        }
+        guard self.textSelectionNode == nil, let messageItem = self.item, self.currentPageLayout?.layout != nil, let pageView = self.pageView, let rootNode = messageItem.controllerInteraction.chatControllerNode() else {
             return
         }
 

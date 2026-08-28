@@ -1,19 +1,35 @@
-# CoreList chat-history backend (PoC)
+# CoreList chat-history backend
 
-`CoreListChatHistoryBackend` (`submodules/TelegramUI/Sources/CoreListChatHistoryBackend.swift`) is a
-**proof-of-concept** alternative chat-history list backend built on the vendored `CoreList` module's
-`CoreVirtualListView` (a from-scratch UIKit virtualized list — see
-`submodules/TelegramUI/Components/CoreList/CLAUDE.md`).
+`CoreListChatHistoryBackend` (`submodules/TelegramUI/Sources/CoreListChatHistoryBackend.swift`) is an
+alternative chat-history list backend built on the vendored `CoreList` module's `CoreVirtualListView`
+(a from-scratch UIKit virtualized list — see `submodules/TelegramUI/Components/CoreList/CLAUDE.md`).
 
-It is **opt-in behind the `coreListChatBackend` experimental flag** and selected in
-`ChatHistoryListNodeImpl.makeListView(rotated:useCoreListBackend:)`
-(`submodules/TelegramUI/Sources/ChatHistoryListNode.swift`). The production default —
-`ListViewImpl` — is unaffected. See the "ChatHistoryListNode composition" section of the root
-`CLAUDE.md` for the backend seam (`ChatHistoryListViewBackend`) this conforms to.
+## Selection
+
+Chosen in `ChatHistoryListNodeImpl.init` and applied by
+`makeListView(rotated:useCoreListBackend:)` (`submodules/TelegramUI/Sources/ChatHistoryListNode.swift`),
+in this order:
+
+1. **`rotated` is the default.** CoreList backs the rotated history — the bottom-up chat proper, the
+   only surface it has been built and verified against. `rotated` defaults to `false` on that
+   initializer, so every list that does not name it (the overlay audio player's playlist, the
+   shared-context message list, an embedded chat preview) stays on `ListViewImpl` without saying so.
+2. **`coreListChatBackend`** (Debug Settings) keeps its original meaning — force CoreList on — which
+   after the default flip is only reachable for those non-rotated lists.
+3. **`ios_killswitch_disable_corelist_chat_backend`** (server app config) forces `ListViewImpl`. It
+   outranks the debug switch deliberately: setting it must guarantee no CoreList in the field, and a
+   device-local opt-out for the switch already exists (turn it off).
+
+The chosen backend is published as `ChatHistoryListNodeImpl.usesCoreListBackend`. **Chat-layer code
+that is deliberately CoreList-only must read that**, not re-derive the policy — one site already
+drifted when the default moved and the Debug Settings switch stopped being the whole answer.
+
+See the "ChatHistoryListNode composition" section of the root `CLAUDE.md` for the backend seam
+(`ChatHistoryListViewBackend`) this conforms to.
 
 ## Scope
 
-The PoC targets **display / scroll / load-more only**. Every `ChatHistoryListViewBackend` member
+The backend targets **display / scroll / load-more only**. Every `ChatHistoryListViewBackend` member
 outside that scope is a **safe stub** — no-op closure or plain stored property — that must never
 crash. Real geometry/range values are populated only for the members the display path needs
 (`displayedItemRange`, `visibleContentOffset`, `contentHeight`) plus the item-node enumerators
@@ -119,6 +135,33 @@ rebuilds when the node is missing, content is dirty, or the width changed, then 
   `ListViewItemNodeLayout`.
 - **Fresh build:** when there is no node yet, it calls `listItem.nodeConfiguredForParams(...)` and adds
   the resulting `node.view`.
+
+### `synchronousLoads` is a property of the pass, not of the row
+
+The fresh-build path is reached by **every row that scrolls into view**, so the `synchronousLoads`
+argument it passes cannot be a constant. `ListViewImpl` reads it off the transaction's options
+(`.PreferSynchronousResourceLoading` → `nodeForItem`, `Display/Source/ListView.swift:2135`) and so
+applies it only to the nodes *that* transaction creates. The chat asks for it on two paths: the first
+view of a chat opened without an animation (`.Initial(fadeIn: false)`,
+`PreparedChatHistoryViewTransition.swift:94`) and the send animation
+(`Chat/ChatControllerLoadDisplayNode.swift:929`).
+
+`chatHistoryTransaction` therefore parks the option in
+`CoreListChatHistoryBackend.prefersSynchronousResourceLoading` for the duration of the transaction
+(`defer`-cleared), and both host views read it **live** at the moment they build a node —
+`CoreListNodeHostView.rebuild` for rows and `CoreListHeaderHostView.update(width:)` for headers,
+whose `ChatMessageAvatarHeader` forwards it into `AvatarNode.setPeer(..., synchronousLoad:)`.
+
+A live read rather than a value seeded at `view()` time (which is what the sibling
+`isFlashingOnScrolling` does): the question is *which pass is building this node*, and only the
+backend can answer it. Outside a transaction — a scroll rebalance, an overscroll hold — it is false,
+which is the right answer for every node those passes create. A re-entrant transaction that CoreList
+defers to its scheduler (`CoreVirtualListView.swift:964`) finds the flag already cleared and builds
+asynchronously; that is the safe direction, and the one `ListViewImpl` errs in too when a transaction
+queues behind another.
+
+Both were hard-coded `true` in the PoC, which decoded every arriving bubble's images — and every
+gutter avatar of every sender run — on the main thread mid-fling.
 
 Both paths drive the item **synchronously** (`async: { f in f() }`); this is sound because
 `ChatMessageItemImpl.updateNode`/`nodeConfiguredForParams` wrap work in `Queue.mainQueue().async`,
@@ -382,15 +425,66 @@ is not: a non-zero distance halts momentum and opts the pass out of `pinsLoadedT
 message would stop tracking the inset edge — the one case that must keep working.
 
 `didEndDragging` was added to the seam for this (`ScrollEngine.onDidEndDragging` → both engines →
-`CoreVirtualListView.didEndDragging`). It deliberately does **not** yet call the backend's
-`endedInteractiveDragging`: that callback drives overscroll-to-open-next-channel, a separate
-unimplemented item rather than something to switch on as a side effect of the hook existing.
+`CoreVirtualListView.didEndDragging`). It now also calls the backend's `endedInteractiveDragging`,
+which drives overscroll-to-open-next-channel — see "Overscroll actions" below for the landing that
+callback runs into.
 
 Covered by `CoreListDemoTests/InsetCompensationSuppressionTests` on the CoreList side (8 tests). The
 chat-side wiring — that a real interactive keyboard dismissal no longer double-offsets — has no
 automated coverage; it was **manually verified working** (2026-07-28) on the CoreList backend, which is
 the only kind of evidence available for it. Before the fix the history visibly moved by roughly twice the
 finger's travel as the keyboard was dragged away.
+
+### The dismissing flick must not also fling (`shouldStopScrolling`)
+
+The same simultaneity that causes the double-offset above has a second consequence at the *release*.
+A downward flick over the history can end by dismissing the keyboard, and the list would then fling on
+its own momentum on top of that — two motions from one gesture.
+
+The two dismissals have separate owners and both are decided in **touch delivery**:
+
+- the system keyboard, in `Window1.panGestureEnded`'s `canDismiss` branch
+  (`Display/Source/WindowContent.swift`);
+- the entity keyboard (the input node), in `ChatControllerNode.panGestureEnded`'s.
+
+`WindowPanRecognizer` invokes its `began`/`moved`/`ended` closures inline from `touchesEnded(_:with:)`
+rather than through target/action, and touch delivery precedes gesture ACTION dispatch — which is where
+`PhysicsScrollEngine.handlePan(.ended)` → `startDeceleration()` → `launchFlight()` runs, and equally
+where `UIScrollView` calls `scrollViewWillEndDragging`. (This is the same ordering fact
+`PhysicsScrollEngine.noteTouchDown` relies on, documented at `PhysicsScrollEngine.swift:163`.) So the
+answer is already settled by the time the list asks for it, and the coordination can be a **pull**:
+
+- `ChatControllerNode.dismissedInputByCurrentGesture` combines the two halves. The entity-keyboard half
+  is a latch on the node itself; the system-keyboard half is `WindowHost.dismissedKeyboardByCurrentGesture`,
+  because `Window1` owns that gesture. Both are set at their dismissal and cleared when their recognizer
+  next sees a touch sequence begin.
+- `ChatControllerImpl.setupChatHistoryNode` installs that as `historyNode.shouldStopScrolling`, and the
+  backend forwards it to `CoreVirtualListView.shouldStopScrolling` →
+  `ScrollEngine.shouldStopScrollingOnRelease`, consulted once in `applyPanUpdate(.ended)`.
+
+Three things are load-bearing:
+
+- **It is not `dismissedInputByDragging`.** That flag (`ChatControllerNode.swift:1393`) asks the same
+  question but is derived in `containerLayoutUpdated`, i.e. from a completed layout pass — which happens
+  after the release, and for the system keyboard only once the dismissal has run its ~0.38s spring. It is
+  the right concept at the wrong time; using it would halt a flight that had already been playing.
+- **Suppression is a zero-velocity release, not a skipped one.** See the CoreList `CLAUDE.md`
+  scroll-engine seam: `.stop` still springs back from an overscrolled release, and it expires the
+  repeated-flick streak exactly as a slow release would.
+- **It is installed only under the CoreList backend.** `ListViewImpl` implements the identical hook and
+  would honour it, but this is a deliberate behaviour change on an experimental backend: today a
+  dismissing flick also flings the history, and the only thing that stops it is the snap-back at
+  `ChatControllerNode.swift:2461` — which needs the drag to have begun at the newest message
+  (`didInteractivelyDragFromTopOrigin`) and lands a keyboard animation late. Under the new predicate that
+  snap-back still runs, but it now springs from where the finger left the content rather than from
+  wherever a fling had carried it.
+
+`shouldStopScrolling` therefore joins the `ChatHistoryListViewBackend` contract as a member both
+backends implement honestly — `ListViewImpl` already had it (`Display/Source/ListView.swift:266`, and
+the chat list installs one of its own), so the contract widened without new behavior there.
+
+Covered by `CoreListDemoTests/ReleaseSuppressionTests` (6 tests) on the CoreList side. The chat-side
+wiring — that a real dismissing flick no longer flings — has no automated coverage.
 
 ### Gesture arbitration
 
@@ -622,6 +716,177 @@ single value it reports at transaction end is already the endpoint. It additiona
 per-frame during animations (`ListView.swift:4908`); CoreList animates through analytic CA tracks with no
 per-frame host callback, which is exactly why the transaction emission must carry the endpoint rather
 than a sample of the way there.
+
+## Overscroll actions
+
+Swiping up past the newest message raises the next-channel-to-read control
+(`ChatHistoryListNode.maybeUpdateOverscrollAction`, `:2722`). The control is created and destroyed by
+**one** predicate over the reported content offset — `offset < -0.1` keeps it, anything else removes
+it — so it is entirely downstream of the section above. Releasing at full expansion either navigates
+(and the node dies with its controller) or, when there is no next channel, holds the control on
+screen for a beat and ramps it away.
+
+That hold is `holdOverscrollAction(distance:)` on the backend protocol. **It displaces the newest
+edge; it is not an inset**, and the distinction is the whole reason the member is named for its
+intent:
+
+- `ListViewImpl` holds it with `scroller.contentInset.top`, a SECOND inset that is zero at rest and
+  independent of the list's own `insets`.
+- `CoreListChatHistoryBackend` holds it in `overscrollHoldDistance`, folded into `coreListInsets`
+  — and **nowhere else**. `insets`, `visibleBand` and `visibleContentOffset` all keep reading
+  `currentInsets`, so while held the list reports `.known(-distance)`, which is precisely what keeps
+  the control alive and sized. Fold the hold into the offset read and the control dismisses itself at
+  the instant it is meant to be held.
+
+**`holdOverscrollAction` must report the offset its pass produced, and that is the load-bearing half.**
+It moves content without going through `chatHistoryTransaction`, so it is the only thing that can
+report — and this backend has no per-frame hook once motion stops ("nothing re-reports when the
+animation lands", `settledFrame`). Without the report the ramp's FINAL step, hold → 0, is invisible:
+the last value the chat ever hears is whatever the last scroll frame caught mid-ramp, and since that
+value is still negative `maybeUpdateOverscrollAction` keeps the control alive over a content offset
+that is really zero. `ListViewImpl` needs no equivalent — `scroller.contentInset` re-reports through
+`scrollViewDidScroll` every frame of the ramp on its own.
+
+Measured on the K2 simulator, which is how this was finally pinned down rather than reasoned out. The
+last two emissions of a repro, and then silence:
+
+```
+[offset] presented value=known(-120.5) minY0=199.5 insetsTop=79.0 hold=106.0
+[offset] presented value=known(-7.7)   minY0=86.7  insetsTop=79.0 hold=6.7   ← last emission ever
+[overscroll] KEEP offset=-28.0 … hasView=true inHierarchy=true
+```
+
+**The general rule: on this backend, any geometry mutation outside a transaction owes a
+content-offset report, because nothing else will make one.** That is the same property that forces
+the `.settled` geometry at transaction points, seen from the other side — there, the endpoint must be
+reported because no later frame will; here, the mutation must be reported at all.
+
+The member used to be spelled `setTopContentInset(_:)`, and that name caused a second, independent bug
+on the same path — worth keeping on the record, because nothing about it looked wrong and because
+fixing it alone did NOT fix the symptom, it only changed which stale negative value got stuck (a
+permanent `-insetsTop` instead of a mid-ramp `-7.7`). CoreList reasonably read "top content inset" as
+the list's own top inset and wrote `currentInsets.top`. On `ListViewImpl` the ramp's final
+`set(0.0)` is a restore to neutral; here it **destroyed** the real inset — in the rotated chat that
+is the input-panel band (`ChatControllerNode.swift:2510`), 45–90pt. Every subsequent
+`visibleContentOffset()` then read `.known(-T)`, a permanent apparent overscroll, so the control was
+rebuilt on every emission and the removal branch became unreachable: a dead 94pt band at the bottom
+of the chat that swallowed touches until the next layout pass restored the inset. Two further
+consequences of the same clobber, worth recognising if it ever recurs: `visibleBand.top` went to 0,
+so rows under the input panel counted as visible; and `coreListInsets` feeds
+`applyChanges(newInsets:)` on *every* transaction (`:833`), so the next arriving message re-pinned
+the newest row 45–90pt lower.
+
+Two general lessons, both instances of rules this file already states elsewhere:
+
+- **A member named for a mechanism invites each backend to pick its own referent.** "Top content
+  inset" is a `UIScrollView` fact with no unambiguous meaning in a list that owns its own geometry.
+  `holdOverscrollAction(distance:)` has exactly one meaning and both backends implement the same one.
+- **This one could not fail to build and did not look wrong at the call site.** The same shape as
+  `didInteractivelyDragFromTopOrigin` and `enableUnreadAlignment`: a plausible implementation of a
+  raw member, silently wrong.
+
+CoreList's implementation also **submits a pass** (`applyChanges`, `compensatesInsetChange: false`)
+rather than only writing a field. `pinsLoadedTop` translates a window starting at index 0 onto the
+inset edge outright (`CoreVirtualListView.swift:2768`), so the larger top inset *is* the held edge.
+Writing the field alone was inert until some later transaction happened to carry it, which is why the
+hold-and-release read as an instant disappearance rather than an animation.
+
+**The landing is one-at-a-time.** `beginOverscrollActionLanding()` tears down any landing already
+running before starting its own, and `cancelOverscrollActionLanding()` stops both of its stages —
+the 0.3s dwell and the 0.2s ramp — without touching the hold or `freezeOverscrollControlProgress`,
+because each caller owns what happens to the geometry next. This is not hypothetical bookkeeping: the
+control sits at full expansion for the landing's whole 0.5s (the hold pins the reported offset at
+`-holdDistance`, which is what `maybeUpdateOverscrollAction` recomputes progress from), so a second
+release inside the window arrives with `expandProgress` back at 1.0 and qualifies again. Each release
+used to schedule its own `Queue.mainQueue().after` dwell and its own animator with nothing relating
+them, and every interleaving landed somewhere wrong — an early ramp's completion clearing
+`freezeOverscrollControlProgress` out from under a later one still running, a jump to full hold
+overwritten by an older ramp's next tick, a dwell firing for a release long superseded. The
+navigate branch cancels too, since `prepareSnapshotState` bakes the current geometry into the
+outgoing snapshot and a surviving ramp would keep moving it as it animates away.
+
+Two further adjacent defects fixed alongside it:
+
+- `currentOverscrollExpandProgress` is written only in `maybeUpdateOverscrollAction`'s create branch;
+  the removal branch left it standing. A swipe that reached full expansion and then stopped being
+  reported as overscrolled parked it at 1.0 forever, arming the action on the next unrelated drag
+  release anywhere in the chat. `endedInteractiveDragging` now consumes it into a local and zeroes
+  it, which kills the cross-gesture leak without changing what any single release does. This one was
+  never CoreList-specific.
+- `globalIgnoreScrollingEvents` was plain storage read by nothing. `prepareSnapshotState` sets it
+  when this node's view is handed to the next-channel transition as the outgoing snapshot;
+  `ListViewImpl` honours it by returning early from `updateScrollViewDidScroll` — the one function
+  that moves its item nodes — so its content freezes and it stops calling back. **CoreList's engine
+  moves the content host itself, so suppressing a host callback does not suppress the motion**, and
+  it needs three parts: `CoreVirtualListView.haltScrollMotionInPlace()` freezes motion already in
+  the air, dropping `isUserInteractionEnabled` stops a new drag, and a guard at the top of
+  `onVisibleWindowChanged` stops the host reacting to whatever slips through.
+
+  Broader than `ListViewImpl` on the interaction half — there the scroller keeps scrolling, only the
+  item nodes hold, and taps still land. A snapshot being animated away should accept neither.
+
+**The hold is applied DURING the drag, and moving an edge under a finger takes two things.**
+`launchFlight` integrates its release hand-off and bakes the whole flight inside the pan's `.ended`,
+firing `didEndDragging` only afterwards — so a hold applied at release is always one step late, and
+out of bounds that step is spring-shaped and proportional to the overscroll (measured: a 12.9pt jump
+opening a spring whose own rate was 5.5pt/sample). Holding from the moment the control fills gives
+the gesture ONE edge. `holdsOverscrollActionDuringDrag` gates it — false on `ListViewImpl`, whose
+`scroller.contentInset` cannot move an edge without moving content, and which needs none of this
+because `UIScrollView` owns its own bounce.
+
+Moving an edge without moving content needs BOTH halves, and each was a separate device-visible jump:
+
+1. **`applyChanges(absorbsEdgeChangeIntoOverscroll:)`.** `presentationOverscroll` preserves the
+   rubber-band MAGNITUDE across a geometry pass — right when the edge stays put (rotation, keyboard),
+   a teleport when the edge itself moves under stationary content. Measured:
+   `newBounds = -185 + (-156.37) = -341.37`, i.e. still 156pt past an edge that just moved 106.
+   Absorbing instead holds the presented position and lets the band re-measure (156 → 50).
+   It is NOT `compensatesInsetChange`, which governs the anchor projection: `pinsLoadedTop`
+   translates the window onto the new inset edge outright whenever index 0 is loaded — always, while
+   an overscroll action is live — so the anchor knob cannot hold content still here.
+2. **`ScrollAxis.reanchorDragToCurrentOffset()`.** Holding the engine offset is only half of holding
+   the content. A drag maps finger travel through the rubber band, so a moved edge re-scales that
+   mapping and the content jumps on the NEXT drag frame — one frame after the offset was preserved,
+   which is what made it look like the absorb had failed. Measured: 116pt past the old edge became
+   10pt past the new one, the band stopped resisting, and the content shot out 64.8pt. The anchor is
+   moved by the difference between this offset's pre-images under the new and old edges
+   (`RubberBand.inverse`). `DragReanchorTests` pins it, with the un-re-anchored jump as its control.
+
+The **ramp** back to zero uses the opposite mode (`movesContent: true`): there the magnitude-preserving
+reading is what carries the content down as the edge closes. Same policy, opposite desirability — which
+is why it is a caller choice rather than a fix.
+
+**Halting motion instead looks like it solves the same symptom and does not.** It strands the content wherever the finger
+happened to lift — neither the resting position nor the held one — and makes the landing depend on
+gesture timing. Moving the edge is a durable trajectory invalidation, so an in-flight spring rebakes
+and settles into the held position on its own. Let the flight finish; just move where it is going.
+
+**The cause that actually shipped was none of the above — it was a third of a point of physics.**
+The two defects above are real and are fixed, but each only changed WHICH stale negative value got
+stuck. `Deceleration.settled()` accepted a rest position within 0.5pt of an edge without moving the
+offset there, and the ⅓pt device grid put every bounce at exactly −0.333. Measured, last emission
+before silence:
+
+```
+[offset] presented value=known(-0.3333) minY0=79.3 insetsTop=79.0 hold=0.0 overscroll=-0.33 flight=false
+[overscroll] KEEP offset=-0.3 … hasView=true inHierarchy=true
+```
+
+`-0.333 < -0.1`, so the control is kept; the list is genuinely at rest, so nothing re-reports; and
+`expandDistance = max(0.333 - 12, 0) = 0`, so it draws at zero expansion while its 94pt host view
+eats every tap. `Deceleration.settleIfNeeded` now clamps a settle to its edge — see the CoreList
+`CLAUDE.md` gotcha; `FlightLaunchPreconditionTests` inverted with it, since it had been asserting the
+−1/3 rest as expected.
+
+**The lesson for this backend:** `ListViewImpl` cannot reach any of these states — a `UIScrollView`
+bounce lands exactly on `-contentInset`, and it re-reports every frame regardless — so a threshold
+the chat has used safely for years is not evidence that a new backend can satisfy it. Anything
+downstream comparing a content offset against a small constant is exposed to sub-point physics
+residue here.
+
+**How to reproduce.** A partial swipe up is enough — the control need only appear — and it clears on
+any layout pass, so focusing the input field hides it. The full-expansion release exercises the
+`holdOverscrollAction` path instead.
 
 ## Neighbor awareness
 
@@ -1159,8 +1424,8 @@ composition, each with its own non-vacuity control.
 
 ## Deferred items / known limitations
 
-These are accepted for the PoC and are the follow-ups before the CoreList backend could be a real
-option:
+These are still open with the backend now default for the rotated history, and are what
+`ios_killswitch_disable_corelist_chat_backend` exists to roll back if one of them bites:
 
 1. **Per-item animation selectivity.** The pass transition is now derived from `scrollToItem` /
    `updateSizeAndInsets` / `options` (see Transaction flow), but it applies to the pass as a whole:
@@ -1197,7 +1462,9 @@ option:
    storage with no behavior; only the display-path values are real. (`didInteractivelyDragFromTopOrigin`
    used to be two of these and is now real — see "Interactive drag start". It is worth reading that
    entry as a warning about the rest: a stub that returns a plausible constant reports *no* problem,
-   and this one disabled a user-visible behavior for as long as it existed.) The three scroll callbacks
+   and this one disabled a user-visible behavior for as long as it existed.) `globalIgnoreScrollingEvents`
+   has since left the block too — it was written by `prepareSnapshotState` and read by nothing, so the
+   outgoing snapshot stayed live; see "Overscroll actions". The three scroll callbacks
    that used to sit here — `endedInteractiveDragging`, `didEndScrolling`,
    `didEndScrollingWithOverscroll` — are now wired, and `didEndScrolling` was the same class of bug as
    `didInteractivelyDragFromTopOrigin`: nothing ever cleared `isInteractivelyScrollingValue`, so after

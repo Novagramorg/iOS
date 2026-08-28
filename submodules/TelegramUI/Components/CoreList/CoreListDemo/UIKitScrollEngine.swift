@@ -21,6 +21,7 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
     var onFlightChanged: ((ScrollFlight?) -> Void)?
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
+    var shouldStopScrollingOnRelease: ((CGFloat) -> Bool)?
 
     /// Raised around programmatic writes so the re-entrant `scrollViewDidScroll` is suppressed.
     /// This is the old `CoreVirtualListView.isUpdating`, now encapsulated.
@@ -60,6 +61,10 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
         scrollView.bounds.origin.y = y
         isProgrammatic = false
     }
+
+    // UIKit owns the drag and its own rubber band; a `contentSize` change re-bands inside
+    // `UIScrollView` with no anchor of ours to move.
+    func reanchorDragToCurrentPosition() {}
 
     func haltMotionInPlace() {
         // A `UIScrollView`'s `bounds.origin` IS its presented position, so writing it back is an exact
@@ -122,6 +127,14 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
     /// self-consistently correct for the velocity we captured.
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
                                    targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        // Ahead of the diagnostics below: UIKit's own way to release without momentum is to project
+        // the landing onto the current offset, which is what `ListViewImpl` does with the same hook
+        // (`Display/Source/ListView.swift:897`). UIKit still bounces back from an overscrolled
+        // release afterwards, matching the physics engine's `.stop` outcome.
+        if shouldStopScrollingOnRelease?(velocity.y) == true {
+            targetContentOffset.pointee = scrollView.contentOffset
+        }
+        
         guard FlightTrace.isEnabled else { return }
         FlightTrace.shared.begin("UISCROLLVIEW flight")
         let from = scrollView.contentOffset.y

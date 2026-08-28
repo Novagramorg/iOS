@@ -62,6 +62,21 @@ protocol ScrollEngine: AnyObject {
     /// `UIScrollViewDelegate.scrollViewDidEndDragging(_:willDecelerate:)`.
     var onDidEndDragging: (() -> Void)? { get set }
 
+    /// Consulted once per interactive release, BEFORE the engine decides whether momentum follows,
+    /// with the recognizer's release velocity. Returning `true` releases as if the finger had come to
+    /// rest: no fling, while an overscrolled release still springs back to the edge.
+    ///
+    /// It exists because a release can be claimed by something outside the list. The chat's history is
+    /// dragged by the same finger that interactively dismisses the keyboard, and that dismissal is
+    /// decided in touch DELIVERY — before the pan's `.ended` reaches an engine in action dispatch — so
+    /// by the time this is consulted the host already knows the momentum was spent elsewhere.
+    ///
+    /// Deliberately a pull, not a latch the host arms: there is exactly one release to answer for and
+    /// no flag to leak into the next gesture. `ListViewImpl.shouldStopScrolling`
+    /// (`Display/Source/ListView.swift:266`) is the same hook on the other backend, consulted in
+    /// `scrollViewWillEndDragging`.
+    var shouldStopScrollingOnRelease: ((_ velocity: CGFloat) -> Bool)? { get set }
+
     /// Programmatic absolute write (the old `setBoundsOriginY` + the fast-flick delta clamp).
     func setOffset(_ y: CGFloat)
 
@@ -74,6 +89,13 @@ protocol ScrollEngine: AnyObject {
     /// last sampling tick's position instead of the current one. See
     /// docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
     func haltMotionInPlace()
+
+    /// Re-anchor an in-progress drag so the content stays where it is across an edge change the
+    /// caller just declared through `setEdges`. A drag maps finger travel to content through the
+    /// rubber band, so moving an edge re-scales that mapping and the content jumps on the next drag
+    /// frame unless the anchor moves with it. No-op outside a drag, and no-op for an engine whose
+    /// drag it does not own.
+    func reanchorDragToCurrentPosition()
 
     /// Re-anchor the reported `offset` on what the render server is currently presenting, without disturbing
     /// any animation. Call once at the top of a mutation pass so the pass reads a CURRENT position: `offset`

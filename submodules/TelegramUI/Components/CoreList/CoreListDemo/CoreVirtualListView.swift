@@ -570,6 +570,15 @@ public final class CoreVirtualListView: UIView {
     // momentum phase after it. Analogous to ListViewImpl's `endedInteractiveDragging`, and the signal a
     // host needs to maintain its own `ListViewImpl.isTracking` equivalent.
     public var didEndDragging: (() -> Void)?
+    // Consulted once at each interactive release, with the release velocity, BEFORE the engine decides
+    // whether momentum follows. Returning true releases the list as if the finger had come to rest — no
+    // fling — while an overscrolled release still springs back. The seam exists for a host whose release
+    // is claimed by something outside the list; see `ScrollEngine.shouldStopScrollingOnRelease`, and
+    // `ListViewImpl.shouldStopScrolling` for the identically-shaped hook on the other backend.
+    public var shouldStopScrolling: ((CGFloat) -> Bool)? {
+        get { self.engine.shouldStopScrollingOnRelease }
+        set { self.engine.shouldStopScrollingOnRelease = newValue }
+    }
     // Fired when a momentum flight stops carrying the content: both the authoritative settle
     // (`finalizeFlight`) and the interruption (`catchFlight`, when a new touch grabs the list
     // mid-flight) reach it, because both are the engine reporting `onFlightChanged(nil)`.
@@ -682,6 +691,26 @@ public final class CoreVirtualListView: UIView {
 
     // The current settled scroll offset reported by the scroll engine.
     public var currentScrollOffset: CGFloat { engine.offset }
+
+    /// The view the scroll pan gesture recognizer is attached to — NOT `self`. Both engines park the
+    /// pan on their content host (`PhysicsScrollEngine`'s own `host`, `UIKitScrollEngine`'s
+    /// `UIScrollView`), which is a subview of this list, so `self` is an ANCESTOR of the pan's view
+    /// and is the wrong answer to every question about the pan.
+    ///
+    /// Two kinds of caller need it, and each breaks SILENTLY with the wrong view:
+    ///
+    /// - a host that force-routes a touch by returning a view from `hitTest` — UIKit collects
+    ///   recognizers from the hit view UPWARD, so handing back an ancestor of the pan excludes the
+    ///   pan from the touch entirely and scrolling simply stops happening;
+    /// - a host attaching its own recognizer that must arbitrate against the scroll pan —
+    ///   `gestureRecognizerShouldBegin` enumerates `pan.view.gestureRecognizers`, i.e. the pan's OWN
+    ///   view, so a recognizer on an ancestor is invisible to that scan even though UIKit still
+    ///   delivers touches to it.
+    ///
+    /// Both are exactly how `ListViewImpl` is wired (`Display/Source/ListView.swift:526` adds the
+    /// scroll pan to `self.view`, and everything that must arbitrate with it goes on that same view);
+    /// the difference is only that there the pan's view and the list's view coincide.
+    public var scrollGestureHostView: UIView { engine.contentHost }
 
     /// Whether a `pinsToBottomEdge` row is currently HELD against the bottom edge, as opposed to
     /// merely happening to be near it. `ListViewImpl.isStrictlyScrolledToPinToEdgeItem()`
@@ -928,6 +957,7 @@ public final class CoreVirtualListView: UIView {
                       additionalScrollDistance: CGFloat = 0.0,
                       anchorMode: CoreListAnchorMode = .automatic,
                       compensatesInsetChange: Bool = true,
+                      absorbsEdgeChangeIntoOverscroll: Bool = false,
                       animatesInsertions: Bool = true,
                       transition: CoreListTransition) {
         let animationDuration = transition.duration
@@ -940,6 +970,7 @@ public final class CoreVirtualListView: UIView {
                                    additionalScrollDistance: additionalScrollDistance,
                                    anchorMode: anchorMode,
                                    compensatesInsetChange: compensatesInsetChange,
+                                   absorbsEdgeChangeIntoOverscroll: absorbsEdgeChangeIntoOverscroll,
                                    animatesInsertions: animatesInsertions,
                                    transition: transition)
             }
@@ -1538,10 +1569,47 @@ public final class CoreVirtualListView: UIView {
             if let minimum = edges.min { newSettledOffset = max(newSettledOffset, minimum) }
             if let maximum { newSettledOffset = min(newSettledOffset, maximum) }
         }
-        let newBoundsOriginY = hasScrollTo
-            ? newSettledOffset
-            : newSettledOffset + presentationOverscroll
+        // `presentationOverscroll` preserves the rubber-band MAGNITUDE across a geometry pass: the
+        // content ends up the same distance past the edge it was before. That is right whenever the
+        // edge stays where it is and the geometry around it changed (a rotation, a keyboard) — the
+        // band is a presentation-only displacement and losing it would snap.
+        //
+        // It is exactly wrong when the EDGE ITSELF MOVES under content that is standing still.
+        // Preserving the magnitude then teleports the content by the edge's travel. Measured on the
+        // chat's overscroll-action hold, which moves the newest edge 106pt while a finger-held
+        // overscroll of 156pt sits there: `newBounds = -185 + (-156.37) = -341.37`, i.e. still 156pt
+        // past an edge that just moved — a 106pt jump at let-go.
+        //
+        // `absorbsEdgeChangeIntoOverscroll` says the caller wants the other reading: hold the
+        // PRESENTED POSITION and let the band re-measure itself against the new edge (156 → 50 here).
+        // Nothing moves, and a spring already in flight simply retargets, which is what "bounce back
+        // from where I am, to the new inset" means.
+        //
+        // Both are needed by the same caller at different moments and neither is a default: the hold
+        // ENGAGING wants absorb (the finger is holding the content still), while the hold RELEASING
+        // over its ramp wants the magnitude preserved, because that is what carries the content back
+        // down as the edge closes. Off by default, so every existing caller keeps today's behaviour.
+        //
+        // The container-origin term keeps it exact across a rebase, where holding the engine offset
+        // literally still would move content by the rebase.
+        let newBoundsOriginY: CGFloat
+        if hasScrollTo {
+            newBoundsOriginY = newSettledOffset
+        } else if absorbsEdgeChangeIntoOverscroll {
+            newBoundsOriginY = oldBoundsOriginY + (containerOriginY - oldContainerOriginY)
+        } else {
+            newBoundsOriginY = newSettledOffset + presentationOverscroll
+        }
         setBoundsOriginY(newBoundsOriginY)
+        if absorbsEdgeChangeIntoOverscroll {
+            // Holding the engine offset is only half of holding the CONTENT. A drag in progress maps
+            // finger travel to content through the rubber band, and this pass just moved an edge, so
+            // the same finger position now bands differently — the content would jump on the very
+            // next drag frame, one frame after the offset we so carefully preserved. Re-anchoring the
+            // drag against the new edges is what makes "absorb" mean the same thing under a finger as
+            // it does under a flight. No-op when nothing is dragging.
+            engine.reanchorDragToCurrentPosition()
+        }
         // Re-solve against the offset this pass just settled on. `render()` ran earlier, before the
         // final offset existed — harmless for rows, whose frames are offset-INDEPENDENT, but the
         // attachment solve consumes the offset, so a header parked against the pre-pass value lands

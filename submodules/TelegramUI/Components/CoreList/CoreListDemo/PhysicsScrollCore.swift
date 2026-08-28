@@ -216,6 +216,12 @@ final class PhysicsScrollCore {
     }
 
 
+    /// Re-anchor an in-progress drag so the current content position survives an edge change the
+    /// caller just declared. See `ScrollAxis.reanchorDragToCurrentOffset`. No-op outside a drag.
+    func reanchorDragToCurrentPosition() {
+        physics.reanchorDragToCurrentOffset()
+    }
+
     /// Cancel an in-flight deceleration WITHOUT moving the content (the analogue of catching a moving
     /// UIScrollView on touch-down). Rebuilds the axis at the current offset so `phase` returns to
     /// `.idle` and `isDecelerating` correctly reports false, while the content is held where it caught.

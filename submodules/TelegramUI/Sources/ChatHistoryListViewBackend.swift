@@ -17,7 +17,73 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     // MARK: - Narrow scroll-view accessors (replacing the previously-exposed `scroller: ListViewScroller`).
     var bounces: Bool { get set }
     var contentHeight: CGFloat { get }
-    func setTopContentInset(_ inset: CGFloat)
+
+    // Hold the newest-message edge displaced `distance` points beyond where it rests, as if a finger
+    // were still holding the overscroll open; `0` releases the hold. Its one caller is the
+    // overscroll-action landing in ChatHistoryListNode (`endedInteractiveDragging`), which keeps the
+    // "you are all caught up" control on screen for a beat and then ramps the displacement back to
+    // zero.
+    //
+    // This used to be spelled `setTopContentInset(_:)`, and the rename is the fix for a bug the raw
+    // spelling caused rather than cosmetics. On `ListViewImpl` that name means `scroller.contentInset`
+    // — a SECOND inset, zero at rest and independent of the list's own `insets` — so `set(0.0)` is a
+    // restore to neutral. `CoreListChatHistoryBackend` reasonably read it as the list's own top inset
+    // and wrote `currentInsets.top`, where `set(0.0)` DESTROYS the real inset (in the rotated chat,
+    // the input-panel band; `ChatControllerNode.swift:2510`). Every later content-offset read then
+    // reported a permanent fake overscroll, so the overscroll control was rebuilt on every emission
+    // and never removed — a dead 94pt band at the bottom of the chat that ate touches until the next
+    // layout pass. A member named for the raw mechanism invites each backend to pick its own
+    // referent; one named for the intent has a single meaning both can implement.
+    //
+    // Contract: the hold is a DISPLAY displacement, invisible to the list's own inset accounting.
+    // `insets` does not change, and `visibleContentOffset()` keeps reporting against the resting
+    // edge — so while held it reads `.known(-distance)`, which is what keeps the control alive and
+    // sized. Both backends must preserve that or the control disappears the moment it is held.
+    //
+    // `movesContent` picks which of the two readings of an edge move the caller wants, and both are
+    // needed by the SAME caller at different moments:
+    //
+    // - `false` (engaging, or handing the edge back) — hold the presented position and let the
+    //   overscroll re-measure against the new edge. The finger is holding the content still, or a
+    //   spring is in flight that should simply retarget.
+    // - `true` (the release ramp) — carry the content with the edge. That is what walks it back down
+    //   as the hold closes.
+    //
+    // Getting this wrong is a teleport by the edge's travel, not a subtle error.
+    func holdOverscrollAction(distance: CGFloat, movesContent: Bool)
+
+    // Whether this backend can hold the edge open DURING a drag without moving content. It matters
+    // because the physics reads the edge before the host ever hears about the release —
+    // `PhysicsScrollEngine.launchFlight` integrates its release hand-off and bakes the whole flight
+    // inside the pan's `.ended`, and only then fires `didEndDragging` — so a hold applied at release
+    // is always one step late, and out of bounds that step is spring-shaped and proportional to the
+    // overscroll. Holding from the moment the control fills gives the gesture ONE edge.
+    //
+    // False on `ListViewImpl`, deliberately: its lever is `scroller.contentInset`, which UIKit
+    // answers by moving `contentOffset`, so it cannot move the edge without moving content — and it
+    // needs none of this, since `UIScrollView` owns its own bounce and never reads a stale edge.
+    var holdsOverscrollActionDuringDrag: Bool { get }
+
+    // The view the backend's scroll pan gesture recognizer is attached to. NOT `self.view`: only
+    // `ListViewImpl` happens to put the pan on its own view, and asking a backend for `.view` and
+    // assuming the pan is on it is the bug this member exists to make unrepresentable.
+    //
+    // Two callers, both of which fail SILENTLY on the wrong view — no build error, no exception,
+    // just a gesture that never fires:
+    //
+    // - `ChatControllerNode`'s previewing-mode `hitTest` force-routes the touch by returning this
+    //   view. UIKit binds the touch to the returned view and then collects recognizers from it
+    //   UPWARD, so an ancestor of the pan excludes the pan from the touch and previewing mode simply
+    //   cannot scroll. (Ordinary scrolling is unaffected either way, because normal hit-testing
+    //   descends to a row and the pan host is an ancestor of THAT — which is what makes the wrong
+    //   answer look correct in every other mode.)
+    // - `addContentGestureRecognizer` and the chat's two-touch selection pan attach here so they
+    //   arbitrate against the scroll pan. Arbitration is by same-view enumeration, not by UIKit's
+    //   general rules: both backends' `gestureRecognizerShouldBegin` scans
+    //   `pan.view.gestureRecognizers` for a `minimumNumberOfTouches == 2` pan to defer to
+    //   (`Display/Source/ListViewScroller.swift:22`, and its port in `PhysicsScrollEngine`), so a
+    //   recognizer parked on an ancestor is invisible to that scan while still receiving touches.
+    var scrollGestureHostView: UIView { get }
 
     // MARK: - Members shared with the `ListView` protocol (signatures copied from ListViewProtocol.swift).
     var scrollEnabled: Bool { get set }
@@ -46,6 +112,14 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     var endedInteractiveDragging: (CGPoint) -> Void { get set }
     var didEndScrolling: ((Bool) -> Void)? { get set }
     var didEndScrollingWithOverscroll: (() -> Void)? { get set }
+    // Consulted once at each interactive release, with the release velocity, BEFORE the backend decides
+    // whether momentum follows; `true` releases the list as if the finger had come to rest, while an
+    // overscrolled release still springs back. Pre-existing on `ListViewImpl`
+    // (`Display/Source/ListView.swift:266`, and the chat list already installs one), so this is a
+    // widening of the contract rather than new behavior on that backend — nothing installs one here
+    // unless the CoreList backend is active. See `ChatControllerNode.dismissedInputByCurrentGesture`
+    // for the one predicate the chat supplies.
+    var shouldStopScrolling: ((CGFloat) -> Bool)? { get set }
     var updateFloatingHeaderOffset: ((CGFloat, ContainedViewLayoutTransition) -> Void)? { get set }
     var didScrollWithOffset: ((CGFloat, ContainedViewLayoutTransition, ListViewItemNode?, Bool) -> Void)? { get set }
     var addContentOffset: ((CGFloat, ListViewItemNode?) -> Void)? { get set }
@@ -183,8 +257,22 @@ extension ListViewImpl: ChatHistoryListViewBackend {
     public var contentHeight: CGFloat {
         return self.scroller.contentSize.height
     }
-    public func setTopContentInset(_ inset: CGFloat) {
-        self.scroller.contentInset = UIEdgeInsets(top: inset, left: 0.0, bottom: 0.0, right: 0.0)
+    // `scroller.contentInset` is the right lever precisely because it is NOT `self.insets`: UIKit
+    // moves `contentOffset` to honour it, `scrollViewDidScroll` carries that through to the item
+    // nodes, and the list's own inset accounting — `insets`, the visible-range scans,
+    // `visibleContentOffset()` — is untouched. Which is the contract stated on the declaration.
+    // `movesContent` is ignored: `scroller.contentInset` cannot express the other mode — UIKit moves
+    // `contentOffset` to honour it — which is exactly what `holdsOverscrollActionDuringDrag` reports.
+    public func holdOverscrollAction(distance: CGFloat, movesContent: Bool) {
+        self.scroller.contentInset = UIEdgeInsets(top: distance, left: 0.0, bottom: 0.0, right: 0.0)
+    }
+
+    public var holdsOverscrollActionDuringDrag: Bool { return false }
+
+    // The one backend where the pan and the list share a view: `ListView.swift:526` adds
+    // `scroller.panGestureRecognizer` to `self.view`.
+    public var scrollGestureHostView: UIView {
+        return self.view
     }
     
     public func itemNodeFrame(_ node: ListViewItemNode) -> CGRect? {

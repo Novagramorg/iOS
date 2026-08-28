@@ -95,6 +95,23 @@ public func openInstantPageMedia(
             break
         }
     }
+    if centralIndex == nil {
+        // `media` is the value the TAPPED view holds, and `entries` come from the CURRENT layout, so
+        // a strict `==` here means every field of `InstantPageMedia` (caption, credit, url, and a
+        // deep media compare) has to still agree. When it doesn't, this function returns having done
+        // nothing at all — the tap is swallowed with no gallery, no error and no visible state, and
+        // it stays that way until the item view is rebuilt. That is too sharp an edge for a
+        // presentation lookup, so fall back to the identity notion the REST of the pipeline already
+        // uses for exactly this cross-reference: `transitionNode` and `updateHiddenMedia` both match
+        // on `instantPageMediaMatchesNodeIdentity`, which keeps the index/url/caption/credit checks
+        // but compares the media itself by id instead of deeply.
+        for i in 0 ..< entries.count {
+            if instantPageMediaMatchesNodeIdentity(entries[i].media, media) {
+                centralIndex = i
+                break
+            }
+        }
+    }
 
     if let centralIndex = centralIndex {
         let controller = InstantPageGalleryController(context: context, userLocation: userLocation, webPage: webPage, entries: entries, centralIndex: centralIndex, fromPlayingVideo: fromPlayingVideo, captureProtected: captureProtected, replaceRootController: { _, _ in

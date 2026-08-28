@@ -52,6 +52,14 @@ private func padding(_ kind: RichTextBlockSpacingKind, _ m: RichTextRenderMetric
         // A bare media block butts against both neighbours; a credited one needs room below for the
         // credit, so only its top is flush.
         return BlockPadding(verticalPadding: m.blockVerticalPadding, flushAbove: true, flushBelow: !hasCredit)
+    case .preformatted:
+        // Flush at the TOP of a sequence only, mirroring the renderer's `.preformatted` arm in
+        // `InstantPageBlock.spacing(metrics:)`. A code block opening the document sits against the
+        // top edge; below it the normal gap still applies, so `flushBelow` stays false.
+        //
+        // Both flush flags are read ONLY at a sequence edge, so this changes the leading edge and
+        // nothing else — the pairwise rules never consult them.
+        return BlockPadding(verticalPadding: m.blockVerticalPadding, flushAbove: true)
     default:
         return BlockPadding(verticalPadding: m.blockVerticalPadding)
     }
