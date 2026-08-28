@@ -511,6 +511,11 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
 
     private let listView: ChatHistoryListViewBackend
     public let rotated: Bool
+    // Which backend `makeListView` actually chose. Read by the chat layer for the few behaviors that
+    // are deliberately CoreList-only; re-deriving the policy at those sites would silently drift from
+    // this one the next time the default moves (it already did once, when CoreList became the default
+    // for rotated lists and the surviving Debug Settings switch stopped being the whole answer).
+    public let usesCoreListBackend: Bool
 
     public let context: AccountContext
     private let systemStyle: ItemListSystemStyle
@@ -995,7 +1000,24 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         nextClientId += 1
 
         self.rotated = rotated
-        self.listView = ChatHistoryListNodeImpl.makeListView(rotated: rotated, useCoreListBackend: context.sharedContext.immediateExperimentalUISettings.coreListChatBackend)
+        // CoreList is the DEFAULT backend for the rotated history — the bottom-up chat proper, which is
+        // the only surface it has been built and verified against. `rotated` is `false` by default on
+        // this initializer, so every other list built from it (the overlay audio player's playlist, the
+        // shared-context message list, an embedded chat preview) keeps `ListViewImpl` without naming it.
+        var useCoreListBackend = rotated
+        // The Debug Settings switch keeps its original meaning — force CoreList on — which after the
+        // default flip is only reachable for the non-rotated lists above.
+        if context.sharedContext.immediateExperimentalUISettings.coreListChatBackend {
+            useCoreListBackend = true
+        }
+        // Server rollback. It outranks the debug switch deliberately: the point of a killswitch is that
+        // setting it guarantees no CoreList in the field, and a device-local opt-out for the flag already
+        // exists (turn the switch off).
+        if let _ = context.getAppConfigValue("ios_killswitch_disable_corelist_chat_backend") {
+            useCoreListBackend = false
+        }
+        self.usesCoreListBackend = useCoreListBackend
+        self.listView = ChatHistoryListNodeImpl.makeListView(rotated: rotated, useCoreListBackend: useCoreListBackend)
 
         super.init()
         

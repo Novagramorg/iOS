@@ -1,19 +1,35 @@
-# CoreList chat-history backend (PoC)
+# CoreList chat-history backend
 
-`CoreListChatHistoryBackend` (`submodules/TelegramUI/Sources/CoreListChatHistoryBackend.swift`) is a
-**proof-of-concept** alternative chat-history list backend built on the vendored `CoreList` module's
-`CoreVirtualListView` (a from-scratch UIKit virtualized list — see
-`submodules/TelegramUI/Components/CoreList/CLAUDE.md`).
+`CoreListChatHistoryBackend` (`submodules/TelegramUI/Sources/CoreListChatHistoryBackend.swift`) is an
+alternative chat-history list backend built on the vendored `CoreList` module's `CoreVirtualListView`
+(a from-scratch UIKit virtualized list — see `submodules/TelegramUI/Components/CoreList/CLAUDE.md`).
 
-It is **opt-in behind the `coreListChatBackend` experimental flag** and selected in
-`ChatHistoryListNodeImpl.makeListView(rotated:useCoreListBackend:)`
-(`submodules/TelegramUI/Sources/ChatHistoryListNode.swift`). The production default —
-`ListViewImpl` — is unaffected. See the "ChatHistoryListNode composition" section of the root
-`CLAUDE.md` for the backend seam (`ChatHistoryListViewBackend`) this conforms to.
+## Selection
+
+Chosen in `ChatHistoryListNodeImpl.init` and applied by
+`makeListView(rotated:useCoreListBackend:)` (`submodules/TelegramUI/Sources/ChatHistoryListNode.swift`),
+in this order:
+
+1. **`rotated` is the default.** CoreList backs the rotated history — the bottom-up chat proper, the
+   only surface it has been built and verified against. `rotated` defaults to `false` on that
+   initializer, so every list that does not name it (the overlay audio player's playlist, the
+   shared-context message list, an embedded chat preview) stays on `ListViewImpl` without saying so.
+2. **`coreListChatBackend`** (Debug Settings) keeps its original meaning — force CoreList on — which
+   after the default flip is only reachable for those non-rotated lists.
+3. **`ios_killswitch_disable_corelist_chat_backend`** (server app config) forces `ListViewImpl`. It
+   outranks the debug switch deliberately: setting it must guarantee no CoreList in the field, and a
+   device-local opt-out for the switch already exists (turn it off).
+
+The chosen backend is published as `ChatHistoryListNodeImpl.usesCoreListBackend`. **Chat-layer code
+that is deliberately CoreList-only must read that**, not re-derive the policy — one site already
+drifted when the default moved and the Debug Settings switch stopped being the whole answer.
+
+See the "ChatHistoryListNode composition" section of the root `CLAUDE.md` for the backend seam
+(`ChatHistoryListViewBackend`) this conforms to.
 
 ## Scope
 
-The PoC targets **display / scroll / load-more only**. Every `ChatHistoryListViewBackend` member
+The backend targets **display / scroll / load-more only**. Every `ChatHistoryListViewBackend` member
 outside that scope is a **safe stub** — no-op closure or plain stored property — that must never
 crash. Real geometry/range values are populated only for the members the display path needs
 (`displayedItemRange`, `visibleContentOffset`, `contentHeight`) plus the item-node enumerators
@@ -1381,8 +1397,8 @@ composition, each with its own non-vacuity control.
 
 ## Deferred items / known limitations
 
-These are accepted for the PoC and are the follow-ups before the CoreList backend could be a real
-option:
+These are still open with the backend now default for the rotated history, and are what
+`ios_killswitch_disable_corelist_chat_backend` exists to roll back if one of them bites:
 
 1. **Per-item animation selectivity.** The pass transition is now derived from `scrollToItem` /
    `updateSizeAndInsets` / `options` (see Transaction flow), but it applies to the pass as a whole:
