@@ -61,6 +61,10 @@ final class UIKitScrollEngine: NSObject, ScrollEngine, UIScrollViewDelegate {
         isProgrammatic = false
     }
 
+    // UIKit owns the drag and its own rubber band; a `contentSize` change re-bands inside
+    // `UIScrollView` with no anchor of ours to move.
+    func reanchorDragToCurrentPosition() {}
+
     func haltMotionInPlace() {
         // A `UIScrollView`'s `bounds.origin` IS its presented position, so writing it back is an exact
         // halt-in-place here — this is the historical `setOffset(offset)` idiom, now stated once instead of

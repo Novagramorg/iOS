@@ -77,7 +77,73 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // MARK: - Narrow scroll-view accessors
     var bounces: Bool = true
     var contentHeight: CGFloat { return self.coreList.settledContentHeight }
-    func setTopContentInset(_ inset: CGFloat) { self.currentInsets.top = inset }
+
+    // How far the newest edge is currently held beyond its resting position. Deliberately NOT part of
+    // `currentInsets`: see `holdOverscrollAction(distance:)` and the protocol declaration for why
+    // aliasing the two is the bug this exists to avoid.
+    private var overscrollHoldDistance: CGFloat = 0.0
+
+    // The hold reaches CoreList as extra top inset — `pinsLoadedTop` translates a window that starts
+    // at index 0 onto the inset edge outright (CoreVirtualListView.swift:2768), so a larger top inset
+    // IS the newest edge sitting lower, which under the wrapper's π rotation is the chat held open at
+    // the bottom. That is the same outcome `ListViewImpl` gets from `scroller.contentInset`.
+    //
+    // `compensatesInsetChange: false`: the displacement is the entire point of the call, so the
+    // anchor projection that normally cancels an inset change out of the visible content must not
+    // run. (It is moot while index 0 is loaded — the pin branch translates outright and never
+    // consults it — and index 0 is always loaded when an overscroll action is live. Passing `false`
+    // states the intent rather than relying on that.)
+    //
+    // Unlike the field it replaced, this SUBMITS A PASS, so the hold-and-release actually moves the
+    // content; writing the inset field alone was inert until some later transaction happened to
+    // carry it.
+    var holdsOverscrollActionDuringDrag: Bool { return true }
+
+    func holdOverscrollAction(distance: CGFloat, movesContent: Bool) {
+        guard distance != self.overscrollHoldDistance else {
+            return
+        }
+        self.overscrollHoldDistance = distance
+        // Before the first updateSizeAndInsets there is no geometry to hold and no window to pin;
+        // the stored distance still applies to the first real pass through `coreListInsets`.
+        guard self.currentSize != .zero else {
+            return
+        }
+        // `absorbsEdgeChangeIntoOverscroll` is the `movesContent` half, and it is NOT the same knob as
+        // `compensatesInsetChange`: that one governs the ANCHOR projection, this one governs what
+        // happens to the rubber band when the edge moves under it. `pinsLoadedTop` translates the
+        // window onto the new inset edge outright whenever index 0 is loaded — which is always, while
+        // an overscroll action is live — so the anchor knob cannot hold the content still here and
+        // only this one can.
+        self.coreList.applyChanges(
+            newInsets: self.coreListInsets,
+            compensatesInsetChange: false,
+            absorbsEdgeChangeIntoOverscroll: !movesContent,
+            transition: .immediate
+        )
+        // MANDATORY, and the reason this bug survived a first fix. This method moves content without
+        // going through `chatHistoryTransaction`, so it is the only thing that reports the offset it
+        // just produced — and CoreList has no per-frame hook once motion stops ("nothing re-reports
+        // when the animation lands", `settledFrame`). Without this the ramp's FINAL step,
+        // hold → 0, is invisible: the last value the chat ever heard is whatever the last scroll
+        // frame happened to catch mid-ramp (measured: -7.7pt, at hold=6.7), which is still
+        // `< -0.1`, so `maybeUpdateOverscrollAction` keeps the overscroll control alive forever over
+        // a content offset that is actually zero — a dead band at the bottom of the chat.
+        //
+        // `ListViewImpl` needs no equivalent because its lever is `scroller.contentInset`: UIKit
+        // moves `contentOffset`, `scrollViewDidScroll` fires, and it re-reports every frame of the
+        // ramp on its own.
+        //
+        // The general rule this is an instance of: on this backend, ANY geometry mutation outside a
+        // transaction owes a content-offset report, because nothing else will make one.
+        //
+        // `.settled` matches `chatHistoryTransaction`'s convention — the outcome of the pass just
+        // submitted — and for an `.immediate` pass settled and presented coincide anyway. While a
+        // spring-back flight is still in the air (the hold is established one callback after the
+        // release that launched it) the flight's own sampler keeps reporting `.presented` per frame,
+        // so the two self-correct exactly as they do at a transaction point.
+        self.updateVisibleContentOffset(transition: .immediate, geometry: .settled)
+    }
 
     // MARK: - Config flags (plain storage; no behavior for the PoC)
     var scrollEnabled: Bool = true
@@ -89,7 +155,42 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     var defaultToSynchronousTransactionWhileScrolling: Bool = false
     var verticalScrollIndicatorColor: UIColor? = nil
     var accessibilityPageScrolledString: ((String, String) -> String)? = nil
-    var globalIgnoreScrollingEvents: Bool = false
+
+    // MARK: - Snapshot freeze
+    //
+    // Set by ChatHistoryListNodeImpl.prepareSnapshotState when this node's own view is handed to the
+    // next-channel transition as the outgoing "snapshot": from that moment it is a picture, not a
+    // list. `ListViewImpl` honours it by returning early from `updateScrollViewDidScroll`
+    // (Display/Source/ListView.swift:1004) — the one function that both moves its item nodes and
+    // reports to the host — so its content freezes and it stops calling back.
+    //
+    // It used to sit in the config-stub block, written by that call site and read by nothing, so the
+    // outgoing list stayed live: still draggable, still reporting offsets into a controller being
+    // torn down.
+    //
+    // Two parts, and note what is deliberately NOT here: motion is not halted. CoreList's engine
+    // moves the content host itself rather than from inside a host callback, so this flag cannot
+    // suppress movement the way ListViewImpl's early return does — and it must not. The release that
+    // reaches this launches a spring-back one callback earlier, and the chat retargets that spring by
+    // applying the overscroll hold (`holdOverscrollAction`), so the flight has to be allowed to
+    // finish: it is what carries the content INTO the held-open position the outgoing snapshot is
+    // supposed to show. Freezing it in place instead strands the content wherever the finger happened
+    // to leave it.
+    //
+    // What the flag does do:
+    // 1. Drops `isUserInteractionEnabled`, so no NEW drag can start on a view that is now a picture.
+    // 2. Guards `onVisibleWindowChanged`, the direct analogue of ListViewImpl's early return, so the
+    //    host stops reacting to a scroll it no longer owns.
+    //
+    // Broader than ListViewImpl on (1) — there the scroller keeps scrolling, only the item nodes
+    // hold, and taps still land. A snapshot being animated away should accept neither.
+    var globalIgnoreScrollingEvents: Bool = false {
+        didSet {
+            if self.globalIgnoreScrollingEvents != oldValue {
+                self.coreList.isUserInteractionEnabled = !self.globalIgnoreScrollingEvents
+            }
+        }
+    }
 
     // MARK: - Geometry / range (real values populated in later tasks)
     var insets: UIEdgeInsets = .zero
@@ -181,9 +282,18 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // The inset-reduced viewport band in the hosted CoreVirtualListView's coordinate space, shared by
     // forEachVisibleItemNode and itemNodeVisibleInsideInsets so the two predicates cannot drift.
     //
-    // Uses currentSize/currentInsets, not the protocol-exposed visibleSize/insets:
-    // setTopContentInset(_:) writes only currentInsets.top, so these are the values actually submitted
-    // to applyChanges. Their orientation already matches — CoreList lays index 0 at its own top and
+    // Uses currentSize/currentInsets, the private working pair, rather than the protocol-exposed
+    // visibleSize/insets. The two carry the same values — both are written together from the same
+    // transaction — so this is a matter of which pair the display path owns, not a difference in
+    // meaning. It did once differ, when `setTopContentInset(_:)` wrote `currentInsets.top` alone;
+    // that aliasing is gone (see `holdOverscrollAction(distance:)`), and this comment used to cite
+    // it as the reason, which is worth knowing if the two ever drift again.
+    //
+    // The band deliberately does NOT include `overscrollHoldDistance`. Holding the newest edge open
+    // must not change which rows count as visible, and ListViewImpl agrees: its own scans read
+    // `self.insets`, which `scroller.contentInset` never touches.
+    //
+    // Their orientation already matches — CoreList lays index 0 at its own top and
     // the wrapper's π maps that to the screen bottom, the same convention ListViewImpl(rotated: true)
     // uses, and both receive the same insets from the same transaction. Before the first
     // updateSizeAndInsets, currentSize is .zero and nothing is inside the band, which is also
@@ -224,7 +334,13 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // accounts for.
     private var coreListInsets: UIEdgeInsets {
         return UIEdgeInsets(
-            top: self.currentInsets.top,
+            // The overscroll hold is added HERE and nowhere else. Everything that reasons about the
+            // list's own geometry — `insets`, `visibleBand`, `visibleContentOffset` — must keep
+            // reading `currentInsets`, so that while the edge is held the reported content offset is
+            // `-overscrollHoldDistance` rather than zero. That is what keeps the overscroll control
+            // on screen and correctly sized for the duration of the hold, and it is what
+            // `ListViewImpl` reports at the same moment.
+            top: self.currentInsets.top + self.overscrollHoldDistance,
             left: 0.0,
             bottom: self.currentInsets.bottom,
             right: 0.0
@@ -440,6 +556,13 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         // transaction end instead (see chatHistoryTransaction).
         self.coreList.onVisibleWindowChanged = { [weak self] in
             guard let self else { return }
+            // The other half of `globalIgnoreScrollingEvents`, and the direct analogue of
+            // ListViewImpl returning early from `updateScrollViewDidScroll` — placed before the
+            // drag-witness write below, exactly as ListViewImpl's guard precedes its `trackingOffset`
+            // accumulation (ListView.swift:1004 vs :1050).
+            if self.globalIgnoreScrollingEvents {
+                return
+            }
             // Reaching here means USER-driven content movement, which is what makes it the analogue of
             // ListViewImpl accumulating a non-zero `trackingOffset`: `handleUserScroll` is the
             // `engine.onScroll` sink, programmatic offset writes are isProgrammatic-guarded, and the
@@ -999,7 +1122,8 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // `geometry` is `.settled` at the transaction point and `.presented` on the scroll path — see
     // OffsetGeometry, and the call sites for why each is the one that consumers can act on.
     private func updateVisibleContentOffset(transition: ContainedViewLayoutTransition, geometry: OffsetGeometry) {
-        self.visibleContentOffsetChanged(self.visibleContentOffset(geometry), transition)
+        let value = self.visibleContentOffset(geometry)
+        self.visibleContentOffsetChanged(value, transition)
     }
 
     func addAfterTransactionsCompleted(_ f: @escaping () -> Void) { f() }
@@ -1016,6 +1140,15 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // ListViewImpl also folds in the minY of removed-but-still-animating nodes above the top item;
     // that has no analogue here, because CoreList departures live in the exitOverlay and never appear
     // in the loaded window.
+    //
+    // Measured against `currentInsets.top`, which EXCLUDES `overscrollHoldDistance` — so while the
+    // overscroll action holds the newest edge open this reports `.known(-distance)`, the same thing
+    // ListViewImpl reports when `scroller.contentInset` holds its content down. That is load-bearing
+    // rather than incidental: `maybeUpdateOverscrollAction` keeps the control alive only while the
+    // offset stays below -0.1 and sizes it from that value, so folding the hold in here would
+    // dismiss the control at the instant it is supposed to be held on screen — and, once the hold
+    // was released back to zero, would leave a permanent apparent overscroll that rebuilt the
+    // control on every emission and never removed it.
     func visibleContentOffset() -> ListViewVisibleContentOffset {
         return self.visibleContentOffset(.presented)
     }

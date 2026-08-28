@@ -5567,9 +5567,9 @@ extension ChatControllerImpl {
             downPressed: buttonAction
         )
 
-        historyNode.openNextChannelToRead = { [weak self] peer, threadData, location in
+        historyNode.openNextChannelToRead = { [weak self] peer, threadData, location -> Bool in
             guard let strongSelf = self else {
-                return
+                return false
             }
             if let navigationController = strongSelf.effectiveNavigationController {
                 let _ = ApplicationSpecificNotice.incrementNextChatSuggestionTip(accountManager: strongSelf.context.sharedContext.accountManager).startStandalone()
@@ -5619,7 +5619,13 @@ extension ChatControllerImpl {
                 strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: strongSelf.context, chatLocation: chatLocation, animated: false, chatListFilter: nextFolderId, chatNavigationStack: updatedChatNavigationStack, completion: { nextController in
                     (nextController as! ChatControllerImpl).animateFromPreviousController(snapshotState: snapshotState)
                 }, customChatNavigationStack: strongSelf.customChatNavigationStack))
+                // Navigation started: the caller may keep the overscroll control frozen, and the
+                // snapshot taken above now owns it.
+                return true
             }
+            // Declined — no navigation controller to push onto. Reporting this is what stops the
+            // caller stranding a frozen control on a chat that is staying put.
+            return false
         }
         
         historyNode.beganDragging = { [weak self] in

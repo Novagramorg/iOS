@@ -665,6 +665,9 @@ final class CoreVirtualListAnimationTests: XCTestCase {
             contentHost.bounds.origin.y = offset
         }
 
+        func reanchorDragToCurrentPosition() {}
+
+
         func haltMotionInPlace() {
             // Nothing to halt: this engine has no momentum. `setOffset` re-clamps, which is the correct
             // no-motion behaviour and mirrors UIKitScrollEngine.

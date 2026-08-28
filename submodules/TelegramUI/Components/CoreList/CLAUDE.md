@@ -1183,15 +1183,30 @@ Animation an authority.
     releases above the threshold at ~0 pts/ms, below `Deceleration.velocityFloor` — and an overscrolled
     release already inside `settleTolerance`. Both settle inside the hand-off's own step, and building a
     `KeyframeFlight` from the resulting `.idle` core trips its precondition assert on device.
-    **The overscrolled one is an everyday gesture, and the pixel grid is why:** the spring's rest is
-    pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
-    release speed, comes to rest at exactly −1/3 pt. The content therefore sits overscrolled inside the
-    tolerance after any bounce, and the next tap or sub-threshold release springs back from there with
-    nothing left to play. At the tests' default scale 1 it rounds to −0.0 instead, so a fixture that
-    never sets a device scale cannot see it. `.stepped` absorbs both cases silently in its first link
-    callback, and `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this
-    lives only on the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through
-    `applyPanUpdate` (the seam) and at the core.
+    The overscrolled one used to be an everyday gesture, and the pixel grid was why: the spring's rest
+    is pixel-ROUNDED and a 3× grid has no vertex at an edge from the outside, so EVERY bounce, at every
+    release speed, came to rest at exactly −1/3 pt and STAYED there. **That is fixed — see the settle
+    clamp below — so a bounce now lands ON the edge and only a release made inside the tolerance
+    reaches this state.** The precondition itself is unchanged and still live. At the tests' default
+    scale 1 the old rest rounded to −0.0 instead, so a fixture that never sets a device scale could not
+    see it at all. `.stepped` absorbs both cases silently in its first link callback, and
+    `TestScrollEngine` cannot see either — it does not apply the hand-off at all — so this lives only on
+    the `.keyframe` production path. `FlightLaunchPreconditionTests` locks it, through `applyPanUpdate`
+    (the seam) and at the core.
+- **A settle at an edge must land ON the edge — `Deceleration.settleIfNeeded` clamps it, and every
+  `step` exit goes through that rather than through `settled()`.** The tolerance is what lets the
+  spring stop in finite time (out of bounds, `settled()` accepts any rest within `settleTolerance`),
+  but it must not leave the offset where it stopped: a real `UIScrollView` bounce lands exactly on
+  `-contentInset`, and consumers are written against that guarantee. Unclamped, the ⅓pt grid parked
+  every bounce at −1/3 pt permanently (above), and the resting overscroll then read as a live
+  overscroll to anything with a tighter threshold. Measured on device: `ChatHistoryListNodeImpl` keeps
+  its next-channel control while `visibleContentOffset() < -0.1`, so a resting −0.333 pinned a
+  transparent 94pt host view over the bottom of every affected chat and swallowed taps there
+  **permanently** — no later emission corrected it, because the list was genuinely at rest and this
+  backend has no per-frame hook there. The control drew at zero expansion (`max(0.333 - 12, 0)`), so
+  nothing appeared to be on screen. Note how far the symptom sits from the cause: a third of a point
+  of physics residue, surfacing as dead touches in a chat. Anything downstream comparing an offset
+  against a small threshold is exposed the same way.
 - **The physics deceleration flights deliberately ignore the drag coefficient.** Every other CoreList
   animation honours Slow Animations; a fling or edge bounce does not. `Trajectory` bakes its path in
   real seconds and `boundsOriginKeyframeAnimation` installs it with `speed` at 1, so the toggle has no

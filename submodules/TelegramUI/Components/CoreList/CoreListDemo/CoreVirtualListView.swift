@@ -928,6 +928,7 @@ public final class CoreVirtualListView: UIView {
                       additionalScrollDistance: CGFloat = 0.0,
                       anchorMode: CoreListAnchorMode = .automatic,
                       compensatesInsetChange: Bool = true,
+                      absorbsEdgeChangeIntoOverscroll: Bool = false,
                       animatesInsertions: Bool = true,
                       transition: CoreListTransition) {
         let animationDuration = transition.duration
@@ -940,6 +941,7 @@ public final class CoreVirtualListView: UIView {
                                    additionalScrollDistance: additionalScrollDistance,
                                    anchorMode: anchorMode,
                                    compensatesInsetChange: compensatesInsetChange,
+                                   absorbsEdgeChangeIntoOverscroll: absorbsEdgeChangeIntoOverscroll,
                                    animatesInsertions: animatesInsertions,
                                    transition: transition)
             }
@@ -1538,10 +1540,47 @@ public final class CoreVirtualListView: UIView {
             if let minimum = edges.min { newSettledOffset = max(newSettledOffset, minimum) }
             if let maximum { newSettledOffset = min(newSettledOffset, maximum) }
         }
-        let newBoundsOriginY = hasScrollTo
-            ? newSettledOffset
-            : newSettledOffset + presentationOverscroll
+        // `presentationOverscroll` preserves the rubber-band MAGNITUDE across a geometry pass: the
+        // content ends up the same distance past the edge it was before. That is right whenever the
+        // edge stays where it is and the geometry around it changed (a rotation, a keyboard) — the
+        // band is a presentation-only displacement and losing it would snap.
+        //
+        // It is exactly wrong when the EDGE ITSELF MOVES under content that is standing still.
+        // Preserving the magnitude then teleports the content by the edge's travel. Measured on the
+        // chat's overscroll-action hold, which moves the newest edge 106pt while a finger-held
+        // overscroll of 156pt sits there: `newBounds = -185 + (-156.37) = -341.37`, i.e. still 156pt
+        // past an edge that just moved — a 106pt jump at let-go.
+        //
+        // `absorbsEdgeChangeIntoOverscroll` says the caller wants the other reading: hold the
+        // PRESENTED POSITION and let the band re-measure itself against the new edge (156 → 50 here).
+        // Nothing moves, and a spring already in flight simply retargets, which is what "bounce back
+        // from where I am, to the new inset" means.
+        //
+        // Both are needed by the same caller at different moments and neither is a default: the hold
+        // ENGAGING wants absorb (the finger is holding the content still), while the hold RELEASING
+        // over its ramp wants the magnitude preserved, because that is what carries the content back
+        // down as the edge closes. Off by default, so every existing caller keeps today's behaviour.
+        //
+        // The container-origin term keeps it exact across a rebase, where holding the engine offset
+        // literally still would move content by the rebase.
+        let newBoundsOriginY: CGFloat
+        if hasScrollTo {
+            newBoundsOriginY = newSettledOffset
+        } else if absorbsEdgeChangeIntoOverscroll {
+            newBoundsOriginY = oldBoundsOriginY + (containerOriginY - oldContainerOriginY)
+        } else {
+            newBoundsOriginY = newSettledOffset + presentationOverscroll
+        }
         setBoundsOriginY(newBoundsOriginY)
+        if absorbsEdgeChangeIntoOverscroll {
+            // Holding the engine offset is only half of holding the CONTENT. A drag in progress maps
+            // finger travel to content through the rubber band, and this pass just moved an edge, so
+            // the same finger position now bands differently — the content would jump on the very
+            // next drag frame, one frame after the offset we so carefully preserved. Re-anchoring the
+            // drag against the new edges is what makes "absorb" mean the same thing under a finger as
+            // it does under a flight. No-op when nothing is dragging.
+            engine.reanchorDragToCurrentPosition()
+        }
         // Re-solve against the offset this pass just settled on. `render()` ran earlier, before the
         // final offset existed — harmless for rows, whose frames are offset-INDEPENDENT, but the
         // attachment solve consumes the offset, so a header parked against the pre-pass value lands

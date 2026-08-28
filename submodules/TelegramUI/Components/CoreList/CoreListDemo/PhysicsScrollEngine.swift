@@ -200,6 +200,10 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
         core.cancelDeceleration()
         core.setOffset(y)
     }
+    func reanchorDragToCurrentPosition() {
+        core.reanchorDragToCurrentPosition()
+    }
+
     func haltMotionInPlace() {
         // Same teardown as `setOffset` minus the offset write: `catchFlight` already snaps the physics and
         // the layer model to the live position and removes the animation, so the content does not move.

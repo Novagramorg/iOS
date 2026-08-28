@@ -75,6 +75,13 @@ protocol ScrollEngine: AnyObject {
     /// docs/superpowers/specs/2026-07-26-clock-free-mutation-pass-design.md.
     func haltMotionInPlace()
 
+    /// Re-anchor an in-progress drag so the content stays where it is across an edge change the
+    /// caller just declared through `setEdges`. A drag maps finger travel to content through the
+    /// rubber band, so moving an edge re-scales that mapping and the content jumps on the next drag
+    /// frame unless the anchor moves with it. No-op outside a drag, and no-op for an engine whose
+    /// drag it does not own.
+    func reanchorDragToCurrentPosition()
+
     /// Re-anchor the reported `offset` on what the render server is currently presenting, without disturbing
     /// any animation. Call once at the top of a mutation pass so the pass reads a CURRENT position: `offset`
     /// is per-frame stable by contract, which makes it stale by however long the main thread has been busy

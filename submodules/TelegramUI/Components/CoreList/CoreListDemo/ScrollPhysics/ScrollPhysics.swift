@@ -24,6 +24,9 @@ struct ScrollAxis {
     private(set) var offset: CGFloat
     private(set) var velocity: CGFloat = 0
     private var dragStartOffset: CGFloat = 0
+    /// The un-banded finger position the last `drag()` proposed. Kept so the drag can be re-anchored
+    /// against moved edges without knowing the recognizer's cumulative translation.
+    private var lastProposedOffset: CGFloat = 0
     private(set) var phase: Phase = .idle
 
     init(offset: CGFloat, min: CGFloat, max: CGFloat, range: CGFloat,
@@ -36,6 +39,7 @@ struct ScrollAxis {
 
     mutating func beginDrag() {
         dragStartOffset = offset
+        lastProposedOffset = offset
         velocity = 0
         phase = .dragging
     }
@@ -46,7 +50,24 @@ struct ScrollAxis {
     /// and cannot be answered per axis.
     mutating func drag(translation: CGFloat) {
         let proposed = dragStartOffset - translation                       // §3
+        lastProposedOffset = proposed
         offset = RubberBand.offset(proposed, min: min, max: max, range: range, c: c) // §1
+    }
+
+    /// Re-anchor an in-progress drag so the CURRENT offset survives an edge change: the anchor moves
+    /// by exactly the difference between the un-banded pre-images of this offset under the new edges
+    /// and the old ones, so the next `drag()` reproduces where the content is now and carries on from
+    /// there. No-op outside a drag.
+    ///
+    /// `setBounds` deliberately disturbs nothing, which is right when the caller wants the band
+    /// re-evaluated. It is wrong when an edge moves under a finger that is holding content still:
+    /// the mapping from finger to content silently re-scales and the content jumps one frame later.
+    /// The chat moves the newest edge mid-drag to hold its overscroll action open, and needs this.
+    mutating func reanchorDragToCurrentOffset() {
+        guard phase == .dragging else { return }
+        let preImage = RubberBand.inverse(offset, min: min, max: max, range: range, c: c)
+        dragStartOffset += preImage - lastProposedOffset
+        lastProposedOffset = preImage
     }
 
     /// Enter deceleration at a release velocity `ReleaseDecision` already decided (pts/ms).
@@ -102,6 +123,7 @@ struct ScrollAxis {
     mutating func shift(by dy: CGFloat) {
         offset += dy
         dragStartOffset += dy
+        lastProposedOffset += dy
     }
 
     /// Re-anchor a deceleration at an explicit offset/velocity under the current edges. The analogue
@@ -137,6 +159,11 @@ struct ScrollPhysics {
     mutating func drag(translation: CGPoint) {
         x.drag(translation: translation.x)
         y.drag(translation: translation.y)
+    }
+
+    mutating func reanchorDragToCurrentOffset() {
+        x.reanchorDragToCurrentOffset()
+        y.reanchorDragToCurrentOffset()
     }
 
     /// Returns the offset to write, whether BOTH axes have settled, and whether EITHER ended its

@@ -67,6 +67,13 @@ final class TestScrollEngine: ScrollEngine {
         core.cancelDeceleration()                          // phase → .idle (production parity, both modes)
         core.setOffset(y)
     }
+    /// Forwards to the real core, like `PhysicsScrollEngine` — this harness exists to put the
+    /// shipping glue under test, and a stub here would make any list-level assertion about holding
+    /// content across a mid-drag edge change pass vacuously.
+    func reanchorDragToCurrentPosition() {
+        core.reanchorDragToCurrentPosition()
+    }
+
     func haltMotionInPlace() {
         // Mirrors PhysicsScrollEngine.haltMotionInPlace: catch the flight at its live position (production
         // additionally removes the CA animation), then idle the core.
