@@ -2657,6 +2657,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 subject: nil,
                 contactsPeerIds: Set(),
                 animatedEmojiStickers: [:],
+                premiumGiftStickers: context.premiumGiftStickersValue,
+                tonGiftStickers: context.tonGiftStickersValue,
                 forcedResourceStatus: forcedResourceStatus,
                 availableReactions: availableReactions,
                 availableMessageEffects: nil,

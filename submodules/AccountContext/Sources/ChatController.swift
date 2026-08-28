@@ -40,6 +40,8 @@ public final class ChatMessageItemAssociatedData: Equatable {
     public let channelDiscussionGroup: ChannelDiscussionGroupStatus
     public let animatedEmojiStickers: [String: [StickerPackItem]]
     public let additionalAnimatedEmojiStickers: [String: [Int: StickerPackItem]]
+    public let premiumGiftStickers: [Int32: StickerPackItem]
+    public let tonGiftStickers: [Int32: StickerPackItem]
     public let forcedResourceStatus: FileMediaResourceStatus?
     public let currentlyPlayingMessageId: EngineMessage.Index?
     public let isCopyProtectionEnabled: Bool
@@ -80,6 +82,8 @@ public final class ChatMessageItemAssociatedData: Equatable {
         channelDiscussionGroup: ChannelDiscussionGroupStatus = .unknown,
         animatedEmojiStickers: [String: [StickerPackItem]] = [:],
         additionalAnimatedEmojiStickers: [String: [Int: StickerPackItem]] = [:],
+        premiumGiftStickers: [Int32: StickerPackItem] = [:],
+        tonGiftStickers: [Int32: StickerPackItem] = [:],
         forcedResourceStatus: FileMediaResourceStatus? = nil,
         currentlyPlayingMessageId: EngineMessage.Index? = nil,
         isCopyProtectionEnabled: Bool = false,
@@ -119,6 +123,8 @@ public final class ChatMessageItemAssociatedData: Equatable {
         self.channelDiscussionGroup = channelDiscussionGroup
         self.animatedEmojiStickers = animatedEmojiStickers
         self.additionalAnimatedEmojiStickers = additionalAnimatedEmojiStickers
+        self.premiumGiftStickers = premiumGiftStickers
+        self.tonGiftStickers = tonGiftStickers
         self.forcedResourceStatus = forcedResourceStatus
         self.currentlyPlayingMessageId = currentlyPlayingMessageId
         self.isCopyProtectionEnabled = isCopyProtectionEnabled
@@ -178,6 +184,12 @@ public final class ChatMessageItemAssociatedData: Equatable {
             return false
         }
         if lhs.additionalAnimatedEmojiStickers != rhs.additionalAnimatedEmojiStickers {
+            return false
+        }
+        if lhs.premiumGiftStickers != rhs.premiumGiftStickers {
+            return false
+        }
+        if lhs.tonGiftStickers != rhs.tonGiftStickers {
             return false
         }
         if lhs.forcedResourceStatus != rhs.forcedResourceStatus {

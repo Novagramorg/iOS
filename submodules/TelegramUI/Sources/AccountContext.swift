@@ -180,6 +180,20 @@ public final class AccountContextImpl: AccountContext {
     public var animatedEmojiStickers: Signal<[String: [StickerPackItem]], NoError> {
         return self.animatedEmojiStickersPromise.get()
     }
+
+    private var premiumGiftStickersDisposable: Disposable?
+    public private(set) var premiumGiftStickersValue: [Int32: StickerPackItem] = [:]
+    private let premiumGiftStickersPromise = Promise<[Int32: StickerPackItem]>()
+    public var premiumGiftStickers: Signal<[Int32: StickerPackItem], NoError> {
+        return self.premiumGiftStickersPromise.get()
+    }
+
+    private var tonGiftStickersDisposable: Disposable?
+    public private(set) var tonGiftStickersValue: [Int32: StickerPackItem] = [:]
+    private let tonGiftStickersPromise = Promise<[Int32: StickerPackItem]>()
+    public var tonGiftStickers: Signal<[Int32: StickerPackItem], NoError> {
+        return self.tonGiftStickersPromise.get()
+    }
     
     private var additionalAnimatedEmojiStickersPromise: Promise<[String: [Int: StickerPackItem]]>?
     public var additionalAnimatedEmojiStickers: Signal<[String: [Int: StickerPackItem]], NoError> {
@@ -436,6 +450,62 @@ public final class AccountContextImpl: AccountContext {
             strongSelf.animatedEmojiStickersValue = stickers
             strongSelf.animatedEmojiStickersPromise.set(.single(stickers))
         })
+
+        self.premiumGiftStickersDisposable = (self.engine.stickers.loadedStickerPack(reference: .premiumGifts, forceActualized: false)
+        |> map { premiumGifts -> [Int32: StickerPackItem] in
+            let durations: [Int32] = [1, 3, 6, 12, 24]
+            var premiumGiftStickers: [Int32: StickerPackItem] = [:]
+            if case let .result(_, items, _) = premiumGifts {
+                for item in items {
+                    var displayText: String?
+                    for attribute in item.file._parse().attributes {
+                        if case let .Sticker(value, _, _) = attribute {
+                            displayText = value
+                            break
+                        }
+                    }
+                    if let value = displayText?.unicodeScalars.first?.value, value >= 49 && value <= 53 {
+                        premiumGiftStickers[durations[Int(value - 49)]] = item
+                    }
+                }
+            }
+            return premiumGiftStickers
+        }
+        |> deliverOnMainQueue).start(next: { [weak self] stickers in
+            guard let strongSelf = self else {
+                return
+            }
+            strongSelf.premiumGiftStickersValue = stickers
+            strongSelf.premiumGiftStickersPromise.set(.single(stickers))
+        })
+
+        self.tonGiftStickersDisposable = (self.engine.stickers.loadedStickerPack(reference: .tonGifts, forceActualized: false)
+        |> map { tonGifts -> [Int32: StickerPackItem] in
+            let dividers: [Int32] = [0, 10, 50]
+            var tonGiftStickers: [Int32: StickerPackItem] = [:]
+            if case let .result(_, items, _) = tonGifts {
+                for item in items {
+                    var displayText: String?
+                    for attribute in item.file._parse().attributes {
+                        if case let .Sticker(value, _, _) = attribute {
+                            displayText = value
+                            break
+                        }
+                    }
+                    if let value = displayText?.unicodeScalars.first?.value, value >= 49 && value <= 51 {
+                        tonGiftStickers[dividers[Int(value - 49)]] = item
+                    }
+                }
+            }
+            return tonGiftStickers
+        }
+        |> deliverOnMainQueue).start(next: { [weak self] stickers in
+            guard let strongSelf = self else {
+                return
+            }
+            strongSelf.tonGiftStickersValue = stickers
+            strongSelf.tonGiftStickersPromise.set(.single(stickers))
+        })
         
         self.userLimitsConfigurationDisposable = (self.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: account.peerId))
         |> mapToSignal { peer -> Signal<(Bool, EngineConfiguration.UserLimits), NoError> in
@@ -512,6 +582,8 @@ public final class AccountContextImpl: AccountContext {
         self.countriesConfigurationDisposable?.dispose()
         self.experimentalUISettingsDisposable?.dispose()
         self.animatedEmojiStickersDisposable?.dispose()
+        self.premiumGiftStickersDisposable?.dispose()
+        self.tonGiftStickersDisposable?.dispose()
         self.userLimitsConfigurationDisposable?.dispose()
         self.peerNameColorsConfigurationDisposable?.dispose()
         self.isFrozenDisposable?.dispose()

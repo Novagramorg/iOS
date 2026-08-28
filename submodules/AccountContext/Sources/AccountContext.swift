@@ -1747,6 +1747,10 @@ public protocol AccountContext: AnyObject {
     var animatedEmojiStickers: Signal<[String: [StickerPackItem]], NoError> { get }
     var animatedEmojiStickersValue: [String: [StickerPackItem]] { get }
     var additionalAnimatedEmojiStickers: Signal<[String: [Int: StickerPackItem]], NoError> { get }
+    var premiumGiftStickers: Signal<[Int32: StickerPackItem], NoError> { get }
+    var premiumGiftStickersValue: [Int32: StickerPackItem] { get }
+    var tonGiftStickers: Signal<[Int32: StickerPackItem], NoError> { get }
+    var tonGiftStickersValue: [Int32: StickerPackItem] { get }
     var availableReactions: Signal<AvailableReactions?, NoError> { get }
     var availableMessageEffects: Signal<AvailableMessageEffects?, NoError> { get }
     
