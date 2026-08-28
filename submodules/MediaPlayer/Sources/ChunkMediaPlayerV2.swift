@@ -154,6 +154,12 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             self.part = part
         }
     }
+
+    private struct AudioBufferTimingState {
+        var sampleRate: CMTimeScale
+        var anchorPts: CMTime
+        var nextSampleOffset: Int64
+    }
     
     private final class LoadedPartsMediaData {
         var ids: [ChunkMediaPlayerPart.Id] = []
@@ -162,6 +168,7 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
         var directReaderId: Double?
         var notifiedHasSound: Bool = false
         var seekFromMinTimestamp: Double?
+        var audioBufferTimingState: AudioBufferTimingState?
     }
     
     private static let sharedDataQueue = Queue(name: "ChunkMediaPlayerV2-DataQueue")
@@ -406,6 +413,9 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                 audioRenderer.isMuted = self.isMuted
                 self.audioRenderer = audioRenderer
                 self.renderSynchronizer.addRenderer(audioRenderer)
+                self.loadedPartsMediaData.with { loadedPartsMediaData in
+                    loadedPartsMediaData.audioBufferTimingState = nil
+                }
                 self.resetMediaDataStarvation()
             }
         } else {
@@ -414,6 +424,9 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                 audioRenderer.stopRequestingMediaData()
                 self.audioIsRequestingMediaData = false
                 self.renderSynchronizer.removeRenderer(audioRenderer, at: .invalid)
+                self.loadedPartsMediaData.with { loadedPartsMediaData in
+                    loadedPartsMediaData.audioBufferTimingState = nil
+                }
                 self.resetMediaDataStarvation()
             }
         }
@@ -983,6 +996,7 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             loadedPartsMediaData.seekFromMinTimestamp = timestamp
             loadedPartsMediaData.directMediaData = nil
             loadedPartsMediaData.directReaderId = nil
+            loadedPartsMediaData.audioBufferTimingState = nil
             
             Queue.mainQueue().async {
                 guard let self else {
@@ -1181,6 +1195,12 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                             continue outer
                         }
                     }
+                    if !isVideo {
+                        sampleBuffer = ChunkMediaPlayerV2.normalizeAudioSampleBuffer(
+                            sampleBuffer,
+                            state: &loadedPartsMediaData.audioBufferTimingState
+                        )
+                    }
                     /*if !isVideo {
                         print("Enqueue audio \(CMSampleBufferGetPresentationTimeStamp(sampleBuffer).value) next: \(CMSampleBufferGetPresentationTimeStamp(sampleBuffer).value + 1024)")
                     }*/
@@ -1249,6 +1269,57 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
         }
         
         return (bufferIsReadyForMoreData: bufferIsReadyForMoreData, didEnqueue: didEnqueue)
+    }
+
+    private static func normalizeAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer, state: inout AudioBufferTimingState?) -> CMSampleBuffer {
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let sampleCount = CMSampleBufferGetNumSamples(sampleBuffer)
+        guard pts.seconds.isFinite, sampleCount > 0, let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer), let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
+            state = nil
+            return sampleBuffer
+        }
+
+        let sampleRateValue = streamDescription.pointee.mSampleRate
+        let roundedSampleRate = sampleRateValue.rounded()
+        guard sampleRateValue.isFinite, roundedSampleRate > 0.0, roundedSampleRate <= Double(Int32.max), abs(sampleRateValue - roundedSampleRate) < 0.001 else {
+            state = nil
+            return sampleBuffer
+        }
+        let sampleRate = CMTimeScale(roundedSampleRate)
+        let sampleCountValue = Int64(sampleCount)
+
+        guard var currentState = state, currentState.sampleRate == sampleRate else {
+            state = AudioBufferTimingState(sampleRate: sampleRate, anchorPts: pts, nextSampleOffset: sampleCountValue)
+            return sampleBuffer
+        }
+
+        let expectedPts = CMTimeAdd(currentState.anchorPts, CMTime(value: currentState.nextSampleOffset, timescale: currentState.sampleRate))
+        let inputDelta = CMTimeSubtract(pts, expectedPts).seconds
+        guard inputDelta.isFinite, abs(inputDelta) <= 2.0 / 1000.0 else {
+            state = AudioBufferTimingState(sampleRate: sampleRate, anchorPts: pts, nextSampleOffset: sampleCountValue)
+            return sampleBuffer
+        }
+
+        let normalizedSampleBuffer: CMSampleBuffer
+        if CMTimeCompare(pts, expectedPts) == 0 {
+            normalizedSampleBuffer = sampleBuffer
+        } else {
+            let timeOffset = CMTimeSubtract(expectedPts, pts)
+            guard let updatedSampleBuffer = createSampleBuffer(fromSampleBuffer: sampleBuffer, withTimeOffset: timeOffset, duration: nil) else {
+                state = AudioBufferTimingState(sampleRate: sampleRate, anchorPts: pts, nextSampleOffset: sampleCountValue)
+                return sampleBuffer
+            }
+            normalizedSampleBuffer = updatedSampleBuffer
+        }
+
+        let (nextSampleOffset, overflow) = currentState.nextSampleOffset.addingReportingOverflow(sampleCountValue)
+        if overflow {
+            state = AudioBufferTimingState(sampleRate: sampleRate, anchorPts: pts, nextSampleOffset: sampleCountValue)
+        } else {
+            currentState.nextSampleOffset = nextSampleOffset
+            state = currentState
+        }
+        return normalizedSampleBuffer
     }
 }
 
