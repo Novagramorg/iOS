@@ -701,6 +701,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     secondaryText: messageTheme.secondaryTextColor
                 )
                 let tableHeaderColor = isDark || !isIncoming ? messageTheme.accentControlColor.withMultipliedAlpha(0.1) : UIColor(white: 0.0, alpha: 0.05)
+                
+                let checkboxFill = isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor
+                var checkboxForeground = isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.foregroundColor : item.presentationData.theme.theme.list.itemCheckColors.foregroundColor
+                if isDark && checkboxForeground == checkboxFill {
+                    checkboxForeground = messageTheme.mediaControlInnerBackgroundColor
+                }
+                
                 let pageTheme = InstantPageTheme(
                     type: isDark ? .dark : .light,
                     pageBackgroundColor: .clear,
@@ -729,8 +736,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     quoteAccentColor: mainColor,
                     buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
                     buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
-                    checkboxFill: isIncoming ? item.presentationData.theme.theme.list.itemCheckColors.fillColor : messageTheme.accentControlColor,
-                    checkboxForeground: item.presentationData.theme.theme.list.itemCheckColors.foregroundColor,
+                    checkboxFill: checkboxFill,
+                    checkboxForeground: checkboxForeground,
                     neutralButtonBackgroundColor: tableHeaderColor,
                     neutralButtonForegroundColor: isIncoming ? messageTheme.primaryTextColor : messageTheme.accentControlColor,
                     unsupportedPillFillColor: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper),
