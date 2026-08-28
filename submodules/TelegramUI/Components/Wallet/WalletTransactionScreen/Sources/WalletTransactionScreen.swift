@@ -587,7 +587,7 @@ private final class WalletTransactionContentComponent: Component {
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .copy(text: "TON Address copied to clipboard"),
+                    content: .copy(text: "TON address copied to clipboard"),
                     position: .bottom,
                     action: { _ in
                         return false
@@ -791,19 +791,13 @@ private final class WalletTransactionContentComponent: Component {
 
                 let amountSize = self.amount.update(
                     transition: transition,
-                    component: AnyComponent(Button(
-                        content: AnyComponent(WalletTransactionAmountComponent(
-                            theme: theme,
-                            dateTimeFormat: environment.dateTimeFormat,
-                            amount: transaction.amount,
-                            direction: transaction.direction,
-                            currency: transaction.currency,
-                            pending: self.isPreview ? false : (transaction.status == .pending || self.amountPending)
-                        )),
-                        automaticHighlight: false,
-                        action: { [weak self] in
-                            self?.toggleAmountPending()
-                        }
+                    component: AnyComponent(WalletTransactionAmountComponent(
+                        theme: theme,
+                        dateTimeFormat: environment.dateTimeFormat,
+                        amount: transaction.amount,
+                        direction: transaction.direction,
+                        currency: transaction.currency,
+                        pending: self.isPreview ? false : (transaction.status == .pending || self.amountPending)
                     )),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width, height: 100.0)

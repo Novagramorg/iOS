@@ -39,8 +39,6 @@ private let smallButtonWidth: CGFloat = 69.0
 private let iconSize = CGSize(width: 30.0, height: 30.0)
 private let glassPanelSideInset: CGFloat = 20.0
 private let smallPanelWidth: CGFloat = 240.0
-//TODO:localize
-private let moneyAttachmentTitle = "Money"
 
 private final class IconComponent: Component {
     public let account: Account
@@ -222,7 +220,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 name = strings.Attachment_File
                 imageName = "Chat/Attach Menu/File"
             case .money:
-                name = moneyAttachmentTitle
+                //TODO:localize
+                name = "Money"
                 imageName = "Chat/Attach Menu/Money"
             case .location:
                 name = strings.Attachment_Location
@@ -2180,7 +2179,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             case .file:
                 accessibilityTitle = self.presentationData.strings.Attachment_File
             case .money:
-                accessibilityTitle = moneyAttachmentTitle
+                //TODO:localize
+                accessibilityTitle = "Money"
             case .location:
                 accessibilityTitle = self.presentationData.strings.Attachment_Location
             case .todo:

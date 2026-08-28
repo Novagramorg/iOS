@@ -124,6 +124,8 @@ swift_library(
         "//submodules/UndoUI",
         "//submodules/MediaPlayer:UniversalMediaPlayer",
         "//submodules/WebUI",
+        "//submodules/WalletContext",
+        "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TelegramUI/Components/MultiScaleTextNode",
         "//submodules/GridMessageSelectionNode",
         "//submodules/ChatMessageInteractiveMediaBadge",

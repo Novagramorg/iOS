@@ -260,18 +260,9 @@ extension ChatControllerImpl {
                 isScheduledMessages = true
             }
 
-#if DEBUG
-            if case .default = subject,
-               !isScheduledMessages,
-               banSendText == nil,
-               let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser,
-               user.id != self.context.account.peerId,
-               !user.isDeleted,
-               user.botInfo == nil,
-               let fileIndex = availableButtons.firstIndex(of: .file) {
+            if case .default = subject, !isScheduledMessages, banSendText == nil, self.presentationInterfaceState.gramAddress != nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, user.botInfo == nil, let fileIndex = availableButtons.firstIndex(of: .file) {
                 availableButtons.insert(.money, at: fileIndex + 1)
             }
-#endif
 
             var isPaidMessages = false
             if let _ = self.presentationInterfaceState.sendPaidMessageStars {
@@ -546,7 +537,7 @@ extension ChatControllerImpl {
                         }
                         return true
                     case .money:
-                        guard let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer.flatMap(EnginePeer.init) else {
+                        guard let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer.flatMap(EnginePeer.init), let gramAddress = strongSelf.presentationInterfaceState.gramAddress else {
                             return true
                         }
                         guard let walletContext = strongSelf.context.walletContext else {
@@ -556,43 +547,7 @@ extension ChatControllerImpl {
                             context: strongSelf.context,
                             peer: peer,
                             walletContext: walletContext,
-                            completion: { [weak self] amount, comment in
-                                guard let strongSelf = self else {
-                                    return
-                                }
-                                let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
-                                let text = "_<transfer:out,\(amount)>\(comment ?? "")"
-                                let message: EnqueueMessage = .message(
-                                    text: text,
-                                    attributes: [],
-                                    inlineStickers: [:],
-                                    mediaReference: nil,
-                                    threadId: strongSelf.chatLocation.threadId,
-                                    replyToMessageId: replyMessageSubject?.subjectModel,
-                                    replyToStoryId: nil,
-                                    localGroupingKey: nil,
-                                    correlationId: nil,
-                                    bubbleUpEmojiOrStickersets: []
-                                )
-                                strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
-                                        guard let strongSelf = self else {
-                                            return
-                                        }
-                                        strongSelf.chatDisplayNode.collapseInput()
-                                        strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                            $0.updatedInterfaceState {
-                                                $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil)
-                                            }
-                                        })
-                                    }, nil)
-                                    let messages = strongSelf.transformEnqueueMessages([message], postpone: postpone)
-                                    strongSelf.sendMessages(messages, postpone: postpone)
-                                })
-                            }
+                            address: gramAddress
                         )
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)

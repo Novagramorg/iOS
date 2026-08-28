@@ -419,6 +419,7 @@ extension ChatControllerImpl {
             presentationInterfaceState = presentationInterfaceState.updatedHasSearchTags(contentData.state.hasSearchTags)
             presentationInterfaceState = presentationInterfaceState.updatedIsPremiumRequiredForMessaging(contentData.state.isPremiumRequiredForMessaging)
             presentationInterfaceState = presentationInterfaceState.updatedSendPaidMessageStars(contentData.state.sendPaidMessageStars)
+            presentationInterfaceState = presentationInterfaceState.updatedGramAddress(contentData.state.gramAddress)
             presentationInterfaceState = presentationInterfaceState.updatedAlwaysShowGiftButton(contentData.state.alwaysShowGiftButton)
             presentationInterfaceState = presentationInterfaceState.updatedDisallowedGifts(contentData.state.disallowedGifts)
             presentationInterfaceState = presentationInterfaceState.updatedHasSavedChats(contentData.state.hasSavedChats)

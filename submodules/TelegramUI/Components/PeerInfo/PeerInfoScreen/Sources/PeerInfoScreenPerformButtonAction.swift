@@ -12,6 +12,8 @@ import NotificationExceptionsScreen
 import TranslateUI
 import TelegramNotices
 import AlertComponent
+import WalletContext
+import WalletSendScreen
 
 extension PeerInfoScreenNode {
     func performButtonAction(key: PeerInfoHeaderButtonKey, buttonNode: PeerInfoHeaderButtonNode?, gesture: ContextGesture?) {
@@ -644,6 +646,21 @@ extension PeerInfoScreenNode {
                                 }
                             })))
                         }
+                    }
+
+                    if strongSelf.peerId.namespace == Namespaces.Peer.CloudUser, user.id != strongSelf.context.account.peerId, !user.isDeleted, user.botInfo == nil, !user.flags.contains(.isSupport), let cachedData = data.cachedData as? CachedUserData, cachedData.gramAddress != nil {
+                        items.append(.action(ContextMenuActionItem(text: "Send Money", icon: { theme in
+                            generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] _, f in
+                            f(.dismissWithoutContent)
+
+                            guard let self, let controller = self.controller, let peer = self.data?.peer, let walletContext = self.context.walletContext, let gramAddress = (self.data?.cachedData as? CachedUserData)?.gramAddress else {
+                                return
+                            }
+                            let sendController = WalletSendScreen(context: self.context, peer: peer, walletContext: walletContext, address: gramAddress)
+                            sendController.navigationPresentation = .modal
+                            controller.push(sendController)
+                        })))
                     }
                     
                     if let cachedData = data.cachedData as? CachedUserData, canTranslateChats(context: strongSelf.context), cachedData.flags.contains(.translationHidden) {

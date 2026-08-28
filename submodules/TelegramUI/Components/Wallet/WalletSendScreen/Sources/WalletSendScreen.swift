@@ -460,22 +460,19 @@ private final class WalletSendScreenComponent: Component {
 
     let context: AccountContext
     let peer: EnginePeer?
-    let initialAddress: String?
+    let initialAddress: String
     let walletContext: WalletContext
-    let completion: (Int64, String?) -> Void
 
     init(
         context: AccountContext,
         peer: EnginePeer?,
-        initialAddress: String?,
-        walletContext: WalletContext,
-        completion: @escaping (Int64, String?) -> Void
+        initialAddress: String,
+        walletContext: WalletContext
     ) {
         self.context = context
         self.peer = peer
         self.initialAddress = initialAddress
         self.walletContext = walletContext
-        self.completion = completion
     }
 
     static func ==(lhs: WalletSendScreenComponent, rhs: WalletSendScreenComponent) -> Bool {
@@ -741,11 +738,6 @@ private final class WalletSendScreenComponent: Component {
                   self.amount <= balance else {
                 return
             }
-            if component.peer != nil {
-                component.completion(self.amount, self.comment)
-                self.dismiss()
-                return
-            }
             guard !self.recipientAddress.isEmpty else {
                 return
             }
@@ -830,8 +822,8 @@ private final class WalletSendScreenComponent: Component {
             var shouldFocusAmountField = false
             if self.initialAddress != component.initialAddress {
                 self.initialAddress = component.initialAddress
-                if let initialAddress = component.initialAddress, !initialAddress.isEmpty {
-                    self.applyRecipient(initialAddress)
+                if !component.initialAddress.isEmpty {
+                    self.applyRecipient(component.initialAddress)
                     shouldFocusAmountField = true
                 }
             }
@@ -1393,7 +1385,7 @@ private final class WalletSendScreenComponent: Component {
                 let sendPrefix = "Send "
                 sendTitle = sendPrefix + amountTitle
             }
-            let hasRecipient = component.peer != nil || !self.recipientAddress.isEmpty
+            let hasRecipient = !self.recipientAddress.isEmpty
             let canSend = hasAmount
                 && hasRecipient
                 && !self.isPreparingTransfer
@@ -1446,7 +1438,7 @@ private final class WalletSendScreenComponent: Component {
                         height: sendButtonSize.height
                     )
                 )
-                transition.setAlpha(view: sendButtonView, alpha: hasAmount || component.initialAddress != nil ? 1.0 : 0.0)
+                transition.setAlpha(view: sendButtonView, alpha: hasAmount || !component.initialAddress.isEmpty ? 1.0 : 0.0)
                 sendButtonView.isUserInteractionEnabled = hasAmount
             }
 
@@ -1512,16 +1504,15 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         peer: EnginePeer,
         walletContext: WalletContext,
-        completion: @escaping (Int64, String?) -> Void
+        address: String
     ) {
         super.init(
             context: context,
             component: WalletSendScreenComponent(
                 context: context,
                 peer: peer,
-                initialAddress: nil,
-                walletContext: walletContext,
-                completion: completion
+                initialAddress: address,
+                walletContext: walletContext
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
@@ -1538,9 +1529,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 context: context,
                 peer: nil,
                 initialAddress: address,
-                walletContext: walletContext,
-                completion: { _, _ in
-                }
+                walletContext: walletContext
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
