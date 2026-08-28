@@ -658,6 +658,8 @@ final class CoreVirtualListAnimationTests: XCTestCase {
         var onFlightChanged: ((ScrollFlight?) -> Void)?
         var onWillBeginDragging: (() -> Void)?
         var onDidEndDragging: (() -> Void)?
+        // Never consulted: this engine has no drag and therefore no release.
+        var shouldStopScrollingOnRelease: ((CGFloat) -> Bool)?
         private(set) var offset: CGFloat = 0
 
         func setOffset(_ y: CGFloat) {

@@ -78,6 +78,18 @@ provides `offset`, programmatic `setOffset`/`applyShift`, edge declaration, user
 interval only**: neither fires for momentum, bounce or programmatic writes, so a host can maintain a
 `ListViewImpl.isTracking` equivalent from them.
 
+It also provides `shouldStopScrollingOnRelease`, consulted ONCE per release with the recognizer
+velocity, before the engine decides whether momentum follows. It exists for a host whose release was
+already claimed by something outside the list — the chat's history is dragged by the same finger that
+interactively dismisses the keyboard, and that dismissal is decided in touch DELIVERY, so it is known
+by the time the pan's `.ended` reaches the engine in action dispatch. **Suppression is expressed as a
+zero-velocity release, not as skipping the release:** `ReleaseDecision` answers `.stop` for a zero
+sample and expires the repeated-flick streak (what a genuinely slow release leaves behind), and `.stop`
+while overscrolled still installs the spring-back — skipping `endDrag` instead would strand an
+overscrolled list off its edge. `ListViewImpl.shouldStopScrolling` is the same hook on the other chat
+backend, and `UIKitScrollEngine` honours it the UIKit way, by projecting `targetContentOffset` onto the
+current offset. Covered by `ReleaseSuppressionTests`.
+
 - `UIKitScrollEngine` is the production default and the only list component that knows
   `UIScrollView`. It owns the private 10,000,000-point virtual canvas and prevents programmatic
   offset writes from re-entering the user-scroll callback.
@@ -282,7 +294,9 @@ caller-owned.
 edge transitions (above); `willBeginDragging` / `didEndDragging` fire on interactive drag start and end
 (forwarded from `ScrollEngine.onWillBeginDragging`/`onDidEndDragging`; the analogues of
 `ListViewImpl.beganInteractiveDragging`/`endedInteractiveDragging`, and together the finger-down
-interval a host needs to reproduce `ListViewImpl.isTracking`).
+interval a host needs to reproduce `ListViewImpl.isTracking`); `shouldStopScrolling` forwards to
+`ScrollEngine.shouldStopScrollingOnRelease` so a host can decline the momentum of a release it has
+already spent elsewhere (above).
 `loadedItemViews` is a **non-copying** `Sequence` over the settled window's item views in ascending
 index order — it walks `activeWindow.items` in place (a COW snapshot; no array built, no element
 copied, safe to mutate the list mid-iteration), the iterator-based analogue of

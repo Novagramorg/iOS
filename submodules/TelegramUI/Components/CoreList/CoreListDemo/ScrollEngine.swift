@@ -62,6 +62,21 @@ protocol ScrollEngine: AnyObject {
     /// `UIScrollViewDelegate.scrollViewDidEndDragging(_:willDecelerate:)`.
     var onDidEndDragging: (() -> Void)? { get set }
 
+    /// Consulted once per interactive release, BEFORE the engine decides whether momentum follows,
+    /// with the recognizer's release velocity. Returning `true` releases as if the finger had come to
+    /// rest: no fling, while an overscrolled release still springs back to the edge.
+    ///
+    /// It exists because a release can be claimed by something outside the list. The chat's history is
+    /// dragged by the same finger that interactively dismisses the keyboard, and that dismissal is
+    /// decided in touch DELIVERY — before the pan's `.ended` reaches an engine in action dispatch — so
+    /// by the time this is consulted the host already knows the momentum was spent elsewhere.
+    ///
+    /// Deliberately a pull, not a latch the host arms: there is exactly one release to answer for and
+    /// no flag to leak into the next gesture. `ListViewImpl.shouldStopScrolling`
+    /// (`Display/Source/ListView.swift:266`) is the same hook on the other backend, consulted in
+    /// `scrollViewWillEndDragging`.
+    var shouldStopScrollingOnRelease: ((_ velocity: CGFloat) -> Bool)? { get set }
+
     /// Programmatic absolute write (the old `setBoundsOriginY` + the fast-flick delta clamp).
     func setOffset(_ y: CGFloat)
 

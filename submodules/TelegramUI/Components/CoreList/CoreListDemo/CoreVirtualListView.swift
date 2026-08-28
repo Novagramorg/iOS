@@ -570,6 +570,15 @@ public final class CoreVirtualListView: UIView {
     // momentum phase after it. Analogous to ListViewImpl's `endedInteractiveDragging`, and the signal a
     // host needs to maintain its own `ListViewImpl.isTracking` equivalent.
     public var didEndDragging: (() -> Void)?
+    // Consulted once at each interactive release, with the release velocity, BEFORE the engine decides
+    // whether momentum follows. Returning true releases the list as if the finger had come to rest — no
+    // fling — while an overscrolled release still springs back. The seam exists for a host whose release
+    // is claimed by something outside the list; see `ScrollEngine.shouldStopScrollingOnRelease`, and
+    // `ListViewImpl.shouldStopScrolling` for the identically-shaped hook on the other backend.
+    public var shouldStopScrolling: ((CGFloat) -> Bool)? {
+        get { self.engine.shouldStopScrollingOnRelease }
+        set { self.engine.shouldStopScrollingOnRelease = newValue }
+    }
     // Fired when a momentum flight stops carrying the content: both the authoritative settle
     // (`finalizeFlight`) and the interruption (`catchFlight`, when a new touch grabs the list
     // mid-flight) reach it, because both are the engine reporting `onFlightChanged(nil)`.

@@ -41,6 +41,7 @@ final class TestScrollEngine: ScrollEngine {
     }
     var onWillBeginDragging: (() -> Void)?
     var onDidEndDragging: (() -> Void)?
+    var shouldStopScrollingOnRelease: ((CGFloat) -> Bool)?
     /// Mirrors `PhysicsScrollEngine.offset`: the physics position, advanced once per frame, never a sample of
     /// the flight. See that property and the clock-free-mutation-pass spec.
     var offset: CGFloat { core.offset }
@@ -150,7 +151,10 @@ final class TestScrollEngine: ScrollEngine {
     }
 
     @discardableResult func endDrag() -> Bool {
-        let decelerate = core.endDrag(recognizerVelocity: lastRecognizerVelocity, at: clock.now)
+        // Mirror PhysicsScrollEngine.applyPanUpdate(.ended): a host that claims the release is honoured
+        // by releasing at zero, not by skipping `endDrag` — so an overscrolled release still bounces.
+        let suppressed = shouldStopScrollingOnRelease?(lastRecognizerVelocity) ?? false
+        let decelerate = core.endDrag(recognizerVelocity: suppressed ? 0.0 : lastRecognizerVelocity, at: clock.now)
         lastRecognizerVelocity = 0
         defer { onDidEndDragging?() }                            // parity with PhysicsScrollEngine.handlePan(.ended)
         if decelerate && decelerationMode == .keyframe {
