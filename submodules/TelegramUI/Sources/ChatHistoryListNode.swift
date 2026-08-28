@@ -1370,7 +1370,14 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             }
             return strongSelf.isSelectionGestureEnabled
         }
-        self.listView.view.addGestureRecognizer(selectionRecognizer)
+        // On the scroll pan's own view, not merely somewhere above it: both backends' scroll pans
+        // defer to a two-touch pan by enumerating `pan.view.gestureRecognizers`
+        // (`Display/Source/ListViewScroller.swift:22` and its port in `PhysicsScrollEngine`), so a
+        // recognizer attached to an ancestor is invisible to that scan. It would still receive
+        // touches — UIKit collects recognizers up the whole chain — but the scroll pan would begin
+        // with two fingers down and, granting no simultaneity, starve this recognizer: a two-finger
+        // selection drag scrolls the chat instead of selecting.
+        self.listView.scrollGestureHostView.addGestureRecognizer(selectionRecognizer)
 
         self.loadNextGenericReactionEffect(context: context)
     }
@@ -5453,13 +5460,18 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     public var contentHeight: CGFloat {
         return self.listView.contentHeight
     }
-    // The inner view that owns the scroll pan gesture recognizer (see ListView's `self.view.addGestureRecognizer(self.scroller.panGestureRecognizer)`).
-    // Since the composition refactor, `self.view` is the rotated wrapper and the pan lives on this
-    // descendant. ChatControllerNode's previewing-mode hitTest fallback must return THIS view, not
-    // `self.view`: returning the wrapper binds touches to an ancestor of the pan's view, so the pan
-    // never fires and scrolling silently breaks.
-    public var scrollableContentView: UIView {
-        return self.listView.view
+    // The view that owns the scroll pan gesture recognizer. Since the composition refactor,
+    // `self.view` is the rotated wrapper and the pan lives on a descendant — so ChatControllerNode's
+    // previewing-mode hitTest fallback must return THIS view: returning an ancestor of the pan's view
+    // binds the touch above the pan, which then never fires, and scrolling silently breaks.
+    //
+    // This is ASKED OF THE BACKEND rather than derived as `self.listView.view`, which is what it used
+    // to be. That spelling encoded "the backend's own view owns the pan" — true for `ListViewImpl`,
+    // and false for `CoreListChatHistoryBackend`, where the pan sits two levels lower on the scroll
+    // engine's content host. So the composition fix reproduced the very bug it fixed as soon as a
+    // second backend existed, with no build error: previewing mode could not scroll under CoreList.
+    public var scrollGestureHostView: UIView {
+        return self.listView.scrollGestureHostView
     }
     public var scrollEnabled: Bool {
         get { self.listView.scrollEnabled }
@@ -5569,10 +5581,12 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         set { self.listView.tapped = newValue }
     }
 
-    // Routes an externally-supplied gesture recognizer onto the scroll surface
-    // (child view) so it shares ListViewImpl's gesture-simultaneity environment.
+    // Routes an externally-supplied gesture recognizer onto the view that owns the scroll pan, so it
+    // shares the backend's gesture-arbitration environment. Same-view placement is the mechanism, not
+    // a detail: the scroll pan's `gestureRecognizerShouldBegin` reasons about `pan.view`'s own
+    // recognizer list, which cannot see one parked on an ancestor.
     public func addContentGestureRecognizer(_ recognizer: UIGestureRecognizer) {
-        self.listView.view.addGestureRecognizer(recognizer)
+        self.listView.scrollGestureHostView.addGestureRecognizer(recognizer)
     }
 
 }

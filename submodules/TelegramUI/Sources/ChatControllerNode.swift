@@ -4394,7 +4394,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 return result
             }
             if self.bounds.contains(point) {
-                return self.historyNode.scrollableContentView
+                return self.historyNode.scrollGestureHostView
             }
         default:
             break

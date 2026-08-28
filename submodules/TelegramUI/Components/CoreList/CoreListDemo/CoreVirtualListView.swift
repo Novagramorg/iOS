@@ -683,6 +683,26 @@ public final class CoreVirtualListView: UIView {
     // The current settled scroll offset reported by the scroll engine.
     public var currentScrollOffset: CGFloat { engine.offset }
 
+    /// The view the scroll pan gesture recognizer is attached to — NOT `self`. Both engines park the
+    /// pan on their content host (`PhysicsScrollEngine`'s own `host`, `UIKitScrollEngine`'s
+    /// `UIScrollView`), which is a subview of this list, so `self` is an ANCESTOR of the pan's view
+    /// and is the wrong answer to every question about the pan.
+    ///
+    /// Two kinds of caller need it, and each breaks SILENTLY with the wrong view:
+    ///
+    /// - a host that force-routes a touch by returning a view from `hitTest` — UIKit collects
+    ///   recognizers from the hit view UPWARD, so handing back an ancestor of the pan excludes the
+    ///   pan from the touch entirely and scrolling simply stops happening;
+    /// - a host attaching its own recognizer that must arbitrate against the scroll pan —
+    ///   `gestureRecognizerShouldBegin` enumerates `pan.view.gestureRecognizers`, i.e. the pan's OWN
+    ///   view, so a recognizer on an ancestor is invisible to that scan even though UIKit still
+    ///   delivers touches to it.
+    ///
+    /// Both are exactly how `ListViewImpl` is wired (`Display/Source/ListView.swift:526` adds the
+    /// scroll pan to `self.view`, and everything that must arbitrate with it goes on that same view);
+    /// the difference is only that there the pan's view and the list's view coincide.
+    public var scrollGestureHostView: UIView { engine.contentHost }
+
     /// Whether a `pinsToBottomEdge` row is currently HELD against the bottom edge, as opposed to
     /// merely happening to be near it. `ListViewImpl.isStrictlyScrolledToPinToEdgeItem()`
     /// (`Display/Source/ListView.swift:2708`), tolerance included.

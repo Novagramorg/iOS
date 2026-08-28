@@ -64,6 +64,27 @@ public protocol ChatHistoryListViewBackend: ASDisplayNode {
     // needs none of this, since `UIScrollView` owns its own bounce and never reads a stale edge.
     var holdsOverscrollActionDuringDrag: Bool { get }
 
+    // The view the backend's scroll pan gesture recognizer is attached to. NOT `self.view`: only
+    // `ListViewImpl` happens to put the pan on its own view, and asking a backend for `.view` and
+    // assuming the pan is on it is the bug this member exists to make unrepresentable.
+    //
+    // Two callers, both of which fail SILENTLY on the wrong view — no build error, no exception,
+    // just a gesture that never fires:
+    //
+    // - `ChatControllerNode`'s previewing-mode `hitTest` force-routes the touch by returning this
+    //   view. UIKit binds the touch to the returned view and then collects recognizers from it
+    //   UPWARD, so an ancestor of the pan excludes the pan from the touch and previewing mode simply
+    //   cannot scroll. (Ordinary scrolling is unaffected either way, because normal hit-testing
+    //   descends to a row and the pan host is an ancestor of THAT — which is what makes the wrong
+    //   answer look correct in every other mode.)
+    // - `addContentGestureRecognizer` and the chat's two-touch selection pan attach here so they
+    //   arbitrate against the scroll pan. Arbitration is by same-view enumeration, not by UIKit's
+    //   general rules: both backends' `gestureRecognizerShouldBegin` scans
+    //   `pan.view.gestureRecognizers` for a `minimumNumberOfTouches == 2` pan to defer to
+    //   (`Display/Source/ListViewScroller.swift:22`, and its port in `PhysicsScrollEngine`), so a
+    //   recognizer parked on an ancestor is invisible to that scan while still receiving touches.
+    var scrollGestureHostView: UIView { get }
+
     // MARK: - Members shared with the `ListView` protocol (signatures copied from ListViewProtocol.swift).
     var scrollEnabled: Bool { get set }
     var preloadPages: Bool { get set }
@@ -239,6 +260,12 @@ extension ListViewImpl: ChatHistoryListViewBackend {
     }
 
     public var holdsOverscrollActionDuringDrag: Bool { return false }
+
+    // The one backend where the pan and the list share a view: `ListView.swift:526` adds
+    // `scroller.panGestureRecognizer` to `self.view`.
+    public var scrollGestureHostView: UIView {
+        return self.view
+    }
     
     public func itemNodeFrame(_ node: ListViewItemNode) -> CGRect? {
         // On ListViewImpl a node's own frame IS list space; `index != nil` is its liveness guard,

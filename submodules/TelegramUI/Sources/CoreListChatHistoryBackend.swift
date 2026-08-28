@@ -99,6 +99,13 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // carry it.
     var holdsOverscrollActionDuringDrag: Bool { return true }
 
+    // Two levels below `self.view`: this node hosts `coreList`, `coreList` hosts the scroll engine's
+    // content host, and the pan is on that. All three views cover the same rect (`layout()` sizes
+    // `coreList` to our bounds, `CoreVirtualListView` sizes `contentHost` to its own), so routing a
+    // touch or a recognizer here rather than to `self.view` is geometrically neutral and only
+    // changes which recognizers can see it — which is the entire point.
+    var scrollGestureHostView: UIView { return self.coreList.scrollGestureHostView }
+
     func holdOverscrollAction(distance: CGFloat, movesContent: Bool) {
         guard distance != self.overscrollHoldDistance else {
             return
