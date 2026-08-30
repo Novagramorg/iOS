@@ -898,7 +898,7 @@ public final class GiftMessageScreen: ViewControllerComponentContainer {
                 })
             }
         }
-        if !self.didPresentMessageHint {
+        if self.peer.id != self.accountContext.account.peerId && !self.didPresentMessageHint {
             self.didPresentMessageHint = true
             Queue.mainQueue().after(0.3, { [weak self] in
                 guard let self, !self.isDismissed else {
