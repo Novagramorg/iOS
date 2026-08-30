@@ -392,7 +392,13 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
         super.didLoad()
         
         let recognizer = TapLongTapOrDoubleTapGestureRecognizer(target: self, action: #selector(self.tapLongTapOrDoubleTapGesture(_:)))
-        recognizer.tapActionAtPoint = { _ in
+        recognizer.tapActionAtPoint = { [weak self] point in
+            guard let self else {
+                return .waitForSingleTap
+            }
+            if self.hasAvatarAction(at: point) {
+                return .fail
+            }
             return .waitForSingleTap
         }
         recognizer.highlight = { [weak self] point in
@@ -420,6 +426,24 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
         default:
             break
         }
+    }
+
+    private func communityId() -> EnginePeer.Id? {
+        guard let itemNode = self.itemNode as? ChatListItemNode, let chatListItem = itemNode.item else {
+            return nil
+        }
+        guard case let .peer(peerData) = chatListItem.content else {
+            return nil
+        }
+        return peerData.peer.peer?.containerPeerId
+    }
+
+    private func hasAvatarAction(at point: CGPoint) -> Bool {
+        guard let item = self.item, let itemNode = self.itemNode as? ChatListItemNode else {
+            return false
+        }
+        let avatarFrame = itemNode.avatarNode.view.convert(itemNode.avatarNode.view.bounds, to: self.view)
+        return avatarFrame.contains(point) && (self.communityId() != nil || item.data.storyStats != nil)
     }
     
     override func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
@@ -540,6 +564,17 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
                 }
                 
                 StoryContainerScreen.openPeerStories(context: item.context, peerId: item.data.peer.peerId, parentController: controller, avatarNode: itemNode.avatarNode)
+            },
+            openCommunity: { [weak self] communityId in
+                guard let self, let item = self.item, let controller = item.controller() else {
+                    return
+                }
+                let communityController = item.context.sharedContext.makeCommunityViewScreen(
+                    context: item.context,
+                    communityId: communityId,
+                    mode: .sheet
+                )
+                controller.push(communityController)
             },
             openStarsTopup: { _ in
             },
@@ -663,7 +698,7 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
             
             self.itemNode = itemNode
             if let itemNode {
-                itemNode.isUserInteractionEnabled = false
+                itemNode.isUserInteractionEnabled = true
                 self.contextSourceNode.contentNode.addSubnode(itemNode)
             }
         }
@@ -740,7 +775,7 @@ private final class PeerInfoScreenPersonalChannelItemNode: PeerInfoScreenItemNod
         if let point, let itemNode = self.itemNode as? ChatListItemNode {
             if !itemNode.avatarNode.view.convert(itemNode.avatarNode.view.bounds, to: self.view).contains(point) {
                 isHighlighted = true
-            } else if let item = self.item, item.data.storyStats == nil {
+            } else if let item = self.item, item.data.storyStats == nil && self.communityId() == nil {
                 isHighlighted = true
             }
         }

@@ -3658,6 +3658,16 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             if let sourceNode = sourceNode as? ChatListItemNode {
                 self.interaction.openStories?(id, sourceNode.avatarNode)
             }
+        }, openCommunity: { [weak self] communityId in
+            guard let self, let navigationController = self.navigationController else {
+                return
+            }
+            let controller = self.context.sharedContext.makeCommunityViewScreen(
+                context: self.context,
+                communityId: communityId,
+                mode: .sheet
+            )
+            navigationController.pushViewController(controller)
         }, openStarsTopup: { _ in
         }, editPeer: { _ in
         }, openWebApp: { _ in
