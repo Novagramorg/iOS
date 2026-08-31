@@ -23,6 +23,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
+        "//submodules/PresentationDataUtils",
         "//submodules/TelegramStringFormatting",
         "//submodules/TelegramUI/Components/AlertComponent",
         "//submodules/TelegramUI/Components/AlertComponent/AlertInputFieldComponent",
@@ -31,6 +32,7 @@ swift_library(
         "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/QrCodeUI",
         "//submodules/WalletContext",
+        "//submodules/UndoUI",
     ],
     visibility = [
         "//visibility:public",

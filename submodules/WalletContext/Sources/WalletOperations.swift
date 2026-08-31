@@ -3,6 +3,48 @@ import SwiftSignalKit
 import TelegramCore
 import WalletEngineFFI
 
+private struct AcceptedWalletEngineSubmission {
+    let transfer: WalletContext.PendingTransfer
+    let remainsPending: Bool
+}
+
+private func acceptedWalletEngineSubmission(
+    pending: WalletContext.PendingTransfer,
+    messageHash: String?,
+    phase: SendPhase
+) -> AcceptedWalletEngineSubmission? {
+    let status: WalletContext.PendingTransfer.Status
+    let remainsPending: Bool
+    switch phase {
+    case .submitted:
+        status = .pending
+        remainsPending = true
+    case .submissionUnknown:
+        status = .submissionUnknown
+        remainsPending = true
+    case .confirmed:
+        status = .pending
+        remainsPending = false
+    case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
+         .submitting, .handedOff, .replaced, .sequenceNumberConsumed, .expired,
+         .superseded, .failed, .cancelled:
+        return nil
+    }
+    return AcceptedWalletEngineSubmission(
+        transfer: WalletContext.PendingTransfer(
+            id: pending.id,
+            recipient: pending.recipient,
+            amount: pending.amount,
+            comment: pending.comment,
+            collectibleAddress: pending.collectibleAddress,
+            normalizedHash: messageHash ?? pending.normalizedHash,
+            createdAt: pending.createdAt,
+            status: status
+        ),
+        remainsPending: remainsPending
+    )
+}
+
 private func walletServerIdentity(_ state: TelegramCore.WalletState) throws -> (address: String, publicKey: Data) {
     switch state {
     case let .ready(_, _, _, address, publicKey, _):
@@ -13,6 +55,34 @@ private func walletServerIdentity(_ state: TelegramCore.WalletState) throws -> (
     case .empty:
         throw WalletContext.WalletError.replacementInvalid
     }
+}
+
+func stageRecoveryPhraseImport(
+    runtime: WalletEngineRuntime,
+    words: [String],
+    sourceAddress: String,
+    sourcePublicKey: Data
+) async throws -> WalletContext.PreparedRecoveryPhraseImport {
+    let normalizedWords = normalizedEngineMnemonic(words)
+    guard detectMnemonicSchemes(words: normalizedWords).contains(.rotation) else {
+        throw WalletContext.WalletError.invalidMnemonic
+    }
+    let staged = try await runtime.stageReplacement(words: normalizedWords)
+    let disposition: WalletContext.PreparedRecoveryPhraseImport.Disposition
+    if walletEngineAddressesEqual(staged.address, sourceAddress),
+       staged.publicKey == sourcePublicKey {
+        disposition = .currentWallet
+    } else {
+        disposition = .replacement
+    }
+    return WalletContext.PreparedRecoveryPhraseImport(
+        disposition: disposition,
+        recordId: staged.recordId,
+        sourceAddress: sourceAddress,
+        sourcePublicKey: sourcePublicKey,
+        candidateAddress: staged.address,
+        candidatePublicKey: staged.publicKey
+    )
 }
 
 public extension WalletContext {
@@ -263,21 +333,171 @@ public extension WalletContext {
             let words = try await WalletSignalRequestContext<[String]>().run(
                 context.engine.wallet.exportSecretPhrase(password: password)
             )
-            let staged = try await context.runtime.stageReplacement(words: words)
-            guard walletEngineAddressesEqual(staged.address, address), staged.publicKey == publicKey else {
-                try? await context.runtime.discardReplacement(recordId: staged.recordId)
+            let prepared = try await stageRecoveryPhraseImport(
+                runtime: context.runtime,
+                words: words,
+                sourceAddress: address,
+                sourcePublicKey: publicKey
+            )
+            guard prepared.disposition == .currentWallet else {
+                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
             let generation = await context.prepareForRuntimeIdentityChange()
             let activation = try await context.runtime.commitReplacement(
-                recordId: staged.recordId,
+                recordId: prepared.recordId,
                 serverAddress: address,
                 serverPublicKey: publicKey
             )
             if let state = context.serverWalletState {
-                _ = context.installRuntimeActivation(state: state, activation: activation, generation: generation)
+                _ = context.installRuntimeActivation(
+                    state: state,
+                    activation: activation,
+                    generation: generation,
+                    preserveCurrentWalletState: true
+                )
             }
             return words
+        }
+    }
+
+    func prepareRecoveryPhraseImport(words: [String]) -> Signal<PreparedRecoveryPhraseImport, WalletError> {
+        self.performOperation(.preparingRecoveryPhraseImport) { context in
+            guard let state = context.serverWalletState else {
+                throw WalletError.noWallet
+            }
+            let sourceIdentity = try walletServerIdentity(state)
+            let prepared = try await stageRecoveryPhraseImport(
+                runtime: context.runtime,
+                words: words,
+                sourceAddress: sourceIdentity.address,
+                sourcePublicKey: sourceIdentity.publicKey
+            )
+            context.preparedRecoveryPhraseImportRecordId = prepared.recordId
+            return prepared
+        }
+    }
+
+    func completeRecoveryPhraseImport(
+        _ prepared: PreparedRecoveryPhraseImport,
+        password: String? = nil
+    ) -> Signal<WalletInfo, WalletError> {
+        self.performOperation(.completingRecoveryPhraseImport, cancelOnDispose: false) { context in
+            guard let currentServerState = context.serverWalletState else {
+                throw WalletError.noWallet
+            }
+            let currentIdentity: (address: String, publicKey: Data)
+            do {
+                currentIdentity = try walletServerIdentity(currentServerState)
+            } catch {
+                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    context.preparedRecoveryPhraseImportRecordId = nil
+                }
+                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                throw error
+            }
+            guard walletEngineAddressesEqual(currentIdentity.address, prepared.sourceAddress),
+                  currentIdentity.publicKey == prepared.sourcePublicKey else {
+                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    context.preparedRecoveryPhraseImportRecordId = nil
+                }
+                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                throw WalletError.storage(.identityMismatch)
+            }
+
+            switch prepared.disposition {
+            case .currentWallet:
+                guard walletEngineAddressesEqual(prepared.candidateAddress, currentIdentity.address),
+                      prepared.candidatePublicKey == currentIdentity.publicKey else {
+                    if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                        context.preparedRecoveryPhraseImportRecordId = nil
+                    }
+                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    throw WalletError.storage(.identityMismatch)
+                }
+                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    context.preparedRecoveryPhraseImportRecordId = nil
+                }
+                let generation = await context.prepareForRuntimeIdentityChange()
+                let activation = try await context.runtime.commitReplacement(
+                    recordId: prepared.recordId,
+                    serverAddress: currentIdentity.address,
+                    serverPublicKey: currentIdentity.publicKey
+                )
+                return context.installRuntimeActivation(
+                    state: currentServerState,
+                    activation: activation,
+                    generation: generation,
+                    preserveCurrentWalletState: true
+                )
+
+            case .replacement:
+                let state: TelegramCore.WalletState
+                do {
+                    state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
+                        context.engine.wallet.replaceWallet(
+                            replacement: .imported(publicKey: prepared.candidatePublicKey),
+                            password: password
+                        )
+                    )
+                } catch let error as TelegramCore.WalletOperationError {
+                    switch error {
+                    case .requestPassword, .invalidPassword:
+                        break
+                    case .network:
+                        if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                            context.preparedRecoveryPhraseImportRecordId = nil
+                        }
+                    default:
+                        if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                            context.preparedRecoveryPhraseImportRecordId = nil
+                        }
+                        try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    }
+                    throw error
+                }
+                let replacementIdentity: (address: String, publicKey: Data)
+                do {
+                    replacementIdentity = try walletServerIdentity(state)
+                } catch {
+                    if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                        context.preparedRecoveryPhraseImportRecordId = nil
+                    }
+                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    throw error
+                }
+                guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
+                      prepared.candidatePublicKey == replacementIdentity.publicKey else {
+                    if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                        context.preparedRecoveryPhraseImportRecordId = nil
+                    }
+                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    throw WalletError.storage(.identityMismatch)
+                }
+                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    context.preparedRecoveryPhraseImportRecordId = nil
+                }
+                let generation = await context.prepareForRuntimeIdentityChange()
+                let activation = try await context.runtime.commitReplacement(
+                    recordId: prepared.recordId,
+                    serverAddress: replacementIdentity.address,
+                    serverPublicKey: replacementIdentity.publicKey
+                )
+                return context.installRuntimeActivation(
+                    state: state,
+                    activation: activation,
+                    generation: generation
+                )
+            }
+        }
+    }
+
+    func discardRecoveryPhraseImport(_ prepared: PreparedRecoveryPhraseImport) -> Signal<Void, WalletError> {
+        self.performUtility { context in
+            if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                context.preparedRecoveryPhraseImportRecordId = nil
+            }
+            try await context.runtime.discardReplacement(recordId: prepared.recordId)
         }
     }
 
@@ -470,29 +690,18 @@ public extension WalletContext {
             )
             context.preparedTransfers[prepared.id] = nil
 
-            do {
-                let result: SendResult
-                switch record.request {
-                case let .send(intent):
-                    result = try await context.runtime.send(operationId: prepared.id, intent: intent)
-                case let .nft(intent):
-                    result = try await context.runtime.sendNft(operationId: prepared.id, intent: intent)
+            let applyAcceptedSubmission: (SendPhase, String?) -> SubmittedTransfer? = { phase, messageHash in
+                guard let accepted = acceptedWalletEngineSubmission(
+                    pending: pending,
+                    messageHash: messageHash,
+                    phase: phase
+                ) else {
+                    return nil
                 }
-                guard walletEngineAcceptsSubmission(result.phase) else {
-                    throw WalletError.sdk("wallet-engine send ended in \(result.phase)")
+                var updated = context.currentState.pendingTransfers.filter { $0.id != accepted.transfer.id }
+                if accepted.remainsPending {
+                    updated.append(accepted.transfer)
                 }
-                let submitted = PendingTransfer(
-                    id: pending.id,
-                    recipient: pending.recipient,
-                    amount: pending.amount,
-                    comment: pending.comment,
-                    collectibleAddress: pending.collectibleAddress,
-                    normalizedHash: result.messageHash,
-                    createdAt: pending.createdAt,
-                    status: .pending
-                )
-                var updated = context.currentState.pendingTransfers.filter { $0.id != submitted.id }
-                if result.phase != .confirmed { updated.append(submitted) }
                 context.replaceState(
                     phase: context.currentState.phase,
                     balance: context.currentState.balance,
@@ -501,18 +710,35 @@ public extension WalletContext {
                     activeOperation: context.currentState.activeOperation
                 )
                 context.requestSynchronization(force: true)
-                return SubmittedTransfer(pendingTransfer: submitted)
+                return SubmittedTransfer(pendingTransfer: accepted.transfer)
+            }
+
+            do {
+                let result: SendResult
+                switch record.request {
+                case let .send(intent):
+                    result = try await context.runtime.send(operationId: prepared.id, intent: intent)
+                case let .nft(intent):
+                    result = try await context.runtime.sendNft(operationId: prepared.id, intent: intent)
+                }
+                guard let submitted = applyAcceptedSubmission(result.phase, result.messageHash) else {
+                    throw WalletError.sdk("wallet-engine send ended in \(result.phase)")
+                }
+                return submitted
             } catch {
                 let snapshot = try? await context.runtime.snapshot()
-                if snapshot?.send.phase != .submissionUnknown && snapshot?.send.phase != .submitted {
-                    context.replaceState(
-                        phase: context.currentState.phase,
-                        balance: context.currentState.balance,
-                        transactions: context.currentState.transactions,
-                        pendingTransfers: context.currentState.pendingTransfers.filter { $0.id != pending.id },
-                        activeOperation: context.currentState.activeOperation
-                    )
+                if let send = snapshot?.send,
+                   send.operationId == pending.id,
+                   let submitted = applyAcceptedSubmission(send.phase, nil) {
+                    return submitted
                 }
+                context.replaceState(
+                    phase: context.currentState.phase,
+                    balance: context.currentState.balance,
+                    transactions: context.currentState.transactions,
+                    pendingTransfers: context.currentState.pendingTransfers.filter { $0.id != pending.id },
+                    activeOperation: context.currentState.activeOperation
+                )
                 throw error
             }
         }
@@ -597,7 +823,8 @@ extension WalletContext {
     func installRuntimeActivation(
         state: TelegramCore.WalletState,
         activation: WalletEngineActivation,
-        generation: UInt64
+        generation: UInt64,
+        preserveCurrentWalletState: Bool = false
     ) -> WalletInfo {
         let identity: (backupEnabled: Bool, canExportPhrase: Bool, canEnableBackup: Bool, address: String, publicKey: Data)
         switch state {
@@ -616,13 +843,17 @@ extension WalletContext {
             canEnableBackup: identity.canEnableBackup,
             canSign: activation.canSign
         )
-        self.serverTransactionsNextOffset = nil
+        if !preserveCurrentWalletState {
+            self.serverTransactionsNextOffset = nil
+        }
         self.replaceState(
             phase: .wallet(info),
-            balance: .loading(previous: nil),
-            transactions: TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
-            collectibles: .empty,
-            pendingTransfers: [],
+            balance: preserveCurrentWalletState ? self.currentState.balance : .loading(previous: nil),
+            transactions: preserveCurrentWalletState
+                ? self.currentState.transactions
+                : TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
+            collectibles: preserveCurrentWalletState ? self.currentState.collectibles : .empty,
+            pendingTransfers: preserveCurrentWalletState ? self.currentState.pendingTransfers : [],
             activeOperation: self.currentState.activeOperation
         )
         self.beginObserving(snapshot: activation.snapshot, generation: generation)

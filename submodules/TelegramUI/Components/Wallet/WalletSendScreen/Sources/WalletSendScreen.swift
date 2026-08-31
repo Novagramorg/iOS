@@ -7,6 +7,7 @@ import TelegramCore
 import LocalizedPeerData
 import SwiftSignalKit
 import TelegramPresentationData
+import PresentationDataUtils
 import TelegramStringFormatting
 import ComponentFlow
 import ViewControllerComponent
@@ -21,6 +22,7 @@ import AlertComponent
 import AlertInputFieldComponent
 import WalletContext
 import QrCodeUI
+import UndoUI
 
 private enum WalletSendInputMode: Equatable {
     case gram
@@ -743,11 +745,40 @@ private final class WalletSendScreenComponent: Component {
             }
             self.isPreparingTransfer = true
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.transferDisposable.set((component.walletContext.prepareTransfer(
+            let preparation = component.walletContext.prepareTransfer(
                 address: self.recipientAddress,
                 amount: self.amount,
                 comment: self.comment
             )
+
+            if let peer = component.peer {
+                self.transferDisposable.set((preparation
+                |> mapToSignal { prepared in
+                    return component.walletContext.submitTransfer(prepared)
+                }
+                |> deliverOnMainQueue).start(next: { [weak self] submittedTransfer in
+                    guard let self, let controller = self.environment?.controller() else {
+                        return
+                    }
+                    self.isPreparingTransfer = false
+                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+
+                    switch submittedTransfer.pendingTransfer.status {
+                    case .submissionUnknown:
+                        self.presentSubmissionUnknown(on: controller, context: component.context)
+                    case .broadcasting, .pending:
+                        self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
+                    }
+                    controller.dismiss()
+                }, error: { [weak self] _ in
+                    self?.isPreparingTransfer = false
+                    self?.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                    self?.presentTransferError()
+                }))
+                return
+            }
+
+            self.transferDisposable.set((preparation
             |> deliverOnMainQueue).start(next: { [weak self] prepared in
                 guard let self, let controller = self.environment?.controller() else {
                     return
@@ -782,19 +813,51 @@ private final class WalletSendScreenComponent: Component {
             }))
         }
 
+        private func presentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
+            //TODO:localize
+            let text = "Grams have been sent to \(peer.compactDisplayTitle)."
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            controller.present(
+                UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .emoji(name: "Celebrate", text: text),
+                    position: .bottom,
+                    action: { _ in
+                        return false
+                    }
+                ),
+                in: .window(.root)
+            )
+        }
+
+        private func presentSubmissionUnknown(on controller: ViewController, context: AccountContext) {
+            //TODO:localize
+            let title = "Transfer Pending"
+            //TODO:localize
+            let text = "The transfer may have been sent. Don’t send it again while its status is being checked."
+            //TODO:localize
+            let ok = "OK"
+            controller.present(textAlertController(
+                context: context,
+                title: title,
+                text: text,
+                actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+                })]
+            ), in: .window(.root))
+        }
+
         private func presentTransferError() {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             //TODO:localize
             let title = "Transfer Failed"
             //TODO:localize
             let text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
             //TODO:localize
             let ok = "OK"
-            controller.present(standardTextAlertController(
-                theme: AlertControllerTheme(presentationData: presentationData),
+            controller.present(textAlertController(
+                context: component.context,
                 title: title,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
@@ -1359,6 +1422,7 @@ private final class WalletSendScreenComponent: Component {
                 transition.setAlpha(view: balanceTextView, alpha: showBalance ? 1.0 : 0.0)
             }
 
+            let sendIdentifier: String
             let amountTitle: String
             if self.inputMode == .fiat, self.currentRate != nil {
                 amountTitle = walletSendInputText(
@@ -1367,6 +1431,7 @@ private final class WalletSendScreenComponent: Component {
                     rate: self.currentRate,
                     dateTimeFormat: environment.dateTimeFormat
                 ) + " " + self.currentFiatCurrency.rawValue
+                sendIdentifier = "fiat"
             } else {
                 amountTitle = formatTonAmountText(
                     self.amount,
@@ -1374,6 +1439,7 @@ private final class WalletSendScreenComponent: Component {
                     maxDecimalPositions: 9,
                     formatString: environment.strings.Currency_Grams
                 )
+                sendIdentifier = "grams"
             }
 
             let sendTitle: String
@@ -1402,7 +1468,7 @@ private final class WalletSendScreenComponent: Component {
                         pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
                     ),
                     content: AnyComponentWithIdentity(
-                        id: "title",
+                        id: sendIdentifier,
                         component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
                                 string: sendTitle,

@@ -371,6 +371,7 @@ private final class WalletImportScreenComponent: Component {
         private var environment: EnvironmentType?
         private var component: WalletImportScreenComponent?
         private let operationDisposable = MetaDisposable()
+        private let discardDisposable = MetaDisposable()
         private var isImporting = false
         private var didCompleteVerification = false
         private var words = Array(repeating: "", count: 12)
@@ -525,6 +526,7 @@ private final class WalletImportScreenComponent: Component {
             NotificationCenter.default.removeObserver(self)
             self.titleTransformContainer.removeFromSuperview()
             self.operationDisposable.dispose()
+            self.discardDisposable.dispose()
         }
 
         @objc private func pasteboardDidChange(_ notification: Notification) {
@@ -552,7 +554,7 @@ private final class WalletImportScreenComponent: Component {
                 return false
             }
             switch component.mode {
-            case .importWallet:
+            case .importWallet, .enterRecoveryPhrase:
                 return self.words.allSatisfy { word in
                     return !word.isEmpty && component.walletContext.isMnemonicWord(word)
                 }
@@ -1004,6 +1006,10 @@ private final class WalletImportScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
+            if component.mode == .enterRecoveryPhrase {
+                self.prepareRecoveryPhraseImport(words: words)
+                return
+            }
             self.isImporting = true
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             guard let controller = self.environment?.controller() else {
@@ -1028,6 +1034,113 @@ private final class WalletImportScreenComponent: Component {
                     self?.finishImportWithError(error: error)
                 }
             ))
+        }
+
+        private func prepareRecoveryPhraseImport(words: [String]) {
+            guard let component = self.component else {
+                return
+            }
+            self.isImporting = true
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            self.operationDisposable.set((component.walletContext.prepareRecoveryPhraseImport(words: words)
+            |> deliverOnMainQueue).start(next: { [weak self] prepared in
+                guard let self else {
+                    return
+                }
+                switch prepared.disposition {
+                case .currentWallet:
+                    self.completeRecoveryPhraseImport(prepared, password: nil)
+                case .replacement:
+                    self.isImporting = false
+                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                    self.presentReplacementConfirmation(prepared)
+                }
+            }, error: { [weak self] error in
+                self?.finishImportWithError(error: error)
+            }))
+        }
+
+        private func presentReplacementConfirmation(_ prepared: WalletContext.PreparedRecoveryPhraseImport) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Replace Wallet",
+                text: "This recovery phrase belongs to a different wallet. Replacing the current wallet will remove access to it on this device. Make sure you’ve saved its recovery phrase before continuing.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                        self?.discardPreparedRecoveryPhraseImport(prepared)
+                    }),
+                    TextAlertAction(type: .destructiveAction, title: "Replace", action: { [weak self] in
+                        self?.authorizeRecoveryPhraseReplacement(prepared)
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func authorizeRecoveryPhraseReplacement(_ prepared: WalletContext.PreparedRecoveryPhraseImport) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            self.isImporting = true
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            self.operationDisposable.set(performWalletAuthorizedOperation(
+                context: component.context,
+                present: { [weak controller] alert in
+                    controller?.present(alert, in: .window(.root))
+                },
+                operation: { password in
+                    component.walletContext.completeRecoveryPhraseImport(prepared, password: password)
+                },
+                next: { [weak self] _ in
+                    self?.finishRecoveryPhraseImport()
+                },
+                failed: { [weak self] error in
+                    if error == .authorizationCancelled {
+                        self?.discardPreparedRecoveryPhraseImport(prepared)
+                    }
+                    self?.finishImportWithError(error: error)
+                }
+            ))
+        }
+
+        private func completeRecoveryPhraseImport(
+            _ prepared: WalletContext.PreparedRecoveryPhraseImport,
+            password: String?
+        ) {
+            guard let component = self.component else {
+                return
+            }
+            self.operationDisposable.set((component.walletContext.completeRecoveryPhraseImport(
+                prepared,
+                password: password
+            )
+            |> deliverOnMainQueue).start(next: { [weak self] _ in
+                self?.finishRecoveryPhraseImport()
+            }, error: { [weak self] error in
+                self?.finishImportWithError(error: error)
+            }))
+        }
+
+        private func discardPreparedRecoveryPhraseImport(_ prepared: WalletContext.PreparedRecoveryPhraseImport) {
+            guard let component = self.component else {
+                return
+            }
+            self.discardDisposable.set(component.walletContext.discardRecoveryPhraseImport(prepared).start())
+        }
+
+        private func finishRecoveryPhraseImport() {
+            guard let component = self.component else {
+                return
+            }
+            self.isImporting = false
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            if let completion = component.completion {
+                completion()
+            } else {
+                self.dismiss()
+            }
         }
 
         private func finishImportWithError(error: WalletContext.WalletError) {
@@ -1179,7 +1292,7 @@ private final class WalletImportScreenComponent: Component {
                 self.didRequestInitialFocus = false
                 self.didCompleteVerification = false
                 switch component.mode {
-                case .importWallet:
+                case .importWallet, .enterRecoveryPhrase:
                     self.setupWordInputFields(displayNumbers: Array(1 ... 12), preserving: [])
                 case .verify:
                     self.setupWordInputFields(
@@ -1212,6 +1325,20 @@ private final class WalletImportScreenComponent: Component {
                 ))
                 //TODO:localize
                 buttonTitle = "Import"
+            case .enterRecoveryPhrase:
+                isVerificationMode = false
+                animationName = "WalletWordList"
+                //TODO:localize
+                titleText = "Enter Recovery Phrase"
+                //TODO:localize
+                let bodyText = "Enter the 12- or 24-word recovery phrase for this wallet."
+                bodyContent = .plain(NSAttributedString(
+                    string: bodyText,
+                    font: Font.regular(16.0),
+                    textColor: theme.list.itemPrimaryTextColor
+                ))
+                //TODO:localize
+                buttonTitle = "Done"
             case .verify:
                 isVerificationMode = true
                 animationName = "WalletWordCheck"
@@ -1703,7 +1830,7 @@ public final class WalletImportScreen: ViewControllerComponentContainer {
     ) {
         let verificationIndices: [Int]
         switch mode {
-        case .importWallet:
+        case .importWallet, .enterRecoveryPhrase:
             verificationIndices = []
         case let .verify(words):
             precondition(words.count >= 3)

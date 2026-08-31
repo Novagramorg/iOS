@@ -4,6 +4,7 @@ import Display
 import AccountContext
 import WalletContext
 import SwiftSignalKit
+import TelegramNotices
 import TelegramPresentationData
 import ComponentFlow
 import ViewControllerComponent
@@ -131,6 +132,44 @@ private final class WalletSettingsScreenComponent: Component {
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
+        }
+
+        private func openRecoveryPhraseImport() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.push(component.context.sharedContext.makeWalletImportScreen(
+                context: component.context,
+                mode: .enterRecoveryPhrase,
+                completion: { [weak self] in
+                    self?.completeRecoveryPhraseImport()
+                }
+            ))
+        }
+
+        private func completeRecoveryPhraseImport() {
+            guard let component = self.component,
+                  let settingsController = self.environment?.controller(),
+                  let navigationController = settingsController.navigationController as? NavigationController,
+                  let settingsControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === settingsController }) else {
+                return
+            }
+            let viewControllers = Array(navigationController.viewControllers.prefix(through: settingsControllerIndex))
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            navigationController.setViewControllers(viewControllers, animated: true)
+            Queue.mainQueue().after(0.4) { [weak settingsController] in
+                settingsController?.present(UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .actionSucceeded(
+                        title: "Wallet Imported",
+                        text: "Your wallet was restored from your recovery phrase.",
+                        cancel: nil,
+                        destructive: false
+                    ),
+                    position: .bottom,
+                    action: { _ in false }
+                ), in: .current)
+            }
         }
 
         private func presentDisableBackupAlert() {
@@ -493,41 +532,49 @@ private final class WalletSettingsScreenComponent: Component {
         }
 
         private func completeWalletReplacement(toastTitle: String, toastText: String) {
-            guard let component = self.component,
-                  let settingsController = self.environment?.controller(),
-                  let navigationController = settingsController.navigationController as? NavigationController,
-                  let settingsControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === settingsController }),
-                  settingsControllerIndex > 0 else {
+            guard let component = self.component else {
                 return
             }
-
-            let remainingViewControllers = Array(navigationController.viewControllers.prefix(upTo: settingsControllerIndex))
-            guard let walletController = remainingViewControllers.last as? ViewController else {
-                return
-            }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-
-            navigationController.setViewControllers(remainingViewControllers, animated: true)
-            Queue.mainQueue().after(0.4) { [weak walletController] in
-                guard let walletController else {
+            let accountManager = component.context.sharedContext.accountManager
+            let _ = (ApplicationSpecificNotice.resetWalletGramTooltip(accountManager: accountManager)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] in
+                guard let self,
+                      let component = self.component,
+                      let settingsController = self.environment?.controller(),
+                      let navigationController = settingsController.navigationController as? NavigationController,
+                      let settingsControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === settingsController }),
+                      settingsControllerIndex > 0 else {
                     return
                 }
-                //TODO:localize
-                walletController.present(UndoOverlayController(
-                    presentationData: presentationData,
-                    content: .actionSucceeded(
-                        title: toastTitle,
-                        text: toastText,
-                        cancel: nil,
-                        destructive: false
-                    ),
-                    elevatedLayout: false,
-                    animateInAsReplacement: false,
-                    action: { _ in
-                        return false
+                
+                let remainingViewControllers = Array(navigationController.viewControllers.prefix(upTo: settingsControllerIndex))
+                guard let walletController = remainingViewControllers.last as? ViewController else {
+                    return
+                }
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                
+                navigationController.setViewControllers(remainingViewControllers, animated: true)
+                Queue.mainQueue().after(0.4) { [weak walletController] in
+                    guard let walletController else {
+                        return
                     }
-                ), in: .current)
-            }
+                    //TODO:localize
+                    walletController.present(UndoOverlayController(
+                        presentationData: presentationData,
+                        content: .actionSucceeded(
+                            title: toastTitle,
+                            text: toastText,
+                            cancel: nil,
+                            destructive: false
+                        ),
+                        elevatedLayout: false,
+                        animateInAsReplacement: false,
+                        action: { _ in
+                            return false
+                        }
+                    ), in: .current)
+                }
+            })
         }
 
         private func createReplacementWallet() {
@@ -628,9 +675,6 @@ private final class WalletSettingsScreenComponent: Component {
             //TODO:localize
             let recoveryHeader = "Recovery Phrase"
             //TODO:localize
-            let recoveryAction = "Show Recovery Phrase"
-            //TODO:localize
-            let recoveryFooter = "You can transfer your wallet to another device by copying your 12- or 24-word recovery phrase."
             //TODO:localize
             let backupHeader = "Encrypted Backup"
             //TODO:localize
@@ -651,18 +695,27 @@ private final class WalletSettingsScreenComponent: Component {
             let canDisableBackup: Bool
             let canEnableBackup: Bool
             let canRevealPhrase: Bool
+            let canEnterRecoveryPhrase: Bool
             let backupEnabled: Bool
             if let phase = self.walletState?.phase, case let .wallet(info) = phase {
                 canDisableBackup = info.canDisableBackup
                 canEnableBackup = info.canEnableBackup && info.canSign
                 canRevealPhrase = info.canRevealPhrase
+                canEnterRecoveryPhrase = !info.canSign && !info.canExportPhrase
                 backupEnabled = info.backupEnabled
             } else {
                 canDisableBackup = false
                 canEnableBackup = false
                 canRevealPhrase = false
+                canEnterRecoveryPhrase = false
                 backupEnabled = false
             }
+            //TODO:localize
+            let recoveryAction = canEnterRecoveryPhrase ? "Enter Recovery Phrase" : "Show Recovery Phrase"
+            //TODO:localize
+            let recoveryFooter = canEnterRecoveryPhrase
+                ? "Enter your recovery phrase to restore access to this wallet."
+                : "You can transfer your wallet to another device by copying your 12- or 24-word recovery phrase."
             //TODO:localize
             let backupFooter = backupEnabled
                 ? "Telegram stores an encrypted backup of your keys, split across several datacenters. No Telegram employee can access them."
@@ -704,7 +757,11 @@ private final class WalletSettingsScreenComponent: Component {
                             )),
                             accessory: nil,
                             action: { [weak self] _ in
-                                self?.openRecoveryPhrase()
+                                if canEnterRecoveryPhrase {
+                                    self?.openRecoveryPhraseImport()
+                                } else {
+                                    self?.openRecoveryPhrase()
+                                }
                             }
                         )))
                     ]
@@ -712,7 +769,7 @@ private final class WalletSettingsScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: sectionWidth, height: 10000.0)
             )
-            if canRevealPhrase, let recoverySectionView = self.recoverySection.view {
+            if canRevealPhrase || canEnterRecoveryPhrase, let recoverySectionView = self.recoverySection.view {
                 if recoverySectionView.superview == nil {
                     self.scrollView.addSubview(recoverySectionView)
                 }

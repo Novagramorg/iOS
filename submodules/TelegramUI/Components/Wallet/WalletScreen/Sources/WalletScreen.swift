@@ -3,6 +3,7 @@ import UIKit
 import Display
 import AccountContext
 import TelegramPresentationData
+import PresentationDataUtils
 import TelegramStringFormatting
 import TextFormat
 import ComponentFlow
@@ -13,6 +14,7 @@ import QrCodeUI
 import ContextUI
 import SwiftSignalKit
 import TelegramCore
+import TelegramNotices
 import WalletContext
 import WalletCardComponent
 import EdgeEffect
@@ -29,6 +31,8 @@ import WalletSendScreen
 import WalletPeerSelectionScreen
 import TooltipUI
 import SettingsUI
+import UndoUI
+import WalletAuthorizationUI
 
 private let walletSectionOverscan: CGFloat = 100.0
 private let walletTransactionItemHeight: CGFloat = 79.0
@@ -336,14 +340,30 @@ private final class WalletNavigationBalanceComponent: Component {
     }
 
     final class View: UIView {
+        private let primaryCollapseContainerView = UIView()
+        private let secondaryCollapseContainerView = UIView()
+        private let primaryContainerView = UIView()
+        private let secondaryContainerView = UIView()
         private let balanceText = ComponentView<Empty>()
         private let gramIcon = ComponentView<Empty>()
         private let fiatText = ComponentView<Empty>()
+
+        var primaryTargetFrame: CGRect = .zero
+        var secondaryTargetFrame: CGRect = .zero
 
         override init(frame: CGRect) {
             super.init(frame: frame)
 
             self.isUserInteractionEnabled = false
+            self.clipsToBounds = false
+            self.primaryCollapseContainerView.clipsToBounds = false
+            self.secondaryCollapseContainerView.clipsToBounds = false
+            self.primaryContainerView.clipsToBounds = false
+            self.secondaryContainerView.clipsToBounds = false
+            self.addSubview(self.primaryCollapseContainerView)
+            self.addSubview(self.secondaryCollapseContainerView)
+            self.primaryCollapseContainerView.addSubview(self.primaryContainerView)
+            self.secondaryCollapseContainerView.addSubview(self.secondaryContainerView)
         }
 
         required init?(coder: NSCoder) {
@@ -435,15 +455,57 @@ private final class WalletNavigationBalanceComponent: Component {
                 height: balanceRowSize.height + verticalSpacing + fiatSize.height
             )
 
+            for collapseContainerView in [self.primaryCollapseContainerView, self.secondaryCollapseContainerView] {
+                ComponentTransition.immediate.setBounds(
+                    view: collapseContainerView,
+                    bounds: CGRect(origin: CGPoint(), size: size)
+                )
+                ComponentTransition.immediate.setPosition(
+                    view: collapseContainerView,
+                    position: CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+                )
+            }
+
+            self.primaryTargetFrame = CGRect(
+                origin: CGPoint(
+                    x: floor((size.width - balanceRowSize.width) * 0.5),
+                    y: 0.0
+                ),
+                size: balanceRowSize
+            )
+            self.secondaryTargetFrame = CGRect(
+                origin: CGPoint(
+                    x: floor((size.width - fiatSize.width) * 0.5),
+                    y: balanceRowSize.height + verticalSpacing
+                ),
+                size: fiatSize
+            )
+            ComponentTransition.immediate.setBounds(
+                view: self.primaryContainerView,
+                bounds: CGRect(origin: CGPoint(), size: balanceRowSize)
+            )
+            ComponentTransition.immediate.setPosition(
+                view: self.primaryContainerView,
+                position: self.primaryTargetFrame.center
+            )
+            ComponentTransition.immediate.setBounds(
+                view: self.secondaryContainerView,
+                bounds: CGRect(origin: CGPoint(), size: fiatSize)
+            )
+            ComponentTransition.immediate.setPosition(
+                view: self.secondaryContainerView,
+                position: self.secondaryTargetFrame.center
+            )
+
             if let balanceTextView = self.balanceText.view {
-                if balanceTextView.superview == nil {
-                    self.addSubview(balanceTextView)
+                if balanceTextView.superview !== self.primaryContainerView {
+                    self.primaryContainerView.addSubview(balanceTextView)
                 }
                 transition.setFrame(
                     view: balanceTextView,
                     frame: CGRect(
                         origin: CGPoint(
-                            x: floor((size.width - balanceRowSize.width) * 0.5) + iconSize.width + balanceSpacing,
+                            x: iconSize.width + balanceSpacing,
                             y: floor((balanceRowSize.height - balanceSize.height) * 0.5)
                         ),
                         size: balanceSize
@@ -451,14 +513,14 @@ private final class WalletNavigationBalanceComponent: Component {
                 )
             }
             if let gramIconView = self.gramIcon.view {
-                if gramIconView.superview == nil {
-                    self.addSubview(gramIconView)
+                if gramIconView.superview !== self.primaryContainerView {
+                    self.primaryContainerView.addSubview(gramIconView)
                 }
                 transition.setFrame(
                     view: gramIconView,
                     frame: CGRect(
                         origin: CGPoint(
-                            x: floor((size.width - balanceRowSize.width) * 0.5),
+                            x: 0.0,
                             y: floor((balanceRowSize.height - iconSize.height) * 0.5) - UIScreenPixel
                         ),
                         size: iconSize
@@ -466,22 +528,86 @@ private final class WalletNavigationBalanceComponent: Component {
                 )
             }
             if let fiatTextView = self.fiatText.view {
-                if fiatTextView.superview == nil {
-                    self.addSubview(fiatTextView)
+                if fiatTextView.superview !== self.secondaryContainerView {
+                    self.secondaryContainerView.addSubview(fiatTextView)
                 }
                 transition.setFrame(
                     view: fiatTextView,
-                    frame: CGRect(
-                        origin: CGPoint(
-                            x: floor((size.width - fiatSize.width) * 0.5),
-                            y: balanceRowSize.height + verticalSpacing
-                        ),
-                        size: fiatSize
-                    )
+                    frame: CGRect(origin: CGPoint(), size: fiatSize)
                 )
             }
 
             return size
+        }
+
+        func updateTransitionFrames(
+            primaryFrame: CGRect?,
+            secondaryFrame: CGRect?,
+            isCollapsed: Bool,
+            transition: ComponentTransition
+        ) {
+            self.updateTransitionContainer(
+                self.primaryCollapseContainerView,
+                self.primaryContainerView,
+                targetFrame: self.primaryTargetFrame,
+                currentFrame: primaryFrame,
+                isCollapsed: isCollapsed,
+                transition: transition
+            )
+            self.updateTransitionContainer(
+                self.secondaryCollapseContainerView,
+                self.secondaryContainerView,
+                targetFrame: self.secondaryTargetFrame,
+                currentFrame: secondaryFrame,
+                isCollapsed: isCollapsed,
+                transition: transition
+            )
+        }
+
+        private func updateTransitionContainer(
+            _ collapseContainerView: UIView,
+            _ containerView: UIView,
+            targetFrame: CGRect,
+            currentFrame: CGRect?,
+            isCollapsed: Bool,
+            transition: ComponentTransition
+        ) {
+            guard !targetFrame.isEmpty,
+                  let currentFrame,
+                  !currentFrame.isEmpty,
+                  currentFrame.width.isFinite,
+                  currentFrame.height.isFinite else {
+                ComponentTransition.immediate.setPosition(view: containerView, position: targetFrame.center)
+                ComponentTransition.immediate.setTransform(view: containerView, transform: CATransform3DIdentity)
+                transition.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
+                return
+            }
+
+            let scaleX = currentFrame.width / targetFrame.width
+            let scaleY = currentFrame.height / targetFrame.height
+            ComponentTransition.immediate.setPosition(view: containerView, position: currentFrame.center)
+            ComponentTransition.immediate.setTransform(
+                view: containerView,
+                transform: CATransform3DMakeScale(scaleX, scaleY, 1.0)
+            )
+            transition.setTransform(
+                view: collapseContainerView,
+                transform: isCollapsed ? self.collapseTransform(
+                    in: collapseContainerView,
+                    from: currentFrame,
+                    to: targetFrame
+                ) : CATransform3DIdentity
+            )
+        }
+
+        private func collapseTransform(in containerView: UIView, from sourceFrame: CGRect, to targetFrame: CGRect) -> CATransform3D {
+            let scaleX = targetFrame.width / sourceFrame.width
+            let scaleY = targetFrame.height / sourceFrame.height
+            let anchor = CGPoint(x: containerView.bounds.midX, y: containerView.bounds.midY)
+            var transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
+            transform.m41 = targetFrame.midX - anchor.x - (sourceFrame.midX - anchor.x) * scaleX
+            transform.m42 = targetFrame.midY - anchor.y - (sourceFrame.midY - anchor.y) * scaleY
+            return transform
         }
     }
 
@@ -553,6 +679,7 @@ private final class WalletScreenComponent: Component {
         private let navigationBalance = ComponentView<Empty>()
         private let cardContainerView: UIView
         private let cardScrollContainerView: UIView
+        private let cardBalanceCoordinateView: UIView
         private let cardVisualContainerView: UIView
         private let card = ComponentView<Empty>()
         private let addFundsButton = ComponentView<Empty>()
@@ -577,15 +704,20 @@ private final class WalletScreenComponent: Component {
         private var walletState: WalletContext.State?
         private var walletStateDisposable: Disposable?
         private let loadMoreDisposable = MetaDisposable()
+        private let gramTooltipDisposable = MetaDisposable()
+        private let signingAccessDisposable = MetaDisposable()
         private var accountContext: AccountContext?
         private var accountName = ""
         private var accountPeerDisposable: Disposable?
         private var twoStepAuthData: Promise<TwoStepAuthData?>?
         private var twoStepAuthDataDisposable: Disposable?
         private var hasTwoStepAuth: Bool?
+        private var isAwaitingAccountProtectionResult = false
         private var isUpdating = false
         private var isGramTooltipPresentationPending = false
         private var didPresentGramTooltip = false
+        private var gramTooltipWalletAddress: String?
+        private var isResolvingSigningAccess = false
         private var selectedSection: SelectedSection = .transactions
         private var isCardCollapsed = false
         private var cardExpandedFrame: CGRect?
@@ -595,9 +727,11 @@ private final class WalletScreenComponent: Component {
             self.topEdgeEffectView = EdgeEffectView()
             self.cardContainerView = UIView()
             self.cardScrollContainerView = UIView()
+            self.cardBalanceCoordinateView = UIView()
             self.cardVisualContainerView = UIView()
             self.cardContainerView.clipsToBounds = false
             self.cardScrollContainerView.clipsToBounds = false
+            self.cardBalanceCoordinateView.isUserInteractionEnabled = false
             self.cardVisualContainerView.clipsToBounds = false
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
@@ -617,6 +751,7 @@ private final class WalletScreenComponent: Component {
             self.topEdgeEffectView.isUserInteractionEnabled = false
 
             self.cardContainerView.addSubview(self.cardScrollContainerView)
+            self.cardScrollContainerView.addSubview(self.cardBalanceCoordinateView)
             self.cardScrollContainerView.addSubview(self.cardVisualContainerView)
             self.addSubview(self.scrollView)
             self.addSubview(self.topEdgeEffectView)
@@ -650,6 +785,8 @@ private final class WalletScreenComponent: Component {
             self.accountPeerDisposable?.dispose()
             self.twoStepAuthDataDisposable?.dispose()
             self.loadMoreDisposable.dispose()
+            self.gramTooltipDisposable.dispose()
+            self.signingAccessDisposable.dispose()
         }
 
         func refreshTwoStepAuth() {
@@ -657,15 +794,50 @@ private final class WalletScreenComponent: Component {
                 return
             }
 
+            let updatedData = component.context.engine.auth.twoStepAuthData()
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
+                return .single(nil)
+            }
+            |> beforeNext { [weak self] data in
+                guard let self, self.isAwaitingAccountProtectionResult else {
+                    return
+                }
+                self.isAwaitingAccountProtectionResult = false
+
+                guard data?.currentPasswordDerivation != nil else {
+                    return
+                }
+                Queue.mainQueue().after(0.4) { [weak self] in
+                    self?.presentPasswordSetToast()
+                }
+            }
             component.twoStepAuthData.set(
                 .single(nil)
-                |> then(
-                    component.context.engine.auth.twoStepAuthData()
-                    |> map(Optional.init)
-                    |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
-                        return .single(nil)
-                    }
-                )
+                |> then(updatedData)
+            )
+        }
+
+        private func presentPasswordSetToast() {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  controller.navigationController?.topViewController === controller else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            controller.present(
+                UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .actionSucceeded(
+                        title: "Password set",
+                        text: "Your account is now protected.",
+                        cancel: nil,
+                        destructive: false
+                    ),
+                    position: .bottom,
+                    action: { _ in false }
+                ),
+                in: .current
             )
         }
 
@@ -767,27 +939,48 @@ private final class WalletScreenComponent: Component {
         }
 
         private func maybePresentGramTooltip(cardView: WalletCardComponent.View) {
+            guard let walletInfo = self.walletInfo else {
+                return
+            }
+            if self.gramTooltipWalletAddress != walletInfo.address {
+                self.gramTooltipWalletAddress = walletInfo.address
+                self.isGramTooltipPresentationPending = false
+                self.didPresentGramTooltip = false
+                self.gramTooltipDisposable.set(nil)
+            }
+            
             guard !self.isGramTooltipPresentationPending,
                   !self.didPresentGramTooltip,
                   !self.isCardCollapsed,
                   self.environment?.isVisible == true,
-                  self.walletInfo != nil,
                   !cardView.gramIconFrame.isEmpty else {
                 return
             }
 
+            guard let component = self.component else {
+                return
+            }
+            let walletAddress = walletInfo.address
             self.isGramTooltipPresentationPending = true
-            Queue.mainQueue().after(0.0) { [weak self, weak cardView] in
+            self.gramTooltipDisposable.set((ApplicationSpecificNotice.getWalletGramTooltip(accountManager: component.context.sharedContext.accountManager)
+            |> deliverOnMainQueue).start(next: { [weak self, weak cardView] count in
                 guard let self else {
                     return
                 }
                 self.isGramTooltipPresentationPending = false
 
-                guard !self.didPresentGramTooltip,
-                      !self.isCardCollapsed,
+                guard self.gramTooltipWalletAddress == walletAddress,
+                      self.walletInfo?.address == walletAddress,
+                      !self.didPresentGramTooltip else {
+                    return
+                }
+                if count >= 3 {
+                    self.didPresentGramTooltip = true
+                    return
+                }
+                
+                guard !self.isCardCollapsed,
                       self.environment?.isVisible == true,
-                      self.walletInfo != nil,
-                      let component = self.component,
                       let cardView,
                       cardView.window != nil,
                       !cardView.gramIconFrame.isEmpty,
@@ -811,7 +1004,8 @@ private final class WalletScreenComponent: Component {
                     }
                 )
                 controller.present(tooltipScreen, in: .current)
-            }
+                let _ = ApplicationSpecificNotice.incrementWalletGramTooltip(accountManager: component.context.sharedContext.accountManager).startStandalone()
+            }))
         }
 
         private func loadMoreItemsIfNeeded() {
@@ -961,8 +1155,15 @@ private final class WalletScreenComponent: Component {
             transition.setAlpha(view: self.topEdgeEffectView, alpha: edgeEffectAlpha)
             let headerTransitionFraction = max(0.0, min(1.0, self.scrollView.contentOffset.y / self.cardCollapseThreshold))
             if let navigationTitleView = self.navigationTitle.view {
-                transition.setAlpha(view: navigationTitleView, alpha: 1.0 - headerTransitionFraction)
-                transition.setBlur(layer: navigationTitleView.layer, radius: headerTransitionFraction * 8.0)
+                ComponentTransition.immediate.setAlpha(
+                    view: navigationTitleView,
+                    alpha: 1.0 - headerTransitionFraction
+                )
+                navigationTitleView.layer.removeAnimation(forKey: "filters.gaussianBlur.inputRadius")
+                ComponentTransition.immediate.setBlur(
+                    layer: navigationTitleView.layer,
+                    radius: headerTransitionFraction * 8.0
+                )
             }
             if let cardExpandedFrame = self.cardExpandedFrame {
                 ComponentTransition.immediate.setFrame(
@@ -984,6 +1185,108 @@ private final class WalletScreenComponent: Component {
                     transform: cardScrollTransform
                 )
             }
+            self.updateBalanceTransition(fraction: headerTransitionFraction, transition: transition)
+        }
+
+        private func updateBalanceTransition(fraction: CGFloat, transition: ComponentTransition) {
+            guard let cardView = self.card.view as? WalletCardComponent.View,
+                  let navigationBalanceView = self.navigationBalance.view as? WalletNavigationBalanceComponent.View,
+                  let cardExpandedFrame = self.cardExpandedFrame else {
+                return
+            }
+
+            if self.scrollView.contentOffset.y <= 0.0 {
+                let primaryFrame = cardView.convert(cardView.primaryBalanceSourceFrame, to: self)
+                let secondaryFrame = cardView.convert(cardView.secondaryBalanceSourceFrame, to: self)
+                navigationBalanceView.updateTransitionFrames(
+                    primaryFrame: navigationBalanceView.convert(primaryFrame, from: self),
+                    secondaryFrame: navigationBalanceView.convert(secondaryFrame, from: self),
+                    isCollapsed: false,
+                    transition: transition
+                )
+                cardView.updateBalanceTransition(
+                    primaryFrame: nil,
+                    secondaryFrame: nil,
+                    primaryCollapsedFrame: nil,
+                    secondaryCollapsedFrame: nil,
+                    fraction: 0.0,
+                    isCollapsed: false,
+                    transition: transition
+                )
+                return
+            }
+
+            let primarySourceFrame = cardView.primaryBalanceSourceFrame.offsetBy(
+                dx: cardExpandedFrame.minX,
+                dy: cardExpandedFrame.minY
+            )
+            let secondarySourceFrame = cardView.secondaryBalanceSourceFrame.offsetBy(
+                dx: cardExpandedFrame.minX,
+                dy: cardExpandedFrame.minY
+            )
+            let primaryTargetFrame = navigationBalanceView.convert(navigationBalanceView.primaryTargetFrame, to: self)
+            let secondaryTargetFrame = navigationBalanceView.convert(navigationBalanceView.secondaryTargetFrame, to: self)
+
+            guard !primarySourceFrame.isEmpty,
+                  !secondarySourceFrame.isEmpty,
+                  !primaryTargetFrame.isEmpty,
+                  !secondaryTargetFrame.isEmpty else {
+                navigationBalanceView.updateTransitionFrames(
+                    primaryFrame: nil,
+                    secondaryFrame: nil,
+                    isCollapsed: self.isCardCollapsed,
+                    transition: transition
+                )
+                cardView.updateBalanceTransition(
+                    primaryFrame: nil,
+                    secondaryFrame: nil,
+                    primaryCollapsedFrame: nil,
+                    secondaryCollapsedFrame: nil,
+                    fraction: fraction,
+                    isCollapsed: self.isCardCollapsed,
+                    transition: transition
+                )
+                return
+            }
+
+            // The inner containers follow scrolling through only this initial part
+            // of the path. Separate outer containers cover the rest with a spring.
+            let preCollapseFraction = 0.16 * fraction
+            let primaryFrame = self.interpolateFrame(
+                from: primarySourceFrame,
+                to: primaryTargetFrame,
+                fraction: preCollapseFraction
+            )
+            let secondaryFrame = self.interpolateFrame(
+                from: secondarySourceFrame,
+                to: secondaryTargetFrame,
+                fraction: preCollapseFraction
+            )
+            navigationBalanceView.updateTransitionFrames(
+                primaryFrame: navigationBalanceView.convert(primaryFrame, from: self),
+                secondaryFrame: navigationBalanceView.convert(secondaryFrame, from: self),
+                isCollapsed: self.isCardCollapsed,
+                transition: transition
+            )
+            cardView.updateBalanceTransition(
+                primaryFrame: self.cardBalanceCoordinateView.convert(primaryFrame, from: self),
+                secondaryFrame: self.cardBalanceCoordinateView.convert(secondaryFrame, from: self),
+                primaryCollapsedFrame: self.cardBalanceCoordinateView.convert(primaryTargetFrame, from: self),
+                secondaryCollapsedFrame: self.cardBalanceCoordinateView.convert(secondaryTargetFrame, from: self),
+                fraction: fraction,
+                isCollapsed: self.isCardCollapsed,
+                transition: transition
+            )
+        }
+
+        private func interpolateFrame(from: CGRect, to: CGRect, fraction: CGFloat) -> CGRect {
+            let inverseFraction = 1.0 - fraction
+            return CGRect(
+                x: from.minX * inverseFraction + to.minX * fraction,
+                y: from.minY * inverseFraction + to.minY * fraction,
+                width: from.width * inverseFraction + to.width * fraction,
+                height: from.height * inverseFraction + to.height * fraction
+            )
         }
 
         private func dismiss() {
@@ -1038,7 +1341,44 @@ private final class WalletScreenComponent: Component {
         private func openSend(address: String? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  self.walletInfo?.canSign == true else {
+                  let walletInfo = self.walletInfo,
+                  !self.isResolvingSigningAccess else {
+                return
+            }
+            if !walletInfo.canSign {
+                if walletInfo.canExportPhrase {
+                    self.isResolvingSigningAccess = true
+                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                    self.signingAccessDisposable.set(performWalletAuthorizedOperation(
+                        context: component.context,
+                        present: { [weak controller] alert in
+                            controller?.present(alert, in: .window(.root))
+                        },
+                        operation: { password in
+                            component.walletContext.recoveryPhrase(password: password)
+                        },
+                        next: { [weak self] _ in
+                            guard let self, self.component?.walletContext === component.walletContext else {
+                                return
+                            }
+                            self.isResolvingSigningAccess = false
+                            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                            self.routeToSend(address: address)
+                        },
+                        failed: { [weak self] error in
+                            self?.finishResolvingSigningAccess(error: error)
+                        }
+                    ))
+                } else {
+                    self.presentRecoveryPhraseImportAlert()
+                }
+                return
+            }
+            self.routeToSend(address: address)
+        }
+
+        private func routeToSend(address: String?) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
             if let address {
@@ -1052,6 +1392,80 @@ private final class WalletScreenComponent: Component {
                 )
                 peerSelectionScreen.navigationPresentation = .modal
                 controller.push(peerSelectionScreen)
+            }
+        }
+
+        private func finishResolvingSigningAccess(error: WalletContext.WalletError) {
+            self.isResolvingSigningAccess = false
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            guard error != .authorizationCancelled,
+                  let component = self.component,
+                  let controller = self.environment?.controller() else {
+                return
+            }
+            let message = walletAuthorizationErrorMessage(error)
+            controller.present(textAlertController(
+                context: component.context,
+                title: message?.title ?? "Couldn’t Restore Wallet",
+                text: message?.text ?? "Check the network connection and try again.",
+                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+            ), in: .window(.root))
+        }
+
+        private func openRecoveryPhraseImport() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.push(component.context.sharedContext.makeWalletImportScreen(
+                context: component.context,
+                mode: .enterRecoveryPhrase,
+                completion: { [weak self] in
+                    self?.completeRecoveryPhraseImport()
+                }
+            ))
+        }
+
+        private func presentRecoveryPhraseImportAlert() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Recovery Phrase Required",
+                text: "To send funds, you’ll need to enter your 12- or 24-word recovery phrase to restore access to this wallet.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
+                    TextAlertAction(type: .defaultAction, title: "Proceed", action: { [weak self] in
+                        Queue.mainQueue().after(0.25) { [weak self] in
+                            self?.openRecoveryPhraseImport()
+                        }
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func completeRecoveryPhraseImport() {
+            guard let component = self.component,
+                  let walletController = self.environment?.controller(),
+                  let navigationController = walletController.navigationController as? NavigationController,
+                  let walletControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === walletController }) else {
+                return
+            }
+            let viewControllers = Array(navigationController.viewControllers.prefix(through: walletControllerIndex))
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            navigationController.setViewControllers(viewControllers, animated: true)
+            Queue.mainQueue().after(0.4) { [weak walletController] in
+                walletController?.present(UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .actionSucceeded(
+                        title: "Wallet Imported",
+                        text: "Your wallet was restored from your recovery phrase.",
+                        cancel: nil,
+                        destructive: false
+                    ),
+                    position: .bottom,
+                    action: { _ in false }
+                ), in: .current)
             }
         }
 
@@ -1077,6 +1491,7 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            self.isAwaitingAccountProtectionResult = true
             controller.push(component.context.sharedContext.makeSetupTwoFactorAuthController(context: component.context))
         }
 
@@ -1088,10 +1503,10 @@ private final class WalletScreenComponent: Component {
             let _ = passcodeOptionsAccessController(
                 context: context,
                 pushController: { [weak controller] passcodeController in
-                    controller?.push(passcodeController)
+                    (controller?.navigationController as? NavigationController)?.replaceTopController(passcodeController, animated: true)
                 },
                 completion: { [weak controller] _ in
-                    controller?.push(passcodeOptionsController(context: context))
+                    (controller?.navigationController as? NavigationController)?.replaceTopController(passcodeOptionsController(context: context), animated: true)
                 }
             ).start(next: { [weak controller] passcodeController in
                 if let passcodeController {
@@ -1687,7 +2102,7 @@ private final class WalletScreenComponent: Component {
                 transition.setAlpha(view: navigationBalanceView, alpha: self.isCardCollapsed ? 1.0 : 0.0)
                 transition.setSublayerTransform(
                     view: navigationBalanceView,
-                    transform: CATransform3DMakeTranslation(0.0, self.isCardCollapsed ? 0.0 : 6.0, 0.0)
+                    transform: CATransform3DIdentity
                 )
             }
 
@@ -1745,6 +2160,10 @@ private final class WalletScreenComponent: Component {
                 view: self.cardScrollContainerView,
                 frame: CGRect(origin: CGPoint(), size: cardSize)
             )
+            ComponentTransition.immediate.setFrame(
+                view: self.cardBalanceCoordinateView,
+                frame: CGRect(origin: CGPoint(), size: cardSize)
+            )
             transition.setFrame(
                 view: self.cardVisualContainerView,
                 frame: CGRect(
@@ -1774,6 +2193,16 @@ private final class WalletScreenComponent: Component {
                     )
                 )
                 if let cardView = cardView as? WalletCardComponent.View {
+                    cardView.balanceGeometryUpdated = { [weak self, weak cardView] in
+                        guard let self,
+                              let cardView,
+                              !self.isUpdating,
+                              let currentCardView = self.card.view as? WalletCardComponent.View,
+                              currentCardView === cardView else {
+                            return
+                        }
+                        self.updateScrolling(transition: .immediate)
+                    }
                     self.maybePresentGramTooltip(cardView: cardView)
                 }
             }
@@ -1838,7 +2267,8 @@ private final class WalletScreenComponent: Component {
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
                     ),
-                    isEnabled: self.walletInfo?.canSign == true,
+                    isEnabled: self.walletInfo != nil && !self.isResolvingSigningAccess,
+                    displaysProgress: self.isResolvingSigningAccess,
                     action: { [weak self] in
                         self?.openSend()
                     }

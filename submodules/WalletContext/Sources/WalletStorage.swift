@@ -64,7 +64,6 @@ enum WalletEngineStorageError: Error, Equatable {
     case corrupted
 }
 
-/// A v2-only store. Its service names do not overlap the legacy WalletContext vault.
 actor WalletEngineStorage {
     private struct JournalDiskRecord: Codable {
         let version: UInt64

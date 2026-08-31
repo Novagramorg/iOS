@@ -1370,6 +1370,7 @@ public enum WalletInfoScreenMode: Equatable, CaseIterable {
 
 public enum WalletImportScreenMode: Equatable {
     case importWallet
+    case enterRecoveryPhrase
     case verify(words: [String])
 }
 

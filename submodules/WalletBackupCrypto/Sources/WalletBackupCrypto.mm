@@ -302,7 +302,7 @@ bool encryptShare(const std::string &share, NSData *holderPublicKey, std::string
     return true;
 }
 
-}  // namespace
+}
 
 @interface WalletBackupCryptoKeyPair () {
     tde2e_api::PrivateKeyId _privateKeyId;

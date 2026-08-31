@@ -22,7 +22,8 @@ public final class WalletContext {
     let log: (String) -> Void
     let storage: WalletEngineStorage
     let runtime: WalletEngineRuntime
-    let streamingSocketFactory: any WalletStreamingSocketFactory
+    let streamingLog: WalletStreamingLogger
+    let streamingTransportFactory: any WalletStreamingTransportFactory
     let statePromise: ValuePromise<State>
     let tonConnectPresentationPipe = ValuePipe<TonConnectPresentation>()
     var currentState: State
@@ -31,6 +32,7 @@ public final class WalletContext {
     var serverTransactionsNextOffset: String?
     var canSignCurrentWallet = false
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
+    var preparedRecoveryPhraseImportRecordId: String?
     var tonConnectCoordinator: WalletTonConnectCoordinator?
 
     let environmentDisposable = MetaDisposable()
@@ -105,8 +107,10 @@ public final class WalletContext {
         self.log = log
         self.storage = storage
         self.runtime = WalletEngineRuntime(engine: engine, storage: storage)
-        let streamingURLProvider = WalletStreamingURLProvider(engine: engine)
-        self.streamingSocketFactory = WalletURLSessionStreamingSocketFactory(provider: streamingURLProvider)
+        let streamingLog = WalletStreamingLogger(log)
+        self.streamingLog = streamingLog
+        let streamingURLProvider = WalletStreamingURLProvider(engine: engine, log: streamingLog)
+        self.streamingTransportFactory = WalletURLSessionStreamingTransportFactory(provider: streamingURLProvider, log: streamingLog)
         let initialState = State(
             phase: .restoring,
             balance: .idle,
@@ -247,14 +251,21 @@ public final class WalletContext {
                 )
                 try Task.checkCancellation()
                 var promotedReplacement = false
-                if case let .ready(_, _, _, address, publicKey, _) = value {
-                    promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
-                        serverAddress: address,
-                        serverPublicKey: publicKey,
-                        discardMismatch: true
-                    )
-                } else if case .empty = value {
-                    try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
+                let isMutatingReplacementCandidate = self.preparedRecoveryPhraseImportRecordId != nil
+                    || self.currentState.activeOperation == .creating
+                    || self.currentState.activeOperation == .importing
+                    || self.currentState.activeOperation == .preparingRecoveryPhraseImport
+                    || self.currentState.activeOperation == .completingRecoveryPhraseImport
+                if !isMutatingReplacementCandidate {
+                    if case let .ready(_, _, _, address, publicKey, _) = value {
+                        promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
+                            serverAddress: address,
+                            serverPublicKey: publicKey,
+                            discardMismatch: true
+                        )
+                    } else if case .empty = value {
+                        try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
+                    }
                 }
                 self.applyServerWalletState(value, forceActivation: promotedReplacement)
             } catch is CancellationError {
@@ -268,7 +279,10 @@ public final class WalletContext {
     func applyServerWalletState(_ value: TelegramCore.WalletState, forceActivation: Bool = false) {
         assert(Queue.mainQueue().isCurrent())
         self.serverWalletState = value
-        if self.currentState.activeOperation == .creating || self.currentState.activeOperation == .importing {
+        if self.currentState.activeOperation == .creating
+            || self.currentState.activeOperation == .importing
+            || self.currentState.activeOperation == .preparingRecoveryPhraseImport
+            || self.currentState.activeOperation == .completingRecoveryPhraseImport {
             // replaceWallet also emits updateWalletState. The RPC result owns the
             // staged-secret commit; applying the update here would cancel it.
             return
@@ -373,13 +387,33 @@ public final class WalletContext {
                         )
                     }
                     let activation: WalletEngineActivation
-                    do {
-                        activation = try await self.runtime.activate(
-                            serverAddress: address,
-                            serverPublicKey: publicKey,
-                            exportedWords: words
-                        )
-                    } catch WalletError.invalidMnemonic {
+                    if let words {
+                        do {
+                            let prepared = try await stageRecoveryPhraseImport(
+                                runtime: self.runtime,
+                                words: words,
+                                sourceAddress: address,
+                                sourcePublicKey: publicKey
+                            )
+                            guard prepared.disposition == .currentWallet else {
+                                try? await self.runtime.discardReplacement(recordId: prepared.recordId)
+                                throw WalletError.storage(.identityMismatch)
+                            }
+                            activation = try await self.runtime.commitReplacement(
+                                recordId: prepared.recordId,
+                                serverAddress: address,
+                                serverPublicKey: publicKey
+                            )
+                        } catch {
+                            // Automatic recovery is best-effort. Password, transport,
+                            // or invalid backup data leave the wallet read-only.
+                            activation = try await self.runtime.activate(
+                                serverAddress: address,
+                                serverPublicKey: publicKey,
+                                exportedWords: nil
+                            )
+                        }
+                    } else {
                         activation = try await self.runtime.activate(
                             serverAddress: address,
                             serverPublicKey: publicKey,
@@ -634,7 +668,7 @@ public final class WalletContext {
                 collectibleAddress: current.collectibleAddress,
                 normalizedHash: current.normalizedHash,
                 createdAt: current.createdAt,
-                status: .pending
+                status: send.phase == .submissionUnknown ? .submissionUnknown : .pending
             )
             if send.phase == .confirmed {
                 values.remove(at: index)

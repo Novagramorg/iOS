@@ -25,6 +25,7 @@ swift_library(
         "//submodules/PresentationDataUtils",
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/ChatListHeaderComponent",
+        "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/WalletContext",
     ],

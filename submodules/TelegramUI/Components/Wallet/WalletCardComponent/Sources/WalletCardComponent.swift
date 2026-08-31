@@ -71,8 +71,20 @@ public final class WalletCardComponent: Component {
         private let backgroundView = WalletCardBackgroundView()
         private let foregroundView = UIControl()
 
+        private let primaryBalanceCollapseContainerView = UIView()
+        private let secondaryBalanceCollapseContainerView = UIView()
+        private let primaryBalanceContainerView = UIView()
+        private let secondaryBalanceContainerView = UIView()
+
         public private(set) var gramIconFrame: CGRect = .zero
+        public private(set) var primaryBalanceSourceFrame: CGRect = .zero
+        public private(set) var secondaryBalanceSourceFrame: CGRect = .zero
+        public var balanceGeometryUpdated: (() -> Void)?
+
         private var gramIconContentFrame: CGRect = .zero
+        private var primaryBalanceBaseFrame: CGRect = .zero
+        private var secondaryBalanceBaseFrame: CGRect = .zero
+        private var balanceTransitionFraction: CGFloat = 0.0
 
         private let integralBalance = ComponentView<Empty>()
         private let fractionalBalance = ComponentView<Empty>()
@@ -127,6 +139,15 @@ public final class WalletCardComponent: Component {
             self.foregroundView.layer.masksToBounds = false
             self.foregroundView.layer.allowsEdgeAntialiasing = true
             self.addSubview(self.foregroundView)
+
+            self.primaryBalanceCollapseContainerView.clipsToBounds = false
+            self.secondaryBalanceCollapseContainerView.clipsToBounds = false
+            self.primaryBalanceContainerView.clipsToBounds = false
+            self.secondaryBalanceContainerView.clipsToBounds = false
+            self.foregroundView.addSubview(self.primaryBalanceCollapseContainerView)
+            self.foregroundView.addSubview(self.secondaryBalanceCollapseContainerView)
+            self.primaryBalanceCollapseContainerView.addSubview(self.primaryBalanceContainerView)
+            self.secondaryBalanceCollapseContainerView.addSubview(self.secondaryBalanceContainerView)
 
             self.shadowView.layer.zPosition = -Self.foregroundZPosition
             self.backgroundView.layer.zPosition = 0.0
@@ -218,6 +239,17 @@ public final class WalletCardComponent: Component {
             self.foregroundView.bounds = CGRect(origin: .zero, size: size)
             self.foregroundView.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
             self.foregroundView.layer.position = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+
+            for collapseContainerView in [self.primaryBalanceCollapseContainerView, self.secondaryBalanceCollapseContainerView] {
+                ComponentTransition.immediate.setBounds(
+                    view: collapseContainerView,
+                    bounds: CGRect(origin: CGPoint(), size: size)
+                )
+                ComponentTransition.immediate.setPosition(
+                    view: collapseContainerView,
+                    position: CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+                )
+            }
 
             let projectionPadding = WalletCardBackgroundView.projectionPadding
             transition.setFrame(
@@ -337,9 +369,48 @@ public final class WalletCardComponent: Component {
             let integralOriginY = floor(mainCenterY - integralSize.height * 0.5)
             let integralBottomY = integralOriginY + integralSize.height
             var mainOriginX = 20.0
+            let integralFrame = CGRect(
+                origin: CGPoint(x: mainOriginX, y: integralOriginY),
+                size: integralSize
+            )
+            mainOriginX += integralSize.width
+            if !fractionalText.isEmpty {
+                mainOriginX += 1.0
+            }
+            let fractionalFrame = CGRect(
+                origin: CGPoint(
+                    x: mainOriginX,
+                    y: floor(integralBottomY - fractionalSize.height - 2.0) - 1.0 - UIScreenPixel
+                ),
+                size: fractionalSize
+            )
+            mainOriginX += fractionalSize.width
+            mainOriginX += 5.0
+            let currencyFrame = CGRect(
+                origin: CGPoint(x: mainOriginX, y: floor(integralBottomY - currencySize.height - 2.0)),
+                size: currencySize
+            )
+
+            var primaryBalanceBaseFrame = integralFrame
+            if !fractionalFrame.isEmpty {
+                primaryBalanceBaseFrame = primaryBalanceBaseFrame.union(fractionalFrame)
+            }
+            self.primaryBalanceBaseFrame = primaryBalanceBaseFrame
+            ComponentTransition.immediate.setBounds(
+                view: self.primaryBalanceContainerView,
+                bounds: CGRect(origin: CGPoint(), size: primaryBalanceBaseFrame.size)
+            )
+            ComponentTransition.immediate.setPosition(
+                view: self.primaryBalanceContainerView,
+                position: primaryBalanceBaseFrame.center
+            )
+
             if let gramIconSize = UIImage(bundleImageName: "Wallet/CardGram")?.size {
                 self.gramIconContentFrame = CGRect(
-                    origin: CGPoint(x: mainOriginX, y: integralOriginY - 1.0),
+                    origin: CGPoint(
+                        x: integralFrame.minX - primaryBalanceBaseFrame.minX,
+                        y: integralFrame.minY - primaryBalanceBaseFrame.minY - 1.0
+                    ),
                     size: gramIconSize
                 )
             } else {
@@ -347,44 +418,38 @@ public final class WalletCardComponent: Component {
                 self.gramIconFrame = .zero
             }
             if let integralView = self.integralBalance.view {
-                if integralView.superview !== self.foregroundView {
-                    self.foregroundView.addSubview(integralView)
+                if integralView.superview !== self.primaryBalanceContainerView {
+                    self.primaryBalanceContainerView.addSubview(integralView)
                 }
                 transition.setFrame(
                     view: integralView,
-                    frame: CGRect(
-                        origin: CGPoint(x: mainOriginX, y: integralOriginY),
-                        size: integralSize
+                    frame: integralFrame.offsetBy(
+                        dx: -primaryBalanceBaseFrame.minX,
+                        dy: -primaryBalanceBaseFrame.minY
                     )
                 )
             }
-            mainOriginX += integralSize.width
-            if !fractionalText.isEmpty {
-                mainOriginX += 1.0
-            }
             if let fractionalView = self.fractionalBalance.view {
-                if fractionalView.superview !== self.foregroundView {
-                    self.foregroundView.addSubview(fractionalView)
+                if fractionalView.superview !== self.primaryBalanceContainerView {
+                    self.primaryBalanceContainerView.addSubview(fractionalView)
                 }
                 transition.setFrame(
                     view: fractionalView,
-                    frame: CGRect(
-                        origin: CGPoint(x: mainOriginX, y: floor(integralBottomY - fractionalSize.height - 2.0) - 1.0 - UIScreenPixel),
-                        size: fractionalSize
+                    frame: fractionalFrame.offsetBy(
+                        dx: -primaryBalanceBaseFrame.minX,
+                        dy: -primaryBalanceBaseFrame.minY
                     )
                 )
             }
-            mainOriginX += fractionalSize.width
-            mainOriginX += 5.0
             if let currencyView = self.currency.view {
-                if currencyView.superview !== self.foregroundView {
-                    self.foregroundView.addSubview(currencyView)
+                if currencyView.superview !== self.primaryBalanceContainerView {
+                    self.primaryBalanceContainerView.addSubview(currencyView)
                 }
                 transition.setFrame(
                     view: currencyView,
-                    frame: CGRect(
-                        origin: CGPoint(x: mainOriginX, y: floor(integralBottomY - currencySize.height - 2.0)),
-                        size: currencySize
+                    frame: currencyFrame.offsetBy(
+                        dx: -primaryBalanceBaseFrame.minX,
+                        dy: -primaryBalanceBaseFrame.minY
                     )
                 )
             }
@@ -407,16 +472,25 @@ public final class WalletCardComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: width, height: 100.0)
             )
+            self.secondaryBalanceBaseFrame = CGRect(
+                origin: CGPoint(x: 24.0, y: 114.0),
+                size: secondarySize
+            )
+            ComponentTransition.immediate.setBounds(
+                view: self.secondaryBalanceContainerView,
+                bounds: CGRect(origin: CGPoint(), size: secondarySize)
+            )
+            ComponentTransition.immediate.setPosition(
+                view: self.secondaryBalanceContainerView,
+                position: self.secondaryBalanceBaseFrame.center
+            )
             if let secondaryView = self.secondaryBalance.view {
-                if secondaryView.superview !== self.foregroundView {
-                    self.foregroundView.addSubview(secondaryView)
+                if secondaryView.superview !== self.secondaryBalanceContainerView {
+                    self.secondaryBalanceContainerView.addSubview(secondaryView)
                 }
                 transition.setFrame(
                     view: secondaryView,
-                    frame: CGRect(
-                        origin: CGPoint(x: 24.0, y: 114.0),
-                        size: secondarySize
-                    )
+                    frame: CGRect(origin: CGPoint(), size: secondarySize)
                 )
             }
 
@@ -659,6 +733,128 @@ public final class WalletCardComponent: Component {
             }
         }
 
+        public func updateBalanceTransition(
+            primaryFrame: CGRect?,
+            secondaryFrame: CGRect?,
+            primaryCollapsedFrame: CGRect?,
+            secondaryCollapsedFrame: CGRect?,
+            fraction: CGFloat,
+            isCollapsed: Bool,
+            transition: ComponentTransition
+        ) {
+            let fraction = max(0.0, min(1.0, fraction))
+            self.balanceTransitionFraction = fraction
+
+            self.updateBalanceContainer(
+                self.primaryBalanceCollapseContainerView,
+                self.primaryBalanceContainerView,
+                baseFrame: self.primaryBalanceBaseFrame,
+                targetFrame: primaryFrame,
+                collapsedFrame: primaryCollapsedFrame,
+                isCollapsed: isCollapsed,
+                transition: transition
+            )
+            self.updateBalanceContainer(
+                self.secondaryBalanceCollapseContainerView,
+                self.secondaryBalanceContainerView,
+                baseFrame: self.secondaryBalanceBaseFrame,
+                targetFrame: secondaryFrame,
+                collapsedFrame: secondaryCollapsedFrame,
+                isCollapsed: isCollapsed,
+                transition: transition
+            )
+            if let currencyView = self.currency.view {
+                transition.setAlpha(view: currencyView, alpha: 1.0 - fraction)
+            }
+            self.updateProjectedBalanceFrames()
+        }
+
+        private func updateBalanceContainer(
+            _ collapseContainerView: UIView,
+            _ containerView: UIView,
+            baseFrame: CGRect,
+            targetFrame: CGRect?,
+            collapsedFrame: CGRect?,
+            isCollapsed: Bool,
+            transition: ComponentTransition
+        ) {
+            guard !baseFrame.isEmpty,
+                  let targetFrame,
+                  !targetFrame.isEmpty,
+                  targetFrame.width.isFinite,
+                  targetFrame.height.isFinite else {
+                ComponentTransition.immediate.setPosition(view: containerView, position: baseFrame.center)
+                ComponentTransition.immediate.setTransform(view: containerView, transform: CATransform3DIdentity)
+                transition.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
+                return
+            }
+
+            let targetFrameInForeground = self.foregroundView.convert(targetFrame, from: self)
+            let scaleX = targetFrameInForeground.width / baseFrame.width
+            let scaleY = targetFrameInForeground.height / baseFrame.height
+            ComponentTransition.immediate.setPosition(
+                view: containerView,
+                position: targetFrameInForeground.center
+            )
+            ComponentTransition.immediate.setTransform(
+                view: containerView,
+                transform: CATransform3DMakeScale(scaleX, scaleY, 1.0)
+            )
+
+            let collapseTransform: CATransform3D
+            if isCollapsed,
+               let collapsedFrame,
+               !collapsedFrame.isEmpty,
+               collapsedFrame.width.isFinite,
+               collapsedFrame.height.isFinite {
+                collapseTransform = self.collapseTransform(
+                    in: collapseContainerView,
+                    from: targetFrameInForeground,
+                    to: self.foregroundView.convert(collapsedFrame, from: self)
+                )
+            } else {
+                collapseTransform = CATransform3DIdentity
+            }
+            transition.setTransform(view: collapseContainerView, transform: collapseTransform)
+        }
+
+        private func collapseTransform(in containerView: UIView, from sourceFrame: CGRect, to targetFrame: CGRect) -> CATransform3D {
+            let scaleX = targetFrame.width / sourceFrame.width
+            let scaleY = targetFrame.height / sourceFrame.height
+            let anchor = CGPoint(x: containerView.bounds.midX, y: containerView.bounds.midY)
+            var transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
+            transform.m41 = targetFrame.midX - anchor.x - (sourceFrame.midX - anchor.x) * scaleX
+            transform.m42 = targetFrame.midY - anchor.y - (sourceFrame.midY - anchor.y) * scaleY
+            return transform
+        }
+
+        private func updateProjectedBalanceFrames() {
+            if self.primaryBalanceBaseFrame.isEmpty {
+                self.primaryBalanceSourceFrame = .zero
+            } else {
+                self.primaryBalanceSourceFrame = self.foregroundView.convert(
+                    self.primaryBalanceBaseFrame,
+                    to: self
+                )
+            }
+            if self.secondaryBalanceBaseFrame.isEmpty {
+                self.secondaryBalanceSourceFrame = .zero
+            } else {
+                self.secondaryBalanceSourceFrame = self.foregroundView.convert(
+                    self.secondaryBalanceBaseFrame,
+                    to: self
+                )
+            }
+            if self.gramIconContentFrame.isEmpty {
+                self.gramIconFrame = .zero
+            } else {
+                self.gramIconFrame = self.primaryBalanceContainerView.convert(
+                    self.gramIconContentFrame,
+                    to: self
+                )
+            }
+        }
+
         private func renderCurrentFrame() {
             guard self.currentSize.width > 0.0, self.currentSize.height > 0.0 else {
                 return
@@ -712,11 +908,7 @@ public final class WalletCardComponent: Component {
 
             let projectedQuad = self.projectedQuad(for: perspectiveTransform)
 
-            if self.gramIconContentFrame.isEmpty {
-                self.gramIconFrame = .zero
-            } else {
-                self.gramIconFrame = self.foregroundView.convert(self.gramIconContentFrame, to: self)
-            }
+            self.updateProjectedBalanceFrames()
 
             let additionalIdleGain = Self.highlightIdleGain - 1.0
             self.backgroundView.render(
@@ -727,6 +919,10 @@ public final class WalletCardComponent: Component {
                 surfaceTiltY: self.currentDepthY,
                 quad: projectedQuad
             )
+
+            if self.balanceTransitionFraction > 0.0 && self.balanceTransitionFraction < 1.0 {
+                self.balanceGeometryUpdated?()
+            }
         }
 
         private func projectedQuad(for transform: CATransform3D) -> WalletCardProjectedQuad {

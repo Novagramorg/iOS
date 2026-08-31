@@ -21,6 +21,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
+        "//submodules/PresentationDataUtils",
         "//submodules/TelegramStringFormatting",
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/TextFieldComponent",

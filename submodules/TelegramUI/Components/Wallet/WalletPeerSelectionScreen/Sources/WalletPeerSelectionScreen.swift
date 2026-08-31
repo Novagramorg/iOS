@@ -13,6 +13,7 @@ import SearchBarNode
 import QrCodeUI
 import MultilineTextComponent
 import ButtonComponent
+import LottieComponent
 import WalletContext
 import WalletSendScreen
 
@@ -90,10 +91,10 @@ private final class WalletPeerSelectionRecipientView: UIControl {
         }
 
         self.titleLabel.text = title
-        self.titleLabel.font = Font.semibold(17.0)
+        self.titleLabel.font = Font.medium(16.0)
         self.titleLabel.textColor = theme.list.itemPrimaryTextColor
         self.subtitleLabel.text = subtitle
-        self.subtitleLabel.font = Font.regular(15.0)
+        self.subtitleLabel.font = Font.regular(14.0)
         self.subtitleLabel.textColor = theme.list.itemSecondaryTextColor
         self.subtitleLabel.isHidden = subtitle == nil
         self.chevronView.image = generateTintedImage(
@@ -104,7 +105,7 @@ private final class WalletPeerSelectionRecipientView: UIControl {
         self.accessibilityValue = subtitle
 
         let sideInset: CGFloat = 16.0
-        let iconSize = CGSize(width: 48.0, height: 48.0)
+        let iconSize = CGSize(width: 40.0, height: 40.0)
         transition.setFrame(
             view: self.iconView,
             frame: CGRect(
@@ -115,32 +116,49 @@ private final class WalletPeerSelectionRecipientView: UIControl {
             )
         )
 
-        let chevronSize = CGSize(width: 24.0, height: size.height)
+        let chevronSize = CGSize(width: 10.0, height: 20.0)
         transition.setFrame(
             view: self.chevronView,
             frame: CGRect(
                 x: size.width - sideInset - chevronSize.width,
-                y: 0.0,
+                y: floorToScreenPixels((size.height - chevronSize.height) * 0.5),
                 width: chevronSize.width,
                 height: chevronSize.height
             )
         )
 
-        let textOriginX = sideInset + iconSize.width + 12.0
+        let textOriginX = sideInset + iconSize.width + 11.0
         let textWidth = max(1.0, size.width - textOriginX - chevronSize.width - sideInset - 8.0)
         if subtitle != nil {
+            let titleHeight: CGFloat = 20.0
+            let subtitleHeight: CGFloat = 18.0
+            let textSpacing: CGFloat = 1.0
+            let textOriginY = floorToScreenPixels(
+                (size.height - titleHeight - textSpacing - subtitleHeight) * 0.5
+            )
             transition.setFrame(
                 view: self.titleLabel,
-                frame: CGRect(x: textOriginX, y: 11.0, width: textWidth, height: 24.0)
+                frame: CGRect(x: textOriginX, y: textOriginY, width: textWidth, height: titleHeight)
             )
             transition.setFrame(
                 view: self.subtitleLabel,
-                frame: CGRect(x: textOriginX, y: 35.0, width: textWidth, height: 21.0)
+                frame: CGRect(
+                    x: textOriginX,
+                    y: textOriginY + titleHeight + textSpacing,
+                    width: textWidth,
+                    height: subtitleHeight
+                )
             )
         } else {
+            let titleHeight: CGFloat = 20.0
             transition.setFrame(
                 view: self.titleLabel,
-                frame: CGRect(x: textOriginX, y: floorToScreenPixels((size.height - 24.0) * 0.5), width: textWidth, height: 24.0)
+                frame: CGRect(
+                    x: textOriginX,
+                    y: floorToScreenPixels((size.height - titleHeight) * 0.5),
+                    width: textWidth,
+                    height: titleHeight
+                )
             )
         }
     }
@@ -180,6 +198,9 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
         private let recipientSectionTitle = UILabel()
         private let recipientView = WalletPeerSelectionRecipientView()
+        private let emptyResultsAnimation = ComponentView<Empty>()
+        private let emptyResultsTitle = ComponentView<Empty>()
+        private let emptyResultsText = ComponentView<Empty>()
         private let continueButton = ComponentView<Empty>()
 
         private var component: WalletPeerSelectionScreenComponent?
@@ -195,13 +216,13 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var resolveGeneration: Int = 0
         private var query: String = ""
         private var recipient: WalletContext.ResolvedTransferRecipient?
+        private var noResultsQuery: String?
         private var isPreparingTransfer = false
 
         override init(frame: CGRect) {
             super.init(frame: frame)
 
-            self.recipientSectionTitle.text = "Recipient"
-            self.recipientSectionTitle.font = Font.semibold(17.0)
+            self.recipientSectionTitle.text = "Recipient".uppercased()
             self.addSubview(self.recipientSectionTitle)
 
             self.recipientView.pressed = { [weak self] in
@@ -225,6 +246,13 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.walletStateDisposable.dispose()
         }
 
+        private func clearNoResults() {
+            self.noResultsQuery = nil
+            self.emptyResultsAnimation.view?.removeFromSuperview()
+            self.emptyResultsTitle.view?.removeFromSuperview()
+            self.emptyResultsText.view?.removeFromSuperview()
+        }
+
         private func resetQuery() {
             self.resolveGeneration &+= 1
             self.resolveTimer?.invalidate()
@@ -232,6 +260,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.resolveDisposable.set(nil)
             self.query = ""
             self.recipient = nil
+            self.clearNoResults()
             self.searchBarNode?.activity = false
         }
 
@@ -248,6 +277,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.resolveDisposable.set(nil)
             self.query = query
             self.recipient = nil
+            self.clearNoResults()
             self.searchBarNode?.activity = false
             self.state?.updated(transition: .easeInOut(duration: 0.2))
 
@@ -255,30 +285,25 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 return
             }
 
-            let isDomain = query.contains(".")
-                && !query.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) })
-                && !query.lowercased().hasPrefix("ton://")
-            if isDomain {
-                let timer = SwiftSignalKit.Timer(timeout: 0.3, repeat: false, completion: { [weak self] in
-                    guard let self, self.resolveGeneration == generation, self.query == query else {
-                        return
-                    }
-                    self.resolveTimer = nil
-                    self.resolve(query: query, generation: generation, displaysActivity: true)
-                }, queue: Queue.mainQueue())
-                self.resolveTimer = timer
-                timer.start()
-            } else {
-                self.resolve(query: query, generation: generation, displaysActivity: false)
-            }
+            let timer = SwiftSignalKit.Timer(timeout: 0.4, repeat: false, completion: { [weak self] in
+                guard let self, self.resolveGeneration == generation, self.query == query else {
+                    return
+                }
+                self.resolveTimer = nil
+                self.resolve(query: query, generation: generation)
+            }, queue: Queue.mainQueue())
+            self.resolveTimer = timer
+            timer.start()
         }
 
-        private func resolve(query: String, generation: Int, displaysActivity: Bool) {
+        private func resolve(query: String, generation: Int) {
             guard let component = self.component else {
                 return
             }
-            if displaysActivity {
-                self.searchBarNode?.activity = true
+            self.searchBarNode?.activity = true
+            self.clearNoResults()
+            if !self.isUpdating {
+                self.state?.updated(transition: .easeInOut(duration: 0.2))
             }
             self.resolveDisposable.set((component.walletContext.resolveTransferRecipient(query)
             |> deliverOnMainQueue).start(next: { [weak self] recipient in
@@ -287,6 +312,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 self.searchBarNode?.activity = false
                 self.recipient = recipient
+                self.noResultsQuery = recipient == nil ? query : nil
                 if !self.isUpdating {
                     self.state?.updated(transition: .easeInOut(duration: 0.2))
                 }
@@ -296,6 +322,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 self.searchBarNode?.activity = false
                 self.recipient = nil
+                self.noResultsQuery = query
                 if !self.isUpdating {
                     self.state?.updated(transition: .easeInOut(duration: 0.2))
                 }
@@ -687,6 +714,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 removedSearchBar = searchBarNode
             }
 
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            self.recipientSectionTitle.font = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             self.recipientSectionTitle.textColor = environment.theme.list.freeTextColor
             let contentSideInset = environment.safeInsets.left + 16.0
             let hasRecipient = self.recipient != nil
@@ -703,7 +732,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 x: environment.safeInsets.left,
                 y: sectionTitleFrame.maxY + 4.0,
                 width: max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right),
-                height: 68.0
+                height: 56.0
             )
             transition.setFrame(view: self.recipientView, frame: recipientFrame)
             transition.setAlpha(view: self.recipientView, alpha: hasRecipient ? 1.0 : 0.0)
@@ -715,6 +744,142 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     size: recipientFrame.size,
                     transition: transition
                 )
+            }
+
+            let emptyResultsFadeTransition = ComponentTransition.easeInOut(duration: 0.25)
+            if let noResultsQuery = self.noResultsQuery {
+                let sideInset: CGFloat = 44.0
+                let animationHeight: CGFloat = 148.0
+                let animationSpacing: CGFloat = 8.0
+                let textSpacing: CGFloat = 8.0
+
+                //TODO:localize
+                let title = "No Results"
+                let emptyResultsTitleSize = self.emptyResultsTitle.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: title,
+                            font: Font.semibold(17.0),
+                            textColor: environment.theme.list.itemSecondaryTextColor
+                        )),
+                        horizontalAlignment: .center
+                    )),
+                    environment: {},
+                    containerSize: availableSize
+                )
+
+                //TODO:localize
+                let text = "There were no results for “\(noResultsQuery)”.\nTry another address."
+                let emptyResultsTextSize = self.emptyResultsText.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: text,
+                            font: Font.regular(15.0),
+                            textColor: environment.theme.list.itemSecondaryTextColor
+                        )),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0
+                    )),
+                    environment: {},
+                    containerSize: CGSize(
+                        width: max(1.0, availableSize.width - sideInset * 2.0),
+                        height: availableSize.height
+                    )
+                )
+
+                let emptyResultsAnimationSize = self.emptyResultsAnimation.update(
+                    transition: .immediate,
+                    component: AnyComponent(LottieComponent(
+                        content: LottieComponent.AppBundleContent(name: "ChatListNoResults")
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: animationHeight, height: animationHeight)
+                )
+
+                let topInset = environment.safeInsets.top
+                let bottomInset = max(environment.safeInsets.bottom, environment.inputHeight)
+                let emptyResultsHeight = animationHeight
+                    + animationSpacing
+                    + emptyResultsTitleSize.height
+                    + textSpacing
+                    + emptyResultsTextSize.height
+                let animationY = topInset + floorToScreenPixels(
+                    (availableSize.height - topInset - bottomInset - emptyResultsHeight) * 0.5
+                )
+                let emptyResultsAnimationFrame = CGRect(
+                    x: floorToScreenPixels((availableSize.width - emptyResultsAnimationSize.width) * 0.5),
+                    y: animationY,
+                    width: emptyResultsAnimationSize.width,
+                    height: emptyResultsAnimationSize.height
+                )
+                let emptyResultsTitleFrame = CGRect(
+                    x: floorToScreenPixels((availableSize.width - emptyResultsTitleSize.width) * 0.5),
+                    y: emptyResultsAnimationFrame.maxY + animationSpacing,
+                    width: emptyResultsTitleSize.width,
+                    height: emptyResultsTitleSize.height
+                )
+                let emptyResultsTextFrame = CGRect(
+                    x: floorToScreenPixels((availableSize.width - emptyResultsTextSize.width) * 0.5),
+                    y: emptyResultsTitleFrame.maxY + textSpacing,
+                    width: emptyResultsTextSize.width,
+                    height: emptyResultsTextSize.height
+                )
+
+                if let view = self.emptyResultsAnimation.view as? LottieComponent.View {
+                    if view.superview == nil {
+                        view.alpha = 0.0
+                        self.addSubview(view)
+                        view.playOnce()
+                    }
+                    emptyResultsFadeTransition.setAlpha(view: view, alpha: 1.0)
+                    view.bounds = CGRect(origin: .zero, size: emptyResultsAnimationFrame.size)
+                    ComponentTransition.immediate.setPosition(view: view, position: emptyResultsAnimationFrame.center)
+                }
+                if let view = self.emptyResultsTitle.view {
+                    if view.superview == nil {
+                        view.alpha = 0.0
+                        self.addSubview(view)
+                    }
+                    emptyResultsFadeTransition.setAlpha(view: view, alpha: 1.0)
+                    view.bounds = CGRect(origin: .zero, size: emptyResultsTitleFrame.size)
+                    ComponentTransition.immediate.setPosition(view: view, position: emptyResultsTitleFrame.center)
+                }
+                if let view = self.emptyResultsText.view {
+                    if view.superview == nil {
+                        view.alpha = 0.0
+                        self.addSubview(view)
+                    }
+                    emptyResultsFadeTransition.setAlpha(view: view, alpha: 1.0)
+                    view.bounds = CGRect(origin: .zero, size: emptyResultsTextFrame.size)
+                    ComponentTransition.immediate.setPosition(view: view, position: emptyResultsTextFrame.center)
+                }
+            } else {
+                if let view = self.emptyResultsAnimation.view {
+                    emptyResultsFadeTransition.setAlpha(view: view, alpha: 0.0, completion: { [weak self, weak view] _ in
+                        guard self?.noResultsQuery == nil else {
+                            return
+                        }
+                        view?.removeFromSuperview()
+                    })
+                }
+                if let view = self.emptyResultsTitle.view {
+                    emptyResultsFadeTransition.setAlpha(view: view, alpha: 0.0, completion: { [weak self, weak view] _ in
+                        guard self?.noResultsQuery == nil else {
+                            return
+                        }
+                        view?.removeFromSuperview()
+                    })
+                }
+                if let view = self.emptyResultsText.view {
+                    emptyResultsFadeTransition.setAlpha(view: view, alpha: 0.0, completion: { [weak self, weak view] _ in
+                        guard self?.noResultsQuery == nil else {
+                            return
+                        }
+                        view?.removeFromSuperview()
+                    })
+                }
             }
 
             let buttonSideInset = environment.safeInsets.left + 16.0

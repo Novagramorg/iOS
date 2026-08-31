@@ -352,7 +352,11 @@ public extension WalletContext {
     }
 
     struct PendingTransfer: Codable, Equatable, Sendable {
-        public enum Status: String, Codable, Equatable, Sendable { case broadcasting, pending }
+        public enum Status: String, Codable, Equatable, Sendable {
+            case broadcasting
+            case pending
+            case submissionUnknown
+        }
         public let id: String
         public let recipient: String
         public let amount: Int64
@@ -383,8 +387,39 @@ public extension WalletContext {
         }
     }
 
+    struct PreparedRecoveryPhraseImport: Equatable {
+        public enum Disposition: Equatable {
+            case currentWallet
+            case replacement
+        }
+
+        public let disposition: Disposition
+        let recordId: String
+        let sourceAddress: String
+        let sourcePublicKey: Data
+        let candidateAddress: String
+        let candidatePublicKey: Data
+
+        init(
+            disposition: Disposition,
+            recordId: String,
+            sourceAddress: String,
+            sourcePublicKey: Data,
+            candidateAddress: String,
+            candidatePublicKey: Data
+        ) {
+            self.disposition = disposition
+            self.recordId = recordId
+            self.sourceAddress = sourceAddress
+            self.sourcePublicKey = sourcePublicKey
+            self.candidateAddress = candidateAddress
+            self.candidatePublicKey = candidatePublicKey
+        }
+    }
+
     enum ActiveOperation: Equatable {
-        case creating, importing, recoveringPhrase, enablingBackup, preparingBackupDisable, disablingBackup
+        case creating, importing, recoveringPhrase, preparingRecoveryPhraseImport, completingRecoveryPhraseImport
+        case enablingBackup, preparingBackupDisable, disablingBackup
         case preparingTransfer, submittingTransfer, loadingMoreTransactions, loadingMoreCollectibles
     }
     enum Phase: Equatable { case restoring, provisioning, empty, wallet(WalletInfo), failed(FatalStorageError) }

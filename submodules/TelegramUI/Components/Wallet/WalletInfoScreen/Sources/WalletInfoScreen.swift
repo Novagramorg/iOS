@@ -4,11 +4,13 @@ import Display
 import AccountContext
 import Markdown
 import TelegramPresentationData
+import TextFormat
 import ComponentFlow
 import ViewControllerComponent
 import SheetComponent
 import BalancedTextComponent
 import BundleIconComponent
+import MultilineTextComponent
 import LottieComponent
 import GlassBarButtonComponent
 import ButtonComponent
@@ -242,6 +244,22 @@ private final class WalletInfoSheetContent: CombinedComponent {
             self.playRecoveryAnimation.invoke(Void())
         }
 
+        func openTerms(context: AccountContext, url: String) {
+            guard let controller = self.getController() else {
+                return
+            }
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            context.sharedContext.openExternalUrl(
+                context: context,
+                urlContext: .generic,
+                url: url,
+                forceExternal: false,
+                presentationData: presentationData,
+                navigationController: controller.navigationController as? NavigationController,
+                dismissInput: {}
+            )
+        }
+
         func dismiss(animated: Bool, completion: (() -> Void)? = nil) {
             guard let controller = self.getController() as? WalletInfoScreen else {
                 return
@@ -270,6 +288,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
         let text = Child(BalancedTextComponent.self)
         let list = Child(List<Empty>.self)
         let button = Child(ButtonComponent.self)
+        let terms = Child(MultilineTextComponent.self)
 
         return { context in
             let environment = context.environment[ViewControllerComponentContainer.Environment.self].value
@@ -453,6 +472,57 @@ private final class WalletInfoSheetContent: CombinedComponent {
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + button.size.height / 2.0))
             )
             contentSize.height += button.size.height
+
+            if case .wallet = component.mode {
+                contentSize.height += 24.0
+
+                //TODO:localize
+                let termsString = "By using Wallet you agree to Terms of Service."
+                let termsLink = "Terms of Service"
+                let termsText = NSMutableAttributedString(
+                    string: termsString,
+                    attributes: [
+                        .font: Font.regular(13.0),
+                        .foregroundColor: secondaryTextColor
+                    ]
+                )
+                let termsLinkRange = (termsString as NSString).range(of: termsLink)
+                termsText.addAttributes(
+                    [
+                        .foregroundColor: theme.list.itemAccentColor,
+                        NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
+                    ],
+                    range: termsLinkRange
+                )
+
+                let terms = terms.update(
+                    component: MultilineTextComponent(
+                        text: .plain(termsText),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0,
+                        highlightColor: theme.list.itemAccentColor.withAlphaComponent(0.2),
+                        highlightAction: { attributes in
+                            if attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] != nil {
+                                return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                            } else {
+                                return nil
+                            }
+                        },
+                        tapAction: { [weak state] attributes, _ in
+                            guard let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String else {
+                                return
+                            }
+                            state?.openTerms(context: component.context, url: url)
+                        }
+                    ),
+                    availableSize: CGSize(width: context.availableSize.width, height: context.availableSize.height),
+                    transition: .immediate
+                )
+                context.add(terms
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + terms.size.height / 2.0))
+                )
+                contentSize.height += terms.size.height
+            }
             contentSize.height += 30.0
 
             return contentSize

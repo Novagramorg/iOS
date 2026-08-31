@@ -984,17 +984,17 @@ public final class WalletTransactionItemComponent: Component {
 }
 
 private func walletTransactionCounterparty(_ address: String?) -> String {
-    guard let address, !address.isEmpty else {
+    guard var address, !address.isEmpty else {
         //TODO:localize
         let unknownAddress = "Unknown Address"
         return unknownAddress
     }
-
+    address = WalletContext.transferAddress(from: address) ?? address
+    
     let edgeLength = 4
     guard address.count > edgeLength * 2 else {
         return address
     }
-
     return "\(address.prefix(edgeLength))…\(address.suffix(edgeLength))"
 }
 

@@ -62,9 +62,13 @@ private func walletCollectibleFragmentUrl(collectible: WalletContext.Collectible
     switch collectible.kind {
     case .username:
         path = "username"
-        value = collectible.name
+        var username = collectible.name
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+        if username.lowercased().hasSuffix(".t.me") {
+            username.removeLast(".t.me".count)
+        }
+        value = username
     case .anonymousNumber:
         path = "number"
         value = collectible.name.filter { $0.isNumber }
@@ -563,19 +567,20 @@ private final class WalletCollectibleContentComponent: Component {
                         value: backdrop.value,
                         rarity: backdrop.rarity
                     ))
-                ),
-                TableComponent.Item(
-                    id: "value",
-                    title: "Value",
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: self.giftValue(),
-                            font: Font.regular(15.0),
-                            textColor: theme.list.itemPrimaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
-                    ))
                 )
+//                ,
+//                TableComponent.Item(
+//                    id: "value",
+//                    title: "Value",
+//                    component: AnyComponent(MultilineTextComponent(
+//                        text: .plain(NSAttributedString(
+//                            string: self.giftValue(),
+//                            font: Font.regular(15.0),
+//                            textColor: theme.list.itemPrimaryTextColor
+//                        )),
+//                        maximumNumberOfLines: 1
+//                    ))
+//                )
             ]
         }
 
@@ -714,7 +719,7 @@ private final class WalletCollectibleContentComponent: Component {
             contentHeight += 28.0
             let buttonSpacing: CGFloat = 10.0
             let sideInset: CGFloat = 20.0
-            let buttonCount: CGFloat = component.collectible.kind == .gift ? 3.0 : 2.0
+            let buttonCount: CGFloat = component.collectible.kind == .gift && !"".isEmpty ? 3.0 : 2.0
             let buttonWidth = floor((availableSize.width - sideInset * 2.0 - buttonSpacing * (buttonCount - 1.0)) / buttonCount)
             var buttonX = sideInset
             let transferSize = self.transferButton.update(
@@ -738,7 +743,7 @@ private final class WalletCollectibleContentComponent: Component {
             }
             buttonX += buttonWidth + buttonSpacing
 
-            if component.collectible.kind == .gift {
+            if !"".isEmpty, component.collectible.kind == .gift {
                 let wearSize = self.wearButton.update(
                     transition: transition,
                     component: AnyComponent(WalletCollectibleActionComponent(
@@ -794,7 +799,8 @@ private final class WalletCollectibleContentComponent: Component {
                     component: AnyComponent(TableComponent(
                         theme: theme,
                         items: self.giftTableItems(component: component, theme: theme),
-                        semiTransparent: true
+                        semiTransparent: true,
+                        rightColumnBackgroundColor: theme.list.itemModalBlocksBackgroundColor
                     )),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - 48.0, height: 1000.0)

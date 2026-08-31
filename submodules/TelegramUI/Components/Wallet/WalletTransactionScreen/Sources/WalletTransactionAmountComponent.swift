@@ -84,19 +84,23 @@ final class WalletTransactionAmountComponent: Component {
             environment: Environment<Empty>,
             transition: ComponentTransition
         ) -> CGSize {
-            let formattedAmount: String
+            let formattedAmountText: String
+            var normalizedAmount: Int64 = component.amount
+            if case .outgoing = component.direction, normalizedAmount > 0 {
+                normalizedAmount *= -1
+            }
             let iconName: String
             switch component.currency {
             case .ton:
-                formattedAmount = formatTonAmountText(
-                    component.amount,
+                formattedAmountText = formatTonAmountText(
+                    normalizedAmount,
                     dateTimeFormat: component.dateTimeFormat,
                     maxDecimalPositions: 3
                 )
                 iconName = "Wallet/TransactionGramLarge"
             case .usdt:
-                formattedAmount = formatWalletTransactionTokenAmountText(
-                    component.amount,
+                formattedAmountText = formatWalletTransactionTokenAmountText(
+                    normalizedAmount,
                     decimalDigits: 6,
                     dateTimeFormat: component.dateTimeFormat
                 )
@@ -111,17 +115,17 @@ final class WalletTransactionAmountComponent: Component {
             let regularTextColor: UIColor
             switch component.direction {
             case .incoming:
-                amountText = "+\(formattedAmount)"
+                amountText = "+\(formattedAmountText)"
                 if component.currency == .usdt {
                     regularTextColor = UIColor(rgb: 0x0B9696)
                 } else {
                     regularTextColor = component.theme.list.itemDisclosureActions.constructive.fillColor
                 }
             case .outgoing:
-                amountText = "\(formattedAmount)".replacingOccurrences(of: "-", with: "−")
+                amountText = "\(formattedAmountText)".replacingOccurrences(of: "-", with: "−")
                 regularTextColor = component.theme.actionSheet.primaryTextColor
             case .unknown:
-                amountText = formattedAmount
+                amountText = formattedAmountText
                 regularTextColor = component.theme.actionSheet.primaryTextColor
             }
 

@@ -17,6 +17,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/PresentationDataUtils",
         "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/TelegramNotices",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramStringFormatting",
         "//submodules/TelegramUI/Components/ListActionItemComponent",
