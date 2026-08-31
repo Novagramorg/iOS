@@ -418,16 +418,15 @@ public final class WalletTransactionItemComponent: Component {
 
             let isDeployContract = transaction.kind == .deployContract
             var subtitleText: String
-            let formattedAmountValue: Int64
-            let showAmountPlus: Bool
+            var amountValue: Int64
+            var amountPrefix: String = ""
             var amountColor: UIColor
             var amountIconColor: UIColor?
             let avatarPeer: StarsAvatarComponent.Peer?
             if isDeployContract {
                 //TODO:localize
                 subtitleText = "Deploy Contract"
-                formattedAmountValue = 0
-                showAmountPlus = false
+                amountValue = 0
                 amountColor = component.theme.list.itemPrimaryTextColor
                 amountIconColor = nil
                 avatarPeer = nil
@@ -441,8 +440,7 @@ public final class WalletTransactionItemComponent: Component {
                         //TODO:localize
                         subtitleText = "Deposit"
                     }
-                    formattedAmountValue = transaction.amount
-                    showAmountPlus = true
+                    amountValue = transaction.amount
                     if transaction.currency == .usdt {
                         amountColor = UIColor(rgb: 0x0B9696)
                     } else {
@@ -458,8 +456,7 @@ public final class WalletTransactionItemComponent: Component {
                         //TODO:localize
                         subtitleText = "Withdrawal"
                     }
-                    formattedAmountValue = -transaction.amount
-                    showAmountPlus = false
+                    amountValue = transaction.amount
                     amountColor = component.theme.list.itemPrimaryTextColor
                     amountIconColor = transaction.collectible != nil
                         ? component.theme.list.itemSecondaryTextColor
@@ -467,12 +464,18 @@ public final class WalletTransactionItemComponent: Component {
                     avatarPeer = .transaction(.outgoing)
                 case .unknown:
                     subtitleText = ""
-                    formattedAmountValue = transaction.amount
-                    showAmountPlus = false
+                    amountValue = transaction.amount
                     amountColor = component.theme.list.itemPrimaryTextColor
                     amountIconColor = nil
                     avatarPeer = nil
                 }
+            }
+            
+            if amountValue > 0 {
+                amountPrefix = "+"
+            } else {
+                amountValue *= -1
+                amountPrefix = "–"
             }
 
             let isPending = transaction.status == .pending
@@ -621,22 +624,22 @@ public final class WalletTransactionItemComponent: Component {
             let amountText: String
             let amountIconName: String
             if transaction.collectible != nil {
-                amountText = transaction.direction == .incoming ? "+1 item" : "-1 item"
+                amountText = transaction.direction == .incoming ? "+1 item" : "–1 item"
                 amountIconName = "Wallet/TransactionCollectible"
             } else if transaction.currency == .ton {
-                amountText = formatTonAmountText(
-                    formattedAmountValue,
+                amountText = amountPrefix + formatTonAmountText(
+                    amountValue,
                     dateTimeFormat: component.dateTimeFormat,
-                    showPlus: showAmountPlus,
+                    showPlus: false,
                     maxDecimalPositions: 3
                 )
                 amountIconName = "Wallet/TransactionGram"
             } else {
-                amountText = formatWalletTokenAmountText(
-                    formattedAmountValue,
+                amountText = amountPrefix + formatWalletTokenAmountText(
+                    amountValue,
                     decimalDigits: 6,
                     dateTimeFormat: component.dateTimeFormat,
-                    showPlus: showAmountPlus,
+                    showPlus: false,
                     maxDecimalPositions: 2
                 )
                 amountIconName = "Wallet/TransactionUsdt"
@@ -992,7 +995,7 @@ private func walletTransactionCounterparty(_ address: String?) -> String {
         return address
     }
 
-    return "\(address.prefix(edgeLength))...\(address.suffix(edgeLength))"
+    return "\(address.prefix(edgeLength))…\(address.suffix(edgeLength))"
 }
 
 private func formatWalletTokenAmountText(

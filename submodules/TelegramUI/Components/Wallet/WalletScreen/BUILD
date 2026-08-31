@@ -35,6 +35,7 @@ swift_library(
         "//submodules/ContextUI",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TooltipUI",
+        "//submodules/SettingsUI",
         "//submodules/TelegramUI/Components/Wallet/WalletCardComponent",
         "//submodules/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletPeerSelectionScreen",

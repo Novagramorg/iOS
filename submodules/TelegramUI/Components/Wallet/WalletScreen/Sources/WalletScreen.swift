@@ -28,6 +28,7 @@ import GlassBackgroundComponent
 import WalletSendScreen
 import WalletPeerSelectionScreen
 import TooltipUI
+import SettingsUI
 
 private let walletSectionOverscan: CGFloat = 100.0
 private let walletTransactionItemHeight: CGFloat = 79.0
@@ -510,20 +511,23 @@ private final class WalletScreenComponent: Component {
 
     let context: AccountContext
     let walletContext: WalletContext
+    let twoStepAuthData: Promise<TwoStepAuthData?>
     let routeToSetup: ((ViewController) -> Void)?
 
     init(
         context: AccountContext,
         walletContext: WalletContext,
+        twoStepAuthData: Promise<TwoStepAuthData?>,
         routeToSetup: ((ViewController) -> Void)?
     ) {
         self.context = context
         self.walletContext = walletContext
+        self.twoStepAuthData = twoStepAuthData
         self.routeToSetup = routeToSetup
     }
 
     static func ==(lhs: WalletScreenComponent, rhs: WalletScreenComponent) -> Bool {
-        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
+        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext && lhs.twoStepAuthData === rhs.twoStepAuthData
     }
 
     private final class ScrollView: UIScrollView {
@@ -553,12 +557,17 @@ private final class WalletScreenComponent: Component {
         private let card = ComponentView<Empty>()
         private let addFundsButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
+        private let accountProtectionSection = ComponentView<Empty>()
         private let transactionTabsBackgroundView = GlassBackgroundView()
         private let transactionTabs = ComponentView<Empty>()
         private let transactionsSection = LazySectionView()
         private let collectiblesSection = LazySectionView()
         private let emptyTransactionsInfo = ComponentView<Empty>()
         private let emptyTransactionsFooter = ComponentView<Empty>()
+        private let accountProtectionIcon = renderSettingsIcon(
+            name: "Item List/Icons/Warning",
+            backgroundColors: [UIColor(rgb: 0xff453a)]
+        )
 
         private var component: WalletScreenComponent?
         private var environment: EnvironmentType?
@@ -571,6 +580,9 @@ private final class WalletScreenComponent: Component {
         private var accountContext: AccountContext?
         private var accountName = ""
         private var accountPeerDisposable: Disposable?
+        private var twoStepAuthData: Promise<TwoStepAuthData?>?
+        private var twoStepAuthDataDisposable: Disposable?
+        private var hasTwoStepAuth: Bool?
         private var isUpdating = false
         private var isGramTooltipPresentationPending = false
         private var didPresentGramTooltip = false
@@ -636,7 +648,25 @@ private final class WalletScreenComponent: Component {
         deinit {
             self.walletStateDisposable?.dispose()
             self.accountPeerDisposable?.dispose()
+            self.twoStepAuthDataDisposable?.dispose()
             self.loadMoreDisposable.dispose()
+        }
+
+        func refreshTwoStepAuth() {
+            guard let component = self.component, self.accountContext === component.context else {
+                return
+            }
+
+            component.twoStepAuthData.set(
+                .single(nil)
+                |> then(
+                    component.context.engine.auth.twoStepAuthData()
+                    |> map(Optional.init)
+                    |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
+                        return .single(nil)
+                    }
+                )
+            )
         }
 
         func scrollToTop() {
@@ -1043,6 +1073,33 @@ private final class WalletScreenComponent: Component {
             controller.push(component.context.sharedContext.makeWalletSettingsScreen(context: component.context))
         }
 
+        private func openAccountProtection() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.push(component.context.sharedContext.makeSetupTwoFactorAuthController(context: component.context))
+        }
+
+        private func openPasscodeSettings() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let context = component.context
+            let _ = passcodeOptionsAccessController(
+                context: context,
+                pushController: { [weak controller] passcodeController in
+                    controller?.push(passcodeController)
+                },
+                completion: { [weak controller] _ in
+                    controller?.push(passcodeOptionsController(context: context))
+                }
+            ).start(next: { [weak controller] passcodeController in
+                if let passcodeController {
+                    controller?.push(passcodeController)
+                }
+            })
+        }
+
         private func openTerms(url: String) {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
@@ -1348,8 +1405,9 @@ private final class WalletScreenComponent: Component {
                     icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FaceId"), color: theme.contextMenu.primaryColor)
                     },
-                    action: { _, dismiss in
+                    action: { [weak self] _, dismiss in
                         dismiss(.default)
+                        self?.openPasscodeSettings()
                     }
                 )),
                 .action(ContextMenuActionItem(
@@ -1414,6 +1472,33 @@ private final class WalletScreenComponent: Component {
                     self.walletState = walletState
                     if !self.isUpdating {
                         self.componentState?.updated(transition: .easeInOut(duration: 0.25))
+                    }
+                })
+            }
+
+            if self.twoStepAuthData !== component.twoStepAuthData {
+                self.twoStepAuthDataDisposable?.dispose()
+                let subscribedTwoStepAuthData = component.twoStepAuthData
+                self.twoStepAuthData = subscribedTwoStepAuthData
+                self.hasTwoStepAuth = nil
+                self.twoStepAuthDataDisposable = (subscribedTwoStepAuthData.get()
+                |> deliverOnMainQueue).start(next: { [weak self, weak subscribedTwoStepAuthData] data in
+                    guard let self, let subscribedTwoStepAuthData, self.twoStepAuthData === subscribedTwoStepAuthData else {
+                        return
+                    }
+                    let hadTwoStepAuthValue = self.hasTwoStepAuth != nil
+                    
+                    let hasTwoStepAuth: Bool?
+                    if let data {
+                        hasTwoStepAuth = data.currentPasswordDerivation != nil || data.unconfirmedEmailPattern != nil
+                    } else {
+                        hasTwoStepAuth = nil
+                    }
+                    if self.hasTwoStepAuth != hasTwoStepAuth {
+                        self.hasTwoStepAuth = hasTwoStepAuth
+                        if !self.isUpdating {
+                            self.componentState?.updated(transition: hadTwoStepAuthValue ? .easeInOut(duration: 0.2) : .immediate)
+                        }
                     }
                 })
             }
@@ -1779,6 +1864,67 @@ private final class WalletScreenComponent: Component {
 
             let buttonsHeight = max(addFundsButtonSize.height, sendButtonSize.height)
             var contentHeight = buttonsOriginY + buttonsHeight
+
+            if self.hasTwoStepAuth == false && !transactions.isEmpty {
+                var transition = transition
+                if self.accountProtectionSection.view?.superview == nil {
+                    transition = .immediate
+                }
+                self.accountProtectionSection.parentState = state
+                let accountProtectionSectionSize = self.accountProtectionSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        style: .glass,
+                        header: nil,
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: "accountProtection", component: AnyComponent(ListActionItemComponent(
+                                theme: environment.theme,
+                                style: .glass,
+                                title: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        //TODO:localize
+                                        string: "Protect Your Account",
+                                        font: Font.regular(17.0),
+                                        textColor: environment.theme.list.itemDestructiveColor
+                                    )),
+                                    maximumNumberOfLines: 1
+                                )),
+                                leftIcon: .custom(AnyComponentWithIdentity(
+                                    id: "accountProtectionIcon",
+                                    component: AnyComponent(Image(
+                                        image: self.accountProtectionIcon,
+                                        size: CGSize(width: 30.0, height: 30.0)
+                                    ))
+                                ), false),
+                                accessory: .arrow,
+                                action: { [weak self] _ in
+                                    self?.openAccountProtection()
+                                }
+                            )))
+                        ]
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: cardWidth, height: 10000.0)
+                )
+                if let accountProtectionSectionView = self.accountProtectionSection.view {
+                    if accountProtectionSectionView.superview == nil {
+                        self.scrollView.addSubview(accountProtectionSectionView)
+                    }
+                    let accountProtectionOriginY = contentHeight + 12.0
+                    transition.setFrame(
+                        view: accountProtectionSectionView,
+                        frame: CGRect(
+                            origin: CGPoint(x: environment.safeInsets.left + sideInset, y: accountProtectionOriginY),
+                            size: accountProtectionSectionSize
+                        )
+                    )
+                    contentHeight = accountProtectionOriginY + accountProtectionSectionSize.height
+                }
+            } else {
+                self.accountProtectionSection.view?.removeFromSuperview()
+            }
 
             if !collectibles.isEmpty {
                 let transactionTabsOriginY = contentHeight + 12.0
@@ -2177,6 +2323,7 @@ public final class WalletScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         walletContext: WalletContext,
+        twoStepAuthData: Promise<TwoStepAuthData?>,
         routeToSetup: ((ViewController) -> Void)? = nil
     ) {
         super.init(
@@ -2184,6 +2331,7 @@ public final class WalletScreen: ViewControllerComponentContainer {
             component: WalletScreenComponent(
                 context: context,
                 walletContext: walletContext,
+                twoStepAuthData: twoStepAuthData,
                 routeToSetup: routeToSetup
             ),
             navigationBarAppearance: .transparent,
@@ -2201,6 +2349,15 @@ public final class WalletScreen: ViewControllerComponentContainer {
             }
             componentView.scrollToTop()
         }
+    }
+
+    override public func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        guard let componentView = self.node.hostView.componentView as? WalletScreenComponent.View else {
+            return
+        }
+        componentView.refreshTwoStepAuth()
     }
 
     required public init(coder aDecoder: NSCoder) {

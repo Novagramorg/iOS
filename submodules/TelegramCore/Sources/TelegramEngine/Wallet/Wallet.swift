@@ -29,6 +29,7 @@ public enum WalletState: Equatable {
     case ready(
         backupEnabled: Bool,
         canExportPhrase: Bool,
+        canEnableBackup: Bool,
         address: String,
         publicKey: Data,
         balance: Int64
@@ -112,17 +113,38 @@ public enum WalletGetTransactionsError: Error {
     case generic
 }
 
-public enum WalletExportSecretPhraseError: Error {
+public enum WalletReplacement: Equatable {
+    case new
+    case imported(publicKey: Data)
+}
+
+public enum WalletOperationError: Error, Equatable {
     case generic
+    case network
+    case requestPassword
+    case invalidPassword
+    case twoStepAuthMissing
+    case passwordTooFresh(Int32)
+    case sessionTooFresh(Int32)
+    case backupDisabled
+    case backupNotAvailable
+    case replacementInvalid
+    case publicKeyInvalid
+    case tokenInvalid
+    case tokenExpired
+    case clientKeyInvalid
+    case partUnavailable
+    case invalidBackupData
 }
 
 extension WalletState {
-    init(apiState: Api.WalletState) {
+    public init(apiState: Api.WalletState) {
         switch apiState {
         case let .walletState(state):
             self = .ready(
                 backupEnabled: (state.flags & (1 << 0)) != 0,
                 canExportPhrase: (state.flags & (1 << 1)) != 0,
+                canEnableBackup: (state.flags & (1 << 2)) != 0,
                 address: state.address,
                 publicKey: state.publicKey.makeData(),
                 balance: state.balance
@@ -193,7 +215,7 @@ private func tonApiRequestError(_ error: MTRpcError) -> TonApiRequestError {
     return TonApiRequestError(code: error.errorCode, description: error.errorDescription)
 }
 
-private func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGetStateError> {
+func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGetStateError> {
     return account.network.request(Api.functions.wallet.getState())
     |> mapError { _ -> WalletGetStateError in
         return .generic
@@ -203,7 +225,7 @@ private func _internal_getWalletState(account: Account) -> Signal<WalletState, W
     }
 }
 
-private func _internal_getWalletUserAddresses(
+func _internal_getWalletUserAddresses(
     account: Account,
     userIds: [EnginePeer.Id]
 ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
@@ -242,7 +264,7 @@ private func _internal_getWalletUserAddresses(
     }
 }
 
-private func _internal_getWalletTransactions(
+func _internal_getWalletTransactions(
     account: Account,
     inbound: Bool,
     outbound: Bool,
@@ -288,20 +310,7 @@ private func _internal_getWalletTransactions(
     }
 }
 
-private func _internal_exportWalletSecretPhrase(account: Account) -> Signal<[String], WalletExportSecretPhraseError> {
-    return account.network.request(Api.functions.wallet.exportSecretPhrase(flags: 0, password: nil))
-    |> mapError { _ -> WalletExportSecretPhraseError in
-        return .generic
-    }
-    |> map { result in
-        switch result {
-        case let .secretPhrase(secretPhrase):
-            return secretPhrase.words
-        }
-    }
-}
-
-private func _internal_getStreamingUrl(account: Account) -> Signal<WalletStreamingUrl, TonApiRequestError> {
+func _internal_getStreamingUrl(account: Account) -> Signal<WalletStreamingUrl, TonApiRequestError> {
     let request = Api.functions.toncenter.getStreamingUrl()
 
     return currentWebDocumentsHostDatacenterId(
@@ -335,7 +344,7 @@ private func _internal_getStreamingUrl(account: Account) -> Signal<WalletStreami
     }
 }
 
-private func _internal_performTonApiRequest(
+func _internal_performTonApiRequest(
     account: Account,
     flags: Int32,
     endpoint: String,
@@ -379,82 +388,6 @@ private func _internal_performTonApiRequest(
             case let .dataJSON(dataJSON):
                 return dataJSON.data
             }
-        }
-    }
-}
-
-public extension TelegramEngine {
-    final class Wallet {
-        private let account: Account
-
-        init(account: Account) {
-            self.account = account
-        }
-
-        public func getState() -> Signal<WalletState, WalletGetStateError> {
-            return _internal_getWalletState(account: self.account)
-        }
-
-        public func stateUpdates() -> Signal<WalletState, NoError> {
-            return self.account.stateManager.walletStateUpdates()
-            |> map { WalletState(apiState: $0) }
-        }
-
-        public func getUserAddresses(userIds: [EnginePeer.Id]) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
-            return _internal_getWalletUserAddresses(account: self.account, userIds: userIds)
-        }
-
-        public func getTransactions(
-            inbound: Bool,
-            outbound: Bool,
-            offset: String,
-            limit: Int32
-        ) -> Signal<WalletTransactions, WalletGetTransactionsError> {
-            return _internal_getWalletTransactions(
-                account: self.account,
-                inbound: inbound,
-                outbound: outbound,
-                offset: offset,
-                limit: limit
-            )
-        }
-
-        public func exportSecretPhrase() -> Signal<[String], WalletExportSecretPhraseError> {
-            return _internal_exportWalletSecretPhrase(account: self.account)
-        }
-
-        public func getStreamingUrl() -> Signal<WalletStreamingUrl, TonApiRequestError> {
-            return _internal_getStreamingUrl(account: self.account)
-        }
-
-        public func performGetRequest(endpoint: String, query: String? = nil) -> Signal<String, TonApiRequestError> {
-            var flags: Int32 = 0
-            if query != nil {
-                flags |= 1 << 1
-            }
-
-            return _internal_performTonApiRequest(
-                account: self.account,
-                flags: flags,
-                endpoint: endpoint,
-                query: query,
-                payload: nil
-            )
-        }
-
-        public func performPostRequest(endpoint: String, payload: String? = nil) -> Signal<String, TonApiRequestError> {
-            var flags: Int32 = 1 << 0
-            if payload != nil {
-                flags |= 1 << 2
-            }
-
-            return _internal_performTonApiRequest(
-                account: self.account,
-                flags: flags,
-                endpoint: endpoint,
-                query: nil,
-                payload: payload
-            )
         }
     }
 }

@@ -14,6 +14,7 @@ import ButtonComponent
 import SegmentControlComponent
 import WalletContext
 import SwiftSignalKit
+import WalletAuthorizationUI
 
 private final class WalletImportScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -61,7 +62,17 @@ private final class WalletImportScreenComponent: Component {
                 guard self.shouldBecomeFirstResponder?() ?? true else {
                     return false
                 }
-                return super.becomeFirstResponder()
+                let shouldSelectAll = !self.isFirstResponder && self.text?.isEmpty == false
+                let result = super.becomeFirstResponder()
+                if result && shouldSelectAll {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.isFirstResponder else {
+                            return
+                        }
+                        self.selectAll(nil)
+                    }
+                }
+                return result
             }
 
             override func deleteBackward() {
@@ -324,6 +335,10 @@ private final class WalletImportScreenComponent: Component {
                 shouldChangeCharactersIn range: NSRange,
                 replacementString string: String
             ) -> Bool {
+                if string == " " {
+                    self.returnPressed?(self.index)
+                    return false
+                }
                 guard string.rangeOfCharacter(from: .whitespacesAndNewlines) != nil else {
                     return true
                 }
@@ -991,24 +1006,44 @@ private final class WalletImportScreenComponent: Component {
             }
             self.isImporting = true
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.operationDisposable.set((component.walletContext.importWallet(words: words)
-            |> deliverOnMainQueue).start(next: { [weak self] _ in
-                self?.dismiss()
-            }, error: { [weak self] _ in
-                self?.finishImportWithError()
-            }))
+            guard let controller = self.environment?.controller() else {
+                return
+            }
+            self.operationDisposable.set(performWalletAuthorizedOperation(
+                context: component.context,
+                present: { [weak controller] alert in
+                    controller?.present(alert, in: .window(.root))
+                },
+                operation: { password in
+                    component.walletContext.importWallet(words: words, password: password)
+                },
+                next: { [weak self] _ in
+                    if let completion = component.completion {
+                        completion()
+                    } else {
+                        self?.dismiss()
+                    }
+                },
+                failed: { [weak self] error in
+                    self?.finishImportWithError(error: error)
+                }
+            ))
         }
 
-        private func finishImportWithError() {
+        private func finishImportWithError(error: WalletContext.WalletError) {
             self.isImporting = false
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            guard error != .authorizationCancelled else {
+                return
+            }
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
-                title: "Couldn’t Import Wallet",
-                text: "Check the recovery phrase and network connection, then try again.",
+                title: message?.title ?? "Couldn’t Import Wallet",
+                text: message?.text ?? "Check the recovery phrase and network connection, then try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
@@ -1181,9 +1216,9 @@ private final class WalletImportScreenComponent: Component {
                 isVerificationMode = true
                 animationName = "WalletWordCheck"
                 //TODO:localize
-                titleText = "Test Time!"
+                titleText = "Test Time"
                 //TODO:localize
-                let bodyText = "Let’s check that you wrote them down correctly. Please enter the words\n**%1$@**, **%2$@** and **%3$@**"
+                let bodyText = "Make sure you wrote your recovery phrase down correctly.\nEnter words **%1$@**, **%2$@** and **%3$@**."
                 let displayedIndices = component.verificationIndices.map { String($0 + 1) }
                 let formattedBodyText: String
                 if displayedIndices.count == 3 {

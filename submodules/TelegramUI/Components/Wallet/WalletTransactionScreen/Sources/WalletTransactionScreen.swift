@@ -419,22 +419,9 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         private func authorizeAndSubmit(_ preparedTransfer: WalletContext.PreparedTransfer) {
-            guard let component = self.component else {
-                return
-            }
             self.previewOperation = .authorizing
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self] authorized in
-                guard let self, self.previewOperation == .authorizing else {
-                    return
-                }
-                guard authorized else {
-                    self.previewOperation = .ready
-                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                    return
-                }
-                self.submit(preparedTransfer)
-            })
+            self.submit(preparedTransfer)
         }
 
         private func submit(_ preparedTransfer: WalletContext.PreparedTransfer) {

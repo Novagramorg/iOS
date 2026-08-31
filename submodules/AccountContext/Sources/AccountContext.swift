@@ -1377,6 +1377,7 @@ public enum WalletWordsScreenMode: Equatable {
     case view
     case verify
     case replacement
+    case backupDisable
 }
 
 public enum WalletTransactionScreenMode {
@@ -1590,7 +1591,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
-    func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectTransferRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
+    func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectOperationRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, mode: WalletTransactionScreenMode) -> ViewController
     func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible) -> ViewController

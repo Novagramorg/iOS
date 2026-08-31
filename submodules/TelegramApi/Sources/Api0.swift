@@ -583,6 +583,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-433014407] = { return Api.InputWallPaper.parse_inputWallPaper($0) }
     dict[-1770371538] = { return Api.InputWallPaper.parse_inputWallPaperNoFile($0) }
     dict[1913199744] = { return Api.InputWallPaper.parse_inputWallPaperSlug($0) }
+    dict[856446476] = { return Api.InputWalletReplacement.parse_inputWalletImported($0) }
+    dict[1671708892] = { return Api.InputWalletReplacement.parse_inputWalletNew($0) }
     dict[-1678949555] = { return Api.InputWebDocument.parse_inputWebDocument($0) }
     dict[-193992412] = { return Api.InputWebFileLocation.parse_inputWebFileAudioAlbumThumbLocation($0) }
     dict[-1625153079] = { return Api.InputWebFileLocation.parse_inputWebFileGeoPointLocation($0) }
@@ -1736,7 +1738,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[997004590] = { return Api.users.UserFull.parse_userFull($0) }
     dict[1658259128] = { return Api.users.Users.parse_users($0) }
     dict[828000628] = { return Api.users.Users.parse_usersSlice($0) }
-    dict[-1120186479] = { return Api.wallet.SecretPhrase.parse_secretPhrase($0) }
+    dict[417867063] = { return Api.wallet.EncryptedSecretPhrasePart.parse_encryptedSecretPhrasePart($0) }
+    dict[-103410961] = { return Api.wallet.HolderDc.parse_holderDc($0) }
+    dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
     dict[1126356389] = { return Api.wallet.Transactions.parse_transactions($0) }
     return dict
 }()
@@ -2175,6 +2179,8 @@ public extension Api {
         case let _1 as Api.InputUser:
             _1.serialize(buffer, boxed)
         case let _1 as Api.InputWallPaper:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.InputWalletReplacement:
             _1.serialize(buffer, boxed)
         case let _1 as Api.InputWebDocument:
             _1.serialize(buffer, boxed)
@@ -3048,7 +3054,11 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.users.Users:
             _1.serialize(buffer, boxed)
-        case let _1 as Api.wallet.SecretPhrase:
+        case let _1 as Api.wallet.EncryptedSecretPhrasePart:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.HolderDc:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.SecretPhraseParts:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.Transactions:
             _1.serialize(buffer, boxed)

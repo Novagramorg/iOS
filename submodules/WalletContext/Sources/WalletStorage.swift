@@ -1,307 +1,345 @@
 import Foundation
 import Security
-import TONCrypto
+import WalletEngineFFI
 
-extension WalletContext {
-    struct PendingKeyRotation: Codable, Equatable {
-        let words: [String]
-        let publicKey: String
-        let boc: String
-        let normalizedHash: String
-        let validUntil: Int32
+struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
+    let schemaVersion: Int
+    let recordId: String
+    let address: String
+    let publicKey: Data
+    let network: String
+    let secretRef: String?
+
+    init(descriptor: WalletDescriptor) {
+        self.schemaVersion = 2
+        self.recordId = descriptor.recordId
+        self.address = descriptor.address
+        self.publicKey = descriptor.publicKey
+        self.network = descriptor.network == .mainnet ? "mainnet" : "testnet"
+        self.secretRef = descriptor.secretRef.value
     }
 
-    struct SecretRecord: Codable {
-        let schemaVersion: Int
-        let words: [String]
-        let walletVersion: WalletVersion
-        let network: String
-        let walletId: Int?
-        let workchain: Int?
-        let address: String
-        let publicKey: String
-        let originalPublicKey: String?
-        let pendingKeyRotation: PendingKeyRotation?
-
-        init(
-            schemaVersion: Int,
-            words: [String],
-            walletVersion: WalletVersion,
-            network: String,
-            walletId: Int?,
-            workchain: Int?,
-            address: String,
-            publicKey: String,
-            originalPublicKey: String? = nil,
-            pendingKeyRotation: PendingKeyRotation? = nil
-        ) {
-            self.schemaVersion = schemaVersion
-            self.words = words
-            self.walletVersion = walletVersion
-            self.network = network
-            self.walletId = walletId
-            self.workchain = workchain
-            self.address = address
-            self.publicKey = publicKey
-            self.originalPublicKey = originalPublicKey
-            self.pendingKeyRotation = pendingKeyRotation
-        }
+    init(recordId: String, address: String, publicKey: Data, secretRef: String?) {
+        self.schemaVersion = 2
+        self.recordId = recordId
+        self.address = address
+        self.publicKey = publicKey
+        self.network = "mainnet"
+        self.secretRef = secretRef
     }
 
-    struct MetadataRecord: Codable, Equatable {
-        var schemaVersion: Int
-        var walletAddress: String?
-        var pendingTransfers: [PendingTransfer]
-        var balance: Int64?
-        var balanceUpdatedAt: Int32?
-        var fiatRates: [FiatCurrency: FiatRate]?
-        var fiatRatesUpdatedAt: Int32?
-        var selectedFiatCurrency: FiatCurrency?
-        var transactions: [Transaction]?
-        var collectibles: [Collectible]?
-
-        init(
-            schemaVersion: Int,
-            walletAddress: String? = nil,
-            pendingTransfers: [PendingTransfer],
-            balance: Int64? = nil,
-            balanceUpdatedAt: Int32? = nil,
-            fiatRates: [FiatCurrency: FiatRate]? = nil,
-            fiatRatesUpdatedAt: Int32? = nil,
-            selectedFiatCurrency: FiatCurrency? = nil,
-            transactions: [Transaction]? = nil,
-            collectibles: [Collectible]? = nil
-        ) {
-            self.schemaVersion = schemaVersion
-            self.walletAddress = walletAddress
-            self.pendingTransfers = pendingTransfers
-            self.balance = balance
-            self.balanceUpdatedAt = balanceUpdatedAt
-            self.fiatRates = fiatRates
-            self.fiatRatesUpdatedAt = fiatRatesUpdatedAt
-            self.selectedFiatCurrency = selectedFiatCurrency
-            self.transactions = transactions
-            self.collectibles = collectibles
+    var descriptor: WalletDescriptor? {
+        guard self.schemaVersion == 2,
+              !self.recordId.isEmpty,
+              self.publicKey.count == 32,
+              let secretRef = self.secretRef,
+              !secretRef.isEmpty else {
+            return nil
         }
-
-        private enum CodingKeys: String, CodingKey {
-            case schemaVersion
-            case walletAddress
-            case pendingTransfers
-            case balance
-            case balanceUpdatedAt
-            case fiatRates
-            case fiatRatesUpdatedAt
-            case selectedFiatCurrency
-            case transactions
-            case collectibles
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
-            self.walletAddress = try container.decodeIfPresent(String.self, forKey: .walletAddress)
-            self.pendingTransfers = try container.decode([PendingTransfer].self, forKey: .pendingTransfers)
-            self.balance = try? container.decode(Int64.self, forKey: .balance)
-            self.balanceUpdatedAt = try? container.decode(Int32.self, forKey: .balanceUpdatedAt)
-            self.fiatRates = try? container.decode([FiatCurrency: FiatRate].self, forKey: .fiatRates)
-            self.fiatRatesUpdatedAt = try? container.decode(Int32.self, forKey: .fiatRatesUpdatedAt)
-            self.selectedFiatCurrency = try? container.decode(FiatCurrency.self, forKey: .selectedFiatCurrency)
-            self.transactions = try? container.decode([Transaction].self, forKey: .transactions)
-            self.collectibles = try? container.decode([Collectible].self, forKey: .collectibles)
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(self.schemaVersion, forKey: .schemaVersion)
-            try container.encodeIfPresent(self.walletAddress, forKey: .walletAddress)
-            try container.encode(self.pendingTransfers, forKey: .pendingTransfers)
-            try container.encodeIfPresent(self.balance, forKey: .balance)
-            try container.encodeIfPresent(self.balanceUpdatedAt, forKey: .balanceUpdatedAt)
-            try container.encodeIfPresent(self.fiatRates, forKey: .fiatRates)
-            try container.encodeIfPresent(self.fiatRatesUpdatedAt, forKey: .fiatRatesUpdatedAt)
-            try container.encodeIfPresent(self.selectedFiatCurrency, forKey: .selectedFiatCurrency)
-            try container.encodeIfPresent(self.transactions, forKey: .transactions)
-            try container.encodeIfPresent(self.collectibles, forKey: .collectibles)
-        }
+        return WalletDescriptor(
+            recordId: self.recordId,
+            address: self.address,
+            publicKey: self.publicKey,
+            network: self.network == "testnet" ? .testnet : .mainnet,
+            secretRef: ProtectedSecretRef(value: secretRef)
+        )
     }
 }
 
-final class WalletKeychainVault {
-    enum Error: Swift.Error {
-        case keychainStatus(OSStatus)
-        case corrupted
+struct WalletEngineMetadataRecord: Codable, Equatable, Sendable {
+    var schemaVersion: Int = 2
+    var walletAddress: String?
+    var pendingTransfers: [WalletContext.PendingTransfer] = []
+    var balance: Int64?
+    var balanceUpdatedAt: Int32?
+    var fiatRates: [WalletContext.FiatCurrency: WalletContext.FiatRate]?
+    var fiatRatesUpdatedAt: Int32?
+    var selectedFiatCurrency: WalletContext.FiatCurrency = .usd
+    var transactions: [WalletContext.Transaction] = []
+    var collectibles: [WalletContext.Collectible] = []
+}
+
+enum WalletEngineStorageError: Error, Equatable {
+    case keychainStatus(Int32)
+    case corrupted
+}
+
+/// A v2-only store. Its service names do not overlap the legacy WalletContext vault.
+actor WalletEngineStorage {
+    private struct JournalDiskRecord: Codable {
+        let version: UInt64
+        let payload: Data
     }
 
-    private let service = "org.telegram.ton-wallet"
-    private let secretAccount: String
-    private let metadataAccount: String
+    private let descriptorService: String
+    private let metadataService: String
+    private let secretService: String
+    private let journalService: String
+    private let tonConnectService: String
 
     init(namespace: String) {
-        self.secretAccount = namespace + ".secret"
-        self.metadataAccount = namespace + ".metadata"
+        self.descriptorService = "org.telegram.ton-wallet.engine.v2.descriptor.\(namespace)"
+        self.metadataService = "org.telegram.ton-wallet.engine.v2.metadata.\(namespace)"
+        self.secretService = "org.telegram.ton-wallet.engine.v2.secret.\(namespace)"
+        self.journalService = "org.telegram.ton-wallet.engine.v2.journal.\(namespace)"
+        self.tonConnectService = "org.telegram.ton-wallet.engine.v2.ton-connect.\(namespace)"
     }
 
-    func readSecret<Value: Decodable>(_ type: Value.Type) throws -> Value? {
-        return try self.read(account: self.secretAccount, type: type)
+    func loadDescriptor() throws -> WalletEngineDescriptorRecord? {
+        try self.readCodable(service: self.descriptorService, account: "wallet")
     }
 
-    func readMetadata<Value: Decodable>(_ type: Value.Type) throws -> Value? {
-        return try self.read(account: self.metadataAccount, type: type)
+    func saveDescriptor(_ descriptor: WalletEngineDescriptorRecord) throws {
+        try self.writeCodable(descriptor, service: self.descriptorService, account: "wallet")
     }
 
-    func containsSecret() throws -> Bool {
-        let status = SecItemCopyMatching(self.query(account: self.secretAccount) as CFDictionary, nil)
-        if status == errSecSuccess {
-            return true
+    func removeDescriptor() throws {
+        try self.remove(service: self.descriptorService, account: "wallet")
+    }
+
+    func loadReplacementCandidate() throws -> WalletEngineDescriptorRecord? {
+        try self.readCodable(service: self.descriptorService, account: "replacement-candidate")
+    }
+
+    func saveReplacementCandidate(_ descriptor: WalletEngineDescriptorRecord) throws {
+        try self.writeCodable(descriptor, service: self.descriptorService, account: "replacement-candidate")
+    }
+
+    func removeReplacementCandidate() throws {
+        try self.remove(service: self.descriptorService, account: "replacement-candidate")
+    }
+
+    func loadMetadata() throws -> WalletEngineMetadataRecord? {
+        try self.readCodable(service: self.metadataService, account: "state")
+    }
+
+    func saveMetadata(_ metadata: WalletEngineMetadataRecord) throws {
+        try self.writeCodable(metadata, service: self.metadataService, account: "state")
+    }
+
+    func loadTonConnectSession(recordId: String) throws -> Data? {
+        try self.read(service: self.tonConnectService, account: recordId)
+    }
+
+    func saveTonConnectSession(_ data: Data, recordId: String) throws {
+        try self.write(data, service: self.tonConnectService, account: recordId)
+    }
+
+    func removeTonConnectSession(recordId: String) throws {
+        try self.remove(service: self.tonConnectService, account: recordId)
+    }
+
+    func readProtectedSecret(_ request: ProtectedSecretRead) throws -> Data {
+        guard let data = try self.read(service: self.secretService, account: request.secretRef.value),
+              !data.isEmpty else {
+            throw protectedSecretFailure(.notFound, "Protected secret was not found")
         }
-        if status == errSecItemNotFound {
+        return data
+    }
+
+    func containsProtectedSecret(_ secretRef: ProtectedSecretRef) throws -> Bool {
+        guard let data = try self.read(service: self.secretService, account: secretRef.value) else {
             return false
         }
-        throw Error.keychainStatus(status)
+        return !data.isEmpty
     }
 
-    func writeSecret<Value: Encodable>(_ value: Value) throws {
-        try self.write(value, account: self.secretAccount)
+    func storeProtectedSecret(_ request: ProtectedSecretStore) throws {
+        guard !request.secretRef.value.isEmpty, !request.bytes.isEmpty else {
+            throw protectedSecretFailure(.policyViolation, "Protected secret is empty")
+        }
+        // App policy intentionally ignores requireUserPresence.
+        try self.write(request.bytes, service: self.secretService, account: request.secretRef.value)
     }
 
-    func writeMetadata<Value: Encodable>(_ value: Value) throws {
-        try self.write(value, account: self.metadataAccount)
+    func deleteProtectedSecret(_ secretRef: ProtectedSecretRef) throws {
+        try self.remove(service: self.secretService, account: secretRef.value)
     }
 
-    func deleteSecret() throws {
-        try self.delete(account: self.secretAccount)
+    func loadJournal(_ key: JournalKey) throws -> JournalRecord? {
+        let account = self.journalAccount(key)
+        guard let value: JournalDiskRecord = try self.readCodable(service: self.journalService, account: account) else {
+            return nil
+        }
+        guard value.version > 0, !value.payload.isEmpty else {
+            throw journalFailure(.corruptData, "Wallet send journal is corrupt")
+        }
+        return JournalRecord(version: value.version, payload: value.payload)
     }
 
-    func deleteMetadata() throws {
-        try self.delete(account: self.metadataAccount)
+    func compareExchangeJournal(_ mutation: JournalCompareExchange) throws -> JournalCompareExchangeResult {
+        let current = try self.loadJournal(mutation.key)
+        guard current?.version == mutation.expectedVersion else {
+            return JournalCompareExchangeResult(applied: false, current: current)
+        }
+        guard mutation.replacement.version > 0, !mutation.replacement.payload.isEmpty else {
+            throw journalFailure(.corruptData, "Wallet send journal replacement is invalid")
+        }
+        try self.writeCodable(
+            JournalDiskRecord(version: mutation.replacement.version, payload: mutation.replacement.payload),
+            service: self.journalService,
+            account: self.journalAccount(mutation.key)
+        )
+        return JournalCompareExchangeResult(applied: true, current: mutation.replacement)
     }
 
-    private func query(account: String) -> [String: Any] {
-        return [
+    private func journalAccount(_ key: JournalKey) -> String {
+        Data("\(key.recordId)\u{0}\(key.slot)".utf8).base64EncodedString()
+    }
+
+    private func readCodable<Value: Decodable>(service: String, account: String) throws -> Value? {
+        guard let data = try self.read(service: service, account: account) else {
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode(Value.self, from: data)
+        } catch {
+            throw WalletEngineStorageError.corrupted
+        }
+    }
+
+    private func writeCodable<Value: Encodable>(_ value: Value, service: String, account: String) throws {
+        do {
+            try self.write(JSONEncoder().encode(value), service: service, account: account)
+        } catch let error as WalletEngineStorageError {
+            throw error
+        } catch {
+            throw WalletEngineStorageError.corrupted
+        }
+    }
+
+    private func baseQuery(service: String, account: String) -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: self.service,
-            kSecAttrAccount as String: account
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: false
         ]
     }
 
-    private func read<Value: Decodable>(account: String, type: Value.Type) throws -> Value? {
-        var query = self.query(account: account)
+    private func read(service: String, account: String) throws -> Data? {
+        var query = self.baseQuery(service: service, account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecItemNotFound {
             return nil
         }
-        guard status == errSecSuccess else {
-            throw Error.keychainStatus(status)
+        guard status == errSecSuccess, let data = item as? Data else {
+            throw WalletEngineStorageError.keychainStatus(status)
         }
-        guard let data = result as? Data else {
-            throw Error.corrupted
-        }
-        do {
-            return try JSONDecoder().decode(type, from: data)
-        } catch {
-            throw Error.corrupted
-        }
+        return data
     }
 
-    private func write<Value: Encodable>(_ value: Value, account: String) throws {
-        let data: Data
-        do {
-            data = try JSONEncoder().encode(value)
-        } catch {
-            throw Error.corrupted
-        }
-        let query = self.query(account: account)
-        let update: [String: Any] = [kSecValueData as String: data]
-        let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+    private func write(_ data: Data, service: String, account: String) throws {
+        let query = self.baseQuery(service: service, account: account)
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary
+        )
         if updateStatus == errSecSuccess {
             return
         }
         guard updateStatus == errSecItemNotFound else {
-            throw Error.keychainStatus(updateStatus)
+            throw WalletEngineStorageError.keychainStatus(updateStatus)
         }
         var addQuery = query
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         addQuery[kSecValueData as String] = data
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
-            throw Error.keychainStatus(addStatus)
+            throw WalletEngineStorageError.keychainStatus(addStatus)
         }
     }
 
-    private func delete(account: String) throws {
-        let status = SecItemDelete(self.query(account: account) as CFDictionary)
+    private func remove(service: String, account: String) throws {
+        let status = SecItemDelete(self.baseQuery(service: service, account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw Error.keychainStatus(status)
+            throw WalletEngineStorageError.keychainStatus(status)
         }
     }
 }
 
-func fatalStorageError(_ error: WalletKeychainVault.Error) -> WalletContext.FatalStorageError {
-    switch error {
-    case let .keychainStatus(status):
-        return .keychainStatus(status)
-    case .corrupted:
-        return .corrupted
+actor WalletEnginePlatformHost: WalletPlatformHost {
+    let storage: WalletEngineStorage
+
+    init(storage: WalletEngineStorage) {
+        self.storage = storage
+    }
+
+    func now() async -> UInt64 {
+        UInt64(max(0, Date().timeIntervalSince1970.rounded(.down)))
+    }
+
+    func readProtectedSecret(request: ProtectedSecretRead) async throws -> Data {
+        do {
+            return try await self.storage.readProtectedSecret(request)
+        } catch let error as ProtectedSecretHostError {
+            throw error
+        } catch {
+            throw protectedSecretFailure(.unavailable, String(describing: error))
+        }
+    }
+
+    func storeProtectedSecret(request: ProtectedSecretStore) async throws {
+        do {
+            try await self.storage.storeProtectedSecret(request)
+        } catch let error as ProtectedSecretHostError {
+            throw error
+        } catch {
+            throw protectedSecretFailure(.unavailable, String(describing: error))
+        }
+    }
+
+    func deleteProtectedSecret(secretRef: ProtectedSecretRef) async throws {
+        do {
+            try await self.storage.deleteProtectedSecret(secretRef)
+        } catch {
+            throw protectedSecretFailure(.unavailable, String(describing: error))
+        }
+    }
+
+    func loadJournal(key: JournalKey) async throws -> JournalRecord? {
+        do {
+            return try await self.storage.loadJournal(key)
+        } catch let error as JournalHostError {
+            throw error
+        } catch {
+            throw journalFailure(.unavailable, String(describing: error))
+        }
+    }
+
+    func compareExchangeJournal(mutation: JournalCompareExchange) async throws -> JournalCompareExchangeResult {
+        do {
+            return try await self.storage.compareExchangeJournal(mutation)
+        } catch let error as JournalHostError {
+            throw error
+        } catch {
+            throw journalFailure(.unavailable, String(describing: error))
+        }
     }
 }
 
-func walletInfo(secret: WalletContext.SecretRecord) -> WalletContext.WalletInfo {
-    return WalletContext.WalletInfo(
-        address: secret.address,
-        publicKey: secret.publicKey,
-        version: secret.walletVersion,
-        canDisableBackup: secret.walletVersion == .v5Experimental
-            && secret.originalPublicKey == nil
-            && secret.pendingKeyRotation == nil
+private func protectedSecretFailure(
+    _ kind: ProtectedSecretHostErrorKind,
+    _ diagnostic: String
+) -> ProtectedSecretHostError {
+    .Failed(kind: kind, diagnostic: sanitizedWalletEngineDiagnostic(diagnostic))
+}
+
+private func journalFailure(
+    _ kind: JournalHostErrorKind,
+    _ diagnostic: String
+) -> JournalHostError {
+    .Failed(kind: kind, diagnostic: sanitizedWalletEngineDiagnostic(diagnostic))
+}
+
+func sanitizedWalletEngineDiagnostic(_ value: String) -> String {
+    String(
+        value.unicodeScalars
+            .map { CharacterSet.controlCharacters.contains($0) ? " " : String($0) }
+            .joined()
+            .prefix(256)
     )
-}
-
-func normalizedMnemonicWords(_ words: [String]) -> [String] {
-    return words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty }
-}
-
-enum ValidatedWalletMnemonic {
-    case ton(words: [String])
-    case rotation(words: [String], mnemonic: RotationMnemonic)
-
-    var words: [String] {
-        switch self {
-        case let .ton(words), let .rotation(words, _):
-            return words
-        }
-    }
-}
-
-func validatedWalletMnemonic(_ words: [String]) throws -> ValidatedWalletMnemonic {
-    let normalized = words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-    guard !normalized.contains(where: { $0.isEmpty }) else {
-        throw WalletContext.WalletError.invalidMnemonic
-    }
-    switch normalized.count {
-    case RotationMnemonic.halfWordCount:
-        // A 12-word phrase is the pre-rotation BIP-39 form. TON mnemonics used by
-        // V4R2/V5R1 are intentionally accepted only in their 24-word form.
-        do {
-            return .rotation(words: normalized, mnemonic: try RotationMnemonic(words: normalized))
-        } catch {
-            throw WalletContext.WalletError.invalidMnemonic
-        }
-    case RotationMnemonic.rotationWordCount:
-        // Twenty-four words are ambiguous. Prefer the TON scheme; only if it rejects
-        // the whole phrase, try the two independently checksummed BIP-39 halves.
-        if (try? Mnemonic.validate(normalized)) == true {
-            return .ton(words: normalized)
-        }
-        do {
-            return .rotation(words: normalized, mnemonic: try RotationMnemonic(words: normalized))
-        } catch {
-            throw WalletContext.WalletError.invalidMnemonic
-        }
-    default:
-        throw WalletContext.WalletError.unsupportedMnemonicLength
-    }
 }

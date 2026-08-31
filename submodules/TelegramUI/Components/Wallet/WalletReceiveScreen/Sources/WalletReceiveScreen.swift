@@ -1000,6 +1000,36 @@ private final class WalletReceiveSheetContent: Component {
                 && self.appliedDisplaysAddress != self.displaysAddress
             let cardContentTransition: ComponentTransition = shouldAnimateCardFlip ? .immediate : transition
             let updateCardContents = {
+                //TODO:localize
+                let copiedTitle = "Address copied"
+                let copiedStatusSize = self.copiedStatus.update(
+                    transition: .immediate,
+                    component: AnyComponent(HStack<Empty>([
+                        AnyComponentWithIdentity(
+                            id: "check",
+                            component: AnyComponent(Text(
+                                text: "✓",
+                                font: Font.semibold(14.0),
+                                color: UIColor(rgb: 0x087cff)
+                            ))
+                        ),
+                        AnyComponentWithIdentity(
+                            id: "title",
+                            component: AnyComponent(Text(
+                                text: copiedTitle,
+                                font: Font.semibold(14.0),
+                                color: UIColor(rgb: 0x087cff)
+                            ))
+                        )
+                    ], spacing: 6.0)),
+                    environment: {},
+                    containerSize: CGSize(width: max(1.0, cardWidth - 40.0), height: 28.0)
+                )
+                if let copiedStatusView = self.copiedStatus.view, copiedStatusView.superview == nil {
+                    copiedStatusView.alpha = self.displaysAddress ? 1.0 : 0.0
+                    self.cardView.addSubview(copiedStatusView)
+                }
+
                 if self.displaysAddress {
                     let addressGridSize = self.addressGrid.update(
                         transition: cardContentTransition,
@@ -1023,37 +1053,9 @@ private final class WalletReceiveSheetContent: Component {
                         )
                     }
 
-                    //TODO:localize
-                    let copiedTitle = "Address copied"
-                    let copiedStatusSize = self.copiedStatus.update(
-                        transition: .immediate,
-                        component: AnyComponent(HStack<Empty>([
-                            AnyComponentWithIdentity(
-                                id: "check",
-                                component: AnyComponent(Text(
-                                    text: "✓",
-                                    font: Font.semibold(14.0),
-                                    color: UIColor(rgb: 0x087cff)
-                                ))
-                            ),
-                            AnyComponentWithIdentity(
-                                id: "title",
-                                component: AnyComponent(Text(
-                                    text: copiedTitle,
-                                    font: Font.semibold(14.0),
-                                    color: UIColor(rgb: 0x087cff)
-                                ))
-                            )
-                        ], spacing: 6.0)),
-                        environment: {},
-                        containerSize: CGSize(width: max(1.0, cardWidth - 40.0), height: 28.0)
-                    )
                     let copiedStatusTop = addressGridTop + addressGridSize.height + (cardWidth < 230.0 ? 8.0 : 16.0)
                     if let copiedStatusView = self.copiedStatus.view {
-                        if copiedStatusView.superview == nil {
-                            self.cardView.addSubview(copiedStatusView)
-                        }
-                        cardContentTransition.setFrame(
+                        ComponentTransition.immediate.setFrame(
                             view: copiedStatusView,
                             frame: CGRect(
                                 x: (cardWidth - copiedStatusSize.width) / 2.0,
@@ -1087,7 +1089,12 @@ private final class WalletReceiveSheetContent: Component {
                         )
                     }
                     self.addressGrid.view?.removeFromSuperview()
-                    self.copiedStatus.view?.removeFromSuperview()
+                }
+                if let copiedStatusView = self.copiedStatus.view {
+                    cardContentTransition.setAlpha(
+                        view: copiedStatusView,
+                        alpha: self.displaysAddress ? 1.0 : 0.0
+                    )
                 }
 
                 let copyButtonSize = self.copyButton.update(
@@ -1116,7 +1123,7 @@ private final class WalletReceiveSheetContent: Component {
                         copyButtonView.removeFromSuperview()
                         self.cardView.addSubview(copyButtonView)
                     }
-                    cardContentTransition.setFrame(
+                    ComponentTransition.immediate.setFrame(
                         view: copyButtonView,
                         frame: CGRect(
                             x: (cardWidth - copyButtonSize.width) / 2.0,

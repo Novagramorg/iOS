@@ -480,7 +480,6 @@ swift_library(
         "//submodules/TelegramUI/Components/MiniAppListScreen",
         "//submodules/TelegramUI/Components/Stars/StarsIntroScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletScreen",
-        "//submodules/TelegramUI/Components/Wallet/WalletSetupScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletReceiveScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletImportScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletSettingsScreen",

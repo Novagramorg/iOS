@@ -26,13 +26,13 @@ fileprivate enum WalletTransferFinishResult {
 private final class WalletTransferSheetContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
-    let request: WalletContext.TonConnectTransferRequest
+    let request: WalletContext.TonConnectOperationRequest
     let walletState: WalletContext.State?
     let bottomInset: CGFloat
     let infoPressed: () -> Void
 
     init(
-        request: WalletContext.TonConnectTransferRequest,
+        request: WalletContext.TonConnectOperationRequest,
         walletState: WalletContext.State?,
         bottomInset: CGFloat,
         infoPressed: @escaping () -> Void
@@ -178,19 +178,14 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += domainSize.height
             contentHeight += 20.0
 
-            let fiatCurrency = component.walletState?.fiat.selectedCurrency ?? .usd
-            let fiatRate = component.walletState?.fiat.selectedRate
             let cardWidth = min(361.0, max(1.0, safeContentWidth - 42.0))
             self.card.parentState = state
             let cardSize = self.card.update(
                 transition: transition,
-                component: AnyComponent(WalletTransferCardComponent(
-                    amount: component.request.amount,
-                    recipient: component.request.recipient,
-                    fiatCurrency: fiatCurrency,
-                    fiatRate: fiatRate,
-                    dateTimeFormat: environment.dateTimeFormat,
-                    infoPressed: component.infoPressed
+                component: AnyComponent(WalletTonConnectMessagesComponent(
+                    request: component.request,
+                    theme: theme,
+                    compact: true
                 )),
                 environment: {},
                 containerSize: CGSize(width: cardWidth, height: availableSize.height)
@@ -211,26 +206,11 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += cardSize.height
             contentHeight += 18.0
 
-            let formattedFee = formatTonAmountText(
-                component.request.fee,
-                dateTimeFormat: environment.dateTimeFormat,
-                maxDecimalPositions: 9
-            )
             let feeText: String
-            if let fiatRate {
-                let fiatFee = formatTonFiatValue(
-                    component.request.fee,
-                    divide: true,
-                    rate: fiatRate.unitsPerGram,
-                    currencySymbol: fiatCurrency.symbol,
-                    maxDecimalPositions: 4,
-                    dateTimeFormat: environment.dateTimeFormat
-                )
-                //TODO:localize
-                feeText = "Network fee: \(formattedFee) Grams (≈\(fiatFee))."
+            if let fee = component.request.feeNanograms {
+                feeText = "Network fee: \(formatTonConnectNanograms(fee)) Grams."
             } else {
-                //TODO:localize
-                feeText = "Network fee: \(formattedFee) Grams."
+                feeText = "Network fee is paid by the relayer. Telegram will not broadcast this message."
             }
             self.fee.parentState = state
             let feeSize = self.fee.update(
@@ -442,13 +422,13 @@ private final class WalletTransferSheetComponent: CombinedComponent {
 
     let context: AccountContext
     let walletContext: WalletContext
-    let request: WalletContext.TonConnectTransferRequest
+    let request: WalletContext.TonConnectOperationRequest
     let confirm: (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void
 
     init(
         context: AccountContext,
         walletContext: WalletContext,
-        request: WalletContext.TonConnectTransferRequest,
+        request: WalletContext.TonConnectOperationRequest,
         confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void
     ) {
         self.context = context
@@ -517,56 +497,44 @@ private final class WalletTransferSheetComponent: CombinedComponent {
             self.isAuthorizing = true
             self.updated(transition: .easeInOut(duration: 0.2))
 
-            component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self] authorized in
+            self.isAuthorizing = false
+            self.isConfirming = true
+            self.updated(transition: .easeInOut(duration: 0.2))
+            component.confirm({ [weak self] result in
                 Queue.mainQueue().async {
-                    guard let self, !self.isFinished, self.isAuthorizing else {
+                    guard let self, !self.isFinished else {
                         return
                     }
-                    self.isAuthorizing = false
-                    guard authorized else {
+                    switch result {
+                    case .success:
+                        self.finish(
+                            .confirmed,
+                            getController: getController,
+                            animated: true,
+                            animateOut: animateOut
+                        )
+                    case .failure:
+                        self.isConfirming = false
                         self.updated(transition: .easeInOut(duration: 0.2))
-                        return
-                    }
-
-                    self.isConfirming = true
-                    self.updated(transition: .easeInOut(duration: 0.2))
-                    component.confirm({ [weak self] result in
-                        Queue.mainQueue().async {
-                            guard let self, !self.isFinished else {
-                                return
-                            }
-                            switch result {
-                            case .success:
-                                self.finish(
-                                    .confirmed,
-                                    getController: getController,
-                                    animated: true,
-                                    animateOut: animateOut
-                                )
-                            case .failure:
-                                self.isConfirming = false
-                                self.updated(transition: .easeInOut(duration: 0.2))
-                                guard let controller = getController() else {
-                                    return
-                                }
-                                //TODO:localize
-                                let errorText = "Unable to send this transaction. Please try again."
-                                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                                controller.present(textAlertController(
-                                    context: component.context,
-                                    title: nil,
-                                    text: errorText,
-                                    actions: [
-                                        TextAlertAction(
-                                            type: .defaultAction,
-                                            title: presentationData.strings.Common_OK,
-                                            action: {}
-                                        )
-                                    ]
-                                ), in: .window(.root))
-                            }
+                        guard let controller = getController() else {
+                            return
                         }
-                    })
+                        //TODO:localize
+                        let errorText = "Unable to send this transaction. Please try again."
+                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                        controller.present(textAlertController(
+                            context: component.context,
+                            title: nil,
+                            text: errorText,
+                            actions: [
+                                TextAlertAction(
+                                    type: .defaultAction,
+                                    title: presentationData.strings.Common_OK,
+                                    action: {}
+                                )
+                            ]
+                        ), in: .window(.root))
+                    }
                 }
             })
         }
@@ -760,7 +728,7 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         walletContext: WalletContext,
-        request: WalletContext.TonConnectTransferRequest,
+        request: WalletContext.TonConnectOperationRequest,
         cancelled: @escaping () -> Void,
         confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void
     ) {

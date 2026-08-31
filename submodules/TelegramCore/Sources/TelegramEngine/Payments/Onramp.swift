@@ -324,7 +324,8 @@ func _internal_createOnrampSession(
         memo: memo,
         theme: theme,
         successReturnUrl: successReturnUrl,
-        failReturnUrl: failReturnUrl
+        failReturnUrl: failReturnUrl,
+        cryptoAmount: nil
     ))
     |> map(OnrampSession.init(apiSession:))
     |> mapError { _ in

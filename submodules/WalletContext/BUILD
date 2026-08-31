@@ -10,14 +10,9 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+      "//third-party/wallet-engine:WalletEngineFFI",
       "//submodules/SSignalKit/SwiftSignalKit",
       "//submodules/TelegramCore",
-      "//submodules/WalletContext/SwiftTonWalletKit:TONConnect",
-      "//submodules/WalletContext/SwiftTonWalletKit:TONContracts",
-      "//submodules/WalletContext/SwiftTonWalletKit:TONCore",
-      "//submodules/WalletContext/SwiftTonWalletKit:TONCrypto",
-      "//submodules/WalletContext/SwiftTonWalletKit:TONToncenter",
-      "//submodules/WalletContext/SwiftTonWalletKit:TONWalletKit",
     ],
     visibility = [
         "//visibility:public",

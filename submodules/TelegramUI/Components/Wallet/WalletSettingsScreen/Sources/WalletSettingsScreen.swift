@@ -12,7 +12,9 @@ import ListSectionComponent
 import ListActionItemComponent
 import PresentationDataUtils
 import TelegramStringFormatting
+import AlertComponent
 import UndoUI
+import WalletAuthorizationUI
 
 private final class WalletSettingsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -33,7 +35,7 @@ private final class WalletSettingsScreenComponent: Component {
         private let scrollView: UIScrollView
         private let recoverySection = ComponentView<Empty>()
         private let backupSection = ComponentView<Empty>()
-        private let deleteSection = ComponentView<Empty>()
+        private let replacementSection = ComponentView<Empty>()
 
         private var component: WalletSettingsScreenComponent?
         private var environment: EnvironmentType?
@@ -45,6 +47,9 @@ private final class WalletSettingsScreenComponent: Component {
         private var walletState: WalletContext.State?
         private weak var backupWordsController: ViewController?
         private var preparedBackupDisable: WalletContext.PreparedBackupDisable?
+        private weak var replacementOptionsController: AlertScreen?
+        private var replacementCreationProgress: ValuePromise<Bool>?
+        private var isCreatingReplacementWallet = false
 
         override init(frame: CGRect) {
             self.scrollView = UIScrollView()
@@ -89,34 +94,40 @@ private final class WalletSettingsScreenComponent: Component {
                     guard let self, let component = self.component, let controller = self.environment?.controller() else {
                         return
                     }
-                    component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self, weak controller] authorized in
-                        guard authorized, let self, let controller else {
-                            return
-                        }
-                        self.operationDisposable.set((component.walletContext.recoveryPhrase()
-                        |> deliverOnMainQueue).start(next: { words in
+                    self.operationDisposable.set(performWalletAuthorizedOperation(
+                        context: component.context,
+                        present: { [weak controller] alert in
+                            controller?.present(alert, in: .window(.root))
+                        },
+                        operation: { password in
+                            component.walletContext.recoveryPhrase(password: password)
+                        },
+                        next: { words in
                             controller.push(component.context.sharedContext.makeWalletWordsScreen(
                                 context: component.context,
                                 words: words,
                                 verify: false,
                                 completion: nil
                             ))
-                        }, error: { [weak self] _ in
-                            self?.presentRecoveryPhraseError()
-                        }))
-                    })
+                        },
+                        failed: { [weak self] error in
+                            self?.presentRecoveryPhraseError(error: error)
+                        }
+                    ))
                 }
             ))
         }
 
-        private func presentRecoveryPhraseError() {
+        private func presentRecoveryPhraseError(error: WalletContext.WalletError) {
+            guard error != .authorizationCancelled else { return }
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
-                title: "Couldn’t Show Recovery Phrase",
-                text: "Telegram couldn’t unlock the local wallet secret. Unlock the device and try again.",
+                title: message?.title ?? "Couldn’t Show Recovery Phrase",
+                text: message?.text ?? "Check the network connection and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
@@ -168,56 +179,15 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let feeText = self.formattedFee(prepared.fee)
-            //TODO:localize
-            let text = "You'll get a new phrase to write down. Address and balance stay the same.\n\nNetwork fee: \(feeText)."
             controller.present(textAlertController(
                 context: component.context,
-                title: "Update Secret Phrase?",
-                text: text,
+                title: "Save Your Recovery Phrase",
+                text: "Disabling encrypted backup does not change your wallet or phrase. Make sure you have written the current phrase down before continuing.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Not now", action: {
                     }),
-                    TextAlertAction(type: .defaultAction, title: "Update", action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        if prepared.availableBalance < prepared.fee {
-                            self.presentInsufficientBalanceAlert(prepared: prepared)
-                        } else {
-                            self.openReplacementPhrase(prepared: prepared)
-                        }
-                    })
-                ]
-            ), in: .window(.root))
-        }
-
-        private func presentInsufficientBalanceAlert(prepared: WalletContext.PreparedBackupDisable) {
-            guard let component = self.component, let controller = self.environment?.controller() else {
-                return
-            }
-            let feeText = self.formattedFee(prepared.fee)
-            //TODO:localize
-            let text = "You need \(feeText) to update your recovery phrase."
-            controller.present(textAlertController(
-                context: component.context,
-                title: "Not enough Gram",
-                text: text,
-                actions: [
-                    TextAlertAction(type: .genericAction, title: "Not now", action: {
-                    }),
-                    TextAlertAction(type: .defaultAction, title: "Top up", action: { [weak self] in
-                        guard let self,
-                              let component = self.component,
-                              let controller = self.environment?.controller(),
-                              let phase = self.walletState?.phase,
-                              case let .wallet(info) = phase else {
-                            return
-                        }
-                        controller.push(component.context.sharedContext.makeWalletReceiveScreen(
-                            context: component.context,
-                            address: info.address
-                        ))
+                    TextAlertAction(type: .defaultAction, title: "View Phrase", action: { [weak self] in
+                        self?.openReplacementPhrase(prepared: prepared)
                     })
                 ]
             ), in: .window(.root))
@@ -231,7 +201,7 @@ private final class WalletSettingsScreenComponent: Component {
             let wordsController = component.context.sharedContext.makeWalletWordsScreen(
                 context: component.context,
                 words: prepared.words,
-                mode: .replacement,
+                mode: .backupDisable,
                 completion: { [weak self] in
                     self?.presentFinalDisableBackupAlert()
                 }
@@ -272,28 +242,13 @@ private final class WalletSettingsScreenComponent: Component {
             presentingController.present(textAlertController(
                 context: component.context,
                 title: "Disable Backup?",
-                text: "Telegram will delete its encrypted backup, and your recovery key will be updated. This can't be undone.",
+                text: "Telegram will delete the encrypted shares stored across its datacenters. Your local recovery phrase will remain unchanged.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
                         self?.dismissBackupWordsFlow()
                     }),
                     TextAlertAction(type: .destructiveAction, title: "Disable", action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        component.context.sharedContext.authorizeWalletAccess(
-                            context: component.context,
-                            completion: { [weak self] authorized in
-                                guard let self else {
-                                    return
-                                }
-                                guard authorized else {
-                                    self.dismissBackupWordsFlow()
-                                    return
-                                }
-                                self.submitDisableBackup(prepared: prepared)
-                            }
-                        )
+                        self?.submitDisableBackup(prepared: prepared)
                     })
                 ]
             ), in: .window(.root))
@@ -303,28 +258,27 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
-            self.backupOperationDisposable.set((component.walletContext.disableBackup(prepared)
-            |> deliverOnMainQueue).start(next: { [weak self] _ in
+            let presentingController = self.backupWordsController?.navigationController?.topViewController as? ViewController
+                ?? self.environment?.controller()
+            self.backupOperationDisposable.set(performWalletAuthorizedOperation(
+                context: component.context,
+                present: { [weak presentingController] alert in
+                    presentingController?.present(alert, in: .window(.root))
+                },
+                operation: { password in
+                    component.walletContext.disableBackup(prepared, password: password)
+                },
+                next: { [weak self] _ in
                 guard let self else {
                     return
                 }
                 self.dismissBackupWordsFlow()
                 self.presentBackupDisabledToast()
-            }, error: { [weak self] error in
+            }, failed: { [weak self] error in
                 guard let self else {
                     return
                 }
-                if case let .insufficientBalance(required) = error {
-                    self.presentInsufficientBalanceAlert(prepared: WalletContext.PreparedBackupDisable(
-                        id: prepared.id,
-                        words: prepared.words,
-                        fee: required,
-                        availableBalance: 0,
-                        expiresAt: prepared.expiresAt
-                    ))
-                } else {
-                    self.presentDisableBackupError(keepPhrase: true)
-                }
+                self.presentDisableBackupError(error: error, keepPhrase: true)
             }))
         }
 
@@ -346,49 +300,27 @@ private final class WalletSettingsScreenComponent: Component {
             self.preparedBackupDisable = nil
         }
 
-        private func presentDisableBackupError(keepPhrase: Bool) {
+        private func presentDisableBackupError(error: WalletContext.WalletError? = nil, keepPhrase: Bool) {
+            guard error != .authorizationCancelled else { return }
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let message = error.flatMap(walletAuthorizationErrorMessage)
             let text: String
-            if keepPhrase {
-                text = "Check the wallet balance and network connection, then try again. Keep the new recovery phrase until the wallet status is updated."
+            if let message {
+                text = message.text
+            } else if keepPhrase {
+                text = "Your local recovery phrase is unchanged. Check the network connection and try again."
             } else {
                 text = "Check the wallet balance and network connection, then try again."
             }
             controller.present(textAlertController(
                 context: component.context,
-                title: "Couldn't Disable Backup",
+                title: message?.title ?? "Couldn't Disable Backup",
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
-        }
-
-        private func formattedFee(_ fee: Int64) -> String {
-            guard let component = self.component else {
-                return ""
-            }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            let gramValue = formatTonAmountText(
-                fee,
-                dateTimeFormat: presentationData.dateTimeFormat,
-                maxDecimalPositions: 9
-            )
-            if let walletState = self.walletState,
-               let rate = walletState.fiat.selectedRate {
-                let fiatValue = formatTonFiatValue(
-                    fee,
-                    divide: true,
-                    rate: rate.unitsPerGram,
-                    currencySymbol: walletState.fiat.selectedCurrency.symbol,
-                    maxDecimalPositions: 4,
-                    dateTimeFormat: presentationData.dateTimeFormat
-                )
-                return "\(gramValue) GRAM (≈\(fiatValue))"
-            } else {
-                return "\(gramValue) GRAM"
-            }
         }
 
         private func presentBackupDisabledToast() {
@@ -399,9 +331,11 @@ private final class WalletSettingsScreenComponent: Component {
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .emoji(
-                        name: "TwoFactorSetupRememberSuccess",
-                        text: "Backup Disabled. Your recovery phrase is now the only way to restore your wallet."
+                    content: .actionSucceeded(
+                        title: "Backup Disabled",
+                        text: "Your recovery phrase is now the only way to restore your wallet.",
+                        cancel: nil,
+                        destructive: false
                     ),
                     position: .bottom,
                     action: { _ in false }
@@ -410,46 +344,246 @@ private final class WalletSettingsScreenComponent: Component {
             )
         }
 
+        private func enableBackup() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            self.backupOperationDisposable.set(performWalletAuthorizedOperation(
+                context: component.context,
+                present: { [weak controller] alert in
+                    controller?.present(alert, in: .window(.root))
+                },
+                operation: { password in
+                    component.walletContext.enableBackup(password: password)
+                },
+                next: { [weak self] _ in
+                    self?.presentBackupEnabledToast()
+                },
+                failed: { [weak self] error in
+                    self?.presentBackupOperationError(error)
+                }
+            ))
+        }
+
+        private func presentBackupEnabledToast() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            controller.present(UndoOverlayController(
+                presentationData: presentationData,
+                content: .actionSucceeded(
+                    title: "Backup Enabled",
+                    text: "Your keys are now stored encrypted across Telegram's datacenters.",
+                    cancel: nil,
+                    destructive: false
+                ),
+                position: .bottom,
+                action: { _ in false }
+            ), in: .current)
+        }
+
+        private func presentBackupOperationError(_ error: WalletContext.WalletError) {
+            guard error != .authorizationCancelled else { return }
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let message = walletAuthorizationErrorMessage(error)
+            controller.present(textAlertController(
+                context: component.context,
+                title: message?.title ?? "Couldn’t Update Backup",
+                text: message?.text ?? "Check the network connection and try again.",
+                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+            ), in: .window(.root))
+        }
+
         private func presentDeleteWalletAlert() {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-
-            //TODO:localize
-            let title = "Delete Wallet?"
-            //TODO:localize
-            let text = "You'll lose access to your funds unless you've saved your 12- or 24-word recovery phrase."
-            //TODO:localize
-            let cancelTitle = "Cancel"
-            //TODO:localize
-            let deleteTitle = "Delete Anyway"
-
-            let alertController = textAlertController(
+            controller.present(textAlertController(
                 context: component.context,
-                title: title,
-                text: text,
+                title: "Delete Wallet?",
+                text: "You'll lose access to your funds unless you've saved your recovery phrase.",
                 actions: [
-                    TextAlertAction(type: .genericAction, title: cancelTitle, action: {
-                    }),
-                    TextAlertAction(type: .destructiveAction, title: deleteTitle, action: { [weak self] in
-                        guard let self, let component = self.component, let controller = self.environment?.controller() else {
-                            return
+                    TextAlertAction(type: .destructiveAction, title: "Delete Anyway", action: { [weak self] in
+                        Queue.mainQueue().after(0.25) { [weak self] in
+                            self?.presentWalletReplacementOptionsAlert()
                         }
-                        component.context.sharedContext.authorizeWalletAccess(context: component.context, completion: { [weak self, weak controller] authorized in
-                            guard authorized, let self, let controller else {
-                                return
-                            }
-                            self.operationDisposable.set((component.walletContext.deleteWallet()
-                            |> deliverOnMainQueue).start(next: {
-                                controller.dismiss()
-                            }, error: { _ in
-                                
-                            }))
-                        })
-                    })
+                    }),
+                    TextAlertAction(type: .genericAction, title: "Cancel", action: {})
+                ],
+                actionLayout: .vertical
+            ), in: .window(.root))
+        }
+
+        private func presentWalletReplacementOptionsAlert() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let creationProgress = ValuePromise<Bool>(false, ignoreRepeated: true)
+            let actionsEnabled = creationProgress.get()
+            |> map { !$0 }
+            let alertController = AlertScreen(
+                context: component.context,
+                configuration: AlertScreen.Configuration(
+                    actionAlignment: .vertical,
+                    dismissOnOutsideTap: true
+                ),
+                content: [
+                    AnyComponentWithIdentity(
+                        id: "title",
+                        component: AnyComponent(AlertTitleComponent(
+                            title: "How do you want to replace the old wallet?"
+                        ))
+                    )
+                ],
+                actions: [
+                    AlertScreen.Action(
+                        title: "Create a New Wallet",
+                        action: { [weak self] in
+                            self?.createReplacementWallet()
+                        },
+                        autoDismiss: false,
+                        isEnabled: actionsEnabled,
+                        progress: creationProgress.get()
+                    ),
+                    AlertScreen.Action(
+                        title: "Import an Existing Wallet",
+                        action: { [weak self] in
+                            self?.openReplacementImport()
+                        },
+                        autoDismiss: false,
+                        isEnabled: actionsEnabled
+                    )
                 ]
             )
+            self.replacementOptionsController = alertController
+            self.replacementCreationProgress = creationProgress
+            alertController.dismissed = { [weak self, weak alertController] _ in
+                guard let self, self.replacementOptionsController === alertController else {
+                    return
+                }
+                self.replacementOptionsController = nil
+                self.replacementCreationProgress = nil
+                self.isCreatingReplacementWallet = false
+            }
             controller.present(alertController, in: .window(.root))
+        }
+
+        private func openReplacementImport() {
+            guard !self.isCreatingReplacementWallet,
+                  let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let alertController = self.replacementOptionsController else {
+                return
+            }
+            alertController.dismiss { [weak self, weak controller] in
+                controller?.push(component.context.sharedContext.makeWalletImportScreen(
+                    context: component.context,
+                    mode: .importWallet,
+                    completion: { [weak self] in
+                        self?.completeWalletReplacement(
+                            toastTitle: "Wallet Imported",
+                            toastText: "Your wallet was restored from your recovery phrase."
+                        )
+                    }
+                ))
+            }
+        }
+
+        private func completeWalletReplacement(toastTitle: String, toastText: String) {
+            guard let component = self.component,
+                  let settingsController = self.environment?.controller(),
+                  let navigationController = settingsController.navigationController as? NavigationController,
+                  let settingsControllerIndex = navigationController.viewControllers.firstIndex(where: { $0 === settingsController }),
+                  settingsControllerIndex > 0 else {
+                return
+            }
+
+            let remainingViewControllers = Array(navigationController.viewControllers.prefix(upTo: settingsControllerIndex))
+            guard let walletController = remainingViewControllers.last as? ViewController else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+
+            navigationController.setViewControllers(remainingViewControllers, animated: true)
+            Queue.mainQueue().after(0.4) { [weak walletController] in
+                guard let walletController else {
+                    return
+                }
+                //TODO:localize
+                walletController.present(UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .actionSucceeded(
+                        title: toastTitle,
+                        text: toastText,
+                        cancel: nil,
+                        destructive: false
+                    ),
+                    elevatedLayout: false,
+                    animateInAsReplacement: false,
+                    action: { _ in
+                        return false
+                    }
+                ), in: .current)
+            }
+        }
+
+        private func createReplacementWallet() {
+            guard !self.isCreatingReplacementWallet,
+                  let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let alertController = self.replacementOptionsController,
+                  let creationProgress = self.replacementCreationProgress else {
+                return
+            }
+            self.isCreatingReplacementWallet = true
+            creationProgress.set(true)
+            self.operationDisposable.set(performWalletAuthorizedOperation(
+                context: component.context,
+                present: { [weak controller] alert in
+                    controller?.present(alert, in: .window(.root))
+                },
+                operation: { password in
+                    component.walletContext.createWallet(password: password)
+                },
+                next: { [weak self, weak alertController] _ in
+                    let complete: () -> Void = { [weak self] in
+                        self?.completeWalletReplacement(
+                            toastTitle: "Wallet Created",
+                            toastText: "Your new wallet is ready to use."
+                        )
+                    }
+                    if let alertController {
+                        alertController.dismiss(completion: complete)
+                    } else {
+                        complete()
+                    }
+                },
+                failed: { [weak self] error in
+                    guard let self else {
+                        return
+                    }
+                    self.isCreatingReplacementWallet = false
+                    self.replacementCreationProgress?.set(false)
+                    self.presentReplacementError(error)
+                }
+            ))
+        }
+
+        private func presentReplacementError(_ error: WalletContext.WalletError) {
+            guard error != .authorizationCancelled else { return }
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let message = walletAuthorizationErrorMessage(error)
+            controller.present(textAlertController(
+                context: component.context,
+                title: message?.title ?? "Couldn’t Replace Wallet",
+                text: message?.text ?? "Check the network connection and try again.",
+                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+            ), in: .window(.root))
         }
 
         func update(
@@ -500,9 +634,9 @@ private final class WalletSettingsScreenComponent: Component {
             //TODO:localize
             let backupHeader = "Encrypted Backup"
             //TODO:localize
-            let disableBackupAction = "Disable Backup"
+            let enableBackupAction = "Enable Backup"
             //TODO:localize
-            let backupFooter = "Telegram stores an encrypted backup of your keys, split across several datacenters. No Telegram employee can access them."
+            let disableBackupAction = "Disable Backup"
             //TODO:localize
             let deleteWalletAction = "Delete Wallet"
 
@@ -515,14 +649,24 @@ private final class WalletSettingsScreenComponent: Component {
             let sectionWidth = availableSize.width - sideInset * 2.0
             var contentHeight = environment.navigationHeight + 16.0
             let canDisableBackup: Bool
-            let canExportPhrase: Bool
+            let canEnableBackup: Bool
+            let canRevealPhrase: Bool
+            let backupEnabled: Bool
             if let phase = self.walletState?.phase, case let .wallet(info) = phase {
                 canDisableBackup = info.canDisableBackup
-                canExportPhrase = info.canExportPhrase
+                canEnableBackup = info.canEnableBackup && info.canSign
+                canRevealPhrase = info.canRevealPhrase
+                backupEnabled = info.backupEnabled
             } else {
                 canDisableBackup = false
-                canExportPhrase = false
+                canEnableBackup = false
+                canRevealPhrase = false
+                backupEnabled = false
             }
+            //TODO:localize
+            let backupFooter = backupEnabled
+                ? "Telegram stores an encrypted backup of your keys, split across several datacenters. No Telegram employee can access them."
+                : "Telegram will store an encrypted backup of your keys, split across several datacenters. No Telegram employee will be able to access them."
 
             self.recoverySection.parentState = self.state
             let recoverySectionSize = self.recoverySection.update(
@@ -568,7 +712,7 @@ private final class WalletSettingsScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: sectionWidth, height: 10000.0)
             )
-            if canExportPhrase, let recoverySectionView = self.recoverySection.view {
+            if canRevealPhrase, let recoverySectionView = self.recoverySection.view {
                 if recoverySectionView.superview == nil {
                     self.scrollView.addSubview(recoverySectionView)
                 }
@@ -585,7 +729,44 @@ private final class WalletSettingsScreenComponent: Component {
                 self.recoverySection.view?.removeFromSuperview()
             }
 
+            var backupItems: [AnyComponentWithIdentity<Empty>] = []
+            if canEnableBackup {
+                backupItems.append(AnyComponentWithIdentity(id: "enableBackup", component: AnyComponent(ListActionItemComponent(
+                    theme: theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: enableBackupAction,
+                            font: actionFont,
+                            textColor: theme.list.itemAccentColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    accessory: nil,
+                    action: { [weak self] _ in
+                        self?.enableBackup()
+                    }
+                ))))
+            }
             if canDisableBackup {
+                backupItems.append(AnyComponentWithIdentity(id: "disableBackup", component: AnyComponent(ListActionItemComponent(
+                    theme: theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: disableBackupAction,
+                            font: actionFont,
+                            textColor: theme.list.itemDestructiveColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    accessory: nil,
+                    action: { [weak self] _ in
+                        self?.presentDisableBackupAlert()
+                    }
+                ))))
+            }
+            if !backupItems.isEmpty {
                 self.backupSection.parentState = self.state
                 let backupSectionSize = self.backupSection.update(
                     transition: transition,
@@ -608,24 +789,7 @@ private final class WalletSettingsScreenComponent: Component {
                             )),
                             maximumNumberOfLines: 0
                         )),
-                        items: [
-                            AnyComponentWithIdentity(id: "disableBackup", component: AnyComponent(ListActionItemComponent(
-                                theme: theme,
-                                style: .glass,
-                                title: AnyComponent(MultilineTextComponent(
-                                    text: .plain(NSAttributedString(
-                                        string: disableBackupAction,
-                                        font: actionFont,
-                                        textColor: theme.list.itemDestructiveColor
-                                    )),
-                                    maximumNumberOfLines: 0
-                                )),
-                                accessory: nil,
-                                action: { [weak self] _ in
-                                    self?.presentDisableBackupAlert()
-                                }
-                            )))
-                        ]
+                        items: backupItems
                     )),
                     environment: {},
                     containerSize: CGSize(width: sectionWidth, height: 10000.0)
@@ -648,8 +812,8 @@ private final class WalletSettingsScreenComponent: Component {
                 self.backupSection.view?.removeFromSuperview()
             }
 
-            self.deleteSection.parentState = self.state
-            let deleteSectionSize = self.deleteSection.update(
+            self.replacementSection.parentState = self.state
+            let replacementSectionSize = self.replacementSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
@@ -678,19 +842,19 @@ private final class WalletSettingsScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: sectionWidth, height: 10000.0)
             )
-            if let deleteSectionView = self.deleteSection.view {
-                if deleteSectionView.superview == nil {
-                    self.scrollView.addSubview(deleteSectionView)
+            if let replacementSectionView = self.replacementSection.view {
+                if replacementSectionView.superview == nil {
+                    self.scrollView.addSubview(replacementSectionView)
                 }
                 transition.setFrame(
-                    view: deleteSectionView,
+                    view: replacementSectionView,
                     frame: CGRect(
                         origin: CGPoint(x: sideInset, y: contentHeight),
-                        size: deleteSectionSize
+                        size: replacementSectionSize
                     )
                 )
             }
-            contentHeight += deleteSectionSize.height
+            contentHeight += replacementSectionSize.height
             contentHeight += 24.0 + environment.safeInsets.bottom
 
             transition.setFrame(

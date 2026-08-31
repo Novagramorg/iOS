@@ -657,7 +657,7 @@ public final class AccountContextImpl: AccountContext {
             )
             self.tonConnectController = controller
             self.sharedContext.presentGlobalController(controller, nil)
-        case let .transfer(request):
+        case let .operation(request):
             guard self.tonConnectController == nil else {
                 return
             }
@@ -682,7 +682,7 @@ public final class AccountContextImpl: AccountContext {
                         completion(.failure(.unavailable))
                         return
                     }
-                    self.tonConnectOperationDisposable.set((walletContext.approveTonConnectTransfer(id: request.id)
+                    self.tonConnectOperationDisposable.set((walletContext.approveTonConnectOperation(id: request.id)
                     |> deliverOnMainQueue).start(next: { [weak self] in
                         self?.tonConnectController = nil
                         self?.tonConnectRequestId = nil

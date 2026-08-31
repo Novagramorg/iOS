@@ -4160,16 +4160,34 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         guard let walletContext = context.walletContext else {
             fatalError()
         }
+
+        let twoStepAuthData: Promise<TwoStepAuthData?>
+        if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface, let current = rootController.getTwoStepAuthData() {
+            twoStepAuthData = current
+        } else {
+            twoStepAuthData = Promise()
+            twoStepAuthData.set(
+                .single(nil)
+                |> then(
+                    context.engine.auth.twoStepAuthData()
+                    |> map(Optional.init)
+                    |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
+                        return .single(nil)
+                    }
+                )
+            )
+        }
         switch walletContext.stateValue.phase {
         case .restoring, .provisioning, .empty, .wallet, .failed:
-            return self.makeWalletContentScreen(context: context, walletContext: walletContext)
+            return self.makeWalletContentScreen(context: context, walletContext: walletContext, twoStepAuthData: twoStepAuthData)
         }
     }
 
-    private func makeWalletContentScreen(context: AccountContext, walletContext: WalletContext) -> ViewController {
+    private func makeWalletContentScreen(context: AccountContext, walletContext: WalletContext, twoStepAuthData: Promise<TwoStepAuthData?>) -> ViewController {
         return WalletScreen(
             context: context,
             walletContext: walletContext,
+            twoStepAuthData: twoStepAuthData,
             routeToSetup: nil
         )
     }
@@ -4208,7 +4226,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletConnectScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, connect: connect)
     }
 
-    public func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectTransferRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
+    public func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectOperationRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
         return WalletTransferScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
     }
 

@@ -1,4 +1,59 @@
 public extension Api {
+    enum InputWalletReplacement: TypeConstructorDescription {
+        public class Cons_inputWalletImported: TypeConstructorDescription {
+            public var publicKey: Buffer
+            public init(publicKey: Buffer) {
+                self.publicKey = publicKey
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputWalletImported", [("publicKey", ConstructorParameterDescription(self.publicKey))])
+            }
+        }
+        case inputWalletImported(Cons_inputWalletImported)
+        case inputWalletNew
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .inputWalletImported(let _data):
+                if boxed {
+                    buffer.appendInt32(856446476)
+                }
+                serializeBytes(_data.publicKey, buffer: buffer, boxed: false)
+                break
+            case .inputWalletNew:
+                if boxed {
+                    buffer.appendInt32(1671708892)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .inputWalletImported(let _data):
+                return ("inputWalletImported", [("publicKey", ConstructorParameterDescription(_data.publicKey))])
+            case .inputWalletNew:
+                return ("inputWalletNew", [])
+            }
+        }
+
+        public static func parse_inputWalletImported(_ reader: BufferReader) -> InputWalletReplacement? {
+            var _1: Buffer?
+            _1 = parseBytes(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputWalletReplacement.inputWalletImported(Cons_inputWalletImported(publicKey: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputWalletNew(_ reader: BufferReader) -> InputWalletReplacement? {
+            return Api.InputWalletReplacement.inputWalletNew
+        }
+    }
+}
+public extension Api {
     enum InputWebDocument: TypeConstructorDescription {
         public class Cons_inputWebDocument: TypeConstructorDescription {
             public var url: String

@@ -1,32 +1,49 @@
 import Foundation
 import TelegramCore
-import TONCore
-import TONWalletKit
+import WalletEngineFFI
 
 let walletTransactionFetchLimit = 50
 let walletPreparedTransferLifetime: TimeInterval = 5.0 * 60.0
-let walletPendingTransferLifetime: Int64 = 10 * 60
-let walletUsdtJettonMasterAddress = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
 
 struct ResolvedTransferInput {
     let address: String
     let amount: Int64
+    let body: SendMessageBody
     let comment: String?
+    let expiration: SendExpiration
 }
 
 func resolveTransferInput(address: String, amount: Int64, comment: String?) throws -> ResolvedTransferInput {
-    let transfer: TransferURL
-    do {
-        transfer = try TransferURL.parse(address)
-    } catch TransferURLError.invalidAmount(_) {
-        throw WalletContext.WalletError.invalidAmount
-    } catch {
+    let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+    let link: ParsedTonTransferLink?
+    if trimmed.lowercased().hasPrefix("ton://") {
+        do {
+            link = try parseTonTransferLink(value: trimmed)
+        } catch {
+            throw WalletContext.WalletError.invalidAddress
+        }
+    } else {
+        link = nil
+    }
+
+    let recipient = link?.recipient ?? trimmed
+    guard let info = try? parseTonAddress(value: recipient), !isTestnetAddress(info.format),
+          let normalized = try? convertTonAddress(
+            value: recipient,
+            format: .userFriendly(bounceable: false, testnet: false)
+          ) else {
         throw WalletContext.WalletError.invalidAddress
     }
 
+    if let link {
+        guard case .gram = link.asset else {
+            throw WalletContext.WalletError.invalidAddress
+        }
+    }
+
     var resolvedAmount = amount
-    if resolvedAmount <= 0, let linkAmount = transfer.amount {
-        guard let parsed = Int64(String(linkAmount)) else {
+    if resolvedAmount <= 0, let linkAmount = link?.amount {
+        guard let parsed = Int64(linkAmount) else {
             throw WalletContext.WalletError.invalidAmount
         }
         resolvedAmount = parsed
@@ -35,23 +52,54 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
         throw WalletContext.WalletError.invalidAmount
     }
 
-    let resolvedComment = nonEmptyString(comment?.trimmingCharacters(in: .whitespacesAndNewlines))
-        ?? transfer.text
+    let explicitComment = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let linkComment: String?
+    let linkBody: SendMessageBody
+    if let payload = link?.payload {
+        switch payload {
+        case .none:
+            linkComment = nil
+            linkBody = .empty
+        case let .text(text):
+            linkComment = text
+            linkBody = .comment(text: text)
+        case let .boc(boc):
+            linkComment = nil
+            linkBody = .rawPayload(boc: boc)
+        }
+    } else {
+        linkComment = nil
+        linkBody = .empty
+    }
+    let resolvedComment = (explicitComment?.isEmpty == false ? explicitComment : nil) ?? linkComment
+    let body: SendMessageBody
+    if let resolvedComment {
+        body = .comment(text: resolvedComment)
+    } else {
+        body = linkBody
+    }
     return ResolvedTransferInput(
-        address: transfer.addressString(),
+        address: normalized,
         amount: resolvedAmount,
-        comment: resolvedComment
+        body: body,
+        comment: resolvedComment,
+        expiration: link?.expiration ?? .engineDefault
     )
 }
 
-enum WalletDataError: Error {
-    case invalidData
+private func isTestnetAddress(_ format: TonAddressFormat) -> Bool {
+    switch format {
+    case .raw:
+        return false
+    case let .userFriendly(_, testnet):
+        return testnet
+    }
 }
 
 func walletTransactions(
     from transactions: [TelegramCore.WalletTransaction]
 ) -> [WalletContext.Transaction] {
-    return transactions.map { transaction in
+    transactions.map { transaction in
         let peer: WalletContext.Transaction.Peer
         switch transaction.peer {
         case let .user(enginePeer):
@@ -70,14 +118,9 @@ func walletTransactions(
             peer = .unsupported
         }
 
-        let status: WalletContext.Transaction.Status
-        if transaction.failed {
-            status = .failed
-        } else if transaction.pending {
-            status = .pending
-        } else {
-            status = .completed
-        }
+        let status: WalletContext.Transaction.Status = transaction.failed
+            ? .failed
+            : (transaction.pending ? .pending : .completed)
         let logicalTime = transaction.id.split(separator: ":", maxSplits: 1).first.map(String.init)
             ?? transaction.id
         return WalletContext.Transaction(
@@ -95,243 +138,54 @@ func walletTransactions(
     }
 }
 
-func walletTransactions(
-    from activities: [WalletActivity],
-    usdtJettonWalletAddress: String?,
-    collectibles: [String: WalletContext.Transaction.CollectibleTransfer]
-) throws -> [WalletContext.Transaction] {
-    let usdtJettonWallet = usdtJettonWalletAddress.flatMap { try? Address.parse($0) }
-    var result: [WalletContext.Transaction] = []
-    result.reserveCapacity(activities.count)
-
-    for activity in activities {
-        guard let fee = Int64(String(activity.fee)) else {
-            throw WalletDataError.invalidData
-        }
-
-        let direction: WalletContext.Transaction.Direction
-        switch activity.direction {
-        case .incoming:
-            direction = .incoming
-        case .outgoing:
-            direction = .outgoing
-        }
-
-        let status: WalletContext.Transaction.Status
-        switch activity.status {
-        case .pending:
-            status = .pending
-        case .completed:
-            status = .completed
-        }
-
-        let kind: WalletContext.Transaction.Kind
-        switch activity.kind {
-        case .transfer:
-            kind = .transfer
-        case .deployContract:
-            kind = .deployContract
-        }
-
-        let counterparty = activity.counterparty?.toString(bounceable: false)
-        let amount: Int64
-        let currency: WalletContext.Transaction.Currency
-        let collectible: WalletContext.Transaction.CollectibleTransfer?
-        let timestamp: Int32
-
-        switch activity.asset {
-        case .ton:
-            guard let value = Int64(String(activity.amount)) else { continue }
-            amount = value
-            currency = .ton
-            collectible = nil
-            timestamp = Int32(clamping: activity.timestamp)
-        case let .jetton(wallet):
-            guard let usdtJettonWallet,
-                  wallet == usdtJettonWallet,
-                  let value = Int64(String(activity.amount)) else {
-                continue
-            }
-            amount = value
-            currency = .usdt
-            collectible = nil
-            guard let value = Int32(exactly: activity.timestamp) else {
-                throw WalletDataError.invalidData
-            }
-            timestamp = value
-        case let .nft(item):
-            amount = 0
-            currency = .ton
-            let address = item.toString(bounceable: false)
-            collectible = collectibles[item.rawString.lowercased()]
-                ?? fallbackCollectible(address: address)
-            guard let value = Int32(exactly: activity.timestamp) else {
-                throw WalletDataError.invalidData
-            }
-            timestamp = value
-        }
-
-        result.append(WalletContext.Transaction(
-            id: activity.id,
-            transactionHash: activity.transactionHash,
-            externalMessageHash: activity.externalMessageHash,
-            logicalTime: activity.logicalTime,
-            timestamp: timestamp,
-            direction: direction,
-            amount: amount,
-            fee: fee,
-            peer: counterparty.map { .address($0) } ?? .unsupported,
-            comment: activity.comment,
-            currency: currency,
-            collectible: collectible,
-            status: status,
-            kind: kind
-        ))
-    }
-    return result
-}
-
-func collectibleAddresses(in activities: [WalletActivity]) -> [String] {
-    var result = Set<String>()
-    for activity in activities {
-        if case let .nft(item) = activity.asset {
-            result.insert(item.rawString.lowercased())
-        }
-    }
-    return Array(result)
-}
-
-private func fallbackCollectible(address: String) -> WalletContext.Transaction.CollectibleTransfer {
-    WalletContext.Transaction.CollectibleTransfer(
-        address: address,
-        name: "NFT",
-        imageUrl: nil,
-        kind: .other
-    )
-}
-
-private func rawAddress(_ value: String?) -> String? {
-    guard let value else { return nil }
-    return try? Address.parse(value).rawString.lowercased()
-}
-
 func mergeTransactions(
     existing: [WalletContext.Transaction],
     new: [WalletContext.Transaction]
 ) -> [WalletContext.Transaction] {
-    var actionTransactionKeys = Set<String>()
-    actionTransactionKeys.reserveCapacity(existing.count + new.count)
-    for transaction in existing where transaction.transactionHash != nil {
-        actionTransactionKeys.insert(transactionBlockchainKey(transaction))
-    }
-    for transaction in new where transaction.transactionHash != nil {
-        actionTransactionKeys.insert(transactionBlockchainKey(transaction))
-    }
-
-    var transactionsByKey: [String: WalletContext.Transaction] = [:]
-    transactionsByKey.reserveCapacity(existing.count + new.count)
-    func insert(_ transaction: WalletContext.Transaction) {
-        if transaction.transactionHash == nil,
-           actionTransactionKeys.contains(transactionBlockchainKey(transaction)) {
-            return
-        }
-        let key = transactionKey(transaction)
-        if let current = transactionsByKey[key] {
-            transactionsByKey[key] = preferredTransaction(current, over: transaction)
-        } else {
-            transactionsByKey[key] = transaction
-        }
-    }
-    existing.forEach(insert)
-    new.forEach(insert)
-    return transactionsByKey.values.sorted { lhs, rhs in
-        if lhs.timestamp != rhs.timestamp { return lhs.timestamp > rhs.timestamp }
-        return logicalTimeIsGreater(lhs.logicalTime, than: rhs.logicalTime)
-    }
-}
-
-func transactionKey(_ transaction: WalletContext.Transaction) -> String {
-    let id = transactionHashKey(transaction.id)
-
-    // TON transfers can share a transaction (batch sends), so retain their message-level
-    // identity. This also recognizes the previous `trace:...:ton:<direction>:<hash>` format and
-    // immediately removes duplicates already present in the current transaction list.
-    for marker in [":ton:in:", ":ton:out:"] {
-        if let range = id.range(of: marker, options: .backwards) {
-            let messageHash = id[range.upperBound...]
-            if !messageHash.isEmpty {
-                return "message\(marker)\(messageHash)"
+    var values: [String: WalletContext.Transaction] = [:]
+    for transaction in existing + new {
+        let key = transaction.transactionHash?.lowercased() ?? transaction.id.lowercased()
+        if let current = values[key] {
+            let currentScore = transactionInformationScore(current)
+            let candidateScore = transactionInformationScore(transaction)
+            if candidateScore >= currentScore {
+                values[key] = transaction
             }
+        } else {
+            values[key] = transaction
         }
     }
-
-    guard let transactionHash = transaction.transactionHash else {
-        return id
+    return values.values.sorted { lhs, rhs in
+        if lhs.timestamp != rhs.timestamp {
+            return lhs.timestamp > rhs.timestamp
+        }
+        return decimalStringIsGreater(lhs.logicalTime, rhs.logicalTime)
     }
-    let blockchainKey = transactionHashKey(transactionHash)
-    if transaction.kind == .deployContract {
-        let addressKey = transaction.peer.address.flatMap { rawAddress($0) }
-            ?? transaction.peer.address.map(transactionHashKey)
-            ?? "unknown"
-        return "transaction:\(blockchainKey):deploy:\(addressKey)"
-    }
-    if let collectible = transaction.collectible {
-        let itemKey = rawAddress(collectible.address) ?? transactionHashKey(collectible.address)
-        return "transaction:\(blockchainKey):nft:\(transaction.direction.rawValue):\(itemKey)"
-    }
-    return "transaction:\(blockchainKey):\(transaction.currency.rawValue):\(transaction.direction.rawValue)"
 }
 
-private func preferredTransaction(
-    _ lhs: WalletContext.Transaction,
-    over rhs: WalletContext.Transaction
-) -> WalletContext.Transaction {
-    let lhsScore = transactionInformationScore(lhs)
-    let rhsScore = transactionInformationScore(rhs)
-    return lhsScore > rhsScore ? lhs : rhs
-}
-
-private func transactionInformationScore(_ transaction: WalletContext.Transaction) -> Int {
-    var score = transaction.status == .completed ? 100 : 0
-    if transaction.peer.displayName != nil { score += 4 }
-    if let collectible = transaction.collectible {
-        if collectible.name != "NFT" { score += 2 }
-        if collectible.imageUrl != nil { score += 1 }
-        if collectible.collectionName != nil { score += 1 }
-    }
+private func transactionInformationScore(_ value: WalletContext.Transaction) -> Int {
+    var score = value.status == .completed ? 100 : 0
+    if value.peer.displayName != nil { score += 4 }
+    if value.comment != nil { score += 1 }
     return score
 }
 
-func transactionBlockchainKey(_ transaction: WalletContext.Transaction) -> String {
-    transactionHashKey(transaction.transactionHash ?? transaction.id)
-}
-
-func transactionHashKey(_ value: String) -> String {
-    value.lowercased()
-}
-
-func transactionTraceKey(_ value: String) -> String {
-    value.lowercased()
-}
-
-private func logicalTimeIsGreater(_ lhs: String, than rhs: String) -> Bool {
-    guard let normalizedLhs = normalizedUnsignedDecimal(lhs),
-          let normalizedRhs = normalizedUnsignedDecimal(rhs) else {
+private func decimalStringIsGreater(_ lhs: String, _ rhs: String) -> Bool {
+    let left = normalizedUnsignedDecimal(lhs)
+    let right = normalizedUnsignedDecimal(rhs)
+    guard let left, let right else {
         return lhs > rhs
     }
-    if normalizedLhs.count != normalizedRhs.count { return normalizedLhs.count > normalizedRhs.count }
-    return normalizedLhs > normalizedRhs
+    if left.count != right.count {
+        return left.count > right.count
+    }
+    return left > right
 }
 
 private func normalizedUnsignedDecimal(_ value: String) -> String? {
-    let bytes = Array(value.utf8)
-    guard !bytes.isEmpty, bytes.allSatisfy({ (48 ... 57).contains($0) }) else { return nil }
-    let firstNonZero = bytes.firstIndex(where: { $0 != 48 }) ?? bytes.count
-    if firstNonZero == bytes.count { return "0" }
-    return String(decoding: bytes[firstNonZero...], as: UTF8.self)
-}
-
-private func nonEmptyString(_ value: String?) -> String? {
-    guard let value, !value.isEmpty else { return nil }
-    return value
+    guard !value.isEmpty, value.allSatisfy(\.isNumber) else {
+        return nil
+    }
+    let trimmed = value.drop(while: { $0 == "0" })
+    return trimmed.isEmpty ? "0" : String(trimmed)
 }

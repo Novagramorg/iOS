@@ -277,7 +277,7 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
         self.scrollNode.view.contentSize = CGSize(width: scrollView.bounds.width, height: self.totalContentHeight)
 
         if measuredNewHeight {
-            self.getController()?.requestLayout(transition: .immediate)
+            self.getController()?.requestLayout(transition: .animated(duration: 0.45, curve: .spring))
         }
     }
 

@@ -82,7 +82,7 @@ private final class WalletWordsScreenComponent: Component {
             let titleText: String
             let bodyText: String
             switch component.mode {
-            case .view, .verify:
+            case .view, .verify, .backupDisable:
                 //TODO:localize
                 titleText = "Your Recovery Phrase"
                 //TODO:localize
@@ -401,6 +401,8 @@ private final class WalletWordsSheetComponent: CombinedComponent {
             case .replacement:
                 //TODO:localize
                 buttonTitle = "Continue"
+            case .backupDisable:
+                buttonTitle = "Continue"
             }
             let sheetComponent = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
@@ -535,7 +537,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
         guard !self.words.isEmpty, !self.isVerifying else {
             return
         }
-        if self.mode == .replacement, Date().timeIntervalSince(self.displayedAt) < 10.0 {
+        if (self.mode == .replacement || self.mode == .backupDisable), Date().timeIntervalSince(self.displayedAt) < 10.0 {
             //TODO:localize
             self.present(textAlertController(
                 context: self.context,
@@ -568,7 +570,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
                     self.isVerifying = false
                     self.completion?()
 
-                    if self.mode == .replacement {
+                    if self.mode == .replacement || self.mode == .backupDisable {
                         return
                     }
 

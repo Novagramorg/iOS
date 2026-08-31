@@ -926,6 +926,9 @@ plist_fragment(
 
 ios_framework(
     name = "TelegramUIFramework",
+    additional_linker_inputs = [
+        "//third-party/boringssl:crypto",
+    ],
     bundle_id = "{telegram_bundle_id}.TelegramUI".format(
         telegram_bundle_id = telegram_bundle_id,
     ),
@@ -948,6 +951,13 @@ ios_framework(
     minimum_os_version = minimum_os_version,
     extension_safe = True,
     ipa_post_processor = strip_framework,
+    linkopts = [
+        # TelegramCoreFramework also owns BoringSSL through tde2e. The normal
+        # framework avoid-deps pass removes crypto here even though libssl from
+        # WebRTC still needs it in this binary.
+        "-force_load",
+        "$(location //third-party/boringssl:crypto)",
+    ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
     ] + debug_deps,

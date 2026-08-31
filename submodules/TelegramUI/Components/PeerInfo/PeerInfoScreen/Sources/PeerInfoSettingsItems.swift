@@ -152,10 +152,12 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             interaction.openSettings(.profile)
         }))
         
-        //TODO:localize
-        items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
-            interaction.openSettings(.wallet)
-        }))
+        if context.account.testingEnvironment {
+            //TODO:localize
+            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
+                interaction.openSettings(.wallet)
+            }))
+        }
         
         if !settings.proxySettings.servers.isEmpty {
             let proxyType: String
