@@ -1741,7 +1741,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
         for context in connectionOptions.urlContexts {
             let url = context.url
-            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == buildConfig.appSpecificUrlScheme {
+            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
                 self.openUrlWhenReady(url: url, external: true)
             } else {
                 self.handleOpenURL(url)
