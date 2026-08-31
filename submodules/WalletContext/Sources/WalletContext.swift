@@ -142,6 +142,10 @@ public final class WalletContext {
             guard let self else { return }
             do {
                 if let metadata = try await storage.loadMetadata(), metadata.schemaVersion == 2 {
+                    let cachedTransactions = try await walletTransactions(
+                        from: metadata.transactions,
+                        engine: self.engine
+                    )
                     self.metadata = metadata
                     self.balanceLastSuccessfulAt = metadata.balanceUpdatedAt
                     self.fiatLastSuccessfulAt = metadata.fiatRatesUpdatedAt
@@ -150,8 +154,8 @@ public final class WalletContext {
                             phase: .restoring,
                             balance: metadata.balance.map { .value($0, updatedAt: metadata.balanceUpdatedAt ?? 0) } ?? .idle,
                             transactions: TransactionsState(
-                                items: Array(metadata.transactions.prefix(walletMetadataCachedItemLimit)),
-                                offset: metadata.transactions.count,
+                                items: Array(cachedTransactions.prefix(walletMetadataCachedItemLimit)),
+                                offset: cachedTransactions.count,
                                 canLoadMore: false,
                                 isLoadingMore: false,
                                 error: nil
@@ -719,7 +723,9 @@ public final class WalletContext {
         self.metadata.fiatRates = state.fiat.rates.currentValue
         self.metadata.fiatRatesUpdatedAt = state.fiat.rates.lastSuccessfulAt ?? self.fiatLastSuccessfulAt
         self.metadata.selectedFiatCurrency = state.fiat.selectedCurrency
-        self.metadata.transactions = Array(state.transactions.items.prefix(walletMetadataCachedItemLimit))
+        self.metadata.transactions = state.transactions.items
+            .prefix(walletMetadataCachedItemLimit)
+            .map(WalletStoredTransaction.init)
         self.metadata.collectibles = Array(state.collectibles.items.prefix(walletMetadataCachedItemLimit))
         let metadata = self.metadata
         let storage = self.storage

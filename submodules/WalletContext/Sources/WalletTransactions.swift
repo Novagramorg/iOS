@@ -1,5 +1,6 @@
 import Foundation
 import TelegramCore
+import SwiftSignalKit
 import WalletEngineFFI
 
 let walletTransactionFetchLimit = 50
@@ -103,15 +104,7 @@ func walletTransactions(
         let peer: WalletContext.Transaction.Peer
         switch transaction.peer {
         case let .user(enginePeer):
-            switch enginePeer {
-            case let .user(user):
-                let displayName = !user.nameOrPhone.isEmpty
-                    ? user.nameOrPhone
-                    : (user.username.map { "@\($0)" } ?? "Telegram User")
-                peer = .user(id: user.id, displayName: displayName)
-            default:
-                peer = .unsupported
-            }
+            peer = .user(enginePeer)
         case let .address(address):
             peer = .address(address)
         case .unsupported:
@@ -136,6 +129,29 @@ func walletTransactions(
             status: status
         )
     }
+}
+
+func walletTransactions(
+    from transactions: [WalletStoredTransaction],
+    engine: TelegramEngine
+) async throws -> [WalletContext.Transaction] {
+    let peerIds = Array(Set(transactions.compactMap { $0.peer.userId }))
+    guard !peerIds.isEmpty else {
+        return transactions.map { $0.transaction(peers: [:]) }
+    }
+    let values = try await WalletSignalRequestContext<[EnginePeer.Id: EnginePeer?]>().run(
+        engine.data.get(EngineDataMap(
+            peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:))
+        ))
+        |> castError(WalletContext.WalletError.self)
+    )
+    var peers: [EnginePeer.Id: EnginePeer] = [:]
+    for (id, peer) in values {
+        if let peer {
+            peers[id] = peer
+        }
+    }
+    return transactions.map { $0.transaction(peers: peers) }
 }
 
 func mergeTransactions(

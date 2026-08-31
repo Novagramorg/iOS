@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import TelegramCore
 import WalletEngineFFI
 
 struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
@@ -46,6 +47,92 @@ struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
     }
 }
 
+struct WalletStoredTransaction: Codable, Equatable, Sendable {
+    enum Peer: Codable, Equatable, @unchecked Sendable {
+        case user(id: EnginePeer.Id, displayName: String)
+        case address(String)
+        case unsupported
+
+        var userId: EnginePeer.Id? {
+            if case let .user(id, _) = self {
+                return id
+            }
+            return nil
+        }
+    }
+
+    let id: String
+    let transactionHash: String?
+    let externalMessageHash: String?
+    let logicalTime: String
+    let timestamp: Int32
+    let kind: WalletContext.Transaction.Kind
+    let direction: WalletContext.Transaction.Direction
+    let amount: Int64
+    let fee: Int64
+    let peer: Peer
+    let comment: String?
+    let currency: WalletContext.Transaction.Currency
+    let collectible: WalletContext.Transaction.CollectibleTransfer?
+    let status: WalletContext.Transaction.Status
+
+    init(_ transaction: WalletContext.Transaction) {
+        self.id = transaction.id
+        self.transactionHash = transaction.transactionHash
+        self.externalMessageHash = transaction.externalMessageHash
+        self.logicalTime = transaction.logicalTime
+        self.timestamp = transaction.timestamp
+        self.kind = transaction.kind
+        self.direction = transaction.direction
+        self.amount = transaction.amount
+        self.fee = transaction.fee
+        switch transaction.peer {
+        case let .user(peer):
+            self.peer = .user(id: peer.id, displayName: peer.debugDisplayTitle)
+        case let .address(address):
+            self.peer = .address(address)
+        case .unsupported:
+            self.peer = .unsupported
+        }
+        self.comment = transaction.comment
+        self.currency = transaction.currency
+        self.collectible = transaction.collectible
+        self.status = transaction.status
+    }
+
+    func transaction(peers: [EnginePeer.Id: EnginePeer]) -> WalletContext.Transaction {
+        let peer: WalletContext.Transaction.Peer
+        switch self.peer {
+        case let .user(id, _):
+            if let value = peers[id] {
+                peer = .user(value)
+            } else {
+                peer = .unsupported
+            }
+        case let .address(address):
+            peer = .address(address)
+        case .unsupported:
+            peer = .unsupported
+        }
+        return WalletContext.Transaction(
+            id: self.id,
+            transactionHash: self.transactionHash,
+            externalMessageHash: self.externalMessageHash,
+            logicalTime: self.logicalTime,
+            timestamp: self.timestamp,
+            direction: self.direction,
+            amount: self.amount,
+            fee: self.fee,
+            peer: peer,
+            comment: self.comment,
+            currency: self.currency,
+            collectible: self.collectible,
+            status: self.status,
+            kind: self.kind
+        )
+    }
+}
+
 struct WalletEngineMetadataRecord: Codable, Equatable, Sendable {
     var schemaVersion: Int = 2
     var walletAddress: String?
@@ -55,7 +142,7 @@ struct WalletEngineMetadataRecord: Codable, Equatable, Sendable {
     var fiatRates: [WalletContext.FiatCurrency: WalletContext.FiatRate]?
     var fiatRatesUpdatedAt: Int32?
     var selectedFiatCurrency: WalletContext.FiatCurrency = .usd
-    var transactions: [WalletContext.Transaction] = []
+    var transactions: [WalletStoredTransaction] = []
     var collectibles: [WalletContext.Collectible] = []
 }
 

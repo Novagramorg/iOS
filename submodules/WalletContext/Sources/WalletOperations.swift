@@ -927,7 +927,7 @@ extension WalletContext {
                 )
                 let task = Task { @MainActor [weak self] in
                     guard let self else { subscriber.putError(.unavailable); return }
-                    defer {
+                    let finishOperation = {
                         if self.activeOperationCancellation === cancellation {
                             self.activeOperationCancellation = nil
                             self.replaceState(
@@ -942,13 +942,19 @@ extension WalletContext {
                             }
                         }
                     }
+                    defer {
+                        finishOperation()
+                    }
                     do {
                         let value = try await operation(self)
+                        finishOperation()
                         subscriber.putNext(value)
                         subscriber.putCompletion()
                     } catch is CancellationError {
+                        finishOperation()
                         subscriber.putError(.unavailable)
                     } catch {
+                        finishOperation()
                         subscriber.putError(walletError(error))
                     }
                 }

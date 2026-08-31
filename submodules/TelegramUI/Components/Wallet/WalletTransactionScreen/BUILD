@@ -24,6 +24,7 @@ swift_library(
         "//submodules/PresentationDataUtils",
         "//submodules/TelegramStringFormatting",
         "//submodules/TextFormat",
+        "//submodules/TelegramUI/Components/AvatarComponent",
         "//submodules/TelegramUI/Components/TextFieldComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/Gifts/TableComponent",

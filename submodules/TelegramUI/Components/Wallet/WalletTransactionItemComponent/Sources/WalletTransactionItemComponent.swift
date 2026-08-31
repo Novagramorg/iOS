@@ -422,7 +422,7 @@ public final class WalletTransactionItemComponent: Component {
             var amountPrefix: String = ""
             var amountColor: UIColor
             var amountIconColor: UIColor?
-            let avatarPeer: StarsAvatarComponent.Peer?
+            var avatarPeer: StarsAvatarComponent.Peer?
             if isDeployContract {
                 //TODO:localize
                 subtitleText = "Deploy Contract"
@@ -438,7 +438,7 @@ public final class WalletTransactionItemComponent: Component {
                         subtitleText = "Incoming collectible"
                     } else {
                         //TODO:localize
-                        subtitleText = "Deposit"
+                        subtitleText = "Incoming transfer"
                     }
                     amountValue = transaction.amount
                     if transaction.currency == .usdt {
@@ -454,7 +454,7 @@ public final class WalletTransactionItemComponent: Component {
                         subtitleText = "Outgoing collectible"
                     } else {
                         //TODO:localize
-                        subtitleText = "Withdrawal"
+                        subtitleText = "Outgoing transfer"
                     }
                     amountValue = transaction.amount
                     amountColor = component.theme.list.itemPrimaryTextColor
@@ -469,6 +469,9 @@ public final class WalletTransactionItemComponent: Component {
                     amountIconColor = nil
                     avatarPeer = nil
                 }
+            }
+            if case let .user(peer) = transaction.peer {
+                avatarPeer = .transactionPeer(.peer(peer))
             }
             
             if amountValue > 0 {
@@ -682,8 +685,8 @@ public final class WalletTransactionItemComponent: Component {
 
             let peerTitle: String
             switch transaction.peer {
-            case let .user(_, displayName):
-                peerTitle = displayName
+            case let .user(peer):
+                peerTitle = peer.debugDisplayTitle
             case let .address(address):
                 peerTitle = walletTransactionCounterparty(address)
             case .unsupported:

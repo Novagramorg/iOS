@@ -250,16 +250,32 @@ public extension WalletContext {
         }
     }
 
-    struct Transaction: Codable, Equatable, Sendable {
+    struct Transaction: Equatable, Sendable {
         public enum Kind: String, Codable, Equatable, Sendable { case transfer, deployContract }
         public enum Direction: String, Codable, Equatable, Sendable { case incoming, outgoing, unknown }
         public enum Currency: String, Codable, Equatable, Sendable { case ton, usdt }
         public enum Status: String, Codable, Equatable, Sendable { case completed, pending, failed }
-        public enum Peer: Codable, Equatable, @unchecked Sendable {
-            case user(id: EnginePeer.Id, displayName: String), address(String), unsupported
-            public var address: String? { if case let .address(value) = self { return value }; return nil }
-            public var displayName: String? { if case let .user(_, value) = self { return value }; return nil }
+        
+        public enum Peer: Equatable, @unchecked Sendable {
+            case user(EnginePeer)
+            case address(String)
+            case unsupported
+            
+            public var address: String? {
+                if case let .address(value) = self {
+                    return value
+                }
+                return nil
+            }
+            
+            public var displayName: String? {
+                if case let .user(peer) = self {
+                    return peer.debugDisplayTitle
+                }
+                return nil
+            }
         }
+        
         public struct CollectibleTransfer: Codable, Equatable, Sendable {
             public enum Kind: String, Codable, Equatable, Sendable { case gift, username, anonymousNumber, other }
             public let address: String

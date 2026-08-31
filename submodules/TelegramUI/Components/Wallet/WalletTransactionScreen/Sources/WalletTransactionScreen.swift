@@ -20,6 +20,7 @@ import TextFormat
 import TextFieldComponent
 import UndoUI
 import TooltipUI
+import AvatarComponent
 import WalletContext
 import WalletCollectibleHeaderComponent
 
@@ -534,6 +535,30 @@ private final class WalletTransactionContentComponent: Component {
             )
         }
 
+        private func openPeer(_ peer: EnginePeer) {
+            guard let component = self.component,
+                  let controller = self.environment?.controller() as? WalletTransactionScreen,
+                  let navigationController = controller.navigationController as? NavigationController else {
+                return
+            }
+            controller.dismissAllTooltips()
+            component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                navigationController: navigationController,
+                chatController: nil,
+                context: component.context,
+                chatLocation: .peer(peer),
+                subject: nil,
+                botStart: nil,
+                updateTextInputState: nil,
+                keepStack: .always,
+                useExisting: true,
+                purposefulAction: nil,
+                scrollToEndIfExists: false,
+                activateMessageSearch: nil,
+                animated: true
+            ))
+        }
+
         private func commentBubbleImage(
             presentationData: PresentationData,
             incoming: Bool,
@@ -962,7 +987,36 @@ private final class WalletTransactionContentComponent: Component {
                 addressComponent = nil
             }
             let counterpartyComponent: AnyComponent<Empty>
-            if let counterpartyName {
+            if case let .user(peer) = transaction.peer {
+                let peerItems: [AnyComponentWithIdentity<Empty>] = [
+                    AnyComponentWithIdentity(
+                        id: "avatar",
+                        component: AnyComponent(AvatarComponent(
+                            context: component.context,
+                            theme: theme,
+                            peer: peer,
+                            size: CGSize(width: 20.0, height: 20.0)
+                        ))
+                    ),
+                    AnyComponentWithIdentity(
+                        id: "title",
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: peer.debugDisplayTitle,
+                                font: valueFont,
+                                textColor: theme.list.itemAccentColor
+                            )),
+                            maximumNumberOfLines: 1
+                        ))
+                    )
+                ]
+                counterpartyComponent = AnyComponent(Button(
+                    content: AnyComponent(HStack(peerItems, spacing: 6.0)),
+                    action: { [weak self] in
+                        self?.openPeer(peer)
+                    }
+                ))
+            } else if let counterpartyName {
                 counterpartyComponent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: counterpartyName, font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
