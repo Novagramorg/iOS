@@ -266,6 +266,11 @@ typedef NS_ENUM(int32_t, OngoingCallDataSavingWebrtc) {
 + (int32_t)maxLayer;
 + (NSArray<NSString *> * _Nonnull)versionsWithIncludeReference:(bool)includeReference;
 
+/// Updates the shared RTCAudioSessionConfiguration only, leaving the live AVAudioSession alone.
+/// Callers that have not yet taken ownership of the audio session must use this rather than
+/// -setupAudioSession, which also applies the configuration and would stomp whichever holder is
+/// currently active.
++ (void)setupSharedAudioSessionConfiguration;
 + (void)setupAudioSession;
 
 @property (nonatomic, copy) void (^ _Nullable stateChanged)(OngoingCallStateWebrtc, OngoingCallVideoStateWebrtc, OngoingCallRemoteVideoStateWebrtc, OngoingCallRemoteAudioStateWebrtc, OngoingCallRemoteBatteryLevelWebrtc, float);
