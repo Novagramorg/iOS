@@ -1613,14 +1613,19 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
 + (void)applyServerConfig:(NSString *)string {
 }
 
-+ (void)setupAudioSession {
++ (void)setupSharedAudioSessionConfiguration {
     RTCAudioSessionConfiguration *sharedConfiguration = [RTCAudioSessionConfiguration webRTCConfiguration];
     sharedConfiguration.mode = AVAudioSessionModeVoiceChat;
     sharedConfiguration.categoryOptions |= AVAudioSessionCategoryOptionMixWithOthers;
     sharedConfiguration.categoryOptions |= AVAudioSessionCategoryOptionAllowBluetoothA2DP;
     sharedConfiguration.outputNumberOfChannels = 1;
     [RTCAudioSessionConfiguration setWebRTCConfiguration:sharedConfiguration];
+}
+
++ (void)setupAudioSession {
+    [self setupSharedAudioSessionConfiguration];
     
+    RTCAudioSessionConfiguration *sharedConfiguration = [RTCAudioSessionConfiguration webRTCConfiguration];
     [[RTCAudioSession sharedInstance] lockForConfiguration];
     [[RTCAudioSession sharedInstance] setConfiguration:sharedConfiguration active:false error:nil disableRecording:false];
     [[RTCAudioSession sharedInstance] unlockForConfiguration];

@@ -855,6 +855,13 @@ public final class OngoingCallContext {
         OngoingCallThreadLocalContextWebrtc.setupAudioSession()
     }
     
+    /// Aligns the shared WebRTC audio session configuration with the one ManagedAudioSession
+    /// installs for a call, without touching the live AVAudioSession. Use this when the audio
+    /// session has not been taken over yet.
+    public static func setupSharedAudioSessionConfiguration() {
+        OngoingCallThreadLocalContextWebrtc.setupSharedAudioSessionConfiguration()
+    }
+    
     public let callId: CallId
     public let internalId: CallSessionInternalId
     
