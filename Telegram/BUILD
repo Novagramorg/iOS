@@ -952,10 +952,6 @@ ios_framework(
     extension_safe = True,
     ipa_post_processor = strip_framework,
     linkopts = [
-        # TelegramCoreFramework also owns BoringSSL through tde2e. The normal
-        # framework avoid-deps pass removes crypto here even though libssl from
-        # WebRTC still needs it in this binary.
-        "-force_load",
         "$(location //third-party/boringssl:crypto)",
     ],
     deps = [
