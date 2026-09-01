@@ -262,25 +262,21 @@ public func buyStarGiftImpl(
                 updateIsBalanceVisible(false)
             }
 
-            if recipientPeerId == context.account.peerId {
-                presentConfirmation(GiftMessageScreen.Result(hideName: true, text: nil, entities: nil), nil)
-            } else {
-                weak var messageController: GiftMessageScreen?
-                let messageScreen = GiftMessageScreen(
-                    context: context,
-                    peer: peer,
-                    gift: uniqueGift,
-                    dismissOnCompletion: false,
-                    completion: { message in
-                        guard let messageController else {
-                            return
-                        }
-                        presentConfirmation(message, messageController)
+            weak var messageController: GiftMessageScreen?
+            let messageScreen = GiftMessageScreen(
+                context: context,
+                peer: peer,
+                gift: uniqueGift,
+                dismissOnCompletion: false,
+                completion: { message in
+                    guard let messageController else {
+                        return
                     }
-                )
-                messageController = messageScreen
-                controller.push(messageScreen)
-            }
+                    presentConfirmation(message, messageController)
+                }
+            )
+            messageController = messageScreen
+            controller.push(messageScreen)
         })
     }
 }

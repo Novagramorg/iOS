@@ -845,7 +845,7 @@ private func premiumSearchableItems(context: AccountContext) -> [SettingsSearcha
                                     let resultController = UndoOverlayController(
                                         presentationData: presentationData,
                                         content: .universal(
-                                            animation: "StarsSend",
+                                            animation: "star_reaction_appear",
                                             scale: 0.066,
                                             colors: [:],
                                             title: nil,

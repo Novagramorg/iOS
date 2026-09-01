@@ -167,6 +167,7 @@ public final class WindowHostView {
     var presentInGlobalOverlay: ((_ controller: ContainableController) -> Void)?
     var addGlobalPortalHostViewImpl: ((PortalSourceView) -> Void)?
     var presentNative: ((UIViewController) -> Void)?
+    var motionShake: (() -> Void)?
     var nativeController: (() -> UIViewController?)?
     var updateSize: ((CGSize, Double, UIInterfaceOrientation) -> Void)?
     var layoutSubviews: (() -> Void)?
@@ -352,6 +353,14 @@ public class Window1 {
         }
     }
     
+    public var motionShake: (() -> Void)? {
+        didSet {
+            self.hostView.motionShake = { [weak self] in
+                self?.motionShake?()
+            }
+        }
+    }
+
     public let systemUserInterfaceStyle: Signal<WindowUserInterfaceStyle, NoError>
     
     private var windowPanRecognizer: WindowPanRecognizer?

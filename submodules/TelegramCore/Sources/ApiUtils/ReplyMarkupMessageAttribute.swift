@@ -198,10 +198,17 @@ extension ReplyMarkupMessageAttribute {
                 if (markupFlags & (1 << 4)) != 0 {
                     flags.insert(.persistent)
                 }
+                if (markupFlags & (1 << 5)) != 0 {
+                    flags.insert(.setupReply)
+                }
                 placeholder = apiPlaceholder
             case let .replyInlineMarkup(replyInlineMarkupData):
+                let markupFlags = replyInlineMarkupData.flags
                 let apiRows = replyInlineMarkupData.rows
                 rows = apiRows.map { ReplyMarkupRow(apiInlineRow: $0) }
+                if (markupFlags & (1 << 5)) != 0 {
+                    flags.insert(.setupReply)
+                }
                 flags.insert(.inline)
             case let .replyKeyboardForceReply(replyKeyboardForceReplyData):
                 let (forceReplyFlags, apiPlaceholder) = (replyKeyboardForceReplyData.flags, replyKeyboardForceReplyData.placeholder)

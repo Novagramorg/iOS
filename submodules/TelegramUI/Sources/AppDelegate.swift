@@ -46,6 +46,12 @@ import NavigationBarImpl
 import ContextUI
 import ContextControllerImpl
 import ProxyServerPreviewScreen
+import WalletContext
+import WalletSendScreen
+
+#if DEBUG
+import AlertComponent
+#endif
 
 #if canImport(AppCenter)
 import AppCenter
@@ -53,6 +59,10 @@ import AppCenterCrashes
 #endif
 
 private let handleVoipNotifications = false
+
+private func isTonTransferUrl(_ url: URL) -> Bool {
+    return url.scheme?.lowercased() == "ton" && url.host?.lowercased() == "transfer"
+}
 
 private var testIsLaunched = false
 
@@ -1532,6 +1542,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             Logger.shared.log("App \(self.episodeId)", "isActive = \(value)")
         })
         
+        if let url = launchOptions?[.url] {
+            if let url = url as? URL, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
+                self.openUrlWhenReady(url: url, external: true)
+            } else if let urlString = url as? String, urlString.lowercased().hasPrefix("tg:") || urlString.lowercased().hasPrefix("ton:") || urlString.lowercased().hasPrefix("\(buildConfig.appSpecificUrlScheme):"), let url = URL(string: urlString) {
+                self.openUrlWhenReady(url: url, external: true)
+            }
+        }
+        
         if application.applicationState == .active {
             self.isInForegroundValue = true
             self.isInForegroundPromise.set(true)
@@ -1723,7 +1741,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
         for context in connectionOptions.urlContexts {
             let url = context.url
-            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == buildConfig.appSpecificUrlScheme {
+            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
                 self.openUrlWhenReady(url: url, external: true)
             } else {
                 self.handleOpenURL(url)
@@ -2544,7 +2562,19 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             if let authContext = authContext, let confirmationCode = parseConfirmationCodeUrl(sharedContext: sharedContext, url: url) {
                 authContext.rootController.applyConfirmationCode(confirmationCode)
             } else if let context = context {
-                context.openUrl(url, external: true)
+                if WalletContext.isTonConnectUrl(url.absoluteString) {
+                    context.context.walletContext?.processTonConnectUrl(url.absoluteString)
+                } else if url.scheme?.lowercased() == "ton" {
+                    if isTonTransferUrl(url), let walletContext = context.context.walletContext {
+                        context.rootController.pushViewController(WalletSendScreen(
+                            context: context.context,
+                            walletContext: walletContext,
+                            address: url.absoluteString
+                        ))
+                    }
+                } else {
+                    context.openUrl(url, external: true)
+                }
             } else if let authContext = authContext {
                 if let proxyData = parseProxyUrl(sharedContext: sharedContext, url: url) {
                     authContext.rootController.view.endEditing(true)
@@ -2858,7 +2888,19 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         self.openUrlWhenReadyDisposable.set((signal
         |> deliverOnMainQueue).start(next: { [weak self] context in
-            context.openUrl(url, external: external)
+            if WalletContext.isTonConnectUrl(url.absoluteString) {
+                context.context.walletContext?.processTonConnectUrl(url.absoluteString)
+            } else if url.scheme?.lowercased() == "ton" {
+                if isTonTransferUrl(url), let walletContext = context.context.walletContext {
+                    context.rootController.pushViewController(WalletSendScreen(
+                        context: context.context,
+                        walletContext: walletContext,
+                        address: url.absoluteString
+                    ))
+                }
+            } else {
+                context.openUrl(url, external: external)
+            }
             
             Queue.mainQueue().after(1.0, {
                 self?.openUrlInProgress = nil

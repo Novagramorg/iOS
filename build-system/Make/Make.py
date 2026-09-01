@@ -86,6 +86,9 @@ class BazelCommandLine:
         ]
 
         self.common_release_args = [
+            # Enable cross-crate link-time optimization for Rust targets.
+            '--@rules_rust//rust/settings:lto=fat',
+
             # https://github.com/bazelbuild/rules_swift
             # Enable whole module optimization.
             '--features=swift.opt_uses_wmo',

@@ -76,6 +76,16 @@ import MiniAppListScreen
 import GiftOptionsScreen
 import GiftViewScreen
 import StarsIntroScreen
+import WalletScreen
+import WalletReceiveScreen
+import WalletImportScreen
+import WalletSettingsScreen
+import WalletWordsScreen
+import WalletInfoScreen
+import WalletConnectScreen
+import WalletContext
+import WalletTransactionScreen
+import WalletCollectibleScreen
 import ContentReportScreen
 import AffiliateProgramSetupScreen
 import GalleryUI
@@ -4145,7 +4155,102 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeStarsIntroScreen(context: AccountContext) -> ViewController {
         return StarsIntroScreen(context: context)
     }
+
+    public func makeWalletScreen(context: AccountContext) -> ViewController {
+        guard let walletContext = context.walletContext else {
+            fatalError()
+        }
+
+        let twoStepAuthData: Promise<TwoStepAuthData?>
+        if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface, let current = rootController.getTwoStepAuthData() {
+            twoStepAuthData = current
+        } else {
+            twoStepAuthData = Promise()
+            twoStepAuthData.set(
+                .single(nil)
+                |> then(
+                    context.engine.auth.twoStepAuthData()
+                    |> map(Optional.init)
+                    |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
+                        return .single(nil)
+                    }
+                )
+            )
+        }
+        switch walletContext.stateValue.phase {
+        case .restoring, .provisioning, .empty, .wallet, .failed:
+            return self.makeWalletContentScreen(context: context, walletContext: walletContext, twoStepAuthData: twoStepAuthData)
+        }
+    }
+
+    private func makeWalletContentScreen(context: AccountContext, walletContext: WalletContext, twoStepAuthData: Promise<TwoStepAuthData?>) -> ViewController {
+        return WalletScreen(
+            context: context,
+            walletContext: walletContext,
+            twoStepAuthData: twoStepAuthData,
+            routeToSetup: nil
+        )
+    }
+
+    public func makeWalletReceiveScreen(context: AccountContext, address: String) -> ViewController {
+        return WalletReceiveScreen(context: context, address: address)
+    }
+
+    public func makeWalletImportScreen(context: AccountContext, mode: WalletImportScreenMode, completion: (() -> Void)?) -> ViewController {
+        guard let walletContext = context.walletContext else {
+            preconditionFailure("Wallet is only available in the main account context")
+        }
+        return WalletImportScreen(context: context, walletContext: walletContext, mode: mode, completion: completion)
+    }
+
+    public func makeWalletSettingsScreen(context: AccountContext) -> ViewController {
+        guard let walletContext = context.walletContext else {
+            preconditionFailure("Wallet is only available in the main account context")
+        }
+        return WalletSettingsScreen(context: context, walletContext: walletContext)
+    }
+
+    public func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController {
+        return WalletWordsScreen(context: context, words: words, verify: verify, completion: completion)
+    }
+
+    public func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletWordsScreen(context: context, words: words, mode: mode, completion: completion)
+    }
     
+    public func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletInfoScreen(context: context, mode: mode, completion: completion)
+    }
+
+    public func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
+        return WalletConnectScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, connect: connect)
+    }
+
+    public func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectOperationRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
+        return WalletTransferScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
+    }
+
+    public func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController {
+        return WalletTransactionScreen(context: context, mode: mode)
+    }
+
+    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, mode: WalletTransactionScreenMode) -> ViewController {
+        return WalletTransactionScreen(context: context, walletContext: walletContext, mode: mode)
+    }
+
+    public func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible) -> ViewController {
+        return WalletCollectibleScreen(context: context, walletContext: walletContext, collectible: collectible)
+    }
+
+    public func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void) {
+        let _ = passcodeEntryController(context: context, completion: completion).start(next: { [weak self] controller in
+            guard let self, let controller else {
+                return
+            }
+            self.mainWindow?.present(controller, on: .root)
+        })
+    }
+
     public func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController {
         return GiftViewScreen(context: context, subject: .message(message), shareStory: shareStory)
     }
@@ -4307,6 +4412,18 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController {
         return incomingMessagePrivacyScreen(context: context, value: value, exceptions: exceptions, update: update)
+    }
+
+    public func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool) {
+        ChatControllerImpl.presentBotApp(
+            context: context,
+            parentController: parentController,
+            botApp: botApp,
+            botPeer: botPeer,
+            payload: payload,
+            mode: mode,
+            isOnramp: isOnramp
+        )
     }
     
     public func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?) {

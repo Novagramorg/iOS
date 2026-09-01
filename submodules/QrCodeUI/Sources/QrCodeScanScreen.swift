@@ -46,12 +46,44 @@ private func parseAuthTransferUrl(_ url: URL) -> Data? {
     return nil
 }
 
+private func normalizedTonQrValue(_ value: String) -> String? {
+    let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else {
+        return nil
+    }
+    if let components = URLComponents(string: value),
+       components.scheme?.lowercased() == "ton",
+       components.host?.lowercased() == "transfer" {
+        return value
+    }
+
+    let friendlyCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+    if value.count == 48, value.unicodeScalars.allSatisfy({ friendlyCharacters.contains($0) }) {
+        return value
+    }
+
+    let rawParts = value.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+    let hexadecimalCharacters = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+    if rawParts.count == 2,
+       (rawParts[0] == "0" || rawParts[0] == "-1"),
+       rawParts[1].count == 64,
+       rawParts[1].unicodeScalars.allSatisfy({ hexadecimalCharacters.contains($0) }) {
+        return value
+    }
+    return nil
+}
+
 public final class QrCodeScanScreen: ViewController {
     public enum Subject {
         case authTransfer(activeSessionsContext: ActiveSessionsContext)
         case peer
         case cryptoAddress
         case custom(info: String)
+        case customValidated(info: String, validate: (String) -> Bool)
+    }
+
+    public static func normalizedCryptoAddress(_ value: String) -> String? {
+        return normalizedTonQrValue(value)
     }
     
     private let context: AccountContext
@@ -115,8 +147,15 @@ public final class QrCodeScanScreen: ViewController {
     private var animatedIn = false
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
-        if case .custom = self.subject, !self.animatedIn, let layout = self.validLayout {
+
+        let isCustom: Bool
+        switch self.subject {
+        case .custom:
+            isCustom = true
+        default:
+            isCustom = false
+        }
+        if isCustom, !self.animatedIn, let layout = self.validLayout {
             self.animatedIn = true
             self.controllerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: layout.size.height), to: CGPoint(), duration: 0.4, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
@@ -162,11 +201,30 @@ public final class QrCodeScanScreen: ViewController {
         })
     }
     
-    private func completeWithCode(_ code: String) {
-        guard case .custom = self.subject else {
-            return
+    @discardableResult
+    fileprivate func completeWithCode(_ code: String) -> Bool {
+        switch self.subject {
+        case .cryptoAddress:
+            guard let value = normalizedTonQrValue(code) else {
+                return false
+            }
+            self.codeResolved = true
+            self.completion(value)
+            self.dismissAnimated()
+            return true
+        case .custom:
+            self.completion(code)
+            return true
+        case let .customValidated(_, validate):
+            guard validate(code) else {
+                return false
+            }
+            self.codeResolved = true
+            self.completion(code)
+            return true
+        default:
+            return false
         }
-        self.completion(code)
     }
     
     override public func loadDisplayNode() {
@@ -213,7 +271,7 @@ public final class QrCodeScanScreen: ViewController {
                         }))
                     }
                 case .cryptoAddress:
-                    break
+                    strongSelf.completeWithCode(code)
                 case .peer:
                     if let _ = URL(string: code) {
                         strongSelf.controllerNode.resolveCode(code: code, completion: { [weak self] result in
@@ -222,7 +280,7 @@ public final class QrCodeScanScreen: ViewController {
                             }
                         })
                     }
-                case .custom:
+                case .custom, .customValidated:
                     strongSelf.completeWithCode(code)
             }
         })
@@ -437,6 +495,9 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
             case let .custom(info):
                 title = presentationData.strings.AuthSessions_AddDevice_ScanTitle
                 text = info
+            case let .customValidated(info, _):
+                title = presentationData.strings.AuthSessions_AddDevice_ScanTitle
+                text = info
         }
         
         self.titleNode = ImmediateTextNode()
@@ -561,9 +622,11 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
                 case .peer:
                     filteredCodes = codes.filter { $0.message.hasPrefix("https://t.me/") || $0.message.hasPrefix("t.me/") }
                 case .cryptoAddress:
-                    filteredCodes = codes.filter { $0.message.hasPrefix("ton://") }
+                    filteredCodes = codes.filter { normalizedTonQrValue($0.message) != nil }
                 case .custom:
                     filteredCodes = codes
+                case let .customValidated(_, validate):
+                    filteredCodes = codes.filter { validate($0.message) }
             }
             if let code = filteredCodes.first, CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4).contains(code.boundingBox.center) {
                 if strongSelf.codeWithError != code.message {
@@ -661,7 +724,14 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         transition.updateFrame(node: self.fadeNode, frame: bounds)
         
         let topNavigationIconName: String
-        if case .custom = self.subject {
+        let isCustom: Bool
+        switch self.subject {
+        case .custom:
+            isCustom = true
+        default:
+            isCustom = false
+        }
+        if isCustom {
             topNavigationIconName = "Navigation/Close"
         } else {
             topNavigationIconName = "Navigation/Back"
@@ -684,7 +754,14 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
                     guard let self else {
                         return
                     }
-                    if case .custom = self.subject {
+                    let isCustom: Bool
+                    switch self.subject {
+                    case .custom:
+                        isCustom = true
+                    default:
+                        isCustom = false
+                    }
+                    if isCustom {
                         self.controller?.cancelPressed()
                     } else {
                         self.controller?.dismiss()
@@ -888,6 +965,13 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
     }
     
     fileprivate func resolveCode(code: String, completion: @escaping (Bool) -> Void) {
+        switch self.subject {
+        case .cryptoAddress, .customValidated:
+            completion(self.controller?.completeWithCode(code) == true)
+            return
+        default:
+            break
+        }
         self.resolveDisposable.set((self.context.sharedContext.resolveUrl(context: self.context, peerId: nil, url: code, skipUrlAuth: false)
         |> deliverOnMainQueue).start(next: { [weak self] result in
             if let strongSelf = self {

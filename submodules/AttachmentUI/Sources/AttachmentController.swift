@@ -23,6 +23,7 @@ import TextFormat
 public enum AttachmentButtonType: Equatable {
     case gallery
     case file
+    case money
     case location
     case todo
     case quickReply
@@ -43,6 +44,8 @@ public enum AttachmentButtonType: Equatable {
             return "gallery"
         case .file:
             return "file"
+        case .money:
+            return "money"
         case .location:
             return "location"
         case .todo:
@@ -82,6 +85,12 @@ public enum AttachmentButtonType: Equatable {
             }
         case .file:
             if case .file = rhs {
+                return true
+            } else {
+                return false
+            }
+        case .money:
+            if case .money = rhs {
                 return true
             } else {
                 return false

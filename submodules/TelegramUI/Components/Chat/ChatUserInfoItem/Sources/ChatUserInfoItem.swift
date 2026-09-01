@@ -392,7 +392,30 @@ public final class ChatUserInfoItemNode: ListViewItemNode, ASGestureRecognizerDe
             
             let disclaimerText: NSMutableAttributedString
             if let verification = item.verification {
-                disclaimerText = NSMutableAttributedString(string: " #  \(verification.description)", font: Font.regular(13.0), textColor: subtitleColor)
+                let textFont = Font.regular(13.0)
+                let iconPrefix = " #  "
+                let iconPrefixLength = (iconPrefix as NSString).length
+                let descriptionEntities = verification.descriptionEntities.map { entity in
+                    return MessageTextEntity(
+                        range: (entity.range.lowerBound + iconPrefixLength) ..< (entity.range.upperBound + iconPrefixLength),
+                        type: entity.type
+                    )
+                }
+                disclaimerText = NSMutableAttributedString(attributedString: stringWithAppliedEntities(
+                    iconPrefix + verification.description,
+                    entities: descriptionEntities,
+                    baseColor: subtitleColor,
+                    linkColor: subtitleColor,
+                    baseFont: textFont,
+                    linkFont: textFont,
+                    boldFont: Font.semibold(13.0),
+                    italicFont: Font.italic(13.0),
+                    boldItalicFont: Font.semiboldItalic(13.0),
+                    fixedFont: Font.monospace(13.0),
+                    blockQuoteFont: textFont,
+                    message: nil,
+                    paragraphAlignment: .center
+                ))
                 if let range = disclaimerText.string.range(of: "#") {
                     disclaimerText.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSRange(range, in: disclaimerText.string))
                     disclaimerText.addAttribute(.foregroundColor, value: subtitleColor, range: NSRange(range, in: disclaimerText.string))

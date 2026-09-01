@@ -25,21 +25,48 @@ public func convertTonToStars(_ amount: StarsAmount, tonUsdRate: Double, starsUs
     return Int64(starsValue)
 }
 
-public func formatTonUsdValue(_ value: Int64, divide: Bool = true, rate: Double = 1.0, dateTimeFormat: PresentationDateTimeFormat) -> String {
+public func formatFiatValue(_ value: Double, currencySymbol: String, maxDecimalPositions: Int = 2, dateTimeFormat: PresentationDateTimeFormat) -> String {
     let decimalSeparator = dateTimeFormat.decimalSeparator
-    let normalizedValue: Double = divide ? Double(value) / 1000000000 : Double(value)
-    var formattedValue = String(format: "%0.2f", normalizedValue * rate)
+    var formattedValue = String(
+        format: "%0.\(maxDecimalPositions)f",
+        locale: Locale(identifier: "en_US_POSIX"),
+        value
+    )
     formattedValue = formattedValue.replacingOccurrences(of: ".", with: decimalSeparator)
     if let dotIndex = formattedValue.firstIndex(of: decimalSeparator.first!) {
         let integerPartString = formattedValue[..<dotIndex]
         if let integerPart = Int32(integerPartString) {
             let modifiedIntegerPart = presentationStringsFormattedNumber(integerPart, dateTimeFormat.groupingSeparator)
             
-            let resultString = "$\(modifiedIntegerPart)\(formattedValue[dotIndex...])"
+            let resultString = "\(currencySymbol)\(modifiedIntegerPart)\(formattedValue[dotIndex...])"
             return resultString
         }
     }
-    return "$\(formattedValue)"
+    if let integerPart = Int32(formattedValue) {
+        return "\(currencySymbol)\(presentationStringsFormattedNumber(integerPart, dateTimeFormat.groupingSeparator))"
+    }
+    return "\(currencySymbol)\(formattedValue)"
+}
+
+public func formatTonFiatValue(_ value: Int64, divide: Bool = true, rate: Double = 1.0, currencySymbol: String, maxDecimalPositions: Int = 2, dateTimeFormat: PresentationDateTimeFormat) -> String {
+    let normalizedValue: Double = divide ? Double(value) / 1000000000 : Double(value)
+    return formatFiatValue(
+        normalizedValue * rate,
+        currencySymbol: currencySymbol,
+        maxDecimalPositions: maxDecimalPositions,
+        dateTimeFormat: dateTimeFormat
+    )
+}
+
+public func formatTonUsdValue(_ value: Int64, divide: Bool = true, rate: Double = 1.0, maxDecimalPositions: Int = 2, dateTimeFormat: PresentationDateTimeFormat) -> String {
+    return formatTonFiatValue(
+        value,
+        divide: divide,
+        rate: rate,
+        currencySymbol: "$",
+        maxDecimalPositions: maxDecimalPositions,
+        dateTimeFormat: dateTimeFormat
+    )
 }
 
 public func formatTonAmountText(_ value: Int64, dateTimeFormat: PresentationDateTimeFormat, showPlus: Bool = false, maxDecimalPositions: Int? = 2, formatString: ((Int32) -> String)? = nil) -> String {

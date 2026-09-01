@@ -18,6 +18,7 @@ enum SettingsSection: Int, CaseIterable {
     case phone
     case accounts
     case myProfile
+    case wallet
     case proxy
     case apps
     case shortcuts
@@ -150,6 +151,13 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         items[.myProfile]!.append(PeerInfoScreenDisclosureItem(id: 0, text: presentationData.strings.Settings_MyProfile, icon: PresentationResourcesSettings.myProfile, action: {
             interaction.openSettings(.profile)
         }))
+        
+        if context.account.testingEnvironment, context.sharedContext.immediateExperimentalUISettings.allowWebViewInspection {
+            //TODO:localize
+            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
+                interaction.openSettings(.wallet)
+            }))
+        }
         
         if !settings.proxySettings.servers.isEmpty {
             let proxyType: String

@@ -13,8 +13,14 @@ import MultilineTextComponent
 import GiftItemComponent
 
 public final class StarsAvatarComponent: Component {
+    public enum Direction: Equatable {
+        case incoming
+        case outgoing
+    }
+
     public enum Peer: Equatable {
         case transactionPeer(StarsContext.State.Transaction.Peer)
+        case transaction(Direction)
         case search
     }
     
@@ -116,6 +122,9 @@ public final class StarsAvatarComponent: Component {
             let size = component.size ?? CGSize(width: 40.0, height: 40.0)
             var iconInset: CGFloat = 3.0
             var iconOffset: CGFloat = 0.0
+            var iconRotation: CGFloat = 0.0
+
+            self.iconView.transform = .identity
             
             var dimensions = size
             
@@ -368,6 +377,33 @@ public final class StarsAvatarComponent: Component {
                     self.avatarNode.isHidden = true
                     self.iconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Media/EntityInputPremiumIcon"), color: .white)
                 }
+            case let .transaction(direction):
+                iconInset = 6.0
+                switch direction {
+                case .incoming:
+                    self.backgroundView.image = generateGradientFilledCircleImage(
+                        diameter: size.width,
+                        colors: [
+                            UIColor(rgb: 0x32b83b).cgColor,
+                            UIColor(rgb: 0x87d93b).cgColor
+                        ],
+                        direction: .vertical
+                    )
+                    iconRotation = .pi
+                case .outgoing:
+                    self.backgroundView.image = generateGradientFilledCircleImage(
+                        diameter: size.width,
+                        colors: [
+                            UIColor(rgb: 0x2a9ef1).cgColor,
+                            UIColor(rgb: 0x72d5fd).cgColor
+                        ],
+                        direction: .vertical
+                    )
+                }
+                self.backgroundView.isHidden = false
+                self.iconView.isHidden = false
+                self.avatarNode.isHidden = true
+                self.iconView.image = UIImage(bundleImageName: "Wallet/TransactionArrow")
             case .search:
                 iconInset = 6.0
                 self.backgroundView.image = generateGradientFilledCircleImage(
@@ -386,6 +422,7 @@ public final class StarsAvatarComponent: Component {
             
             self.avatarNode.frame = CGRect(origin: .zero, size: size)
             self.iconView.frame = CGRect(origin: .zero, size: size).insetBy(dx: iconInset, dy: iconInset).offsetBy(dx: 0.0, dy: iconOffset)
+            self.iconView.transform = CGAffineTransform(rotationAngle: iconRotation)
             self.backgroundView.frame = CGRect(origin: .zero, size: size)
 
             return size

@@ -117,6 +117,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
     public let hasTopEdgeEffect: Bool
     public let bottomItem: AnyComponent<Empty>?
     public let backgroundColor: BackgroundColor
+    public let clipsContent: Bool
     public let isFullscreen: Bool
     public let defaultHeight: CGFloat?
     public let externalState: ExternalState?
@@ -130,6 +131,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
         hasTopEdgeEffect: Bool = true,
         bottomItem: AnyComponent<Empty>? = nil,
         backgroundColor: BackgroundColor,
+        clipsContent: Bool = false,
         isFullscreen: Bool = false,
         defaultHeight: CGFloat? = nil,
         externalState: ExternalState? = nil,
@@ -142,6 +144,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
         self.hasTopEdgeEffect = hasTopEdgeEffect
         self.bottomItem = bottomItem
         self.backgroundColor = backgroundColor
+        self.clipsContent = clipsContent
         self.isFullscreen = isFullscreen
         self.defaultHeight = defaultHeight
         self.externalState = externalState
@@ -168,6 +171,9 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             return false
         }
         if lhs.backgroundColor != rhs.backgroundColor {
+            return false
+        }
+        if lhs.clipsContent != rhs.clipsContent {
             return false
         }
         if lhs.isFullscreen != rhs.isFullscreen {
@@ -590,11 +596,11 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 topOffsetFraction = 1.0
             }
             
-            #if DEBUG && true
-            if "".isEmpty {
-                topOffsetFraction = 1.0
-            }
-            #endif
+//            #if DEBUG && true
+//            if "".isEmpty {
+//                topOffsetFraction = 1.0
+//            }
+//            #endif
 
             let minScale: CGFloat = itemLayout.isTablet ? 1.0 : (itemLayout.containerSize.width - 6.0 * 2.0) / itemLayout.containerSize.width
             let minScaledTranslation: CGFloat = itemLayout.isTablet ? 0.0 : (itemLayout.containerSize.height - itemLayout.containerSize.height * minScale) * 0.5 - 6.0
@@ -739,6 +745,9 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 if contentView.superview == nil {
                     self.scrollContentView.addSubview(contentView)
                 }
+                contentView.clipsToBounds = component.clipsContent
+                contentView.layer.cornerRadius = 40.0
+                
                 transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(x: rawSideInset, y: 0.0), size: contentViewSize))
             }
 

@@ -70,6 +70,88 @@ private func peerMentionsAttributes(primaryTextColor: UIColor, peerIds: [(Int, E
     return result
 }
 
+public func walletTransferServiceMessageString(
+    presentationData: (PresentationTheme, TelegramWallpaper),
+    strings: PresentationStrings,
+    dateTimeFormat: PresentationDateTimeFormat,
+    message: EngineMessage,
+    transfer: WalletTransferMessageData,
+    tonUsdRate: Double?
+) -> NSAttributedString {
+    let primaryTextColor = serviceMessageColorComponents(theme: presentationData.0, wallpaper: presentationData.1).primaryText
+    let regularFont = Font.regular(13.0)
+    let semiboldFont = Font.semibold(13.0)
+    let result = NSMutableAttributedString()
+
+    func append(_ text: String, font: UIFont, additionalAttributes: [NSAttributedString.Key: Any] = [:]) {
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: primaryTextColor
+        ]
+        for (key, value) in additionalAttributes {
+            attributes[key] = value
+        }
+        result.append(NSAttributedString(string: text, attributes: attributes))
+    }
+
+    let conversationPeer = message.enginePeers[message.id.peerId] ?? message.author
+    let peerName = conversationPeer?.compactDisplayTitle ?? ""
+    let peerMentionAttributes: [NSAttributedString.Key: Any]
+    if let peerId = conversationPeer?.id {
+        peerMentionAttributes = [
+            NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention): TelegramPeerMention(peerId: peerId, mention: "")
+        ]
+    } else {
+        peerMentionAttributes = [:]
+    }
+
+    //TODO:localize
+    let youText = "You"
+    //TODO:localize
+    let sentText = " sent "
+    //TODO:localize
+    let sentYouText = " sent you "
+    //TODO:localize
+    let worthPrefixText = "(worth "
+    //TODO:localize
+    let worthSuffixText = "). "
+    //TODO:localize
+    let learnMoreText = "Learn more"
+
+    switch transfer.direction {
+    case .incoming:
+        append(peerName, font: semiboldFont, additionalAttributes: peerMentionAttributes)
+        append(sentYouText, font: regularFont)
+    case .outgoing:
+        append(youText, font: semiboldFont)
+        append(sentText, font: regularFont)
+        append(peerName, font: regularFont, additionalAttributes: peerMentionAttributes)
+        append(" ", font: regularFont)
+    }
+
+    let amountText = formatTonAmountText(
+        transfer.amount,
+        dateTimeFormat: dateTimeFormat,
+        maxDecimalPositions: 3,
+        formatString: strings.Currency_Grams
+    )
+    append(amountText, font: semiboldFont)
+    append("\n", font: regularFont)
+
+    if let tonUsdRate {
+        append(worthPrefixText, font: regularFont)
+        append(formatTonUsdValue(transfer.amount, rate: tonUsdRate, dateTimeFormat: dateTimeFormat), font: regularFont)
+        append(worthSuffixText, font: regularFont)
+    }
+    append(
+        learnMoreText,
+        font: semiboldFont,
+        additionalAttributes: [NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): ""]
+    )
+
+    return result
+}
+
 public func plainServiceMessageString(strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder, dateTimeFormat: PresentationDateTimeFormat, message: EngineMessage, accountPeerId: EnginePeer.Id, forChatList: Bool, forForumOverview: Bool, forAdditionalServiceMessage: Bool = false) -> (text: String, spoilerRanges: [NSRange], customEmojiRanges: [(NSRange, ChatTextInputTextCustomEmojiAttribute)])? {
     if let attributedString = universalServiceMessageString(presentationData: nil, strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, message: message, accountPeerId: accountPeerId, forChatList: forChatList, forForumOverview: forForumOverview, forAdditionalServiceMessage: forAdditionalServiceMessage) {
         var ranges: [NSRange] = []

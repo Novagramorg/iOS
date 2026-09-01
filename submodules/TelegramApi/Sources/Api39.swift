@@ -1,4 +1,304 @@
 public extension Api.payments {
+    enum PaymentForm: TypeConstructorDescription {
+        public class Cons_paymentForm: TypeConstructorDescription {
+            public var flags: Int32
+            public var formId: Int64
+            public var botId: Int64
+            public var title: String
+            public var description: String
+            public var photo: Api.WebDocument?
+            public var invoice: Api.Invoice
+            public var providerId: Int64
+            public var url: String
+            public var nativeProvider: String?
+            public var nativeParams: Api.DataJSON?
+            public var additionalMethods: [Api.PaymentFormMethod]?
+            public var savedInfo: Api.PaymentRequestedInfo?
+            public var savedCredentials: [Api.PaymentSavedCredentials]?
+            public var users: [Api.User]
+            public init(flags: Int32, formId: Int64, botId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, providerId: Int64, url: String, nativeProvider: String?, nativeParams: Api.DataJSON?, additionalMethods: [Api.PaymentFormMethod]?, savedInfo: Api.PaymentRequestedInfo?, savedCredentials: [Api.PaymentSavedCredentials]?, users: [Api.User]) {
+                self.flags = flags
+                self.formId = formId
+                self.botId = botId
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.invoice = invoice
+                self.providerId = providerId
+                self.url = url
+                self.nativeProvider = nativeProvider
+                self.nativeParams = nativeParams
+                self.additionalMethods = additionalMethods
+                self.savedInfo = savedInfo
+                self.savedCredentials = savedCredentials
+                self.users = users
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("paymentForm", [("flags", ConstructorParameterDescription(self.flags)), ("formId", ConstructorParameterDescription(self.formId)), ("botId", ConstructorParameterDescription(self.botId)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("photo", ConstructorParameterDescription(self.photo)), ("invoice", ConstructorParameterDescription(self.invoice)), ("providerId", ConstructorParameterDescription(self.providerId)), ("url", ConstructorParameterDescription(self.url)), ("nativeProvider", ConstructorParameterDescription(self.nativeProvider)), ("nativeParams", ConstructorParameterDescription(self.nativeParams)), ("additionalMethods", ConstructorParameterDescription(self.additionalMethods)), ("savedInfo", ConstructorParameterDescription(self.savedInfo)), ("savedCredentials", ConstructorParameterDescription(self.savedCredentials)), ("users", ConstructorParameterDescription(self.users))])
+            }
+        }
+        public class Cons_paymentFormStarGift: TypeConstructorDescription {
+            public var formId: Int64
+            public var invoice: Api.Invoice
+            public init(formId: Int64, invoice: Api.Invoice) {
+                self.formId = formId
+                self.invoice = invoice
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("paymentFormStarGift", [("formId", ConstructorParameterDescription(self.formId)), ("invoice", ConstructorParameterDescription(self.invoice))])
+            }
+        }
+        public class Cons_paymentFormStars: TypeConstructorDescription {
+            public var flags: Int32
+            public var formId: Int64
+            public var botId: Int64
+            public var title: String
+            public var description: String
+            public var photo: Api.WebDocument?
+            public var invoice: Api.Invoice
+            public var users: [Api.User]
+            public init(flags: Int32, formId: Int64, botId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, users: [Api.User]) {
+                self.flags = flags
+                self.formId = formId
+                self.botId = botId
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.invoice = invoice
+                self.users = users
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("paymentFormStars", [("flags", ConstructorParameterDescription(self.flags)), ("formId", ConstructorParameterDescription(self.formId)), ("botId", ConstructorParameterDescription(self.botId)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("photo", ConstructorParameterDescription(self.photo)), ("invoice", ConstructorParameterDescription(self.invoice)), ("users", ConstructorParameterDescription(self.users))])
+            }
+        }
+        case paymentForm(Cons_paymentForm)
+        case paymentFormStarGift(Cons_paymentFormStarGift)
+        case paymentFormStars(Cons_paymentFormStars)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .paymentForm(let _data):
+                if boxed {
+                    buffer.appendInt32(-1610250415)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.formId, buffer: buffer, boxed: false)
+                serializeInt64(_data.botId, buffer: buffer, boxed: false)
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                serializeString(_data.description, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    _data.photo!.serialize(buffer, true)
+                }
+                _data.invoice.serialize(buffer, true)
+                serializeInt64(_data.providerId, buffer: buffer, boxed: false)
+                serializeString(_data.url, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    serializeString(_data.nativeProvider!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    _data.nativeParams!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 6) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.additionalMethods!.count))
+                    for item in _data.additionalMethods! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    _data.savedInfo!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.savedCredentials!.count))
+                    for item in _data.savedCredentials! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.users.count))
+                for item in _data.users {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .paymentFormStarGift(let _data):
+                if boxed {
+                    buffer.appendInt32(-1272590367)
+                }
+                serializeInt64(_data.formId, buffer: buffer, boxed: false)
+                _data.invoice.serialize(buffer, true)
+                break
+            case .paymentFormStars(let _data):
+                if boxed {
+                    buffer.appendInt32(2079764828)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.formId, buffer: buffer, boxed: false)
+                serializeInt64(_data.botId, buffer: buffer, boxed: false)
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                serializeString(_data.description, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    _data.photo!.serialize(buffer, true)
+                }
+                _data.invoice.serialize(buffer, true)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.users.count))
+                for item in _data.users {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .paymentForm(let _data):
+                return ("paymentForm", [("flags", ConstructorParameterDescription(_data.flags)), ("formId", ConstructorParameterDescription(_data.formId)), ("botId", ConstructorParameterDescription(_data.botId)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("photo", ConstructorParameterDescription(_data.photo)), ("invoice", ConstructorParameterDescription(_data.invoice)), ("providerId", ConstructorParameterDescription(_data.providerId)), ("url", ConstructorParameterDescription(_data.url)), ("nativeProvider", ConstructorParameterDescription(_data.nativeProvider)), ("nativeParams", ConstructorParameterDescription(_data.nativeParams)), ("additionalMethods", ConstructorParameterDescription(_data.additionalMethods)), ("savedInfo", ConstructorParameterDescription(_data.savedInfo)), ("savedCredentials", ConstructorParameterDescription(_data.savedCredentials)), ("users", ConstructorParameterDescription(_data.users))])
+            case .paymentFormStarGift(let _data):
+                return ("paymentFormStarGift", [("formId", ConstructorParameterDescription(_data.formId)), ("invoice", ConstructorParameterDescription(_data.invoice))])
+            case .paymentFormStars(let _data):
+                return ("paymentFormStars", [("flags", ConstructorParameterDescription(_data.flags)), ("formId", ConstructorParameterDescription(_data.formId)), ("botId", ConstructorParameterDescription(_data.botId)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("photo", ConstructorParameterDescription(_data.photo)), ("invoice", ConstructorParameterDescription(_data.invoice)), ("users", ConstructorParameterDescription(_data.users))])
+            }
+        }
+
+        public static func parse_paymentForm(_ reader: BufferReader) -> PaymentForm? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
+                if let signature = reader.readInt32() {
+                    _6 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
+            var _7: Api.Invoice?
+            if let signature = reader.readInt32() {
+                _7 = Api.parse(reader, signature: signature) as? Api.Invoice
+            }
+            var _8: Int64?
+            _8 = reader.readInt64()
+            var _9: String?
+            _9 = parseString(reader)
+            var _10: String?
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                _10 = parseString(reader)
+            }
+            var _11: Api.DataJSON?
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                if let signature = reader.readInt32() {
+                    _11 = Api.parse(reader, signature: signature) as? Api.DataJSON
+                }
+            }
+            var _12: [Api.PaymentFormMethod]?
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
+                if let _ = reader.readInt32() {
+                    _12 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PaymentFormMethod.self)
+                }
+            }
+            var _13: Api.PaymentRequestedInfo?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _13 = Api.parse(reader, signature: signature) as? Api.PaymentRequestedInfo
+                }
+            }
+            var _14: [Api.PaymentSavedCredentials]?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                if let _ = reader.readInt32() {
+                    _14 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PaymentSavedCredentials.self)
+                }
+            }
+            var _15: [Api.User]?
+            if let _ = reader.readInt32() {
+                _15 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _6 != nil
+            let _c7 = _7 != nil
+            let _c8 = _8 != nil
+            let _c9 = _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _11 != nil
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _13 != nil
+            let _c14 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _14 != nil
+            let _c15 = _15 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 {
+                return Api.payments.PaymentForm.paymentForm(Cons_paymentForm(flags: _1!, formId: _2!, botId: _3!, title: _4!, description: _5!, photo: _6, invoice: _7!, providerId: _8!, url: _9!, nativeProvider: _10, nativeParams: _11, additionalMethods: _12, savedInfo: _13, savedCredentials: _14, users: _15!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_paymentFormStarGift(_ reader: BufferReader) -> PaymentForm? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Api.Invoice?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Invoice
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.payments.PaymentForm.paymentFormStarGift(Cons_paymentFormStarGift(formId: _1!, invoice: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_paymentFormStars(_ reader: BufferReader) -> PaymentForm? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
+                if let signature = reader.readInt32() {
+                    _6 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
+            var _7: Api.Invoice?
+            if let signature = reader.readInt32() {
+                _7 = Api.parse(reader, signature: signature) as? Api.Invoice
+            }
+            var _8: [Api.User]?
+            if let _ = reader.readInt32() {
+                _8 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _6 != nil
+            let _c7 = _7 != nil
+            let _c8 = _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.payments.PaymentForm.paymentFormStars(Cons_paymentFormStars(flags: _1!, formId: _2!, botId: _3!, title: _4!, description: _5!, photo: _6, invoice: _7!, users: _8!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.payments {
     enum PaymentReceipt: TypeConstructorDescription {
         public class Cons_paymentReceipt: TypeConstructorDescription {
             public var flags: Int32
@@ -2084,198 +2384,6 @@ public extension Api.phone {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.phone.GroupCallStars.groupCallStars(Cons_groupCallStars(totalStars: _1!, topDonors: _2!, chats: _3!, users: _4!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.phone {
-    enum GroupCallStreamChannels: TypeConstructorDescription {
-        public class Cons_groupCallStreamChannels: TypeConstructorDescription {
-            public var channels: [Api.GroupCallStreamChannel]
-            public init(channels: [Api.GroupCallStreamChannel]) {
-                self.channels = channels
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("groupCallStreamChannels", [("channels", ConstructorParameterDescription(self.channels))])
-            }
-        }
-        case groupCallStreamChannels(Cons_groupCallStreamChannels)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .groupCallStreamChannels(let _data):
-                if boxed {
-                    buffer.appendInt32(-790330702)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.channels.count))
-                for item in _data.channels {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .groupCallStreamChannels(let _data):
-                return ("groupCallStreamChannels", [("channels", ConstructorParameterDescription(_data.channels))])
-            }
-        }
-
-        public static func parse_groupCallStreamChannels(_ reader: BufferReader) -> GroupCallStreamChannels? {
-            var _1: [Api.GroupCallStreamChannel]?
-            if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.GroupCallStreamChannel.self)
-            }
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.phone.GroupCallStreamChannels.groupCallStreamChannels(Cons_groupCallStreamChannels(channels: _1!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.phone {
-    enum GroupCallStreamRtmpUrl: TypeConstructorDescription {
-        public class Cons_groupCallStreamRtmpUrl: TypeConstructorDescription {
-            public var url: String
-            public var key: String
-            public init(url: String, key: String) {
-                self.url = url
-                self.key = key
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("groupCallStreamRtmpUrl", [("url", ConstructorParameterDescription(self.url)), ("key", ConstructorParameterDescription(self.key))])
-            }
-        }
-        case groupCallStreamRtmpUrl(Cons_groupCallStreamRtmpUrl)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .groupCallStreamRtmpUrl(let _data):
-                if boxed {
-                    buffer.appendInt32(767505458)
-                }
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                serializeString(_data.key, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .groupCallStreamRtmpUrl(let _data):
-                return ("groupCallStreamRtmpUrl", [("url", ConstructorParameterDescription(_data.url)), ("key", ConstructorParameterDescription(_data.key))])
-            }
-        }
-
-        public static func parse_groupCallStreamRtmpUrl(_ reader: BufferReader) -> GroupCallStreamRtmpUrl? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.phone.GroupCallStreamRtmpUrl.groupCallStreamRtmpUrl(Cons_groupCallStreamRtmpUrl(url: _1!, key: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.phone {
-    enum GroupParticipants: TypeConstructorDescription {
-        public class Cons_groupParticipants: TypeConstructorDescription {
-            public var count: Int32
-            public var participants: [Api.GroupCallParticipant]
-            public var nextOffset: String
-            public var chats: [Api.Chat]
-            public var users: [Api.User]
-            public var version: Int32
-            public init(count: Int32, participants: [Api.GroupCallParticipant], nextOffset: String, chats: [Api.Chat], users: [Api.User], version: Int32) {
-                self.count = count
-                self.participants = participants
-                self.nextOffset = nextOffset
-                self.chats = chats
-                self.users = users
-                self.version = version
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("groupParticipants", [("count", ConstructorParameterDescription(self.count)), ("participants", ConstructorParameterDescription(self.participants)), ("nextOffset", ConstructorParameterDescription(self.nextOffset)), ("chats", ConstructorParameterDescription(self.chats)), ("users", ConstructorParameterDescription(self.users)), ("version", ConstructorParameterDescription(self.version))])
-            }
-        }
-        case groupParticipants(Cons_groupParticipants)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .groupParticipants(let _data):
-                if boxed {
-                    buffer.appendInt32(-193506890)
-                }
-                serializeInt32(_data.count, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.participants.count))
-                for item in _data.participants {
-                    item.serialize(buffer, true)
-                }
-                serializeString(_data.nextOffset, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.chats.count))
-                for item in _data.chats {
-                    item.serialize(buffer, true)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.users.count))
-                for item in _data.users {
-                    item.serialize(buffer, true)
-                }
-                serializeInt32(_data.version, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .groupParticipants(let _data):
-                return ("groupParticipants", [("count", ConstructorParameterDescription(_data.count)), ("participants", ConstructorParameterDescription(_data.participants)), ("nextOffset", ConstructorParameterDescription(_data.nextOffset)), ("chats", ConstructorParameterDescription(_data.chats)), ("users", ConstructorParameterDescription(_data.users)), ("version", ConstructorParameterDescription(_data.version))])
-            }
-        }
-
-        public static func parse_groupParticipants(_ reader: BufferReader) -> GroupParticipants? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: [Api.GroupCallParticipant]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.GroupCallParticipant.self)
-            }
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: [Api.Chat]?
-            if let _ = reader.readInt32() {
-                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
-            }
-            var _5: [Api.User]?
-            if let _ = reader.readInt32() {
-                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            var _6: Int32?
-            _6 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            let _c6 = _6 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
-                return Api.phone.GroupParticipants.groupParticipants(Cons_groupParticipants(count: _1!, participants: _2!, nextOffset: _3!, chats: _4!, users: _5!, version: _6!))
             }
             else {
                 return nil
