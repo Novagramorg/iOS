@@ -668,12 +668,20 @@ private final class GiftViewSheetContent: CombinedComponent {
             self.giftVariantsDisposable.dispose()
         }
 
-        func openPeer(_ peer: EnginePeer, gifts: Bool = false, dismiss: Bool = true) {
+        func openPeer(_ peer: EnginePeer, gifts: Bool = false, profile: Bool = false, dismiss: Bool = true) {
             guard let controller = self.getController() as? GiftViewScreen, let navigationController = controller.navigationController as? NavigationController else {
                 return
             }
                         
             controller.dismissAllTooltips()
+
+            if profile,
+               let currentController = navigationController.viewControllers.last(where: { $0 !== controller }),
+               let currentProfile = currentController as? PeerInfoScreen,
+               currentProfile.peerId == peer.id {
+                self.dismiss(animated: true)
+                return
+            }
             
             let context = self.context
             let action = { [navigationController] in
@@ -701,6 +709,18 @@ private final class GiftViewSheetContent: CombinedComponent {
                         }
                         let _ = profileGifts
                     })
+                } else if profile {
+                    if let profileController = context.sharedContext.makePeerInfoController(
+                        context: context,
+                        updatedPresentationData: nil,
+                        peer: peer,
+                        mode: .generic,
+                        avatarInitiallyExpanded: false,
+                        fromChat: false,
+                        requestsContext: nil
+                    ) {
+                        navigationController.pushViewController(profileController)
+                    }
                 } else {
                     context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
                         navigationController: navigationController,
@@ -2887,11 +2907,12 @@ private final class GiftViewSheetContent: CombinedComponent {
         let subtitle = Child(MultilineTextComponent.self)
         
         let descriptionButton = Child(PlainButtonComponent.self)
+        let giftMessageSenderButtonChild = Child(PlainButtonComponent.self)
         let description = Child(MultilineTextComponent.self)
         let animatedDescription = Child(HStack<Empty>.self)
         let giftMessageBackground = Child(Image.self)
         let giftMessageTextComponent = Child(SelectableGiftMessageTextComponent.self)
-        let giftMessageAvatar = Child(AvatarComponent.self)
+        let giftMessageAvatar = Child(PlainButtonComponent.self)
         
         let transferButton = Child(HeaderButtonComponent.self)
         let wearButton = Child(HeaderButtonComponent.self)
@@ -4156,6 +4177,29 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 .disappear(.default(alpha: true))
                             )
                         })
+
+                        if hasGiftMessage, !giftMessageNameHidden, let giftMessagePeer {
+                            let giftMessageSenderButton = giftMessageSenderButtonChild.update(
+                                component: PlainButtonComponent(
+                                    content: AnyComponent(Rectangle(color: .clear)),
+                                    minSize: description.size,
+                                    action: { [weak state] in
+                                        state?.openPeer(giftMessagePeer, profile: true)
+                                    },
+                                    animateAlpha: false,
+                                    animateScale: false
+                                ),
+                                availableSize: description.size,
+                                transition: .immediate
+                            )
+                            headerComponents.append({
+                                context.add(giftMessageSenderButton
+                                    .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + description.size.height / 2.0))
+                                    .appear(.default(alpha: true))
+                                    .disappear(.default(alpha: true))
+                                )
+                            })
+                        }
                         
                         if hasDescriptionButton {
                             let descriptionButton = descriptionButton.update(
@@ -4220,11 +4264,22 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 transition: context.transition
                             )
                             let giftMessageAvatar = giftMessageAvatar.update(
-                                component: AvatarComponent(
-                                    context: component.context,
-                                    theme: theme,
-                                    peer: giftMessagePeer,
-                                    overrideImage: nil
+                                component: PlainButtonComponent(
+                                    content: AnyComponent(AvatarComponent(
+                                        context: component.context,
+                                        theme: theme,
+                                        peer: giftMessagePeer,
+                                        overrideImage: nil
+                                    )),
+                                    minSize: avatarSize,
+                                    action: { [weak state] in
+                                        if let giftMessagePeer {
+                                            state?.openPeer(giftMessagePeer, profile: true)
+                                        }
+                                    },
+                                    isEnabled: giftMessagePeer != nil,
+                                    animateAlpha: giftMessagePeer != nil,
+                                    animateScale: giftMessagePeer != nil
                                 ),
                                 environment: {},
                                 availableSize: avatarSize,
