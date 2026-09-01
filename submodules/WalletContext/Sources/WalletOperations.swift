@@ -526,35 +526,164 @@ public extension WalletContext {
                   info.backupEnabled else {
                 throw WalletError.unavailable
             }
-            let words = try await context.runtime.revealRecoveryPhrase()
+
+            if let existing = try await context.runtime.keyRotationRecord() {
+                guard walletEngineAddressesEqual(existing.walletAddress, info.address),
+                      existing.walletPublicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey,
+                      existing.newPublicKey.count == 32,
+                      existing.validUntil <= UInt64(Int32.max) else {
+                    throw WalletError.storage(.identityMismatch)
+                }
+
+                if existing.phase == .rollbackStored || existing.phase == .replacementStored || existing.phase == .rolledBack {
+                    _ = try await context.runtime.resolveKeyRotation()
+                } else {
+                    if existing.phase == .submissionStarted {
+                        _ = try? await context.runtime.resolveKeyRotation()
+                    }
+                    if let current = try await context.runtime.keyRotationRecord() {
+                        let words = try await context.runtime.revealRecoveryPhrase()
+                        guard words.count == 24 else {
+                            throw WalletError.invalidBackupData
+                        }
+                        return PreparedBackupDisable(
+                            id: current.operationId,
+                            walletAddress: info.address,
+                            walletPublicKey: info.publicKey,
+                            words: words,
+                            newPublicKey: current.newPublicKey,
+                            signedBoc: "",
+                            seqno: 0,
+                            expiresAt: Int32(current.validUntil),
+                            keyRotationPhase: current.phase == .confirmed ? .confirmed : .pending
+                        )
+                    }
+                }
+            }
+
+            let expiresAt = currentWalletTimestamp() + 300
+            let prepared = try await context.runtime.prepareKeyRotation(validUntil: UInt64(expiresAt))
+            let words = prepared.replacementRecoveryPhrase.phrase
+                .split(whereSeparator: { $0.isWhitespace })
+                .map(String.init)
+            guard words.count == 24,
+                  prepared.newPublicKey.count == 32,
+                  prepared.validUntil == UInt64(expiresAt),
+                  !prepared.signedBoc.isEmpty else {
+                throw WalletError.sdk("Wallet engine returned invalid key-rotation material")
+            }
             return PreparedBackupDisable(
                 id: UUID().uuidString.lowercased(),
                 walletAddress: info.address,
                 walletPublicKey: info.publicKey,
                 words: words,
-                expiresAt: currentWalletTimestamp() + 300
+                newPublicKey: prepared.newPublicKey,
+                signedBoc: prepared.signedBoc,
+                seqno: prepared.seqno,
+                expiresAt: expiresAt,
+                keyRotationPhase: .prepared
             )
         }
     }
 
     func disableBackup(_ prepared: PreparedBackupDisable, password: String? = nil) -> Signal<WalletInfo, WalletError> {
         self.performOperation(.disablingBackup, cancelOnDispose: false) { context in
-            guard prepared.expiresAt > currentWalletTimestamp(),
-                  context.canSignCurrentWallet,
+            guard context.canSignCurrentWallet,
                   case let .wallet(info) = context.currentState.phase,
                   info.address == prepared.walletAddress,
                   info.publicKey == prepared.walletPublicKey,
                   info.backupEnabled else {
                 throw WalletError.unavailable
             }
+
+            var rotation = try await context.runtime.keyRotationRecord()
+            if rotation == nil {
+                guard prepared.keyRotationPhase == .prepared,
+                      prepared.expiresAt > currentWalletTimestamp(),
+                      prepared.newPublicKey.count == 32,
+                      !prepared.signedBoc.isEmpty else {
+                    throw WalletError.unavailable
+                }
+                let result: SendResult
+                do {
+                    result = try await context.runtime.sendKeyRotation(
+                        operationId: prepared.id,
+                        words: prepared.words,
+                        newPublicKey: prepared.newPublicKey,
+                        signedBoc: prepared.signedBoc,
+                        seqno: prepared.seqno,
+                        validUntil: UInt64(prepared.expiresAt)
+                    )
+                } catch {
+                    if (try? await context.runtime.keyRotationRecord()) == nil {
+                        throw WalletError.keyRotationFailed
+                    }
+                    throw error
+                }
+                switch result.phase {
+                case .submitted, .submissionUnknown, .confirmed:
+                    break
+                case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
+                     .submitting, .handedOff, .replaced, .sequenceNumberConsumed, .expired,
+                     .superseded, .failed, .cancelled:
+                    throw WalletError.keyRotationFailed
+                }
+                rotation = try await context.runtime.keyRotationRecord()
+            }
+
+            guard let rotation,
+                  rotation.operationId == prepared.id,
+                  walletEngineAddressesEqual(rotation.walletAddress, info.address),
+                  rotation.walletPublicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey else {
+                throw WalletError.operationInProgress
+            }
+            let (resolutionDeadline, deadlineOverflow) = rotation.validUntil.addingReportingOverflow(120)
+            guard !deadlineOverflow else {
+                throw WalletError.invalidBackupData
+            }
+
+            while true {
+                let resolution = try await context.runtime.resolveKeyRotation()
+                switch resolution {
+                case let .confirmed(operationId):
+                    guard operationId == prepared.id else {
+                        throw WalletError.operationInProgress
+                    }
+                    break
+                case let .pending(operationId, retryAfterMilliseconds):
+                    guard operationId == prepared.id else {
+                        throw WalletError.operationInProgress
+                    }
+                    let now = UInt64(max(0, Date().timeIntervalSince1970.rounded(.down)))
+                    guard now <= resolutionDeadline else {
+                        throw WalletError.network
+                    }
+                    let delay = min(5_000, max(500, retryAfterMilliseconds ?? 1_000))
+                    try await Task.sleep(nanoseconds: delay * 1_000_000)
+                    continue
+                case let .rolledBack(operationId, _):
+                    guard operationId == prepared.id else {
+                        throw WalletError.operationInProgress
+                    }
+                    throw WalletError.keyRotationFailed
+                case .none:
+                    throw WalletError.unavailable
+                }
+                break
+            }
+
             let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
                 context.engine.wallet.disableBackup(password: password)
             )
+            guard case let .ready(backupEnabled, _, _, _, _, _) = state, !backupEnabled else {
+                throw WalletError.invalidBackupData
+            }
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(identity.address, info.address),
                   identity.publicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey else {
                 throw WalletError.storage(.identityMismatch)
             }
+            try await context.runtime.completeKeyRotation(operationId: prepared.id)
             context.applyServerWalletState(state)
             guard case let .wallet(updated) = context.currentState.phase else {
                 throw WalletError.unavailable

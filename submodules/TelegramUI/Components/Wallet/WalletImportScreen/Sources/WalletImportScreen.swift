@@ -925,7 +925,7 @@ private final class WalletImportScreenComponent: Component {
 
         private func continueVerification() {
             guard let component = self.component,
-                  case let .verify(phraseWords) = component.mode,
+                  case let .verify(phraseWords, _) = component.mode,
                   component.verificationIndices.count == self.words.count,
                   !self.didCompleteVerification else {
                 return
@@ -1832,9 +1832,16 @@ public final class WalletImportScreen: ViewControllerComponentContainer {
         switch mode {
         case .importWallet, .enterRecoveryPhrase:
             verificationIndices = []
-        case let .verify(words):
+        case let .verify(words, keyRotation):
             precondition(words.count >= 3)
-            verificationIndices = Array(words.indices.shuffled().prefix(3)).sorted()
+            if keyRotation {
+                precondition(words.count == 24)
+                let anchorIndex = Int.random(in: 0 ..< 12)
+                let signingIndices = Array((12 ..< 24).shuffled().prefix(2))
+                verificationIndices = ([anchorIndex] + signingIndices).sorted()
+            } else {
+                verificationIndices = Array(words.indices.shuffled().prefix(3)).sorted()
+            }
         }
 
         super.init(

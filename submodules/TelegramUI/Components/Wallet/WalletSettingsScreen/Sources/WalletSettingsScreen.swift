@@ -48,6 +48,9 @@ private final class WalletSettingsScreenComponent: Component {
         private var walletState: WalletContext.State?
         private weak var backupWordsController: ViewController?
         private var preparedBackupDisable: WalletContext.PreparedBackupDisable?
+        private weak var disableBackupConfirmationController: AlertScreen?
+        private var disableBackupProgress: ValuePromise<Bool>?
+        private var isDisablingBackup = false
         private weak var replacementOptionsController: AlertScreen?
         private var replacementCreationProgress: ValuePromise<Bool>?
         private var isCreatingReplacementWallet = false
@@ -210,7 +213,7 @@ private final class WalletSettingsScreenComponent: Component {
             |> deliverOnMainQueue).start(next: { [weak self] prepared in
                 self?.presentUpdateSecretPhraseAlert(prepared: prepared)
             }, error: { [weak self] _ in
-                self?.presentDisableBackupError(keepPhrase: false)
+                self?.presentDisableBackupError()
             }))
         }
 
@@ -220,12 +223,12 @@ private final class WalletSettingsScreenComponent: Component {
             }
             controller.present(textAlertController(
                 context: component.context,
-                title: "Save Your Recovery Phrase",
-                text: "Disabling encrypted backup does not change your wallet or phrase. Make sure you have written the current phrase down before continuing.",
+                title: "Update Secret Phrase?",
+                text: "You'll get a new phrase to write down. Address and balance stay the same.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Not now", action: {
                     }),
-                    TextAlertAction(type: .defaultAction, title: "View Phrase", action: { [weak self] in
+                    TextAlertAction(type: .defaultAction, title: "Update", action: { [weak self] in
                         self?.openReplacementPhrase(prepared: prepared)
                     })
                 ]
@@ -268,37 +271,66 @@ private final class WalletSettingsScreenComponent: Component {
 
         private func presentFinalDisableBackupAlert() {
             guard let component = self.component,
-                  let controller = self.environment?.controller(),
-                  let prepared = self.preparedBackupDisable else {
+                  let prepared = self.preparedBackupDisable,
+                  let controller = self.backupWordsController?.navigationController?.topViewController as? ViewController
+                    ?? self.environment?.controller() else {
                 return
             }
-            let presentingController: ViewController
-            if let topController = self.backupWordsController?.navigationController?.topViewController as? ViewController {
-                presentingController = topController
-            } else {
-                presentingController = controller
-            }
-            presentingController.present(textAlertController(
+            let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
+            let actionsEnabled = progress.get() |> map { !$0 }
+            let alertController = AlertScreen(
                 context: component.context,
-                title: "Disable Backup?",
-                text: "Telegram will delete the encrypted shares stored across its datacenters. Your local recovery phrase will remain unchanged.",
+                configuration: AlertScreen.Configuration(dismissOnOutsideTap: false),
+                content: [
+                    AnyComponentWithIdentity(
+                        id: "title",
+                        component: AnyComponent(AlertTitleComponent(title: "Disable Backup?"))
+                    ),
+                    AnyComponentWithIdentity(
+                        id: "text",
+                        component: AnyComponent(AlertTextComponent(content: .plain(
+                            "Your wallet will switch to the new recovery phrase. After the change is confirmed, Telegram will delete the encrypted backup stored across its datacenters."
+                        )))
+                    )
+                ],
                 actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                    AlertScreen.Action(title: "Cancel", action: { [weak self] in
                         self?.dismissBackupWordsFlow()
                     }),
-                    TextAlertAction(type: .destructiveAction, title: "Disable", action: { [weak self] in
-                        self?.submitDisableBackup(prepared: prepared)
-                    })
+                    AlertScreen.Action(
+                        title: "Disable",
+                        type: .destructive,
+                        action: { [weak self] in
+                            self?.submitDisableBackup(prepared: prepared)
+                        },
+                        autoDismiss: false,
+                        isEnabled: actionsEnabled,
+                        progress: progress.get()
+                    )
                 ]
-            ), in: .window(.root))
+            )
+            self.disableBackupConfirmationController = alertController
+            self.disableBackupProgress = progress
+            alertController.dismissed = { [weak self, weak alertController] _ in
+                guard let self, self.disableBackupConfirmationController === alertController else {
+                    return
+                }
+                self.disableBackupConfirmationController = nil
+                self.disableBackupProgress = nil
+                self.isDisablingBackup = false
+            }
+            controller.present(alertController, in: .window(.root))
         }
 
         private func submitDisableBackup(prepared: WalletContext.PreparedBackupDisable) {
-            guard let component = self.component else {
+            guard !self.isDisablingBackup,
+                  let component = self.component,
+                  let presentingController = self.backupWordsController?.navigationController?.topViewController as? ViewController
+                    ?? self.environment?.controller() else {
                 return
             }
-            let presentingController = self.backupWordsController?.navigationController?.topViewController as? ViewController
-                ?? self.environment?.controller()
+            self.isDisablingBackup = true
+            self.disableBackupProgress?.set(true)
             self.backupOperationDisposable.set(performWalletAuthorizedOperation(
                 context: component.context,
                 present: { [weak presentingController] alert in
@@ -308,17 +340,25 @@ private final class WalletSettingsScreenComponent: Component {
                     component.walletContext.disableBackup(prepared, password: password)
                 },
                 next: { [weak self] _ in
-                guard let self else {
-                    return
+                    guard let self else { return }
+                    let complete: () -> Void = { [weak self] in
+                        guard let self else { return }
+                        self.dismissBackupWordsFlow()
+                        self.presentBackupDisabledToast()
+                    }
+                    if let alertController = self.disableBackupConfirmationController {
+                        alertController.dismiss(completion: complete)
+                    } else {
+                        complete()
+                    }
+                },
+                failed: { [weak self] error in
+                    guard let self else { return }
+                    self.isDisablingBackup = false
+                    self.disableBackupProgress?.set(false)
+                    self.presentDisableBackupError(error: error)
                 }
-                self.dismissBackupWordsFlow()
-                self.presentBackupDisabledToast()
-            }, failed: { [weak self] error in
-                guard let self else {
-                    return
-                }
-                self.presentDisableBackupError(error: error, keepPhrase: true)
-            }))
+            ))
         }
 
         private func dismissBackupWordsFlow() {
@@ -339,24 +379,18 @@ private final class WalletSettingsScreenComponent: Component {
             self.preparedBackupDisable = nil
         }
 
-        private func presentDisableBackupError(error: WalletContext.WalletError? = nil, keepPhrase: Bool) {
+        private func presentDisableBackupError(error: WalletContext.WalletError? = nil) {
             guard error != .authorizationCancelled else { return }
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard let component = self.component,
+                  let controller = self.backupWordsController?.navigationController?.topViewController as? ViewController
+                    ?? self.environment?.controller() else {
                 return
             }
             let message = error.flatMap(walletAuthorizationErrorMessage)
-            let text: String
-            if let message {
-                text = message.text
-            } else if keepPhrase {
-                text = "Your local recovery phrase is unchanged. Check the network connection and try again."
-            } else {
-                text = "Check the wallet balance and network connection, then try again."
-            }
             controller.present(textAlertController(
                 context: component.context,
                 title: message?.title ?? "Couldn't Disable Backup",
-                text: text,
+                text: message?.text ?? "The encrypted backup is still enabled. Check the network connection and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
@@ -367,20 +401,17 @@ private final class WalletSettingsScreenComponent: Component {
                 return
             }
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            controller.present(
-                UndoOverlayController(
-                    presentationData: presentationData,
-                    content: .actionSucceeded(
-                        title: "Backup Disabled",
-                        text: "Your recovery phrase is now the only way to restore your wallet.",
-                        cancel: nil,
-                        destructive: false
-                    ),
-                    position: .bottom,
-                    action: { _ in false }
+            controller.present(UndoOverlayController(
+                presentationData: presentationData,
+                content: .actionSucceeded(
+                    title: "Backup Disabled",
+                    text: "Your recovery phrase is now the only way to restore your wallet.",
+                    cancel: nil,
+                    destructive: false
                 ),
-                in: .current
-            )
+                position: .bottom,
+                action: { _ in false }
+            ), in: .current)
         }
 
         private func enableBackup() {

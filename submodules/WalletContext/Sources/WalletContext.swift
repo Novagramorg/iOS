@@ -283,6 +283,9 @@ public final class WalletContext {
     func applyServerWalletState(_ value: TelegramCore.WalletState, forceActivation: Bool = false) {
         assert(Queue.mainQueue().isCurrent())
         self.serverWalletState = value
+        if case let .ready(backupEnabled, _, _, address, publicKey, _) = value, !backupEnabled {
+            self.completeConfirmedKeyRotationIfNeeded(address: address, publicKey: publicKey)
+        }
         if self.currentState.activeOperation == .creating
             || self.currentState.activeOperation == .importing
             || self.currentState.activeOperation == .preparingRecoveryPhraseImport
@@ -518,6 +521,7 @@ public final class WalletContext {
             case .failed: balance = .stale(previous: self.currentState.balance.currentValue, error: synchronizationError(snapshot.accountResource.error), lastSuccessfulAt: self.balanceLastSuccessfulAt)
             }
         }
+        self.reconcileKeyRotation(snapshot.send)
         let pending = self.reconcilePendingTransfers(snapshot.send)
         self.replaceState(
             phase: self.currentState.phase,
@@ -683,6 +687,48 @@ public final class WalletContext {
             break
         }
         return values
+    }
+
+    func reconcileKeyRotation(_ send: SendSnapshot) {
+        switch send.phase {
+        case .confirmed, .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
+            let generation = self.activationGeneration
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    let result = try await self.runtime.reconcileKeyRotation(send: send)
+                    guard self.activationGeneration == generation else { return }
+                    switch result {
+                    case let .confirmed(operationId):
+                        if case let .wallet(info) = self.currentState.phase, !info.backupEnabled {
+                            try? await self.runtime.completeKeyRotation(operationId: operationId)
+                        }
+                        self.requestSynchronization(force: true)
+                    case .rolledBack:
+                        self.requestSynchronization(force: true)
+                    case .none, .pending:
+                        break
+                    }
+                } catch {
+                    self.log("event=wallet_key_rotation_reconciliation_failed error=\(type(of: error))")
+                }
+            }
+        case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
+             .submitting, .submissionUnknown, .submitted, .handedOff:
+            break
+        }
+    }
+
+    func completeConfirmedKeyRotationIfNeeded(address: String, publicKey: Data) {
+        Task { [runtime = self.runtime] in
+            guard let record = try? await runtime.keyRotationRecord(),
+                  record.phase == .confirmed,
+                  walletEngineAddressesEqual(record.walletAddress, address),
+                  record.walletPublicKey == publicKey else {
+                return
+            }
+            try? await runtime.completeKeyRotation(operationId: record.operationId)
+        }
     }
 
     func replaceState(

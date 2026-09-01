@@ -82,12 +82,12 @@ private final class WalletWordsScreenComponent: Component {
             let titleText: String
             let bodyText: String
             switch component.mode {
-            case .view, .verify, .backupDisable:
+            case .view, .verify:
                 //TODO:localize
                 titleText = "Your Recovery Phrase"
                 //TODO:localize
                 bodyText = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
-            case .replacement:
+            case .replacement, .backupDisable:
                 //TODO:localize
                 titleText = "New Secret Phrase"
                 //TODO:localize
@@ -553,7 +553,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
             let wordsController: ViewController = self
             let verificationController = self.context.sharedContext.makeWalletImportScreen(
                 context: self.context,
-                mode: .verify(words: self.words),
+                mode: .verify(words: self.words, keyRotation: self.mode == .backupDisable),
                 completion: { [weak self, weak wordsController] in
                     guard let self, let wordsController else {
                         return

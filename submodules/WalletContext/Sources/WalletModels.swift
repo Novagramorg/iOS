@@ -88,8 +88,9 @@ public extension WalletContext {
         public let canExportPhrase: Bool
         public let canEnableBackup: Bool
         public let canSign: Bool
-        public var canDisableBackup: Bool { self.backupEnabled && self.canSign }
+        public var canDisableBackup: Bool { self.backupEnabled }
         public var canRevealPhrase: Bool { self.canSign || self.canExportPhrase }
+        
         public init(
             address: String,
             publicKey: String,
@@ -398,17 +399,41 @@ public extension WalletContext {
     }
 
     struct PreparedBackupDisable: Equatable {
+        public enum KeyRotationPhase: Equatable {
+            case prepared
+            case pending
+            case confirmed
+        }
+
         public let id: String
         public let walletAddress: String
         public let walletPublicKey: String
         public let words: [String]
+        public let newPublicKey: Data
+        public let signedBoc: String
+        public let seqno: UInt32
         public let expiresAt: Int32
-        public init(id: String, walletAddress: String, walletPublicKey: String, words: [String], expiresAt: Int32) {
+        let keyRotationPhase: KeyRotationPhase
+        public init(
+            id: String,
+            walletAddress: String,
+            walletPublicKey: String,
+            words: [String],
+            newPublicKey: Data,
+            signedBoc: String,
+            seqno: UInt32,
+            expiresAt: Int32,
+            keyRotationPhase: KeyRotationPhase = .prepared
+        ) {
             self.id = id
             self.walletAddress = walletAddress
             self.walletPublicKey = walletPublicKey
             self.words = words
+            self.newPublicKey = newPublicKey
+            self.signedBoc = signedBoc
+            self.seqno = seqno
             self.expiresAt = expiresAt
+            self.keyRotationPhase = keyRotationPhase
         }
     }
 
@@ -470,6 +495,7 @@ public extension WalletContext {
         case requestPassword, invalidPassword, twoStepAuthMissing, authorizationCancelled
         case passwordTooFresh(Int32), sessionTooFresh(Int32)
         case backupDisabled, backupNotAvailable, replacementInvalid, publicKeyInvalid
+        case keyRotationFailed
         case tokenInvalid, tokenExpired, clientKeyInvalid, partUnavailable, invalidBackupData
         case insufficientBalance(required: Int64)
         case storage(FatalStorageError)

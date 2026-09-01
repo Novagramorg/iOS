@@ -438,7 +438,11 @@ public final class WalletTransactionItemComponent: Component {
                         subtitleText = "Incoming collectible"
                     } else {
                         //TODO:localize
-                        subtitleText = "Incoming transfer"
+                        if case .user = transaction.peer {
+                            subtitleText = "Incoming transfer"
+                        } else {
+                            subtitleText = "Deposit"
+                        }
                     }
                     amountValue = transaction.amount
                     if transaction.currency == .usdt {
@@ -454,7 +458,11 @@ public final class WalletTransactionItemComponent: Component {
                         subtitleText = "Outgoing collectible"
                     } else {
                         //TODO:localize
-                        subtitleText = "Outgoing transfer"
+                        if case .user = transaction.peer {
+                            subtitleText = "Outgoing transfer"
+                        } else {
+                            subtitleText = "Withdrawal"
+                        }
                     }
                     amountValue = transaction.amount
                     amountColor = component.theme.list.itemPrimaryTextColor

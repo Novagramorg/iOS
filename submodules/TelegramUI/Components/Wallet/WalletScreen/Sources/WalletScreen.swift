@@ -812,10 +812,7 @@ private final class WalletScreenComponent: Component {
                     self?.presentPasswordSetToast()
                 }
             }
-            component.twoStepAuthData.set(
-                .single(nil)
-                |> then(updatedData)
-            )
+            component.twoStepAuthData.set(updatedData)
         }
 
         private func presentPasswordSetToast() {

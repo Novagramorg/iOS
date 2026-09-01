@@ -115,6 +115,17 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
                 self.context.sharedContext.presentationData
             )
         )
+        controller.dismissed = { [weak self] byOutsideTap in
+            if byOutsideTap {
+                let _ = (progress.get()
+                |> take(1)).start(next: { [weak self] inProgress in
+                    guard !inProgress else {
+                        return
+                    }
+                    self?.failed(.authorizationCancelled)
+                })
+            }
+        }
         submit = { [weak self] in
             guard let self else { return }
             self.start(password: inputState.value, inputState: inputState, progress: progress)
@@ -154,6 +165,11 @@ public func walletAuthorizationErrorMessage(_ error: WalletContext.WalletError) 
         return ("Backup Is Disabled", "Enable encrypted backup before restoring the recovery phrase from Telegram.")
     case .backupNotAvailable:
         return ("Backup Unavailable", "Encrypted backup is not available for this wallet.")
+    case .keyRotationFailed:
+        return (
+            "Couldn't Update Recovery Phrase",
+            "The new recovery phrase was not activated. Your previous phrase and encrypted backup are still valid."
+        )
     default:
         return nil
     }

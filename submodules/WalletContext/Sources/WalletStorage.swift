@@ -152,6 +152,27 @@ struct WalletEngineMetadataRecord: Codable, Equatable, Sendable {
     var collectibles: [WalletContext.Collectible] = []
 }
 
+enum WalletEngineKeyRotationStoragePhase: String, Codable, Equatable, Sendable {
+    case rollbackStored
+    case replacementStored
+    case submissionStarted
+    case confirmed
+    case rolledBack
+}
+
+struct WalletEngineKeyRotationRecord: Codable, Equatable, Sendable {
+    var schemaVersion: Int = 1
+    let operationId: String
+    let recordId: String
+    let walletAddress: String
+    let walletPublicKey: Data
+    let activeSecretRef: String
+    let rollbackSecretRef: String
+    let newPublicKey: Data
+    let validUntil: UInt64
+    var phase: WalletEngineKeyRotationStoragePhase
+}
+
 enum WalletEngineStorageError: Error, Equatable {
     case keychainStatus(Int32)
     case corrupted
@@ -199,6 +220,119 @@ actor WalletEngineStorage {
 
     func removeReplacementCandidate() throws {
         try self.remove(service: self.descriptorService, account: "replacement-candidate")
+    }
+
+    func loadKeyRotation() throws -> WalletEngineKeyRotationRecord? {
+        try self.readCodable(service: self.descriptorService, account: "key-rotation")
+    }
+
+    func installKeyRotationReplacement(
+        operationId: String,
+        descriptor: WalletEngineDescriptorRecord,
+        newPublicKey: Data,
+        validUntil: UInt64,
+        replacementSecret: Data
+    ) throws -> WalletEngineKeyRotationRecord {
+        guard !operationId.isEmpty,
+              newPublicKey.count == 32,
+              !replacementSecret.isEmpty,
+              let activeSecretRef = descriptor.secretRef,
+              !activeSecretRef.isEmpty,
+              let currentSecret = try self.read(service: self.secretService, account: activeSecretRef),
+              !currentSecret.isEmpty else {
+            throw WalletEngineStorageError.corrupted
+        }
+        if let current = try self.loadKeyRotation() {
+            guard current.operationId == operationId,
+                  current.recordId == descriptor.recordId,
+                  current.walletAddress == descriptor.address,
+                  current.walletPublicKey == descriptor.publicKey else {
+                throw WalletEngineStorageError.corrupted
+            }
+            return current
+        }
+
+        let rollbackSecretRef = "wallet:\(descriptor.recordId):key-rotation-rollback:\(operationId)"
+        try self.write(currentSecret, service: self.secretService, account: rollbackSecretRef)
+        var record = WalletEngineKeyRotationRecord(
+            operationId: operationId,
+            recordId: descriptor.recordId,
+            walletAddress: descriptor.address,
+            walletPublicKey: descriptor.publicKey,
+            activeSecretRef: activeSecretRef,
+            rollbackSecretRef: rollbackSecretRef,
+            newPublicKey: newPublicKey,
+            validUntil: validUntil,
+            phase: .rollbackStored
+        )
+        try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        try self.write(replacementSecret, service: self.secretService, account: activeSecretRef)
+        record.phase = .replacementStored
+        try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        return record
+    }
+
+    func markKeyRotationSubmissionStarted(operationId: String) throws -> WalletEngineKeyRotationRecord {
+        guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
+            throw WalletEngineStorageError.corrupted
+        }
+        if record.phase == .replacementStored {
+            record.phase = .submissionStarted
+            try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        }
+        return record
+    }
+
+    func confirmKeyRotation(operationId: String) throws -> WalletEngineKeyRotationRecord {
+        guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
+            throw WalletEngineStorageError.corrupted
+        }
+        if record.phase != .confirmed {
+            record.phase = .confirmed
+            try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        }
+        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
+        return record
+    }
+
+    func rollbackKeyRotation(operationId: String) throws {
+        guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
+            return
+        }
+        if record.phase == .rolledBack {
+            try self.remove(service: self.secretService, account: record.rollbackSecretRef)
+            try self.remove(service: self.descriptorService, account: "key-rotation")
+            return
+        }
+        guard record.phase != .confirmed,
+              let previousSecret = try self.read(service: self.secretService, account: record.rollbackSecretRef),
+              !previousSecret.isEmpty else {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.write(previousSecret, service: self.secretService, account: record.activeSecretRef)
+        record.phase = .rolledBack
+        try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
+        try self.remove(service: self.descriptorService, account: "key-rotation")
+    }
+
+    func completeKeyRotation(operationId: String) throws {
+        guard let record = try self.loadKeyRotation(), record.operationId == operationId else {
+            return
+        }
+        guard record.phase == .confirmed else {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
+        try self.remove(service: self.descriptorService, account: "key-rotation")
+    }
+
+    func discardKeyRotation(operationId: String) throws {
+        guard let record = try self.loadKeyRotation(), record.operationId == operationId else {
+            return
+        }
+        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
+        try self.remove(service: self.descriptorService, account: "key-rotation")
     }
 
     func loadMetadata() throws -> WalletEngineMetadataRecord? {
