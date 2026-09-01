@@ -28,7 +28,6 @@ let package = Package(
         .package(name: "DarwinDirStat", path: "../Utils/DarwinDirStat"),
         .package(name: "EncryptionProvider", path: "../EncryptionProvider"),
         .package(name: "Emoji", path: "../Emoji"),
-        .package(name: "WalletBackupCrypto", path: "../../../../packages/WalletBackupCrypto"),
         .package(name: "MediaPreuploadRegistry", path: "../MediaPreuploadRegistry"),
     ],
     targets: [
@@ -49,7 +48,6 @@ let package = Package(
                            .product(name: "FlatBuffers", package: "FlatBuffers", condition: nil),
                            .product(name: "FlatSerialization", package: "FlatSerialization", condition: nil),
                            .product(name: "EncryptionProvider", package: "EncryptionProvider", condition: nil),
-                           .product(name: "WalletBackupCrypto", package: "WalletBackupCrypto", condition: nil),
                            .product(name: "MediaPreuploadRegistry", package: "MediaPreuploadRegistry", condition: nil)],
             path: "Sources",
             swiftSettings: [.unsafeFlags(["-warnings-as-errors"])]),

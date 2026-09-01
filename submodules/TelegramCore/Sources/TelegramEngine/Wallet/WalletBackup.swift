@@ -2,39 +2,15 @@ import Foundation
 import MtProtoKit
 import SwiftSignalKit
 import TelegramApi
-import WalletBackupCrypto
 
-private enum WalletPhraseCodec {
-    private static let encodedLength = 215
+public struct WalletBackupHolder: Equatable {
+    public let datacenterId: Int32
+    public let publicKey: Data
+}
 
-    static func encode(words: [String]) -> Data? {
-        let words = words
-        .flatMap { value in
-            value.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        }
-        .map { $0.lowercased() }
-        guard !words.isEmpty else {
-            return nil
-        }
-        guard var result = words.joined(separator: " ").data(using: .utf8), result.count <= encodedLength else {
-            return nil
-        }
-        result.append(Data(repeating: 0x20, count: encodedLength - result.count))
-        return result
-    }
-
-    static func decode(_ data: Data) -> [String]? {
-        guard let value = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        let words = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        .split(whereSeparator: { $0.isWhitespace })
-        .map { String($0).lowercased() }
-        guard !words.isEmpty, encode(words: words) == data else {
-            return nil
-        }
-        return words
-    }
+public struct WalletSecretPhraseExport: Equatable {
+    public let token: String
+    public let datacenterIds: [Int32]
 }
 
 private func walletOperationError(_ error: MTRpcError, passwordProvided: Bool) -> WalletOperationError {
@@ -163,11 +139,6 @@ func _internal_disableWalletBackup(
     }
 }
 
-private struct WalletBackupHolder {
-    let datacenterId: Int32
-    let publicKey: Data
-}
-
 private func parseBackupHolders(_ holders: [Api.wallet.HolderDc]) -> [WalletBackupHolder]? {
     var result: [WalletBackupHolder] = []
     var datacenterIds = Set<Int32>()
@@ -184,56 +155,84 @@ private func parseBackupHolders(_ holders: [Api.wallet.HolderDc]) -> [WalletBack
     return result.count == 3 ? result : nil
 }
 
-func _internal_enableWalletBackup(
-    account: Account,
-    words: [String],
-    password: String?
-) -> Signal<WalletState, WalletOperationError> {
-    guard let secret = WalletPhraseCodec.encode(words: words) else {
-        return .fail(.invalidBackupData)
-    }
+func _internal_getWalletBackupHolders(account: Account) -> Signal<[WalletBackupHolder], WalletOperationError> {
     return account.network.request(Api.functions.wallet.getBackupHolderDcs(), automaticFloodWait: false)
     |> mapError { error in
-        return walletOperationError(error, passwordProvided: password != nil)
+        return walletOperationError(error, passwordProvided: false)
     }
-    |> mapToSignal { holders -> Signal<[Data], WalletOperationError> in
+    |> mapToSignal { holders -> Signal<[WalletBackupHolder], WalletOperationError> in
         guard let holders = parseBackupHolders(holders) else {
             return .fail(.invalidBackupData)
         }
-        guard let parts = WalletBackupCrypto.encryptSecretForBackup(
-            secret,
-            holderPublicKeys: holders.map(\.publicKey)
-        ) else {
-            return .fail(.invalidBackupData)
-        }
-        return .single(parts)
+        return .single(holders)
     }
-    |> mapToSignal { parts -> Signal<WalletState, WalletOperationError> in
-        return walletPasswordProof(account: account, password: password)
-        |> mapToSignal { proof -> Signal<WalletState, WalletOperationError> in
-            let flags: Int32 = proof == nil ? 0 : (1 << 0)
-            return account.network.request(
-                Api.functions.wallet.enableBackup(
-                    flags: flags,
-                    parts: parts.map { Buffer(data: $0) },
-                    password: proof
-                ),
-                automaticFloodWait: false
-            )
-            |> mapError { error in
-                return walletOperationError(error, passwordProvided: password != nil)
+}
+
+func _internal_enableWalletBackup(
+    account: Account,
+    encryptedParts: [Data],
+    password: String?
+) -> Signal<WalletState, WalletOperationError> {
+    guard encryptedParts.count == 3, encryptedParts.allSatisfy({ !$0.isEmpty }) else {
+        return .fail(.invalidBackupData)
+    }
+    return walletPasswordProof(account: account, password: password)
+    |> mapToSignal { proof -> Signal<WalletState, WalletOperationError> in
+        let flags: Int32 = proof == nil ? 0 : (1 << 0)
+        return account.network.request(
+            Api.functions.wallet.enableBackup(
+                flags: flags,
+                parts: encryptedParts.map { Buffer(data: $0) },
+                password: proof
+            ),
+            automaticFloodWait: false
+        )
+        |> mapError { error in
+            return walletOperationError(error, passwordProvided: password != nil)
+        }
+        |> map(WalletState.init(apiState:))
+    }
+}
+
+func _internal_requestWalletSecretPhraseExport(
+    account: Account,
+    password: String?
+) -> Signal<WalletSecretPhraseExport, WalletOperationError> {
+    return walletPasswordProof(account: account, password: password)
+    |> mapToSignal { proof -> Signal<WalletSecretPhraseExport, WalletOperationError> in
+        let flags: Int32 = proof == nil ? 0 : (1 << 0)
+        return account.network.request(
+            Api.functions.wallet.exportSecretPhrase(flags: flags, password: proof),
+            automaticFloodWait: false
+        )
+        |> mapError { error in
+            return walletOperationError(error, passwordProvided: password != nil)
+        }
+        |> mapToSignal { phraseParts -> Signal<WalletSecretPhraseExport, WalletOperationError> in
+            let token: String
+            let datacenterIds: [Int32]
+            switch phraseParts {
+            case let .secretPhraseParts(parts):
+                token = parts.token
+                datacenterIds = parts.dcs
             }
-            |> map(WalletState.init(apiState:))
+            guard datacenterIds.count == 3, Set(datacenterIds).count == 3 else {
+                return .fail(.invalidBackupData)
+            }
+            return .single(WalletSecretPhraseExport(token: token, datacenterIds: datacenterIds))
         }
     }
 }
 
-private func fetchWalletSecretPhrasePart(
+func _internal_fetchEncryptedWalletSecretPhrasePart(
     account: Account,
     datacenterId: Int32,
     token: String,
     publicKey: Data
 ) -> Signal<Data, WalletOperationError> {
+    guard publicKey.count == 32 else {
+        return .fail(.invalidBackupData)
+    }
     let request = Api.functions.wallet.fetchEncryptedSecretPhrasePart(
         token: token,
         publicKey: Buffer(data: publicKey)
@@ -253,82 +252,15 @@ private func fetchWalletSecretPhrasePart(
     |> mapError { error in
         return walletOperationError(error, passwordProvided: false)
     }
-    |> map { part -> Data in
+    |> mapToSignal { part -> Signal<Data, WalletOperationError> in
+        let data: Data
         switch part {
         case let .encryptedSecretPhrasePart(part):
-            return part.data.makeData()
+            data = part.data.makeData()
         }
-    }
-}
-
-private func shouldRetryWalletPhraseExport(_ error: WalletOperationError) -> Bool {
-    switch error {
-    case .network, .tokenInvalid, .tokenExpired, .clientKeyInvalid, .partUnavailable, .invalidBackupData:
-        return true
-    default:
-        return false
-    }
-}
-
-private func exportWalletSecretPhraseAttempt(
-    account: Account,
-    password: String?,
-    retryFetchFailure: Bool
-) -> Signal<[String], WalletOperationError> {
-    return walletPasswordProof(account: account, password: password)
-    |> mapToSignal { proof -> Signal<[String], WalletOperationError> in
-        let flags: Int32 = proof == nil ? 0 : (1 << 0)
-        return account.network.request(
-            Api.functions.wallet.exportSecretPhrase(flags: flags, password: proof),
-            automaticFloodWait: false
-        )
-        |> mapError { error in
-            return walletOperationError(error, passwordProvided: password != nil)
+        guard !data.isEmpty else {
+            return .fail(.invalidBackupData)
         }
-        |> mapToSignal { phraseParts -> Signal<[String], WalletOperationError> in
-            let token: String
-            let datacenterIds: [Int32]
-            switch phraseParts {
-            case let .secretPhraseParts(parts):
-                token = parts.token
-                datacenterIds = parts.dcs
-            }
-            guard datacenterIds.count == 3, Set(datacenterIds).count == 3 else {
-                return .fail(.invalidBackupData)
-            }
-            guard let keyPair = WalletBackupCryptoKeyPair.generateKeyPair() else {
-                return .fail(.invalidBackupData)
-            }
-            let fetch = combineLatest(
-                fetchWalletSecretPhrasePart(account: account, datacenterId: datacenterIds[0], token: token, publicKey: keyPair.publicKey),
-                fetchWalletSecretPhrasePart(account: account, datacenterId: datacenterIds[1], token: token, publicKey: keyPair.publicKey),
-                fetchWalletSecretPhrasePart(account: account, datacenterId: datacenterIds[2], token: token, publicKey: keyPair.publicKey)
-            )
-            |> mapToSignal { first, second, third -> Signal<[String], WalletOperationError> in
-                guard let secret = keyPair.decryptAndCombineBackupEnvelopes([first, second, third]),
-                      let words = WalletPhraseCodec.decode(secret) else {
-                    return .fail(.invalidBackupData)
-                }
-                return .single(words)
-            }
-            return fetch
-            |> `catch` { error -> Signal<[String], WalletOperationError> in
-                guard retryFetchFailure, shouldRetryWalletPhraseExport(error) else {
-                    return .fail(error)
-                }
-                return exportWalletSecretPhraseAttempt(
-                    account: account,
-                    password: password,
-                    retryFetchFailure: false
-                )
-            }
-        }
+        return .single(data)
     }
-}
-
-func _internal_exportWalletSecretPhrase(
-    account: Account,
-    password: String?
-) -> Signal<[String], WalletOperationError> {
-    return exportWalletSecretPhraseAttempt(account: account, password: password, retryFetchFailure: true)
 }

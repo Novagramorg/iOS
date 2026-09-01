@@ -245,9 +245,7 @@ public extension WalletContext {
             let generation = await context.prepareForRuntimeIdentityChange()
             let words: [String]
             do {
-                words = try await WalletSignalRequestContext<[String]>().run(
-                    context.engine.wallet.exportSecretPhrase(password: password)
-                )
+                words = try await exportWalletSecretPhrase(engine: context.engine, password: password)
             } catch {
                 // Replacement has already committed on the server. Keep the new
                 // identity usable as read-only and let recovery retry later.
@@ -330,9 +328,7 @@ public extension WalletContext {
                   case let .ready(_, _, _, address, publicKey, _) = context.serverWalletState else {
                 throw WalletError.unavailable
             }
-            let words = try await WalletSignalRequestContext<[String]>().run(
-                context.engine.wallet.exportSecretPhrase(password: password)
-            )
+            let words = try await exportWalletSecretPhrase(engine: context.engine, password: password)
             let prepared = try await stageRecoveryPhraseImport(
                 runtime: context.runtime,
                 words: words,
@@ -509,9 +505,7 @@ public extension WalletContext {
                 throw WalletError.unavailable
             }
             let words = try await context.runtime.revealRecoveryPhrase()
-            let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                context.engine.wallet.enableBackup(words: words, password: password)
-            )
+            let state = try await enableWalletBackup(engine: context.engine, words: words, password: password)
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(identity.address, info.address),
                   identity.publicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey else {

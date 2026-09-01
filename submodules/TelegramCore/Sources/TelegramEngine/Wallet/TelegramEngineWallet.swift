@@ -40,12 +40,29 @@ public extension TelegramEngine {
             )
         }
 
-        public func exportSecretPhrase(password: String? = nil) -> Signal<[String], WalletOperationError> {
-            return _internal_exportWalletSecretPhrase(account: self.account, password: password)
+        public func getBackupHolders() -> Signal<[WalletBackupHolder], WalletOperationError> {
+            return _internal_getWalletBackupHolders(account: self.account)
         }
 
-        public func enableBackup(words: [String], password: String? = nil) -> Signal<WalletState, WalletOperationError> {
-            return _internal_enableWalletBackup(account: self.account, words: words, password: password)
+        public func enableBackup(encryptedParts: [Data], password: String? = nil) -> Signal<WalletState, WalletOperationError> {
+            return _internal_enableWalletBackup(account: self.account, encryptedParts: encryptedParts, password: password)
+        }
+
+        public func requestSecretPhraseExport(password: String? = nil) -> Signal<WalletSecretPhraseExport, WalletOperationError> {
+            return _internal_requestWalletSecretPhraseExport(account: self.account, password: password)
+        }
+
+        public func fetchEncryptedSecretPhrasePart(
+            datacenterId: Int32,
+            token: String,
+            publicKey: Data
+        ) -> Signal<Data, WalletOperationError> {
+            return _internal_fetchEncryptedWalletSecretPhrasePart(
+                account: self.account,
+                datacenterId: datacenterId,
+                token: token,
+                publicKey: publicKey
+            )
         }
 
         public func disableBackup(password: String? = nil) -> Signal<WalletState, WalletOperationError> {

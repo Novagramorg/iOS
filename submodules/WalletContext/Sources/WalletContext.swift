@@ -386,9 +386,7 @@ public final class WalletContext {
                     let needsSecret = !hasStoredSecret
                     var words: [String]?
                     if needsSecret && canExportPhrase {
-                        words = try? await WalletSignalRequestContext<[String]>().run(
-                            self.engine.wallet.exportSecretPhrase(password: nil)
-                        )
+                        words = try? await exportWalletSecretPhrase(engine: self.engine, password: nil)
                     }
                     let activation: WalletEngineActivation
                     if let words {
