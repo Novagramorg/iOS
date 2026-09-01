@@ -2432,11 +2432,13 @@ public extension Api {
         }
         public class Cons_walletTransactionPeerUser: TypeConstructorDescription {
             public var userId: Int64
-            public init(userId: Int64) {
+            public var address: String
+            public init(userId: Int64, address: String) {
                 self.userId = userId
+                self.address = address
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("walletTransactionPeerUser", [("userId", ConstructorParameterDescription(self.userId))])
+                return ("walletTransactionPeerUser", [("userId", ConstructorParameterDescription(self.userId)), ("address", ConstructorParameterDescription(self.address))])
             }
         }
         case walletTransactionPeerAddress(Cons_walletTransactionPeerAddress)
@@ -2458,9 +2460,10 @@ public extension Api {
                 break
             case .walletTransactionPeerUser(let _data):
                 if boxed {
-                    buffer.appendInt32(-645113722)
+                    buffer.appendInt32(-186018266)
                 }
                 serializeInt64(_data.userId, buffer: buffer, boxed: false)
+                serializeString(_data.address, buffer: buffer, boxed: false)
                 break
             }
         }
@@ -2472,7 +2475,7 @@ public extension Api {
             case .walletTransactionPeerUnsupported:
                 return ("walletTransactionPeerUnsupported", [])
             case .walletTransactionPeerUser(let _data):
-                return ("walletTransactionPeerUser", [("userId", ConstructorParameterDescription(_data.userId))])
+                return ("walletTransactionPeerUser", [("userId", ConstructorParameterDescription(_data.userId)), ("address", ConstructorParameterDescription(_data.address))])
             }
         }
 
@@ -2493,9 +2496,12 @@ public extension Api {
         public static func parse_walletTransactionPeerUser(_ reader: BufferReader) -> WalletTransactionPeer? {
             var _1: Int64?
             _1 = reader.readInt64()
+            var _2: String?
+            _2 = parseString(reader)
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.WalletTransactionPeer.walletTransactionPeerUser(Cons_walletTransactionPeerUser(userId: _1!))
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.WalletTransactionPeer.walletTransactionPeerUser(Cons_walletTransactionPeerUser(userId: _1!, address: _2!))
             }
             else {
                 return nil

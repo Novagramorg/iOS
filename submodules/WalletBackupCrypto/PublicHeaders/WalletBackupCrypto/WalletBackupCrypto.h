@@ -38,8 +38,8 @@ typedef NS_ERROR_ENUM(WalletBackupCryptoErrorDomain, WalletBackupCryptoErrorCode
 + (nullable NSArray<NSData *> *)encryptSecret:(NSData *)secret
                           holderPublicKeys:(NSArray<NSData *> *)holderPublicKeys
                                      error:(NSError * _Nullable * _Nullable)error;
-/// Encrypts the shares and wraps them in the observed mnemonic part container
-/// expected by wallet.enableBackup.
+/// Encrypts the shares as bare `ephemeralPublicKey || ciphertext` envelopes
+/// for wallet.enableBackup.
 + (nullable NSArray<NSData *> *)encryptSecretForBackup:(NSData *)secret
                                       holderPublicKeys:(NSArray<NSData *> *)holderPublicKeys
     NS_SWIFT_NAME(encryptSecretForBackup(_:holderPublicKeys:));

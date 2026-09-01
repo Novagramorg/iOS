@@ -103,8 +103,8 @@ func walletTransactions(
     transactions.map { transaction in
         let peer: WalletContext.Transaction.Peer
         switch transaction.peer {
-        case let .user(enginePeer):
-            peer = .user(enginePeer)
+        case let .user(enginePeer, address):
+            peer = .user(enginePeer, address: address)
         case let .address(address):
             peer = .address(address)
         case .unsupported:

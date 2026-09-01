@@ -94,24 +94,6 @@ bool appendTlBytes(std::string &value, const std::string &bytes) {
     return true;
 }
 
-bool serializeObservedEnvelopeWrapper(
-    const std::string &blob,
-    std::uint32_t index,
-    std::uint32_t setId,
-    std::string &result
-) {
-    if (index >= kShareCount || blob.empty()) {
-        return false;
-    }
-    result.clear();
-    result.reserve(kObservedEnvelopeWrapperHeaderLength + 4 + blob.size());
-    appendLittleEndian32(result, kObservedEnvelopeWrapperSignature);
-    appendLittleEndian32(result, index);
-    appendLittleEndian32(result, static_cast<std::uint32_t>(kShareCount));
-    appendLittleEndian32(result, setId);
-    return appendTlBytes(result, blob);
-}
-
 bool parseTrailingTlBytes(
     const std::string &value,
     std::size_t offset,
@@ -498,29 +480,7 @@ bool encryptShare(const std::string &share, NSData *holderPublicKey, std::string
 
 + (nullable NSArray<NSData *> *)encryptSecretForBackup:(NSData *)secret
                                       holderPublicKeys:(NSArray<NSData *> *)holderPublicKeys {
-    NSArray<NSData *> *envelopes = [self encryptSecret:secret holderPublicKeys:holderPublicKeys error:nil];
-    if (envelopes == nil || envelopes.count != kShareCount) {
-        return nil;
-    }
-
-    std::uint32_t setId = 0;
-    if (SecRandomCopyBytes(kSecRandomDefault, sizeof(setId), reinterpret_cast<std::uint8_t *>(&setId)) != errSecSuccess) {
-        return nil;
-    }
-
-    NSMutableArray<NSData *> *result = [[NSMutableArray alloc] initWithCapacity:kShareCount];
-    for (std::size_t index = 0; index < kShareCount; ++index) {
-        std::string wrapper;
-        if (!serializeObservedEnvelopeWrapper(
-                stringFromData(envelopes[index]),
-                static_cast<std::uint32_t>(index),
-                setId,
-                wrapper)) {
-            return nil;
-        }
-        [result addObject:dataFromString(wrapper)];
-    }
-    return result;
+    return [self encryptSecret:secret holderPublicKeys:holderPublicKeys error:nil];
 }
 
 @end

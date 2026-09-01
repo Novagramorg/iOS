@@ -47,7 +47,7 @@ public struct WalletUserAddress: Equatable {
 }
 
 public enum WalletTransactionPeer: Equatable {
-    case user(EnginePeer)
+    case user(EnginePeer, address: String)
     case address(String)
     case unsupported
 }
@@ -177,15 +177,15 @@ private extension WalletTransactionPeer {
             self = .address(peer.address)
         case .walletTransactionPeerUnsupported:
             self = .unsupported
-        case let .walletTransactionPeerUser(peer):
+        case let .walletTransactionPeerUser(apiPeer):
             let peerId = EnginePeer.Id(
                 namespace: Namespaces.Peer.CloudUser,
-                id: PeerId.Id._internalFromInt64Value(peer.userId)
+                id: PeerId.Id._internalFromInt64Value(apiPeer.userId)
             )
             if let peer = transaction.getPeer(peerId) {
-                self = .user(EnginePeer(peer))
+                self = .user(EnginePeer(peer), address: apiPeer.address)
             } else {
-                self = .unsupported
+                self = .address(apiPeer.address)
             }
         }
     }

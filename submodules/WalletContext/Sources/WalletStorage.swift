@@ -71,6 +71,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     let amount: Int64
     let fee: Int64
     let peer: Peer
+    let peerAddress: String?
     let comment: String?
     let currency: WalletContext.Transaction.Currency
     let collectible: WalletContext.Transaction.CollectibleTransfer?
@@ -87,12 +88,15 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         self.amount = transaction.amount
         self.fee = transaction.fee
         switch transaction.peer {
-        case let .user(peer):
+        case let .user(peer, address):
             self.peer = .user(id: peer.id, displayName: peer.debugDisplayTitle)
+            self.peerAddress = address
         case let .address(address):
             self.peer = .address(address)
+            self.peerAddress = nil
         case .unsupported:
             self.peer = .unsupported
+            self.peerAddress = nil
         }
         self.comment = transaction.comment
         self.currency = transaction.currency
@@ -105,7 +109,9 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         switch self.peer {
         case let .user(id, _):
             if let value = peers[id] {
-                peer = .user(value)
+                peer = .user(value, address: self.peerAddress ?? "")
+            } else if let peerAddress = self.peerAddress, !peerAddress.isEmpty {
+                peer = .address(peerAddress)
             } else {
                 peer = .unsupported
             }

@@ -257,19 +257,28 @@ public extension WalletContext {
         public enum Status: String, Codable, Equatable, Sendable { case completed, pending, failed }
         
         public enum Peer: Equatable, @unchecked Sendable {
-            case user(EnginePeer)
+            case user(EnginePeer, address: String)
             case address(String)
             case unsupported
             
             public var address: String? {
-                if case let .address(value) = self {
+                let value: String
+                switch self {
+                case let .user(_, address):
+                    value = address
+                case let .address(address):
+                    value = address
+                case .unsupported:
+                    return nil
+                }
+                if !value.isEmpty {
                     return value
                 }
                 return nil
             }
             
             public var displayName: String? {
-                if case let .user(peer) = self {
+                if case let .user(peer, _) = self {
                     return peer.debugDisplayTitle
                 }
                 return nil

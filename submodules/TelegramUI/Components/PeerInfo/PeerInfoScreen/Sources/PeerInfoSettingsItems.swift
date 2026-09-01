@@ -152,7 +152,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             interaction.openSettings(.profile)
         }))
         
-        if context.account.testingEnvironment {
+        if context.account.testingEnvironment, context.sharedContext.immediateExperimentalUISettings.allowWebViewInspection {
             //TODO:localize
             items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
                 interaction.openSettings(.wallet)

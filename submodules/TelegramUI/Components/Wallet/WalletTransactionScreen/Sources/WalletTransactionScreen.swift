@@ -987,7 +987,7 @@ private final class WalletTransactionContentComponent: Component {
                 addressComponent = nil
             }
             let counterpartyComponent: AnyComponent<Empty>
-            if case let .user(peer) = transaction.peer {
+            if case let .user(peer, _) = transaction.peer {
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: "avatar",
@@ -1067,7 +1067,7 @@ private final class WalletTransactionContentComponent: Component {
                 title: counterpartyTitle,
                 component: counterpartyComponent
             )]
-            if counterpartyName != nil, let addressComponent {
+            if case .user = transaction.peer, let addressComponent {
                 //TODO:localize
                 tableItems.append(TableComponent.Item(
                     id: "address",
