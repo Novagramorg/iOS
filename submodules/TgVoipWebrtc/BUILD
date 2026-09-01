@@ -313,6 +313,30 @@ objc_library(
     ],
 )
 
+cc_test(
+    name = "mtproto_ice_transport_test",
+    srcs = ["tgcalls/tgcalls/v2/MtProtoIceTransportTest.cpp"],
+    copts = [
+        "-I{}/tgcalls/tgcalls".format("submodules/TgVoipWebrtc"),
+        "-Ithird-party/webrtc/webrtc",
+        "-Ithird-party/webrtc/dependencies",
+        "-Ithird-party/webrtc/absl",
+        "-Ithird-party/libyuv",
+        "-DRTC_ENABLE_VP9",
+        "-DNDEBUG",
+        "-std=c++17",
+        "-w",
+    ] + select({
+        "@platforms//os:linux": ["-DWEBRTC_LINUX", "-DWEBRTC_POSIX"],
+        "//conditions:default": ["-DWEBRTC_MAC", "-DWEBRTC_POSIX"],
+    }),
+    linkopts = select({
+        "@platforms//os:linux": ["-lpthread", "-lm", "-ldl"],
+        "//conditions:default": ["-framework", "CoreFoundation", "-framework", "Security"],
+    }),
+    deps = [":tgcalls_core"],
+)
+
 # Pure C++ core library for non-iOS targets (e.g. CLI tools).
 # Uses FakeInterface instead of darwin platform files.
 cc_library(
@@ -371,6 +395,7 @@ cc_library(
         "tgcalls/tgcalls/v2/InstanceV2Impl.cpp",
         "tgcalls/tgcalls/v2/InstanceV2CompatImpl.cpp",
         "tgcalls/tgcalls/v2/InstanceV2ReferenceImpl.cpp",
+        "tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",
         "tgcalls/tgcalls/v2wasm/ReferenceCallCore.cpp",
         "tgcalls/tgcalls/v2wasm/SignalingFraming.cpp",
         "tgcalls/tgcalls/v2wasm/CoreGzip.cpp",

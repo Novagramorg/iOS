@@ -8,6 +8,35 @@ This repo has been patched to support native macOS arm64 builds (`darwin_arm64` 
 - `third-party/webrtc/BUILD` — added `@platforms//os:linux` to `arch_specific_cflags` select (fixes macOS getting Linux flags via `//conditions:default`); moved `cocoa_threading.mm` from `cc_library` to `webrtc_platform_helpers` `objc_library` (Bazel 8 rejects `.mm` in `cc_library`); replaced UIKit with AppKit for macOS
 - `third-party/openh264/BUILD` — added `//conditions:default` to `select()` statements
 - `third-party/webrtc/absl/absl/base/attributes.h` — disabled `ABSL_ATTRIBUTE_LIFETIME_BOUND` (newer Xcode clang rejects it on void-returning functions)
+
+### Vendored webrtc patch: "Allow SCTP without DTLS"
+
+`third-party/webrtc/webrtc/pc/peer_connection.cc` — the SCTP factory is no
+longer gated on `dtls_enabled_`.
+
+Upstream writes `// DTLS has to be enabled to use SCTP.` and only sets
+`config.sctp_factory` when DTLS is on, because SCTP would otherwise run
+unprotected. tgcalls disables DTLS deliberately when `network_use_mtproto` is
+set: the mtproto layer below ICE carries its own shared key, so DTLS is
+redundant and its handshake round-trips and record framing are exactly the
+overhead being removed.
+
+Without this patch, `Options::disable_encryption` also destroys the data
+channel — `GetDataChannelTransport` returns null, `SetLocalDescription` fails
+with "Failed to create data channel", and **no call can connect at all**. That
+failure is not obvious from the option's name, and it is why three separate
+no-patch designs were abandoned before this one.
+
+Safe because the `DtlsTransport` object still exists under `disable_encryption`
+(it is passed to `CreateUnencryptedRtpTransport`) and an inactive one is a pure
+passthrough to ICE (`dtls_transport.cc:431`), so SCTP rides through it into
+mtproto — matching 13.0.0, where the data channel shares the mtproto transport.
+Only callers setting `disable_encryption` are affected, which upstream treats as
+a test-only switch; for everyone else `dtls_enabled_` is true and behaviour is
+unchanged.
+
+Engine-side detail is in `tgcalls/CLAUDE.md` under "mtproto transport on the
+PeerConnection engines".
 - 8 third-party BUILD files + 8 build shell scripts — added `darwin_arm64 -> macos_arm64` architecture support (opus, libvpx, ffmpeg, dav1d, mozjpeg, webp, libjxl, td)
 
 ## Linux Build Support
