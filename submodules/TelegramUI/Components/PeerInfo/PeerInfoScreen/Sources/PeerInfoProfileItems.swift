@@ -20,6 +20,24 @@ import BoostLevelIconComponent
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
 
+private func peerVerificationDescriptionEntities(_ verification: PeerVerification) -> [MessageTextEntity] {
+    var result = verification.descriptionEntities
+    for entity in generateTextEntities(verification.description, enabledTypes: [.allUrl]) {
+        let hasOverlappingLink = result.contains(where: { current in
+            switch current.type {
+            case .Url, .TextUrl, .Email:
+                return current.range.overlaps(entity.range)
+            default:
+                return false
+            }
+        })
+        if !hasOverlappingLink {
+            result.append(entity)
+        }
+    }
+    return result
+}
+
 enum InfoSection: Int, CaseIterable {
     case unofficial
     case community
@@ -509,20 +527,10 @@ func infoItems(
                 }
                                 
                 if let verification = (data.cachedData as? CachedUserData)?.verification {
-                    let description: String
-                    let descriptionString = verification.description
-                    let entities = generateTextEntities(descriptionString, enabledTypes: [.allUrl])
-                    if let entity = entities.first {
-                        let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
-                        let url = (descriptionString as NSString).substring(with: range)
-                        description = descriptionString.replacingOccurrences(of: url, with: "[\(url)](\(url))")
-                    } else {
-                        description = descriptionString
-                    }
                     let attributedPrefix = NSMutableAttributedString(string: "  ")
                     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSMakeRange(0, 1))
                     
-                    items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: ItemVerification, text: description, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: { action in
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: ItemVerification, text: verification.description, entities: peerVerificationDescriptionEntities(verification), attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: { action in
                         if case let .tap(url) = action, let navigationController = interaction.getController()?.navigationController as? NavigationController {
                             context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
                         }
@@ -686,21 +694,10 @@ func infoItems(
                 }
                 
                 if let verification = (data.cachedData as? CachedChannelData)?.verification {
-                    let description: String
-                    let descriptionString = verification.description
-                    let entities = generateTextEntities(descriptionString, enabledTypes: [.allUrl])
-                    if let entity = entities.first {
-                        let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
-                        let url = (descriptionString as NSString).substring(with: range)
-                        description = descriptionString.replacingOccurrences(of: url, with: "[\(url)](\(url))")
-                    } else {
-                        description = descriptionString
-                    }
-                    
                     let attributedPrefix = NSMutableAttributedString(string: "  ")
                     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSMakeRange(0, 1))
                     
-                    items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: 800, text: description, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: { action in
+                    items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: 800, text: verification.description, entities: peerVerificationDescriptionEntities(verification), attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: { action in
                         if case let .tap(url) = action, let navigationController = interaction.getController()?.navigationController as? NavigationController {
                             context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
                         }

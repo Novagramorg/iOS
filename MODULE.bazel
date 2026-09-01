@@ -27,9 +27,79 @@ http_archive(
     build_file_content = _WASI_SDK_BUILD,
 )
 
-bazel_dep(name = "bazel_features", version = "1.33.0")
-bazel_dep(name = "bazel_skylib", version = "1.8.1")
-bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "bazel_features", version = "1.50.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_rust", version = "0.74.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    extra_target_triples = [
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
+        "x86_64-apple-ios",
+    ],
+    versions = ["1.96.1"],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+wallet_engine_crates = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+wallet_engine_crates.spec(package = "aes", repositories = ["wallet_engine_crates"], version = "=0.8.4")
+wallet_engine_crates.spec(package = "async-trait", repositories = ["wallet_engine_crates"], version = "=0.1.89")
+wallet_engine_crates.spec(package = "base64", repositories = ["wallet_engine_crates"], version = "=0.22.1")
+wallet_engine_crates.spec(package = "crc", repositories = ["wallet_engine_crates"], version = "=3.4.0")
+wallet_engine_crates.spec(package = "crypto_box", default_features = False, features = ["alloc", "salsa20", "std"], repositories = ["wallet_engine_crates"], version = "=0.9.1")
+wallet_engine_crates.spec(package = "curve25519-dalek", repositories = ["wallet_engine_crates"], version = "=4.1.3")
+wallet_engine_crates.spec(package = "ed25519-dalek", features = ["zeroize"], repositories = ["wallet_engine_crates"], version = "=2.2.0")
+wallet_engine_crates.spec(package = "fastnum", features = ["numtraits"], repositories = ["wallet_engine_crates"], version = "0.7")
+wallet_engine_crates.spec(package = "futures", repositories = ["wallet_engine_crates"], version = "=0.3.31")
+wallet_engine_crates.spec(package = "getrandom", features = ["wasm_js"], repositories = ["wallet_engine_crates"], version = "=0.3.4")
+wallet_engine_crates.spec(package = "hex", repositories = ["wallet_engine_crates"], version = "0.4")
+wallet_engine_crates.spec(package = "hmac", repositories = ["wallet_engine_crates"], version = "=0.12.1")
+wallet_engine_crates.spec(package = "num-bigint", repositories = ["wallet_engine_crates"], version = "=0.4.8")
+wallet_engine_crates.spec(package = "num-traits", repositories = ["wallet_engine_crates"], version = "0.2")
+wallet_engine_crates.spec(package = "parking_lot", repositories = ["wallet_engine_crates"], version = "0.12")
+wallet_engine_crates.spec(package = "pbkdf2", features = ["simple"], repositories = ["wallet_engine_crates"], version = "=0.12.2")
+wallet_engine_crates.spec(package = "serde", features = ["derive"], repositories = ["wallet_engine_crates"], version = "=1.0.229")
+wallet_engine_crates.spec(package = "serde-aux", repositories = ["wallet_engine_crates"], version = "4")
+wallet_engine_crates.spec(package = "serde_json", repositories = ["wallet_engine_crates"], version = "=1.0.151")
+wallet_engine_crates.spec(package = "sha2", repositories = ["wallet_engine_crates"], version = "=0.10.9")
+wallet_engine_crates.spec(package = "subtle", repositories = ["wallet_engine_crates"], version = "=2.6.1")
+wallet_engine_crates.spec(package = "thiserror", repositories = ["wallet_engine_crates"], version = "=2.0.17")
+wallet_engine_crates.spec(package = "ton_core", features = ["serde"], repositories = ["wallet_engine_crates"], version = "=0.1.4")
+wallet_engine_crates.spec(package = "ton_macros", repositories = ["wallet_engine_crates"], version = "0.1")
+wallet_engine_crates.spec(package = "uniffi", repositories = ["wallet_engine_crates"], version = "=0.32.0")
+wallet_engine_crates.spec(package = "url", repositories = ["wallet_engine_crates"], version = "=2.5.7")
+wallet_engine_crates.spec(package = "zeroize", features = ["derive"], repositories = ["wallet_engine_crates"], version = "=1.9.0")
+wallet_engine_crates.from_specs(
+    name = "wallet_engine_crates",
+    cargo_lockfile = "//third-party/wallet-engine:Cargo.Bazel.lock",
+    supported_platform_triples = [
+        "aarch64-apple-darwin",
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
+        "x86_64-apple-darwin",
+        "x86_64-apple-ios",
+    ],
+)
+wallet_engine_crates.spec(package = "anyhow", repositories = ["wallet_engine_bindgen_crates"], version = "=1.0.102")
+wallet_engine_crates.spec(package = "uniffi", features = ["cli"], repositories = ["wallet_engine_bindgen_crates"], version = "=0.32.0")
+wallet_engine_crates.from_specs(
+    name = "wallet_engine_bindgen_crates",
+    cargo_lockfile = "//third-party/wallet-engine:Bindgen.Cargo.Bazel.lock",
+    supported_platform_triples = [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ],
+)
+use_repo(
+    wallet_engine_crates,
+    "wallet_engine_bindgen_crates",
+    "wallet_engine_crates",
+)
+
 bazel_dep(name = "rules_go", version = "0.60.0", repo_name = "io_bazel_rules_go")
 
 go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")
@@ -108,4 +178,3 @@ local_path_override(
     module_name = "build_configuration",
     path = "./build-input/configuration-repository",
 )
-

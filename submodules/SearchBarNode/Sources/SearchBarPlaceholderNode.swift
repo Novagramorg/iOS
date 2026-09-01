@@ -36,8 +36,10 @@ public final class SearchBarPlaceholderContentView: UIView {
         var isActive: Bool
         var additionalPlaceholderInset: CGFloat
         var preferClearGlass: Bool
+        var displayGlassBackgroundWhenInactive: Bool
+        var alignPlaceholderToLeftWhenInactive: Bool
         
-        init(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, isActive: Bool, additionalPlaceholderInset: CGFloat, preferClearGlass: Bool) {
+        init(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, isActive: Bool, additionalPlaceholderInset: CGFloat, preferClearGlass: Bool, displayGlassBackgroundWhenInactive: Bool, alignPlaceholderToLeftWhenInactive: Bool) {
             self.placeholderString = placeholderString
             self.compactPlaceholderString = compactPlaceholderString
             self.constrainedSize = constrainedSize
@@ -49,6 +51,8 @@ public final class SearchBarPlaceholderContentView: UIView {
             self.isActive = isActive
             self.additionalPlaceholderInset = additionalPlaceholderInset
             self.preferClearGlass = preferClearGlass
+            self.displayGlassBackgroundWhenInactive = displayGlassBackgroundWhenInactive
+            self.alignPlaceholderToLeftWhenInactive = alignPlaceholderToLeftWhenInactive
         }
     }
     
@@ -143,6 +147,8 @@ public final class SearchBarPlaceholderContentView: UIView {
         backgroundColor: UIColor,
         controlColor: UIColor,
         preferClearGlass: Bool,
+        displayGlassBackgroundWhenInactive: Bool,
+        alignPlaceholderToLeftWhenInactive: Bool,
         transition: ContainedViewLayoutTransition
     ) -> CGFloat {
         let params = Params(
@@ -156,7 +162,9 @@ public final class SearchBarPlaceholderContentView: UIView {
             controlColor: controlColor,
             isActive: false,
             additionalPlaceholderInset: 0.0,
-            preferClearGlass: preferClearGlass
+            preferClearGlass: preferClearGlass,
+            displayGlassBackgroundWhenInactive: displayGlassBackgroundWhenInactive,
+            alignPlaceholderToLeftWhenInactive: alignPlaceholderToLeftWhenInactive
         )
         self.params = params
         return self.updateLayout(params: params, transition: transition)
@@ -232,6 +240,8 @@ public final class SearchBarPlaceholderContentView: UIView {
             totalWidth += iconSize.width + spacing
             if params.isActive {
                 iconX = 8.0
+            } else if params.alignPlaceholderToLeftWhenInactive {
+                iconX = 12.0
             } else {
                 iconX = floor((params.constrainedSize.width - totalWidth) / 2.0)
             }
@@ -281,7 +291,7 @@ public final class SearchBarPlaceholderContentView: UIView {
         }
         
         var plainBackgroundAlpha = outerAlpha
-        if params.isActive {
+        if params.isActive || params.displayGlassBackgroundWhenInactive {
             plainBackgroundAlpha = 0.0
         }
         if self.plainBackgroundView.alpha != plainBackgroundAlpha {
@@ -316,12 +326,12 @@ public final class SearchBarPlaceholderContentView: UIView {
             if backgroundFrame.height < 16.0 {
                 backgroundAlpha = max(0.0, min(1.0, backgroundFrame.height / 16.0))
             }
-            if !params.isActive {
+            if !params.isActive && !params.displayGlassBackgroundWhenInactive {
                 backgroundAlpha = 0.0
             }
             ComponentTransition(transition).setAlpha(view: glassBackgroundContainerView, alpha: backgroundAlpha)
             let isDark = params.backgroundColor.hsb.b < 0.5
-            if params.isActive {
+            if params.isActive || params.displayGlassBackgroundWhenInactive {
                 glassBackgroundContainerView.update(size: backgroundFrame.size, isDark: isDark, transition: ComponentTransition(transition))
                 glassBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: params.preferClearGlass ? .clear : .panel), isInteractive: true, transition: ComponentTransition(transition))
             }
@@ -430,8 +440,10 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
         var backgroundColor: UIColor
         var controlColor: UIColor
         var preferClearGlass: Bool
+        var displayGlassBackgroundWhenInactive: Bool
+        var alignPlaceholderToLeftWhenInactive: Bool
         
-        init(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, preferClearGlass: Bool) {
+        init(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, preferClearGlass: Bool, displayGlassBackgroundWhenInactive: Bool, alignPlaceholderToLeftWhenInactive: Bool) {
             self.placeholderString = placeholderString
             self.compactPlaceholderString = compactPlaceholderString
             self.constrainedSize = constrainedSize
@@ -441,6 +453,8 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
             self.backgroundColor = backgroundColor
             self.controlColor = controlColor
             self.preferClearGlass = preferClearGlass
+            self.displayGlassBackgroundWhenInactive = displayGlassBackgroundWhenInactive
+            self.alignPlaceholderToLeftWhenInactive = alignPlaceholderToLeftWhenInactive
         }
     }
     
@@ -581,8 +595,8 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
         }
     }
     
-    public func updateLayout(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, preferClearGlass: Bool = false, transition: ContainedViewLayoutTransition) -> CGFloat {
-        let params = Params(placeholderString: placeholderString, compactPlaceholderString: compactPlaceholderString, constrainedSize: constrainedSize, expansionProgress: expansionProgress, iconColor: iconColor, foregroundColor: foregroundColor, backgroundColor: backgroundColor, controlColor: controlColor, preferClearGlass: preferClearGlass)
+    public func updateLayout(placeholderString: NSAttributedString?, compactPlaceholderString: NSAttributedString?, constrainedSize: CGSize, expansionProgress: CGFloat, iconColor: UIColor, foregroundColor: UIColor, backgroundColor: UIColor, controlColor: UIColor, preferClearGlass: Bool = false, displayGlassBackgroundWhenInactive: Bool = false, alignPlaceholderToLeftWhenInactive: Bool = false, transition: ContainedViewLayoutTransition) -> CGFloat {
+        let params = Params(placeholderString: placeholderString, compactPlaceholderString: compactPlaceholderString, constrainedSize: constrainedSize, expansionProgress: expansionProgress, iconColor: iconColor, foregroundColor: foregroundColor, backgroundColor: backgroundColor, controlColor: controlColor, preferClearGlass: preferClearGlass, displayGlassBackgroundWhenInactive: displayGlassBackgroundWhenInactive, alignPlaceholderToLeftWhenInactive: alignPlaceholderToLeftWhenInactive)
         self.params = params
         
         if self.isTakenOut {
@@ -595,7 +609,7 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
     }
     
     private func update(params: Params, transition: ContainedViewLayoutTransition) -> CGFloat {
-        let height = self.contentView.updateLayout(placeholderString: params.placeholderString, compactPlaceholderString: params.compactPlaceholderString, constrainedSize: params.constrainedSize, expansionProgress: params.expansionProgress, iconColor: params.iconColor, foregroundColor: params.foregroundColor, backgroundColor: params.backgroundColor, controlColor: params.controlColor, preferClearGlass: params.preferClearGlass, transition: transition)
+        let height = self.contentView.updateLayout(placeholderString: params.placeholderString, compactPlaceholderString: params.compactPlaceholderString, constrainedSize: params.constrainedSize, expansionProgress: params.expansionProgress, iconColor: params.iconColor, foregroundColor: params.foregroundColor, backgroundColor: params.backgroundColor, controlColor: params.controlColor, preferClearGlass: params.preferClearGlass, displayGlassBackgroundWhenInactive: params.displayGlassBackgroundWhenInactive, alignPlaceholderToLeftWhenInactive: params.alignPlaceholderToLeftWhenInactive, transition: transition)
         let size = CGSize(width: params.constrainedSize.width, height: height)
         transition.updateFrame(view: self.containerView, frame: CGRect(origin: CGPoint(), size: size))
         transition.updateFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: size))

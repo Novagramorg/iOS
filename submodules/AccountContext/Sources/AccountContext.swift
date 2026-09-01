@@ -14,6 +14,7 @@ import AnimationCache
 import MultiAnimationRenderer
 import Photos
 import TextFormat
+import WalletContext
 
 public final class TelegramApplicationOpenUrlCompletion {
     public let completion: (Bool) -> Void
@@ -1361,6 +1362,34 @@ public enum EmojiStatusSelectionControllerMode {
     case quickReactionSelection(completion: () -> Void)
 }
 
+public enum WalletInfoScreenMode: Equatable, CaseIterable {
+    case wallet
+    case gram
+    case recovery
+}
+
+public enum WalletImportScreenMode: Equatable {
+    case importWallet
+    case enterRecoveryPhrase
+    case verify(words: [String])
+}
+
+public enum WalletWordsScreenMode: Equatable {
+    case view
+    case verify
+    case replacement
+    case backupDisable
+}
+
+public enum WalletTransactionScreenMode {
+    case transaction(WalletContext.Transaction)
+    case preview(
+        walletContext: WalletContext,
+        preparedTransfer: WalletContext.PreparedTransfer,
+        dismissSendScreen: () -> Void
+    )
+}
+
 public protocol SharedAccountContext: AnyObject {
     var sharedContainerPath: String { get }
     var basePath: String { get }
@@ -1555,6 +1584,19 @@ public protocol SharedAccountContext: AnyObject {
     func makeStarsGiftScreen(context: AccountContext, message: EngineMessage) -> ViewController
     func makeStarsGiveawayBoostScreen(context: AccountContext, peerId: EnginePeer.Id, boost: ChannelBoostersContext.State.Boost) -> ViewController
     func makeStarsIntroScreen(context: AccountContext) -> ViewController
+    func makeWalletScreen(context: AccountContext) -> ViewController
+    func makeWalletReceiveScreen(context: AccountContext, address: String) -> ViewController
+    func makeWalletImportScreen(context: AccountContext, mode: WalletImportScreenMode, completion: (() -> Void)?) -> ViewController
+    func makeWalletSettingsScreen(context: AccountContext) -> ViewController
+    func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController
+    func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController
+    func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
+    func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
+    func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectOperationRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
+    func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController
+    func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, mode: WalletTransactionScreenMode) -> ViewController
+    func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible) -> ViewController
+    func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void)
     func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController
     func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]?) -> ViewController
@@ -1574,6 +1616,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeMiniAppListScreenInitialData(context: AccountContext) -> Signal<MiniAppListScreenInitialData, NoError>
     func makeMiniAppListScreen(context: AccountContext, initialData: MiniAppListScreenInitialData) -> ViewController
     func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController
+    func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool)
     func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?)
     func openJoinChatWebView(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, webView: JoinChatWebView, chatTitle: String)
     func makeAffiliateProgramSetupScreenInitialData(context: AccountContext, peerId: EnginePeer.Id, mode: AffiliateProgramSetupScreenMode) -> Signal<AffiliateProgramSetupScreenInitialData, NoError>
@@ -1732,6 +1775,7 @@ public protocol AccountContext: AnyObject {
     var inAppPurchaseManager: InAppPurchaseManager? { get }
     var starsContext: StarsContext? { get }
     var tonContext: StarsContext? { get }
+    var walletContext: WalletContext? { get }
     var giftAuctionsManager: GiftAuctionsManager? { get }
     
     var currentLimitsConfiguration: Atomic<LimitsConfiguration> { get }

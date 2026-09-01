@@ -1,0 +1,2055 @@
+import Foundation
+import UIKit
+import CoreText
+import Display
+import AccountContext
+import SwiftSignalKit
+import TelegramCore
+import TelegramPresentationData
+import PresentationDataUtils
+import ComponentFlow
+import ViewControllerComponent
+import SheetComponent
+import NavigationStackComponent
+import ItemListUI
+import BalancedTextComponent
+import BundleIconComponent
+import MultilineTextComponent
+import GlassBarButtonComponent
+import ButtonComponent
+import ListSectionComponent
+import ListActionItemComponent
+import QrCode
+
+private final class WalletReceiveQrComponent: Component {
+    let address: String
+
+    init(address: String) {
+        self.address = address
+    }
+
+    static func ==(lhs: WalletReceiveQrComponent, rhs: WalletReceiveQrComponent) -> Bool {
+        return lhs.address == rhs.address
+    }
+
+    final class View: UIView {
+        private var component: WalletReceiveQrComponent?
+        private let imageNode: TransformImageNode
+
+        override init(frame: CGRect) {
+            self.imageNode = TransformImageNode()
+
+            super.init(frame: frame)
+
+            self.backgroundColor = .white
+            self.isUserInteractionEnabled = false
+            self.addSubview(self.imageNode.view)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(
+            component: WalletReceiveQrComponent,
+            availableSize: CGSize
+        ) -> CGSize {
+            let previousComponent = self.component
+            self.component = component
+
+            if previousComponent?.address != component.address {
+                self.imageNode.setSignal(
+                    qrCode(
+                        string: "ton://transfer/\(component.address)",
+                        color: .black,
+                        backgroundColor: .white,
+                        icon: .custom(UIImage(bundleImageName: "Wallet/QrGram")),
+                        ecl: "Q"
+                    )
+                    |> map { $0.1 },
+                    attemptSynchronously: true
+                )
+            }
+
+            let side = min(availableSize.width, availableSize.height)
+            let size = CGSize(width: side, height: side)
+            let imageInset = min(6.0, max(0.0, (side - 1.0) / 2.0))
+            let imageSide = max(1.0, side - imageInset * 2.0)
+            let imageSize = CGSize(width: imageSide, height: imageSide)
+
+            let makeImageLayout = self.imageNode.asyncLayout()
+            let imageApply = makeImageLayout(TransformImageArguments(
+                corners: ImageCorners(),
+                imageSize: imageSize,
+                boundingSize: imageSize,
+                intrinsicInsets: .zero,
+                emptyColor: nil
+            ))
+            let _ = imageApply()
+            self.imageNode.frame = CGRect(
+                origin: CGPoint(x: imageInset, y: imageInset),
+                size: imageSize
+            )
+
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize)
+    }
+}
+
+private final class WalletReceiveAddressRingComponent: Component {
+    let address: String
+    let color: UIColor
+    let cardSize: CGSize
+    let cardCornerRadius: CGFloat
+    let pathOffset: CGFloat
+
+    init(
+        address: String,
+        color: UIColor,
+        cardSize: CGSize,
+        cardCornerRadius: CGFloat,
+        pathOffset: CGFloat
+    ) {
+        self.address = address
+        self.color = color
+        self.cardSize = cardSize
+        self.cardCornerRadius = cardCornerRadius
+        self.pathOffset = pathOffset
+    }
+
+    static func ==(lhs: WalletReceiveAddressRingComponent, rhs: WalletReceiveAddressRingComponent) -> Bool {
+        if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.color != rhs.color {
+            return false
+        }
+        if lhs.cardSize != rhs.cardSize {
+            return false
+        }
+        if lhs.cardCornerRadius != rhs.cardCornerRadius {
+            return false
+        }
+        if lhs.pathOffset != rhs.pathOffset {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private struct RoundedRectPerimeter {
+            struct Sample {
+                let point: CGPoint
+                let tangent: CGVector
+            }
+
+            let rect: CGRect
+            let radius: CGFloat
+            let horizontalLength: CGFloat
+            let verticalLength: CGFloat
+            let cornerLength: CGFloat
+            let length: CGFloat
+
+            init?(rect inputRect: CGRect, radius proposedRadius: CGFloat) {
+                guard inputRect.origin.x.isFinite, inputRect.origin.y.isFinite,
+                      inputRect.width.isFinite, inputRect.height.isFinite,
+                      proposedRadius.isFinite else {
+                    return nil
+                }
+
+                let rect = inputRect.standardized
+                guard rect.width > 0.0, rect.height > 0.0 else {
+                    return nil
+                }
+
+                let radius = min(max(0.0, proposedRadius), min(rect.width, rect.height) * 0.5)
+                let horizontalLength = max(0.0, rect.width - radius * 2.0)
+                let verticalLength = max(0.0, rect.height - radius * 2.0)
+                let cornerLength = CGFloat.pi * radius * 0.5
+                let length = horizontalLength * 2.0 + verticalLength * 2.0 + cornerLength * 4.0
+                guard length.isFinite, length > 0.0 else {
+                    return nil
+                }
+
+                self.rect = rect
+                self.radius = radius
+                self.horizontalLength = horizontalLength
+                self.verticalLength = verticalLength
+                self.cornerLength = cornerLength
+                self.length = length
+            }
+
+            private func arcSample(center: CGPoint, angle: CGFloat) -> Sample {
+                let sine = sin(angle)
+                let cosine = cos(angle)
+                return Sample(
+                    point: CGPoint(
+                        x: center.x + self.radius * cosine,
+                        y: center.y + self.radius * sine
+                    ),
+                    tangent: CGVector(dx: -sine, dy: cosine)
+                )
+            }
+
+            func sample(at distance: CGFloat) -> Sample {
+                var normalizedDistance: CGFloat
+                if distance.isFinite {
+                    normalizedDistance = distance.truncatingRemainder(dividingBy: self.length)
+                } else {
+                    normalizedDistance = 0.0
+                }
+                if normalizedDistance < 0.0 {
+                    normalizedDistance += self.length
+                }
+
+                // The primitive path starts at the top-left tangency. Apply a phase so that
+                // distance zero is the center of the top edge.
+                var segmentDistance = normalizedDistance + self.horizontalLength * 0.5
+                if segmentDistance >= self.length {
+                    segmentDistance -= self.length
+                }
+
+                if self.horizontalLength > 0.0 && segmentDistance < self.horizontalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.minX + self.radius + segmentDistance,
+                            y: self.rect.minY
+                        ),
+                        tangent: CGVector(dx: 1.0, dy: 0.0)
+                    )
+                }
+                segmentDistance -= self.horizontalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.maxX - self.radius, y: self.rect.minY + self.radius),
+                        angle: -.pi * 0.5 + segmentDistance / self.radius
+                    )
+                }
+                segmentDistance -= self.cornerLength
+
+                if self.verticalLength > 0.0 && segmentDistance < self.verticalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.maxX,
+                            y: self.rect.minY + self.radius + segmentDistance
+                        ),
+                        tangent: CGVector(dx: 0.0, dy: 1.0)
+                    )
+                }
+                segmentDistance -= self.verticalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.maxX - self.radius, y: self.rect.maxY - self.radius),
+                        angle: segmentDistance / self.radius
+                    )
+                }
+                segmentDistance -= self.cornerLength
+
+                if self.horizontalLength > 0.0 && segmentDistance < self.horizontalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.maxX - self.radius - segmentDistance,
+                            y: self.rect.maxY
+                        ),
+                        tangent: CGVector(dx: -1.0, dy: 0.0)
+                    )
+                }
+                segmentDistance -= self.horizontalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.minX + self.radius, y: self.rect.maxY - self.radius),
+                        angle: .pi * 0.5 + segmentDistance / self.radius
+                    )
+                }
+                segmentDistance -= self.cornerLength
+
+                if self.verticalLength > 0.0 && segmentDistance < self.verticalLength {
+                    return Sample(
+                        point: CGPoint(
+                            x: self.rect.minX,
+                            y: self.rect.maxY - self.radius - segmentDistance
+                        ),
+                        tangent: CGVector(dx: 0.0, dy: -1.0)
+                    )
+                }
+                segmentDistance -= self.verticalLength
+
+                if self.cornerLength > 0.0 && segmentDistance < self.cornerLength {
+                    return self.arcSample(
+                        center: CGPoint(x: self.rect.minX + self.radius, y: self.rect.minY + self.radius),
+                        angle: .pi + segmentDistance / self.radius
+                    )
+                }
+
+                return Sample(
+                    point: CGPoint(x: self.rect.minX + self.radius, y: self.rect.minY),
+                    tangent: CGVector(dx: 1.0, dy: 0.0)
+                )
+            }
+        }
+
+        private struct GlyphItem {
+            let glyph: CGGlyph
+            let position: CGPoint
+            let advance: CGFloat
+            let font: CTFont
+        }
+
+        private struct GlyphLayout {
+            let items: [GlyphItem]
+            let width: CGFloat
+        }
+
+        private var component: WalletReceiveAddressRingComponent?
+        private var availableSize: CGSize = .zero
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.isOpaque = false
+            self.backgroundColor = .clear
+            self.contentMode = .redraw
+            self.isUserInteractionEnabled = false
+            self.isAccessibilityElement = false
+            self.accessibilityElementsHidden = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private static func groupedAddress(_ address: String) -> [String] {
+            var result: [String] = []
+            var index = address.startIndex
+            while index < address.endIndex {
+                let endIndex = address.index(index, offsetBy: 4, limitedBy: address.endIndex) ?? address.endIndex
+                result.append(String(address[index ..< endIndex]))
+                index = endIndex
+            }
+            return result
+        }
+
+        private static func glyphLayout(text: String, font: UIFont) -> GlyphLayout? {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(
+                string: text,
+                attributes: [.font: font]
+            ))
+
+            var items: [GlyphItem] = []
+            let glyphRuns = CTLineGetGlyphRuns(line) as NSArray
+            for runValue in glyphRuns {
+                let run = runValue as! CTRun
+                let glyphCount = CTRunGetGlyphCount(run)
+                if glyphCount == 0 {
+                    continue
+                }
+
+                var glyphs = [CGGlyph](repeating: 0, count: glyphCount)
+                var positions = [CGPoint](repeating: .zero, count: glyphCount)
+                var advances = [CGSize](repeating: .zero, count: glyphCount)
+                let range = CFRangeMake(0, glyphCount)
+                CTRunGetGlyphs(run, range, &glyphs)
+                CTRunGetPositions(run, range, &positions)
+                CTRunGetAdvances(run, range, &advances)
+
+                let attributes = CTRunGetAttributes(run) as NSDictionary
+                guard let runFont = attributes[kCTFontAttributeName] as! CTFont? else {
+                    continue
+                }
+
+                for index in 0 ..< glyphCount {
+                    items.append(GlyphItem(
+                        glyph: glyphs[index],
+                        position: positions[index],
+                        advance: max(0.0, advances[index].width),
+                        font: runFont
+                    ))
+                }
+            }
+
+            items.sort { lhs, rhs in
+                return lhs.position.x < rhs.position.x
+            }
+            guard !items.isEmpty else {
+                return nil
+            }
+
+            var width: CGFloat = 0.0
+            for item in items {
+                width = max(width, item.position.x + item.advance)
+            }
+            guard width.isFinite, width > 0.0 else {
+                return nil
+            }
+
+            return GlyphLayout(items: items, width: width)
+        }
+
+        override func draw(_ rect: CGRect) {
+            guard let component = self.component, !component.address.isEmpty,
+                  let graphicsContext = UIGraphicsGetCurrentContext() else {
+                return
+            }
+
+            let bounds = self.bounds
+            guard bounds.origin.x.isFinite, bounds.origin.y.isFinite,
+                  bounds.width.isFinite, bounds.height.isFinite,
+                  bounds.width > 0.0, bounds.height > 0.0,
+                  component.cardSize.width.isFinite, component.cardSize.height.isFinite,
+                  component.cardCornerRadius.isFinite, component.pathOffset.isFinite else {
+                return
+            }
+
+            let groupedAddress = Self.groupedAddress(component.address)
+                .joined(separator: " ")
+                .uppercased()
+            guard !groupedAddress.isEmpty else {
+                return
+            }
+
+            let baseFontSize = max(8.0, min(11.0, bounds.width / 31.0)) * 1.2
+            let baseFont = Font.with(size: baseFontSize, design: .monospace, weight: .semibold)
+
+            let cardSize = CGSize(
+                width: max(0.0, component.cardSize.width),
+                height: max(0.0, component.cardSize.height)
+            )
+            let cardRect = CGRect(
+                x: bounds.midX - cardSize.width * 0.5,
+                y: bounds.midY - cardSize.height * 0.5,
+                width: cardSize.width,
+                height: cardSize.height
+            )
+            let pathOffset = max(0.0, component.pathOffset)
+            let desiredPathRect = cardRect.insetBy(dx: -pathOffset, dy: -pathOffset)
+
+            let glyphInset = ceil(baseFont.lineHeight * 0.5)
+            let safeInsetX = min(glyphInset, max(0.0, (bounds.width - 1.0) * 0.5))
+            let safeInsetY = min(glyphInset, max(0.0, (bounds.height - 1.0) * 0.5))
+            let safeBounds = bounds.insetBy(dx: safeInsetX, dy: safeInsetY)
+            let pathRect = desiredPathRect.intersection(safeBounds)
+            guard !pathRect.isNull, !pathRect.isEmpty else {
+                return
+            }
+
+            let cardCornerRadius = min(
+                max(0.0, component.cardCornerRadius),
+                min(cardRect.width, cardRect.height) * 0.5
+            )
+            guard let perimeter = RoundedRectPerimeter(
+                rect: pathRect,
+                radius: cardCornerRadius + pathOffset
+            ) else {
+                return
+            }
+
+            let halfLength = perimeter.length * 0.5
+            guard halfLength.isFinite, halfLength > 0.0 else {
+                return
+            }
+
+            let unitText = "· \(groupedAddress) "
+            guard let glyphLayout = Self.glyphLayout(text: unitText, font: baseFont) else {
+                return
+            }
+            let glyphScale: CGFloat
+            if glyphLayout.width > halfLength {
+                glyphScale = halfLength / glyphLayout.width * 0.99
+            } else {
+                glyphScale = 1.0
+            }
+            guard glyphScale.isFinite, glyphScale > 0.0 else {
+                return
+            }
+
+            let tracking = max(
+                0.0,
+                (halfLength - glyphLayout.width * glyphScale) / CGFloat(glyphLayout.items.count)
+            )
+            guard let firstItem = glyphLayout.items.first else {
+                return
+            }
+            let firstCenter = (firstItem.position.x + firstItem.advance * 0.5) * glyphScale
+
+            graphicsContext.saveGState()
+            graphicsContext.setFillColor(component.color.cgColor)
+            graphicsContext.setTextDrawingMode(.fill)
+
+            for copyIndex in 0 ..< 2 {
+                let copyOffset = CGFloat(copyIndex) * halfLength
+                for index in 0 ..< glyphLayout.items.count {
+                    let item = glyphLayout.items[index]
+                    let centerOffset = (item.position.x + item.advance * 0.5) * glyphScale - firstCenter
+                    let distance = copyOffset + centerOffset + CGFloat(index) * tracking
+                    let sample = perimeter.sample(at: distance)
+                    let angle = atan2(sample.tangent.dy, sample.tangent.dx)
+
+                    graphicsContext.saveGState()
+                    graphicsContext.translateBy(x: sample.point.x, y: sample.point.y)
+                    graphicsContext.rotate(by: angle)
+                    graphicsContext.scaleBy(x: glyphScale, y: -glyphScale)
+                    graphicsContext.textMatrix = .identity
+
+                    var glyph = item.glyph
+                    var glyphPosition = CGPoint(
+                        x: -item.advance * 0.5,
+                        y: (CTFontGetDescent(item.font) - CTFontGetAscent(item.font)) * 0.5
+                    )
+                    CTFontDrawGlyphs(item.font, &glyph, &glyphPosition, 1, graphicsContext)
+                    graphicsContext.restoreGState()
+                }
+            }
+
+            graphicsContext.restoreGState()
+        }
+
+        func update(
+            component: WalletReceiveAddressRingComponent,
+            availableSize: CGSize
+        ) -> CGSize {
+            let needsDisplay: Bool
+            if let currentComponent = self.component {
+                needsDisplay = currentComponent != component || self.availableSize != availableSize
+            } else {
+                needsDisplay = true
+            }
+
+            self.component = component
+            self.availableSize = availableSize
+            if needsDisplay {
+                self.setNeedsDisplay()
+            }
+
+            return availableSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize)
+    }
+}
+
+private final class WalletReceiveAddressGridComponent: Component {
+    let address: String
+
+    init(address: String) {
+        self.address = address
+    }
+
+    static func ==(lhs: WalletReceiveAddressGridComponent, rhs: WalletReceiveAddressGridComponent) -> Bool {
+        return lhs.address == rhs.address
+    }
+
+    final class View: UIView {
+        private var labels: [UILabel] = []
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private static func groupedAddress(_ address: String) -> [String] {
+            var result: [String] = []
+            var index = address.startIndex
+            while index < address.endIndex {
+                let endIndex = address.index(index, offsetBy: 4, limitedBy: address.endIndex) ?? address.endIndex
+                result.append(String(address[index ..< endIndex]))
+                index = endIndex
+            }
+            return result
+        }
+
+        func update(
+            component: WalletReceiveAddressGridComponent,
+            availableSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let groups = Self.groupedAddress(component.address)
+            while self.labels.count < groups.count {
+                let label = UILabel()
+                label.backgroundColor = .clear
+                label.font = Font.with(size: 17.0, design: .monospace, weight: .semibold)
+                label.textAlignment = .center
+                self.labels.append(label)
+                self.addSubview(label)
+            }
+
+            let columnCount = 3
+            let rowCount = Int(ceil(CGFloat(groups.count) / CGFloat(columnCount)))
+            let width = min(192.0, max(1.0, availableSize.width))
+            let rowHeight: CGFloat = 26.0
+            let cellWidth = width / CGFloat(columnCount)
+
+            for index in 0 ..< self.labels.count {
+                let label = self.labels[index]
+                guard index < groups.count else {
+                    label.isHidden = true
+                    continue
+                }
+                label.isHidden = false
+                label.text = groups[index]
+                label.textColor = index.isMultiple(of: 2) ? .black : UIColor(rgb: 0x8e8e93)
+
+                let column = index % columnCount
+                let row = index / columnCount
+                transition.setFrame(
+                    view: label,
+                    frame: CGRect(
+                        x: CGFloat(column) * cellWidth,
+                        y: CGFloat(row) * rowHeight,
+                        width: cellWidth,
+                        height: rowHeight
+                    )
+                )
+            }
+
+            return CGSize(width: width, height: CGFloat(rowCount) * rowHeight)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
+private final class WalletReceiveSheetContent: Component {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let address: String
+    let containerHeight: CGFloat
+    let animateOut: ActionSlot<Action<Void>>
+    let getController: () -> ViewController?
+    let openOnramp: () -> Void
+
+    init(
+        context: AccountContext,
+        address: String,
+        containerHeight: CGFloat,
+        animateOut: ActionSlot<Action<Void>>,
+        getController: @escaping () -> ViewController?,
+        openOnramp: @escaping () -> Void
+    ) {
+        self.context = context
+        self.address = address
+        self.containerHeight = containerHeight
+        self.animateOut = animateOut
+        self.getController = getController
+        self.openOnramp = openOnramp
+    }
+
+    static func ==(lhs: WalletReceiveSheetContent, rhs: WalletReceiveSheetContent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.containerHeight != rhs.containerHeight {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let background = ComponentView<Empty>()
+        private let closeButton = ComponentView<Empty>()
+        private let addressRing = ComponentView<Empty>()
+        private let cardView = UIView()
+        private let cardBackground = ComponentView<Empty>()
+        private let qrCode = ComponentView<Empty>()
+        private let addressGrid = ComponentView<Empty>()
+        private let copiedStatus = ComponentView<Empty>()
+        private let copyButton = ComponentView<Empty>()
+        private let explanation = ComponentView<Empty>()
+        private let buyButton = ComponentView<Empty>()
+
+        private var component: WalletReceiveSheetContent?
+        private weak var state: EmptyComponentState?
+        private let hapticFeedback = HapticFeedback()
+        private var displaysAddress = false
+        private var appliedDisplaysAddress: Bool?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.cardView.clipsToBounds = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func dismiss(animated: Bool) {
+            guard let component = self.component,
+                  let controller = component.getController() as? WalletReceiveScreen else {
+                return
+            }
+            if animated {
+                component.animateOut.invoke(Action { [weak controller] _ in
+                    controller?.dismiss(completion: nil)
+                })
+            } else {
+                controller.dismiss(animated: false)
+            }
+        }
+
+        private func copyAddress() {
+            guard let component = self.component else {
+                return
+            }
+            UIPasteboard.general.string = component.address
+            self.hapticFeedback.tap()
+            if !self.displaysAddress {
+                self.displaysAddress = true
+                self.state?.updated(transition: .immediate)
+            }
+        }
+
+        private func showQrCode() {
+            guard self.displaysAddress else {
+                return
+            }
+            self.displaysAddress = false
+            self.state?.updated(transition: .immediate)
+        }
+
+        func update(
+            component: WalletReceiveSheetContent,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            self.component = component
+            self.state = state
+
+            let environment = environment[EnvironmentType.self].value
+
+            let availableWidth = availableSize.width
+            let horizontalInset: CGFloat = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
+            let widthLimitedCardWidth = max(1.0, availableWidth - 104.0)
+            let heightLimitedCardWidth = max(1.0, component.containerHeight - 338.0)
+            let minimumReadableCardWidth = min(216.0, widthLimitedCardWidth)
+            let cardWidth = min(
+                256.0,
+                widthLimitedCardWidth,
+                max(minimumReadableCardWidth, heightLimitedCardWidth)
+            )
+            let qrSize = max(1.0, cardWidth - 20.0)
+            let copyButtonHeight: CGFloat = 28.0
+            let cardHeight = qrSize + copyButtonHeight + 24.0
+            let cardCornerRadius: CGFloat = 28.0
+            let ringPathOffset: CGFloat = 14.0
+            let ringSize = CGSize(
+                width: max(1.0, min(max(1.0, availableWidth - 32.0), cardWidth + 76.0)),
+                height: cardHeight + 56.0
+            )
+
+            let cardTop: CGFloat = cardWidth < 230.0 ? 58.0 : 70.0
+            let cardFrame = CGRect(
+                x: floor((availableWidth - cardWidth) / 2.0),
+                y: cardTop,
+                width: cardWidth,
+                height: cardHeight
+            )
+            let ringFrame = CGRect(
+                x: floor((availableWidth - ringSize.width) / 2.0),
+                y: cardFrame.minY - 28.0,
+                width: ringSize.width,
+                height: ringSize.height
+            )
+
+            let addressRingSize = self.addressRing.update(
+                transition: transition,
+                component: AnyComponent(WalletReceiveAddressRingComponent(
+                    address: component.address,
+                    color: UIColor(rgb: 0x0052b3).withAlphaComponent(0.48),
+                    cardSize: cardFrame.size,
+                    cardCornerRadius: cardCornerRadius,
+                    pathOffset: ringPathOffset
+                )),
+                environment: {},
+                containerSize: ringSize
+            )
+
+            let cardBackgroundSize = self.cardBackground.update(
+                transition: transition,
+                component: AnyComponent(RoundedRectangle(
+                    color: .white,
+                    cornerRadius: cardCornerRadius,
+                    size: cardFrame.size
+                )),
+                environment: {},
+                containerSize: cardFrame.size
+            )
+
+            let copyButtonContent: AnyComponentWithIdentity<Empty>
+            let copyButtonAction: () -> Void
+            if self.displaysAddress {
+                //TODO:localize
+                let showQrTitle = "Show my QR"
+                copyButtonContent = AnyComponentWithIdentity(
+                    id: "showQr",
+                    component: AnyComponent(Text(
+                        text: showQrTitle,
+                        font: Font.semibold(14.0),
+                        color: UIColor(rgb: 0x087cff)
+                    ))
+                )
+                copyButtonAction = { [weak self] in
+                    self?.showQrCode()
+                }
+            } else {
+                //TODO:localize
+                let copyTitle = "Copy my address"
+                copyButtonContent = AnyComponentWithIdentity(
+                    id: "copy",
+                    component: AnyComponent(HStack<Empty>([
+                        AnyComponentWithIdentity(
+                            id: "icon",
+                            component: AnyComponent(BundleIconComponent(
+                                name: "Wallet/ReceiveCopy",
+                                tintColor: UIColor(rgb: 0x087cff)
+                            ))
+                        ),
+                        AnyComponentWithIdentity(
+                            id: "title",
+                            component: AnyComponent(Text(
+                                text: copyTitle,
+                                font: Font.semibold(14.0),
+                                color: UIColor(rgb: 0x087cff)
+                            ))
+                        )
+                    ], spacing: 7.0))
+                )
+                copyButtonAction = { [weak self] in
+                    self?.copyAddress()
+                }
+            }
+
+            let closeButtonSize = self.closeButton.update(
+                transition: .immediate,
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: CGSize(width: 44.0, height: 44.0),
+                    backgroundColor: UIColor(rgb: 0x1883fc),
+                    isDark: false,
+                    state: .tintedGlass,
+                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Navigation/Close",
+                            tintColor: .white
+                        )
+                    )),
+                    action: { [weak self] _ in
+                        self?.dismiss(animated: true)
+                    }
+                )),
+                environment: {},
+                containerSize: CGSize(width: 44.0, height: 44.0)
+            )
+
+            //TODO:localize
+            let explanationText = "Use to receive GRAM on\nThe Open Network (TON) only."
+            let explanationSize = self.explanation.update(
+                transition: .immediate,
+                component: AnyComponent(BalancedTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: explanationText,
+                        font: Font.regular(15.0),
+                        textColor: .white
+                    )),
+                    horizontalAlignment: .center,
+                    maximumNumberOfLines: 2,
+                    lineSpacing: 0.2
+                )),
+                environment: {},
+                containerSize: CGSize(
+                    width: max(1.0, availableWidth - horizontalInset * 2.0),
+                    height: 100.0
+                )
+            )
+            let explanationTop = ringFrame.maxY + (cardWidth < 230.0 ? 12.0 : 20.0)
+
+            //TODO:localize
+            let buyTitle = "Buy with cash or crypto"
+            let buyContent = HStack<Empty>([
+                AnyComponentWithIdentity(
+                    id: "icon",
+                    component: AnyComponent(BundleIconComponent(name: "Wallet/ButtonBuy", tintColor: UIColor(rgb: 0x087cff)))
+                ),
+                AnyComponentWithIdentity(
+                    id: "title",
+                    component: AnyComponent(Text(
+                        text: buyTitle,
+                        font: Font.semibold(17.0),
+                        color: UIColor(rgb: 0x087cff)
+                    ))
+                )
+            ], spacing: 10.0)
+            let buyButtonSize = self.buyButton.update(
+                transition: .immediate,
+                component: AnyComponent(ButtonComponent(
+                    background: ButtonComponent.Background(
+                        style: .legacy,
+                        color: .white,
+                        foreground: UIColor(rgb: 0x087cff),
+                        pressedColor: UIColor(white: 0.92, alpha: 1.0),
+                        cornerRadius: 26.0
+                    ),
+                    content: AnyComponentWithIdentity(id: "buy", component: AnyComponent(buyContent)),
+                    isEnabled: true,
+                    displaysProgress: false,
+                    action: { [weak self] in
+                        self?.component?.openOnramp()
+                    }
+                )),
+                environment: {},
+                containerSize: CGSize(width: max(1.0, availableWidth - horizontalInset * 2.0), height: 52.0)
+            )
+            let buyButtonTop = explanationTop + explanationSize.height + (cardWidth < 230.0 ? 18.0 : 30.0)
+
+            let contentHeight = buyButtonTop + buyButtonSize.height + max(22.0, environment.safeInsets.bottom + 12.0)
+            let backgroundSize = self.background.update(
+                transition: transition,
+                component: AnyComponent(RoundedRectangle(
+                    colors: [
+                        UIColor(rgb: 0x0079ff),
+                        UIColor(rgb: 0x46b2ff),
+                        UIColor(rgb: 0x46b2ff),
+                        UIColor(rgb: 0x067eff)
+                    ],
+                    cornerRadius: 0.0,
+                    gradientDirection: .vertical,
+                    size: CGSize(width: availableWidth * 2.0, height: contentHeight)
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableWidth * 2.0, height: contentHeight)
+            )
+            if let backgroundView = self.background.view {
+                if backgroundView.superview !== self {
+                    backgroundView.removeFromSuperview()
+                    self.addSubview(backgroundView)
+                }
+                transition.setFrame(view: backgroundView, frame: CGRect(origin: .zero, size: backgroundSize))
+            }
+            if let addressRingView = self.addressRing.view {
+                if addressRingView.superview !== self {
+                    addressRingView.removeFromSuperview()
+                    self.addSubview(addressRingView)
+                }
+                transition.setFrame(view: addressRingView, frame: CGRect(origin: ringFrame.origin, size: addressRingSize))
+            }
+
+            if self.cardView.superview !== self {
+                self.cardView.removeFromSuperview()
+                self.addSubview(self.cardView)
+            }
+            self.cardView.layer.cornerRadius = cardCornerRadius
+            transition.setFrame(view: self.cardView, frame: cardFrame)
+            if let cardBackgroundView = self.cardBackground.view {
+                if cardBackgroundView.superview == nil {
+                    self.cardView.addSubview(cardBackgroundView)
+                }
+                transition.setFrame(view: cardBackgroundView, frame: CGRect(origin: .zero, size: cardBackgroundSize))
+            }
+
+            let shouldAnimateCardFlip = self.appliedDisplaysAddress != nil
+                && self.appliedDisplaysAddress != self.displaysAddress
+            let cardContentTransition: ComponentTransition = shouldAnimateCardFlip ? .immediate : transition
+            let updateCardContents = {
+                //TODO:localize
+                let copiedTitle = "Address copied"
+                let copiedStatusSize = self.copiedStatus.update(
+                    transition: .immediate,
+                    component: AnyComponent(HStack<Empty>([
+                        AnyComponentWithIdentity(
+                            id: "check",
+                            component: AnyComponent(Text(
+                                text: "✓",
+                                font: Font.semibold(14.0),
+                                color: UIColor(rgb: 0x087cff)
+                            ))
+                        ),
+                        AnyComponentWithIdentity(
+                            id: "title",
+                            component: AnyComponent(Text(
+                                text: copiedTitle,
+                                font: Font.semibold(14.0),
+                                color: UIColor(rgb: 0x087cff)
+                            ))
+                        )
+                    ], spacing: 6.0)),
+                    environment: {},
+                    containerSize: CGSize(width: max(1.0, cardWidth - 40.0), height: 28.0)
+                )
+                if let copiedStatusView = self.copiedStatus.view, copiedStatusView.superview == nil {
+                    copiedStatusView.alpha = self.displaysAddress ? 1.0 : 0.0
+                    self.cardView.addSubview(copiedStatusView)
+                }
+
+                if self.displaysAddress {
+                    let addressGridSize = self.addressGrid.update(
+                        transition: cardContentTransition,
+                        component: AnyComponent(WalletReceiveAddressGridComponent(address: component.address)),
+                        environment: {},
+                        containerSize: CGSize(width: max(1.0, cardWidth - 52.0), height: cardHeight)
+                    )
+                    let addressGridTop = cardWidth < 230.0 ? 34.0 : 54.0
+                    if let addressGridView = self.addressGrid.view {
+                        if addressGridView.superview == nil {
+                            self.cardView.addSubview(addressGridView)
+                        }
+                        cardContentTransition.setFrame(
+                            view: addressGridView,
+                            frame: CGRect(
+                                x: (cardWidth - addressGridSize.width) / 2.0,
+                                y: addressGridTop,
+                                width: addressGridSize.width,
+                                height: addressGridSize.height
+                            )
+                        )
+                    }
+
+                    let copiedStatusTop = addressGridTop + addressGridSize.height + (cardWidth < 230.0 ? 8.0 : 16.0)
+                    if let copiedStatusView = self.copiedStatus.view {
+                        ComponentTransition.immediate.setFrame(
+                            view: copiedStatusView,
+                            frame: CGRect(
+                                x: (cardWidth - copiedStatusSize.width) / 2.0,
+                                y: copiedStatusTop,
+                                width: copiedStatusSize.width,
+                                height: copiedStatusSize.height
+                            )
+                        )
+                    }
+                    self.qrCode.view?.removeFromSuperview()
+                } else {
+                    let qrCodeSize = self.qrCode.update(
+                        transition: cardContentTransition,
+                        component: AnyComponent(WalletReceiveQrComponent(address: component.address)),
+                        environment: {},
+                        containerSize: CGSize(width: qrSize, height: qrSize)
+                    )
+                    if let qrCodeView = self.qrCode.view {
+                        if qrCodeView.superview == nil {
+                            qrCodeView.removeFromSuperview()
+                            self.cardView.addSubview(qrCodeView)
+                        }
+                        cardContentTransition.setFrame(
+                            view: qrCodeView,
+                            frame: CGRect(
+                                x: (cardWidth - qrCodeSize.width) / 2.0,
+                                y: 10.0,
+                                width: qrCodeSize.width,
+                                height: qrCodeSize.height
+                            )
+                        )
+                    }
+                    self.addressGrid.view?.removeFromSuperview()
+                }
+                if let copiedStatusView = self.copiedStatus.view {
+                    cardContentTransition.setAlpha(
+                        view: copiedStatusView,
+                        alpha: self.displaysAddress ? 1.0 : 0.0
+                    )
+                }
+
+                let copyButtonSize = self.copyButton.update(
+                    transition: .immediate,
+                    component: AnyComponent(ButtonComponent(
+                        background: ButtonComponent.Background(
+                            style: .glass,
+                            color: UIColor(rgb: 0x087cff, alpha: 0.1),
+                            foreground: UIColor(rgb: 0x087cff),
+                            pressedColor: UIColor(rgb: 0xc8e4ff),
+                            cornerRadius: copyButtonHeight / 2.0
+                        ),
+                        content: copyButtonContent,
+                        restrictContentAnimations: true,
+                        contentInsets: UIEdgeInsets(top: 0.0, left: 14.0, bottom: 0.0, right: 14.0),
+                        fitToContentWidth: true,
+                        isEnabled: true,
+                        displaysProgress: false,
+                        action: copyButtonAction
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: max(1.0, cardWidth - 32.0), height: copyButtonHeight)
+                )
+                if let copyButtonView = self.copyButton.view {
+                    if copyButtonView.superview == nil {
+                        copyButtonView.removeFromSuperview()
+                        self.cardView.addSubview(copyButtonView)
+                    }
+                    ComponentTransition.immediate.setFrame(
+                        view: copyButtonView,
+                        frame: CGRect(
+                            x: (cardWidth - copyButtonSize.width) / 2.0,
+                            y: cardHeight - 16.0 - copyButtonSize.height,
+                            width: copyButtonSize.width,
+                            height: copyButtonSize.height
+                        )
+                    )
+                    self.cardView.bringSubviewToFront(copyButtonView)
+                }
+            }
+
+            if shouldAnimateCardFlip {
+                UIView.transition(
+                    with: self.cardView,
+                    duration: 0.4,
+                    options: [.transitionFlipFromLeft, .curveEaseOut],
+                    animations: updateCardContents
+                )
+            } else {
+                updateCardContents()
+            }
+            self.appliedDisplaysAddress = self.displaysAddress
+
+            if let explanationView = self.explanation.view {
+                if explanationView.superview !== self {
+                    explanationView.removeFromSuperview()
+                    self.addSubview(explanationView)
+                }
+                transition.setFrame(
+                    view: explanationView,
+                    frame: CGRect(
+                        x: (availableWidth - explanationSize.width) / 2.0,
+                        y: explanationTop,
+                        width: explanationSize.width,
+                        height: explanationSize.height
+                    )
+                )
+            }
+            if let buyButtonView = self.buyButton.view {
+                if buyButtonView.superview !== self {
+                    buyButtonView.removeFromSuperview()
+                    self.addSubview(buyButtonView)
+                }
+                transition.setFrame(
+                    view: buyButtonView,
+                    frame: CGRect(
+                        x: (availableWidth - buyButtonSize.width) / 2.0,
+                        y: buyButtonTop,
+                        width: buyButtonSize.width,
+                        height: buyButtonSize.height
+                    )
+                )
+            }
+            if let closeButtonView = self.closeButton.view {
+                if closeButtonView.superview !== self {
+                    closeButtonView.removeFromSuperview()
+                    self.addSubview(closeButtonView)
+                }
+                transition.setFrame(
+                    view: closeButtonView,
+                    frame: CGRect(
+                        x: 16.0,
+                        y: 16.0,
+                        width: closeButtonSize.width,
+                        height: closeButtonSize.height
+                    )
+                )
+            }
+
+            return CGSize(width: availableWidth, height: contentHeight)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<EnvironmentType>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            state: state,
+            environment: environment,
+            transition: transition
+        )
+    }
+}
+
+fileprivate enum WalletReceiveOnrampMethod: Equatable {
+    case bankCard
+    case cryptocurrency
+    case p2p
+
+    var provider: String {
+        switch self {
+        case .bankCard:
+            return "moonpay"
+        case .cryptocurrency, .p2p:
+            return "wallet"
+        }
+    }
+
+    var paymentMethod: String {
+        switch self {
+        case .bankCard:
+            return "credit_debit_card"
+        case .cryptocurrency:
+            return "cross_chain"
+        case .p2p:
+            return "p2p_express"
+        }
+    }
+}
+
+private final class WalletReceiveOnrampPage: Component {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let address: String
+    let containerHeight: CGFloat
+    let isMoonPayAvailable: Bool
+    let creatingSessionMethod: WalletReceiveOnrampMethod?
+    let createOnrampSession: (WalletReceiveOnrampMethod, String, String?) -> Void
+    let isCrosschainAvailable: Bool
+    let isP2PAvailable: Bool
+    let isWalletBalanceAvailable: Bool
+    let requestPop: () -> Void
+
+    init(
+        context: AccountContext,
+        address: String,
+        containerHeight: CGFloat,
+        isMoonPayAvailable: Bool,
+        creatingSessionMethod: WalletReceiveOnrampMethod?,
+        createOnrampSession: @escaping (WalletReceiveOnrampMethod, String, String?) -> Void,
+        isCrosschainAvailable: Bool,
+        isP2PAvailable: Bool,
+        isWalletBalanceAvailable: Bool,
+        requestPop: @escaping () -> Void
+    ) {
+        self.context = context
+        self.address = address
+        self.containerHeight = containerHeight
+        self.isMoonPayAvailable = isMoonPayAvailable
+        self.creatingSessionMethod = creatingSessionMethod
+        self.createOnrampSession = createOnrampSession
+        self.isCrosschainAvailable = isCrosschainAvailable
+        self.isP2PAvailable = isP2PAvailable
+        self.isWalletBalanceAvailable = isWalletBalanceAvailable
+        self.requestPop = requestPop
+    }
+
+    static func ==(lhs: WalletReceiveOnrampPage, rhs: WalletReceiveOnrampPage) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.containerHeight != rhs.containerHeight {
+            return false
+        }
+        if lhs.isMoonPayAvailable != rhs.isMoonPayAvailable {
+            return false
+        }
+        if lhs.creatingSessionMethod != rhs.creatingSessionMethod {
+            return false
+        }
+        if lhs.isCrosschainAvailable != rhs.isCrosschainAvailable {
+            return false
+        }
+        if lhs.isP2PAvailable != rhs.isP2PAvailable {
+            return false
+        }
+        if lhs.isWalletBalanceAvailable != rhs.isWalletBalanceAvailable {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let backgroundView = UIView()
+        private let backButton = ComponentView<Empty>()
+        private let title = ComponentView<Empty>()
+        private let mainSection = ComponentView<Empty>()
+
+        private let bankCardIcon = renderSettingsIcon(
+            name: "Wallet/BuyCard",
+            backgroundColors: [UIColor(rgb: 0x34c759)]
+        )
+        private let cryptocurrencyIcon = renderSettingsIcon(
+            name: "Wallet/BuyCrypto",
+            backgroundColors: [UIColor(rgb: 0xff9f0a)]
+        )
+        private let p2pIcon = renderSettingsIcon(
+            name: "Wallet/BuyP2P",
+            backgroundColors: [UIColor(rgb: 0x0079ff)]
+        )
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.backgroundView.isUserInteractionEnabled = false
+            self.addSubview(self.backgroundView)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func item(
+            id: String,
+            title: String,
+            subtitle: String,
+            icon: UIImage?,
+            theme: PresentationTheme,
+            accessory: ListActionItemComponent.Accessory = .arrow,
+            isEnabled: Bool = true,
+            action: @escaping () -> Void
+        ) -> AnyComponentWithIdentity<Empty> {
+            return AnyComponentWithIdentity(id: id, component: AnyComponent(ListActionItemComponent(
+                theme: theme,
+                style: .glass,
+                title: AnyComponent(VStack<Empty>([
+                    AnyComponentWithIdentity(
+                        id: "title",
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: title,
+                                font: Font.semibold(17.0),
+                                textColor: theme.list.itemPrimaryTextColor
+                            )),
+                            maximumNumberOfLines: 1
+                        ))
+                    ),
+                    AnyComponentWithIdentity(
+                        id: "subtitle",
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: subtitle,
+                                font: Font.regular(14.0),
+                                textColor: theme.list.itemSecondaryTextColor
+                            )),
+                            maximumNumberOfLines: 2
+                        ))
+                    )
+                ], alignment: .left, spacing: 2.0)),
+                verticalAlignment: .middle,
+                contentInsets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0),
+                separatorInset: 62.0,
+                leftIcon: .custom(
+                    AnyComponentWithIdentity(
+                        id: id,
+                        component: AnyComponent(Image(
+                            image: icon,
+                            size: CGSize(width: 30.0, height: 30.0)
+                        ))
+                    ),
+                    false
+                ),
+                accessory: accessory,
+                action: isEnabled ? { _ in action() } : nil,
+                highlighting: isEnabled ? .default : .disabled
+            )))
+        }
+
+        func update(
+            component: WalletReceiveOnrampPage,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let environment = environment[EnvironmentType.self].value
+            let theme = environment.theme.withModalBlocksBackground()
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            transition.setBackgroundColor(view: self.backgroundView, color: environment.theme.list.modalBlocksBackgroundColor)
+
+            let safeContentWidth = max(
+                0.0,
+                availableSize.width - environment.safeInsets.left - environment.safeInsets.right
+            )
+
+            let backButtonSize = self.backButton.update(
+                transition: transition,
+                component: AnyComponent(GlassBarButtonComponent(
+                    size: CGSize(width: 44.0, height: 44.0),
+                    backgroundColor: nil,
+                    isDark: theme.overallDarkAppearance,
+                    state: .glass,
+                    component: AnyComponentWithIdentity(
+                        id: "back",
+                        component: AnyComponent(BundleIconComponent(
+                            name: "Navigation/Back",
+                            tintColor: theme.chat.inputPanel.panelControlColor
+                        ))
+                    ),
+                    action: { _ in
+                        component.requestPop()
+                    }
+                )),
+                environment: {},
+                containerSize: CGSize(width: 44.0, height: 44.0)
+            )
+            if let backButtonView = self.backButton.view {
+                if backButtonView.superview == nil {
+                    self.addSubview(backButtonView)
+                }
+                transition.setFrame(
+                    view: backButtonView,
+                    frame: CGRect(
+                        x: environment.safeInsets.left + 16.0,
+                        y: 16.0,
+                        width: backButtonSize.width,
+                        height: backButtonSize.height
+                    )
+                )
+            }
+
+            //TODO:localize
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(Text(
+                    text: "Buy Grams",
+                    font: Font.semibold(17.0),
+                    color: theme.list.itemPrimaryTextColor
+                )),
+                environment: {},
+                containerSize: CGSize(width: max(1.0, safeContentWidth - 128.0), height: 44.0)
+            )
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                transition.setFrame(
+                    view: titleView,
+                    frame: CGRect(
+                        x: environment.safeInsets.left + floor((safeContentWidth - titleSize.width) / 2.0),
+                        y: 16.0 + floor((44.0 - titleSize.height) / 2.0),
+                        width: titleSize.width,
+                        height: titleSize.height
+                    )
+                )
+            }
+
+            let contentWidth = min(382.0, max(1.0, safeContentWidth - 48.0))
+            let contentX = environment.safeInsets.left + floor((safeContentWidth - contentWidth) / 2.0)
+
+            //TODO:localize
+            let bankCardTitle = "Bank Card"
+            let bankCardSubtitle = "Visa, Mastercard, Apple Pay"
+            let cryptocurrencyTitle = "Cryptocurrency"
+            let cryptocurrencySubtitle = "Swap from your existing wallet"
+            let p2pTitle = "P2P Market"
+            let p2pSubtitle = "Buy from other users using local payment methods"
+
+            let mainSectionSize = self.mainSection.update(
+                transition: transition,
+                component: AnyComponent(ListSectionComponent(
+                    theme: theme,
+                    style: .glass,
+                    header: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: "Buy with".uppercased(),
+                            font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                            textColor: environment.theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    footer: nil,
+                    items: {
+                        var items: [AnyComponentWithIdentity<Empty>] = []
+                        if component.isMoonPayAvailable {
+                            items.append(self.item(
+                                id: "bankCard",
+                                title: bankCardTitle,
+                                subtitle: bankCardSubtitle,
+                                icon: self.bankCardIcon,
+                                theme: theme,
+                                accessory: component.creatingSessionMethod == .bankCard ? .activity : .arrow,
+                                isEnabled: component.creatingSessionMethod == nil,
+                                action: {
+                                    guard component.creatingSessionMethod == nil else {
+                                        return
+                                    }
+                                    component.createOnrampSession(
+                                        .bankCard,
+                                        component.address,
+                                        theme.overallDarkAppearance ? "dark" : "light"
+                                    )
+                                }
+                            ))
+                        }
+                        if component.isCrosschainAvailable {
+                            items.append(self.item(
+                                id: "cryptocurrency",
+                                title: cryptocurrencyTitle,
+                                subtitle: cryptocurrencySubtitle,
+                                icon: self.cryptocurrencyIcon,
+                                theme: theme,
+                                accessory: component.creatingSessionMethod == .cryptocurrency ? .activity : .arrow,
+                                isEnabled: component.creatingSessionMethod == nil,
+                                action: {
+                                    guard component.creatingSessionMethod == nil else {
+                                        return
+                                    }
+                                    component.createOnrampSession(.cryptocurrency, component.address, nil)
+                                }
+                            ))
+                        }
+                        if component.isP2PAvailable {
+                            items.append(self.item(
+                                id: "p2p",
+                                title: p2pTitle,
+                                subtitle: p2pSubtitle,
+                                icon: self.p2pIcon,
+                                theme: theme,
+                                accessory: component.creatingSessionMethod == .p2p ? .activity : .arrow,
+                                isEnabled: component.creatingSessionMethod == nil,
+                                action: {
+                                    guard component.creatingSessionMethod == nil else {
+                                        return
+                                    }
+                                    component.createOnrampSession(.p2p, component.address, nil)
+                                }
+                            ))
+                        }
+                        return items
+                    }()
+                )),
+                environment: {},
+                containerSize: CGSize(width: contentWidth, height: 1000.0)
+            )
+            let sectionTop: CGFloat = 76.0
+            if let mainSectionView = self.mainSection.view {
+                if mainSectionView.superview == nil {
+                    self.addSubview(mainSectionView)
+                }
+                transition.setFrame(
+                    view: mainSectionView,
+                    frame: CGRect(
+                        x: contentX,
+                        y: sectionTop,
+                        width: mainSectionSize.width,
+                        height: mainSectionSize.height
+                    )
+                )
+            }
+
+            let contentHeight = sectionTop + mainSectionSize.height + max(24.0, environment.safeInsets.bottom + 12.0)
+            transition.setFrame(
+                view: self.backgroundView,
+                frame: CGRect(
+                    origin: .zero,
+                    size: CGSize(width: availableSize.width, height: max(contentHeight, component.containerHeight))
+                )
+            )
+            return CGSize(width: availableSize.width, height: contentHeight)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<EnvironmentType>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            state: state,
+            environment: environment,
+            transition: transition
+        )
+    }
+}
+
+private final class WalletReceiveSheetComponent: CombinedComponent {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let address: String
+
+    init(context: AccountContext, address: String) {
+        self.context = context
+        self.address = address
+    }
+
+    static func ==(lhs: WalletReceiveSheetComponent, rhs: WalletReceiveSheetComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.address != rhs.address {
+            return false
+        }
+        return true
+    }
+
+    final class State: ComponentState {
+        private let context: AccountContext
+        private let onrampAvailabilityDisposables = DisposableSet()
+        private let createSessionDisposable = MetaDisposable()
+        private let openBotAppDisposable = MetaDisposable()
+
+        fileprivate var isOnrampDetailsPresented = false
+        fileprivate var isMoonPayAvailable = false
+        fileprivate var isCrosschainAvailable = false
+        fileprivate var isP2PAvailable = false
+        fileprivate var isWalletBalanceAvailable = false
+        fileprivate var creatingSessionMethod: WalletReceiveOnrampMethod?
+
+        init(context: AccountContext) {
+            self.context = context
+
+            super.init()
+
+            self.onrampAvailabilityDisposables.add((context.engine.payments.getOnrampProviders(cryptoCurrency: "gram")
+            |> deliverOnMainQueue).start(next: { [weak self] providers in
+                guard let self else {
+                    return
+                }
+                if let moonPayProvider = providers.first(where: {
+                    $0.id == "moonpay" && $0.cryptoCurrencies.contains("gram")
+                }) {
+                    self.onrampAvailabilityDisposables.add((context.engine.payments.getOnrampAvailability(
+                        provider: moonPayProvider.id,
+                        cryptoCurrency: "gram"
+                    )
+                    |> deliverOnMainQueue).start(next: { [weak self] availability in
+                        guard let self else {
+                            return
+                        }
+                        let isMoonPayAvailable = availability.isAllowed && availability.isBuyAllowed
+                        if self.isMoonPayAvailable != isMoonPayAvailable {
+                            self.isMoonPayAvailable = isMoonPayAvailable
+                            self.updated(transition: .easeInOut(duration: 0.25))
+                        }
+                    }, error: { _ in
+                    }))
+                }
+                if let walletProvider = providers.first(where: {
+                    $0.id == "wallet" && $0.cryptoCurrencies.contains("gram")
+                }) {
+                    self.onrampAvailabilityDisposables.add((context.engine.payments.getOnrampAvailability(
+                        provider: walletProvider.id,
+                        cryptoCurrency: "gram"
+                    )
+                    |> deliverOnMainQueue).start(next: { [weak self] availability in
+                        guard let self else {
+                            return
+                        }
+                        var crossChainAvailable = false
+                        var p2pAvailable = false
+                        var walletBalanceAvailable = false
+                        if availability.isAllowed && availability.isBuyAllowed {
+                            if let crossChainMethod = availability.methods.first(where: { $0.paymentMethod == "cross_chain" }) {
+                                crossChainAvailable = crossChainMethod.isAvailable
+                            }
+                            if let p2pMethod = availability.methods.first(where: { $0.paymentMethod == "p2p_express" }) {
+                                p2pAvailable = p2pMethod.isAvailable
+                            }
+                            if let walletBalanceMethod = availability.methods.first(where: { $0.paymentMethod == "balance" }) {
+                                walletBalanceAvailable = walletBalanceMethod.isAvailable
+                            }
+                        }
+
+                        self.isCrosschainAvailable = crossChainAvailable
+                        self.isP2PAvailable = p2pAvailable
+                        self.isWalletBalanceAvailable = walletBalanceAvailable
+
+                        self.updated(transition: .easeInOut(duration: 0.25))
+                    }, error: { _ in
+                    }))
+                }
+            }, error: { _ in
+            }))
+        }
+
+        deinit {
+            self.onrampAvailabilityDisposables.dispose()
+            self.createSessionDisposable.dispose()
+            self.openBotAppDisposable.dispose()
+        }
+
+        fileprivate func createOnrampSession(
+            method: WalletReceiveOnrampMethod,
+            address: String,
+            theme: String?,
+            getController: @escaping () -> ViewController?
+        ) {
+            let isAvailable: Bool
+            switch method {
+            case .bankCard:
+                isAvailable = self.isMoonPayAvailable
+            case .cryptocurrency:
+                isAvailable = self.isCrosschainAvailable
+            case .p2p:
+                isAvailable = self.isP2PAvailable
+            }
+            guard isAvailable, self.creatingSessionMethod == nil else {
+                return
+            }
+
+            self.creatingSessionMethod = method
+            self.updated(transition: .easeInOut(duration: 0.2))
+
+            self.createSessionDisposable.set((self.context.engine.payments.createOnrampSession(
+                provider: method.provider,
+                cryptoCurrency: "gram",
+                address: address,
+                paymentMethod: method.paymentMethod,
+                theme: theme,
+                successReturnUrl: nil,// "tg://",
+                failReturnUrl: nil //method == .bankCard ? nil : "tg://"
+            )
+            |> deliverOnMainQueue).start(next: { [weak self] session in
+                guard let self else {
+                    return
+                }
+                self.creatingSessionMethod = nil
+                self.updated(transition: .easeInOut(duration: 0.2))
+
+                if method.provider == "wallet" {
+                    self.openBotAppDisposable.set((self.context.sharedContext.resolveUrl(
+                        context: self.context,
+                        peerId: nil,
+                        url: session.url,
+                        skipUrlAuth: true
+                    )
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { [weak self] result in
+                        guard let self else {
+                            return
+                        }
+                        guard case let .peer(peer, .withBotApp(botAppStart)) = result, let botPeer = peer.flatMap(EnginePeer.init) else {
+                            self.presentOnrampError(getController: getController)
+                            return
+                        }
+                        let context = self.context
+                        let navigationController = (getController()?.navigationController as? NavigationController)
+                            ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
+                        self.dismissScreen(getController: getController, completion: {
+                            guard let parentController = navigationController?.viewControllers.last as? ViewController else {
+                                return
+                            }
+                            context.sharedContext.openBotApp(
+                                context: context,
+                                parentController: parentController,
+                                botApp: botAppStart.botApp,
+                                botPeer: botPeer,
+                                payload: botAppStart.payload,
+                                mode: botAppStart.mode,
+                                isOnramp: true
+                            )
+                        })
+                    }))
+                } else {
+                    let context = self.context
+                    self.dismissScreen(getController: getController, completion: {
+                        context.sharedContext.openExternalUrl(
+                            context: context,
+                            urlContext: .generic,
+                            url: session.url,
+                            forceExternal: true,
+                            presentationData: context.sharedContext.currentPresentationData.with { $0 },
+                            navigationController: nil,
+                            dismissInput: {
+                            }
+                        )
+                    })
+                }
+            }, error: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.creatingSessionMethod = nil
+                self.updated(transition: .easeInOut(duration: 0.2))
+                self.presentOnrampError(getController: getController)
+            }))
+        }
+
+        private func dismissScreen(getController: @escaping () -> ViewController?, completion: @escaping () -> Void) {
+            if let controller = getController() as? WalletReceiveScreen {
+                controller.dismissAnimated(completion: completion)
+            } else {
+                completion()
+            }
+        }
+
+        private func presentOnrampError(getController: @escaping () -> ViewController?) {
+            guard let controller = getController() else {
+                return
+            }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            //TODO:localize
+            let title = "Purchase Failed"
+            //TODO:localize
+            let text = "The purchase couldn't be started. Please try again."
+            controller.present(textAlertController(
+                context: self.context,
+                title: title,
+                text: text,
+                actions: [
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        fileprivate func cancelOnrampSession() {
+            self.createSessionDisposable.set(nil)
+            self.openBotAppDisposable.set(nil)
+            if self.creatingSessionMethod != nil {
+                self.creatingSessionMethod = nil
+            }
+        }
+    }
+
+    func makeState() -> State {
+        return State(context: self.context)
+    }
+
+    static var body: Body {
+        let sheet = Child(SheetComponent<EnvironmentType>.self)
+        let animateOut = StoredActionSlot(Action<Void>.self)
+        let sheetExternalState = SheetComponent<EnvironmentType>.ExternalState()
+
+        return { context in
+            let environment = context.environment[EnvironmentType.self]
+            let controller = environment.controller
+            let componentState = context.state
+
+            let popOnrampDetails: () -> Void = { [weak componentState] in
+                guard let componentState, componentState.isOnrampDetailsPresented else {
+                    return
+                }
+                componentState.cancelOnrampSession()
+                componentState.isOnrampDetailsPresented = false
+                componentState.updated(transition: .spring(duration: 0.45))
+            }
+
+            var navigationItems: [AnyComponentWithIdentity<EnvironmentType>] = [
+                AnyComponentWithIdentity(
+                    id: "receive",
+                    component: AnyComponent(WalletReceiveSheetContent(
+                        context: context.component.context,
+                        address: context.component.address,
+                        containerHeight: context.availableSize.height,
+                        animateOut: animateOut,
+                        getController: controller,
+                        openOnramp: { [weak componentState] in
+                            guard let componentState, !componentState.isOnrampDetailsPresented else {
+                                return
+                            }
+                            componentState.isOnrampDetailsPresented = true
+                            componentState.updated(transition: .spring(duration: 0.45))
+                        }
+                    ))
+                )
+            ]
+            if componentState.isOnrampDetailsPresented {
+                navigationItems.append(AnyComponentWithIdentity(
+                    id: "onrampDetails",
+                    component: AnyComponent(WalletReceiveOnrampPage(
+                        context: context.component.context,
+                        address: context.component.address,
+                        containerHeight: context.availableSize.height,
+                        isMoonPayAvailable: componentState.isMoonPayAvailable,
+                        creatingSessionMethod: componentState.creatingSessionMethod,
+                        createOnrampSession: { [weak componentState] method, address, theme in
+                            componentState?.createOnrampSession(
+                                method: method,
+                                address: address,
+                                theme: theme,
+                                getController: controller
+                            )
+                        },
+                        isCrosschainAvailable: componentState.isCrosschainAvailable,
+                        isP2PAvailable: componentState.isP2PAvailable,
+                        isWalletBalanceAvailable: componentState.isWalletBalanceAvailable,
+                        requestPop: popOnrampDetails
+                    ))
+                ))
+            }
+
+            let sheet = sheet.update(
+                component: SheetComponent<EnvironmentType>(
+                    content: AnyComponent<EnvironmentType>(NavigationStackComponent(
+                        items: navigationItems,
+                        clipContent: false,
+                        requestPop: popOnrampDetails
+                    )),
+                    style: .glass,
+                    backgroundColor: .color(UIColor(rgb: 0x0079ff)),
+                    followContentSizeChanges: true,
+                    clipsContent: true,
+                    autoAnimateOut: false,
+                    externalState: sheetExternalState,
+                    animateOut: animateOut,
+                    onPan: {
+                    },
+                    willDismiss: {
+                    }
+                ),
+                environment: {
+                    environment
+                    SheetComponentEnvironment(
+                        metrics: environment.metrics,
+                        deviceMetrics: environment.deviceMetrics,
+                        isDisplaying: environment.value.isVisible,
+                        isCentered: environment.metrics.widthClass == .regular,
+                        hasInputHeight: !environment.inputHeight.isZero,
+                        regularMetricsSize: CGSize(width: 430.0, height: 900.0),
+                        dismiss: { animated in
+                            guard let controller = controller() as? WalletReceiveScreen else {
+                                return
+                            }
+                            if animated {
+                                animateOut.invoke(Action { _ in
+                                    controller.completeAnimatedDismiss()
+                                })
+                            } else {
+                                controller.completeAnimatedDismiss()
+                            }
+                        }
+                    )
+                },
+                availableSize: context.availableSize,
+                transition: context.transition
+            )
+            context.add(sheet.position(CGPoint(
+                x: context.availableSize.width / 2.0,
+                y: context.availableSize.height / 2.0
+            )))
+
+            if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
+                var sideInset: CGFloat = 0.0
+                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
+                if case .regular = environment.metrics.widthClass {
+                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
+                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
+                }
+
+                let layout = ContainerViewLayout(
+                    size: context.availableSize,
+                    metrics: environment.metrics,
+                    deviceMetrics: environment.deviceMetrics,
+                    intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
+                    safeInsets: UIEdgeInsets(
+                        top: 0.0,
+                        left: max(sideInset, environment.safeInsets.left),
+                        bottom: 0.0,
+                        right: max(sideInset, environment.safeInsets.right)
+                    ),
+                    additionalInsets: .zero,
+                    statusBarHeight: environment.statusBarHeight,
+                    inputHeight: nil,
+                    inputHeightIsInteractivellyChanging: false,
+                    inVoiceOver: false
+                )
+                controller.presentationContext.containerLayoutUpdated(
+                    layout,
+                    transition: context.transition.containedViewLayoutTransition
+                )
+            }
+
+            return context.availableSize
+        }
+    }
+}
+
+public final class WalletReceiveScreen: ViewControllerComponentContainer {
+    private let context: AccountContext
+    private var animatedDismissCompletion: (() -> Void)?
+
+    public init(context: AccountContext, address: String) {
+        self.context = context
+
+        super.init(
+            context: context,
+            component: WalletReceiveSheetComponent(context: context, address: address),
+            navigationBarAppearance: .none,
+            statusBarStyle: .ignore,
+            theme: .default
+        )
+
+        self.navigationPresentation = .flatModal
+        self.automaticallyControlPresentationContextLayout = false
+    }
+
+    required public init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func viewDidLoad() {
+        super.viewDidLoad()
+
+        self.view.disablesInteractiveModalDismiss = true
+    }
+
+    fileprivate func completeAnimatedDismiss() {
+        let completion = self.animatedDismissCompletion
+        self.animatedDismissCompletion = nil
+        self.dismiss(completion: completion)
+    }
+
+    public func dismissAnimated(completion: (() -> Void)? = nil) {
+        self.animatedDismissCompletion = completion
+        if let view = self.node.hostView.findTaggedView(
+            tag: SheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
+        ) as? SheetComponent<ViewControllerComponentContainer.Environment>.View {
+            view.dismissAnimated()
+        } else {
+            self.completeAnimatedDismiss()
+        }
+    }
+}

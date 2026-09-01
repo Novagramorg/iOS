@@ -59,6 +59,7 @@ import PeerInfoAvatarListNode
 import PasswordSetupUI
 import CalendarMessageScreen
 import TooltipUI
+import QrCode
 import QrCodeUI
 import TranslateUI
 import ChatPresentationInterfaceState
@@ -188,6 +189,7 @@ enum PeerInfoSettingsSection {
     case premiumManagement
     case stars
     case ton
+    case wallet
 }
 
 enum PeerInfoReportType {
@@ -3985,13 +3987,13 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         peer: peer,
                         verifierSettings: verifierSettings,
                         verifierIcon: verifierIcon,
-                        apply: { [weak self, weak controller] value in
+                        apply: { [weak self, weak controller] value, entities in
                             guard let self else {
                                 return
                             }
                             controller?.dismiss(animated: true)
                             
-                            let _ = (self.context.engine.peers.updateCustomVerification(botId: self.peerId, peerId: peer.id, value: .enabled(description: value))
+                            let _ = (self.context.engine.peers.updateCustomVerification(botId: self.peerId, peerId: peer.id, value: .enabled(description: value, descriptionEntities: entities))
                             |> deliverOnMainQueue).start(completed: { [weak self] in
                                 guard let self else {
                                     return
@@ -6552,6 +6554,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         }
         
         if isSettings {
+            preloadQrCode()
+            
             if let starsContext = context.starsContext {
                 self.starsContext = starsContext
                 starsContext.load(force: true)

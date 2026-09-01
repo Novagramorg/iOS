@@ -35,3 +35,6 @@ url=../tgcalls.git
 [submodule "third-party/XcodeGen"]
 	path = third-party/XcodeGen
 	url = https://github.com/yonaskolb/XcodeGen.git
+[submodule "third-party/wallet-engine"]
+	path = third-party/wallet-engine/wallet-engine
+	url = https://github.com/i582/wallet-engine.git

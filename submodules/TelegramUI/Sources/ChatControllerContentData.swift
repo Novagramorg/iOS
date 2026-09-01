@@ -114,6 +114,7 @@ extension ChatControllerImpl {
             var copyProtectionEnabled: Bool = false
             var myCopyProtectionEnabled: Bool = false
             var sendPaidMessageStars: StarsAmount?
+            var gramAddress: String?
             var alwaysShowGiftButton: Bool = false
             var disallowedGifts: TelegramDisallowedGifts?
             var appliedBoosts: Int32?
@@ -864,12 +865,14 @@ extension ChatControllerImpl {
                     var contactStatus: ChatContactStatus?
                     var businessIntro: TelegramBusinessIntro?
                     var sendPaidMessageStars: StarsAmount?
+                    var gramAddress: String?
                     var alwaysShowGiftButton = false
                     var disallowedGifts: TelegramDisallowedGifts?
                     var isManagedBot = false
                     if let peer = peerView.peers[peerView.peerId] {
                         if let cachedData = peerView.cachedData as? CachedUserData {
                             isManagedBot = cachedData.botManagerId != nil
+                            gramAddress = cachedData.gramAddress
                             contactStatus = ChatContactStatus(canAddContact: !peerView.peerIsContact, peerStatusSettings: cachedData.peerStatusSettings, invitedBy: nil, managingBot: managingBot)
                             if case let .known(value) = cachedData.businessIntro {
                                 businessIntro = value
@@ -1087,6 +1090,7 @@ extension ChatControllerImpl {
                     strongSelf.state.hasSearchTags = hasSearchTags
                     strongSelf.state.isPremiumRequiredForMessaging = isPremiumRequiredForMessaging
                     strongSelf.state.sendPaidMessageStars = sendPaidMessageStars
+                    strongSelf.state.gramAddress = gramAddress
                     strongSelf.state.alwaysShowGiftButton = alwaysShowGiftButton
                     strongSelf.state.disallowedGifts = disallowedGifts
                     strongSelf.state.hasSavedChats = hasSavedChats
@@ -1465,6 +1469,7 @@ extension ChatControllerImpl {
                     var copyProtectionEnabled = false
                     var businessIntro: TelegramBusinessIntro?
                     var sendPaidMessageStars: StarsAmount?
+                    var gramAddress: String?
                     var alwaysShowGiftButton = false
                     var disallowedGifts: TelegramDisallowedGifts?
                     var isManagedBot = false
@@ -1472,6 +1477,7 @@ extension ChatControllerImpl {
                         copyProtectionEnabled = peer.isCopyProtectionEnabled
                         if let cachedData = peerView.cachedData as? CachedUserData {
                             isManagedBot = cachedData.botManagerId != nil
+                            gramAddress = cachedData.gramAddress
                             contactStatus = ChatContactStatus(canAddContact: !peerView.peerIsContact, peerStatusSettings: cachedData.peerStatusSettings, invitedBy: nil, managingBot: managingBot)
                             if case let .known(value) = cachedData.businessIntro {
                                 businessIntro = value
@@ -1802,6 +1808,7 @@ extension ChatControllerImpl {
                         strongSelf.state.boostsToUnrestrict = boostsToUnrestrict
                         strongSelf.state.businessIntro = businessIntro
                         strongSelf.state.sendPaidMessageStars = sendPaidMessageStars
+                        strongSelf.state.gramAddress = gramAddress
                         strongSelf.state.alwaysShowGiftButton = alwaysShowGiftButton
                         strongSelf.state.disallowedGifts = disallowedGifts
                         

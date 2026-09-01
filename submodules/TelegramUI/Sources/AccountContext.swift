@@ -24,6 +24,8 @@ import DCTAnimationCacheImpl
 import DCTMultiAnimationRendererImpl
 import AppBundle
 import DirectMediaImageCache
+import WalletContext
+import AlertUI
 
 private final class DeviceSpecificContactImportContext {
     let disposable = MetaDisposable()
@@ -130,7 +132,13 @@ public final class AccountContextImpl: AccountContext {
     public let inAppPurchaseManager: InAppPurchaseManager?
     public let starsContext: StarsContext?
     public let tonContext: StarsContext?
+    public let walletContext: WalletContext?
     public let giftAuctionsManager: GiftAuctionsManager?
+
+    private var tonConnectPresentationDisposable: Disposable?
+    private let tonConnectOperationDisposable = MetaDisposable()
+    private weak var tonConnectController: ViewController?
+    private var tonConnectRequestId: String?
     
     public let peerChannelMemberCategoriesContextsManager = PeerChannelMemberCategoriesContextsManager()
     
@@ -316,6 +324,31 @@ public final class AccountContextImpl: AccountContext {
             self.inAppPurchaseManager = InAppPurchaseManager(engine: .authorized(self.engine))
             self.starsContext = self.engine.payments.peerStarsContext()
             self.tonContext = self.engine.payments.peerTonContext()
+            let accountIsCurrent = sharedContext.activeAccountContexts
+            |> map { primary, _, _ in
+                return primary?.account.id == account.id
+            }
+            |> distinctUntilChanged
+            let networkAvailable = account.networkState
+            |> map { state -> Bool in
+                if case .waitingForNetwork = state {
+                    return false
+                } else {
+                    return true
+                }
+            }
+            |> distinctUntilChanged
+            let environment = account.testingEnvironment ? "test" : "production"
+            self.walletContext = WalletContext(
+                engine: self.engine,
+                storageNamespace: "telegram.\(environment).\(UInt64(bitPattern: account.peerId.toInt64()))",
+                applicationInForeground: sharedContext.applicationBindings.applicationInForeground,
+                accountIsCurrent: accountIsCurrent,
+                networkAvailable: networkAvailable,
+                log: { message in
+                    Logger.shared.log("WalletContext", message)
+                }
+            )
             self.giftAuctionsManager = GiftAuctionsManager(account: account)
         } else {
             self.prefetchManager = nil
@@ -324,6 +357,7 @@ public final class AccountContextImpl: AccountContext {
             self.inAppPurchaseManager = nil
             self.starsContext = nil
             self.tonContext = nil
+            self.walletContext = nil
             self.giftAuctionsManager = nil
         }
         
@@ -572,6 +606,113 @@ public final class AccountContextImpl: AccountContext {
             }
             (self.animationRenderer as? DCTMultiAnimationRendererImpl)?.useYuvA = settings.compressedEmojiCache
         })
+
+        if let walletContext = self.walletContext {
+            self.tonConnectPresentationDisposable = (walletContext.tonConnectPresentations
+            |> deliverOnMainQueue).start(next: { [weak self, weak walletContext] presentation in
+                guard let self, let walletContext else {
+                    return
+                }
+                self.handleTonConnectPresentation(presentation, walletContext: walletContext)
+            })
+        }
+    }
+
+    private func handleTonConnectPresentation(_ presentation: WalletContext.TonConnectPresentation, walletContext: WalletContext) {
+        switch presentation {
+        case let .request(request):
+            guard self.tonConnectController == nil else {
+                return
+            }
+            self.tonConnectRequestId = request.id
+            let controller = self.sharedContext.makeWalletConnectScreen(
+                context: self,
+                walletContext: walletContext,
+                request: request,
+                cancelled: { [weak self, weak walletContext] in
+                    guard let self else {
+                        return
+                    }
+                    self.tonConnectController = nil
+                    self.tonConnectRequestId = nil
+                    guard let walletContext else {
+                        return
+                    }
+                    self.tonConnectOperationDisposable.set(walletContext.rejectTonConnectRequest(id: request.id).start())
+                },
+                connect: { [weak self, weak walletContext] completion in
+                    guard let self, let walletContext else {
+                        completion(.failure(.unavailable))
+                        return
+                    }
+                    self.tonConnectOperationDisposable.set((walletContext.approveTonConnectRequest(id: request.id)
+                    |> deliverOnMainQueue).start(next: { [weak self] in
+                        self?.tonConnectController = nil
+                        self?.tonConnectRequestId = nil
+                        completion(.success(Void()))
+                    }, error: { error in
+                        completion(.failure(error))
+                    }))
+                }
+            )
+            self.tonConnectController = controller
+            self.sharedContext.presentGlobalController(controller, nil)
+        case let .operation(request):
+            guard self.tonConnectController == nil else {
+                return
+            }
+            self.tonConnectRequestId = request.id
+            let controller = self.sharedContext.makeWalletTransferScreen(
+                context: self,
+                walletContext: walletContext,
+                request: request,
+                cancelled: { [weak self, weak walletContext] in
+                    guard let self else {
+                        return
+                    }
+                    self.tonConnectController = nil
+                    self.tonConnectRequestId = nil
+                    guard let walletContext else {
+                        return
+                    }
+                    self.tonConnectOperationDisposable.set(walletContext.rejectTonConnectRequest(id: request.id).start())
+                },
+                confirm: { [weak self, weak walletContext] completion in
+                    guard let self, let walletContext else {
+                        completion(.failure(.unavailable))
+                        return
+                    }
+                    self.tonConnectOperationDisposable.set((walletContext.approveTonConnectOperation(id: request.id)
+                    |> deliverOnMainQueue).start(next: { [weak self] in
+                        self?.tonConnectController = nil
+                        self?.tonConnectRequestId = nil
+                        completion(.success(Void()))
+                    }, error: { error in
+                        completion(.failure(error))
+                    }))
+                }
+            )
+            self.tonConnectController = controller
+            self.sharedContext.presentGlobalController(controller, nil)
+        case let .dismiss(requestId):
+            guard self.tonConnectRequestId == requestId else {
+                return
+            }
+            let controller = self.tonConnectController
+            self.tonConnectController = nil
+            self.tonConnectRequestId = nil
+            self.tonConnectOperationDisposable.set(nil)
+            controller?.dismiss(animated: false, completion: nil)
+        case let .error(text):
+            //TODO:localize
+            let okTitle = "OK"
+            self.sharedContext.presentGlobalController(textAlertController(
+                context: self,
+                title: nil,
+                text: text,
+                actions: [TextAlertAction(type: .defaultAction, title: okTitle, action: {})]
+            ), nil)
+        }
     }
     
     deinit {
@@ -587,6 +728,8 @@ public final class AccountContextImpl: AccountContext {
         self.userLimitsConfigurationDisposable?.dispose()
         self.peerNameColorsConfigurationDisposable?.dispose()
         self.isFrozenDisposable?.dispose()
+        self.tonConnectPresentationDisposable?.dispose()
+        self.tonConnectOperationDisposable.dispose()
     }
     
     public func storeSecureIdPassword(password: String) {

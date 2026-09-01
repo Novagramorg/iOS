@@ -233,7 +233,7 @@ private func passcodeOptionsControllerEntries(presentationData: PresentationData
     return entries
 }
 
-func passcodeOptionsController(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil) -> ViewController {
+public func passcodeOptionsController(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil) -> ViewController {
     let initialState = PasscodeOptionsControllerState()
     
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)

@@ -3230,6 +3230,7 @@ static int mov_read_stsd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     }
 
     /* Prepare space for hosting multiple extradata. */
+    sc->stsd_count = 0;
     sc->extradata = av_calloc(entries, sizeof(*sc->extradata));
     if (!sc->extradata)
         return AVERROR(ENOMEM);
@@ -3265,6 +3266,9 @@ fail:
     sc->stsd_count = 0;
     av_freep(&sc->extradata);
     av_freep(&sc->extradata_size);
+    /* stsd_count indexes the arrays freed above; leaving it stale would let a
+     * subsequent stsd atom keep counting into a smaller reallocated array. */
+    sc->stsd_count = 0;
     return ret;
 }
 
