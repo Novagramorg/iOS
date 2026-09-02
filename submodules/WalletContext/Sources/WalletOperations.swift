@@ -118,7 +118,7 @@ public extension WalletContext {
               !value.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
             return .single(nil)
         }
-        return self.performUtility { context in
+        return self.performUtility("resolve_transfer_recipient") { context in
             guard let address = try await context.runtime.resolveDns(value.lowercased()),
                   let normalized = normalizedMainnetAddress(address) else {
                 return nil
@@ -128,7 +128,7 @@ public extension WalletContext {
     }
 
     func resolveUserAddresses(userIds: [EnginePeer.Id]) -> Signal<[EnginePeer.Id: String], WalletError> {
-        self.performUtility { context in
+        self.performUtility("resolve_user_addresses") { context in
             var result: [EnginePeer.Id: String] = [:]
             let ids = Array(Set(userIds))
             var index = 0
@@ -154,6 +154,7 @@ public extension WalletContext {
                 do {
                     try await coordinator.start(link: value)
                 } catch {
+                    self.errorLogger.error("wallet_ton_connect_start_failed", error)
                     self.withMainQueue {
                         self.tonConnectPresentationPipe.putNext(.error(
                             sanitizedWalletEngineDiagnostic(String(describing: error))
@@ -165,7 +166,7 @@ public extension WalletContext {
     }
 
     func approveTonConnectRequest(id: String) -> Signal<Void, WalletError> {
-        self.performUtility { context in
+        self.performUtility("approve_ton_connect_request") { context in
             guard context.canSignCurrentWallet, let coordinator = context.tonConnectCoordinator else {
                 throw WalletError.unavailable
             }
@@ -174,7 +175,7 @@ public extension WalletContext {
     }
 
     func approveTonConnectOperation(id: String) -> Signal<Void, WalletError> {
-        self.performUtility { context in
+        self.performUtility("approve_ton_connect_operation") { context in
             guard context.canSignCurrentWallet, let coordinator = context.tonConnectCoordinator else {
                 throw WalletError.unavailable
             }
@@ -260,7 +261,7 @@ public extension WalletContext {
             let staged = try await context.runtime.stageReplacement(words: words)
             guard walletEngineAddressesEqual(staged.address, identity.address),
                   staged.publicKey == identity.publicKey else {
-                try? await context.runtime.discardReplacement(recordId: staged.recordId)
+                await context.discardReplacementForCleanup(recordId: staged.recordId)
                 let activation = try await context.runtime.activate(
                     serverAddress: identity.address,
                     serverPublicKey: identity.publicKey,
@@ -296,14 +297,14 @@ public extension WalletContext {
                 )
             } catch let error as TelegramCore.WalletOperationError {
                 if error == .replacementInvalid || error == .publicKeyInvalid {
-                    try? await context.runtime.discardReplacement(recordId: staged.recordId)
+                    await context.discardReplacementForCleanup(recordId: staged.recordId)
                 }
                 throw error
             }
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(staged.address, identity.address),
                   staged.publicKey == identity.publicKey else {
-                try? await context.runtime.discardReplacement(recordId: staged.recordId)
+                await context.discardReplacementForCleanup(recordId: staged.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
             let generation = await context.prepareForRuntimeIdentityChange()
@@ -336,7 +337,7 @@ public extension WalletContext {
                 sourcePublicKey: publicKey
             )
             guard prepared.disposition == .currentWallet else {
-                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                await context.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
             let generation = await context.prepareForRuntimeIdentityChange()
@@ -389,7 +390,7 @@ public extension WalletContext {
                 if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                     context.preparedRecoveryPhraseImportRecordId = nil
                 }
-                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                await context.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw error
             }
             guard walletEngineAddressesEqual(currentIdentity.address, prepared.sourceAddress),
@@ -397,7 +398,7 @@ public extension WalletContext {
                 if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                     context.preparedRecoveryPhraseImportRecordId = nil
                 }
-                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                await context.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
 
@@ -408,7 +409,7 @@ public extension WalletContext {
                     if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                         context.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    await context.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw WalletError.storage(.identityMismatch)
                 }
                 if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
@@ -448,7 +449,7 @@ public extension WalletContext {
                         if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                             context.preparedRecoveryPhraseImportRecordId = nil
                         }
-                        try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                        await context.discardReplacementForCleanup(recordId: prepared.recordId)
                     }
                     throw error
                 }
@@ -459,7 +460,7 @@ public extension WalletContext {
                     if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                         context.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    await context.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw error
                 }
                 guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
@@ -467,7 +468,7 @@ public extension WalletContext {
                     if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                         context.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    await context.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw WalletError.storage(.identityMismatch)
                 }
                 if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
@@ -489,7 +490,7 @@ public extension WalletContext {
     }
 
     func discardRecoveryPhraseImport(_ prepared: PreparedRecoveryPhraseImport) -> Signal<Void, WalletError> {
-        self.performUtility { context in
+        self.performUtility("discard_recovery_phrase_import") { context in
             if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                 context.preparedRecoveryPhraseImportRecordId = nil
             }
@@ -539,7 +540,11 @@ public extension WalletContext {
                     _ = try await context.runtime.resolveKeyRotation()
                 } else {
                     if existing.phase == .submissionStarted {
-                        _ = try? await context.runtime.resolveKeyRotation()
+                        do {
+                            _ = try await context.runtime.resolveKeyRotation()
+                        } catch {
+                            context.errorLogger.error("wallet_key_rotation_resolution_failed", error)
+                        }
                     }
                     if let current = try await context.runtime.keyRotationRecord() {
                         let words = try await context.runtime.revealRecoveryPhrase()
@@ -615,10 +620,18 @@ public extension WalletContext {
                         validUntil: UInt64(prepared.expiresAt)
                     )
                 } catch {
-                    if (try? await context.runtime.keyRotationRecord()) == nil {
+                    let sendError = error
+                    let currentRotation: WalletEngineKeyRotationRecord?
+                    do {
+                        currentRotation = try await context.runtime.keyRotationRecord()
+                    } catch {
+                        context.errorLogger.error("wallet_key_rotation_recovery_read_failed", error)
+                        currentRotation = nil
+                    }
+                    if currentRotation == nil {
                         throw WalletError.keyRotationFailed
                     }
-                    throw error
+                    throw sendError
                 }
                 switch result.phase {
                 case .submitted, .submissionUnknown, .confirmed:
@@ -849,7 +862,14 @@ public extension WalletContext {
                 }
                 return submitted
             } catch {
-                let snapshot = try? await context.runtime.snapshot()
+                context.errorLogger.error("wallet_send_failed", error)
+                let snapshot: WalletSnapshot?
+                do {
+                    snapshot = try await context.runtime.snapshot()
+                } catch {
+                    context.errorLogger.error("wallet_send_recovery_snapshot_failed", error)
+                    snapshot = nil
+                }
                 if let send = snapshot?.send,
                    send.operationId == pending.id,
                    let submitted = applyAcceptedSubmission(send.phase, nil) {
@@ -904,7 +924,10 @@ public extension WalletContext {
         self.performOperation(.loadingMoreCollectibles) { context in
             guard context.currentState.collectibles.canLoadMore else { return Void() }
             let update = try await context.runtime.loadMoreNfts()
-            let items = await walletCollectibles(from: update.snapshot.nfts.items)
+            let items = await walletCollectibles(
+                from: update.snapshot.nfts.items,
+                errorLogger: context.errorLogger
+            )
             context.replaceState(
                 phase: context.currentState.phase,
                 balance: context.currentState.balance,
@@ -924,6 +947,15 @@ public extension WalletContext {
 }
 
 extension WalletContext {
+    @MainActor
+    func discardReplacementForCleanup(recordId: String) async {
+        do {
+            try await self.runtime.discardReplacement(recordId: recordId)
+        } catch {
+            self.errorLogger.error("wallet_replacement_cleanup_failed", error)
+        }
+    }
+
     @MainActor
     func prepareForRuntimeIdentityChange() async -> UInt64 {
         self.activationGeneration &+= 1
@@ -984,6 +1016,7 @@ extension WalletContext {
             let coordinator = WalletTonConnectCoordinator(
                 runtime: self.runtime,
                 storage: self.storage,
+                errorLogger: self.errorLogger,
                 recordId: activation.snapshot.recordId,
                 event: { [weak self] event in
                     self?.withMainQueue { self?.handleTonConnectEvent(event) }
@@ -997,6 +1030,7 @@ extension WalletContext {
     }
 
     func performUtility<Value>(
+        _ name: String,
         _ operation: @escaping @MainActor (WalletContext) async throws -> Value
     ) -> Signal<Value, WalletError> {
         Signal { [weak self] subscriber in
@@ -1012,9 +1046,11 @@ extension WalletContext {
                     try Task.checkCancellation()
                     subscriber.putNext(value)
                     subscriber.putCompletion()
-                } catch is CancellationError {
+                } catch let error as CancellationError {
+                    self.errorLogger.error("wallet_operation_cancelled", error, context: "operation=\(name)")
                     subscriber.putError(.unavailable)
                 } catch {
+                    self.errorLogger.error("wallet_operation_failed", error, context: "operation=\(name)")
                     subscriber.putError(walletError(error))
                 }
             }
@@ -1037,6 +1073,11 @@ extension WalletContext {
             self.withMainQueue { [weak self] in
                 guard let self else { subscriber.putError(.unavailable); return }
                 guard self.currentState.activeOperation == nil else {
+                    self.errorLogger.error(
+                        "wallet_operation_rejected",
+                        WalletError.operationInProgress,
+                        context: "operation=\(activeOperation)"
+                    )
                     subscriber.putError(.operationInProgress)
                     return
                 }
@@ -1073,10 +1114,12 @@ extension WalletContext {
                         finishOperation()
                         subscriber.putNext(value)
                         subscriber.putCompletion()
-                    } catch is CancellationError {
+                    } catch let error as CancellationError {
+                        self.errorLogger.error("wallet_operation_cancelled", error, context: "operation=\(activeOperation)")
                         finishOperation()
                         subscriber.putError(.unavailable)
                     } catch {
+                        self.errorLogger.error("wallet_operation_failed", error, context: "operation=\(activeOperation)")
                         finishOperation()
                         subscriber.putError(walletError(error))
                     }

@@ -29,15 +29,21 @@ struct WalletCollectibleMetadata {
     }
 }
 
-func walletCollectibles(from values: [NftItem]) async -> [WalletContext.Collectible] {
+func walletCollectibles(
+    from values: [NftItem],
+    errorLogger: WalletContextErrorLogger
+) async -> [WalletContext.Collectible] {
     var result: [WalletContext.Collectible] = []
     result.reserveCapacity(values.count)
     for value in values {
         var metadata = walletCollectibleMetadata(from: value)
         if walletCollectibleNeedsRemoteMetadata(value, metadata: metadata),
-           let url = walletCollectibleMetadataUrl(from: value),
-           let remote = try? await walletCollectibleMetadata(from: url) {
-            metadata.merge(remote)
+           let url = walletCollectibleMetadataUrl(from: value) {
+            do {
+                metadata.merge(try await walletCollectibleMetadata(from: url))
+            } catch {
+                errorLogger.error("wallet_collectible_metadata_fetch_failed", error)
+            }
         }
         result.append(walletCollectible(from: value, metadata: metadata))
     }

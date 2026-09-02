@@ -489,9 +489,11 @@ actor WalletEngineStorage {
 
 actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
+    private let errorLogger: WalletContextErrorLogger
 
-    init(storage: WalletEngineStorage) {
+    init(storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
         self.storage = storage
+        self.errorLogger = errorLogger
     }
 
     func now() async -> UInt64 {
@@ -502,8 +504,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.readProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
+            self.errorLogger.error("wallet_protected_secret_read_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_protected_secret_read_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -512,8 +516,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             try await self.storage.storeProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
+            self.errorLogger.error("wallet_protected_secret_store_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_protected_secret_store_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -522,6 +528,7 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             try await self.storage.deleteProtectedSecret(secretRef)
         } catch {
+            self.errorLogger.error("wallet_protected_secret_delete_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -530,8 +537,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.loadJournal(key)
         } catch let error as JournalHostError {
+            self.errorLogger.error("wallet_journal_load_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_journal_load_failed", error)
             throw journalFailure(.unavailable, String(describing: error))
         }
     }
@@ -540,8 +549,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.compareExchangeJournal(mutation)
         } catch let error as JournalHostError {
+            self.errorLogger.error("wallet_journal_compare_exchange_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_journal_compare_exchange_failed", error)
             throw journalFailure(.unavailable, String(describing: error))
         }
     }

@@ -103,20 +103,26 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
     private static let maximumEarlyCancellations = 256
 
     private let engine: TelegramEngine
+    private let errorLogger: WalletContextErrorLogger
     private var tasks: [UInt64: Task<Data, Error>] = [:]
     private var cancelledBeforeStart = Set<UInt64>()
 
-    init(engine: TelegramEngine) {
+    init(engine: TelegramEngine, errorLogger: WalletContextErrorLogger) {
         self.engine = engine
+        self.errorLogger = errorLogger
     }
 
     func executeStatusless(request: HttpRequest) async throws -> Data {
         let id = request.id.value
         guard self.tasks[id] == nil else {
-            throw Self.failure(.policyViolation, "Duplicate provider request identifier")
+            let error = Self.failure(.policyViolation, "Duplicate provider request identifier")
+            self.errorLogger.error("wallet_statusless_request_failed", error)
+            throw error
         }
         guard self.cancelledBeforeStart.remove(id) == nil else {
-            throw Self.failure(.cancelled, "Provider request was cancelled")
+            let error = Self.failure(.cancelled, "Provider request was cancelled")
+            self.errorLogger.error("wallet_statusless_request_failed", error)
+            throw error
         }
 
         let engine = self.engine
@@ -128,21 +134,30 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
 
         do {
             return try await task.value
-        } catch is CancellationError {
+        } catch let error as CancellationError {
+            self.errorLogger.error("wallet_statusless_request_failed", error)
             throw Self.failure(.cancelled, "Provider request was cancelled")
         } catch let error as StatuslessHostError {
+            self.errorLogger.error("wallet_statusless_request_failed", error)
             throw error
         } catch let error as TonApiRequestError {
+            self.errorLogger.error("wallet_statusless_request_failed", error)
             throw Self.failure(.other, "Telegram relay failed (\(error.code))")
         } catch let error as URLError {
+            self.errorLogger.error("wallet_statusless_request_failed", error)
             throw Self.failure(walletEngineTransportKind(error.code), error.localizedDescription)
-        } catch WalletEngineRelayError.responseTooLarge {
-            throw Self.failure(.responseTooLarge, "Provider response exceeds 4 MiB")
-        } catch WalletEngineRelayError.invalidRequest {
-            throw Self.failure(.policyViolation, "Provider request body is not valid UTF-8")
-        } catch WalletEngineRelayError.completedWithoutResponse {
-            throw Self.failure(.other, "Telegram relay completed without a response")
+        } catch let error as WalletEngineRelayError {
+            self.errorLogger.error("wallet_statusless_request_failed", error)
+            switch error {
+            case .responseTooLarge:
+                throw Self.failure(.responseTooLarge, "Provider response exceeds 4 MiB")
+            case .invalidRequest:
+                throw Self.failure(.policyViolation, "Provider request body is not valid UTF-8")
+            case .completedWithoutResponse:
+                throw Self.failure(.other, "Telegram relay completed without a response")
+            }
         } catch {
+            self.errorLogger.error("wallet_statusless_request_failed", error)
             throw Self.failure(.other, String(describing: error))
         }
     }

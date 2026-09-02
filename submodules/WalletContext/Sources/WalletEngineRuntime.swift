@@ -24,6 +24,7 @@ enum WalletEngineKeyRotationResolution: Equatable, Sendable {
 /// Serializes all UniFFI calls and owns the callback objects for one wallet identity.
 actor WalletEngineRuntime {
     let storage: WalletEngineStorage
+    private let errorLogger: WalletContextErrorLogger
     private let platformHost: WalletEnginePlatformHost
     private let statuslessHost: WalletEngineStatuslessHost
     private let lifecycle: WalletLifecycle
@@ -33,10 +34,11 @@ actor WalletEngineRuntime {
     private var ffiBusy = false
     private var ffiWaiters: [CheckedContinuation<Void, Never>] = []
 
-    init(engine: TelegramEngine, storage: WalletEngineStorage) {
+    init(engine: TelegramEngine, storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
         self.storage = storage
-        self.platformHost = WalletEnginePlatformHost(storage: storage)
-        self.statuslessHost = WalletEngineStatuslessHost(engine: engine)
+        self.errorLogger = errorLogger
+        self.platformHost = WalletEnginePlatformHost(storage: storage, errorLogger: errorLogger)
+        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, errorLogger: errorLogger)
         self.lifecycle = WalletLifecycle(platformHost: self.platformHost)
     }
 
@@ -73,7 +75,11 @@ actor WalletEngineRuntime {
             do {
                 try await self.storage.saveReplacementCandidate(record)
             } catch {
-                try? await self.storage.deleteProtectedSecret(imported.secretRef)
+                do {
+                    try await self.storage.deleteProtectedSecret(imported.secretRef)
+                } catch {
+                    self.errorLogger.error("wallet_replacement_secret_cleanup_failed", error)
+                }
                 throw error
             }
             return WalletEngineStagedWallet(
@@ -195,14 +201,22 @@ actor WalletEngineRuntime {
             ))
             guard walletEngineAddressesEqual(imported.address, serverAddress),
                   imported.publicKey == serverPublicKey else {
-                try? await self.storage.deleteProtectedSecret(imported.secretRef)
+                do {
+                    try await self.storage.deleteProtectedSecret(imported.secretRef)
+                } catch {
+                    self.errorLogger.error("wallet_imported_secret_cleanup_failed", error)
+                }
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             let record = WalletEngineDescriptorRecord(descriptor: imported)
             do {
                 try await self.storage.saveDescriptor(record)
             } catch {
-                try? await self.storage.deleteProtectedSecret(imported.secretRef)
+                do {
+                    try await self.storage.deleteProtectedSecret(imported.secretRef)
+                } catch {
+                    self.errorLogger.error("wallet_imported_secret_cleanup_failed", error)
+                }
                 throw error
             }
             selectedRecord = record
@@ -407,17 +421,36 @@ actor WalletEngineRuntime {
                 )
                 return result
             } catch {
-                if let snapshot = try? self.requireClient().snapshot() {
+                let snapshot: WalletSnapshot?
+                do {
+                    snapshot = try self.requireClient().snapshot()
+                } catch {
+                    self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
+                    snapshot = nil
+                }
+                if let snapshot {
                     if snapshot.send.operationId == operationId,
                        (snapshot.send.phase == .submitted
                         || snapshot.send.phase == .submissionUnknown
                         || snapshot.send.phase == .confirmed) {
-                        _ = try? await self.reconcileKeyRotation(send: snapshot.send)
+                        do {
+                            _ = try await self.reconcileKeyRotation(send: snapshot.send)
+                        } catch {
+                            self.errorLogger.error("wallet_key_rotation_reconciliation_failed", error)
+                        }
                     } else {
-                        try? await self.storage.rollbackKeyRotation(operationId: operationId)
+                        do {
+                            try await self.storage.rollbackKeyRotation(operationId: operationId)
+                        } catch {
+                            self.errorLogger.error("wallet_key_rotation_rollback_failed", error)
+                        }
                     }
                 } else {
-                    try? await self.storage.rollbackKeyRotation(operationId: operationId)
+                    do {
+                        try await self.storage.rollbackKeyRotation(operationId: operationId)
+                    } catch {
+                        self.errorLogger.error("wallet_key_rotation_rollback_failed", error)
+                    }
                 }
                 throw error
             }
@@ -440,8 +473,14 @@ actor WalletEngineRuntime {
                 let send = try await self.requireClient().resolvePending()
                 return try await self.reconcileKeyRotation(send: send)
             } catch {
-                if let snapshot = try? self.requireClient().snapshot(),
-                   snapshot.send.operationId == record.operationId {
+                let snapshot: WalletSnapshot?
+                do {
+                    snapshot = try self.requireClient().snapshot()
+                } catch {
+                    self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
+                    snapshot = nil
+                }
+                if let snapshot, snapshot.send.operationId == record.operationId {
                     return try await self.reconcileKeyRotation(send: snapshot.send)
                 }
                 throw error
@@ -548,9 +587,13 @@ actor WalletEngineRuntime {
     }
 
     func shutdown() async {
-        try? await self.withFfi {
-            self.tonConnectSession = nil
-            try await self.shutdownClient()
+        do {
+            try await self.withFfi {
+                self.tonConnectSession = nil
+                try await self.shutdownClient()
+            }
+        } catch {
+            self.errorLogger.error("wallet_engine_shutdown_failed", error)
         }
     }
 
@@ -672,6 +715,7 @@ actor WalletEngineRuntime {
             } catch {
                 // A transport failure is ambiguous. Keep both the replacement
                 // secret and rollback material until provider evidence is available.
+                self.errorLogger.error("wallet_key_rotation_recovery_failed", error)
             }
         case .confirmed:
             _ = try await self.storage.confirmKeyRotation(operationId: rotation.operationId)

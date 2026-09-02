@@ -25,11 +25,6 @@ final class WalletStreamingLogger: @unchecked Sendable {
     }
 }
 
-private func walletStreamingErrorFields(_ error: Error) -> String {
-    let nsError = error as NSError
-    return "error_type=\(String(reflecting: type(of: error))) error_domain=\(nsError.domain) error_code=\(nsError.code)"
-}
-
 private final class WalletStreamingEngineURLSource: @unchecked Sendable {
     let engine: TelegramEngine
 
@@ -97,10 +92,10 @@ actor WalletStreamingURLProvider {
             try Task.checkCancellation()
             let fallbackTimestamp = self.now()
             if let cached = self.cached, cached.expires > fallbackTimestamp {
-                self.log("event=wallet_stream_url_fetch_failed_using_cache expires_in=\(cached.expires - fallbackTimestamp) \(walletStreamingErrorFields(error))")
+                self.log("event=wallet_stream_url_fetch_failed_using_cache expires_in=\(cached.expires - fallbackTimestamp) \(walletContextErrorFields(error))")
                 return cached.url
             }
-            self.log("event=wallet_stream_url_fetch_failed \(walletStreamingErrorFields(error))")
+            self.log("event=wallet_stream_url_fetch_failed \(walletContextErrorFields(error))")
             throw error
         }
     }
@@ -204,7 +199,7 @@ private final class WalletStreamingSessionDelegate: NSObject, URLSessionWebSocke
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error {
-            self.log("event=wallet_stream_socket_completed \(walletStreamingErrorFields(error))")
+            self.log("event=wallet_stream_socket_completed \(walletContextErrorFields(error))")
         } else {
             self.log("event=wallet_stream_socket_completed")
         }
@@ -620,7 +615,7 @@ actor WalletToncenterStreamingClient {
                     return
                 }
             } catch {
-                self.log("event=wallet_stream_connection_failed attempt=\(attempt) subscribed=\(self.connectionSubscribed ? 1 : 0) \(walletStreamingErrorFields(error))")
+                self.log("event=wallet_stream_connection_failed attempt=\(attempt) subscribed=\(self.connectionSubscribed ? 1 : 0) \(walletContextErrorFields(error))")
             }
             await self.transport?.close()
             self.transport = nil
@@ -656,7 +651,7 @@ actor WalletToncenterStreamingClient {
                     try await transport.send(message: ping)
                     log("event=wallet_stream_ping_sent")
                 } catch {
-                    log("event=wallet_stream_ping_failed \(walletStreamingErrorFields(error))")
+                    log("event=wallet_stream_ping_failed \(walletContextErrorFields(error))")
                     await transport.close()
                     return
                 }

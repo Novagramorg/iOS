@@ -6,6 +6,110 @@ import WalletEngineFFI
 private let walletMetadataCachedItemLimit = 10
 let walletFiatRatesRefreshInterval: TimeInterval = 15 * 60
 
+final class WalletContextErrorLogger: @unchecked Sendable {
+    private let sink: (String) -> Void
+
+    init(_ sink: @escaping (String) -> Void) {
+        self.sink = sink
+    }
+
+    func log(_ message: String) {
+        self.sink(message)
+    }
+
+    func error(_ event: String, _ error: Error, context: String? = nil) {
+        var message = "event=\(event) \(walletContextErrorFields(error))"
+        if let context, !context.isEmpty {
+            message += " \(context)"
+        }
+        self.sink(message)
+    }
+}
+
+func walletContextErrorFields(_ error: Error) -> String {
+    let nsError = error as NSError
+    var result = "error_type=\(String(reflecting: type(of: error))) error_domain=\(nsError.domain) error_code=\(nsError.code)"
+    if let kind = walletContextErrorKind(error) {
+        result += " error_kind=\(kind)"
+    }
+    return result
+}
+
+private func walletContextErrorKind(_ error: Error) -> String? {
+    if error is CancellationError {
+        return "cancelled"
+    }
+    if let error = error as? TelegramCore.WalletOperationError {
+        switch error {
+        case .generic: return "telegram_generic"
+        case .network: return "telegram_network"
+        case .requestPassword: return "request_password"
+        case .invalidPassword: return "invalid_password"
+        case .twoStepAuthMissing: return "two_step_auth_missing"
+        case .passwordTooFresh: return "password_too_fresh"
+        case .sessionTooFresh: return "session_too_fresh"
+        case .backupDisabled: return "backup_disabled"
+        case .backupNotAvailable: return "backup_not_available"
+        case .replacementInvalid: return "replacement_invalid"
+        case .publicKeyInvalid: return "public_key_invalid"
+        case .tokenInvalid: return "token_invalid"
+        case .tokenExpired: return "token_expired"
+        case .clientKeyInvalid: return "client_key_invalid"
+        case .partUnavailable: return "part_unavailable"
+        case .invalidBackupData: return "invalid_backup_data"
+        }
+    }
+    if let error = error as? WalletEngineStorageError {
+        switch error {
+        case .keychainStatus: return "keychain_status"
+        case .corrupted: return "storage_corrupted"
+        }
+    }
+    if let error = error as? WalletContext.WalletError {
+        switch error {
+        case .unavailable: return "unavailable"
+        case .noWallet: return "no_wallet"
+        case .walletAlreadyExists: return "wallet_already_exists"
+        case .invalidMnemonic: return "invalid_mnemonic"
+        case .unsupportedMnemonicLength: return "unsupported_mnemonic_length"
+        case .invalidAddress: return "invalid_address"
+        case .invalidAmount: return "invalid_amount"
+        case .operationInProgress: return "operation_in_progress"
+        case .previewFailed: return "preview_failed"
+        case .previewIncomplete: return "preview_incomplete"
+        case .preparedTransferExpired: return "prepared_transfer_expired"
+        case .preparedTransferNotFound: return "prepared_transfer_not_found"
+        case .network: return "network"
+        case .requestPassword: return "request_password"
+        case .invalidPassword: return "invalid_password"
+        case .twoStepAuthMissing: return "two_step_auth_missing"
+        case .authorizationCancelled: return "authorization_cancelled"
+        case .passwordTooFresh: return "password_too_fresh"
+        case .sessionTooFresh: return "session_too_fresh"
+        case .backupDisabled: return "backup_disabled"
+        case .backupNotAvailable: return "backup_not_available"
+        case .replacementInvalid: return "replacement_invalid"
+        case .publicKeyInvalid: return "public_key_invalid"
+        case .keyRotationFailed: return "key_rotation_failed"
+        case .tokenInvalid: return "token_invalid"
+        case .tokenExpired: return "token_expired"
+        case .clientKeyInvalid: return "client_key_invalid"
+        case .partUnavailable: return "part_unavailable"
+        case .invalidBackupData: return "invalid_backup_data"
+        case .insufficientBalance: return "insufficient_balance"
+        case .storage: return "storage"
+        case .sdk: return "sdk"
+        }
+    }
+    if let error = error as? TonApiRequestError {
+        return "telegram_relay_\(error.code)"
+    }
+    if let error = error as? URLError {
+        return "url_\(error.code.rawValue)"
+    }
+    return nil
+}
+
 public final class WalletContext {
     enum PreparedEngineTransfer {
         case send(SendIntent)
@@ -19,7 +123,7 @@ public final class WalletContext {
     }
 
     let engine: TelegramEngine
-    let log: (String) -> Void
+    let errorLogger: WalletContextErrorLogger
     let storage: WalletEngineStorage
     let runtime: WalletEngineRuntime
     let streamingLog: WalletStreamingLogger
@@ -100,13 +204,14 @@ public final class WalletContext {
         applicationInForeground: Signal<Bool, NoError>,
         accountIsCurrent: Signal<Bool, NoError>,
         networkAvailable: Signal<Bool, NoError>,
-        log: @escaping (String) -> Void = { _ in }
+        log: @escaping (String) -> Void = { Logger.shared.log("WalletContext", $0) }
     ) {
         let storage = WalletEngineStorage(namespace: storageNamespace)
+        let errorLogger = WalletContextErrorLogger(log)
         self.engine = engine
-        self.log = log
+        self.errorLogger = errorLogger
         self.storage = storage
-        self.runtime = WalletEngineRuntime(engine: engine, storage: storage)
+        self.runtime = WalletEngineRuntime(engine: engine, storage: storage, errorLogger: errorLogger)
         let streamingLog = WalletStreamingLogger(log)
         self.streamingLog = streamingLog
         let streamingURLProvider = WalletStreamingURLProvider(engine: engine, log: streamingLog)
@@ -177,6 +282,7 @@ public final class WalletContext {
                     }
                 }
             } catch let error as WalletEngineStorageError {
+                self.errorLogger.error("wallet_metadata_restore_failed", error)
                 self.replaceState(
                     phase: .failed(Self.storageError(error)),
                     balance: self.currentState.balance,
@@ -186,6 +292,7 @@ public final class WalletContext {
                 )
                 return
             } catch {
+                self.errorLogger.error("wallet_metadata_restore_failed", error)
                 self.replaceState(
                     phase: .failed(.corrupted),
                     balance: self.currentState.balance,
@@ -274,7 +381,7 @@ public final class WalletContext {
                 self.applyServerWalletState(value, forceActivation: promotedReplacement)
             } catch is CancellationError {
             } catch {
-                self.log("event=wallet_state_failed error=\(type(of: error))")
+                self.errorLogger.error("wallet_state_failed", error)
                 self.scheduleRetry()
             }
         }
@@ -389,7 +496,11 @@ public final class WalletContext {
                     let needsSecret = !hasStoredSecret
                     var words: [String]?
                     if needsSecret && canExportPhrase {
-                        words = try? await exportWalletSecretPhrase(engine: self.engine, password: nil)
+                        do {
+                            words = try await exportWalletSecretPhrase(engine: self.engine, password: nil)
+                        } catch {
+                            self.errorLogger.error("wallet_automatic_phrase_export_failed", error)
+                        }
                     }
                     let activation: WalletEngineActivation
                     if let words {
@@ -401,7 +512,7 @@ public final class WalletContext {
                                 sourcePublicKey: publicKey
                             )
                             guard prepared.disposition == .currentWallet else {
-                                try? await self.runtime.discardReplacement(recordId: prepared.recordId)
+                                await self.discardReplacementForCleanup(recordId: prepared.recordId)
                                 throw WalletError.storage(.identityMismatch)
                             }
                             activation = try await self.runtime.commitReplacement(
@@ -412,6 +523,7 @@ public final class WalletContext {
                         } catch {
                             // Automatic recovery is best-effort. Password, transport,
                             // or invalid backup data leave the wallet read-only.
+                            self.errorLogger.error("wallet_automatic_phrase_install_failed", error)
                             activation = try await self.runtime.activate(
                                 serverAddress: address,
                                 serverPublicKey: publicKey,
@@ -448,6 +560,7 @@ public final class WalletContext {
                         let coordinator = WalletTonConnectCoordinator(
                             runtime: self.runtime,
                             storage: self.storage,
+                            errorLogger: self.errorLogger,
                             recordId: activation.snapshot.recordId,
                             event: { [weak self] event in
                                 self?.withMainQueue { self?.handleTonConnectEvent(event) }
@@ -459,6 +572,7 @@ public final class WalletContext {
                     self.requestSynchronization()
                 } catch is CancellationError {
                 } catch let error as WalletEngineStorageError {
+                    self.errorLogger.error("wallet_engine_activation_failed", error)
                     self.replaceState(
                         phase: .failed(Self.storageError(error)),
                         balance: self.currentState.balance,
@@ -467,7 +581,7 @@ public final class WalletContext {
                         activeOperation: nil
                     )
                 } catch {
-                    self.log("event=wallet_engine_activation_failed error=\(type(of: error))")
+                    self.errorLogger.error("wallet_engine_activation_failed", error)
                     self.replaceState(
                         phase: .failed(.unsupportedVersion),
                         balance: .idle,
@@ -498,7 +612,7 @@ public final class WalletContext {
                     return
                 } catch {
                     guard self.activationGeneration == generation else { return }
-                    self.log("event=wallet_engine_observation_failed error=\(type(of: error))")
+                    self.errorLogger.error("wallet_engine_observation_failed", error)
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                 }
             }
@@ -517,8 +631,12 @@ public final class WalletContext {
             switch snapshot.accountResource.phase {
             case .idle: balance = self.currentState.balance
             case .loading: balance = .loading(previous: self.currentState.balance.currentValue)
-            case .ready: balance = .stale(previous: self.currentState.balance.currentValue, error: .invalidData, lastSuccessfulAt: self.balanceLastSuccessfulAt)
-            case .failed: balance = .stale(previous: self.currentState.balance.currentValue, error: synchronizationError(snapshot.accountResource.error), lastSuccessfulAt: self.balanceLastSuccessfulAt)
+            case .ready:
+                self.errorLogger.log("event=wallet_engine_balance_invalid")
+                balance = .stale(previous: self.currentState.balance.currentValue, error: .invalidData, lastSuccessfulAt: self.balanceLastSuccessfulAt)
+            case .failed:
+                self.errorLogger.log("event=wallet_engine_account_resource_failed has_diagnostic=\(snapshot.accountResource.error == nil ? 0 : 1)")
+                balance = .stale(previous: self.currentState.balance.currentValue, error: synchronizationError(snapshot.accountResource.error), lastSuccessfulAt: self.balanceLastSuccessfulAt)
             }
         }
         self.reconcileKeyRotation(snapshot.send)
@@ -585,6 +703,7 @@ public final class WalletContext {
                     balance = .stale(previous: balance.currentValue, error: .invalidData, lastSuccessfulAt: self.balanceLastSuccessfulAt)
                 }
             case let .failure(error):
+                self.errorLogger.error("wallet_engine_refresh_failed", error)
                 let mappedError = synchronizationError(error)
                 balance = .stale(previous: balance.currentValue, error: mappedError, lastSuccessfulAt: self.balanceLastSuccessfulAt)
                 shouldRetry = shouldRetry || mappedError.isRetryable
@@ -602,6 +721,7 @@ public final class WalletContext {
                     error: nil
                 )
             case let .failure(error):
+                self.errorLogger.error("wallet_transactions_refresh_failed", error)
                 let mappedError = synchronizationError(error)
                 transactionState = TransactionsState(
                     items: transactionState.items,
@@ -616,7 +736,10 @@ public final class WalletContext {
             switch nfts {
             case let .success(update):
                 snapshot = update.snapshot
-                let values = await walletCollectibles(from: update.snapshot.nfts.items)
+                let values = await walletCollectibles(
+                    from: update.snapshot.nfts.items,
+                    errorLogger: self.errorLogger
+                )
                 collectiblesState = CollectiblesState(
                     items: values,
                     offset: values.count,
@@ -625,6 +748,7 @@ public final class WalletContext {
                     error: nil
                 )
             case let .failure(error):
+                self.errorLogger.error("wallet_nfts_refresh_failed", error)
                 let mappedError = synchronizationError(error)
                 collectiblesState = CollectiblesState(
                     items: collectiblesState.items,
@@ -681,6 +805,7 @@ public final class WalletContext {
                 self.requestSynchronization(force: true)
             }
         case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
+            self.errorLogger.log("event=wallet_pending_transfer_terminal_failure phase=\(send.phase)")
             values.remove(at: index)
             self.requestSynchronization(force: true)
         case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit, .submitting, .handedOff:
@@ -701,7 +826,11 @@ public final class WalletContext {
                     switch result {
                     case let .confirmed(operationId):
                         if case let .wallet(info) = self.currentState.phase, !info.backupEnabled {
-                            try? await self.runtime.completeKeyRotation(operationId: operationId)
+                            do {
+                                try await self.runtime.completeKeyRotation(operationId: operationId)
+                            } catch {
+                                self.errorLogger.error("wallet_key_rotation_completion_failed", error)
+                            }
                         }
                         self.requestSynchronization(force: true)
                     case .rolledBack:
@@ -710,7 +839,7 @@ public final class WalletContext {
                         break
                     }
                 } catch {
-                    self.log("event=wallet_key_rotation_reconciliation_failed error=\(type(of: error))")
+                    self.errorLogger.error("wallet_key_rotation_reconciliation_failed", error)
                 }
             }
         case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
@@ -720,14 +849,18 @@ public final class WalletContext {
     }
 
     func completeConfirmedKeyRotationIfNeeded(address: String, publicKey: Data) {
-        Task { [runtime = self.runtime] in
-            guard let record = try? await runtime.keyRotationRecord(),
-                  record.phase == .confirmed,
-                  walletEngineAddressesEqual(record.walletAddress, address),
-                  record.walletPublicKey == publicKey else {
-                return
+        Task { [runtime = self.runtime, errorLogger = self.errorLogger] in
+            do {
+                guard let record = try await runtime.keyRotationRecord(),
+                      record.phase == .confirmed,
+                      walletEngineAddressesEqual(record.walletAddress, address),
+                      record.walletPublicKey == publicKey else {
+                    return
+                }
+                try await runtime.completeKeyRotation(operationId: record.operationId)
+            } catch {
+                errorLogger.error("wallet_confirmed_key_rotation_cleanup_failed", error)
             }
-            try? await runtime.completeKeyRotation(operationId: record.operationId)
         }
     }
 
@@ -774,13 +907,13 @@ public final class WalletContext {
         let metadata = self.metadata
         let storage = self.storage
         let previousWrite = self.metadataWriteTask
-        let log = self.log
+        let errorLogger = self.errorLogger
         self.metadataWriteTask = Task {
             await previousWrite?.value
             do {
                 try await storage.saveMetadata(metadata)
             } catch {
-                log("event=wallet_metadata_write_failed error=\(type(of: error))")
+                errorLogger.error("wallet_metadata_write_failed", error)
             }
         }
     }
