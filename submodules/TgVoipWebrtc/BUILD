@@ -228,6 +228,7 @@ sources = glob([
     "tgcalls/tgcalls/v2/InstanceV2Impl.cpp",
     "tgcalls/tgcalls/v2/InstanceV2CompatImpl.cpp",
     "tgcalls/tgcalls/v2/InstanceV2ReferenceImpl.cpp",
+    "tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",
     "tgcalls/tgcalls/v2wasm/ReferenceCallCore.cpp",
     "tgcalls/tgcalls/v2wasm/SignalingFraming.cpp",
     "tgcalls/tgcalls/v2wasm/CoreGzip.cpp",
