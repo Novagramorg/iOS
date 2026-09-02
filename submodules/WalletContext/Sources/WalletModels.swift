@@ -1,26 +1,32 @@
 import Foundation
-import SwiftSignalKit
 import TelegramCore
 
 public extension WalletContext {
-    enum FiatCurrency: String, CaseIterable, Codable, Hashable, Sendable {
-        case usd = "USD", eur = "EUR", rub = "RUB", cny = "CNY"
-        case aed = "AED", afn = "AFN", all = "ALL", amd = "AMD", ars = "ARS", aud = "AUD"
-        case azn = "AZN", bam = "BAM", bdt = "BDT", bgn = "BGN", bhd = "BHD", bnd = "BND"
-        case bob = "BOB", brl = "BRL", byn = "BYN", cad = "CAD", chf = "CHF", clp = "CLP"
-        case cop = "COP", crc = "CRC", czk = "CZK", dkk = "DKK", dop = "DOP", dzd = "DZD"
-        case egp = "EGP", etb = "ETB", gbp = "GBP", gel = "GEL", ghs = "GHS", gtq = "GTQ"
-        case hkd = "HKD", hnl = "HNL", hrk = "HRK", huf = "HUF", idr = "IDR", ils = "ILS"
-        case inr = "INR", iqd = "IQD", irr = "IRR", isk = "ISK", jmd = "JMD", jod = "JOD"
-        case jpy = "JPY", kes = "KES", kgs = "KGS", krw = "KRW", kzt = "KZT", lbp = "LBP"
-        case lkr = "LKR", mad = "MAD", mdl = "MDL", mmk = "MMK", mnt = "MNT", mop = "MOP"
-        case mur = "MUR", mvr = "MVR", mxn = "MXN", myr = "MYR", mzn = "MZN", ngn = "NGN"
-        case nio = "NIO", nok = "NOK", npr = "NPR", nzd = "NZD", pab = "PAB", pen = "PEN"
-        case php = "PHP", pkr = "PKR", pln = "PLN", pyg = "PYG", qar = "QAR", ron = "RON"
-        case rsd = "RSD", sar = "SAR", sek = "SEK", sgd = "SGD", syp = "SYP", thb = "THB"
-        case tjs = "TJS", tryCurrency = "TRY", ttd = "TTD", twd = "TWD", tzs = "TZS"
-        case uah = "UAH", ugx = "UGX", uyu = "UYU", uzs = "UZS", vnd = "VND", yer = "YER"
-        case zar = "ZAR"
+    enum FiatCurrency: Int32, CaseIterable, Codable, Hashable, Sendable {
+        case usd, eur, rub, cny
+        case aed, afn, all, amd, ars, aud
+        case azn, bam, bdt, bgn, bhd, bnd
+        case bob, brl, byn, cad, chf, clp
+        case cop, crc, czk, dkk, dop, dzd
+        case egp, etb, gbp, gel, ghs, gtq
+        case hkd, hnl, hrk, huf, idr, ils
+        case inr, iqd, irr, isk, jmd, jod
+        case jpy, kes, kgs, krw, kzt, lbp
+        case lkr, mad, mdl, mmk, mnt, mop
+        case mur, mvr, mxn, myr, mzn, ngn
+        case nio, nok, npr, nzd, pab, pen
+        case php, pkr, pln, pyg, qar, ron
+        case rsd, sar, sek, sgd, syp, thb
+        case tjs, tryCurrency, ttd, twd, tzs
+        case uah, ugx, uyu, uzs, vnd, yer
+        case zar
+
+        public var code: String {
+            if self == .tryCurrency {
+                return "TRY"
+            }
+            return String(describing: self).uppercased()
+        }
 
         public var symbol: String {
             switch self {
@@ -57,7 +63,7 @@ public extension WalletContext {
             case .twd: return "NT$"
             case .uah: return "₴"
             case .vnd: return "₫"
-            default: return self.rawValue
+            default: return self.code
             }
         }
     }
@@ -71,7 +77,7 @@ public extension WalletContext {
         }
     }
 
-    struct FiatState: Equatable {
+    struct FiatState: Equatable, Sendable {
         public let selectedCurrency: FiatCurrency
         public let rates: Resource<[FiatCurrency: FiatRate]>
         public init(selectedCurrency: FiatCurrency, rates: Resource<[FiatCurrency: FiatRate]>) {
@@ -81,14 +87,14 @@ public extension WalletContext {
         public var selectedRate: FiatRate? { self.rates.currentValue?[self.selectedCurrency] }
     }
 
-    struct WalletInfo: Equatable {
+    struct WalletInfo: Equatable, Sendable {
         public let address: String
         public let publicKey: String
         public let backupEnabled: Bool
         public let canExportPhrase: Bool
         public let canEnableBackup: Bool
         public let canSign: Bool
-        public var canDisableBackup: Bool { self.backupEnabled }
+        public var canDisableBackup: Bool { self.backupEnabled && self.canSign }
         public var canRevealPhrase: Bool { self.canSign || self.canExportPhrase }
         
         public init(
@@ -108,7 +114,7 @@ public extension WalletContext {
         }
     }
 
-    struct TonConnectPermission: Equatable {
+    struct TonConnectPermission: Equatable, Sendable {
         public let name: String
         public let title: String?
         public let text: String?
@@ -119,7 +125,7 @@ public extension WalletContext {
         }
     }
 
-    struct TonConnectRequest: Equatable {
+    struct TonConnectRequest: Equatable, Sendable {
         public let id: String
         public let applicationName: String
         public let domain: String
@@ -136,10 +142,10 @@ public extension WalletContext {
         }
     }
 
-    struct TonConnectOperationRequest: Equatable {
-        public enum Method: Equatable { case sendTransaction, signMessage }
-        public struct Message: Equatable {
-            public enum Payload: Equatable { case empty, comment(String), raw(String) }
+    struct TonConnectOperationRequest: Equatable, Sendable {
+        public enum Method: Equatable, Sendable { case sendTransaction, signMessage }
+        public struct Message: Equatable, Sendable {
+            public enum Payload: Equatable, Sendable { case empty, comment(String), raw(String) }
             public let id: String
             public let destination: String
             public let amountNanograms: String
@@ -153,7 +159,7 @@ public extension WalletContext {
                 self.stateInit = stateInit
             }
         }
-        public struct Action: Equatable {
+        public struct Action: Equatable, Sendable {
             public let id: String
             public let kind: String
             public let succeeded: Bool
@@ -206,18 +212,18 @@ public extension WalletContext {
         }
     }
 
-    enum TonConnectPresentation {
+    enum TonConnectPresentation: Sendable {
         case request(TonConnectRequest)
         case operation(TonConnectOperationRequest)
         case dismiss(requestId: String)
         case error(String)
     }
 
-    enum FatalStorageError: Error, Equatable {
+    enum FatalStorageError: Error, Equatable, Sendable {
         case keychainStatus(Int32), corrupted, unsupportedVersion, identityMismatch
     }
 
-    enum SynchronizationError: Error, Equatable {
+    enum SynchronizationError: Error, Equatable, Sendable {
         case unavailable, network, timeout, invalidData, sdk
         case http(statusCode: Int)
         public var isRetryable: Bool {
@@ -252,10 +258,13 @@ public extension WalletContext {
     }
 
     struct Transaction: Equatable, Sendable {
-        public enum Kind: String, Codable, Equatable, Sendable { case transfer, deployContract }
-        public enum Direction: String, Codable, Equatable, Sendable { case incoming, outgoing, unknown }
-        public enum Currency: String, Codable, Equatable, Sendable { case ton, usdt }
-        public enum Status: String, Codable, Equatable, Sendable { case completed, pending, failed }
+        public enum Kind: Int32, Codable, Equatable, Sendable {
+            case transfer = 0
+            case deployContract = 1
+        }
+        public enum Direction: Int32, Codable, Equatable, Sendable { case incoming = 0, outgoing = 1, unknown = 2 }
+        public enum Currency: Int32, Codable, Equatable, Sendable { case ton = 0, usdt = 1 }
+        public enum Status: Int32, Codable, Equatable, Sendable { case completed = 0, pending = 1, failed = 2 }
         
         public enum Peer: Equatable, @unchecked Sendable {
             case user(EnginePeer, address: String)
@@ -287,7 +296,7 @@ public extension WalletContext {
         }
         
         public struct CollectibleTransfer: Codable, Equatable, Sendable {
-            public enum Kind: String, Codable, Equatable, Sendable { case gift, username, anonymousNumber, other }
+            public enum Kind: Int32, Codable, Equatable, Sendable { case gift = 0, username = 1, anonymousNumber = 2, other = 3 }
             public let address: String
             public let name: String
             public let imageUrl: String?
@@ -302,7 +311,6 @@ public extension WalletContext {
         }
         public let id: String
         public let transactionHash: String?
-        public let externalMessageHash: String?
         public let logicalTime: String
         public let timestamp: Int32
         public let kind: Kind
@@ -314,8 +322,8 @@ public extension WalletContext {
         public let currency: Currency
         public let collectible: CollectibleTransfer?
         public let status: Status
-        public init(id: String, transactionHash: String? = nil, externalMessageHash: String? = nil, logicalTime: String, timestamp: Int32, direction: Direction, amount: Int64, fee: Int64, peer: Peer, comment: String?, currency: Currency = .ton, collectible: CollectibleTransfer? = nil, status: Status = .completed, kind: Kind = .transfer) {
-            self.id = id; self.transactionHash = transactionHash; self.externalMessageHash = externalMessageHash
+        public init(id: String, transactionHash: String? = nil, logicalTime: String, timestamp: Int32, direction: Direction, amount: Int64, fee: Int64, peer: Peer, comment: String?, currency: Currency = .ton, collectible: CollectibleTransfer? = nil, status: Status = .completed, kind: Kind = .transfer) {
+            self.id = id; self.transactionHash = transactionHash
             self.logicalTime = logicalTime; self.timestamp = timestamp; self.kind = kind; self.direction = direction
             self.amount = amount; self.fee = fee; self.peer = peer; self.comment = comment; self.currency = currency
             self.collectible = collectible; self.status = status
@@ -331,7 +339,7 @@ public extension WalletContext {
         }
     }
 
-    struct TransactionsState: Equatable {
+    struct TransactionsState: Equatable, Sendable {
         public let items: [Transaction]
         public let offset: Int
         public let canLoadMore: Bool
@@ -344,7 +352,7 @@ public extension WalletContext {
     }
 
     struct Collectible: Codable, Equatable, Sendable {
-        public enum Kind: String, Codable, Equatable, Sendable { case gift, username, anonymousNumber, other }
+        public enum Kind: Int32, Codable, Equatable, Sendable { case gift = 0, username = 1, anonymousNumber = 2, other = 3 }
         public let address: String
         public let name: String
         public let imageUrl: String?
@@ -364,7 +372,7 @@ public extension WalletContext {
         }
     }
 
-    struct CollectiblesState: Equatable {
+    struct CollectiblesState: Equatable, Sendable {
         public let items: [Collectible]
         public let offset: Int
         public let canLoadMore: Bool
@@ -378,10 +386,10 @@ public extension WalletContext {
     }
 
     struct PendingTransfer: Codable, Equatable, Sendable {
-        public enum Status: String, Codable, Equatable, Sendable {
-            case broadcasting
-            case pending
-            case submissionUnknown
+        public enum Status: Int32, Codable, Equatable, Sendable {
+            case broadcasting = 0
+            case pending = 1
+            case submissionUnknown = 2
         }
         public let id: String
         public let recipient: String
@@ -398,8 +406,8 @@ public extension WalletContext {
         }
     }
 
-    struct PreparedBackupDisable: Equatable {
-        public enum KeyRotationPhase: Equatable {
+    struct PreparedBackupDisable: Equatable, Sendable {
+        public enum KeyRotationPhase: Equatable, Sendable {
             case prepared
             case pending
             case confirmed
@@ -437,8 +445,8 @@ public extension WalletContext {
         }
     }
 
-    struct PreparedRecoveryPhraseImport: Equatable {
-        public enum Disposition: Equatable {
+    struct PreparedRecoveryPhraseImport: Equatable, Sendable {
+        public enum Disposition: Equatable, Sendable {
             case currentWallet
             case replacement
         }
@@ -467,14 +475,14 @@ public extension WalletContext {
         }
     }
 
-    enum ActiveOperation: Equatable {
+    enum ActiveOperation: Equatable, Sendable {
         case creating, importing, recoveringPhrase, preparingRecoveryPhraseImport, completingRecoveryPhraseImport
         case enablingBackup, preparingBackupDisable, disablingBackup
         case preparingTransfer, submittingTransfer, loadingMoreTransactions, loadingMoreCollectibles
     }
-    enum Phase: Equatable { case restoring, provisioning, empty, wallet(WalletInfo), failed(FatalStorageError) }
+    enum Phase: Equatable, Sendable { case restoring, provisioning, empty, wallet(WalletInfo), failed(FatalStorageError) }
 
-    struct State: Equatable {
+    struct State: Equatable, Sendable {
         public let phase: Phase
         public let balance: Resource<Int64>
         public let transactions: TransactionsState
@@ -488,8 +496,8 @@ public extension WalletContext {
         }
     }
 
-    enum WalletError: Error, Equatable {
-        case unavailable, noWallet, walletAlreadyExists, invalidMnemonic, unsupportedMnemonicLength
+    enum WalletError: Error, Equatable, Sendable {
+        case unavailable, noWallet, invalidMnemonic
         case invalidAddress, invalidAmount, operationInProgress, previewFailed, previewIncomplete
         case preparedTransferExpired, preparedTransferNotFound, network
         case requestPassword, invalidPassword, twoStepAuthMissing, authorizationCancelled
@@ -502,15 +510,15 @@ public extension WalletContext {
         case sdk(String)
     }
 
-    struct ResolvedTransferRecipient: Equatable {
+    struct ResolvedTransferRecipient: Equatable, Sendable {
         public let address: String, displayName: String?
         public init(address: String, displayName: String?) { self.address = address; self.displayName = displayName }
     }
-    struct CreatedWallet: Equatable {
-        public let info: WalletInfo, words: [String]
-        public init(info: WalletInfo, words: [String]) { self.info = info; self.words = words }
+    struct CreatedWallet: Equatable, Sendable {
+        public let info: WalletInfo
+        public init(info: WalletInfo) { self.info = info }
     }
-    struct PreparedTransfer: Equatable {
+    struct PreparedTransfer: Equatable, Sendable {
         public let id: String, recipient: String
         public let amount: Int64
         public let comment: String?
@@ -522,8 +530,23 @@ public extension WalletContext {
             self.collectible = collectible; self.fee = fee; self.expiresAt = expiresAt
         }
     }
-    struct SubmittedTransfer: Equatable {
+    struct SubmittedTransfer: Equatable, Sendable {
         public let pendingTransfer: PendingTransfer
         public init(pendingTransfer: PendingTransfer) { self.pendingTransfer = pendingTransfer }
+    }
+}
+
+extension WalletContext.Resource: Sendable where Value: Sendable {
+}
+
+extension WalletContext.ActiveOperation {
+    var defersServerWalletState: Bool {
+        switch self {
+        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport:
+            return true
+        case .recoveringPhrase, .enablingBackup, .preparingBackupDisable, .disablingBackup,
+             .preparingTransfer, .submittingTransfer, .loadingMoreTransactions, .loadingMoreCollectibles:
+            return false
+        }
     }
 }

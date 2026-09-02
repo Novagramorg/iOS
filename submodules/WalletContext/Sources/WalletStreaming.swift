@@ -684,9 +684,8 @@ actor WalletToncenterStreamingClient {
     }
 }
 
-extension WalletContext {
+extension WalletContextImpl {
     func evaluateStreamingDemand() {
-        assert(Queue.mainQueue().isCurrent())
         let demandIsActive = WalletStreamingDemand.isActive(
             foreground: self.isApplicationInForeground,
             accountIsCurrent: self.isAccountCurrent,
@@ -727,45 +726,51 @@ extension WalletContext {
         self.streamingClient = client
         self.streamingAddress = rawAddress
         self.streamingGeneration = generation
-        self.streamingTask = Task { @MainActor [weak self] in
-            let events = await client.events(rawAddress: rawAddress)
-            for await event in events {
-                guard let self,
-                      !Task.isCancelled,
-                      self.streamingGeneration == generation,
-                      WalletStreamingDemand.acceptsEvent(
-                        generation: generation,
-                        rawAddress: rawAddress,
-                        currentGeneration: self.activationGeneration,
-                        currentRawAddress: self.streamingAddress,
-                        isActive: WalletStreamingDemand.isActive(
-                            foreground: self.isApplicationInForeground,
-                            accountIsCurrent: self.isAccountCurrent,
-                            networkAvailable: self.isNetworkAvailable,
-                            subscriberCount: self.stateSubscriberCount,
-                            hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
-                        )
-                      ) else {
-                    break
-                }
-                switch event {
-                case .subscribed, .changed:
-                    self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
-                }
+        self.streamingTask = Task { [weak self] in
+            await self?.runStreaming(client: client, generation: generation, rawAddress: rawAddress)
+        }
+    }
+
+    private func runStreaming(
+        client: WalletToncenterStreamingClient,
+        generation: UInt64,
+        rawAddress: String
+    ) async {
+        let events = await client.events(rawAddress: rawAddress)
+        for await event in events {
+            guard !Task.isCancelled,
+                  !self.isShutdown,
+                  self.streamingGeneration == generation,
+                  WalletStreamingDemand.acceptsEvent(
+                    generation: generation,
+                    rawAddress: rawAddress,
+                    currentGeneration: self.activationGeneration,
+                    currentRawAddress: self.streamingAddress,
+                    isActive: WalletStreamingDemand.isActive(
+                        foreground: self.isApplicationInForeground,
+                        accountIsCurrent: self.isAccountCurrent,
+                        networkAvailable: self.isNetworkAvailable,
+                        subscriberCount: self.stateSubscriberCount,
+                        hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
+                    )
+                  ) else {
+                break
             }
-            await client.stop()
-            guard let self else { return }
-            if self.streamingClient === client {
-                self.streamingClient = nil
-                self.streamingTask = nil
-                self.streamingAddress = nil
-                self.streamingGeneration = nil
+            switch event {
+            case .subscribed, .changed:
+                self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
             }
+        }
+        await client.stop()
+        if self.streamingClient === client {
+            self.streamingClient = nil
+            self.streamingTask = nil
+            self.streamingAddress = nil
+            self.streamingGeneration = nil
         }
     }
 
     func stopStreaming() {
-        assert(Queue.mainQueue().isCurrent())
         if self.streamingTask != nil || self.streamingClient != nil {
             self.streamingLog("event=wallet_stream_stop")
         }
@@ -795,26 +800,34 @@ extension WalletContext {
         self.streamingLog("event=wallet_stream_refresh_scheduled")
         let taskId = UUID()
         self.streamingRefreshTaskId = taskId
-        self.streamingRefreshTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-            } catch {
-                return
-            }
-            guard let self,
-                  self.streamingRefreshTaskId == taskId,
-                  self.activationGeneration == generation,
-                  self.streamingGeneration == generation,
-                  self.streamingAddress == rawAddress,
-                  self.canUseNetworkRuntime,
-                  self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
-                return
-            }
-            self.streamingRefreshTask = nil
-            self.streamingRefreshTaskId = nil
-            self.streamingRefreshGate.consume()
-            self.streamingLog("event=wallet_stream_refresh_requested")
-            self.requestSynchronization(force: true)
+        self.streamingRefreshTask = Task { [weak self] in
+            await self?.runStreamingRefreshDelay(
+                taskId: taskId,
+                generation: generation,
+                rawAddress: rawAddress
+            )
         }
+    }
+
+    private func runStreamingRefreshDelay(taskId: UUID, generation: UInt64, rawAddress: String) async {
+        do {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+        } catch {
+            return
+        }
+        guard !self.isShutdown,
+              self.streamingRefreshTaskId == taskId,
+              self.activationGeneration == generation,
+              self.streamingGeneration == generation,
+              self.streamingAddress == rawAddress,
+              self.canUseNetworkRuntime,
+              self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
+            return
+        }
+        self.streamingRefreshTask = nil
+        self.streamingRefreshTaskId = nil
+        self.streamingRefreshGate.consume()
+        self.streamingLog("event=wallet_stream_refresh_requested")
+        self.requestSynchronization(force: true)
     }
 }

@@ -1307,6 +1307,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private let accountContext: AccountContext
     private let walletContext: WalletContext
     private let openExternalUrl: (String) -> Void
+    private let collectibleSent: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
 
@@ -1319,7 +1320,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         walletContext: WalletContext,
-        collectible: WalletContext.Collectible
+        collectible: WalletContext.Collectible,
+        collectibleSent: @escaping (String) -> Void
     ) {
         let initialState = walletContext.stateValue.collectibles
         var initialCollectibles = initialState.items
@@ -1343,6 +1345,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
         self.accountContext = context
         self.walletContext = walletContext
         self.openExternalUrl = openExternalUrl
+        self.collectibleSent = collectibleSent
         self.collectiblesState = initialState
         self.collectibles = initialCollectibles
         self.currentAddress = collectible.address
@@ -1486,6 +1489,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
                 guard let self else {
                     return
                 }
+                self.collectibleSent(collectible.address)
                 if let navigationController = self.navigationController as? NavigationController {
                     var viewControllers = navigationController.viewControllers
                     viewControllers.removeAll(where: { $0 === self })

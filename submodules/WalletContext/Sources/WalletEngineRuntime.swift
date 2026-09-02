@@ -21,6 +21,12 @@ enum WalletEngineKeyRotationResolution: Equatable, Sendable {
     case rolledBack(operationId: String, phase: SendPhase)
 }
 
+private enum WalletEngineKeyRotationChainState: Equatable {
+    case replacement
+    case previous
+    case different
+}
+
 /// Serializes all UniFFI calls and owns the callback objects for one wallet identity.
 actor WalletEngineRuntime {
     let storage: WalletEngineStorage
@@ -369,6 +375,18 @@ actor WalletEngineRuntime {
         try await self.storage.loadKeyRotation()
     }
 
+    func keyRotationRecoveryPhrase(operationId: String) async throws -> [String] {
+        let secret = try await self.storage.keyRotationCandidateSecret(operationId: operationId)
+        guard let phrase = String(data: secret, encoding: .utf8) else {
+            throw WalletContext.WalletError.storage(.corrupted)
+        }
+        let words = normalizedEngineMnemonic(phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
+        guard words.count == 24, detectMnemonicSchemes(words: words).contains(.rotation) else {
+            throw WalletContext.WalletError.invalidMnemonic
+        }
+        return words
+    }
+
     func sendKeyRotation(
         operationId: String,
         words: [String],
@@ -395,19 +413,35 @@ actor WalletEngineRuntime {
             guard let replacementSecret = normalizedWords.joined(separator: " ").data(using: .utf8) else {
                 throw WalletContext.WalletError.invalidMnemonic
             }
-            let record = try await self.storage.installKeyRotationReplacement(
+            let client = try self.requireClient()
+            let snapshot = try client.snapshot()
+            let previousPublicKey: Data
+            do {
+                previousPublicKey = try await self.statuslessHost.walletPublicKey(address: descriptor.address)
+            } catch {
+                switch snapshot.account?.status {
+                case .nonexistent, .uninitialized:
+                    // Before the first deployment, the signing key is the
+                    // stable anchor key represented by the descriptor.
+                    previousPublicKey = descriptor.publicKey
+                case .active, .frozen, .unknown, nil:
+                    throw error
+                }
+            }
+            let record = try await self.storage.installKeyRotationCandidate(
                 operationId: operationId,
                 descriptor: descriptor,
+                previousPublicKey: previousPublicKey,
                 newPublicKey: newPublicKey,
                 validUntil: validUntil,
-                replacementSecret: replacementSecret
+                candidateSecret: replacementSecret
             )
-            guard record.phase != .confirmed else {
+            guard record.phase == .candidateStored else {
                 throw WalletContext.WalletError.unavailable
             }
             _ = try await self.storage.markKeyRotationSubmissionStarted(operationId: operationId)
             do {
-                let result = try await self.requireClient().sendBoc(request: SendBocRequest(
+                let result = try await client.sendBoc(request: SendBocRequest(
                     operationId: operationId,
                     force: false,
                     signedBoc: signedBoc,
@@ -423,35 +457,21 @@ actor WalletEngineRuntime {
             } catch {
                 let snapshot: WalletSnapshot?
                 do {
-                    snapshot = try self.requireClient().snapshot()
+                    snapshot = try client.snapshot()
                 } catch {
                     self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
                     snapshot = nil
                 }
                 if let snapshot {
-                    if snapshot.send.operationId == operationId,
-                       (snapshot.send.phase == .submitted
-                        || snapshot.send.phase == .submissionUnknown
-                        || snapshot.send.phase == .confirmed) {
-                        do {
-                            _ = try await self.reconcileKeyRotation(send: snapshot.send)
-                        } catch {
-                            self.errorLogger.error("wallet_key_rotation_reconciliation_failed", error)
-                        }
-                    } else {
-                        do {
-                            try await self.storage.rollbackKeyRotation(operationId: operationId)
-                        } catch {
-                            self.errorLogger.error("wallet_key_rotation_rollback_failed", error)
-                        }
-                    }
-                } else {
                     do {
-                        try await self.storage.rollbackKeyRotation(operationId: operationId)
+                        _ = try await self.reconcileKeyRotation(send: snapshot.send)
                     } catch {
-                        self.errorLogger.error("wallet_key_rotation_rollback_failed", error)
+                        self.errorLogger.error("wallet_key_rotation_reconciliation_failed", error)
                     }
                 }
+                // submissionStarted is the app's durable boundary. An absent or
+                // unrelated snapshot does not prove that provider handoff did
+                // not happen, so both secrets remain stored for reconciliation.
                 throw error
             }
         }
@@ -462,12 +482,16 @@ actor WalletEngineRuntime {
             guard let record = try await self.storage.loadKeyRotation() else {
                 return .none
             }
-            if record.phase == .confirmed {
-                return .confirmed(operationId: record.operationId)
-            }
-            if record.phase == .rollbackStored || record.phase == .replacementStored || record.phase == .rolledBack {
-                try await self.storage.rollbackKeyRotation(operationId: record.operationId)
+            if record.phase == .candidateStored {
+                try await self.storage.discardUnsubmittedKeyRotation(operationId: record.operationId)
                 return .rolledBack(operationId: record.operationId, phase: .cancelled)
+            }
+            if record.phase == .previousRestored {
+                try await self.storage.cleanupRestoredKeyRotation(operationId: record.operationId)
+                return .rolledBack(operationId: record.operationId, phase: .cancelled)
+            }
+            if record.phase == .chainApplied || record.phase == .backupDisabled {
+                return try await self.resolveAppliedKeyRotation(record)
             }
             do {
                 let send = try await self.requireClient().resolvePending()
@@ -504,23 +528,24 @@ actor WalletEngineRuntime {
         guard let record = try await self.storage.loadKeyRotation() else {
             return .none
         }
-        if record.phase == .confirmed {
-            return .confirmed(operationId: record.operationId)
+        if record.phase == .previousRestored {
+            try await self.storage.cleanupRestoredKeyRotation(operationId: record.operationId)
+            return .rolledBack(operationId: record.operationId, phase: .cancelled)
+        }
+        if record.phase == .chainApplied || record.phase == .backupDisabled {
+            return try await self.resolveAppliedKeyRotation(record)
         }
         guard operationId == record.operationId else {
             if phase == .idle {
-                try await self.storage.rollbackKeyRotation(operationId: record.operationId)
-                return .rolledBack(operationId: record.operationId, phase: .cancelled)
+                return try await self.resolveTerminalKeyRotation(record, phase: .cancelled)
             }
             return .pending(operationId: record.operationId, retryAfterMilliseconds: nil)
         }
         switch phase {
         case .confirmed:
-            _ = try await self.storage.confirmKeyRotation(operationId: record.operationId)
-            return .confirmed(operationId: record.operationId)
+            return try await self.resolveAppliedKeyRotation(record)
         case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
-            try await self.storage.rollbackKeyRotation(operationId: record.operationId)
-            return .rolledBack(operationId: record.operationId, phase: phase)
+            return try await self.resolveTerminalKeyRotation(record, phase: phase)
         case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
              .submitting, .submissionUnknown, .submitted, .handedOff:
             return .pending(
@@ -530,8 +555,102 @@ actor WalletEngineRuntime {
         }
     }
 
-    func completeKeyRotation(operationId: String) async throws {
-        try await self.storage.completeKeyRotation(operationId: operationId)
+    private func resolveAppliedKeyRotation(
+        _ record: WalletEngineKeyRotationRecord
+    ) async throws -> WalletEngineKeyRotationResolution {
+        switch try await self.keyRotationChainState(record) {
+        case .replacement:
+            _ = try await self.storage.markKeyRotationChainApplied(
+                operationId: record.operationId,
+                verifiedPublicKey: record.newPublicKey
+            )
+            return .confirmed(operationId: record.operationId)
+        case .previous:
+            let expired = self.keyRotationValidityHasElapsed(record)
+            try await self.storage.restorePreviousKeyRotationSecret(
+                operationId: record.operationId,
+                verifiedPublicKey: record.previousPublicKey,
+                removeRecord: expired
+            )
+            if expired {
+                return .rolledBack(operationId: record.operationId, phase: .expired)
+            }
+            return .pending(operationId: record.operationId, retryAfterMilliseconds: 1_000)
+        case .different, nil:
+            return .pending(operationId: record.operationId, retryAfterMilliseconds: 1_000)
+        }
+    }
+
+    private func resolveTerminalKeyRotation(
+        _ record: WalletEngineKeyRotationRecord,
+        phase: SendPhase
+    ) async throws -> WalletEngineKeyRotationResolution {
+        switch try await self.keyRotationChainState(record) {
+        case .replacement:
+            _ = try await self.storage.markKeyRotationChainApplied(
+                operationId: record.operationId,
+                verifiedPublicKey: record.newPublicKey
+            )
+            return .confirmed(operationId: record.operationId)
+        case .previous:
+            try await self.storage.restorePreviousKeyRotationSecret(
+                operationId: record.operationId,
+                verifiedPublicKey: record.previousPublicKey,
+                removeRecord: true
+            )
+            return .rolledBack(operationId: record.operationId, phase: phase)
+        case .different, nil:
+            return .pending(operationId: record.operationId, retryAfterMilliseconds: 1_000)
+        }
+    }
+
+    private func keyRotationChainState(
+        _ record: WalletEngineKeyRotationRecord
+    ) async throws -> WalletEngineKeyRotationChainState? {
+        do {
+            let publicKey = try await self.statuslessHost.walletPublicKey(address: record.walletAddress)
+            if publicKey == record.newPublicKey {
+                return .replacement
+            }
+            if publicKey == record.previousPublicKey {
+                return .previous
+            }
+            self.errorLogger.log("event=wallet_key_rotation_public_key_mismatch")
+            return .different
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            self.errorLogger.error("wallet_key_rotation_public_key_check_failed", error)
+            return nil
+        }
+    }
+
+    private func keyRotationValidityHasElapsed(_ record: WalletEngineKeyRotationRecord) -> Bool {
+        let (deadline, overflow) = record.validUntil.addingReportingOverflow(120)
+        guard !overflow else {
+            return false
+        }
+        return UInt64(max(0, Date().timeIntervalSince1970.rounded(.down))) > deadline
+    }
+
+    func completeKeyRotationAfterBackupDisabled(operationId: String) async throws {
+        try await self.withFfi {
+            guard let record = try await self.storage.loadKeyRotation() else {
+                return
+            }
+            guard record.operationId == operationId,
+                  (record.phase == .chainApplied || record.phase == .backupDisabled) else {
+                throw WalletContext.WalletError.storage(.corrupted)
+            }
+            guard try await self.keyRotationChainState(record) == .replacement else {
+                throw WalletContext.WalletError.operationInProgress
+            }
+            _ = try await self.storage.markKeyRotationChainApplied(
+                operationId: record.operationId,
+                verifiedPublicKey: record.newPublicKey
+            )
+            try await self.storage.completeKeyRotation(operationId: operationId)
+        }
     }
 
     func tonConnectAccount() async throws -> TonConnectAccountInfo {
@@ -697,17 +816,22 @@ actor WalletEngineRuntime {
         guard let rotation = try await self.storage.loadKeyRotation() else {
             return
         }
-        guard rotation.schemaVersion == 1,
-              rotation.recordId == descriptor.recordId,
+        guard rotation.recordId == descriptor.recordId,
               walletEngineAddressesEqual(rotation.walletAddress, descriptor.address),
               rotation.walletPublicKey == descriptor.publicKey,
               rotation.activeSecretRef == descriptor.secretRef else {
-            try await self.storage.discardKeyRotation(operationId: rotation.operationId)
+            if rotation.recordId == descriptor.recordId || rotation.activeSecretRef == descriptor.secretRef {
+                throw WalletContext.WalletError.storage(.corrupted)
+            }
+            try await self.storage.discardOrphanedKeyRotation(
+                operationId: rotation.operationId,
+                activeSecretRef: descriptor.secretRef
+            )
             return
         }
         switch rotation.phase {
-        case .rollbackStored, .replacementStored, .rolledBack:
-            try await self.storage.rollbackKeyRotation(operationId: rotation.operationId)
+        case .candidateStored:
+            try await self.storage.discardUnsubmittedKeyRotation(operationId: rotation.operationId)
         case .submissionStarted:
             do {
                 let send = try await client.resolvePending()
@@ -717,8 +841,10 @@ actor WalletEngineRuntime {
                 // secret and rollback material until provider evidence is available.
                 self.errorLogger.error("wallet_key_rotation_recovery_failed", error)
             }
-        case .confirmed:
-            _ = try await self.storage.confirmKeyRotation(operationId: rotation.operationId)
+        case .chainApplied, .backupDisabled:
+            _ = try await self.resolveAppliedKeyRotation(rotation)
+        case .previousRestored:
+            try await self.storage.cleanupRestoredKeyRotation(operationId: rotation.operationId)
         }
     }
 
@@ -730,7 +856,7 @@ actor WalletEngineRuntime {
     }
 
     private func ensureKeyRotationAllowsSigning() async throws {
-        if let rotation = try await self.storage.loadKeyRotation(), rotation.phase != .confirmed {
+        if try await self.storage.loadKeyRotation() != nil {
             throw WalletContext.WalletError.operationInProgress
         }
     }

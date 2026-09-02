@@ -1,0 +1,286 @@
+import Foundation
+import SwiftSignalKit
+import TelegramCore
+import TelegramUIPreferences
+
+struct WalletStoredTransaction: Codable, Equatable, Sendable {
+    enum Peer: Codable, Equatable, @unchecked Sendable {
+        case user(id: EnginePeer.Id, displayName: String)
+        case address(String)
+        case unsupported
+
+        private enum Kind: Int32 {
+            case user = 0
+            case address = 1
+            case unsupported = 2
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case kind
+            case userId
+            case displayName
+            case address
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let rawKind = try container.decode(Int32.self, forKey: .kind)
+            guard let kind = Kind(rawValue: rawKind) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .kind,
+                    in: container,
+                    debugDescription: "Unknown stored wallet peer kind"
+                )
+            }
+            switch kind {
+            case .user:
+                self = .user(
+                    id: EnginePeer.Id(try container.decode(Int64.self, forKey: .userId)),
+                    displayName: try container.decode(String.self, forKey: .displayName)
+                )
+            case .address:
+                self = .address(try container.decode(String.self, forKey: .address))
+            case .unsupported:
+                self = .unsupported
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case let .user(id, displayName):
+                try container.encode(Kind.user.rawValue, forKey: .kind)
+                try container.encode(id.toInt64(), forKey: .userId)
+                try container.encode(displayName, forKey: .displayName)
+            case let .address(address):
+                try container.encode(Kind.address.rawValue, forKey: .kind)
+                try container.encode(address, forKey: .address)
+            case .unsupported:
+                try container.encode(Kind.unsupported.rawValue, forKey: .kind)
+            }
+        }
+
+        var userId: EnginePeer.Id? {
+            if case let .user(id, _) = self {
+                return id
+            }
+            return nil
+        }
+    }
+
+    let id: String
+    let transactionHash: String?
+    let logicalTime: String
+    let timestamp: Int32
+    let kind: WalletContext.Transaction.Kind
+    let direction: WalletContext.Transaction.Direction
+    let amount: Int64
+    let fee: Int64
+    let peer: Peer
+    let peerAddress: String?
+    let comment: String?
+    let currency: WalletContext.Transaction.Currency
+    let collectible: WalletContext.Transaction.CollectibleTransfer?
+    let status: WalletContext.Transaction.Status
+
+    init(_ transaction: WalletContext.Transaction) {
+        self.id = transaction.id
+        self.transactionHash = transaction.transactionHash
+        self.logicalTime = transaction.logicalTime
+        self.timestamp = transaction.timestamp
+        self.kind = transaction.kind
+        self.direction = transaction.direction
+        self.amount = transaction.amount
+        self.fee = transaction.fee
+        switch transaction.peer {
+        case let .user(peer, address):
+            self.peer = .user(id: peer.id, displayName: peer.debugDisplayTitle)
+            self.peerAddress = address
+        case let .address(address):
+            self.peer = .address(address)
+            self.peerAddress = nil
+        case .unsupported:
+            self.peer = .unsupported
+            self.peerAddress = nil
+        }
+        self.comment = transaction.comment
+        self.currency = transaction.currency
+        self.collectible = transaction.collectible
+        self.status = transaction.status
+    }
+
+    func transaction(peers: [EnginePeer.Id: EnginePeer]) -> WalletContext.Transaction {
+        let peer: WalletContext.Transaction.Peer
+        switch self.peer {
+        case let .user(id, _):
+            if let value = peers[id] {
+                peer = .user(value, address: self.peerAddress ?? "")
+            } else if let peerAddress = self.peerAddress, !peerAddress.isEmpty {
+                peer = .address(peerAddress)
+            } else {
+                peer = .unsupported
+            }
+        case let .address(address):
+            peer = .address(address)
+        case .unsupported:
+            peer = .unsupported
+        }
+        return WalletContext.Transaction(
+            id: self.id,
+            transactionHash: self.transactionHash,
+            logicalTime: self.logicalTime,
+            timestamp: self.timestamp,
+            direction: self.direction,
+            amount: self.amount,
+            fee: self.fee,
+            peer: peer,
+            comment: self.comment,
+            currency: self.currency,
+            collectible: self.collectible,
+            status: self.status,
+            kind: self.kind
+        )
+    }
+}
+
+struct WalletStoredState: Codable, Equatable, Sendable {
+    private struct Payload: Codable {
+        var walletAddress: String?
+        var pendingTransfers: [WalletContext.PendingTransfer]
+        var balance: Int64?
+        var balanceUpdatedAt: Int32?
+        var fiatRates: [WalletContext.FiatCurrency: WalletContext.FiatRate]?
+        var fiatRatesUpdatedAt: Int32?
+        var selectedFiatCurrency: WalletContext.FiatCurrency
+        var transactions: [WalletStoredTransaction]
+        var collectibles: [WalletContext.Collectible]
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case payload
+    }
+
+    static let currentSchemaVersion: Int32 = 1
+
+    var schemaVersion: Int32 = WalletStoredState.currentSchemaVersion
+    var walletAddress: String?
+    var pendingTransfers: [WalletContext.PendingTransfer] = []
+    var balance: Int64?
+    var balanceUpdatedAt: Int32?
+    var fiatRates: [WalletContext.FiatCurrency: WalletContext.FiatRate]?
+    var fiatRatesUpdatedAt: Int32?
+    var selectedFiatCurrency: WalletContext.FiatCurrency = .usd
+    var transactions: [WalletStoredTransaction] = []
+    var collectibles: [WalletContext.Collectible] = []
+
+    init() {
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.schemaVersion = try container.decode(Int32.self, forKey: .schemaVersion)
+        let data = try container.decode(Data.self, forKey: .payload)
+        let payload = try JSONDecoder().decode(Payload.self, from: data)
+        self.walletAddress = payload.walletAddress
+        self.pendingTransfers = payload.pendingTransfers
+        self.balance = payload.balance
+        self.balanceUpdatedAt = payload.balanceUpdatedAt
+        self.fiatRates = payload.fiatRates
+        self.fiatRatesUpdatedAt = payload.fiatRatesUpdatedAt
+        self.selectedFiatCurrency = payload.selectedFiatCurrency
+        self.transactions = payload.transactions
+        self.collectibles = payload.collectibles
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.schemaVersion, forKey: .schemaVersion)
+        let payload = Payload(
+            walletAddress: self.walletAddress,
+            pendingTransfers: self.pendingTransfers,
+            balance: self.balance,
+            balanceUpdatedAt: self.balanceUpdatedAt,
+            fiatRates: self.fiatRates,
+            fiatRatesUpdatedAt: self.fiatRatesUpdatedAt,
+            selectedFiatCurrency: self.selectedFiatCurrency,
+            transactions: self.transactions,
+            collectibles: self.collectibles
+        )
+        try container.encode(try JSONEncoder().encode(payload), forKey: .payload)
+    }
+}
+
+actor WalletStoredStateWriter {
+    private enum Mutation: Sendable {
+        case store(WalletStoredState)
+        case remove
+    }
+
+    private let engine: TelegramEngine
+    private var currentDisposable: Disposable?
+    private var isWriting = false
+    private var isShutdown = false
+    private var latestRevision: UInt64 = 0
+    private var pendingMutation: Mutation?
+
+    init(engine: TelegramEngine) {
+        self.engine = engine
+    }
+
+    func enqueue(_ state: WalletStoredState, revision: UInt64) {
+        guard !self.isShutdown, revision > self.latestRevision else { return }
+        self.latestRevision = revision
+        self.pendingMutation = .store(state)
+        self.beginWritingIfNeeded()
+    }
+
+    func remove(revision: UInt64) {
+        guard !self.isShutdown, revision > self.latestRevision else { return }
+        self.latestRevision = revision
+        self.pendingMutation = .remove
+        self.beginWritingIfNeeded()
+    }
+
+    func shutdown() {
+        self.isShutdown = true
+        self.pendingMutation = nil
+        self.currentDisposable?.dispose()
+        self.currentDisposable = nil
+        self.isWriting = false
+    }
+
+    private func beginWritingIfNeeded() {
+        guard !self.isShutdown, !self.isWriting, let mutation = self.pendingMutation else {
+            return
+        }
+        self.pendingMutation = nil
+        self.isWriting = true
+        let disposable = MetaDisposable()
+        self.currentDisposable = disposable
+        disposable.set((self.engine.preferences.update(
+            id: ApplicationSpecificPreferencesKeys.walletState,
+            { current in
+                switch mutation {
+                case let .store(state):
+                    if current?.get(WalletStoredState.self) == state {
+                        return current
+                    }
+                    return EnginePreferencesEntry(state)
+                case .remove:
+                    return nil
+                }
+            }
+        )).start(completed: { [weak self] in
+            Task {
+                await self?.writingCompleted()
+            }
+        }))
+    }
+
+    private func writingCompleted() {
+        self.currentDisposable = nil
+        self.isWriting = false
+        self.beginWritingIfNeeded()
+    }
+}

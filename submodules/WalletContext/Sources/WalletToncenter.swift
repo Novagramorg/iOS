@@ -6,6 +6,7 @@ import WalletEngineFFI
 private enum WalletEngineRelayError: Error {
     case completedWithoutResponse
     case invalidRequest
+    case invalidResponse
     case responseTooLarge
 }
 
@@ -153,6 +154,8 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
                 throw Self.failure(.responseTooLarge, "Provider response exceeds 4 MiB")
             case .invalidRequest:
                 throw Self.failure(.policyViolation, "Provider request body is not valid UTF-8")
+            case .invalidResponse:
+                throw Self.failure(.other, "Provider response is invalid")
             case .completedWithoutResponse:
                 throw Self.failure(.other, "Telegram relay completed without a response")
             }
@@ -174,7 +177,50 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         }
     }
 
-    private nonisolated static func perform(
+    /// Reads the contract's current signing key independently from send
+    /// resolution. An indexed transaction alone can still have aborted.
+    func walletPublicKey(address: String) async throws -> Data {
+        try Task.checkCancellation()
+        guard !address.isEmpty else {
+            throw WalletEngineRelayError.invalidRequest
+        }
+        let body = try JSONSerialization.data(withJSONObject: [
+            "id": 1,
+            "jsonrpc": "2.0",
+            "method": "runGetMethod",
+            "params": [
+                "address": address,
+                "method": "get_public_key",
+                "stack": []
+            ]
+        ])
+        guard let payload = String(data: body, encoding: .utf8) else {
+            throw WalletEngineRelayError.invalidRequest
+        }
+        let engine = self.engine
+        let response: String = try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask {
+                try await WalletSignalRequestContext<String>().run(
+                    engine.wallet.performPostRequest(endpoint: "/api/v2/jsonRPC", payload: payload)
+                )
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 15_000_000_000)
+                throw Self.failure(.timeout, "Provider request timed out")
+            }
+            defer { group.cancelAll() }
+            guard let value = try await group.next() else {
+                throw Self.failure(.other, "Provider request produced no response")
+            }
+            return value
+        }
+        guard let publicKey = walletEnginePublicKey(fromToncenterResponse: Data(response.utf8)) else {
+            throw WalletEngineRelayError.invalidResponse
+        }
+        return publicKey
+    }
+
+    private static func perform(
         _ request: HttpRequest,
         engine: TelegramEngine
     ) async throws -> Data {
@@ -230,10 +276,80 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         return data
     }
 
-    private nonisolated static func failure(
+    private static func failure(
         _ kind: StatuslessHostErrorKind,
         _ diagnostic: String
     ) -> StatuslessHostError {
         .Failed(kind: kind, diagnostic: sanitizedWalletEngineDiagnostic(diagnostic))
     }
+}
+
+func walletEnginePublicKey(fromToncenterResponse data: Data) -> Data? {
+    guard data.count <= walletEngineMaximumStatuslessResponseBytes,
+          let object = try? JSONSerialization.jsonObject(with: data),
+          let root = object as? [String: Any],
+          root["error"] == nil,
+          let result = root["result"] as? [String: Any],
+          let stack = result["stack"] as? [Any],
+          let first = stack.first,
+          let encoded = walletEngineStackNumber(first) else {
+        return nil
+    }
+    return walletEngineUInt256(encoded)
+}
+
+private func walletEngineStackNumber(_ value: Any) -> String? {
+    if let values = value as? [Any], values.count == 2,
+       values[0] as? String == "num" {
+        return values[1] as? String
+    }
+    if let value = value as? [String: Any], value["type"] as? String == "num" {
+        return value["value"] as? String
+    }
+    return nil
+}
+
+private func walletEngineUInt256(_ value: String) -> Data? {
+    var bytes = [UInt8](repeating: 0, count: 32)
+    if value.hasPrefix("0x") || value.hasPrefix("0X") {
+        let digits = value.dropFirst(2)
+        guard !digits.isEmpty, digits.count <= 64 else {
+            return nil
+        }
+        var nibbleIndex = 64 - digits.count
+        for character in digits {
+            guard let nibble = character.hexDigitValue else {
+                return nil
+            }
+            let byteIndex = nibbleIndex / 2
+            if nibbleIndex.isMultiple(of: 2) {
+                bytes[byteIndex] = UInt8(nibble << 4)
+            } else {
+                bytes[byteIndex] |= UInt8(nibble)
+            }
+            nibbleIndex += 1
+        }
+    } else {
+        guard !value.isEmpty else {
+            return nil
+        }
+        for character in value {
+            guard let digit = character.wholeNumberValue, digit < 10 else {
+                return nil
+            }
+            var carry = digit
+            for index in bytes.indices.reversed() {
+                let accumulated = Int(bytes[index]) * 10 + carry
+                bytes[index] = UInt8(accumulated & 0xff)
+                carry = accumulated >> 8
+            }
+            guard carry == 0 else {
+                return nil
+            }
+        }
+    }
+    guard bytes.contains(where: { $0 != 0 }) else {
+        return nil
+    }
+    return Data(bytes)
 }

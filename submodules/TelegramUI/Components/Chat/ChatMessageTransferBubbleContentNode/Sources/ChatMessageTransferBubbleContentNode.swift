@@ -585,7 +585,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 )
                 let controller = item.context.sharedContext.makeWalletTransactionScreen(
                     context: item.context,
-                    mode: .transaction(transaction)
+                    transaction: transaction
                 )
                 if let navigationController = item.controllerInteraction.navigationController() {
                     navigationController.pushViewController(controller)

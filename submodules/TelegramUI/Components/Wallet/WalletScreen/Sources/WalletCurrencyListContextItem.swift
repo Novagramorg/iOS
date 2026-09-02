@@ -11,6 +11,112 @@ import WalletContext
 
 typealias WalletCurrencyListItem = (currency: WalletContext.FiatCurrency, name: String)
 
+func walletCurrencyListItems() -> [WalletCurrencyListItem] {
+    return WalletContext.FiatCurrency.allCases.map { currency in
+        return (currency, walletCurrencyName(currency))
+    }
+}
+
+//TODO:localize
+private func walletCurrencyName(_ currency: WalletContext.FiatCurrency) -> String {
+    switch currency {
+    case .usd: return "US Dollar"
+    case .eur: return "Euro"
+    case .rub: return "Russian Ruble"
+    case .cny: return "Chinese Yuan"
+    case .aed: return "UAE Dirham"
+    case .afn: return "Afghan Afghani"
+    case .all: return "Albanian Lek"
+    case .amd: return "Armenian Dram"
+    case .ars: return "Argentine Peso"
+    case .aud: return "Australian Dollar"
+    case .azn: return "Azerbaijani Manat"
+    case .bam: return "Bosnia-Herzegovina Convertible Mark"
+    case .bdt: return "Bangladeshi Taka"
+    case .bgn: return "Bulgarian Lev"
+    case .bhd: return "Bahraini Dinar"
+    case .bnd: return "Brunei Dollar"
+    case .bob: return "Bolivian Boliviano"
+    case .brl: return "Brazilian Real"
+    case .byn: return "Belarusian Ruble"
+    case .cad: return "Canadian Dollar"
+    case .chf: return "Swiss Franc"
+    case .clp: return "Chilean Peso"
+    case .cop: return "Colombian Peso"
+    case .crc: return "Costa Rican Colón"
+    case .czk: return "Czech Koruna"
+    case .dkk: return "Danish Krone"
+    case .dop: return "Dominican Peso"
+    case .dzd: return "Algerian Dinar"
+    case .egp: return "Egyptian Pound"
+    case .etb: return "Ethiopian Birr"
+    case .gbp: return "British Pound"
+    case .gel: return "Georgian Lari"
+    case .ghs: return "Ghanaian Cedi"
+    case .gtq: return "Guatemalan Quetzal"
+    case .hkd: return "Hong Kong Dollar"
+    case .hnl: return "Honduran Lempira"
+    case .hrk: return "Croatian Kuna"
+    case .huf: return "Hungarian Forint"
+    case .idr: return "Indonesian Rupiah"
+    case .ils: return "Israeli New Shekel"
+    case .inr: return "Indian Rupee"
+    case .iqd: return "Iraqi Dinar"
+    case .irr: return "Iranian Rial"
+    case .isk: return "Icelandic Króna"
+    case .jmd: return "Jamaican Dollar"
+    case .jod: return "Jordanian Dinar"
+    case .jpy: return "Japanese Yen"
+    case .kes: return "Kenyan Shilling"
+    case .kgs: return "Kyrgyzstani Som"
+    case .krw: return "South Korean Won"
+    case .kzt: return "Kazakhstani Tenge"
+    case .lbp: return "Lebanese Pound"
+    case .lkr: return "Sri Lankan Rupee"
+    case .mad: return "Moroccan Dirham"
+    case .mdl: return "Moldovan Leu"
+    case .mmk: return "Myanmar Kyat"
+    case .mnt: return "Mongolian Tögrög"
+    case .mop: return "Macanese Pataca"
+    case .mur: return "Mauritian Rupee"
+    case .mvr: return "Maldivian Rufiyaa"
+    case .mxn: return "Mexican Peso"
+    case .myr: return "Malaysian Ringgit"
+    case .mzn: return "Mozambican Metical"
+    case .ngn: return "Nigerian Naira"
+    case .nio: return "Nicaraguan Córdoba"
+    case .nok: return "Norwegian Krone"
+    case .npr: return "Nepalese Rupee"
+    case .nzd: return "New Zealand Dollar"
+    case .pab: return "Panamanian Balboa"
+    case .pen: return "Peruvian Sol"
+    case .php: return "Philippine Peso"
+    case .pkr: return "Pakistani Rupee"
+    case .pln: return "Polish Złoty"
+    case .pyg: return "Paraguayan Guaraní"
+    case .qar: return "Qatari Riyal"
+    case .ron: return "Romanian Leu"
+    case .rsd: return "Serbian Dinar"
+    case .sar: return "Saudi Riyal"
+    case .sek: return "Swedish Krona"
+    case .sgd: return "Singapore Dollar"
+    case .syp: return "Syrian Pound"
+    case .thb: return "Thai Baht"
+    case .tjs: return "Tajikistani Somoni"
+    case .tryCurrency: return "Turkish Lira"
+    case .ttd: return "Trinidad and Tobago Dollar"
+    case .twd: return "New Taiwan Dollar"
+    case .tzs: return "Tanzanian Shilling"
+    case .uah: return "Ukrainian Hryvnia"
+    case .ugx: return "Ugandan Shilling"
+    case .uyu: return "Uruguayan Peso"
+    case .uzs: return "Uzbekistani Som"
+    case .vnd: return "Vietnamese Đồng"
+    case .yer: return "Yemeni Rial"
+    case .zar: return "South African Rand"
+    }
+}
+
 final class WalletCurrencyListContextItem: ContextMenuCustomItem {
     let context: AccountContext
     let currencies: [WalletCurrencyListItem]
@@ -63,7 +169,7 @@ private func filteredWalletCurrencies(_ currencies: [WalletCurrencyListItem], qu
     }
 
     return currencies.filter { item in
-        let itemTokens = walletCurrencySearchTokens("\(item.currency.rawValue) \(item.name)")
+        let itemTokens = walletCurrencySearchTokens("\(item.currency.code) \(item.name)")
         return queryTokens.allSatisfy { queryToken in
             return itemTokens.contains(where: { itemToken in
                 return itemToken.hasPrefix(queryToken)
@@ -77,7 +183,7 @@ private func walletCurrencyAction(
     currency: WalletCurrencyListItem
 ) -> ContextMenuActionItem {
     return ContextMenuActionItem(
-        text: currency.currency.rawValue,
+        text: currency.currency.code,
         textLayout: .secondLineWithValue(currency.name),
         icon: { _ in
             return nil
@@ -185,7 +291,7 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
         for currency in currencies {
             let height = self.currencyItemHeight ?? 60.0
             let frame = CGRect(x: 0.0, y: yOffset, width: constrainedWidth, height: height)
-            items.append((AnyHashable(currency.currency.rawValue), .currency(currency), frame))
+            items.append((AnyHashable(currency.currency.code), .currency(currency), frame))
             yOffset += height
         }
 

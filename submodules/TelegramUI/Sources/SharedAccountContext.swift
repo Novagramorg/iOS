@@ -4177,18 +4177,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 )
             )
         }
-        switch walletContext.stateValue.phase {
-        case .restoring, .provisioning, .empty, .wallet, .failed:
-            return self.makeWalletContentScreen(context: context, walletContext: walletContext, twoStepAuthData: twoStepAuthData)
-        }
-    }
-
-    private func makeWalletContentScreen(context: AccountContext, walletContext: WalletContext, twoStepAuthData: Promise<TwoStepAuthData?>) -> ViewController {
         return WalletScreen(
             context: context,
             walletContext: walletContext,
-            twoStepAuthData: twoStepAuthData,
-            routeToSetup: nil
+            twoStepAuthData: twoStepAuthData
         )
     }
 
@@ -4230,16 +4222,41 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletTransferScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, mode: WalletTransactionScreenMode) -> ViewController {
-        return WalletTransactionScreen(context: context, mode: mode)
+    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction) -> ViewController {
+        return WalletTransactionScreen(context: context, transaction: transaction)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, mode: WalletTransactionScreenMode) -> ViewController {
-        return WalletTransactionScreen(context: context, walletContext: walletContext, mode: mode)
+    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction) -> ViewController {
+        return WalletTransactionScreen(context: context, walletContext: walletContext, transaction: transaction)
     }
 
-    public func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible) -> ViewController {
-        return WalletCollectibleScreen(context: context, walletContext: walletContext, collectible: collectible)
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, preparedTransfer: WalletContext.PreparedTransfer, dismissSendScreen: @escaping () -> Void) -> ViewController {
+        return WalletTransactionPreviewScreen(
+            context: context,
+            walletContext: walletContext,
+            preparedTransfer: preparedTransfer,
+            dismissSendScreen: dismissSendScreen
+        )
+    }
+
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+        return WalletTransactionPreviewScreen(
+            context: context,
+            walletContext: walletContext,
+            address: address,
+            amount: amount,
+            comment: comment,
+            dismissSendScreen: dismissSendScreen
+        )
+    }
+
+    public func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible, collectibleSent: @escaping (String) -> Void) -> ViewController {
+        return WalletCollectibleScreen(
+            context: context,
+            walletContext: walletContext,
+            collectible: collectible,
+            collectibleSent: collectibleSent
+        )
     }
 
     public func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void) {

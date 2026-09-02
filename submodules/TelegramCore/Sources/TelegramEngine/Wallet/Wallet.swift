@@ -24,7 +24,7 @@ public struct WalletStreamingUrl: Equatable, Sendable {
     }
 }
 
-public enum WalletState: Equatable {
+public enum WalletState: Equatable, Sendable {
     case empty(provisioning: Bool)
     case ready(
         backupEnabled: Bool,
@@ -198,7 +198,7 @@ private extension WalletTransaction {
             self.init(
                 incoming: (walletTransaction.flags & (1 << 0)) != 0,
                 pending: (walletTransaction.flags & (1 << 1)) != 0,
-                failed: (walletTransaction.flags & (1 << 2)) != 0,
+                failed: false, //(walletTransaction.flags & (1 << 2)) != 0,
                 id: walletTransaction.id,
                 amount: walletTransaction.amount,
                 fee: walletTransaction.fee,

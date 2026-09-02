@@ -269,7 +269,7 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
             //TODO:localize
             suffixText = "GRAM"
         case .fiat:
-            suffixText = fiatCurrency.rawValue
+            suffixText = fiatCurrency.code
         }
 
         self.gramIconSize = self.gramIcon.update(
@@ -464,17 +464,20 @@ private final class WalletSendScreenComponent: Component {
     let peer: EnginePeer?
     let initialAddress: String
     let walletContext: WalletContext
+    let completed: (() -> Void)?
 
     init(
         context: AccountContext,
         peer: EnginePeer?,
         initialAddress: String,
-        walletContext: WalletContext
+        walletContext: WalletContext,
+        completed: (() -> Void)?
     ) {
         self.context = context
         self.peer = peer
         self.initialAddress = initialAddress
         self.walletContext = walletContext
+        self.completed = completed
     }
 
     static func ==(lhs: WalletSendScreenComponent, rhs: WalletSendScreenComponent) -> Bool {
@@ -554,6 +557,7 @@ private final class WalletSendScreenComponent: Component {
             }
 
             self.commentBackgroundView.contentMode = .scaleToFill
+            self.commentBackgroundView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.commentPressed)))
             self.addSubview(self.commentBackgroundView)
         }
 
@@ -607,6 +611,13 @@ private final class WalletSendScreenComponent: Component {
 
         private func dismiss() {
             (self.environment?.controller() as? WalletSendScreen)?.dismiss()
+        }
+
+        @objc private func commentPressed() {
+            guard self.component?.peer != nil, let comment = self.comment, !comment.isEmpty else {
+                return
+            }
+            self.showCommentAlert()
         }
 
         private func openReceive() {
@@ -743,15 +754,14 @@ private final class WalletSendScreenComponent: Component {
             guard !self.recipientAddress.isEmpty else {
                 return
             }
-            self.isPreparingTransfer = true
-            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            let preparation = component.walletContext.prepareTransfer(
-                address: self.recipientAddress,
-                amount: self.amount,
-                comment: self.comment
-            )
-
             if let peer = component.peer {
+                self.isPreparingTransfer = true
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                let preparation = component.walletContext.prepareTransfer(
+                    address: self.recipientAddress,
+                    amount: self.amount,
+                    comment: self.comment
+                )
                 self.transferDisposable.set((preparation
                 |> mapToSignal { prepared in
                     return component.walletContext.submitTransfer(prepared)
@@ -768,6 +778,7 @@ private final class WalletSendScreenComponent: Component {
                         self.presentSubmissionUnknown(on: controller, context: component.context)
                     case .broadcasting, .pending:
                         self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
+                        component.completed?()
                     }
                     controller.dismiss()
                 }, error: { [weak self] _ in
@@ -778,39 +789,30 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
 
-            self.transferDisposable.set((preparation
-            |> deliverOnMainQueue).start(next: { [weak self] prepared in
-                guard let self, let controller = self.environment?.controller() else {
+            guard let controller = self.environment?.controller() else {
+                return
+            }
+            let dismissSendScreen: () -> Void = { [weak controller] in
+                guard let controller else {
                     return
                 }
-                self.isPreparingTransfer = false
-                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-
-                let dismissSendScreen: () -> Void = { [weak controller] in
-                    guard let controller else {
-                        return
-                    }
-                    if let navigationController = controller.navigationController as? NavigationController {
-                        var viewControllers = navigationController.viewControllers
-                        viewControllers.removeAll(where: { $0 === controller })
-                        navigationController.setViewControllers(viewControllers, animated: false)
-                    } else {
-                        controller.dismiss(animated: false)
-                    }
+                if let navigationController = controller.navigationController as? NavigationController {
+                    var viewControllers = navigationController.viewControllers
+                    viewControllers.removeAll(where: { $0 === controller })
+                    navigationController.setViewControllers(viewControllers, animated: false)
+                } else {
+                    controller.dismiss(animated: false)
                 }
-                controller.push(component.context.sharedContext.makeWalletTransactionScreen(
-                    context: component.context,
-                    mode: .preview(
-                        walletContext: component.walletContext,
-                        preparedTransfer: prepared,
-                        dismissSendScreen: dismissSendScreen
-                    )
-                ))
-            }, error: { [weak self] _ in
-                self?.isPreparingTransfer = false
-                self?.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                self?.presentTransferError()
-            }))
+                component.completed?()
+            }
+            controller.push(component.context.sharedContext.makeWalletTransactionPreviewScreen(
+                context: component.context,
+                walletContext: component.walletContext,
+                address: self.recipientAddress,
+                amount: self.amount,
+                comment: self.comment,
+                dismissSendScreen: dismissSendScreen
+            ))
         }
 
         private func presentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
@@ -933,7 +935,7 @@ private final class WalletSendScreenComponent: Component {
             }
 
             let theme = environment.theme
-            self.backgroundColor = theme.list.plainBackgroundColor
+            self.backgroundColor = theme.list.modalPlainBackgroundColor
 
             let peerName = component.peer?.compactDisplayTitle
             let addressTitle = self.recipientAddress.isEmpty ? nil : walletSendShortAddress(self.recipientAddress)
@@ -1132,7 +1134,7 @@ private final class WalletSendScreenComponent: Component {
             if hasAmount, let rate = self.currentRate {
                 switch self.inputMode {
                 case .gram:
-                    let fiatSwitchSuffix = " \(self.currentFiatCurrency.rawValue)"
+                    let fiatSwitchSuffix = " \(self.currentFiatCurrency.code)"
                     let formattedFiatValue = formatTonFiatValue(
                         self.amount,
                         divide: true,
@@ -1301,11 +1303,13 @@ private final class WalletSendScreenComponent: Component {
                 transition.setAlpha(view: depositButtonView, alpha: showDeposit ? 1.0 : 0.0)
             }
 
-            if component.peer != nil, let comment = self.comment {
+            if component.peer != nil, let comment = self.comment, !comment.isEmpty {
                 var commentTransition = transition
                 if self.commentText.view?.superview == nil {
                     commentTransition = .immediate
                 }
+
+                self.commentBackgroundView.isUserInteractionEnabled = true
 
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
 
@@ -1351,6 +1355,7 @@ private final class WalletSendScreenComponent: Component {
                 commentTransition.setFrame(view: self.commentBackgroundView, frame: bubbleFrame)
                 if let commentTextView = self.commentText.view {
                     if commentTextView.superview == nil {
+                        commentTextView.isUserInteractionEnabled = false
                         self.addSubview(commentTextView)
                     }
                     commentTransition.setFrame(
@@ -1366,6 +1371,7 @@ private final class WalletSendScreenComponent: Component {
                 }
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
             } else {
+                self.commentBackgroundView.isUserInteractionEnabled = false
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 0.0)
                 if let commentTextView = self.commentText.view {
                     transition.setAlpha(view: commentTextView, alpha: 0.0)
@@ -1422,23 +1428,31 @@ private final class WalletSendScreenComponent: Component {
                 transition.setAlpha(view: balanceTextView, alpha: showBalance ? 1.0 : 0.0)
             }
 
-            let sendIdentifier: String
+            var sendIdentifier: String
             let amountTitle: String
             if self.inputMode == .fiat, self.currentRate != nil {
-                amountTitle = walletSendInputText(
-                    amount: self.amount,
-                    mode: .fiat,
-                    rate: self.currentRate,
-                    dateTimeFormat: environment.dateTimeFormat
-                ) + " " + self.currentFiatCurrency.rawValue
+                if self.amount > 0 {
+                    amountTitle = walletSendInputText(
+                        amount: self.amount,
+                        mode: .fiat,
+                        rate: self.currentRate,
+                        dateTimeFormat: environment.dateTimeFormat
+                    ) + " " + self.currentFiatCurrency.code
+                } else {
+                    amountTitle = self.currentFiatCurrency.code
+                }
                 sendIdentifier = "fiat"
             } else {
-                amountTitle = formatTonAmountText(
-                    self.amount,
-                    dateTimeFormat: environment.dateTimeFormat,
-                    maxDecimalPositions: 9,
-                    formatString: environment.strings.Currency_Grams
-                )
+                if self.amount > 0 {
+                    amountTitle = formatTonAmountText(
+                        self.amount,
+                        dateTimeFormat: environment.dateTimeFormat,
+                        maxDecimalPositions: 9,
+                        formatString: environment.strings.Currency_Grams
+                    )
+                } else {
+                    amountTitle = "Grams"
+                }
                 sendIdentifier = "grams"
             }
 
@@ -1446,6 +1460,7 @@ private final class WalletSendScreenComponent: Component {
             if component.peer == nil {
                 //TODO:localize
                 sendTitle = "Continue"
+                sendIdentifier = "continue"
             } else {
                 //TODO:localize
                 let sendPrefix = "Send "
@@ -1480,7 +1495,7 @@ private final class WalletSendScreenComponent: Component {
                         ))
                     ),
                     isEnabled: canSend,
-                    displaysProgress: self.isPreparingTransfer,
+                    displaysProgress: component.peer != nil && self.isPreparingTransfer,
                     action: { [weak self] in
                         self?.send()
                     }
@@ -1570,7 +1585,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         peer: EnginePeer,
         walletContext: WalletContext,
-        address: String
+        address: String,
+        completed: (() -> Void)? = nil
     ) {
         super.init(
             context: context,
@@ -1578,7 +1594,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 context: context,
                 peer: peer,
                 initialAddress: address,
-                walletContext: walletContext
+                walletContext: walletContext,
+                completed: completed
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
@@ -1588,14 +1605,20 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }
 
-    public init(context: AccountContext, walletContext: WalletContext, address: String) {
+    public init(
+        context: AccountContext,
+        walletContext: WalletContext,
+        address: String,
+        completed: (() -> Void)? = nil
+    ) {
         super.init(
             context: context,
             component: WalletSendScreenComponent(
                 context: context,
                 peer: nil,
                 initialAddress: address,
-                walletContext: walletContext
+                walletContext: walletContext,
+                completed: completed
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,

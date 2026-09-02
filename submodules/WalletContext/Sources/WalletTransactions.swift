@@ -4,7 +4,6 @@ import SwiftSignalKit
 import WalletEngineFFI
 
 let walletTransactionFetchLimit = 50
-let walletPreparedTransferLifetime: TimeInterval = 5.0 * 60.0
 
 struct ResolvedTransferInput {
     let address: String
