@@ -803,7 +803,7 @@ private final class WalletCollectibleContentComponent: Component {
                         rightColumnBackgroundColor: theme.list.itemModalBlocksBackgroundColor
                     )),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - 48.0, height: 1000.0)
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
                 )
                 if let tableView = self.table.view {
                     if tableView.superview == nil {
