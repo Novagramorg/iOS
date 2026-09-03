@@ -94,6 +94,43 @@ Consequences when a transparent view exists to catch taps:
 There are ~24 other `NavigationBackgroundNode(color: .clear)` sites in the project; any of them relied
 upon for touches rather than decoration has the same latent problem.
 
+## The keyboard rotates only by following the app window (iOS 26)
+
+`UIRemoteKeyboardWindow` is a `UIApplicationRotationFollowingWindow`. On iOS 26 it has exactly one
+resize path on rotation, and it is driven by a notification the **application** window posts:
+
+```
+__HandleWindowContentRotationNotification_block_invoke
+  → -[UIApplicationRotationFollowingWindow applicationWindow:didRotateWithOrientation:duration:]
+  → -[UIRemoteKeyboardWindow _setRotatableClient:toOrientation:updateStatusBar:duration:force:isRotating:]
+  → -[UIWindow _rotateWindowToOrientation:updateStatusBar:duration:skipCallbacks:]
+```
+
+A window posts `UIWindowWillRotateNotification` / `UIWindowDidRotateNotification` only if it has a
+registered rotation client, and **UIKit registers one inside `-[UIWindow setRootViewController:]`,
+only when the window already belongs to a `UIWindowScene`.** A window whose root view controller was
+assigned while `windowScene == nil` therefore never posts them, and the keyboard never learns that
+anything rotated: it keeps its launch orientation and bounds, pinned to the pre-rotation bottom edge,
+and the `keyboardWillChangeFrame` the app subsequently receives still carries the old height.
+
+The window itself is unaffected — it resizes through the scene-geometry path
+(`UIWindowSceneDidUpdateEffectiveGeometryNotification`), so the app's own layout is correct and only
+the keyboard is wrong. That asymmetry is what makes this read as a keyboard bug rather than a window
+one.
+
+This is exactly the app's own shape: the window is built unattached in `didFinishLaunching` (see
+`13a2694420`'s message for why it must be) and bound to the scene later, so `AppDelegate.attach`
+re-assigns the root view controller once the scene is bound. Measured alternatives that do **not**
+work: re-assigning the same controller object (UIKit's setter early-returns and registers nothing),
+the same round trip performed before `windowScene` is assigned, re-assigning `windowScene` itself,
+resetting `window.frame` to the scene's coordinate space, and
+`setNeedsUpdateOfSupportedInterfaceOrientations()`. Only a genuine value change with the scene already
+bound works.
+
+**iOS 27 does not reproduce this** — the keyboard geometry comes from elsewhere there (its window is
+on a different `UIScreen` object than the app's), and it rotates correctly either way. A fix for this
+cannot be verified on a 27 simulator; it passes with and without.
+
 ## Reproducing this kind of finding
 
 Neither of the two surprises above is visible from the code, and both were found the same way: build a
