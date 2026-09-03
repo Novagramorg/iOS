@@ -220,6 +220,7 @@ sources = glob([
     "tgcalls/tgcalls/group/GroupJoinPayloadInternal.cpp",
     "tgcalls/tgcalls/group/GroupNetworkManager.cpp",
     "tgcalls/tgcalls/group/StreamingMediaContext.cpp",
+    "tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",
     "tgcalls/tgcalls/group/VideoStreamingPart.cpp",
 
     "tgcalls/tgcalls/v2/ContentNegotiation.cpp",
@@ -338,6 +339,30 @@ cc_test(
     deps = [":tgcalls_core"],
 )
 
+cc_test(
+    name = "streaming_audio_renderer_test",
+    srcs = ["tgcalls/tgcalls/group/StreamingAudioRendererTest.cpp"],
+    copts = [
+        "-I{}/tgcalls/tgcalls".format("submodules/TgVoipWebrtc"),
+        "-Ithird-party/webrtc/webrtc",
+        "-Ithird-party/webrtc/dependencies",
+        "-Ithird-party/webrtc/absl",
+        "-Ithird-party/libyuv",
+        "-DRTC_ENABLE_VP9",
+        "-DNDEBUG",
+        "-std=c++17",
+        "-w",
+    ] + select({
+        "@platforms//os:linux": ["-DWEBRTC_LINUX", "-DWEBRTC_POSIX"],
+        "//conditions:default": ["-DWEBRTC_MAC", "-DWEBRTC_POSIX"],
+    }),
+    linkopts = select({
+        "@platforms//os:linux": ["-lpthread", "-lm", "-ldl"],
+        "//conditions:default": ["-framework", "CoreFoundation", "-framework", "Security"],
+    }),
+    deps = [":tgcalls_core"],
+)
+
 # Pure C++ core library for non-iOS targets (e.g. CLI tools).
 # Uses FakeInterface instead of darwin platform files.
 cc_library(
@@ -388,6 +413,7 @@ cc_library(
         "tgcalls/tgcalls/group/GroupJoinPayloadInternal.cpp",
         "tgcalls/tgcalls/group/GroupNetworkManager.cpp",
         "tgcalls/tgcalls/group/StreamingMediaContext.cpp",
+        "tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",
         "tgcalls/tgcalls/group/VideoStreamingPart.cpp",
 
         "tgcalls/tgcalls/v2/ContentNegotiation.cpp",
