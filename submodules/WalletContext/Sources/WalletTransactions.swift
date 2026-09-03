@@ -110,9 +110,7 @@ func walletTransactions(
             peer = .unsupported
         }
 
-        let status: WalletContext.Transaction.Status = transaction.failed
-            ? .failed
-            : (transaction.pending ? .pending : .completed)
+        let status: WalletContext.Transaction.Status = transaction.failed ? .failed : .completed
         let logicalTime = transaction.id.split(separator: ":", maxSplits: 1).first.map(String.init)
             ?? transaction.id
         return WalletContext.Transaction(

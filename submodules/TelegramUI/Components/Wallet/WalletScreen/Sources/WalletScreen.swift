@@ -1657,7 +1657,7 @@ private final class WalletScreenComponent: Component {
                 self.suppressedCollectiblesWalletAddress = info.address
             case .restoring:
                 break
-            case .provisioning, .empty, .failed:
+            case .creating, .empty, .failed:
                 self.suppressedCollectibleAddresses.removeAll()
                 self.suppressedCollectiblesWalletAddress = nil
             }

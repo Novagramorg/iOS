@@ -553,28 +553,19 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.contentListNode?.clearHighlightAnimated(true)
             self.resolvingPeerId = peer.id
 
-            let addressSignal: Signal<String?, WalletGetUserAddressesError> = component.context.engine.data.get(
-                TelegramEngine.EngineData.Item.Peer.CachedData(id: peer.id)
+            let addressSignal: Signal<String?, WalletGetUserAddressesError> = component.context.engine.wallet.getUserAddresses(
+                userIds: [peer.id],
+                force: true
             )
-            |> castError(WalletGetUserAddressesError.self)
-            |> mapToSignal { cachedData -> Signal<String?, WalletGetUserAddressesError> in
-                if let cachedData = cachedData as? CachedUserData,
-                   let gramAddress = cachedData.gramAddress?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !gramAddress.isEmpty {
-                    return .single(gramAddress)
+            |> map { addresses -> String? in
+                guard let result = addresses.first(where: { $0.userId == peer.id }) else {
+                    return nil
                 }
-
-                return component.context.engine.wallet.getUserAddresses(userIds: [peer.id])
-                |> map { addresses -> String? in
-                    guard let result = addresses.first(where: { $0.userId == peer.id }) else {
-                        return nil
-                    }
-                    let address = result.address.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !address.isEmpty else {
-                        return nil
-                    }
-                    return address
+                let address = result.address.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !address.isEmpty else {
+                    return nil
                 }
+                return address
             }
 
             self.peerAddressDisposable.set((addressSignal
@@ -593,25 +584,25 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         peer: peer
                     )
                 } else {
-                    self.presentMissingWalletAlert()
+                    self.presentRecipientErrorAlert()
                 }
             }, error: { [weak self] _ in
                 guard let self, self.resolvingPeerId == peer.id else {
                     return
                 }
                 self.resolvingPeerId = nil
-                self.presentMissingWalletAlert()
+                self.presentRecipientErrorAlert()
             }))
         }
 
-        private func presentMissingWalletAlert() {
+        private func presentRecipientErrorAlert() {
             guard let component = self.component,
                   let environment = self.environment,
                   let controller = environment.controller() else {
                 return
             }
             //TODO:localize
-            let text = "This user doesn’t have a wallet yet."
+            let text = "An unknown error occurred. Please try again later."
             controller.present(textAlertController(
                 context: component.context,
                 title: nil,

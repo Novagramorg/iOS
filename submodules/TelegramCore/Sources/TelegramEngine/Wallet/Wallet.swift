@@ -25,7 +25,7 @@ public struct WalletStreamingUrl: Equatable, Sendable {
 }
 
 public enum WalletState: Equatable, Sendable {
-    case empty(provisioning: Bool)
+    case empty(creating: Bool)
     case ready(
         backupEnabled: Bool,
         canExportPhrase: Bool,
@@ -54,7 +54,6 @@ public enum WalletTransactionPeer: Equatable {
 
 public struct WalletTransaction: Equatable {
     public let incoming: Bool
-    public let pending: Bool
     public let failed: Bool
     public let id: String
     public let amount: Int64
@@ -66,7 +65,6 @@ public struct WalletTransaction: Equatable {
 
     public init(
         incoming: Bool,
-        pending: Bool,
         failed: Bool,
         id: String,
         amount: Int64,
@@ -77,7 +75,6 @@ public struct WalletTransaction: Equatable {
         txHash: String?
     ) {
         self.incoming = incoming
-        self.pending = pending
         self.failed = failed
         self.id = id
         self.amount = amount
@@ -150,7 +147,7 @@ extension WalletState {
                 balance: state.balance
             )
         case let .walletStateEmpty(state):
-            self = .empty(provisioning: (state.flags & (1 << 0)) != 0)
+            self = .empty(creating: (state.flags & (1 << 0)) != 0)
         }
     }
 }
@@ -197,8 +194,7 @@ private extension WalletTransaction {
         case let .walletTransaction(walletTransaction):
             self.init(
                 incoming: (walletTransaction.flags & (1 << 0)) != 0,
-                pending: (walletTransaction.flags & (1 << 1)) != 0,
-                failed: false, //(walletTransaction.flags & (1 << 2)) != 0,
+                failed: (walletTransaction.flags & (1 << 2)) != 0,
                 id: walletTransaction.id,
                 amount: walletTransaction.amount,
                 fee: walletTransaction.fee,
@@ -227,7 +223,8 @@ func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGet
 
 func _internal_getWalletUserAddresses(
     account: Account,
-    userIds: [EnginePeer.Id]
+    userIds: [EnginePeer.Id],
+    force: Bool
 ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
     guard !userIds.isEmpty else {
         return .single([])
@@ -254,7 +251,11 @@ func _internal_getWalletUserAddresses(
         guard let inputUsers else {
             return .fail(.generic)
         }
-        return account.network.request(Api.functions.wallet.getUserAddresses(id: inputUsers))
+        var flags: Int32 = 0
+        if force {
+            flags |= 1 << 0
+        }
+        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers))
         |> mapError { _ -> WalletGetUserAddressesError in
             return .generic
         }

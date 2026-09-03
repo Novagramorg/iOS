@@ -480,7 +480,7 @@ public extension WalletContext {
         case enablingBackup, preparingBackupDisable, disablingBackup
         case preparingTransfer, submittingTransfer, loadingMoreTransactions, loadingMoreCollectibles
     }
-    enum Phase: Equatable, Sendable { case restoring, provisioning, empty, wallet(WalletInfo), failed(FatalStorageError) }
+    enum Phase: Equatable, Sendable { case restoring, creating, empty, wallet(WalletInfo), failed(FatalStorageError) }
 
     struct State: Equatable, Sendable {
         public let phase: Phase

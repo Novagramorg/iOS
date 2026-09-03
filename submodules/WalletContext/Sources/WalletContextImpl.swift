@@ -464,7 +464,7 @@ actor WalletContextImpl {
         self.activationTask = nil
 
         switch value {
-        case let .empty(provisioning):
+        case let .empty(creating):
             self.observationTask?.cancel()
             self.observationTask = nil
             self.cancelSynchronization()
@@ -477,7 +477,7 @@ actor WalletContextImpl {
                 await runtime.shutdown()
             }
             self.replaceState(
-                phase: provisioning ? .provisioning : .empty,
+                phase: creating ? .creating : .empty,
                 balance: .idle,
                 transactions: TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
                 collectibles: .empty,
@@ -652,9 +652,9 @@ actor WalletContextImpl {
         case let (.wallet(info), .ready(_, _, _, address, publicKey, _)):
             isCompatible = walletEngineAddressesEqual(info.address, address)
                 && info.publicKey == publicKey.map { String(format: "%02x", $0) }.joined()
-        case (.empty, .empty), (.provisioning, .empty):
+        case (.empty, .empty), (.creating, .empty):
             isCompatible = true
-        case (.restoring, _), (.failed, _), (.empty, .ready), (.provisioning, .ready),
+        case (.restoring, _), (.failed, _), (.empty, .ready), (.creating, .ready),
              (.wallet, .empty):
             isCompatible = false
         }

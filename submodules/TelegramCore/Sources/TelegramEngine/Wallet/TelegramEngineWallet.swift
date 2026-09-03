@@ -21,8 +21,15 @@ public extension TelegramEngine {
             |> map { WalletState(apiState: $0) }
         }
 
-        public func getUserAddresses(userIds: [EnginePeer.Id]) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
-            return _internal_getWalletUserAddresses(account: self.account, userIds: userIds)
+        public func getUserAddresses(
+            userIds: [EnginePeer.Id],
+            force: Bool = false
+        ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
+            return _internal_getWalletUserAddresses(
+                account: self.account,
+                userIds: userIds,
+                force: force
+            )
         }
 
         public func getTransactions(

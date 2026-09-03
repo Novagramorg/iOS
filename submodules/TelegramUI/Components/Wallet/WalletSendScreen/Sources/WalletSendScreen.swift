@@ -695,7 +695,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func openMoreMenu(sourceView: UIView) {
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard let component = self.component, let controller = self.environment?.controller(), !self.isPreparingTransfer else {
                 return
             }
 
