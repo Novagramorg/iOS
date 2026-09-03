@@ -392,7 +392,7 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
         let maxActionsWidth: CGFloat = 300.0
         let constrainedWidth = min(constrainedWidth, maxActionsWidth)
         let maxWidth = max(constrainedWidth, minActionsWidth)
-        let maxHeight = min(360.0, max(0.0, constrainedHeight - 150.0))
+        let maxHeight = min(280.0, max(0.0, constrainedHeight - 150.0))
 
         if self.totalContentHeight == 0.0 {
             let _ = self.visibleItems(in: UIScrollView(), constrainedWidth: constrainedWidth)

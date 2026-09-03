@@ -65,6 +65,9 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .corrupted: return "storage_corrupted"
         }
     }
+    if let error = error as? WalletClientError {
+        return "wallet_engine_\(walletEngineErrorCaseName(error))"
+    }
     if let error = error as? WalletContext.WalletError {
         switch error {
         case .unavailable: return "unavailable"
@@ -106,6 +109,32 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         return "url_\(error.code.rawValue)"
     }
     return nil
+}
+
+private func walletEngineErrorCaseName(_ error: WalletClientError) -> String {
+    if case .SendAlreadyInProgress = error {
+        return "send_already_in_progress"
+    }
+    if case .SendPreviewAlreadyInProgress = error {
+        return "send_preview_already_in_progress"
+    }
+    let reflected = String(reflecting: error)
+    let withoutPayload = reflected.split(separator: "(", maxSplits: 1).first.map(String.init) ?? reflected
+    let name = withoutPayload.split(separator: ".").last.map(String.init) ?? withoutPayload
+    var result = ""
+    for scalar in name.unicodeScalars {
+        if CharacterSet.uppercaseLetters.contains(scalar) {
+            if !result.isEmpty {
+                result.append("_")
+            }
+            result.append(String(scalar).lowercased())
+        } else if CharacterSet.alphanumerics.contains(scalar) {
+            result.append(String(scalar).lowercased())
+        } else if result.last != "_" {
+            result.append("_")
+        }
+    }
+    return result.isEmpty ? "unknown" : result
 }
 
 actor WalletContextImpl {
@@ -163,6 +192,7 @@ actor WalletContextImpl {
     var serverStateRefreshRequested = false
     var serverTransactionsNextOffset: String?
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
+    var deferredSynchronizationRequested = false
     var preparedRecoveryPhraseImportRecordId: String?
     var tonConnectCoordinator: WalletTonConnectCoordinator?
 
@@ -459,6 +489,7 @@ actor WalletContextImpl {
             self.activeOperationId = nil
         }
         self.preparedTransfers.removeAll()
+        self.deferredSynchronizationRequested = false
         let generation = self.activationGeneration
         self.activationTask?.cancel()
         self.activationTask = nil
@@ -719,9 +750,16 @@ actor WalletContextImpl {
     }
 
     func requestSynchronization(force: Bool = false) {
+        self.removeExpiredPreparedTransfers()
+        let effectiveForce = force || self.deferredSynchronizationRequested
         guard self.canUseNetworkRuntime,
-              (force || self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty),
+              (effectiveForce || self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty),
               case .wallet = self.currentState.phase else { return }
+        if self.isTransferFlowBlockingSynchronization {
+            self.deferredSynchronizationRequested = true
+            return
+        }
+        self.deferredSynchronizationRequested = false
         guard self.synchronizationGate.beginOrQueue() else {
             return
         }

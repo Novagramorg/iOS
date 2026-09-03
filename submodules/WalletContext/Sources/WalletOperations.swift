@@ -45,6 +45,16 @@ private func acceptedWalletEngineSubmission(
     )
 }
 
+private func walletEngineSendPhaseIsTerminal(_ phase: SendPhase) -> Bool {
+    switch phase {
+    case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
+        return true
+    case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
+         .submitting, .submissionUnknown, .submitted, .confirmed, .handedOff:
+        return false
+    }
+}
+
 private func walletServerIdentity(_ state: TelegramCore.WalletState) throws -> (address: String, publicKey: Data) {
     switch state {
     case let .ready(_, _, _, address, publicKey, _):
@@ -251,6 +261,12 @@ public extension WalletContext {
     func submitTransfer(_ prepared: PreparedTransfer) -> Signal<SubmittedTransfer, WalletError> {
         self.signal(name: "submitting_transfer", cancelOnDispose: false) { impl, operationId in
             try await impl.submitTransfer(prepared, operationId: operationId)
+        }
+    }
+
+    func discardPreparedTransfer(_ prepared: PreparedTransfer) -> Signal<Void, WalletError> {
+        self.signal(name: "discarding_prepared_transfer", cancelOnDispose: false) { impl, _ in
+            await impl.discardPreparedTransfer(prepared)
         }
     }
 
@@ -834,6 +850,7 @@ extension WalletContextImpl {
                 )]
             )
             let preview = try await self.runtime.previewSend(intent: intent)
+            try Task.checkCancellation()
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
             if let balance = self.currentState.balance.currentValue,
@@ -884,6 +901,7 @@ extension WalletContextImpl {
             )
             let id = UUID().uuidString.lowercased()
             let preview = try await self.runtime.previewNft(operationId: id, intent: intent)
+            try Task.checkCancellation()
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
             let transfer = PreparedTransfer(
@@ -939,7 +957,8 @@ extension WalletContextImpl {
                 pendingTransfers: values,
                 activeOperation: self.currentState.activeOperation
             )
-            self.preparedTransfers[prepared.id] = nil
+            let clientRevisionBeforeSend = await self.runtime.currentClientRevision()
+            let activationGenerationBeforeSend = self.activationGeneration
 
             let applyAcceptedSubmission: (SendPhase, String?) -> SubmittedTransfer? = { phase, messageHash in
                 guard let accepted = acceptedWalletEngineSubmission(
@@ -953,6 +972,7 @@ extension WalletContextImpl {
                 if accepted.remainsPending {
                     updated.append(accepted.transfer)
                 }
+                self.preparedTransfers[prepared.id] = nil
                 self.replaceState(
                     phase: self.currentState.phase,
                     balance: self.currentState.balance,
@@ -965,19 +985,32 @@ extension WalletContextImpl {
             }
 
             do {
-                let result: SendResult
+                let execution: WalletEngineSendExecution
                 switch record.request {
                 case let .send(intent):
-                    result = try await self.runtime.send(operationId: prepared.id, intent: intent)
+                    execution = try await self.runtime.send(operationId: prepared.id, intent: intent)
                 case let .nft(intent):
-                    result = try await self.runtime.sendNft(operationId: prepared.id, intent: intent)
+                    execution = try await self.runtime.sendNft(operationId: prepared.id, intent: intent)
                 }
+                if execution.didRecreateClient {
+                    await self.rebindRuntimeObservationAfterClientRecreation(
+                        previousClientRevision: clientRevisionBeforeSend,
+                        activationGeneration: activationGenerationBeforeSend,
+                        walletAddress: record.walletAddress
+                    )
+                }
+                let result = execution.result
                 guard let submitted = applyAcceptedSubmission(result.phase, result.messageHash) else {
+                    if walletEngineSendPhaseIsTerminal(result.phase) {
+                        self.preparedTransfers[prepared.id] = nil
+                        throw WalletError.preparedTransferNotFound
+                    }
                     throw WalletError.sdk("wallet-engine send ended in \(result.phase)")
                 }
                 return submitted
             } catch {
                 self.errorLogger.error("wallet_send_failed", error)
+                var preparedTransferWasInvalidated = false
                 let snapshot: WalletSnapshot?
                 do {
                     snapshot = try await self.runtime.snapshot()
@@ -985,10 +1018,22 @@ extension WalletContextImpl {
                     self.errorLogger.error("wallet_send_recovery_snapshot_failed", error)
                     snapshot = nil
                 }
-                if let send = snapshot?.send,
-                   send.operationId == pending.id,
-                   let submitted = applyAcceptedSubmission(send.phase, nil) {
-                    return submitted
+                if let snapshot {
+                    await self.rebindRuntimeObservationAfterClientRecreation(
+                        previousClientRevision: clientRevisionBeforeSend,
+                        activationGeneration: activationGenerationBeforeSend,
+                        walletAddress: record.walletAddress,
+                        snapshot: snapshot
+                    )
+                    if snapshot.send.operationId == pending.id,
+                       let submitted = applyAcceptedSubmission(snapshot.send.phase, nil) {
+                        return submitted
+                    }
+                    if snapshot.send.operationId == pending.id,
+                       walletEngineSendPhaseIsTerminal(snapshot.send.phase) {
+                        self.preparedTransfers[prepared.id] = nil
+                        preparedTransferWasInvalidated = true
+                    }
                 }
                 self.replaceState(
                     phase: self.currentState.phase,
@@ -997,8 +1042,45 @@ extension WalletContextImpl {
                     pendingTransfers: self.currentState.pendingTransfers.filter { $0.id != pending.id },
                     activeOperation: self.currentState.activeOperation
                 )
+                if preparedTransferWasInvalidated {
+                    throw WalletError.preparedTransferNotFound
+                }
                 throw error
             }
+        }
+    }
+
+    func discardPreparedTransfer(_ prepared: PreparedTransfer) {
+        guard let record = self.preparedTransfers[prepared.id], record.transfer == prepared else {
+            return
+        }
+        self.preparedTransfers[prepared.id] = nil
+        self.resumeDeferredSynchronizationIfNeeded()
+    }
+
+    func rebindRuntimeObservationAfterClientRecreation(
+        previousClientRevision: UInt64,
+        activationGeneration: UInt64,
+        walletAddress: String,
+        snapshot suppliedSnapshot: WalletSnapshot? = nil
+    ) async {
+        let currentClientRevision = await self.runtime.currentClientRevision()
+        guard currentClientRevision != previousClientRevision,
+              self.activationGeneration == activationGeneration,
+              case let .wallet(info) = self.currentState.phase,
+              walletEngineAddressesEqual(info.address, walletAddress) else {
+            return
+        }
+        do {
+            let snapshot: WalletSnapshot
+            if let suppliedSnapshot {
+                snapshot = suppliedSnapshot
+            } else {
+                snapshot = try await self.runtime.snapshot()
+            }
+            self.beginObserving(snapshot: snapshot, generation: activationGeneration)
+        } catch {
+            self.errorLogger.error("wallet_engine_client_rebind_failed", error)
         }
     }
 
@@ -1133,6 +1215,7 @@ extension WalletContextImpl {
         self.cancelSynchronization()
         self.stopStreaming()
         self.preparedTransfers.removeAll()
+        self.deferredSynchronizationRequested = false
         let coordinator = self.tonConnectCoordinator
         self.tonConnectCoordinator = nil
         await coordinator?.shutdown()
@@ -1210,6 +1293,17 @@ extension WalletContextImpl {
             )
             throw WalletError.operationInProgress
         }
+        switch activeOperation {
+        case .preparingTransfer, .submittingTransfer:
+            if self.synchronizationGate.isRunning || self.synchronizationGate.hasQueuedRequest {
+                self.deferredSynchronizationRequested = true
+                self.cancelSynchronization()
+            }
+        case .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
+             .completingRecoveryPhraseImport, .enablingBackup, .preparingBackupDisable,
+             .disablingBackup, .loadingMoreTransactions, .loadingMoreCollectibles:
+            break
+        }
         self.activeOperationId = operationId
         self.replaceState(
             phase: self.currentState.phase,
@@ -1232,6 +1326,7 @@ extension WalletContextImpl {
                     self.applyCompatibleDeferredServerWalletState()
                     self.requestServerWalletState(forceRefreshAfterCurrent: true)
                 }
+                self.resumeDeferredSynchronizationIfNeeded()
             }
         }
         return try await operation()
@@ -1240,6 +1335,28 @@ extension WalletContextImpl {
     func removeExpiredPreparedTransfers() {
         let now = currentWalletTimestamp()
         self.preparedTransfers = self.preparedTransfers.filter { $0.value.transfer.expiresAt > now }
+    }
+
+    var isTransferFlowBlockingSynchronization: Bool {
+        if !self.preparedTransfers.isEmpty {
+            return true
+        }
+        switch self.currentState.activeOperation {
+        case .preparingTransfer, .submittingTransfer:
+            return true
+        case .none, .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
+             .completingRecoveryPhraseImport, .enablingBackup, .preparingBackupDisable,
+             .disablingBackup, .loadingMoreTransactions, .loadingMoreCollectibles:
+            return false
+        }
+    }
+
+    func resumeDeferredSynchronizationIfNeeded() {
+        guard self.deferredSynchronizationRequested,
+              !self.isTransferFlowBlockingSynchronization else {
+            return
+        }
+        self.requestSynchronization(force: true)
     }
 
     func requestFiatRates() {

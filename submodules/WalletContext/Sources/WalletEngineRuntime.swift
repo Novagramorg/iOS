@@ -14,6 +14,11 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
     let publicKey: Data
 }
 
+struct WalletEngineSendExecution: @unchecked Sendable {
+    let result: SendResult
+    let didRecreateClient: Bool
+}
+
 enum WalletEngineKeyRotationResolution: Equatable, Sendable {
     case none
     case pending(operationId: String, retryAfterMilliseconds: UInt64?)
@@ -29,19 +34,39 @@ private enum WalletEngineKeyRotationChainState: Equatable {
 
 /// Serializes all UniFFI calls and owns the callback objects for one wallet identity.
 actor WalletEngineRuntime {
+    private enum FfiPriority {
+        case background
+        case userInitiated
+    }
+
+    private enum FfiCancellation: Equatable {
+        case none
+        case refresh
+        case refreshNfts
+        case loadMoreNfts
+        case sendPreview
+        case send
+    }
+
     let storage: WalletEngineStorage
+    private let engine: TelegramEngine
     private let errorLogger: WalletContextErrorLogger
     private let platformHost: WalletEnginePlatformHost
-    private let statuslessHost: WalletEngineStatuslessHost
+    private var statuslessHost: WalletEngineStatuslessHost
     private let lifecycle: WalletLifecycle
     private var client: WalletClient?
+    private var clientConfig: WalletClientConfig?
+    private var clientRevision: UInt64 = 0
     private var descriptor: WalletDescriptor?
     private var tonConnectSession: TonConnectSession?
     private var ffiBusy = false
-    private var ffiWaiters: [CheckedContinuation<Void, Never>] = []
+    private var userInitiatedFfiWaiters: [CheckedContinuation<Void, Never>] = []
+    private var backgroundFfiWaiters: [CheckedContinuation<Void, Never>] = []
+    private var activeFfiOperation: (id: UUID, cancellation: FfiCancellation)?
 
     init(engine: TelegramEngine, storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
         self.storage = storage
+        self.engine = engine
         self.errorLogger = errorLogger
         self.platformHost = WalletEnginePlatformHost(storage: storage, errorLogger: errorLogger)
         self.statuslessHost = WalletEngineStatuslessHost(engine: engine, errorLogger: errorLogger)
@@ -255,12 +280,10 @@ actor WalletEngineRuntime {
                 requestTimeoutMs: 15_000
             )
         )
-        let client = try WalletClient.newStatusless(
-            config: config,
-            statuslessHost: self.statuslessHost,
-            platformHost: self.platformHost
-        )
+        let client = try self.makeClient(config: config)
         self.client = client
+        self.clientConfig = config
+        self.clientRevision &+= 1
         self.descriptor = record.descriptor
         try await self.recoverKeyRotationAfterActivation(record: record, client: client)
         return WalletEngineActivation(
@@ -289,15 +312,21 @@ actor WalletEngineRuntime {
     }
 
     func refresh() async throws -> WalletUpdate {
-        try await self.withFfi { try await self.requireClient().refresh() }
+        try await self.withFfi(priority: .background, cancellation: .refresh) {
+            try await self.requireClient().refresh()
+        }
     }
 
     func refreshNfts() async throws -> WalletUpdate {
-        try await self.withFfi { try await self.requireClient().refreshNfts() }
+        try await self.withFfi(priority: .background, cancellation: .refreshNfts) {
+            try await self.requireClient().refreshNfts()
+        }
     }
 
     func loadMoreNfts() async throws -> WalletUpdate {
-        try await self.withFfi { try await self.requireClient().loadMoreNfts() }
+        try await self.withFfi(priority: .background, cancellation: .loadMoreNfts) {
+            try await self.requireClient().loadMoreNfts()
+        }
     }
 
     func snapshot() async throws -> WalletSnapshot {
@@ -308,29 +337,38 @@ actor WalletEngineRuntime {
         try await self.requireClient().waitForChange(afterRevision: afterRevision)
     }
 
+    func currentClientRevision() -> UInt64 {
+        self.clientRevision
+    }
+
     func resolveDns(_ name: String) async throws -> String? {
-        try await self.withFfi { try await self.requireClient().resolveDns(name: name) }
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.requireClient().resolveDns(name: name)
+        }
     }
 
     func previewSend(intent: SendIntent) async throws -> SendPreview {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewSend(request: SendPreviewRequest(intent: intent))
         }
     }
 
-    func send(operationId: String, intent: SendIntent) async throws -> SendResult {
-        try await self.withFfi {
+    func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
-            return try await self.requireClient().send(request: SendRequest(
+            let request = SendRequest(
                 operationId: operationId,
                 force: false,
                 intent: intent
-            ))
+            )
+            return try await self.sendRecoveringStuckClient { client in
+                try await client.send(request: request)
+            }
         }
     }
 
     func previewNft(operationId: String, intent: NftTransferIntent) async throws -> SendPreview {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewNftTransfer(request: NftTransferPreviewRequest(
                 operationId: operationId,
                 intent: intent
@@ -338,14 +376,17 @@ actor WalletEngineRuntime {
         }
     }
 
-    func sendNft(operationId: String, intent: NftTransferIntent) async throws -> SendResult {
-        try await self.withFfi {
+    func sendNft(operationId: String, intent: NftTransferIntent) async throws -> WalletEngineSendExecution {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
-            return try await self.requireClient().sendNftTransfer(request: NftTransferRequest(
+            let request = NftTransferRequest(
                 operationId: operationId,
                 force: false,
                 intent: intent
-            ))
+            )
+            return try await self.sendRecoveringStuckClient { client in
+                try await client.sendNftTransfer(request: request)
+            }
         }
     }
 
@@ -682,24 +723,26 @@ actor WalletEngineRuntime {
     }
 
     func previewTonConnect(_ request: SendRequest) async throws -> SendPreview {
-        try await self.withFfi { try await self.requireClient().previewTonConnect(request: request) }
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
+            try await self.requireClient().previewTonConnect(request: request)
+        }
     }
 
     func previewSignMessage(_ request: SignMessageRequest) async throws -> SignMessagePreview {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewSignMessage(request: SendPreviewRequest(intent: request.intent))
         }
     }
 
     func sendTonConnect(_ request: SendRequest) async throws -> SendResult {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().send(request: request)
         }
     }
 
     func signMessage(_ request: SignMessageRequest) async throws -> SignMessageResult {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().signMessage(request: request)
         }
@@ -851,7 +894,63 @@ actor WalletEngineRuntime {
     private func shutdownClient() async throws {
         if let client = self.client {
             self.client = nil
+            self.clientConfig = nil
             try await client.shutdown()
+        }
+    }
+
+    private func makeClient(
+        config: WalletClientConfig,
+        statuslessHost: WalletEngineStatuslessHost? = nil
+    ) throws -> WalletClient {
+        try WalletClient.newStatusless(
+            config: config,
+            statuslessHost: statuslessHost ?? self.statuslessHost,
+            platformHost: self.platformHost
+        )
+    }
+
+    private func sendRecoveringStuckClient(
+        _ operation: (WalletClient) async throws -> SendResult
+    ) async throws -> WalletEngineSendExecution {
+        let client = try self.requireClient()
+        do {
+            return WalletEngineSendExecution(
+                result: try await operation(client),
+                didRecreateClient: false
+            )
+        } catch {
+            guard walletEngineIsSendAlreadyInProgress(error) else {
+                throw error
+            }
+            guard self.client === client, let config = self.clientConfig else {
+                throw error
+            }
+
+            self.errorLogger.error("wallet_engine_stuck_send_recovery_started", error)
+            try await client.shutdown()
+            self.client = nil
+            let replacementStatuslessHost = WalletEngineStatuslessHost(
+                engine: self.engine,
+                errorLogger: self.errorLogger
+            )
+            let replacement: WalletClient
+            do {
+                replacement = try self.makeClient(
+                    config: config,
+                    statuslessHost: replacementStatuslessHost
+                )
+            } catch {
+                self.clientConfig = nil
+                throw error
+            }
+            self.statuslessHost = replacementStatuslessHost
+            self.client = replacement
+            self.clientRevision &+= 1
+            return WalletEngineSendExecution(
+                result: try await operation(replacement),
+                didRecreateClient: true
+            )
         }
     }
 
@@ -875,30 +974,98 @@ actor WalletEngineRuntime {
         return session
     }
 
-    private func withFfi<Value>(_ operation: () async throws -> Value) async throws -> Value {
-        await self.acquireFfi()
-        defer { self.releaseFfi() }
+    private func withFfi<Value>(
+        priority: FfiPriority = .userInitiated,
+        cancellation: FfiCancellation = .none,
+        _ operation: @escaping () async throws -> Value
+    ) async throws -> Value {
+        await self.acquireFfi(priority: priority)
+        defer {
+            self.activeFfiOperation = nil
+            self.releaseFfi()
+        }
         try Task.checkCancellation()
-        return try await operation()
+        let operationId = UUID()
+        self.activeFfiOperation = (operationId, cancellation)
+        let operationTask = Task { () -> Result<Value, Error> in
+            do {
+                return .success(try await operation())
+            } catch {
+                return .failure(error)
+            }
+        }
+        let result = await withTaskCancellationHandler(operation: {
+            await operationTask.value
+        }, onCancel: { [weak self] in
+            Task {
+                await self?.cancelActiveFfiOperation(id: operationId, cancellation: cancellation)
+            }
+        })
+        try Task.checkCancellation()
+        return try result.get()
     }
 
-    private func acquireFfi() async {
+    private func acquireFfi(priority: FfiPriority = .userInitiated) async {
         if !self.ffiBusy {
             self.ffiBusy = true
             return
         }
         await withCheckedContinuation { continuation in
-            self.ffiWaiters.append(continuation)
+            switch priority {
+            case .userInitiated:
+                self.userInitiatedFfiWaiters.append(continuation)
+            case .background:
+                self.backgroundFfiWaiters.append(continuation)
+            }
         }
     }
 
     private func releaseFfi() {
-        if self.ffiWaiters.isEmpty {
-            self.ffiBusy = false
+        if !self.userInitiatedFfiWaiters.isEmpty {
+            self.userInitiatedFfiWaiters.removeFirst().resume()
+        } else if !self.backgroundFfiWaiters.isEmpty {
+            self.backgroundFfiWaiters.removeFirst().resume()
         } else {
-            self.ffiWaiters.removeFirst().resume()
+            self.ffiBusy = false
         }
     }
+
+    private func cancelActiveFfiOperation(id: UUID, cancellation: FfiCancellation) async {
+        guard cancellation != .none,
+              self.activeFfiOperation?.id == id,
+              self.activeFfiOperation?.cancellation == cancellation,
+              let client = self.client else {
+            return
+        }
+        do {
+            switch cancellation {
+            case .none:
+                return
+            case .refresh:
+                try await client.cancelRefresh()
+            case .refreshNfts:
+                try await client.cancelRefreshNfts()
+            case .loadMoreNfts:
+                try await client.cancelLoadMoreNfts()
+            case .sendPreview:
+                try await client.cancelSendPreview()
+            case .send:
+                try await client.cancelSend()
+            }
+        } catch {
+            self.errorLogger.error("wallet_engine_operation_cancellation_failed", error)
+        }
+    }
+}
+
+func walletEngineIsSendAlreadyInProgress(_ error: Error) -> Bool {
+    guard let error = error as? WalletClientError else {
+        return false
+    }
+    if case .SendAlreadyInProgress = error {
+        return true
+    }
+    return false
 }
 
 func normalizedEngineMnemonic(_ words: [String]) -> [String] {

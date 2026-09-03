@@ -275,6 +275,7 @@ private final class WalletTransactionContentComponent: Component {
 
         private let walletDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
+        private let discardTransferDisposables = DisposableSet()
         private let hapticFeedback = HapticFeedback()
         private var amountPending = false
         private var isUpdating = false
@@ -302,8 +303,10 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         deinit {
+            self.discardCurrentPreparedTransfer()
             self.walletDisposable.dispose()
             self.transferDisposable.dispose()
+            self.discardTransferDisposables.dispose()
         }
 
         private var isPreview: Bool {
@@ -318,6 +321,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         private func configureMode(_ mode: WalletTransactionContentMode, fiatWalletContext: WalletContext?) {
+            self.discardCurrentPreparedTransfer()
             self.walletDisposable.set(nil)
             self.transferDisposable.set(nil)
             self.transaction = nil
@@ -424,9 +428,11 @@ private final class WalletTransactionContentComponent: Component {
             case .ready, .preparing:
                 self.commentRevision += 1
                 self.transferDisposable.set(nil)
+                self.discardCurrentPreparedTransfer()
                 self.previewOperation = .ready
                 self.preparingForSend = false
             case .authorizing:
+                self.discardCurrentPreparedTransfer()
                 self.previewOperation = .ready
                 self.preparingForSend = false
             }
@@ -512,10 +518,17 @@ private final class WalletTransactionContentComponent: Component {
             self.transferDisposable.set((preparation
             |> deliverOnMainQueue).start(next: { [weak self] updatedTransfer in
                 guard let self else {
+                    _ = walletContext.discardPreparedTransfer(updatedTransfer).start()
                     return
                 }
                 if revision != self.commentRevision {
+                    self.discardTransferDisposables.add(
+                        walletContext.discardPreparedTransfer(updatedTransfer).start()
+                    )
                     return
+                }
+                if self.preparedTransfer?.id != updatedTransfer.id {
+                    self.discardCurrentPreparedTransfer()
                 }
                 self.preparedTransfer = updatedTransfer
                 self.displayedFee = updatedTransfer.fee
@@ -601,15 +614,32 @@ private final class WalletTransactionContentComponent: Component {
                         isCollectible: submittedTransfer.pendingTransfer.collectibleAddress != nil
                     )
                 }
-            }, error: { [weak self] _ in
+            }, error: { [weak self] error in
                 guard let self else {
                     return
                 }
-                self.preparedTransferNeedsRefresh = true
+                switch error {
+                case .preparedTransferExpired, .preparedTransferNotFound:
+                    self.preparedTransferNeedsRefresh = true
+                default:
+                    self.preparedTransferNeedsRefresh = false
+                }
                 self.previewOperation = .ready
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 self.presentTransferError()
             }))
+        }
+
+        private func discardCurrentPreparedTransfer() {
+            guard let walletContext = self.walletContext,
+                  let preparedTransfer = self.preparedTransfer else {
+                return
+            }
+            self.preparedTransfer = nil
+            self.preparedTransferNeedsRefresh = false
+            self.discardTransferDisposables.add(
+                walletContext.discardPreparedTransfer(preparedTransfer).start()
+            )
         }
 
         private func showSuccessIfNeeded(address: String, isCollectible: Bool) {
@@ -1200,37 +1230,41 @@ private final class WalletTransactionContentComponent: Component {
                 ))
             }
             let displayedFee: Int64? = self.isPreview ? self.displayedFee : transaction.fee
-            let feeComponent: AnyComponent<Empty>
+            let feeComponent: AnyComponent<Empty>?
             if let displayedFee {
-                var feeItems: [AnyComponentWithIdentity<Empty>] = [
-                    AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
-                        name: "Ads/TonAbout",
-                        tintColor: UIColor(rgb: 0x30a1f5),
-                        maxSize: CGSize(width: 14.0, height: 14.0)
-                    ))),
-                    AnyComponentWithIdentity(id: "amount", component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: formatTonAmountText(displayedFee, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 5),
-                            font: valueFont,
-                            textColor: valueColor
-                        )),
-                        maximumNumberOfLines: 1
-                    )))
-                ]
-                if let fiatRate {
-                    let usdFee = formatTonFiatValue(
-                        displayedFee,
-                        rate: fiatRate.unitsPerGram,
-                        currencySymbol: fiatCurrency.symbol,
-                        maxDecimalPositions: 4,
-                        dateTimeFormat: environment.dateTimeFormat
-                    )
-                    feeItems.append(AnyComponentWithIdentity(id: "usd", component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "~ \(usdFee)", font: valueFont, textColor: secondaryValueColor)),
-                        maximumNumberOfLines: 1
-                    ))))
+                if displayedFee > 0 {
+                    var feeItems: [AnyComponentWithIdentity<Empty>] = [
+                        AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
+                            name: "Ads/TonAbout",
+                            tintColor: UIColor(rgb: 0x30a1f5),
+                            maxSize: CGSize(width: 14.0, height: 14.0)
+                        ))),
+                        AnyComponentWithIdentity(id: "amount", component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: formatTonAmountText(displayedFee, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 5),
+                                font: valueFont,
+                                textColor: valueColor
+                            )),
+                            maximumNumberOfLines: 1
+                        )))
+                    ]
+                    if let fiatRate {
+                        let usdFee = formatTonFiatValue(
+                            displayedFee,
+                            rate: fiatRate.unitsPerGram,
+                            currencySymbol: fiatCurrency.symbol,
+                            maxDecimalPositions: 4,
+                            dateTimeFormat: environment.dateTimeFormat
+                        )
+                        feeItems.append(AnyComponentWithIdentity(id: "usd", component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: "~ \(usdFee)", font: valueFont, textColor: secondaryValueColor)),
+                            maximumNumberOfLines: 1
+                        ))))
+                    }
+                    feeComponent = AnyComponent(HStack(feeItems, spacing: 3.0))
+                } else {
+                    feeComponent = nil
                 }
-                feeComponent = AnyComponent(HStack(feeItems, spacing: 3.0))
             } else {
                 feeComponent = AnyComponent(HStack([
                     AnyComponentWithIdentity(
@@ -1267,7 +1301,7 @@ private final class WalletTransactionContentComponent: Component {
                     component: addressComponent
                 ))
             }
-            if transaction.direction == .outgoing {
+            if transaction.direction == .outgoing, let feeComponent {
                 tableItems.append(TableComponent.Item(
                     id: "fee",
                     title: feeTitle,

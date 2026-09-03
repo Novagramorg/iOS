@@ -517,6 +517,8 @@ private final class WalletSendScreenComponent: Component {
         private var walletContext: WalletContext?
         private let walletDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
+        private let discardTransferDisposables = DisposableSet()
+        private var peerPreparedTransfer: WalletContext.PreparedTransfer?
         private var walletBalance: Int64?
         private var walletAddress: String?
         private var walletIsLoading = true
@@ -537,6 +539,9 @@ private final class WalletSendScreenComponent: Component {
             self.amountField.amountUpdated = { [weak self] amount in
                 guard let self else {
                     return
+                }
+                if self.amount != amount {
+                    self.discardPeerPreparedTransfer()
                 }
                 self.amount = amount
                 if !self.isUpdating {
@@ -566,8 +571,10 @@ private final class WalletSendScreenComponent: Component {
         }
 
         deinit {
+            self.discardPeerPreparedTransfer()
             self.walletDisposable.dispose()
             self.transferDisposable.dispose()
+            self.discardTransferDisposables.dispose()
         }
 
         func isPanGestureEnabled() -> Bool {
@@ -575,6 +582,9 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func applyRecipient(_ value: String) {
+            let previousAddress = self.recipientAddress
+            let previousAmount = self.amount
+            let previousComment = self.comment
             var address = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if let components = URLComponents(string: address), components.scheme?.lowercased() == "ton" {
                 if components.host?.lowercased() == "transfer" {
@@ -591,6 +601,11 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
             self.recipientAddress = address
+            if previousAddress != self.recipientAddress
+                || previousAmount != self.amount
+                || previousComment != self.comment {
+                self.discardPeerPreparedTransfer()
+            }
             if !self.isUpdating {
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             }
@@ -686,7 +701,11 @@ private final class WalletSendScreenComponent: Component {
                             return
                         }
                         let value = inputState.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                        self.comment = value.isEmpty ? nil : value
+                        let comment = value.isEmpty ? nil : value
+                        if self.comment != comment {
+                            self.discardPeerPreparedTransfer()
+                            self.comment = comment
+                        }
                         self.componentState?.updated(transition: .spring(duration: 0.35))
                     })
                 ]
@@ -757,19 +776,32 @@ private final class WalletSendScreenComponent: Component {
             if let peer = component.peer {
                 self.isPreparingTransfer = true
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                let preparation = component.walletContext.prepareTransfer(
-                    address: self.recipientAddress,
-                    amount: self.amount,
-                    comment: self.comment
-                )
+                let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
+                if let prepared = self.peerPreparedTransfer,
+                   prepared.recipient == self.recipientAddress,
+                   prepared.amount == self.amount,
+                   prepared.comment == self.comment,
+                   prepared.collectible == nil,
+                   prepared.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) {
+                    preparation = .single(prepared)
+                } else {
+                    self.discardPeerPreparedTransfer()
+                    preparation = component.walletContext.prepareTransfer(
+                        address: self.recipientAddress,
+                        amount: self.amount,
+                        comment: self.comment
+                    )
+                }
                 self.transferDisposable.set((preparation
-                |> mapToSignal { prepared in
+                |> mapToSignal { [weak self] prepared in
+                    self?.peerPreparedTransfer = prepared
                     return component.walletContext.submitTransfer(prepared)
                 }
                 |> deliverOnMainQueue).start(next: { [weak self] submittedTransfer in
                     guard let self, let controller = self.environment?.controller() else {
                         return
                     }
+                    self.peerPreparedTransfer = nil
                     self.isPreparingTransfer = false
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
 
@@ -781,7 +813,10 @@ private final class WalletSendScreenComponent: Component {
                         component.completed?()
                     }
                     controller.dismiss()
-                }, error: { [weak self] _ in
+                }, error: { [weak self] error in
+                    if error == .preparedTransferExpired || error == .preparedTransferNotFound {
+                        self?.discardPeerPreparedTransfer()
+                    }
                     self?.isPreparingTransfer = false
                     self?.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     self?.presentTransferError()
@@ -813,6 +848,17 @@ private final class WalletSendScreenComponent: Component {
                 comment: self.comment,
                 dismissSendScreen: dismissSendScreen
             ))
+        }
+
+        private func discardPeerPreparedTransfer() {
+            guard let walletContext = self.walletContext,
+                  let preparedTransfer = self.peerPreparedTransfer else {
+                return
+            }
+            self.peerPreparedTransfer = nil
+            self.discardTransferDisposables.add(
+                walletContext.discardPreparedTransfer(preparedTransfer).start()
+            )
         }
 
         private func presentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
@@ -894,6 +940,7 @@ private final class WalletSendScreenComponent: Component {
             }
 
             if self.walletContext !== component.walletContext {
+                self.discardPeerPreparedTransfer()
                 self.walletContext = component.walletContext
                 self.walletBalance = nil
                 self.walletAddress = nil
