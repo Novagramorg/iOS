@@ -945,8 +945,8 @@ private final class WalletCollectiblePagerComponent: Component {
             self.scrollView.isPagingEnabled = true
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.showsVerticalScrollIndicator = false
-            self.scrollView.alwaysBounceHorizontal = false
-            self.scrollView.bounces = false
+            self.scrollView.alwaysBounceHorizontal = true
+            self.scrollView.bounces = true
             self.scrollView.layer.cornerRadius = 10.0
             if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
                 self.scrollView.contentInsetAdjustmentBehavior = .never
@@ -1093,8 +1093,11 @@ private final class WalletCollectiblePagerComponent: Component {
             }
             if let targetOffset {
                 let maximumOffset = max(0.0, contentSize.width - scrollFrame.width)
+                let resolvedOffset = self.isSwiping
+                    ? targetOffset
+                    : max(0.0, min(maximumOffset, targetOffset))
                 self.ignoreContentOffsetChange = true
-                self.scrollView.contentOffset = CGPoint(x: max(0.0, min(maximumOffset, targetOffset)), y: 0.0)
+                self.scrollView.contentOffset = CGPoint(x: resolvedOffset, y: 0.0)
                 self.ignoreContentOffsetChange = false
             }
 

@@ -1559,8 +1559,8 @@ private final class WalletTransactionPagerComponent: Component {
             self.scrollView.isPagingEnabled = true
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.showsVerticalScrollIndicator = false
-            self.scrollView.alwaysBounceHorizontal = false
-            self.scrollView.bounces = false
+            self.scrollView.alwaysBounceHorizontal = true
+            self.scrollView.bounces = true
             self.scrollView.layer.cornerRadius = 10.0
             if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
                 self.scrollView.contentInsetAdjustmentBehavior = .never
@@ -1707,8 +1707,11 @@ private final class WalletTransactionPagerComponent: Component {
             }
             if let targetOffset {
                 let maximumOffset = max(0.0, contentSize.width - scrollFrame.width)
+                let resolvedOffset = self.isSwiping
+                    ? targetOffset
+                    : max(0.0, min(maximumOffset, targetOffset))
                 self.ignoreContentOffsetChange = true
-                self.scrollView.contentOffset = CGPoint(x: max(0.0, min(maximumOffset, targetOffset)), y: 0.0)
+                self.scrollView.contentOffset = CGPoint(x: resolvedOffset, y: 0.0)
                 self.ignoreContentOffsetChange = false
             }
 
@@ -2522,11 +2525,17 @@ private func walletTransactionDateText(
     return strings.Time_MediumDate(date, time).string
 }
 
+private func tonHashHex(fromBase64 hash: String) -> String? {
+    guard let data = Data(base64Encoded: hash),
+          data.count == 32 else {
+        return nil
+    }
+
+    return data.map { String(format: "%02x", $0) }.joined()
+}
+
 private func walletTransactionExplorerUrl(id: String) -> String? {
-    var allowedCharacters = CharacterSet.urlPathAllowed
-    allowedCharacters.remove(charactersIn: "/?#%")
-    guard let encodedId = id.addingPercentEncoding(withAllowedCharacters: allowedCharacters),
-          !encodedId.isEmpty else {
+    guard let encodedId = tonHashHex(fromBase64: id) else {
         return nil
     }
     return "https://tonviewer.com/transaction/\(encodedId)"
