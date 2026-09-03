@@ -115,7 +115,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         let makeRibbonTextLayout = TextNode.asyncLayout(self.ribbonTextNode)
         let cachedLabelBackgroundImage = self.cachedLabelBackgroundImage
 
-        return { item, _, _, _, _, _ in
+        return { [weak self] item, _, _, _, _, _ in
             let contentProperties = ChatMessageBubbleContentProperties(
                 hidesSimpleAuthorHeader: true,
                 headerSpacing: 0.0,
