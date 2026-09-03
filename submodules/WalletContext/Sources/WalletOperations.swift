@@ -118,6 +118,13 @@ public extension WalletContext {
         normalizedMainnetAddress(value)
     }
 
+    func rememberWalletPeer(_ peer: EnginePeer, address: String) {
+        let mapping = WalletPeerAddressMapping(peer: peer, address: address)
+        Task { [impl = self.impl, mapping] in
+            await impl.rememberWalletPeer(mapping)
+        }
+    }
+
     func resolveTransferRecipient(_ value: String) -> Signal<ResolvedTransferRecipient?, WalletError> {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return .single(nil) }
@@ -1206,6 +1213,7 @@ extension WalletContextImpl {
     }
 
     func prepareForRuntimeIdentityChange() async -> UInt64 {
+        self.clearStreamingPresentationOverlay()
         self.activationGeneration &+= 1
         let generation = self.activationGeneration
         self.activationTask?.cancel()

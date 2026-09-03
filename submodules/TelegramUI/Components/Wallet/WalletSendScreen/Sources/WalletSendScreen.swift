@@ -1649,6 +1649,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             theme: .default
         )
 
+        walletContext.rememberWalletPeer(peer, address: address)
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }
 

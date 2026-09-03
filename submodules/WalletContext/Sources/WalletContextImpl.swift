@@ -195,6 +195,7 @@ actor WalletContextImpl {
     var deferredSynchronizationRequested = false
     var preparedRecoveryPhraseImportRecordId: String?
     var tonConnectCoordinator: WalletTonConnectCoordinator?
+    var peerByWalletAddress: [String: EnginePeer] = [:]
 
     let fiatRatesDisposable = MetaDisposable()
     var isStoredStateRestored = false
@@ -223,6 +224,7 @@ actor WalletContextImpl {
     var streamingRefreshGate = WalletStreamingRefreshGate()
     var streamingAddress: String?
     var streamingGeneration: UInt64?
+    var streamingPresentationOverlay = WalletStreamingPresentationOverlay()
     var activationGeneration: UInt64 = 0
     var balanceLastSuccessfulAt: Int32?
     var fiatLastSuccessfulAt: Int32?
@@ -482,6 +484,7 @@ actor WalletContextImpl {
             self.requestSynchronization()
             return
         }
+        _ = self.streamingPresentationOverlay.removeAll()
         self.activationGeneration &+= 1
         self.stopStreaming()
         if let activeOperationId = self.activeOperationId {
@@ -771,6 +774,7 @@ actor WalletContextImpl {
     }
 
     private func performSynchronization(taskId: UUID) async {
+        let streamingOverlayWatermark = self.streamingPresentationOverlay.revision
         defer {
             if self.synchronizationTaskId == taskId {
                 self.synchronizationTask = nil
@@ -803,11 +807,14 @@ actor WalletContextImpl {
         var collectiblesState = self.currentState.collectibles
         var snapshot: WalletSnapshot?
         var shouldRetry = false
+        var engineBalanceRefreshApplied = false
+        var transactionsRefreshSucceeded = false
 
         switch engineResultValue {
         case let .success(update):
             snapshot = newestWalletSnapshot(snapshot, update.snapshot)
             if let account = update.snapshot.account, let value = walletEngineBalance(account.balanceNanograms) {
+                engineBalanceRefreshApplied = true
                 let timestamp = currentWalletTimestamp()
                 self.balanceLastSuccessfulAt = timestamp
                 balance = .value(value, updatedAt: timestamp)
@@ -823,6 +830,7 @@ actor WalletContextImpl {
 
         switch transactions {
         case let .success(response):
+            transactionsRefreshSucceeded = true
             let values = walletTransactions(from: response.items)
             self.serverTransactionsNextOffset = response.nextOffset
             transactionState = TransactionsState(
@@ -877,6 +885,18 @@ actor WalletContextImpl {
         } else {
             pending = self.currentState.pendingTransfers
         }
+        var streamingOverlayChanged = false
+        if engineBalanceRefreshApplied {
+            streamingOverlayChanged = self.streamingPresentationOverlay.clearBalance(
+                through: streamingOverlayWatermark
+            ) || streamingOverlayChanged
+        }
+        if transactionsRefreshSucceeded {
+            streamingOverlayChanged = self.streamingPresentationOverlay.clearTransactions(
+                through: streamingOverlayWatermark
+            ) || streamingOverlayChanged
+        }
+        let previousState = self.currentState
         self.replaceState(
             phase: self.currentState.phase,
             balance: balance,
@@ -885,6 +905,9 @@ actor WalletContextImpl {
             pendingTransfers: pending,
             activeOperation: self.currentState.activeOperation
         )
+        if streamingOverlayChanged && self.currentState == previousState {
+            self.publishPresentationState()
+        }
         if shouldRetry {
             self.scheduleRetry()
         }
@@ -1002,11 +1025,59 @@ actor WalletContextImpl {
             activeOperation: activeOperation,
             fiat: fiat ?? self.currentState.fiat
         )
-        guard value != self.currentState else { return }
+        let peerMappingsChanged = self.rememberWalletPeers(in: value.transactions.items)
+        guard value != self.currentState else {
+            if peerMappingsChanged && !self.streamingPresentationOverlay.isEmpty {
+                self.publishPresentationState()
+            }
+            return
+        }
         self.currentState = value
-        self.output.publish(state: value)
+        self.publishPresentationState()
         self.persistStoredState(value)
         self.evaluateStreamingDemand()
+    }
+
+    func publishPresentationState() {
+        self.output.publish(state: self.streamingPresentationOverlay.applying(
+            to: self.currentState,
+            peerByAddress: self.peerByWalletAddress
+        ))
+    }
+
+    func rememberWalletPeer(_ mapping: WalletPeerAddressMapping) {
+        guard let key = walletAddressMappingKey(mapping.address) else {
+            return
+        }
+        let changed = self.peerByWalletAddress[key] != mapping.peer
+        self.peerByWalletAddress[key] = mapping.peer
+        if changed && !self.streamingPresentationOverlay.isEmpty {
+            self.publishPresentationState()
+        }
+    }
+
+    private func rememberWalletPeers(in transactions: [Transaction]) -> Bool {
+        var changed = false
+        for transaction in transactions {
+            guard case let .user(peer, address, _) = transaction.peer,
+                  let key = walletAddressMappingKey(address) else {
+                continue
+            }
+            if self.peerByWalletAddress[key] != peer {
+                self.peerByWalletAddress[key] = peer
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    @discardableResult
+    func clearStreamingPresentationOverlay() -> Bool {
+        guard self.streamingPresentationOverlay.removeAll() else {
+            return false
+        }
+        self.publishPresentationState()
+        return true
     }
 
     private func persistStoredState(_ state: State) {

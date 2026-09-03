@@ -1766,7 +1766,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, price)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
-            case let .gramTransfer(amount, _, _):
+            case let .gramTransfer(amount, _, _, _):
                 let amountText = formatTonAmountText(
                     amount,
                     dateTimeFormat: dateTimeFormat,

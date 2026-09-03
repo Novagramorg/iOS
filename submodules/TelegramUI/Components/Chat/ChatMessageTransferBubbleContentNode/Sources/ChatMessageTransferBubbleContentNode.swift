@@ -228,8 +228,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                 let (addressLayout, addressApply) = makeAddressLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
-                        //TODO:
-                        string: "",
+                        string: transfer.peerAddress.isEmpty ? "" : formatTonAddress(transfer.peerAddress),
                         font: Font.with(size: 10.0, design: .monospace, weight: .medium),
                         textColor: UIColor(rgb: 0x005fdb),
                         paragraphAlignment: .center
@@ -587,7 +586,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     let peer: WalletContext.Transaction.Peer
                     if let enginePeer = item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init),
                        enginePeer.id.namespace == Namespaces.Peer.CloudUser {
-                        peer = .user(enginePeer, address: "", domain: nil)
+                        peer = .user(enginePeer, address: transfer.peerAddress, domain: nil)
+                    } else if !transfer.peerAddress.isEmpty {
+                        peer = .address(transfer.peerAddress, domain: nil)
                     } else {
                         peer = .unsupported
                     }

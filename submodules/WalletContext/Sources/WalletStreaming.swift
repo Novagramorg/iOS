@@ -325,9 +325,22 @@ actor WalletURLSessionStreamingTransport: WalletStreamingTransport {
     }
 }
 
+enum WalletStreamingFinality: Int, Sendable, Equatable {
+    case pending = 0
+    case confirmed = 1
+    case finalized = 2
+}
+
 enum WalletStreamingParsedEvent: Sendable, Equatable {
     case subscribed
-    case changed
+    case accountStateChanged(balance: Int64, finality: WalletStreamingFinality)
+    case transactionsChanged(
+        traceId: String,
+        finality: WalletStreamingFinality,
+        transactions: [WalletContext.Transaction]
+    )
+    case traceInvalidated(traceId: String)
+    case refreshOnly
 }
 
 enum WalletStreamingDemand {
@@ -404,14 +417,57 @@ enum WalletStreamingEventParser {
 
     private struct AccountStateChange: Decodable {
         let account: String
+        let finality: String
+        let state: AccountState
     }
 
-    private struct Transaction: Decodable {
+    private struct AccountState: Decodable {
+        let balance: String
+    }
+
+    private struct StreamingMessage: Decodable {
+        let source: String?
+        let destination: String?
+        let value: String?
+        let bounced: Bool?
+    }
+
+    private struct TransactionDescription: Decodable {
+        let aborted: Bool?
+    }
+
+    private struct StreamingTransaction: Decodable {
         let account: String
+        let hash: String
+        let lt: String
+        let now: Int64
+        let totalFees: String
+        let description: TransactionDescription?
+        let inMessage: StreamingMessage?
+        let outMessages: [StreamingMessage]
+
+        enum CodingKeys: String, CodingKey {
+            case account
+            case hash
+            case lt
+            case now
+            case totalFees = "total_fees"
+            case description
+            case inMessage = "in_msg"
+            case outMessages = "out_msgs"
+        }
     }
 
     private struct TransactionsChange: Decodable {
-        let transactions: [Transaction]
+        let finality: String
+        let traceExternalHashNorm: String
+        let transactions: [StreamingTransaction]
+
+        enum CodingKeys: String, CodingKey {
+            case finality
+            case traceExternalHashNorm = "trace_external_hash_norm"
+            case transactions
+        }
     }
 
     private struct TraceInvalidated: Decodable {
@@ -428,7 +484,7 @@ enum WalletStreamingEventParser {
         }
         let decoder = JSONDecoder()
         guard let envelope = try? decoder.decode(Envelope.self, from: data) else {
-            return nil
+            return .refreshOnly
         }
         if envelope.status == "subscribed" {
             return .subscribed
@@ -436,26 +492,139 @@ enum WalletStreamingEventParser {
         let expected = expectedRawAddress.lowercased()
         switch envelope.type {
         case "account_state_change":
-            guard let value = try? decoder.decode(AccountStateChange.self, from: data),
-                  value.account.lowercased() == expected else {
-                return nil
+            guard let value = try? decoder.decode(AccountStateChange.self, from: data) else {
+                return .refreshOnly
             }
-            return .changed
+            guard value.account.lowercased() == expected,
+                  let finality = self.finality(value.finality),
+                  finality != .pending,
+                  let balance = self.unsignedInt64(value.state.balance) else {
+                return .refreshOnly
+            }
+            return .accountStateChanged(balance: balance, finality: finality)
         case "transactions":
             guard let value = try? decoder.decode(TransactionsChange.self, from: data),
-                  value.transactions.contains(where: { $0.account.lowercased() == expected }) else {
-                return nil
+                  !value.traceExternalHashNorm.isEmpty,
+                  let finality = self.finality(value.finality) else {
+                return .refreshOnly
             }
-            return .changed
+            let matchingTransactions = value.transactions.filter { $0.account.lowercased() == expected }
+            guard !matchingTransactions.isEmpty else {
+                return .refreshOnly
+            }
+            return .transactionsChanged(
+                traceId: value.traceExternalHashNorm,
+                finality: finality,
+                transactions: matchingTransactions.compactMap {
+                    self.transaction($0, walletRawAddress: expected, finality: finality)
+                }
+            )
         case "trace_invalidated":
             guard let value = try? decoder.decode(TraceInvalidated.self, from: data),
                   !value.traceExternalHashNorm.isEmpty else {
-                return nil
+                return .refreshOnly
             }
-            return .changed
+            return .traceInvalidated(traceId: value.traceExternalHashNorm)
         default:
             return nil
         }
+    }
+
+    private static func finality(_ value: String) -> WalletStreamingFinality? {
+        switch value {
+        case "pending": return .pending
+        case "confirmed": return .confirmed
+        case "finalized": return .finalized
+        default: return nil
+        }
+    }
+
+    private static func unsignedInt64(_ value: String) -> Int64? {
+        guard !value.isEmpty, value.allSatisfy(\.isNumber) else {
+            return nil
+        }
+        return Int64(value)
+    }
+
+    private static func transaction(
+        _ value: StreamingTransaction,
+        walletRawAddress: String,
+        finality: WalletStreamingFinality
+    ) -> WalletContext.Transaction? {
+        guard !value.hash.isEmpty,
+              !value.lt.isEmpty,
+              value.lt.allSatisfy(\.isNumber),
+              let timestamp = Int32(exactly: value.now),
+              let fee = self.unsignedInt64(value.totalFees) else {
+            return nil
+        }
+
+        struct Candidate {
+            let direction: WalletContext.Transaction.Direction
+            let amount: Int64
+            let address: String
+            let bounced: Bool
+        }
+
+        var candidates: [Candidate] = []
+        if let message = value.inMessage,
+           message.destination?.lowercased() == walletRawAddress,
+           let source = message.source,
+           !source.isEmpty,
+           let amountValue = message.value,
+           let amount = self.unsignedInt64(amountValue),
+           amount > 0 {
+            candidates.append(Candidate(
+                direction: .incoming,
+                amount: amount,
+                address: source,
+                bounced: message.bounced == true
+            ))
+        }
+        for message in value.outMessages {
+            guard message.source?.lowercased() == walletRawAddress,
+                  let destination = message.destination,
+                  !destination.isEmpty,
+                  let amountValue = message.value,
+                  let amount = self.unsignedInt64(amountValue),
+                  amount > 0 else {
+                continue
+            }
+            candidates.append(Candidate(
+                direction: .outgoing,
+                amount: amount,
+                address: destination,
+                bounced: message.bounced == true
+            ))
+        }
+        guard candidates.count == 1, let candidate = candidates.first else {
+            return nil
+        }
+
+        let status: WalletContext.Transaction.Status
+        if value.description?.aborted == true || candidate.bounced {
+            status = .failed
+        } else if finality == .pending {
+            status = .pending
+        } else {
+            status = .completed
+        }
+        let peerAddress = (try? convertTonAddress(
+            value: candidate.address,
+            format: .userFriendly(bounceable: false, testnet: false)
+        )) ?? candidate.address
+        return WalletContext.Transaction(
+            id: "\(value.lt):\(value.hash):\(candidate.direction == .incoming ? "in" : "out")",
+            transactionHash: value.hash,
+            logicalTime: value.lt,
+            timestamp: timestamp,
+            direction: candidate.direction,
+            amount: candidate.direction == .outgoing ? -candidate.amount : candidate.amount,
+            fee: fee,
+            peer: .address(peerAddress, domain: nil),
+            comment: nil,
+            status: status
+        )
     }
 
     static func isServerError(_ data: Data) -> Bool {
@@ -485,6 +654,119 @@ enum WalletStreamingEventParser {
         case .some: return "unknown_type"
         case nil: return "missing_type"
         }
+    }
+}
+
+struct WalletStreamingPresentationOverlay {
+    private struct BalanceValue {
+        let revision: UInt64
+        let value: Int64
+        let updatedAt: Int32
+    }
+
+    private struct TraceValue {
+        let revision: UInt64
+        let finality: WalletStreamingFinality
+        let transactions: [WalletContext.Transaction]
+    }
+
+    private(set) var revision: UInt64 = 0
+    private var balance: BalanceValue?
+    private var traces: [String: TraceValue] = [:]
+
+    var isEmpty: Bool {
+        self.balance == nil && self.traces.isEmpty
+    }
+
+    mutating func apply(_ event: WalletStreamingParsedEvent, updatedAt: Int32) -> Bool {
+        switch event {
+        case .subscribed, .refreshOnly:
+            return false
+        case let .accountStateChanged(balance, _):
+            self.revision &+= 1
+            self.balance = BalanceValue(revision: self.revision, value: balance, updatedAt: updatedAt)
+            return true
+        case let .transactionsChanged(traceId, finality, transactions):
+            if let current = self.traces[traceId], current.finality.rawValue > finality.rawValue {
+                return false
+            }
+            self.revision &+= 1
+            if transactions.isEmpty {
+                return self.traces.removeValue(forKey: traceId) != nil
+            } else {
+                self.traces[traceId] = TraceValue(
+                    revision: self.revision,
+                    finality: finality,
+                    transactions: transactions
+                )
+                return true
+            }
+        case let .traceInvalidated(traceId):
+            self.revision &+= 1
+            return self.traces.removeValue(forKey: traceId) != nil
+        }
+    }
+
+    mutating func clearBalance(through revision: UInt64) -> Bool {
+        guard let balance = self.balance, balance.revision <= revision else {
+            return false
+        }
+        self.balance = nil
+        return true
+    }
+
+    mutating func clearTransactions(through revision: UInt64) -> Bool {
+        let previousCount = self.traces.count
+        self.traces = self.traces.filter { $0.value.revision > revision }
+        return self.traces.count != previousCount
+    }
+
+    mutating func removeAll() -> Bool {
+        guard !self.isEmpty else {
+            return false
+        }
+        self.balance = nil
+        self.traces.removeAll()
+        return true
+    }
+
+    func applying(
+        to state: WalletContext.State,
+        peerByAddress: [String: EnginePeer]
+    ) -> WalletContext.State {
+        let balance: WalletContext.Resource<Int64>
+        if let overlayBalance = self.balance {
+            balance = .value(overlayBalance.value, updatedAt: overlayBalance.updatedAt)
+        } else {
+            balance = state.balance
+        }
+
+        let overlayTransactions = self.traces.values.flatMap(\.transactions)
+        let transactions: WalletContext.TransactionsState
+        if overlayTransactions.isEmpty {
+            transactions = state.transactions
+        } else {
+            transactions = WalletContext.TransactionsState(
+                items: transactionsWithStreamingOverlay(
+                    authoritative: state.transactions.items,
+                    streaming: overlayTransactions,
+                    peerByAddress: peerByAddress
+                ),
+                offset: state.transactions.offset,
+                canLoadMore: state.transactions.canLoadMore,
+                isLoadingMore: state.transactions.isLoadingMore,
+                error: state.transactions.error
+            )
+        }
+        return WalletContext.State(
+            phase: state.phase,
+            balance: balance,
+            transactions: transactions,
+            collectibles: state.collectibles,
+            pendingTransfers: state.pendingTransfers,
+            activeOperation: state.activeOperation,
+            fiat: state.fiat
+        )
     }
 }
 
@@ -561,7 +843,7 @@ actor WalletToncenterStreamingClient {
             return AsyncStream { $0.finish() }
         }
         var continuation: AsyncStream<WalletStreamingParsedEvent>.Continuation!
-        let stream = AsyncStream<WalletStreamingParsedEvent>(bufferingPolicy: .bufferingNewest(1)) {
+        let stream = AsyncStream<WalletStreamingParsedEvent>(bufferingPolicy: .bufferingNewest(64)) {
             continuation = $0
         }
         self.continuation = continuation
@@ -672,7 +954,7 @@ actor WalletToncenterStreamingClient {
                 self.log("event=wallet_stream_event_ignored kind=\(label)")
                 continue
             }
-            if event == .subscribed {
+            if case .subscribed = event {
                 self.connectionSubscribed = true
                 self.log("event=wallet_stream_subscribed")
             } else {
@@ -757,7 +1039,12 @@ extension WalletContextImpl {
                 break
             }
             switch event {
-            case .subscribed, .changed:
+            case .subscribed, .refreshOnly:
+                self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
+            case .accountStateChanged, .transactionsChanged, .traceInvalidated:
+                if self.streamingPresentationOverlay.apply(event, updatedAt: currentWalletTimestamp()) {
+                    self.publishPresentationState()
+                }
                 self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
             }
         }

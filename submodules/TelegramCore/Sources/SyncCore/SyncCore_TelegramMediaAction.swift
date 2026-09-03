@@ -296,7 +296,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case todoAppendTasks([TelegramMediaTodo.Item])
     case suggestedPostApprovalStatus(status: SuggestedPostApprovalStatus)
     case giftTon(currency: String, amount: Int64, cryptoCurrency: String?, cryptoAmount: Int64?, transactionId: String?)
-    case gramTransfer(amount: Int64, transactionId: String, comment: String?)
+    case gramTransfer(amount: Int64, peerAddress: String, transactionId: String, comment: String?)
     case suggestedPostSuccess(amount: CurrencyAmount)
     case suggestedPostRefund(SuggestedPostRefund)
     case suggestedBirthday(TelegramBirthday)
@@ -500,6 +500,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case 67:
             self = .gramTransfer(
                 amount: decoder.decodeInt64ForKey("amount", orElse: 0),
+                peerAddress: decoder.decodeStringForKey("peerAddress", orElse: ""),
                 transactionId: decoder.decodeStringForKey("transactionId", orElse: ""),
                 comment: decoder.decodeOptionalStringForKey("comment")
             )
@@ -1033,9 +1034,10 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case let .joinedViaCommunity(communityId):
             encoder.encodeInt32(66, forKey: "_rawValue")
             encoder.encodeInt64(communityId.toInt64(), forKey: "communityId")
-        case let .gramTransfer(amount, transactionId, comment):
+        case let .gramTransfer(amount, peerAddress, transactionId, comment):
             encoder.encodeInt32(67, forKey: "_rawValue")
             encoder.encodeInt64(amount, forKey: "amount")
+            encoder.encodeString(peerAddress, forKey: "peerAddress")
             encoder.encodeString(transactionId, forKey: "transactionId")
             if let comment {
                 encoder.encodeString(comment, forKey: "comment")

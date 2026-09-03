@@ -96,6 +96,7 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
     case let .messageActionGramTransfer(messageActionGramTransferData):
         return TelegramMediaAction(action: .gramTransfer(
             amount: messageActionGramTransferData.amount,
+            peerAddress: messageActionGramTransferData.peerAddress,
             transactionId: messageActionGramTransferData.transactionId,
             comment: messageActionGramTransferData.comment
         ))

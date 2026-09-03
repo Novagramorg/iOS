@@ -9,12 +9,14 @@ public struct WalletTransferMessageData: Equatable {
 
     public let direction: Direction
     public let amount: Int64
+    public let peerAddress: String
     public let transactionId: String
     public let caption: String
 
-    public init(direction: Direction, amount: Int64, transactionId: String, caption: String) {
+    public init(direction: Direction, amount: Int64, peerAddress: String, transactionId: String, caption: String) {
         self.direction = direction
         self.amount = amount
+        self.peerAddress = peerAddress
         self.transactionId = transactionId
         self.caption = caption
     }
@@ -23,12 +25,13 @@ public struct WalletTransferMessageData: Equatable {
 public func walletTransferMessageData(message: EngineMessage, accountPeerId: EnginePeer.Id) -> WalletTransferMessageData? {
     for media in message.media {
         guard let action = media as? TelegramMediaAction,
-              case let .gramTransfer(amount, transactionId, comment) = action.action else {
+              case let .gramTransfer(amount, peerAddress, transactionId, comment) = action.action else {
             continue
         }
         return WalletTransferMessageData(
             direction: message.effectivelyIncoming(accountPeerId) ? .incoming : .outgoing,
             amount: amount,
+            peerAddress: peerAddress,
             transactionId: transactionId,
             caption: comment ?? ""
         )
