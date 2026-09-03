@@ -1736,6 +1736,27 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     func attach(scene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
         self.statusBarHost?.scene = scene
         self.window?.windowScene = scene
+
+        // UIKit registers a window's root view controller as that window's rotation client inside
+        // -[UIWindow setRootViewController:], and only if the window already belongs to a scene. This
+        // window is built in didFinishLaunching, before any scene exists, so the registration never
+        // happened and the window never runs -[UIWindow _rotateWindowToOrientation:...]: it still
+        // resizes on rotation, through the scene-geometry path, so the app itself looks correct, but
+        // it never posts UIWindowWillRotateNotification / UIWindowDidRotateNotification.
+        //
+        // UIRemoteKeyboardWindow is a UIApplicationRotationFollowingWindow and rotates ONLY by
+        // following those two notifications, so without this the keyboard keeps its launch
+        // orientation and bounds: it stays pinned to the pre-rotation bottom edge, and the
+        // keyboardWillChangeFrame the app then receives carries the stale portrait height.
+        // Re-assign the controller now that the scene is bound. It must be a real value change --
+        // re-assigning the same object early-returns in UIKit's setter and registers nothing.
+        // (Measured on iOS 26.5; iOS 27 sources the keyboard geometry elsewhere and is unaffected,
+        // so it cannot be used to verify this.)
+        if let window = self.window, let rootViewController = window.rootViewController {
+            window.rootViewController = nil
+            window.rootViewController = rootViewController
+        }
+
         self.mainWindow?.updateDeviceMetrics()
         self.window?.makeKeyAndVisible()
 
