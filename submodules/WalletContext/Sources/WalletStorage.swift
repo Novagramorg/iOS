@@ -1,6 +1,5 @@
 import Foundation
 import Security
-import TelegramCore
 import WalletEngineFFI
 
 struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
@@ -47,127 +46,23 @@ struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
     }
 }
 
-struct WalletStoredTransaction: Codable, Equatable, Sendable {
-    enum Peer: Codable, Equatable, @unchecked Sendable {
-        case user(id: EnginePeer.Id, displayName: String)
-        case address(String)
-        case unsupported
-
-        var userId: EnginePeer.Id? {
-            if case let .user(id, _) = self {
-                return id
-            }
-            return nil
-        }
-    }
-
-    let id: String
-    let transactionHash: String?
-    let externalMessageHash: String?
-    let logicalTime: String
-    let timestamp: Int32
-    let kind: WalletContext.Transaction.Kind
-    let direction: WalletContext.Transaction.Direction
-    let amount: Int64
-    let fee: Int64
-    let peer: Peer
-    let peerAddress: String?
-    let comment: String?
-    let currency: WalletContext.Transaction.Currency
-    let collectible: WalletContext.Transaction.CollectibleTransfer?
-    let status: WalletContext.Transaction.Status
-
-    init(_ transaction: WalletContext.Transaction) {
-        self.id = transaction.id
-        self.transactionHash = transaction.transactionHash
-        self.externalMessageHash = transaction.externalMessageHash
-        self.logicalTime = transaction.logicalTime
-        self.timestamp = transaction.timestamp
-        self.kind = transaction.kind
-        self.direction = transaction.direction
-        self.amount = transaction.amount
-        self.fee = transaction.fee
-        switch transaction.peer {
-        case let .user(peer, address):
-            self.peer = .user(id: peer.id, displayName: peer.debugDisplayTitle)
-            self.peerAddress = address
-        case let .address(address):
-            self.peer = .address(address)
-            self.peerAddress = nil
-        case .unsupported:
-            self.peer = .unsupported
-            self.peerAddress = nil
-        }
-        self.comment = transaction.comment
-        self.currency = transaction.currency
-        self.collectible = transaction.collectible
-        self.status = transaction.status
-    }
-
-    func transaction(peers: [EnginePeer.Id: EnginePeer]) -> WalletContext.Transaction {
-        let peer: WalletContext.Transaction.Peer
-        switch self.peer {
-        case let .user(id, _):
-            if let value = peers[id] {
-                peer = .user(value, address: self.peerAddress ?? "")
-            } else if let peerAddress = self.peerAddress, !peerAddress.isEmpty {
-                peer = .address(peerAddress)
-            } else {
-                peer = .unsupported
-            }
-        case let .address(address):
-            peer = .address(address)
-        case .unsupported:
-            peer = .unsupported
-        }
-        return WalletContext.Transaction(
-            id: self.id,
-            transactionHash: self.transactionHash,
-            externalMessageHash: self.externalMessageHash,
-            logicalTime: self.logicalTime,
-            timestamp: self.timestamp,
-            direction: self.direction,
-            amount: self.amount,
-            fee: self.fee,
-            peer: peer,
-            comment: self.comment,
-            currency: self.currency,
-            collectible: self.collectible,
-            status: self.status,
-            kind: self.kind
-        )
-    }
-}
-
-struct WalletEngineMetadataRecord: Codable, Equatable, Sendable {
-    var schemaVersion: Int = 2
-    var walletAddress: String?
-    var pendingTransfers: [WalletContext.PendingTransfer] = []
-    var balance: Int64?
-    var balanceUpdatedAt: Int32?
-    var fiatRates: [WalletContext.FiatCurrency: WalletContext.FiatRate]?
-    var fiatRatesUpdatedAt: Int32?
-    var selectedFiatCurrency: WalletContext.FiatCurrency = .usd
-    var transactions: [WalletStoredTransaction] = []
-    var collectibles: [WalletContext.Collectible] = []
-}
-
 enum WalletEngineKeyRotationStoragePhase: String, Codable, Equatable, Sendable {
-    case rollbackStored
-    case replacementStored
+    case candidateStored
     case submissionStarted
-    case confirmed
-    case rolledBack
+    case chainApplied
+    case backupDisabled
+    case previousRestored
 }
 
 struct WalletEngineKeyRotationRecord: Codable, Equatable, Sendable {
-    var schemaVersion: Int = 1
     let operationId: String
     let recordId: String
     let walletAddress: String
     let walletPublicKey: Data
     let activeSecretRef: String
     let rollbackSecretRef: String
+    let candidateSecretRef: String
+    let previousPublicKey: Data
     let newPublicKey: Data
     let validUntil: UInt64
     var phase: WalletEngineKeyRotationStoragePhase
@@ -185,14 +80,12 @@ actor WalletEngineStorage {
     }
 
     private let descriptorService: String
-    private let metadataService: String
     private let secretService: String
     private let journalService: String
     private let tonConnectService: String
 
     init(namespace: String) {
         self.descriptorService = "org.telegram.ton-wallet.engine.v2.descriptor.\(namespace)"
-        self.metadataService = "org.telegram.ton-wallet.engine.v2.metadata.\(namespace)"
         self.secretService = "org.telegram.ton-wallet.engine.v2.secret.\(namespace)"
         self.journalService = "org.telegram.ton-wallet.engine.v2.journal.\(namespace)"
         self.tonConnectService = "org.telegram.ton-wallet.engine.v2.ton-connect.\(namespace)"
@@ -226,16 +119,18 @@ actor WalletEngineStorage {
         try self.readCodable(service: self.descriptorService, account: "key-rotation")
     }
 
-    func installKeyRotationReplacement(
+    func installKeyRotationCandidate(
         operationId: String,
         descriptor: WalletEngineDescriptorRecord,
+        previousPublicKey: Data,
         newPublicKey: Data,
         validUntil: UInt64,
-        replacementSecret: Data
+        candidateSecret: Data
     ) throws -> WalletEngineKeyRotationRecord {
         guard !operationId.isEmpty,
+              previousPublicKey.count == 32,
               newPublicKey.count == 32,
-              !replacementSecret.isEmpty,
+              !candidateSecret.isEmpty,
               let activeSecretRef = descriptor.secretRef,
               !activeSecretRef.isEmpty,
               let currentSecret = try self.read(service: self.secretService, account: activeSecretRef),
@@ -246,28 +141,32 @@ actor WalletEngineStorage {
             guard current.operationId == operationId,
                   current.recordId == descriptor.recordId,
                   current.walletAddress == descriptor.address,
-                  current.walletPublicKey == descriptor.publicKey else {
+                  current.walletPublicKey == descriptor.publicKey,
+                  current.previousPublicKey == previousPublicKey,
+                  current.newPublicKey == newPublicKey,
+                  current.validUntil == validUntil else {
                 throw WalletEngineStorageError.corrupted
             }
             return current
         }
 
         let rollbackSecretRef = "wallet:\(descriptor.recordId):key-rotation-rollback:\(operationId)"
+        let candidateSecretRef = "wallet:\(descriptor.recordId):key-rotation-candidate:\(operationId)"
         try self.write(currentSecret, service: self.secretService, account: rollbackSecretRef)
-        var record = WalletEngineKeyRotationRecord(
+        try self.write(candidateSecret, service: self.secretService, account: candidateSecretRef)
+        let record = WalletEngineKeyRotationRecord(
             operationId: operationId,
             recordId: descriptor.recordId,
             walletAddress: descriptor.address,
             walletPublicKey: descriptor.publicKey,
             activeSecretRef: activeSecretRef,
             rollbackSecretRef: rollbackSecretRef,
+            candidateSecretRef: candidateSecretRef,
+            previousPublicKey: previousPublicKey,
             newPublicKey: newPublicKey,
             validUntil: validUntil,
-            phase: .rollbackStored
+            phase: .candidateStored
         )
-        try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
-        try self.write(replacementSecret, service: self.secretService, account: activeSecretRef)
-        record.phase = .replacementStored
         try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
         return record
     }
@@ -276,71 +175,134 @@ actor WalletEngineStorage {
         guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
             throw WalletEngineStorageError.corrupted
         }
-        if record.phase == .replacementStored {
+        if record.phase == .candidateStored {
             record.phase = .submissionStarted
             try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        } else if record.phase != .submissionStarted {
+            throw WalletEngineStorageError.corrupted
         }
         return record
     }
 
-    func confirmKeyRotation(operationId: String) throws -> WalletEngineKeyRotationRecord {
+    func keyRotationCandidateSecret(operationId: String) throws -> Data {
+        guard let record = try self.loadKeyRotation(), record.operationId == operationId,
+              let candidate = try self.read(service: self.secretService, account: record.candidateSecretRef),
+              !candidate.isEmpty else {
+            throw WalletEngineStorageError.corrupted
+        }
+        return candidate
+    }
+
+    func markKeyRotationChainApplied(
+        operationId: String,
+        verifiedPublicKey: Data
+    ) throws -> WalletEngineKeyRotationRecord {
         guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
             throw WalletEngineStorageError.corrupted
         }
-        if record.phase != .confirmed {
-            record.phase = .confirmed
+        guard verifiedPublicKey == record.newPublicKey,
+              (record.phase == .submissionStarted || record.phase == .chainApplied || record.phase == .backupDisabled) else {
+            throw WalletEngineStorageError.corrupted
+        }
+        if record.phase == .backupDisabled {
+            guard let activeSecret = try self.read(service: self.secretService, account: record.activeSecretRef),
+                  !activeSecret.isEmpty else {
+                throw WalletEngineStorageError.corrupted
+            }
+            return record
+        }
+        guard let candidate = try self.read(service: self.secretService, account: record.candidateSecretRef),
+              !candidate.isEmpty else {
+            throw WalletEngineStorageError.corrupted
+        }
+        // The candidate stays separately durable until Telegram confirms that
+        // the encrypted backup has been disabled.
+        try self.write(candidate, service: self.secretService, account: record.activeSecretRef)
+        if record.phase == .submissionStarted {
+            record.phase = .chainApplied
             try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
         }
-        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
         return record
     }
 
-    func rollbackKeyRotation(operationId: String) throws {
-        guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
-            return
-        }
-        if record.phase == .rolledBack {
-            try self.remove(service: self.secretService, account: record.rollbackSecretRef)
-            try self.remove(service: self.descriptorService, account: "key-rotation")
-            return
-        }
-        guard record.phase != .confirmed,
+    func restorePreviousKeyRotationSecret(
+        operationId: String,
+        verifiedPublicKey: Data,
+        removeRecord: Bool
+    ) throws {
+        guard var record = try self.loadKeyRotation(), record.operationId == operationId,
+              record.previousPublicKey == verifiedPublicKey,
               let previousSecret = try self.read(service: self.secretService, account: record.rollbackSecretRef),
               !previousSecret.isEmpty else {
             throw WalletEngineStorageError.corrupted
         }
         try self.write(previousSecret, service: self.secretService, account: record.activeSecretRef)
-        record.phase = .rolledBack
+        if removeRecord {
+            record.phase = .previousRestored
+            try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+            try self.cleanupRestoredKeyRotation(operationId: operationId)
+        } else if record.phase == .chainApplied {
+            record.phase = .submissionStarted
+            try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        }
+    }
+
+    func discardUnsubmittedKeyRotation(operationId: String) throws {
+        guard var record = try self.loadKeyRotation(), record.operationId == operationId else {
+            return
+        }
+        guard record.phase == .candidateStored,
+              let previousSecret = try self.read(service: self.secretService, account: record.rollbackSecretRef),
+              !previousSecret.isEmpty else {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.write(previousSecret, service: self.secretService, account: record.activeSecretRef)
+        record.phase = .previousRestored
         try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
-        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
-        try self.remove(service: self.descriptorService, account: "key-rotation")
+        try self.cleanupRestoredKeyRotation(operationId: operationId)
+    }
+
+    func cleanupRestoredKeyRotation(operationId: String) throws {
+        guard let record = try self.loadKeyRotation() else {
+            return
+        }
+        guard record.operationId == operationId, record.phase == .previousRestored else {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.removeKeyRotation(record)
     }
 
     func completeKeyRotation(operationId: String) throws {
-        guard let record = try self.loadKeyRotation(), record.operationId == operationId else {
+        guard var record = try self.loadKeyRotation() else {
             return
         }
-        guard record.phase == .confirmed else {
+        guard record.operationId == operationId,
+              (record.phase == .chainApplied || record.phase == .backupDisabled) else {
             throw WalletEngineStorageError.corrupted
         }
-        try self.remove(service: self.secretService, account: record.rollbackSecretRef)
-        try self.remove(service: self.descriptorService, account: "key-rotation")
+        if record.phase == .chainApplied {
+            record.phase = .backupDisabled
+            try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
+        }
+        try self.removeKeyRotation(record)
     }
 
-    func discardKeyRotation(operationId: String) throws {
+    func discardOrphanedKeyRotation(operationId: String, activeSecretRef: String?) throws {
         guard let record = try self.loadKeyRotation(), record.operationId == operationId else {
             return
         }
+        let descriptor = try self.loadDescriptor()
+        guard record.recordId != descriptor?.recordId,
+              record.activeSecretRef != activeSecretRef else {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.removeKeyRotation(record)
+    }
+
+    private func removeKeyRotation(_ record: WalletEngineKeyRotationRecord) throws {
+        try self.remove(service: self.secretService, account: record.candidateSecretRef)
         try self.remove(service: self.secretService, account: record.rollbackSecretRef)
         try self.remove(service: self.descriptorService, account: "key-rotation")
-    }
-
-    func loadMetadata() throws -> WalletEngineMetadataRecord? {
-        try self.readCodable(service: self.metadataService, account: "state")
-    }
-
-    func saveMetadata(_ metadata: WalletEngineMetadataRecord) throws {
-        try self.writeCodable(metadata, service: self.metadataService, account: "state")
     }
 
     func loadTonConnectSession(recordId: String) throws -> Data? {
@@ -489,9 +451,11 @@ actor WalletEngineStorage {
 
 actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
+    private let errorLogger: WalletContextErrorLogger
 
-    init(storage: WalletEngineStorage) {
+    init(storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
         self.storage = storage
+        self.errorLogger = errorLogger
     }
 
     func now() async -> UInt64 {
@@ -502,8 +466,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.readProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
+            self.errorLogger.error("wallet_protected_secret_read_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_protected_secret_read_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -512,8 +478,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             try await self.storage.storeProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
+            self.errorLogger.error("wallet_protected_secret_store_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_protected_secret_store_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -522,6 +490,7 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             try await self.storage.deleteProtectedSecret(secretRef)
         } catch {
+            self.errorLogger.error("wallet_protected_secret_delete_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -530,8 +499,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.loadJournal(key)
         } catch let error as JournalHostError {
+            self.errorLogger.error("wallet_journal_load_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_journal_load_failed", error)
             throw journalFailure(.unavailable, String(describing: error))
         }
     }
@@ -540,8 +511,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.compareExchangeJournal(mutation)
         } catch let error as JournalHostError {
+            self.errorLogger.error("wallet_journal_compare_exchange_failed", error)
             throw error
         } catch {
+            self.errorLogger.error("wallet_journal_compare_exchange_failed", error)
             throw journalFailure(.unavailable, String(describing: error))
         }
     }

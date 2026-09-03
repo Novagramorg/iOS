@@ -803,7 +803,7 @@ private final class WalletCollectibleContentComponent: Component {
                         rightColumnBackgroundColor: theme.list.itemModalBlocksBackgroundColor
                     )),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - 48.0, height: 1000.0)
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
                 )
                 if let tableView = self.table.view {
                     if tableView.superview == nil {
@@ -945,8 +945,8 @@ private final class WalletCollectiblePagerComponent: Component {
             self.scrollView.isPagingEnabled = true
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.showsVerticalScrollIndicator = false
-            self.scrollView.alwaysBounceHorizontal = false
-            self.scrollView.bounces = false
+            self.scrollView.alwaysBounceHorizontal = true
+            self.scrollView.bounces = true
             self.scrollView.layer.cornerRadius = 10.0
             if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
                 self.scrollView.contentInsetAdjustmentBehavior = .never
@@ -1093,8 +1093,11 @@ private final class WalletCollectiblePagerComponent: Component {
             }
             if let targetOffset {
                 let maximumOffset = max(0.0, contentSize.width - scrollFrame.width)
+                let resolvedOffset = self.isSwiping
+                    ? targetOffset
+                    : max(0.0, min(maximumOffset, targetOffset))
                 self.ignoreContentOffsetChange = true
-                self.scrollView.contentOffset = CGPoint(x: max(0.0, min(maximumOffset, targetOffset)), y: 0.0)
+                self.scrollView.contentOffset = CGPoint(x: resolvedOffset, y: 0.0)
                 self.ignoreContentOffsetChange = false
             }
 
@@ -1307,6 +1310,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private let accountContext: AccountContext
     private let walletContext: WalletContext
     private let openExternalUrl: (String) -> Void
+    private let collectibleSent: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
 
@@ -1319,7 +1323,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         walletContext: WalletContext,
-        collectible: WalletContext.Collectible
+        collectible: WalletContext.Collectible,
+        collectibleSent: @escaping (String) -> Void
     ) {
         let initialState = walletContext.stateValue.collectibles
         var initialCollectibles = initialState.items
@@ -1343,6 +1348,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
         self.accountContext = context
         self.walletContext = walletContext
         self.openExternalUrl = openExternalUrl
+        self.collectibleSent = collectibleSent
         self.collectiblesState = initialState
         self.collectibles = initialCollectibles
         self.currentAddress = collectible.address
@@ -1486,6 +1492,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
                 guard let self else {
                     return
                 }
+                self.collectibleSent(collectible.address)
                 if let navigationController = self.navigationController as? NavigationController {
                     var viewControllers = navigationController.viewControllers
                     viewControllers.removeAll(where: { $0 === self })

@@ -25,11 +25,6 @@ final class WalletStreamingLogger: @unchecked Sendable {
     }
 }
 
-private func walletStreamingErrorFields(_ error: Error) -> String {
-    let nsError = error as NSError
-    return "error_type=\(String(reflecting: type(of: error))) error_domain=\(nsError.domain) error_code=\(nsError.code)"
-}
-
 private final class WalletStreamingEngineURLSource: @unchecked Sendable {
     let engine: TelegramEngine
 
@@ -97,10 +92,10 @@ actor WalletStreamingURLProvider {
             try Task.checkCancellation()
             let fallbackTimestamp = self.now()
             if let cached = self.cached, cached.expires > fallbackTimestamp {
-                self.log("event=wallet_stream_url_fetch_failed_using_cache expires_in=\(cached.expires - fallbackTimestamp) \(walletStreamingErrorFields(error))")
+                self.log("event=wallet_stream_url_fetch_failed_using_cache expires_in=\(cached.expires - fallbackTimestamp) \(walletContextErrorFields(error))")
                 return cached.url
             }
-            self.log("event=wallet_stream_url_fetch_failed \(walletStreamingErrorFields(error))")
+            self.log("event=wallet_stream_url_fetch_failed \(walletContextErrorFields(error))")
             throw error
         }
     }
@@ -108,16 +103,38 @@ actor WalletStreamingURLProvider {
     private static func parse(_ value: WalletStreamingUrl, now: Int64) throws -> CachedValue {
         let expires = Int64(value.expires)
         guard expires > now,
-              let components = URLComponents(string: value.url),
-              components.scheme?.lowercased() == "https",
+              var components = URLComponents(string: value.url),
               components.host?.isEmpty == false,
               components.user == nil,
               components.password == nil,
-              components.fragment == nil,
-              let url = components.url else {
+              components.fragment == nil else {
             if expires <= now {
                 throw WalletStreamingError.expiredURL
             }
+            throw WalletStreamingError.invalidURL
+        }
+
+        switch components.scheme?.lowercased() {
+        case "https":
+            switch components.path {
+            case "/s/api/streaming/", "/s/api/streaming":
+                components.path = "/api/streaming/v2/ws"
+            case "/api/streaming/v2/ws":
+                break
+            default:
+                throw WalletStreamingError.invalidURL
+            }
+            components.scheme = "wss"
+        case "wss":
+            guard components.path == "/api/streaming/v2/ws" else {
+                throw WalletStreamingError.invalidURL
+            }
+        default:
+            throw WalletStreamingError.invalidURL
+        }
+
+        guard components.percentEncodedQuery?.isEmpty == false,
+              let url = components.url else {
             throw WalletStreamingError.invalidURL
         }
         return CachedValue(url: url, expires: expires)
@@ -126,6 +143,7 @@ actor WalletStreamingURLProvider {
 
 protocol WalletStreamingTransport: Sendable {
     func connect(subscription: Data) async throws
+    func send(message: Data) async throws
     func receive() async throws -> Data
     func close() async
 }
@@ -134,53 +152,15 @@ protocol WalletStreamingTransportFactory: Sendable {
     func makeTransport() -> any WalletStreamingTransport
 }
 
-private final class WalletStreamingDataTask: @unchecked Sendable {
-    private let lock = NSLock()
-    private var task: URLSessionDataTask?
-    private var session: URLSession?
-    private var cancelled = false
-
-    func set(task: URLSessionDataTask, session: URLSession) {
-        self.lock.lock()
-        if self.cancelled {
-            self.lock.unlock()
-            task.cancel()
-            session.invalidateAndCancel()
-        } else {
-            self.task = task
-            self.session = session
-            self.lock.unlock()
-        }
-    }
-
-    func cancel() {
-        self.lock.lock()
-        self.cancelled = true
-        let task = self.task
-        let session = self.session
-        self.task = nil
-        self.session = nil
-        self.lock.unlock()
-        task?.cancel()
-        session?.invalidateAndCancel()
-    }
-}
-
-private final class WalletStreamingSessionDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+private final class WalletStreamingSessionDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let expectedURL: URL
-    private let continuation: AsyncThrowingStream<Data, Error>.Continuation
     private let log: WalletStreamingLogger
-    private var eventBytes = 0
-    private var previousWasLineFeed = false
-    private var finished = false
 
     init(
         expectedURL: URL,
-        continuation: AsyncThrowingStream<Data, Error>.Continuation,
         log: WalletStreamingLogger
     ) {
         self.expectedURL = expectedURL
-        self.continuation = continuation
         self.log = log
     }
 
@@ -197,72 +177,31 @@ private final class WalletStreamingSessionDelegate: NSObject, URLSessionDataDele
 
     func urlSession(
         _ session: URLSession,
-        dataTask: URLSessionDataTask,
-        didReceive response: URLResponse,
-        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
     ) {
-        guard let response = response as? HTTPURLResponse,
-              response.url == self.expectedURL else {
+        guard webSocketTask.originalRequest?.url == self.expectedURL else {
             self.log("event=wallet_stream_response_rejected")
-            self.finish(throwing: WalletStreamingError.invalidResponse)
-            completionHandler(.cancel)
+            webSocketTask.cancel(with: .policyViolation, reason: nil)
             return
         }
-        let isEventStream = response.value(forHTTPHeaderField: "Content-Type")?
-            .split(separator: ";", maxSplits: 1)
-            .first?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased() == "text/event-stream"
-        guard (200 ..< 300).contains(response.statusCode), isEventStream else {
-            self.log("event=wallet_stream_response_rejected status_code=\(response.statusCode) event_stream=\(isEventStream ? 1 : 0)")
-            self.finish(throwing: WalletStreamingError.invalidResponse)
-            completionHandler(.cancel)
-            return
-        }
-        self.log("event=wallet_stream_response_accepted status_code=\(response.statusCode)")
-        completionHandler(.allow)
+        self.log("event=wallet_stream_socket_open")
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard !self.finished else { return }
-        for byte in data {
-            self.eventBytes += 1
-            if byte == 0x0a {
-                if self.previousWasLineFeed {
-                    self.eventBytes = 0
-                }
-                self.previousWasLineFeed = true
-            } else if byte != 0x0d {
-                self.previousWasLineFeed = false
-            }
-            if self.eventBytes > walletStreamingMaximumFrameBytes {
-                self.log("event=wallet_stream_event_too_large")
-                self.finish(throwing: WalletStreamingError.frameTooLarge)
-                dataTask.cancel()
-                return
-            }
-        }
-        self.continuation.yield(data)
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        self.log("event=wallet_stream_socket_closed close_code=\(closeCode.rawValue)")
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard !self.finished else { return }
         if let error {
-            self.log("event=wallet_stream_request_completed \(walletStreamingErrorFields(error))")
-            self.finish(throwing: error)
+            self.log("event=wallet_stream_socket_completed \(walletContextErrorFields(error))")
         } else {
-            self.log("event=wallet_stream_request_completed")
-            self.finish()
-        }
-    }
-
-    private func finish(throwing error: Error? = nil) {
-        guard !self.finished else { return }
-        self.finished = true
-        if let error {
-            self.continuation.finish(throwing: error)
-        } else {
-            self.continuation.finish()
+            self.log("event=wallet_stream_socket_completed")
         }
     }
 }
@@ -284,8 +223,8 @@ final class WalletURLSessionStreamingTransportFactory: WalletStreamingTransportF
 actor WalletURLSessionStreamingTransport: WalletStreamingTransport {
     private let provider: WalletStreamingURLProvider
     private let log: WalletStreamingLogger
-    private var cancellation: WalletStreamingDataTask?
-    private var iterator: AsyncThrowingStream<Data, Error>.Iterator?
+    private var session: URLSession?
+    private var task: URLSessionWebSocketTask?
     private var connectionId: UUID?
 
     init(provider: WalletStreamingURLProvider, log: WalletStreamingLogger) {
@@ -297,19 +236,15 @@ actor WalletURLSessionStreamingTransport: WalletStreamingTransport {
         guard subscription.count <= walletStreamingMaximumFrameBytes else {
             throw WalletStreamingError.frameTooLarge
         }
-        // Every SSE reconnect asks Telegram for a current signed endpoint. If that
+        // Every WebSocket reconnect asks Telegram for a current signed endpoint. If that
         // request fails, the provider can still fall back to an unexpired cached URL.
         let url = try await self.provider.url(forceRefresh: true)
         try Task.checkCancellation()
 
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        request.httpBody = subscription
 
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -319,54 +254,93 @@ actor WalletURLSessionStreamingTransport: WalletStreamingTransport {
         configuration.timeoutIntervalForRequest = 60
         configuration.timeoutIntervalForResource = 24 * 60 * 60
 
-        let cancellation = WalletStreamingDataTask()
-        let log = self.log
-        let stream = AsyncThrowingStream<Data, Error> { continuation in
-            let value = WalletStreamingSessionDelegate(
-                expectedURL: url,
-                continuation: continuation,
-                log: log
-            )
-            let session = URLSession(configuration: configuration, delegate: value, delegateQueue: nil)
-            let task = session.dataTask(with: request)
-            cancellation.set(task: task, session: session)
-            continuation.onTermination = { @Sendable _ in
-                cancellation.cancel()
-            }
-            task.resume()
-        }
+        let delegate = WalletStreamingSessionDelegate(expectedURL: url, log: self.log)
+        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        let task = session.webSocketTask(with: request)
+        task.maximumMessageSize = walletStreamingMaximumFrameBytes
         let connectionId = UUID()
         self.connectionId = connectionId
-        self.cancellation = cancellation
-        self.iterator = stream.makeAsyncIterator()
+        self.session = session
+        self.task = task
+        task.resume()
+
+        do {
+            try await self.send(message: subscription)
+        } catch {
+            if self.connectionId == connectionId {
+                self.connectionId = nil
+                self.task = nil
+                self.session = nil
+            }
+            task.cancel(with: .goingAway, reason: nil)
+            session.invalidateAndCancel()
+            throw error
+        }
+    }
+
+    func send(message: Data) async throws {
+        guard message.count <= walletStreamingMaximumFrameBytes else {
+            throw WalletStreamingError.frameTooLarge
+        }
+        guard let task = self.task,
+              self.connectionId != nil,
+              let string = String(data: message, encoding: .utf8) else {
+            throw WalletStreamingError.notConnected
+        }
+        try await task.send(.string(string))
     }
 
     func receive() async throws -> Data {
-        guard let connectionId = self.connectionId, var iterator = self.iterator else {
+        guard let connectionId = self.connectionId, let task = self.task else {
             throw WalletStreamingError.notConnected
         }
-        let value = try await iterator.next()
+        let message = try await task.receive()
         guard self.connectionId == connectionId else {
             throw CancellationError()
         }
-        self.iterator = iterator
-        guard let value else {
-            throw WalletStreamingError.notConnected
+        let data: Data
+        switch message {
+        case let .data(value):
+            data = value
+        case let .string(value):
+            data = Data(value.utf8)
+        @unknown default:
+            throw WalletStreamingError.invalidResponse
         }
-        return value
+        guard data.count <= walletStreamingMaximumFrameBytes else {
+            self.log("event=wallet_stream_event_too_large")
+            throw WalletStreamingError.frameTooLarge
+        }
+        return data
     }
 
     func close() async {
         self.connectionId = nil
-        self.iterator = nil
-        self.cancellation?.cancel()
-        self.cancellation = nil
+        let task = self.task
+        let session = self.session
+        self.task = nil
+        self.session = nil
+        task?.cancel(with: .goingAway, reason: nil)
+        session?.invalidateAndCancel()
     }
+}
+
+enum WalletStreamingFinality: Int, Sendable, Equatable {
+    case pending = 0
+    case confirmed = 1
+    case finalized = 2
 }
 
 enum WalletStreamingParsedEvent: Sendable, Equatable {
     case subscribed
-    case changed
+    case accountStateChanged(balance: Int64, finality: WalletStreamingFinality)
+    case transactionsChanged(
+        traceId: String,
+        finality: WalletStreamingFinality,
+        transactions: [WalletContext.Transaction]
+    )
+    case traceInvalidated(traceId: String)
+    case refreshOnly
 }
 
 enum WalletStreamingDemand {
@@ -434,91 +408,66 @@ struct WalletStreamingRefreshGate {
     }
 }
 
-struct WalletStreamingSSEParser {
-    private static let dataField = Data("data".utf8)
-
-    private var buffer = Data()
-    private var dataLines: [Data] = []
-    private var dataBytes = 0
-
-    mutating func append(_ chunk: Data) throws -> [Data] {
-        self.buffer.append(chunk)
-        var events: [Data] = []
-        while let newlineIndex = self.buffer.firstIndex(of: 0x0a) {
-            var line = Data(self.buffer[self.buffer.startIndex ..< newlineIndex])
-            self.buffer.removeSubrange(self.buffer.startIndex ... newlineIndex)
-            if line.last == 0x0d {
-                line.removeLast()
-            }
-            if let event = try self.consume(line: line) {
-                events.append(event)
-            }
-        }
-        guard self.dataBytes + self.buffer.count <= walletStreamingMaximumFrameBytes else {
-            throw WalletStreamingError.frameTooLarge
-        }
-        return events
-    }
-
-    private mutating func consume(line: Data) throws -> Data? {
-        if line.isEmpty {
-            return self.finishEvent()
-        }
-        guard line.first != 0x3a, let colonIndex = line.firstIndex(of: 0x3a) else {
-            return nil
-        }
-        guard Data(line[line.startIndex ..< colonIndex]) == Self.dataField else {
-            return nil
-        }
-        var valueStart = line.index(after: colonIndex)
-        if valueStart < line.endIndex, line[valueStart] == 0x20 {
-            valueStart = line.index(after: valueStart)
-        }
-        let value = Data(line[valueStart ..< line.endIndex])
-        let separatorBytes = self.dataLines.isEmpty ? 0 : 1
-        guard self.dataBytes + separatorBytes + value.count <= walletStreamingMaximumFrameBytes else {
-            throw WalletStreamingError.frameTooLarge
-        }
-        self.dataBytes += separatorBytes + value.count
-        self.dataLines.append(value)
-        return nil
-    }
-
-    private mutating func finishEvent() -> Data? {
-        guard !self.dataLines.isEmpty else {
-            self.dataBytes = 0
-            return nil
-        }
-        var event = Data()
-        event.reserveCapacity(self.dataBytes)
-        for index in self.dataLines.indices {
-            if index != self.dataLines.startIndex {
-                event.append(0x0a)
-            }
-            event.append(self.dataLines[index])
-        }
-        self.dataLines.removeAll(keepingCapacity: true)
-        self.dataBytes = 0
-        return event
-    }
-}
-
 enum WalletStreamingEventParser {
     private struct Envelope: Decodable {
         let type: String?
         let status: String?
+        let error: String?
     }
 
     private struct AccountStateChange: Decodable {
         let account: String
+        let finality: String
+        let state: AccountState
     }
 
-    private struct Transaction: Decodable {
+    private struct AccountState: Decodable {
+        let balance: String
+    }
+
+    private struct StreamingMessage: Decodable {
+        let source: String?
+        let destination: String?
+        let value: String?
+        let bounced: Bool?
+    }
+
+    private struct TransactionDescription: Decodable {
+        let aborted: Bool?
+    }
+
+    private struct StreamingTransaction: Decodable {
         let account: String
+        let hash: String
+        let lt: String
+        let now: Int64
+        let totalFees: String
+        let description: TransactionDescription?
+        let inMessage: StreamingMessage?
+        let outMessages: [StreamingMessage]
+
+        enum CodingKeys: String, CodingKey {
+            case account
+            case hash
+            case lt
+            case now
+            case totalFees = "total_fees"
+            case description
+            case inMessage = "in_msg"
+            case outMessages = "out_msgs"
+        }
     }
 
     private struct TransactionsChange: Decodable {
-        let transactions: [Transaction]
+        let finality: String
+        let traceExternalHashNorm: String
+        let transactions: [StreamingTransaction]
+
+        enum CodingKeys: String, CodingKey {
+            case finality
+            case traceExternalHashNorm = "trace_external_hash_norm"
+            case transactions
+        }
     }
 
     private struct TraceInvalidated: Decodable {
@@ -535,7 +484,7 @@ enum WalletStreamingEventParser {
         }
         let decoder = JSONDecoder()
         guard let envelope = try? decoder.decode(Envelope.self, from: data) else {
-            return nil
+            return .refreshOnly
         }
         if envelope.status == "subscribed" {
             return .subscribed
@@ -543,26 +492,147 @@ enum WalletStreamingEventParser {
         let expected = expectedRawAddress.lowercased()
         switch envelope.type {
         case "account_state_change":
-            guard let value = try? decoder.decode(AccountStateChange.self, from: data),
-                  value.account.lowercased() == expected else {
-                return nil
+            guard let value = try? decoder.decode(AccountStateChange.self, from: data) else {
+                return .refreshOnly
             }
-            return .changed
+            guard value.account.lowercased() == expected,
+                  let finality = self.finality(value.finality),
+                  finality != .pending,
+                  let balance = self.unsignedInt64(value.state.balance) else {
+                return .refreshOnly
+            }
+            return .accountStateChanged(balance: balance, finality: finality)
         case "transactions":
             guard let value = try? decoder.decode(TransactionsChange.self, from: data),
-                  value.transactions.contains(where: { $0.account.lowercased() == expected }) else {
-                return nil
+                  !value.traceExternalHashNorm.isEmpty,
+                  let finality = self.finality(value.finality) else {
+                return .refreshOnly
             }
-            return .changed
+            let matchingTransactions = value.transactions.filter { $0.account.lowercased() == expected }
+            guard !matchingTransactions.isEmpty else {
+                return .refreshOnly
+            }
+            return .transactionsChanged(
+                traceId: value.traceExternalHashNorm,
+                finality: finality,
+                transactions: matchingTransactions.compactMap {
+                    self.transaction($0, walletRawAddress: expected, finality: finality)
+                }
+            )
         case "trace_invalidated":
             guard let value = try? decoder.decode(TraceInvalidated.self, from: data),
                   !value.traceExternalHashNorm.isEmpty else {
-                return nil
+                return .refreshOnly
             }
-            return .changed
+            return .traceInvalidated(traceId: value.traceExternalHashNorm)
         default:
             return nil
         }
+    }
+
+    private static func finality(_ value: String) -> WalletStreamingFinality? {
+        switch value {
+        case "pending": return .pending
+        case "confirmed": return .confirmed
+        case "finalized": return .finalized
+        default: return nil
+        }
+    }
+
+    private static func unsignedInt64(_ value: String) -> Int64? {
+        guard !value.isEmpty, value.allSatisfy(\.isNumber) else {
+            return nil
+        }
+        return Int64(value)
+    }
+
+    private static func transaction(
+        _ value: StreamingTransaction,
+        walletRawAddress: String,
+        finality: WalletStreamingFinality
+    ) -> WalletContext.Transaction? {
+        guard !value.hash.isEmpty,
+              !value.lt.isEmpty,
+              value.lt.allSatisfy(\.isNumber),
+              let timestamp = Int32(exactly: value.now),
+              let fee = self.unsignedInt64(value.totalFees) else {
+            return nil
+        }
+
+        struct Candidate {
+            let direction: WalletContext.Transaction.Direction
+            let amount: Int64
+            let address: String
+            let bounced: Bool
+        }
+
+        var candidates: [Candidate] = []
+        if let message = value.inMessage,
+           message.destination?.lowercased() == walletRawAddress,
+           let source = message.source,
+           !source.isEmpty,
+           let amountValue = message.value,
+           let amount = self.unsignedInt64(amountValue),
+           amount > 0 {
+            candidates.append(Candidate(
+                direction: .incoming,
+                amount: amount,
+                address: source,
+                bounced: message.bounced == true
+            ))
+        }
+        for message in value.outMessages {
+            guard message.source?.lowercased() == walletRawAddress,
+                  let destination = message.destination,
+                  !destination.isEmpty,
+                  let amountValue = message.value,
+                  let amount = self.unsignedInt64(amountValue),
+                  amount > 0 else {
+                continue
+            }
+            candidates.append(Candidate(
+                direction: .outgoing,
+                amount: amount,
+                address: destination,
+                bounced: message.bounced == true
+            ))
+        }
+        guard candidates.count == 1, let candidate = candidates.first else {
+            return nil
+        }
+
+        let status: WalletContext.Transaction.Status
+        if value.description?.aborted == true || candidate.bounced {
+            status = .failed
+        } else if finality == .pending {
+            status = .pending
+        } else {
+            status = .completed
+        }
+        let peerAddress = (try? convertTonAddress(
+            value: candidate.address,
+            format: .userFriendly(bounceable: false, testnet: false)
+        )) ?? candidate.address
+        return WalletContext.Transaction(
+            id: "\(value.lt):\(value.hash):\(candidate.direction == .incoming ? "in" : "out")",
+            transactionHash: value.hash,
+            logicalTime: value.lt,
+            timestamp: timestamp,
+            direction: candidate.direction,
+            amount: candidate.direction == .outgoing ? -candidate.amount : candidate.amount,
+            fee: fee,
+            peer: .address(peerAddress, domain: nil),
+            comment: nil,
+            status: status
+        )
+    }
+
+    static func isServerError(_ data: Data) -> Bool {
+        guard data.count <= walletStreamingMaximumFrameBytes,
+              let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else {
+            return false
+        }
+        return envelope.error?.isEmpty == false
     }
 
     static func diagnosticLabel(_ data: Data) -> String {
@@ -587,30 +657,157 @@ enum WalletStreamingEventParser {
     }
 }
 
+struct WalletStreamingPresentationOverlay {
+    private struct BalanceValue {
+        let revision: UInt64
+        let value: Int64
+        let updatedAt: Int32
+    }
+
+    private struct TraceValue {
+        let revision: UInt64
+        let finality: WalletStreamingFinality
+        let transactions: [WalletContext.Transaction]
+    }
+
+    private(set) var revision: UInt64 = 0
+    private var balance: BalanceValue?
+    private var traces: [String: TraceValue] = [:]
+
+    var isEmpty: Bool {
+        self.balance == nil && self.traces.isEmpty
+    }
+
+    mutating func apply(_ event: WalletStreamingParsedEvent, updatedAt: Int32) -> Bool {
+        switch event {
+        case .subscribed, .refreshOnly:
+            return false
+        case let .accountStateChanged(balance, _):
+            self.revision &+= 1
+            self.balance = BalanceValue(revision: self.revision, value: balance, updatedAt: updatedAt)
+            return true
+        case let .transactionsChanged(traceId, finality, transactions):
+            if let current = self.traces[traceId], current.finality.rawValue > finality.rawValue {
+                return false
+            }
+            self.revision &+= 1
+            if transactions.isEmpty {
+                return self.traces.removeValue(forKey: traceId) != nil
+            } else {
+                self.traces[traceId] = TraceValue(
+                    revision: self.revision,
+                    finality: finality,
+                    transactions: transactions
+                )
+                return true
+            }
+        case let .traceInvalidated(traceId):
+            self.revision &+= 1
+            return self.traces.removeValue(forKey: traceId) != nil
+        }
+    }
+
+    mutating func clearBalance(through revision: UInt64) -> Bool {
+        guard let balance = self.balance, balance.revision <= revision else {
+            return false
+        }
+        self.balance = nil
+        return true
+    }
+
+    mutating func clearTransactions(through revision: UInt64) -> Bool {
+        let previousCount = self.traces.count
+        self.traces = self.traces.filter { $0.value.revision > revision }
+        return self.traces.count != previousCount
+    }
+
+    mutating func removeAll() -> Bool {
+        guard !self.isEmpty else {
+            return false
+        }
+        self.balance = nil
+        self.traces.removeAll()
+        return true
+    }
+
+    func applying(
+        to state: WalletContext.State,
+        peerByAddress: [String: EnginePeer]
+    ) -> WalletContext.State {
+        let balance: WalletContext.Resource<Int64>
+        if let overlayBalance = self.balance {
+            balance = .value(overlayBalance.value, updatedAt: overlayBalance.updatedAt)
+        } else {
+            balance = state.balance
+        }
+
+        let overlayTransactions = self.traces.values.flatMap(\.transactions)
+        let transactions: WalletContext.TransactionsState
+        if overlayTransactions.isEmpty {
+            transactions = state.transactions
+        } else {
+            transactions = WalletContext.TransactionsState(
+                items: transactionsWithStreamingOverlay(
+                    authoritative: state.transactions.items,
+                    streaming: overlayTransactions,
+                    peerByAddress: peerByAddress
+                ),
+                offset: state.transactions.offset,
+                canLoadMore: state.transactions.canLoadMore,
+                isLoadingMore: state.transactions.isLoadingMore,
+                error: state.transactions.error
+            )
+        }
+        return WalletContext.State(
+            phase: state.phase,
+            balance: balance,
+            transactions: transactions,
+            collectibles: state.collectibles,
+            pendingTransfers: state.pendingTransfers,
+            activeOperation: state.activeOperation,
+            fiat: state.fiat
+        )
+    }
+}
+
 private struct WalletStreamingSubscribeRequest: Encodable {
+    let operation = "subscribe"
     let types = ["account_state_change", "transactions"]
     let addresses: [String]
     let minFinality = "pending"
     let includeAddressBook = false
     let includeMetadata = false
+    let id: String
 
     enum CodingKeys: String, CodingKey {
+        case operation
         case types
         case addresses
         case minFinality = "min_finality"
         case includeAddressBook = "include_address_book"
         case includeMetadata = "include_metadata"
+        case id
     }
+}
+
+private struct WalletStreamingPingRequest: Encodable {
+    let operation = "ping"
 }
 
 actor WalletToncenterStreamingClient {
     struct Configuration: Sendable {
         let initialBackoff: TimeInterval
         let maximumBackoff: TimeInterval
+        let pingInterval: TimeInterval
 
-        init(initialBackoff: TimeInterval = 1, maximumBackoff: TimeInterval = 60) {
+        init(
+            initialBackoff: TimeInterval = 1,
+            maximumBackoff: TimeInterval = 60,
+            pingInterval: TimeInterval = 15
+        ) {
             self.initialBackoff = initialBackoff
             self.maximumBackoff = maximumBackoff
+            self.pingInterval = pingInterval
         }
     }
 
@@ -646,7 +843,7 @@ actor WalletToncenterStreamingClient {
             return AsyncStream { $0.finish() }
         }
         var continuation: AsyncStream<WalletStreamingParsedEvent>.Continuation!
-        let stream = AsyncStream<WalletStreamingParsedEvent>(bufferingPolicy: .bufferingNewest(1)) {
+        let stream = AsyncStream<WalletStreamingParsedEvent>(bufferingPolicy: .bufferingNewest(64)) {
             continuation = $0
         }
         self.continuation = continuation
@@ -700,7 +897,7 @@ actor WalletToncenterStreamingClient {
                     return
                 }
             } catch {
-                self.log("event=wallet_stream_connection_failed attempt=\(attempt) subscribed=\(self.connectionSubscribed ? 1 : 0) \(walletStreamingErrorFields(error))")
+                self.log("event=wallet_stream_connection_failed attempt=\(attempt) subscribed=\(self.connectionSubscribed ? 1 : 0) \(walletContextErrorFields(error))")
             }
             await self.transport?.close()
             self.transport = nil
@@ -713,35 +910,64 @@ actor WalletToncenterStreamingClient {
         self.transport = transport
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let subscription = try encoder.encode(WalletStreamingSubscribeRequest(addresses: [rawAddress]))
+        let subscription = try encoder.encode(WalletStreamingSubscribeRequest(
+            addresses: [rawAddress],
+            id: UUID().uuidString.lowercased()
+        ))
+        let ping = try encoder.encode(WalletStreamingPingRequest())
         try await transport.connect(subscription: subscription)
         self.log("event=wallet_stream_request_started")
-        var parser = WalletStreamingSSEParser()
+
+        let sleep = self.sleep
+        let pingInterval = self.configuration.pingInterval
+        let log = self.log
+        let pingTask = Task {
+            while !Task.isCancelled {
+                do {
+                    try await sleep(UInt64(max(0, pingInterval) * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                do {
+                    try await transport.send(message: ping)
+                    log("event=wallet_stream_ping_sent")
+                } catch {
+                    log("event=wallet_stream_ping_failed \(walletContextErrorFields(error))")
+                    await transport.close()
+                    return
+                }
+            }
+        }
+        defer {
+            pingTask.cancel()
+        }
 
         while !Task.isCancelled {
-            let chunk = try await transport.receive()
-            for data in try parser.append(chunk) {
-                guard let event = WalletStreamingEventParser.parse(data, expectedRawAddress: rawAddress) else {
-                    let label = WalletStreamingEventParser.diagnosticLabel(data)
-                    self.log("event=wallet_stream_event_ignored kind=\(label)")
-                    continue
-                }
-                if event == .subscribed {
-                    self.connectionSubscribed = true
-                    self.log("event=wallet_stream_subscribed")
-                } else {
-                    self.log("event=wallet_stream_change_received")
-                }
-                self.continuation?.yield(event)
+            let data = try await transport.receive()
+            if WalletStreamingEventParser.isServerError(data) {
+                self.log("event=wallet_stream_server_rejected")
+                throw WalletStreamingError.invalidResponse
             }
+            guard let event = WalletStreamingEventParser.parse(data, expectedRawAddress: rawAddress) else {
+                let label = WalletStreamingEventParser.diagnosticLabel(data)
+                self.log("event=wallet_stream_event_ignored kind=\(label)")
+                continue
+            }
+            if case .subscribed = event {
+                self.connectionSubscribed = true
+                self.log("event=wallet_stream_subscribed")
+            } else {
+                self.log("event=wallet_stream_change_received")
+            }
+            self.continuation?.yield(event)
         }
         throw CancellationError()
     }
 }
 
-extension WalletContext {
+extension WalletContextImpl {
     func evaluateStreamingDemand() {
-        assert(Queue.mainQueue().isCurrent())
         let demandIsActive = WalletStreamingDemand.isActive(
             foreground: self.isApplicationInForeground,
             accountIsCurrent: self.isAccountCurrent,
@@ -782,45 +1008,56 @@ extension WalletContext {
         self.streamingClient = client
         self.streamingAddress = rawAddress
         self.streamingGeneration = generation
-        self.streamingTask = Task { @MainActor [weak self] in
-            let events = await client.events(rawAddress: rawAddress)
-            for await event in events {
-                guard let self,
-                      !Task.isCancelled,
-                      self.streamingGeneration == generation,
-                      WalletStreamingDemand.acceptsEvent(
-                        generation: generation,
-                        rawAddress: rawAddress,
-                        currentGeneration: self.activationGeneration,
-                        currentRawAddress: self.streamingAddress,
-                        isActive: WalletStreamingDemand.isActive(
-                            foreground: self.isApplicationInForeground,
-                            accountIsCurrent: self.isAccountCurrent,
-                            networkAvailable: self.isNetworkAvailable,
-                            subscriberCount: self.stateSubscriberCount,
-                            hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
-                        )
-                      ) else {
-                    break
-                }
-                switch event {
-                case .subscribed, .changed:
-                    self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
-                }
+        self.streamingTask = Task { [weak self] in
+            await self?.runStreaming(client: client, generation: generation, rawAddress: rawAddress)
+        }
+    }
+
+    private func runStreaming(
+        client: WalletToncenterStreamingClient,
+        generation: UInt64,
+        rawAddress: String
+    ) async {
+        let events = await client.events(rawAddress: rawAddress)
+        for await event in events {
+            guard !Task.isCancelled,
+                  !self.isShutdown,
+                  self.streamingGeneration == generation,
+                  WalletStreamingDemand.acceptsEvent(
+                    generation: generation,
+                    rawAddress: rawAddress,
+                    currentGeneration: self.activationGeneration,
+                    currentRawAddress: self.streamingAddress,
+                    isActive: WalletStreamingDemand.isActive(
+                        foreground: self.isApplicationInForeground,
+                        accountIsCurrent: self.isAccountCurrent,
+                        networkAvailable: self.isNetworkAvailable,
+                        subscriberCount: self.stateSubscriberCount,
+                        hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
+                    )
+                  ) else {
+                break
             }
-            await client.stop()
-            guard let self else { return }
-            if self.streamingClient === client {
-                self.streamingClient = nil
-                self.streamingTask = nil
-                self.streamingAddress = nil
-                self.streamingGeneration = nil
+            switch event {
+            case .subscribed, .refreshOnly:
+                self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
+            case .accountStateChanged, .transactionsChanged, .traceInvalidated:
+                if self.streamingPresentationOverlay.apply(event, updatedAt: currentWalletTimestamp()) {
+                    self.publishPresentationState()
+                }
+                self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
             }
+        }
+        await client.stop()
+        if self.streamingClient === client {
+            self.streamingClient = nil
+            self.streamingTask = nil
+            self.streamingAddress = nil
+            self.streamingGeneration = nil
         }
     }
 
     func stopStreaming() {
-        assert(Queue.mainQueue().isCurrent())
         if self.streamingTask != nil || self.streamingClient != nil {
             self.streamingLog("event=wallet_stream_stop")
         }
@@ -850,26 +1087,34 @@ extension WalletContext {
         self.streamingLog("event=wallet_stream_refresh_scheduled")
         let taskId = UUID()
         self.streamingRefreshTaskId = taskId
-        self.streamingRefreshTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-            } catch {
-                return
-            }
-            guard let self,
-                  self.streamingRefreshTaskId == taskId,
-                  self.activationGeneration == generation,
-                  self.streamingGeneration == generation,
-                  self.streamingAddress == rawAddress,
-                  self.canUseNetworkRuntime,
-                  self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
-                return
-            }
-            self.streamingRefreshTask = nil
-            self.streamingRefreshTaskId = nil
-            self.streamingRefreshGate.consume()
-            self.streamingLog("event=wallet_stream_refresh_requested")
-            self.requestSynchronization(force: true)
+        self.streamingRefreshTask = Task { [weak self] in
+            await self?.runStreamingRefreshDelay(
+                taskId: taskId,
+                generation: generation,
+                rawAddress: rawAddress
+            )
         }
+    }
+
+    private func runStreamingRefreshDelay(taskId: UUID, generation: UInt64, rawAddress: String) async {
+        do {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+        } catch {
+            return
+        }
+        guard !self.isShutdown,
+              self.streamingRefreshTaskId == taskId,
+              self.activationGeneration == generation,
+              self.streamingGeneration == generation,
+              self.streamingAddress == rawAddress,
+              self.canUseNetworkRuntime,
+              self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
+            return
+        }
+        self.streamingRefreshTask = nil
+        self.streamingRefreshTaskId = nil
+        self.streamingRefreshGate.consume()
+        self.streamingLog("event=wallet_stream_refresh_requested")
+        self.requestSynchronization(force: true)
     }
 }

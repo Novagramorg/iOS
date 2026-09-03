@@ -14,6 +14,11 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
     let publicKey: Data
 }
 
+struct WalletEngineSendExecution: @unchecked Sendable {
+    let result: SendResult
+    let didRecreateClient: Bool
+}
+
 enum WalletEngineKeyRotationResolution: Equatable, Sendable {
     case none
     case pending(operationId: String, retryAfterMilliseconds: UInt64?)
@@ -21,22 +26,50 @@ enum WalletEngineKeyRotationResolution: Equatable, Sendable {
     case rolledBack(operationId: String, phase: SendPhase)
 }
 
+private enum WalletEngineKeyRotationChainState: Equatable {
+    case replacement
+    case previous
+    case different
+}
+
 /// Serializes all UniFFI calls and owns the callback objects for one wallet identity.
 actor WalletEngineRuntime {
+    private enum FfiPriority {
+        case background
+        case userInitiated
+    }
+
+    private enum FfiCancellation: Equatable {
+        case none
+        case refresh
+        case refreshNfts
+        case loadMoreNfts
+        case sendPreview
+        case send
+    }
+
     let storage: WalletEngineStorage
+    private let engine: TelegramEngine
+    private let errorLogger: WalletContextErrorLogger
     private let platformHost: WalletEnginePlatformHost
-    private let statuslessHost: WalletEngineStatuslessHost
+    private var statuslessHost: WalletEngineStatuslessHost
     private let lifecycle: WalletLifecycle
     private var client: WalletClient?
+    private var clientConfig: WalletClientConfig?
+    private var clientRevision: UInt64 = 0
     private var descriptor: WalletDescriptor?
     private var tonConnectSession: TonConnectSession?
     private var ffiBusy = false
-    private var ffiWaiters: [CheckedContinuation<Void, Never>] = []
+    private var userInitiatedFfiWaiters: [CheckedContinuation<Void, Never>] = []
+    private var backgroundFfiWaiters: [CheckedContinuation<Void, Never>] = []
+    private var activeFfiOperation: (id: UUID, cancellation: FfiCancellation)?
 
-    init(engine: TelegramEngine, storage: WalletEngineStorage) {
+    init(engine: TelegramEngine, storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
         self.storage = storage
-        self.platformHost = WalletEnginePlatformHost(storage: storage)
-        self.statuslessHost = WalletEngineStatuslessHost(engine: engine)
+        self.engine = engine
+        self.errorLogger = errorLogger
+        self.platformHost = WalletEnginePlatformHost(storage: storage, errorLogger: errorLogger)
+        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, errorLogger: errorLogger)
         self.lifecycle = WalletLifecycle(platformHost: self.platformHost)
     }
 
@@ -73,7 +106,11 @@ actor WalletEngineRuntime {
             do {
                 try await self.storage.saveReplacementCandidate(record)
             } catch {
-                try? await self.storage.deleteProtectedSecret(imported.secretRef)
+                do {
+                    try await self.storage.deleteProtectedSecret(imported.secretRef)
+                } catch {
+                    self.errorLogger.error("wallet_replacement_secret_cleanup_failed", error)
+                }
                 throw error
             }
             return WalletEngineStagedWallet(
@@ -195,14 +232,22 @@ actor WalletEngineRuntime {
             ))
             guard walletEngineAddressesEqual(imported.address, serverAddress),
                   imported.publicKey == serverPublicKey else {
-                try? await self.storage.deleteProtectedSecret(imported.secretRef)
+                do {
+                    try await self.storage.deleteProtectedSecret(imported.secretRef)
+                } catch {
+                    self.errorLogger.error("wallet_imported_secret_cleanup_failed", error)
+                }
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             let record = WalletEngineDescriptorRecord(descriptor: imported)
             do {
                 try await self.storage.saveDescriptor(record)
             } catch {
-                try? await self.storage.deleteProtectedSecret(imported.secretRef)
+                do {
+                    try await self.storage.deleteProtectedSecret(imported.secretRef)
+                } catch {
+                    self.errorLogger.error("wallet_imported_secret_cleanup_failed", error)
+                }
                 throw error
             }
             selectedRecord = record
@@ -235,12 +280,10 @@ actor WalletEngineRuntime {
                 requestTimeoutMs: 15_000
             )
         )
-        let client = try WalletClient.newStatusless(
-            config: config,
-            statuslessHost: self.statuslessHost,
-            platformHost: self.platformHost
-        )
+        let client = try self.makeClient(config: config)
         self.client = client
+        self.clientConfig = config
+        self.clientRevision &+= 1
         self.descriptor = record.descriptor
         try await self.recoverKeyRotationAfterActivation(record: record, client: client)
         return WalletEngineActivation(
@@ -269,15 +312,21 @@ actor WalletEngineRuntime {
     }
 
     func refresh() async throws -> WalletUpdate {
-        try await self.withFfi { try await self.requireClient().refresh() }
+        try await self.withFfi(priority: .background, cancellation: .refresh) {
+            try await self.requireClient().refresh()
+        }
     }
 
     func refreshNfts() async throws -> WalletUpdate {
-        try await self.withFfi { try await self.requireClient().refreshNfts() }
+        try await self.withFfi(priority: .background, cancellation: .refreshNfts) {
+            try await self.requireClient().refreshNfts()
+        }
     }
 
     func loadMoreNfts() async throws -> WalletUpdate {
-        try await self.withFfi { try await self.requireClient().loadMoreNfts() }
+        try await self.withFfi(priority: .background, cancellation: .loadMoreNfts) {
+            try await self.requireClient().loadMoreNfts()
+        }
     }
 
     func snapshot() async throws -> WalletSnapshot {
@@ -288,29 +337,38 @@ actor WalletEngineRuntime {
         try await self.requireClient().waitForChange(afterRevision: afterRevision)
     }
 
+    func currentClientRevision() -> UInt64 {
+        self.clientRevision
+    }
+
     func resolveDns(_ name: String) async throws -> String? {
-        try await self.withFfi { try await self.requireClient().resolveDns(name: name) }
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.requireClient().resolveDns(name: name)
+        }
     }
 
     func previewSend(intent: SendIntent) async throws -> SendPreview {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewSend(request: SendPreviewRequest(intent: intent))
         }
     }
 
-    func send(operationId: String, intent: SendIntent) async throws -> SendResult {
-        try await self.withFfi {
+    func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
-            return try await self.requireClient().send(request: SendRequest(
+            let request = SendRequest(
                 operationId: operationId,
                 force: false,
                 intent: intent
-            ))
+            )
+            return try await self.sendRecoveringStuckClient { client in
+                try await client.send(request: request)
+            }
         }
     }
 
     func previewNft(operationId: String, intent: NftTransferIntent) async throws -> SendPreview {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewNftTransfer(request: NftTransferPreviewRequest(
                 operationId: operationId,
                 intent: intent
@@ -318,14 +376,17 @@ actor WalletEngineRuntime {
         }
     }
 
-    func sendNft(operationId: String, intent: NftTransferIntent) async throws -> SendResult {
-        try await self.withFfi {
+    func sendNft(operationId: String, intent: NftTransferIntent) async throws -> WalletEngineSendExecution {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
-            return try await self.requireClient().sendNftTransfer(request: NftTransferRequest(
+            let request = NftTransferRequest(
                 operationId: operationId,
                 force: false,
                 intent: intent
-            ))
+            )
+            return try await self.sendRecoveringStuckClient { client in
+                try await client.sendNftTransfer(request: request)
+            }
         }
     }
 
@@ -351,8 +412,37 @@ actor WalletEngineRuntime {
         }
     }
 
+    func previewKeyRotation(
+        operationId: String,
+        signedBoc: String,
+        seqno: UInt32,
+        validUntil: UInt64
+    ) async throws -> SendPreview {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
+            try await self.requireClient().previewSendBoc(request: SendBocRequest(
+                operationId: operationId,
+                force: false,
+                signedBoc: signedBoc,
+                seqno: seqno,
+                validUntil: validUntil
+            ))
+        }
+    }
+
     func keyRotationRecord() async throws -> WalletEngineKeyRotationRecord? {
         try await self.storage.loadKeyRotation()
+    }
+
+    func keyRotationRecoveryPhrase(operationId: String) async throws -> [String] {
+        let secret = try await self.storage.keyRotationCandidateSecret(operationId: operationId)
+        guard let phrase = String(data: secret, encoding: .utf8) else {
+            throw WalletContext.WalletError.storage(.corrupted)
+        }
+        let words = normalizedEngineMnemonic(phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
+        guard words.count == 24, detectMnemonicSchemes(words: words).contains(.rotation) else {
+            throw WalletContext.WalletError.invalidMnemonic
+        }
+        return words
     }
 
     func sendKeyRotation(
@@ -381,19 +471,35 @@ actor WalletEngineRuntime {
             guard let replacementSecret = normalizedWords.joined(separator: " ").data(using: .utf8) else {
                 throw WalletContext.WalletError.invalidMnemonic
             }
-            let record = try await self.storage.installKeyRotationReplacement(
+            let client = try self.requireClient()
+            let snapshot = try client.snapshot()
+            let previousPublicKey: Data
+            do {
+                previousPublicKey = try await self.statuslessHost.walletPublicKey(address: descriptor.address)
+            } catch {
+                switch snapshot.account?.status {
+                case .nonexistent, .uninitialized:
+                    // Before the first deployment, the signing key is the
+                    // stable anchor key represented by the descriptor.
+                    previousPublicKey = descriptor.publicKey
+                case .active, .frozen, .unknown, nil:
+                    throw error
+                }
+            }
+            let record = try await self.storage.installKeyRotationCandidate(
                 operationId: operationId,
                 descriptor: descriptor,
+                previousPublicKey: previousPublicKey,
                 newPublicKey: newPublicKey,
                 validUntil: validUntil,
-                replacementSecret: replacementSecret
+                candidateSecret: replacementSecret
             )
-            guard record.phase != .confirmed else {
+            guard record.phase == .candidateStored else {
                 throw WalletContext.WalletError.unavailable
             }
             _ = try await self.storage.markKeyRotationSubmissionStarted(operationId: operationId)
             do {
-                let result = try await self.requireClient().sendBoc(request: SendBocRequest(
+                let result = try await client.sendBoc(request: SendBocRequest(
                     operationId: operationId,
                     force: false,
                     signedBoc: signedBoc,
@@ -407,18 +513,23 @@ actor WalletEngineRuntime {
                 )
                 return result
             } catch {
-                if let snapshot = try? self.requireClient().snapshot() {
-                    if snapshot.send.operationId == operationId,
-                       (snapshot.send.phase == .submitted
-                        || snapshot.send.phase == .submissionUnknown
-                        || snapshot.send.phase == .confirmed) {
-                        _ = try? await self.reconcileKeyRotation(send: snapshot.send)
-                    } else {
-                        try? await self.storage.rollbackKeyRotation(operationId: operationId)
-                    }
-                } else {
-                    try? await self.storage.rollbackKeyRotation(operationId: operationId)
+                let snapshot: WalletSnapshot?
+                do {
+                    snapshot = try client.snapshot()
+                } catch {
+                    self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
+                    snapshot = nil
                 }
+                if let snapshot {
+                    do {
+                        _ = try await self.reconcileKeyRotation(send: snapshot.send)
+                    } catch {
+                        self.errorLogger.error("wallet_key_rotation_reconciliation_failed", error)
+                    }
+                }
+                // submissionStarted is the app's durable boundary. An absent or
+                // unrelated snapshot does not prove that provider handoff did
+                // not happen, so both secrets remain stored for reconciliation.
                 throw error
             }
         }
@@ -429,19 +540,29 @@ actor WalletEngineRuntime {
             guard let record = try await self.storage.loadKeyRotation() else {
                 return .none
             }
-            if record.phase == .confirmed {
-                return .confirmed(operationId: record.operationId)
-            }
-            if record.phase == .rollbackStored || record.phase == .replacementStored || record.phase == .rolledBack {
-                try await self.storage.rollbackKeyRotation(operationId: record.operationId)
+            if record.phase == .candidateStored {
+                try await self.storage.discardUnsubmittedKeyRotation(operationId: record.operationId)
                 return .rolledBack(operationId: record.operationId, phase: .cancelled)
+            }
+            if record.phase == .previousRestored {
+                try await self.storage.cleanupRestoredKeyRotation(operationId: record.operationId)
+                return .rolledBack(operationId: record.operationId, phase: .cancelled)
+            }
+            if record.phase == .chainApplied || record.phase == .backupDisabled {
+                return try await self.resolveAppliedKeyRotation(record)
             }
             do {
                 let send = try await self.requireClient().resolvePending()
                 return try await self.reconcileKeyRotation(send: send)
             } catch {
-                if let snapshot = try? self.requireClient().snapshot(),
-                   snapshot.send.operationId == record.operationId {
+                let snapshot: WalletSnapshot?
+                do {
+                    snapshot = try self.requireClient().snapshot()
+                } catch {
+                    self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
+                    snapshot = nil
+                }
+                if let snapshot, snapshot.send.operationId == record.operationId {
                     return try await self.reconcileKeyRotation(send: snapshot.send)
                 }
                 throw error
@@ -465,23 +586,24 @@ actor WalletEngineRuntime {
         guard let record = try await self.storage.loadKeyRotation() else {
             return .none
         }
-        if record.phase == .confirmed {
-            return .confirmed(operationId: record.operationId)
+        if record.phase == .previousRestored {
+            try await self.storage.cleanupRestoredKeyRotation(operationId: record.operationId)
+            return .rolledBack(operationId: record.operationId, phase: .cancelled)
+        }
+        if record.phase == .chainApplied || record.phase == .backupDisabled {
+            return try await self.resolveAppliedKeyRotation(record)
         }
         guard operationId == record.operationId else {
             if phase == .idle {
-                try await self.storage.rollbackKeyRotation(operationId: record.operationId)
-                return .rolledBack(operationId: record.operationId, phase: .cancelled)
+                return try await self.resolveTerminalKeyRotation(record, phase: .cancelled)
             }
             return .pending(operationId: record.operationId, retryAfterMilliseconds: nil)
         }
         switch phase {
         case .confirmed:
-            _ = try await self.storage.confirmKeyRotation(operationId: record.operationId)
-            return .confirmed(operationId: record.operationId)
+            return try await self.resolveAppliedKeyRotation(record)
         case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
-            try await self.storage.rollbackKeyRotation(operationId: record.operationId)
-            return .rolledBack(operationId: record.operationId, phase: phase)
+            return try await self.resolveTerminalKeyRotation(record, phase: phase)
         case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
              .submitting, .submissionUnknown, .submitted, .handedOff:
             return .pending(
@@ -491,8 +613,102 @@ actor WalletEngineRuntime {
         }
     }
 
-    func completeKeyRotation(operationId: String) async throws {
-        try await self.storage.completeKeyRotation(operationId: operationId)
+    private func resolveAppliedKeyRotation(
+        _ record: WalletEngineKeyRotationRecord
+    ) async throws -> WalletEngineKeyRotationResolution {
+        switch try await self.keyRotationChainState(record) {
+        case .replacement:
+            _ = try await self.storage.markKeyRotationChainApplied(
+                operationId: record.operationId,
+                verifiedPublicKey: record.newPublicKey
+            )
+            return .confirmed(operationId: record.operationId)
+        case .previous:
+            let expired = self.keyRotationValidityHasElapsed(record)
+            try await self.storage.restorePreviousKeyRotationSecret(
+                operationId: record.operationId,
+                verifiedPublicKey: record.previousPublicKey,
+                removeRecord: expired
+            )
+            if expired {
+                return .rolledBack(operationId: record.operationId, phase: .expired)
+            }
+            return .pending(operationId: record.operationId, retryAfterMilliseconds: 1_000)
+        case .different, nil:
+            return .pending(operationId: record.operationId, retryAfterMilliseconds: 1_000)
+        }
+    }
+
+    private func resolveTerminalKeyRotation(
+        _ record: WalletEngineKeyRotationRecord,
+        phase: SendPhase
+    ) async throws -> WalletEngineKeyRotationResolution {
+        switch try await self.keyRotationChainState(record) {
+        case .replacement:
+            _ = try await self.storage.markKeyRotationChainApplied(
+                operationId: record.operationId,
+                verifiedPublicKey: record.newPublicKey
+            )
+            return .confirmed(operationId: record.operationId)
+        case .previous:
+            try await self.storage.restorePreviousKeyRotationSecret(
+                operationId: record.operationId,
+                verifiedPublicKey: record.previousPublicKey,
+                removeRecord: true
+            )
+            return .rolledBack(operationId: record.operationId, phase: phase)
+        case .different, nil:
+            return .pending(operationId: record.operationId, retryAfterMilliseconds: 1_000)
+        }
+    }
+
+    private func keyRotationChainState(
+        _ record: WalletEngineKeyRotationRecord
+    ) async throws -> WalletEngineKeyRotationChainState? {
+        do {
+            let publicKey = try await self.statuslessHost.walletPublicKey(address: record.walletAddress)
+            if publicKey == record.newPublicKey {
+                return .replacement
+            }
+            if publicKey == record.previousPublicKey {
+                return .previous
+            }
+            self.errorLogger.log("event=wallet_key_rotation_public_key_mismatch")
+            return .different
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            self.errorLogger.error("wallet_key_rotation_public_key_check_failed", error)
+            return nil
+        }
+    }
+
+    private func keyRotationValidityHasElapsed(_ record: WalletEngineKeyRotationRecord) -> Bool {
+        let (deadline, overflow) = record.validUntil.addingReportingOverflow(120)
+        guard !overflow else {
+            return false
+        }
+        return UInt64(max(0, Date().timeIntervalSince1970.rounded(.down))) > deadline
+    }
+
+    func completeKeyRotationAfterBackupDisabled(operationId: String) async throws {
+        try await self.withFfi {
+            guard let record = try await self.storage.loadKeyRotation() else {
+                return
+            }
+            guard record.operationId == operationId,
+                  (record.phase == .chainApplied || record.phase == .backupDisabled) else {
+                throw WalletContext.WalletError.storage(.corrupted)
+            }
+            guard try await self.keyRotationChainState(record) == .replacement else {
+                throw WalletContext.WalletError.operationInProgress
+            }
+            _ = try await self.storage.markKeyRotationChainApplied(
+                operationId: record.operationId,
+                verifiedPublicKey: record.newPublicKey
+            )
+            try await self.storage.completeKeyRotation(operationId: operationId)
+        }
     }
 
     func tonConnectAccount() async throws -> TonConnectAccountInfo {
@@ -524,33 +740,39 @@ actor WalletEngineRuntime {
     }
 
     func previewTonConnect(_ request: SendRequest) async throws -> SendPreview {
-        try await self.withFfi { try await self.requireClient().previewTonConnect(request: request) }
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
+            try await self.requireClient().previewTonConnect(request: request)
+        }
     }
 
     func previewSignMessage(_ request: SignMessageRequest) async throws -> SignMessagePreview {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewSignMessage(request: SendPreviewRequest(intent: request.intent))
         }
     }
 
     func sendTonConnect(_ request: SendRequest) async throws -> SendResult {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().send(request: request)
         }
     }
 
     func signMessage(_ request: SignMessageRequest) async throws -> SignMessageResult {
-        try await self.withFfi {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().signMessage(request: request)
         }
     }
 
     func shutdown() async {
-        try? await self.withFfi {
-            self.tonConnectSession = nil
-            try await self.shutdownClient()
+        do {
+            try await self.withFfi {
+                self.tonConnectSession = nil
+                try await self.shutdownClient()
+            }
+        } catch {
+            self.errorLogger.error("wallet_engine_shutdown_failed", error)
         }
     }
 
@@ -654,17 +876,22 @@ actor WalletEngineRuntime {
         guard let rotation = try await self.storage.loadKeyRotation() else {
             return
         }
-        guard rotation.schemaVersion == 1,
-              rotation.recordId == descriptor.recordId,
+        guard rotation.recordId == descriptor.recordId,
               walletEngineAddressesEqual(rotation.walletAddress, descriptor.address),
               rotation.walletPublicKey == descriptor.publicKey,
               rotation.activeSecretRef == descriptor.secretRef else {
-            try await self.storage.discardKeyRotation(operationId: rotation.operationId)
+            if rotation.recordId == descriptor.recordId || rotation.activeSecretRef == descriptor.secretRef {
+                throw WalletContext.WalletError.storage(.corrupted)
+            }
+            try await self.storage.discardOrphanedKeyRotation(
+                operationId: rotation.operationId,
+                activeSecretRef: descriptor.secretRef
+            )
             return
         }
         switch rotation.phase {
-        case .rollbackStored, .replacementStored, .rolledBack:
-            try await self.storage.rollbackKeyRotation(operationId: rotation.operationId)
+        case .candidateStored:
+            try await self.storage.discardUnsubmittedKeyRotation(operationId: rotation.operationId)
         case .submissionStarted:
             do {
                 let send = try await client.resolvePending()
@@ -672,21 +899,80 @@ actor WalletEngineRuntime {
             } catch {
                 // A transport failure is ambiguous. Keep both the replacement
                 // secret and rollback material until provider evidence is available.
+                self.errorLogger.error("wallet_key_rotation_recovery_failed", error)
             }
-        case .confirmed:
-            _ = try await self.storage.confirmKeyRotation(operationId: rotation.operationId)
+        case .chainApplied, .backupDisabled:
+            _ = try await self.resolveAppliedKeyRotation(rotation)
+        case .previousRestored:
+            try await self.storage.cleanupRestoredKeyRotation(operationId: rotation.operationId)
         }
     }
 
     private func shutdownClient() async throws {
         if let client = self.client {
             self.client = nil
+            self.clientConfig = nil
             try await client.shutdown()
         }
     }
 
+    private func makeClient(
+        config: WalletClientConfig,
+        statuslessHost: WalletEngineStatuslessHost? = nil
+    ) throws -> WalletClient {
+        try WalletClient.newStatusless(
+            config: config,
+            statuslessHost: statuslessHost ?? self.statuslessHost,
+            platformHost: self.platformHost
+        )
+    }
+
+    private func sendRecoveringStuckClient(
+        _ operation: (WalletClient) async throws -> SendResult
+    ) async throws -> WalletEngineSendExecution {
+        let client = try self.requireClient()
+        do {
+            return WalletEngineSendExecution(
+                result: try await operation(client),
+                didRecreateClient: false
+            )
+        } catch {
+            guard walletEngineIsSendAlreadyInProgress(error) else {
+                throw error
+            }
+            guard self.client === client, let config = self.clientConfig else {
+                throw error
+            }
+
+            self.errorLogger.error("wallet_engine_stuck_send_recovery_started", error)
+            try await client.shutdown()
+            self.client = nil
+            let replacementStatuslessHost = WalletEngineStatuslessHost(
+                engine: self.engine,
+                errorLogger: self.errorLogger
+            )
+            let replacement: WalletClient
+            do {
+                replacement = try self.makeClient(
+                    config: config,
+                    statuslessHost: replacementStatuslessHost
+                )
+            } catch {
+                self.clientConfig = nil
+                throw error
+            }
+            self.statuslessHost = replacementStatuslessHost
+            self.client = replacement
+            self.clientRevision &+= 1
+            return WalletEngineSendExecution(
+                result: try await operation(replacement),
+                didRecreateClient: true
+            )
+        }
+    }
+
     private func ensureKeyRotationAllowsSigning() async throws {
-        if let rotation = try await self.storage.loadKeyRotation(), rotation.phase != .confirmed {
+        if try await self.storage.loadKeyRotation() != nil {
             throw WalletContext.WalletError.operationInProgress
         }
     }
@@ -705,30 +991,98 @@ actor WalletEngineRuntime {
         return session
     }
 
-    private func withFfi<Value>(_ operation: () async throws -> Value) async throws -> Value {
-        await self.acquireFfi()
-        defer { self.releaseFfi() }
+    private func withFfi<Value>(
+        priority: FfiPriority = .userInitiated,
+        cancellation: FfiCancellation = .none,
+        _ operation: @escaping () async throws -> Value
+    ) async throws -> Value {
+        await self.acquireFfi(priority: priority)
+        defer {
+            self.activeFfiOperation = nil
+            self.releaseFfi()
+        }
         try Task.checkCancellation()
-        return try await operation()
+        let operationId = UUID()
+        self.activeFfiOperation = (operationId, cancellation)
+        let operationTask = Task { () -> Result<Value, Error> in
+            do {
+                return .success(try await operation())
+            } catch {
+                return .failure(error)
+            }
+        }
+        let result = await withTaskCancellationHandler(operation: {
+            await operationTask.value
+        }, onCancel: { [weak self] in
+            Task {
+                await self?.cancelActiveFfiOperation(id: operationId, cancellation: cancellation)
+            }
+        })
+        try Task.checkCancellation()
+        return try result.get()
     }
 
-    private func acquireFfi() async {
+    private func acquireFfi(priority: FfiPriority = .userInitiated) async {
         if !self.ffiBusy {
             self.ffiBusy = true
             return
         }
         await withCheckedContinuation { continuation in
-            self.ffiWaiters.append(continuation)
+            switch priority {
+            case .userInitiated:
+                self.userInitiatedFfiWaiters.append(continuation)
+            case .background:
+                self.backgroundFfiWaiters.append(continuation)
+            }
         }
     }
 
     private func releaseFfi() {
-        if self.ffiWaiters.isEmpty {
-            self.ffiBusy = false
+        if !self.userInitiatedFfiWaiters.isEmpty {
+            self.userInitiatedFfiWaiters.removeFirst().resume()
+        } else if !self.backgroundFfiWaiters.isEmpty {
+            self.backgroundFfiWaiters.removeFirst().resume()
         } else {
-            self.ffiWaiters.removeFirst().resume()
+            self.ffiBusy = false
         }
     }
+
+    private func cancelActiveFfiOperation(id: UUID, cancellation: FfiCancellation) async {
+        guard cancellation != .none,
+              self.activeFfiOperation?.id == id,
+              self.activeFfiOperation?.cancellation == cancellation,
+              let client = self.client else {
+            return
+        }
+        do {
+            switch cancellation {
+            case .none:
+                return
+            case .refresh:
+                try await client.cancelRefresh()
+            case .refreshNfts:
+                try await client.cancelRefreshNfts()
+            case .loadMoreNfts:
+                try await client.cancelLoadMoreNfts()
+            case .sendPreview:
+                try await client.cancelSendPreview()
+            case .send:
+                try await client.cancelSend()
+            }
+        } catch {
+            self.errorLogger.error("wallet_engine_operation_cancellation_failed", error)
+        }
+    }
+}
+
+func walletEngineIsSendAlreadyInProgress(_ error: Error) -> Bool {
+    guard let error = error as? WalletClientError else {
+        return false
+    }
+    if case .SendAlreadyInProgress = error {
+        return true
+    }
+    return false
 }
 
 func normalizedEngineMnemonic(_ words: [String]) -> [String] {

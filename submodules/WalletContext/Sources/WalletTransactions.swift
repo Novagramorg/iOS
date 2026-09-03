@@ -4,7 +4,11 @@ import SwiftSignalKit
 import WalletEngineFFI
 
 let walletTransactionFetchLimit = 50
-let walletPreparedTransferLifetime: TimeInterval = 5.0 * 60.0
+
+struct WalletPeerAddressMapping: @unchecked Sendable {
+    let peer: EnginePeer
+    let address: String
+}
 
 struct ResolvedTransferInput {
     let address: String
@@ -100,23 +104,27 @@ private func isTestnetAddress(_ format: TonAddressFormat) -> Bool {
 func walletTransactions(
     from transactions: [TelegramCore.WalletTransaction]
 ) -> [WalletContext.Transaction] {
-    transactions.map { transaction in
+    var seenIds = Set<String>()
+    var result: [WalletContext.Transaction] = []
+    result.reserveCapacity(transactions.count)
+    for transaction in transactions {
+        guard seenIds.insert(transaction.id).inserted else {
+            continue
+        }
         let peer: WalletContext.Transaction.Peer
         switch transaction.peer {
-        case let .user(enginePeer, address):
-            peer = .user(enginePeer, address: address)
-        case let .address(address):
-            peer = .address(address)
+        case let .user(enginePeer, address, domain):
+            peer = .user(enginePeer, address: address, domain: domain)
+        case let .address(address, domain):
+            peer = .address(address, domain: domain)
         case .unsupported:
             peer = .unsupported
         }
 
-        let status: WalletContext.Transaction.Status = transaction.failed
-            ? .failed
-            : (transaction.pending ? .pending : .completed)
+        let status: WalletContext.Transaction.Status = transaction.failed ? .failed : .completed
         let logicalTime = transaction.id.split(separator: ":", maxSplits: 1).first.map(String.init)
             ?? transaction.id
-        return WalletContext.Transaction(
+        result.append(WalletContext.Transaction(
             id: transaction.id,
             transactionHash: transaction.txHash,
             logicalTime: logicalTime,
@@ -127,8 +135,9 @@ func walletTransactions(
             peer: peer,
             comment: transaction.comment,
             status: status
-        )
+        ))
     }
+    return result
 }
 
 func walletTransactions(
@@ -171,7 +180,73 @@ func mergeTransactions(
             values[key] = transaction
         }
     }
-    return values.values.sorted { lhs, rhs in
+    return sortedWalletTransactions(Array(values.values))
+}
+
+func transactionsWithStreamingOverlay(
+    authoritative: [WalletContext.Transaction],
+    streaming: [WalletContext.Transaction],
+    peerByAddress: [String: EnginePeer]
+) -> [WalletContext.Transaction] {
+    var values: [String: WalletContext.Transaction] = [:]
+    for transaction in streaming {
+        let resolved = transactionWithResolvedStreamingPeer(
+            transaction,
+            peerByAddress: peerByAddress
+        )
+        values[walletTransactionMergeKey(resolved)] = resolved
+    }
+    for transaction in authoritative {
+        values[walletTransactionMergeKey(transaction)] = transaction
+    }
+    return sortedWalletTransactions(Array(values.values))
+}
+
+func walletAddressMappingKey(_ address: String) -> String? {
+    let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, let info = try? parseTonAddress(value: trimmed) else {
+        return nil
+    }
+    if case let .userFriendly(_, testnet) = info.format, testnet {
+        return nil
+    }
+    return try? convertTonAddress(value: trimmed, format: .raw).lowercased()
+}
+
+private func transactionWithResolvedStreamingPeer(
+    _ transaction: WalletContext.Transaction,
+    peerByAddress: [String: EnginePeer]
+) -> WalletContext.Transaction {
+    guard case let .address(address, domain) = transaction.peer,
+          let key = walletAddressMappingKey(address),
+          let peer = peerByAddress[key] else {
+        return transaction
+    }
+    return WalletContext.Transaction(
+        id: transaction.id,
+        transactionHash: transaction.transactionHash,
+        logicalTime: transaction.logicalTime,
+        timestamp: transaction.timestamp,
+        direction: transaction.direction,
+        amount: transaction.amount,
+        fee: transaction.fee,
+        peer: .user(peer, address: address, domain: domain),
+        comment: transaction.comment,
+        currency: transaction.currency,
+        collectible: transaction.collectible,
+        status: transaction.status,
+        kind: transaction.kind
+    )
+}
+
+private func walletTransactionMergeKey(_ transaction: WalletContext.Transaction) -> String {
+    transaction.transactionHash?.lowercased() ?? transaction.id.lowercased()
+}
+
+private func sortedWalletTransactions(
+    _ transactions: [WalletContext.Transaction]
+) -> [WalletContext.Transaction] {
+    transactions.sorted { lhs, rhs in
         if lhs.timestamp != rhs.timestamp {
             return lhs.timestamp > rhs.timestamp
         }
@@ -182,6 +257,7 @@ func mergeTransactions(
 private func transactionInformationScore(_ value: WalletContext.Transaction) -> Int {
     var score = value.status == .completed ? 100 : 0
     if value.peer.displayName != nil { score += 4 }
+    if value.peer.domain != nil { score += 2 }
     if value.comment != nil { score += 1 }
     return score
 }

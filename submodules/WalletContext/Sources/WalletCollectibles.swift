@@ -1,7 +1,6 @@
 import Foundation
 import WalletEngineFFI
 
-let walletCollectibleFetchLimit = 60
 private let walletCollectibleMetadataMaximumSize = 2 * 1024 * 1024
 private let walletCollectibleLottieHosts: Set<String> = ["nft.fragment.com"]
 private let walletTelegramAnonymousNumbersCollection = "0:0e41dc1dc3c9067ed24248580e12b3359818d83dee0304fabcf80845eafafdb2"
@@ -29,15 +28,21 @@ struct WalletCollectibleMetadata {
     }
 }
 
-func walletCollectibles(from values: [NftItem]) async -> [WalletContext.Collectible] {
+func walletCollectibles(
+    from values: [NftItem],
+    errorLogger: WalletContextErrorLogger
+) async -> [WalletContext.Collectible] {
     var result: [WalletContext.Collectible] = []
     result.reserveCapacity(values.count)
     for value in values {
         var metadata = walletCollectibleMetadata(from: value)
         if walletCollectibleNeedsRemoteMetadata(value, metadata: metadata),
-           let url = walletCollectibleMetadataUrl(from: value),
-           let remote = try? await walletCollectibleMetadata(from: url) {
-            metadata.merge(remote)
+           let url = walletCollectibleMetadataUrl(from: value) {
+            do {
+                metadata.merge(try await walletCollectibleMetadata(from: url))
+            } catch {
+                errorLogger.error("wallet_collectible_metadata_fetch_failed", error)
+            }
         }
         result.append(walletCollectible(from: value, metadata: metadata))
     }
@@ -225,23 +230,6 @@ private func walletCollectibleGiftSlug(name: String, metadataUrl: URL?) -> Strin
         return nil
     }
     return nonEmptyCollectibleString(metadataUrl.deletingPathExtension().lastPathComponent)
-}
-
-func mergeCollectibles(
-    existing: [WalletContext.Collectible],
-    new: [WalletContext.Collectible]
-) -> [WalletContext.Collectible] {
-    var result = existing
-    var index = Dictionary(uniqueKeysWithValues: existing.enumerated().map { ($1.address, $0) })
-    for value in new {
-        if let existingIndex = index[value.address] {
-            result[existingIndex] = value
-        } else {
-            index[value.address] = result.count
-            result.append(value)
-        }
-    }
-    return result
 }
 
 private func firstCollectibleString(_ values: [String: String], keys: [String]) -> String? {

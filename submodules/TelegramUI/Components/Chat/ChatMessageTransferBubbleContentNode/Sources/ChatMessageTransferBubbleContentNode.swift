@@ -125,8 +125,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             )
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, _ in
-                let messageText = item.attributes.updatingMedia?.text ?? item.message.text
-                guard let transfer = parseWalletTransferMessageText(messageText) else {
+                let engineMessage = EngineMessage(item.message)
+                guard let transfer = walletTransferMessageData(
+                    message: engineMessage,
+                    accountPeerId: item.context.account.peerId
+                ) else {
                     return (0.0, { _ in
                         return (CGSize(), { _, _, _ in })
                     })
@@ -139,7 +142,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     presentationData: (item.presentationData.theme.theme, item.presentationData.theme.wallpaper),
                     strings: item.presentationData.strings,
                     dateTimeFormat: item.presentationData.dateTimeFormat,
-                    message: EngineMessage(item.message),
+                    message: engineMessage,
                     transfer: transfer,
                     tonUsdRate: tonUsdRate
                 )
@@ -225,8 +228,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                 let (addressLayout, addressApply) = makeAddressLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
-                        //TODO:
-                        string: "",
+                        string: transfer.peerAddress.isEmpty ? "" : formatTonAddress(transfer.peerAddress),
                         font: Font.with(size: 10.0, design: .monospace, weight: .medium),
                         textColor: UIColor(rgb: 0x005fdb),
                         paragraphAlignment: .center
@@ -554,8 +556,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 guard let item = self?.item else {
                     return
                 }
-                let messageText = item.attributes.updatingMedia?.text ?? item.message.text
-                guard let transfer = parseWalletTransferMessageText(messageText) else {
+                let engineMessage = EngineMessage(item.message)
+                guard let transfer = walletTransferMessageData(
+                    message: engineMessage,
+                    accountPeerId: item.context.account.peerId
+                ) else {
                     return
                 }
 
@@ -573,19 +578,36 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 } else {
                     comment = transfer.caption
                 }
-                let transaction = WalletContext.Transaction(
-                    id: "telegram-message-\(item.message.id.namespace)-\(item.message.id.id)",
-                    logicalTime: String(item.message.id.id),
-                    timestamp: item.message.timestamp,
-                    direction: direction,
-                    amount: transfer.amount,
-                    fee: 0,
-                    peer: .unsupported,
-                    comment: comment
-                )
+                let walletContext = item.context.walletContext
+                let transaction: WalletContext.Transaction
+                if let current = walletContext?.stateValue.transactions.items.first(where: { $0.id == transfer.transactionId }) {
+                    transaction = current
+                } else {
+                    let peer: WalletContext.Transaction.Peer
+                    if let enginePeer = item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init),
+                       enginePeer.id.namespace == Namespaces.Peer.CloudUser {
+                        peer = .user(enginePeer, address: transfer.peerAddress, domain: nil)
+                    } else if !transfer.peerAddress.isEmpty {
+                        peer = .address(transfer.peerAddress, domain: nil)
+                    } else {
+                        peer = .unsupported
+                    }
+                    let logicalTime = transfer.transactionId.split(separator: ":", maxSplits: 1).first.map(String.init)
+                        ?? transfer.transactionId
+                    transaction = WalletContext.Transaction(
+                        id: transfer.transactionId,
+                        logicalTime: logicalTime,
+                        timestamp: item.message.timestamp,
+                        direction: direction,
+                        amount: transfer.amount,
+                        fee: 0,
+                        peer: peer,
+                        comment: comment
+                    )
+                }
                 let controller = item.context.sharedContext.makeWalletTransactionScreen(
                     context: item.context,
-                    mode: .transaction(transaction)
+                    transaction: transaction
                 )
                 if let navigationController = item.controllerInteraction.navigationController() {
                     navigationController.pushViewController(controller)

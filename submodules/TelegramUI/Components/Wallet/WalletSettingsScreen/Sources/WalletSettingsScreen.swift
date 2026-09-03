@@ -48,6 +48,9 @@ private final class WalletSettingsScreenComponent: Component {
         private var walletState: WalletContext.State?
         private weak var backupWordsController: ViewController?
         private var preparedBackupDisable: WalletContext.PreparedBackupDisable?
+        private weak var disableBackupPreparationController: AlertScreen?
+        private var disableBackupPreparationProgress: ValuePromise<Bool>?
+        private var isPreparingBackupDisable = false
         private weak var disableBackupConfirmationController: AlertScreen?
         private var disableBackupProgress: ValuePromise<Bool>?
         private var isDisablingBackup = false
@@ -178,7 +181,8 @@ private final class WalletSettingsScreenComponent: Component {
         private func presentDisableBackupAlert() {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  self.walletState?.activeOperation == nil else {
+                  self.walletState?.activeOperation == nil,
+                  !self.isPreparingBackupDisable else {
                 return
             }
 
@@ -191,29 +195,80 @@ private final class WalletSettingsScreenComponent: Component {
             //TODO:localize
             let disableTitle = "Disable"
 
-            controller.present(textAlertController(
+            let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
+            let actionsEnabled = progress.get() |> map { !$0 }
+            let alertController = AlertScreen(
                 context: component.context,
-                title: title,
-                text: text,
+                configuration: AlertScreen.Configuration(dismissOnOutsideTap: false),
+                content: [
+                    AnyComponentWithIdentity(
+                        id: "title",
+                        component: AnyComponent(AlertTitleComponent(title: title))
+                    ),
+                    AnyComponentWithIdentity(
+                        id: "text",
+                        component: AnyComponent(AlertTextComponent(content: .plain(text)))
+                    )
+                ],
                 actions: [
-                    TextAlertAction(type: .genericAction, title: cancelTitle, action: {
-                    }),
-                    TextAlertAction(type: .destructiveAction, title: disableTitle, action: { [weak self] in
-                        self?.prepareDisableBackup()
-                    })
+                    AlertScreen.Action(
+                        title: cancelTitle,
+                        action: {},
+                        isEnabled: actionsEnabled
+                    ),
+                    AlertScreen.Action(
+                        title: disableTitle,
+                        type: .destructive,
+                        action: { [weak self] in
+                            self?.prepareDisableBackup()
+                        },
+                        autoDismiss: false,
+                        isEnabled: actionsEnabled,
+                        progress: progress.get()
+                    )
                 ]
-            ), in: .window(.root))
+            )
+            self.disableBackupPreparationController = alertController
+            self.disableBackupPreparationProgress = progress
+            alertController.dismissed = { [weak self, weak alertController] _ in
+                guard let self, self.disableBackupPreparationController === alertController else {
+                    return
+                }
+                self.disableBackupPreparationController = nil
+                self.disableBackupPreparationProgress = nil
+                self.isPreparingBackupDisable = false
+            }
+            controller.present(alertController, in: .window(.root))
         }
 
         private func prepareDisableBackup() {
-            guard let component = self.component else {
+            guard !self.isPreparingBackupDisable,
+                  let component = self.component else {
                 return
             }
+            self.isPreparingBackupDisable = true
+            self.disableBackupPreparationProgress?.set(true)
             self.backupOperationDisposable.set((component.walletContext.prepareDisableBackup()
             |> deliverOnMainQueue).start(next: { [weak self] prepared in
-                self?.presentUpdateSecretPhraseAlert(prepared: prepared)
+                guard let self else {
+                    return
+                }
+                self.isPreparingBackupDisable = false
+                let presentNext = { [weak self] in
+                    self?.presentUpdateSecretPhraseAlert(prepared: prepared)
+                }
+                if let alertController = self.disableBackupPreparationController {
+                    alertController.dismiss(completion: { presentNext() })
+                } else {
+                    presentNext()
+                }
             }, error: { [weak self] _ in
-                self?.presentDisableBackupError()
+                guard let self else {
+                    return
+                }
+                self.isPreparingBackupDisable = false
+                self.disableBackupPreparationProgress?.set(false)
+                self.presentDisableBackupError()
             }))
         }
 
@@ -221,18 +276,110 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            //TODO:localize
+            var text = "You'll get a new phrase to write down. Address and balance stay the same."
+            if let networkFeeNanograms = prepared.networkFeeNanograms {
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let fee = formatTonAmountText(
+                    networkFeeNanograms,
+                    dateTimeFormat: presentationData.dateTimeFormat,
+                    maxDecimalPositions: 5
+                )
+                var feeText = "Network fee: \(fee) Grams"
+                if !"".isEmpty, let fiatRate = self.walletState?.fiat.selectedRate {
+                    let fiatCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
+                    let fiatFee = formatTonFiatValue(
+                        networkFeeNanograms,
+                        rate: fiatRate.unitsPerGram,
+                        currencySymbol: fiatCurrency.symbol,
+                        maxDecimalPositions: 2,
+                        dateTimeFormat: presentationData.dateTimeFormat
+                    )
+                    feeText += " (~\(fiatFee))"
+                }
+                text += "\n\n\(feeText)."
+            }
             controller.present(textAlertController(
                 context: component.context,
                 title: "Update Secret Phrase?",
-                text: "You'll get a new phrase to write down. Address and balance stay the same.",
+                text: text,
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Not now", action: {
                     }),
                     TextAlertAction(type: .defaultAction, title: "Update", action: { [weak self] in
-                        self?.openReplacementPhrase(prepared: prepared)
+                        Queue.mainQueue().after(0.2) { [weak self] in
+                            self?.continueWithPreparedBackupDisable(prepared)
+                        }
                     })
                 ]
             ), in: .window(.root))
+        }
+
+        private func continueWithPreparedBackupDisable(_ prepared: WalletContext.PreparedBackupDisable) {
+            guard let networkFeeNanograms = prepared.networkFeeNanograms else {
+                self.openReplacementPhrase(prepared: prepared)
+                return
+            }
+            guard let balance = self.walletState?.balance.currentValue else {
+                self.presentDisableBackupError(error: .network)
+                return
+            }
+            guard balance >= networkFeeNanograms else {
+                self.presentInsufficientBalanceAlert(required: networkFeeNanograms)
+                return
+            }
+            self.openReplacementPhrase(prepared: prepared)
+        }
+
+        private func presentInsufficientBalanceAlert(required: Int64) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let amount = formatTonAmountText(
+                required,
+                dateTimeFormat: presentationData.dateTimeFormat,
+                maxDecimalPositions: 5
+            )
+            var amountText = "\(amount) GRAM"
+            if let fiatRate = self.walletState?.fiat.selectedRate {
+                let fiatCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
+                let fiatAmount = formatTonFiatValue(
+                    required,
+                    rate: fiatRate.unitsPerGram,
+                    currencySymbol: fiatCurrency.symbol,
+                    maxDecimalPositions: 2,
+                    dateTimeFormat: presentationData.dateTimeFormat
+                )
+                amountText += " (~\(fiatAmount))"
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Not enough Gram",
+                text: "You need \(amountText) to update your recovery phrase.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Not now", action: {}),
+                    TextAlertAction(type: .defaultAction, title: "Top up", action: { [weak self] in
+                        Queue.mainQueue().after(0.2) { [weak self] in
+                            self?.openBackupTopUp()
+                        }
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func openBackupTopUp() {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let phase = self.walletState?.phase,
+                  case let .wallet(info) = phase else {
+                return
+            }
+            self.preparedBackupDisable = nil
+            controller.push(component.context.sharedContext.makeWalletReceiveScreen(
+                context: component.context,
+                address: info.address
+            ))
         }
 
         private func openReplacementPhrase(prepared: WalletContext.PreparedBackupDisable) {

@@ -14894,15 +14894,16 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func getUserAddresses(id: [Api.InputUser]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
+    static func getUserAddresses(flags: Int32, id: [Api.InputUser]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1212803253)
+        buffer.appendInt32(501050385)
+        serializeInt32(flags, buffer: buffer, boxed: false)
         buffer.appendInt32(481674261)
         buffer.appendInt32(Int32(id.count))
         for item in id {
             item.serialize(buffer, true)
         }
-        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.WalletUserAddress]? in
+        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("flags", ConstructorParameterDescription(flags)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.WalletUserAddress]? in
             let reader = BufferReader(buffer)
             var result: [Api.WalletUserAddress]?
             if let _ = reader.readInt32() {

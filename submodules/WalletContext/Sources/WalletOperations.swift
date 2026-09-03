@@ -45,6 +45,16 @@ private func acceptedWalletEngineSubmission(
     )
 }
 
+private func walletEngineSendPhaseIsTerminal(_ phase: SendPhase) -> Bool {
+    switch phase {
+    case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
+        return true
+    case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit,
+         .submitting, .submissionUnknown, .submitted, .confirmed, .handedOff:
+        return false
+    }
+}
+
 private func walletServerIdentity(_ state: TelegramCore.WalletState) throws -> (address: String, publicKey: Data) {
     switch state {
     case let .ready(_, _, _, address, publicKey, _):
@@ -108,6 +118,13 @@ public extension WalletContext {
         normalizedMainnetAddress(value)
     }
 
+    func rememberWalletPeer(_ peer: EnginePeer, address: String) {
+        let mapping = WalletPeerAddressMapping(peer: peer, address: address)
+        Task { [impl = self.impl, mapping] in
+            await impl.rememberWalletPeer(mapping)
+        }
+    }
+
     func resolveTransferRecipient(_ value: String) -> Signal<ResolvedTransferRecipient?, WalletError> {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return .single(nil) }
@@ -118,97 +135,41 @@ public extension WalletContext {
               !value.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
             return .single(nil)
         }
-        return self.performUtility { context in
-            guard let address = try await context.runtime.resolveDns(value.lowercased()),
-                  let normalized = normalizedMainnetAddress(address) else {
-                return nil
-            }
-            return ResolvedTransferRecipient(address: normalized, displayName: value)
-        }
-    }
-
-    func resolveUserAddresses(userIds: [EnginePeer.Id]) -> Signal<[EnginePeer.Id: String], WalletError> {
-        self.performUtility { context in
-            var result: [EnginePeer.Id: String] = [:]
-            let ids = Array(Set(userIds))
-            var index = 0
-            while index < ids.count {
-                let upperBound = min(index + 100, ids.count)
-                let values = try await WalletSignalRequestContext<[WalletUserAddress]>().run(
-                    context.engine.wallet.getUserAddresses(userIds: Array(ids[index ..< upperBound]))
-                )
-                for value in values {
-                    result[value.userId] = value.address
-                }
-                index = upperBound
-            }
-            return result
+        return self.signal(name: "resolve_transfer_recipient") { impl, _ in
+            try await impl.resolveTransferRecipient(value)
         }
     }
 
     func processTonConnectUrl(_ value: String) {
         guard Self.isTonConnectUrl(value) else { return }
-        self.withMainQueue { [weak self] in
-            guard let self, self.canSignCurrentWallet, let coordinator = self.tonConnectCoordinator else { return }
-            Task {
-                do {
-                    try await coordinator.start(link: value)
-                } catch {
-                    self.withMainQueue {
-                        self.tonConnectPresentationPipe.putNext(.error(
-                            sanitizedWalletEngineDiagnostic(String(describing: error))
-                        ))
-                    }
-                }
-            }
+        Task { [impl = self.impl] in
+            await impl.processTonConnectUrl(value)
         }
     }
 
     func approveTonConnectRequest(id: String) -> Signal<Void, WalletError> {
-        self.performUtility { context in
-            guard context.canSignCurrentWallet, let coordinator = context.tonConnectCoordinator else {
-                throw WalletError.unavailable
-            }
-            try await coordinator.approveConnection(id: id)
+        self.signal(name: "approve_ton_connect_request") { impl, _ in
+            try await impl.approveTonConnectRequest(id: id)
         }
     }
 
     func approveTonConnectOperation(id: String) -> Signal<Void, WalletError> {
-        self.performUtility { context in
-            guard context.canSignCurrentWallet, let coordinator = context.tonConnectCoordinator else {
-                throw WalletError.unavailable
-            }
-            try await coordinator.approveOperation(id: id)
-            context.withMainQueue { context.requestSynchronization(force: true) }
+        self.signal(name: "approve_ton_connect_operation") { impl, _ in
+            try await impl.approveTonConnectOperation(id: id)
         }
     }
 
     func rejectTonConnectRequest(id: String) -> Signal<Void, NoError> {
-        Signal { [weak self] subscriber in
-            guard let self else {
-                subscriber.putCompletion()
-                return EmptyDisposable
-            }
-            let task = Task {
-                await self.tonConnectCoordinator?.reject(id: id)
-                subscriber.putNext(Void())
-                subscriber.putCompletion()
-            }
-            return ActionDisposable { task.cancel() }
+        self.noErrorSignal { impl in
+            await impl.rejectTonConnectRequest(id: id)
         }
     }
 
     func setFiatCurrency(_ currency: FiatCurrency) {
-        assert(Queue.mainQueue().isCurrent())
-        guard self.currentState.fiat.selectedCurrency != currency else { return }
-        self.replaceState(
-            phase: self.currentState.phase,
-            balance: self.currentState.balance,
-            transactions: self.currentState.transactions,
-            pendingTransfers: self.currentState.pendingTransfers,
-            activeOperation: self.currentState.activeOperation,
-            fiat: FiatState(selectedCurrency: currency, rates: self.currentState.fiat.rates)
-        )
+        let revision = self.fiatCurrencyRevision.modify { $0 &+ 1 }
+        Task { [impl = self.impl] in
+            await impl.setFiatCurrency(currency, revision: revision)
+        }
     }
 
     func isMnemonicWord(_ word: String) -> Bool {
@@ -226,127 +187,296 @@ public extension WalletContext {
         detectMnemonicSchemes(words: normalizedEngineMnemonic(words)).contains(.rotation)
     }
 
-    func containsMnemonicWord(_ word: String) -> Signal<Bool, WalletError> {
-        .single(self.isMnemonicWord(word))
-    }
-
-    func validateMnemonic(words: [String]) -> Signal<Bool, WalletError> {
-        self.isMnemonicValid(words: words) ? .single(true) : .fail(.invalidMnemonic)
-    }
-
-    func generateMnemonic() -> Signal<[String], WalletError> { .fail(.unavailable) }
-
     func createWallet(password: String? = nil) -> Signal<CreatedWallet, WalletError> {
-        self.performOperation(.creating, cancelOnDispose: false) { context in
-            let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                context.engine.wallet.replaceWallet(replacement: .new, password: password)
-            )
-            let identity = try walletServerIdentity(state)
-            let generation = await context.prepareForRuntimeIdentityChange()
-            let words: [String]
-            do {
-                words = try await exportWalletSecretPhrase(engine: context.engine, password: password)
-            } catch {
-                // Replacement has already committed on the server. Keep the new
-                // identity usable as read-only and let recovery retry later.
-                let activation = try await context.runtime.activate(
-                    serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey,
-                    exportedWords: nil
-                )
-                _ = context.installRuntimeActivation(state: state, activation: activation, generation: generation)
-                throw error
-            }
-            let staged = try await context.runtime.stageReplacement(words: words)
-            guard walletEngineAddressesEqual(staged.address, identity.address),
-                  staged.publicKey == identity.publicKey else {
-                try? await context.runtime.discardReplacement(recordId: staged.recordId)
-                let activation = try await context.runtime.activate(
-                    serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey,
-                    exportedWords: nil
-                )
-                _ = context.installRuntimeActivation(state: state, activation: activation, generation: generation)
-                throw WalletError.storage(.identityMismatch)
-            }
-            let activation = try await context.runtime.commitReplacement(
-                recordId: staged.recordId,
-                serverAddress: identity.address,
-                serverPublicKey: identity.publicKey
-            )
-            let info = context.installRuntimeActivation(state: state, activation: activation, generation: generation)
-            return CreatedWallet(info: info, words: words)
+        self.signal(name: "creating", cancelOnDispose: false) { impl, operationId in
+            try await impl.createWallet(password: password, operationId: operationId)
         }
     }
 
     func importWallet(words: [String], password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.performOperation(.importing, cancelOnDispose: false) { context in
+        self.signal(name: "importing", cancelOnDispose: false) { impl, operationId in
+            try await impl.importWallet(words: words, password: password, operationId: operationId)
+        }
+    }
+
+    func recoveryPhrase(password: String? = nil) -> Signal<[String], WalletError> {
+        self.signal(name: "recovering_phrase", cancelOnDispose: false) { impl, operationId in
+            try await impl.recoveryPhrase(password: password, operationId: operationId)
+        }
+    }
+
+    func prepareRecoveryPhraseImport(words: [String]) -> Signal<PreparedRecoveryPhraseImport, WalletError> {
+        self.signal(name: "preparing_recovery_phrase_import") { impl, operationId in
+            try await impl.prepareRecoveryPhraseImport(words: words, operationId: operationId)
+        }
+    }
+
+    func completeRecoveryPhraseImport(
+        _ prepared: PreparedRecoveryPhraseImport,
+        password: String? = nil
+    ) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "completing_recovery_phrase_import", cancelOnDispose: false) { impl, operationId in
+            try await impl.completeRecoveryPhraseImport(prepared, password: password, operationId: operationId)
+        }
+    }
+
+    func discardRecoveryPhraseImport(_ prepared: PreparedRecoveryPhraseImport) -> Signal<Void, WalletError> {
+        self.signal(name: "discard_recovery_phrase_import") { impl, _ in
+            try await impl.discardRecoveryPhraseImport(prepared)
+        }
+    }
+
+    func enableBackup(password: String? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "enabling_backup", cancelOnDispose: false) { impl, operationId in
+            try await impl.enableBackup(password: password, operationId: operationId)
+        }
+    }
+
+    func prepareDisableBackup() -> Signal<PreparedBackupDisable, WalletError> {
+        self.signal(name: "preparing_backup_disable") { impl, operationId in
+            try await impl.prepareDisableBackup(operationId: operationId)
+        }
+    }
+
+    func disableBackup(_ prepared: PreparedBackupDisable, password: String? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "disabling_backup", cancelOnDispose: false) { impl, operationId in
+            try await impl.disableBackup(prepared, password: password, operationId: operationId)
+        }
+    }
+
+    func prepareTransfer(address: String, amount: Int64, comment: String?) -> Signal<PreparedTransfer, WalletError> {
+        self.signal(name: "preparing_transfer") { impl, operationId in
+            try await impl.prepareTransfer(address: address, amount: amount, comment: comment, operationId: operationId)
+        }
+    }
+
+    func prepareCollectibleTransfer(
+        address: String,
+        collectible: Collectible,
+        comment: String?
+    ) -> Signal<PreparedTransfer, WalletError> {
+        self.signal(name: "preparing_transfer") { impl, operationId in
+            try await impl.prepareCollectibleTransfer(
+                address: address,
+                collectible: collectible,
+                comment: comment,
+                operationId: operationId
+            )
+        }
+    }
+
+    func submitTransfer(_ prepared: PreparedTransfer) -> Signal<SubmittedTransfer, WalletError> {
+        self.signal(name: "submitting_transfer", cancelOnDispose: false) { impl, operationId in
+            try await impl.submitTransfer(prepared, operationId: operationId)
+        }
+    }
+
+    func discardPreparedTransfer(_ prepared: PreparedTransfer) -> Signal<Void, WalletError> {
+        self.signal(name: "discarding_prepared_transfer", cancelOnDispose: false) { impl, _ in
+            await impl.discardPreparedTransfer(prepared)
+        }
+    }
+
+    func loadMoreTransactions() -> Signal<Void, WalletError> {
+        self.signal(name: "loading_more_transactions") { impl, operationId in
+            try await impl.loadMoreTransactions(operationId: operationId)
+        }
+    }
+
+    func loadMoreCollectibles() -> Signal<Void, WalletError> {
+        self.signal(name: "loading_more_collectibles") { impl, operationId in
+            try await impl.loadMoreCollectibles(operationId: operationId)
+        }
+    }
+}
+
+extension WalletContextImpl {
+    func resolveTransferRecipient(_ value: String) async throws -> ResolvedTransferRecipient? {
+        guard !self.isShutdown else { throw WalletError.unavailable }
+        guard let address = try await self.runtime.resolveDns(value.lowercased()),
+              let normalized = normalizedMainnetAddress(address) else {
+            return nil
+        }
+        return ResolvedTransferRecipient(address: normalized, displayName: value)
+    }
+
+    func processTonConnectUrl(_ value: String) async {
+        guard !self.isShutdown,
+              case let .wallet(info) = self.currentState.phase,
+              info.canSign,
+              let coordinator = self.tonConnectCoordinator else {
+            return
+        }
+        do {
+            try await coordinator.start(link: value)
+        } catch {
+            self.errorLogger.error("wallet_ton_connect_start_failed", error)
+            self.output.publish(presentation: .error(
+                sanitizedWalletEngineDiagnostic(String(describing: error))
+            ))
+        }
+    }
+
+    func approveTonConnectRequest(id: String) async throws {
+        guard !self.isShutdown,
+              case let .wallet(info) = self.currentState.phase,
+              info.canSign,
+              let coordinator = self.tonConnectCoordinator else {
+            throw WalletError.unavailable
+        }
+        try await coordinator.approveConnection(id: id)
+    }
+
+    func approveTonConnectOperation(id: String) async throws {
+        guard !self.isShutdown,
+              case let .wallet(info) = self.currentState.phase,
+              info.canSign,
+              let coordinator = self.tonConnectCoordinator else {
+            throw WalletError.unavailable
+        }
+        try await coordinator.approveOperation(id: id)
+        self.requestSynchronization(force: true)
+    }
+
+    func rejectTonConnectRequest(id: String) async {
+        guard !self.isShutdown else { return }
+        await self.tonConnectCoordinator?.reject(id: id)
+    }
+
+    func setFiatCurrency(_ currency: FiatCurrency, revision: UInt64) {
+        guard !self.isShutdown else { return }
+        guard revision > self.latestFiatCurrencyRevision else { return }
+        self.latestFiatCurrencyRevision = revision
+        guard self.currentState.fiat.selectedCurrency != currency else { return }
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation,
+            fiat: FiatState(selectedCurrency: currency, rates: self.currentState.fiat.rates)
+        )
+    }
+
+    func createWallet(password: String?, operationId: UUID) async throws -> CreatedWallet {
+        return try await self.performOperation(.creating, operationId: operationId) {
+            let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
+                self.engine.wallet.replaceWallet(replacement: .new, password: password)
+            )
+            let identity = try walletServerIdentity(state)
+            let generation = await self.prepareForRuntimeIdentityChange()
+            let words: [String]
+            do {
+                words = try await exportWalletSecretPhrase(
+                    engine: self.engine,
+                    password: password,
+                    expectedPublicKey: identity.publicKey
+                )
+            } catch {
+                // Replacement has already committed on the server. Keep the new
+                // identity usable as read-only and let recovery retry later.
+                let activation = try await self.runtime.activate(
+                    serverAddress: identity.address,
+                    serverPublicKey: identity.publicKey,
+                    exportedWords: nil
+                )
+                _ = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+                throw error
+            }
+            let staged = try await self.runtime.stageReplacement(words: words)
+            guard walletEngineAddressesEqual(staged.address, identity.address),
+                  staged.publicKey == identity.publicKey else {
+                await self.discardReplacementForCleanup(recordId: staged.recordId)
+                let activation = try await self.runtime.activate(
+                    serverAddress: identity.address,
+                    serverPublicKey: identity.publicKey,
+                    exportedWords: nil
+                )
+                _ = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+                throw WalletError.storage(.identityMismatch)
+            }
+            let activation = try await self.runtime.commitReplacement(
+                recordId: staged.recordId,
+                serverAddress: identity.address,
+                serverPublicKey: identity.publicKey
+            )
+            let info = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+            return CreatedWallet(info: info)
+        }
+    }
+
+    func importWallet(words: [String], password: String?, operationId: UUID) async throws -> WalletInfo {
+        return try await self.performOperation(.importing, operationId: operationId) {
             let normalizedWords = normalizedEngineMnemonic(words)
             guard detectMnemonicSchemes(words: normalizedWords).contains(.rotation) else {
                 throw WalletError.invalidMnemonic
             }
-            let staged = try await context.runtime.stageReplacement(words: normalizedWords)
+            let staged = try await self.runtime.stageReplacement(words: normalizedWords)
             let state: TelegramCore.WalletState
             do {
                 state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                    context.engine.wallet.replaceWallet(
+                    self.engine.wallet.replaceWallet(
                         replacement: .imported(publicKey: staged.publicKey),
                         password: password
                     )
                 )
             } catch let error as TelegramCore.WalletOperationError {
                 if error == .replacementInvalid || error == .publicKeyInvalid {
-                    try? await context.runtime.discardReplacement(recordId: staged.recordId)
+                    await self.discardReplacementForCleanup(recordId: staged.recordId)
                 }
                 throw error
             }
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(staged.address, identity.address),
                   staged.publicKey == identity.publicKey else {
-                try? await context.runtime.discardReplacement(recordId: staged.recordId)
+                await self.discardReplacementForCleanup(recordId: staged.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
-            let generation = await context.prepareForRuntimeIdentityChange()
-            let activation = try await context.runtime.commitReplacement(
+            let generation = await self.prepareForRuntimeIdentityChange()
+            let activation = try await self.runtime.commitReplacement(
                 recordId: staged.recordId,
                 serverAddress: identity.address,
                 serverPublicKey: identity.publicKey
             )
-            return context.installRuntimeActivation(state: state, activation: activation, generation: generation)
+            return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
         }
     }
 
-    func recoveryPhrase(password: String? = nil) -> Signal<[String], WalletError> {
-        self.performOperation(.recoveringPhrase, cancelOnDispose: false) { context in
-            guard case let .wallet(info) = context.currentState.phase, info.canRevealPhrase else {
+    func recoveryPhrase(password: String?, operationId: UUID) async throws -> [String] {
+        return try await self.performOperation(.recoveringPhrase, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase, info.canRevealPhrase else {
                 throw WalletError.unavailable
             }
-            if context.canSignCurrentWallet {
-                return try await context.runtime.revealRecoveryPhrase()
+            if info.canSign {
+                return try await self.runtime.revealRecoveryPhrase()
             }
             guard info.canExportPhrase,
-                  case let .ready(_, _, _, address, publicKey, _) = context.serverWalletState else {
+                  case let .ready(_, _, _, address, publicKey, _) = self.serverWalletState else {
                 throw WalletError.unavailable
             }
-            let words = try await exportWalletSecretPhrase(engine: context.engine, password: password)
+            let words = try await exportWalletSecretPhrase(
+                engine: self.engine,
+                password: password,
+                expectedPublicKey: publicKey
+            )
             let prepared = try await stageRecoveryPhraseImport(
-                runtime: context.runtime,
+                runtime: self.runtime,
                 words: words,
                 sourceAddress: address,
                 sourcePublicKey: publicKey
             )
             guard prepared.disposition == .currentWallet else {
-                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
-            let generation = await context.prepareForRuntimeIdentityChange()
-            let activation = try await context.runtime.commitReplacement(
+            let generation = await self.prepareForRuntimeIdentityChange()
+            let activation = try await self.runtime.commitReplacement(
                 recordId: prepared.recordId,
                 serverAddress: address,
                 serverPublicKey: publicKey
             )
-            if let state = context.serverWalletState {
-                _ = context.installRuntimeActivation(
+            if let state = self.serverWalletState {
+                _ = self.installRuntimeActivation(
                     state: state,
                     activation: activation,
                     generation: generation,
@@ -357,47 +487,48 @@ public extension WalletContext {
         }
     }
 
-    func prepareRecoveryPhraseImport(words: [String]) -> Signal<PreparedRecoveryPhraseImport, WalletError> {
-        self.performOperation(.preparingRecoveryPhraseImport) { context in
-            guard let state = context.serverWalletState else {
+    func prepareRecoveryPhraseImport(words: [String], operationId: UUID) async throws -> PreparedRecoveryPhraseImport {
+        return try await self.performOperation(.preparingRecoveryPhraseImport, operationId: operationId) {
+            guard let state = self.serverWalletState else {
                 throw WalletError.noWallet
             }
             let sourceIdentity = try walletServerIdentity(state)
             let prepared = try await stageRecoveryPhraseImport(
-                runtime: context.runtime,
+                runtime: self.runtime,
                 words: words,
                 sourceAddress: sourceIdentity.address,
                 sourcePublicKey: sourceIdentity.publicKey
             )
-            context.preparedRecoveryPhraseImportRecordId = prepared.recordId
+            self.preparedRecoveryPhraseImportRecordId = prepared.recordId
             return prepared
         }
     }
 
     func completeRecoveryPhraseImport(
         _ prepared: PreparedRecoveryPhraseImport,
-        password: String? = nil
-    ) -> Signal<WalletInfo, WalletError> {
-        self.performOperation(.completingRecoveryPhraseImport, cancelOnDispose: false) { context in
-            guard let currentServerState = context.serverWalletState else {
+        password: String?,
+        operationId: UUID
+    ) async throws -> WalletInfo {
+        return try await self.performOperation(.completingRecoveryPhraseImport, operationId: operationId) {
+            guard let currentServerState = self.serverWalletState else {
                 throw WalletError.noWallet
             }
             let currentIdentity: (address: String, publicKey: Data)
             do {
                 currentIdentity = try walletServerIdentity(currentServerState)
             } catch {
-                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                    context.preparedRecoveryPhraseImportRecordId = nil
+                if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    self.preparedRecoveryPhraseImportRecordId = nil
                 }
-                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw error
             }
             guard walletEngineAddressesEqual(currentIdentity.address, prepared.sourceAddress),
                   currentIdentity.publicKey == prepared.sourcePublicKey else {
-                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                    context.preparedRecoveryPhraseImportRecordId = nil
+                if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    self.preparedRecoveryPhraseImportRecordId = nil
                 }
-                try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
 
@@ -405,22 +536,22 @@ public extension WalletContext {
             case .currentWallet:
                 guard walletEngineAddressesEqual(prepared.candidateAddress, currentIdentity.address),
                       prepared.candidatePublicKey == currentIdentity.publicKey else {
-                    if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                        context.preparedRecoveryPhraseImportRecordId = nil
+                    if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                        self.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    await self.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw WalletError.storage(.identityMismatch)
                 }
-                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                    context.preparedRecoveryPhraseImportRecordId = nil
+                if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    self.preparedRecoveryPhraseImportRecordId = nil
                 }
-                let generation = await context.prepareForRuntimeIdentityChange()
-                let activation = try await context.runtime.commitReplacement(
+                let generation = await self.prepareForRuntimeIdentityChange()
+                let activation = try await self.runtime.commitReplacement(
                     recordId: prepared.recordId,
                     serverAddress: currentIdentity.address,
                     serverPublicKey: currentIdentity.publicKey
                 )
-                return context.installRuntimeActivation(
+                return self.installRuntimeActivation(
                     state: currentServerState,
                     activation: activation,
                     generation: generation,
@@ -431,7 +562,7 @@ public extension WalletContext {
                 let state: TelegramCore.WalletState
                 do {
                     state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                        context.engine.wallet.replaceWallet(
+                        self.engine.wallet.replaceWallet(
                             replacement: .imported(publicKey: prepared.candidatePublicKey),
                             password: password
                         )
@@ -441,14 +572,14 @@ public extension WalletContext {
                     case .requestPassword, .invalidPassword:
                         break
                     case .network:
-                        if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                            context.preparedRecoveryPhraseImportRecordId = nil
+                        if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                            self.preparedRecoveryPhraseImportRecordId = nil
                         }
                     default:
-                        if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                            context.preparedRecoveryPhraseImportRecordId = nil
+                        if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                            self.preparedRecoveryPhraseImportRecordId = nil
                         }
-                        try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                        await self.discardReplacementForCleanup(recordId: prepared.recordId)
                     }
                     throw error
                 }
@@ -456,30 +587,30 @@ public extension WalletContext {
                 do {
                     replacementIdentity = try walletServerIdentity(state)
                 } catch {
-                    if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                        context.preparedRecoveryPhraseImportRecordId = nil
+                    if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                        self.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    await self.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw error
                 }
                 guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
                       prepared.candidatePublicKey == replacementIdentity.publicKey else {
-                    if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                        context.preparedRecoveryPhraseImportRecordId = nil
+                    if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                        self.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    try? await context.runtime.discardReplacement(recordId: prepared.recordId)
+                    await self.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw WalletError.storage(.identityMismatch)
                 }
-                if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                    context.preparedRecoveryPhraseImportRecordId = nil
+                if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    self.preparedRecoveryPhraseImportRecordId = nil
                 }
-                let generation = await context.prepareForRuntimeIdentityChange()
-                let activation = try await context.runtime.commitReplacement(
+                let generation = await self.prepareForRuntimeIdentityChange()
+                let activation = try await self.runtime.commitReplacement(
                     recordId: prepared.recordId,
                     serverAddress: replacementIdentity.address,
                     serverPublicKey: replacementIdentity.publicKey
                 )
-                return context.installRuntimeActivation(
+                return self.installRuntimeActivation(
                     state: state,
                     activation: activation,
                     generation: generation
@@ -488,46 +619,45 @@ public extension WalletContext {
         }
     }
 
-    func discardRecoveryPhraseImport(_ prepared: PreparedRecoveryPhraseImport) -> Signal<Void, WalletError> {
-        self.performUtility { context in
-            if context.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                context.preparedRecoveryPhraseImportRecordId = nil
-            }
-            try await context.runtime.discardReplacement(recordId: prepared.recordId)
+    func discardRecoveryPhraseImport(_ prepared: PreparedRecoveryPhraseImport) async throws {
+        guard !self.isShutdown else { throw WalletError.unavailable }
+        if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+            self.preparedRecoveryPhraseImportRecordId = nil
         }
+        try await self.runtime.discardReplacement(recordId: prepared.recordId)
     }
 
-    func enableBackup(password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.performOperation(.enablingBackup, cancelOnDispose: false) { context in
-            guard context.canSignCurrentWallet,
-                  case let .wallet(info) = context.currentState.phase,
+    func enableBackup(password: String?, operationId: UUID) async throws -> WalletInfo {
+        return try await self.performOperation(.enablingBackup, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase,
+                  info.canSign,
                   info.canEnableBackup else {
                 throw WalletError.unavailable
             }
-            let words = try await context.runtime.revealRecoveryPhrase()
-            let state = try await enableWalletBackup(engine: context.engine, words: words, password: password)
+            let words = try await self.runtime.revealRecoveryPhrase()
+            let state = try await enableWalletBackup(engine: self.engine, words: words, password: password)
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(identity.address, info.address),
                   identity.publicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey else {
                 throw WalletError.storage(.identityMismatch)
             }
-            context.applyServerWalletState(state)
-            guard case let .wallet(updated) = context.currentState.phase else {
+            self.applyServerWalletState(state)
+            guard case let .wallet(updated) = self.currentState.phase else {
                 throw WalletError.unavailable
             }
             return updated
         }
     }
 
-    func prepareDisableBackup() -> Signal<PreparedBackupDisable, WalletError> {
-        self.performOperation(.preparingBackupDisable) { context in
-            guard context.canSignCurrentWallet,
-                  case let .wallet(info) = context.currentState.phase,
+    func prepareDisableBackup(operationId: UUID) async throws -> PreparedBackupDisable {
+        return try await self.performOperation(.preparingBackupDisable, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase,
+                  info.canSign,
                   info.backupEnabled else {
                 throw WalletError.unavailable
             }
 
-            if let existing = try await context.runtime.keyRotationRecord() {
+            if let existing = try await self.runtime.keyRotationRecord() {
                 guard walletEngineAddressesEqual(existing.walletAddress, info.address),
                       existing.walletPublicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey,
                       existing.newPublicKey.count == 32,
@@ -535,14 +665,20 @@ public extension WalletContext {
                     throw WalletError.storage(.identityMismatch)
                 }
 
-                if existing.phase == .rollbackStored || existing.phase == .replacementStored || existing.phase == .rolledBack {
-                    _ = try await context.runtime.resolveKeyRotation()
+                if existing.phase == .candidateStored || existing.phase == .previousRestored {
+                    _ = try await self.runtime.resolveKeyRotation()
                 } else {
                     if existing.phase == .submissionStarted {
-                        _ = try? await context.runtime.resolveKeyRotation()
+                        do {
+                            _ = try await self.runtime.resolveKeyRotation()
+                        } catch {
+                            self.errorLogger.error("wallet_key_rotation_resolution_failed", error)
+                        }
                     }
-                    if let current = try await context.runtime.keyRotationRecord() {
-                        let words = try await context.runtime.revealRecoveryPhrase()
+                    if let current = try await self.runtime.keyRotationRecord() {
+                        let words = try await self.runtime.keyRotationRecoveryPhrase(
+                            operationId: current.operationId
+                        )
                         guard words.count == 24 else {
                             throw WalletError.invalidBackupData
                         }
@@ -555,14 +691,17 @@ public extension WalletContext {
                             signedBoc: "",
                             seqno: 0,
                             expiresAt: Int32(current.validUntil),
-                            keyRotationPhase: current.phase == .confirmed ? .confirmed : .pending
+                            networkFeeNanograms: nil,
+                            keyRotationPhase: current.phase == .chainApplied || current.phase == .backupDisabled
+                                ? .confirmed
+                                : .pending
                         )
                     }
                 }
             }
 
             let expiresAt = currentWalletTimestamp() + 300
-            let prepared = try await context.runtime.prepareKeyRotation(validUntil: UInt64(expiresAt))
+            let prepared = try await self.runtime.prepareKeyRotation(validUntil: UInt64(expiresAt))
             let words = prepared.replacementRecoveryPhrase.phrase
                 .split(whereSeparator: { $0.isWhitespace })
                 .map(String.init)
@@ -572,8 +711,21 @@ public extension WalletContext {
                   !prepared.signedBoc.isEmpty else {
                 throw WalletError.sdk("Wallet engine returned invalid key-rotation material")
             }
+            let id = UUID().uuidString.lowercased()
+            let preview = try await self.runtime.previewKeyRotation(
+                operationId: id,
+                signedBoc: prepared.signedBoc,
+                seqno: prepared.seqno,
+                validUntil: prepared.validUntil
+            )
+            guard preview.messageBocBase64 == prepared.signedBoc,
+                  preview.validUntil == prepared.validUntil,
+                  !preview.emulation.isIncomplete,
+                  let networkFeeNanograms = Int64(preview.emulation.walletFeesNanograms) else {
+                throw WalletError.previewFailed
+            }
             return PreparedBackupDisable(
-                id: UUID().uuidString.lowercased(),
+                id: id,
                 walletAddress: info.address,
                 walletPublicKey: info.publicKey,
                 words: words,
@@ -581,22 +733,27 @@ public extension WalletContext {
                 signedBoc: prepared.signedBoc,
                 seqno: prepared.seqno,
                 expiresAt: expiresAt,
+                networkFeeNanograms: networkFeeNanograms,
                 keyRotationPhase: .prepared
             )
         }
     }
 
-    func disableBackup(_ prepared: PreparedBackupDisable, password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.performOperation(.disablingBackup, cancelOnDispose: false) { context in
-            guard context.canSignCurrentWallet,
-                  case let .wallet(info) = context.currentState.phase,
+    func disableBackup(
+        _ prepared: PreparedBackupDisable,
+        password: String?,
+        operationId: UUID
+    ) async throws -> WalletInfo {
+        return try await self.performOperation(.disablingBackup, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase,
+                  info.canSign,
                   info.address == prepared.walletAddress,
                   info.publicKey == prepared.walletPublicKey,
                   info.backupEnabled else {
                 throw WalletError.unavailable
             }
 
-            var rotation = try await context.runtime.keyRotationRecord()
+            var rotation = try await self.runtime.keyRotationRecord()
             if rotation == nil {
                 guard prepared.keyRotationPhase == .prepared,
                       prepared.expiresAt > currentWalletTimestamp(),
@@ -606,7 +763,7 @@ public extension WalletContext {
                 }
                 let result: SendResult
                 do {
-                    result = try await context.runtime.sendKeyRotation(
+                    result = try await self.runtime.sendKeyRotation(
                         operationId: prepared.id,
                         words: prepared.words,
                         newPublicKey: prepared.newPublicKey,
@@ -615,10 +772,18 @@ public extension WalletContext {
                         validUntil: UInt64(prepared.expiresAt)
                     )
                 } catch {
-                    if (try? await context.runtime.keyRotationRecord()) == nil {
+                    let sendError = error
+                    let currentRotation: WalletEngineKeyRotationRecord?
+                    do {
+                        currentRotation = try await self.runtime.keyRotationRecord()
+                    } catch {
+                        self.errorLogger.error("wallet_key_rotation_recovery_read_failed", error)
+                        currentRotation = nil
+                    }
+                    if currentRotation == nil {
                         throw WalletError.keyRotationFailed
                     }
-                    throw error
+                    throw sendError
                 }
                 switch result.phase {
                 case .submitted, .submissionUnknown, .confirmed:
@@ -628,7 +793,7 @@ public extension WalletContext {
                      .superseded, .failed, .cancelled:
                     throw WalletError.keyRotationFailed
                 }
-                rotation = try await context.runtime.keyRotationRecord()
+                rotation = try await self.runtime.keyRotationRecord()
             }
 
             guard let rotation,
@@ -643,7 +808,7 @@ public extension WalletContext {
             }
 
             while true {
-                let resolution = try await context.runtime.resolveKeyRotation()
+                let resolution = try await self.runtime.resolveKeyRotation()
                 switch resolution {
                 case let .confirmed(operationId):
                     guard operationId == prepared.id else {
@@ -673,7 +838,7 @@ public extension WalletContext {
             }
 
             let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                context.engine.wallet.disableBackup(password: password)
+                self.engine.wallet.disableBackup(password: password)
             )
             guard case let .ready(backupEnabled, _, _, _, _, _) = state, !backupEnabled else {
                 throw WalletError.invalidBackupData
@@ -683,19 +848,24 @@ public extension WalletContext {
                   identity.publicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey else {
                 throw WalletError.storage(.identityMismatch)
             }
-            try await context.runtime.completeKeyRotation(operationId: prepared.id)
-            context.applyServerWalletState(state)
-            guard case let .wallet(updated) = context.currentState.phase else {
+            try await self.runtime.completeKeyRotationAfterBackupDisabled(operationId: prepared.id)
+            self.applyServerWalletState(state)
+            guard case let .wallet(updated) = self.currentState.phase else {
                 throw WalletError.unavailable
             }
             return updated
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, comment: String?) -> Signal<PreparedTransfer, WalletError> {
-        self.performOperation(.preparingTransfer) { context in
-            guard context.canSignCurrentWallet,
-                  case let .wallet(info) = context.currentState.phase else {
+    func prepareTransfer(
+        address: String,
+        amount: Int64,
+        comment: String?,
+        operationId: UUID
+    ) async throws -> PreparedTransfer {
+        return try await self.performOperation(.preparingTransfer, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase,
+                  info.canSign else {
                 throw WalletError.unavailable
             }
             let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
@@ -709,10 +879,11 @@ public extension WalletContext {
                     stateInit: nil
                 )]
             )
-            let preview = try await context.runtime.previewSend(intent: intent)
+            let preview = try await self.runtime.previewSend(intent: intent)
+            try Task.checkCancellation()
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
-            if let balance = context.currentState.balance.currentValue,
+            if let balance = self.currentState.balance.currentValue,
                resolved.amount > balance || fee > balance - resolved.amount {
                 throw WalletError.insufficientBalance(required: resolved.amount + fee)
             }
@@ -724,12 +895,12 @@ public extension WalletContext {
                 fee: fee,
                 expiresAt: Int32(clamping: preview.validUntil)
             )
-            context.preparedTransfers[transfer.id] = PreparedEngineTransferRecord(
+            self.preparedTransfers[transfer.id] = PreparedEngineTransferRecord(
                 walletAddress: info.address,
                 transfer: transfer,
                 request: .send(intent)
             )
-            context.removeExpiredPreparedTransfers()
+            self.removeExpiredPreparedTransfers()
             return transfer
         }
     }
@@ -737,11 +908,12 @@ public extension WalletContext {
     func prepareCollectibleTransfer(
         address: String,
         collectible: Collectible,
-        comment: String?
-    ) -> Signal<PreparedTransfer, WalletError> {
-        self.performOperation(.preparingTransfer) { context in
-            guard context.canSignCurrentWallet,
-                  case let .wallet(info) = context.currentState.phase,
+        comment: String?,
+        operationId: UUID
+    ) async throws -> PreparedTransfer {
+        return try await self.performOperation(.preparingTransfer, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase,
+                  info.canSign,
                   let recipient = normalizedMainnetAddress(address),
                   let nft = normalizedMainnetAddress(collectible.address) else {
                 throw WalletError.invalidAddress
@@ -758,7 +930,8 @@ public extension WalletContext {
                 expiration: .engineDefault
             )
             let id = UUID().uuidString.lowercased()
-            let preview = try await context.runtime.previewNft(operationId: id, intent: intent)
+            let preview = try await self.runtime.previewNft(operationId: id, intent: intent)
+            try Task.checkCancellation()
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
             let transfer = PreparedTransfer(
@@ -770,27 +943,30 @@ public extension WalletContext {
                 fee: fee,
                 expiresAt: Int32(clamping: preview.validUntil)
             )
-            context.preparedTransfers[id] = PreparedEngineTransferRecord(
+            self.preparedTransfers[id] = PreparedEngineTransferRecord(
                 walletAddress: info.address,
                 transfer: transfer,
                 request: .nft(intent)
             )
-            context.removeExpiredPreparedTransfers()
+            self.removeExpiredPreparedTransfers()
             return transfer
         }
     }
 
-    func submitTransfer(_ prepared: PreparedTransfer) -> Signal<SubmittedTransfer, WalletError> {
-        self.performOperation(.submittingTransfer, cancelOnDispose: false) { context in
-            guard context.canSignCurrentWallet,
-                  case let .wallet(info) = context.currentState.phase,
-                  let record = context.preparedTransfers[prepared.id],
+    func submitTransfer(
+        _ prepared: PreparedTransfer,
+        operationId: UUID
+    ) async throws -> SubmittedTransfer {
+        return try await self.performOperation(.submittingTransfer, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase,
+                  info.canSign,
+                  let record = self.preparedTransfers[prepared.id],
                   record.walletAddress == info.address,
                   record.transfer == prepared else {
                 throw WalletError.preparedTransferNotFound
             }
             guard prepared.expiresAt > currentWalletTimestamp() else {
-                context.preparedTransfers[prepared.id] = nil
+                self.preparedTransfers[prepared.id] = nil
                 throw WalletError.preparedTransferExpired
             }
             let pending = PendingTransfer(
@@ -802,16 +978,17 @@ public extension WalletContext {
                 createdAt: currentWalletTimestamp(),
                 status: .broadcasting
             )
-            var values = context.currentState.pendingTransfers.filter { $0.id != pending.id }
+            var values = self.currentState.pendingTransfers.filter { $0.id != pending.id }
             values.append(pending)
-            context.replaceState(
-                phase: context.currentState.phase,
-                balance: context.currentState.balance,
-                transactions: context.currentState.transactions,
+            self.replaceState(
+                phase: self.currentState.phase,
+                balance: self.currentState.balance,
+                transactions: self.currentState.transactions,
                 pendingTransfers: values,
-                activeOperation: context.currentState.activeOperation
+                activeOperation: self.currentState.activeOperation
             )
-            context.preparedTransfers[prepared.id] = nil
+            let clientRevisionBeforeSend = await self.runtime.currentClientRevision()
+            let activationGenerationBeforeSend = self.activationGeneration
 
             let applyAcceptedSubmission: (SendPhase, String?) -> SubmittedTransfer? = { phase, messageHash in
                 guard let accepted = acceptedWalletEngineSubmission(
@@ -821,111 +998,245 @@ public extension WalletContext {
                 ) else {
                     return nil
                 }
-                var updated = context.currentState.pendingTransfers.filter { $0.id != accepted.transfer.id }
+                var updated = self.currentState.pendingTransfers.filter { $0.id != accepted.transfer.id }
                 if accepted.remainsPending {
                     updated.append(accepted.transfer)
                 }
-                context.replaceState(
-                    phase: context.currentState.phase,
-                    balance: context.currentState.balance,
-                    transactions: context.currentState.transactions,
+                self.preparedTransfers[prepared.id] = nil
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: self.currentState.transactions,
                     pendingTransfers: updated,
-                    activeOperation: context.currentState.activeOperation
+                    activeOperation: self.currentState.activeOperation
                 )
-                context.requestSynchronization(force: true)
+                self.requestSynchronization(force: true)
                 return SubmittedTransfer(pendingTransfer: accepted.transfer)
             }
 
             do {
-                let result: SendResult
+                let execution: WalletEngineSendExecution
                 switch record.request {
                 case let .send(intent):
-                    result = try await context.runtime.send(operationId: prepared.id, intent: intent)
+                    execution = try await self.runtime.send(operationId: prepared.id, intent: intent)
                 case let .nft(intent):
-                    result = try await context.runtime.sendNft(operationId: prepared.id, intent: intent)
+                    execution = try await self.runtime.sendNft(operationId: prepared.id, intent: intent)
                 }
+                if execution.didRecreateClient {
+                    await self.rebindRuntimeObservationAfterClientRecreation(
+                        previousClientRevision: clientRevisionBeforeSend,
+                        activationGeneration: activationGenerationBeforeSend,
+                        walletAddress: record.walletAddress
+                    )
+                }
+                let result = execution.result
                 guard let submitted = applyAcceptedSubmission(result.phase, result.messageHash) else {
+                    if walletEngineSendPhaseIsTerminal(result.phase) {
+                        self.preparedTransfers[prepared.id] = nil
+                        throw WalletError.preparedTransferNotFound
+                    }
                     throw WalletError.sdk("wallet-engine send ended in \(result.phase)")
                 }
                 return submitted
             } catch {
-                let snapshot = try? await context.runtime.snapshot()
-                if let send = snapshot?.send,
-                   send.operationId == pending.id,
-                   let submitted = applyAcceptedSubmission(send.phase, nil) {
-                    return submitted
+                self.errorLogger.error("wallet_send_failed", error)
+                var preparedTransferWasInvalidated = false
+                let snapshot: WalletSnapshot?
+                do {
+                    snapshot = try await self.runtime.snapshot()
+                } catch {
+                    self.errorLogger.error("wallet_send_recovery_snapshot_failed", error)
+                    snapshot = nil
                 }
-                context.replaceState(
-                    phase: context.currentState.phase,
-                    balance: context.currentState.balance,
-                    transactions: context.currentState.transactions,
-                    pendingTransfers: context.currentState.pendingTransfers.filter { $0.id != pending.id },
-                    activeOperation: context.currentState.activeOperation
+                if let snapshot {
+                    await self.rebindRuntimeObservationAfterClientRecreation(
+                        previousClientRevision: clientRevisionBeforeSend,
+                        activationGeneration: activationGenerationBeforeSend,
+                        walletAddress: record.walletAddress,
+                        snapshot: snapshot
+                    )
+                    if snapshot.send.operationId == pending.id,
+                       let submitted = applyAcceptedSubmission(snapshot.send.phase, nil) {
+                        return submitted
+                    }
+                    if snapshot.send.operationId == pending.id,
+                       walletEngineSendPhaseIsTerminal(snapshot.send.phase) {
+                        self.preparedTransfers[prepared.id] = nil
+                        preparedTransferWasInvalidated = true
+                    }
+                }
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: self.currentState.transactions,
+                    pendingTransfers: self.currentState.pendingTransfers.filter { $0.id != pending.id },
+                    activeOperation: self.currentState.activeOperation
                 )
+                if preparedTransferWasInvalidated {
+                    throw WalletError.preparedTransferNotFound
+                }
                 throw error
             }
         }
     }
 
-    func loadMoreTransactions() -> Signal<Void, WalletError> {
-        self.performOperation(.loadingMoreTransactions) { context in
-            guard context.currentState.transactions.canLoadMore,
-                  let offset = context.serverTransactionsNextOffset else { return Void() }
-            let response = try await WalletSignalRequestContext<TelegramCore.WalletTransactions>().run(
-                context.engine.wallet.getTransactions(
-                    inbound: true,
-                    outbound: true,
-                    offset: offset,
-                    limit: Int32(walletTransactionFetchLimit)
-                )
-            )
-            let items = mergeTransactions(
-                existing: context.currentState.transactions.items,
-                new: walletTransactions(from: response.items)
-            )
-            context.serverTransactionsNextOffset = response.nextOffset
-            context.replaceState(
-                phase: context.currentState.phase,
-                balance: context.currentState.balance,
-                transactions: TransactionsState(
-                    items: items,
-                    offset: items.count,
-                    canLoadMore: response.nextOffset != nil,
-                    isLoadingMore: false,
-                    error: nil
-                ),
-                pendingTransfers: context.currentState.pendingTransfers,
-                activeOperation: context.currentState.activeOperation
-            )
+    func discardPreparedTransfer(_ prepared: PreparedTransfer) {
+        guard let record = self.preparedTransfers[prepared.id], record.transfer == prepared else {
+            return
+        }
+        self.preparedTransfers[prepared.id] = nil
+        self.resumeDeferredSynchronizationIfNeeded()
+    }
+
+    func rebindRuntimeObservationAfterClientRecreation(
+        previousClientRevision: UInt64,
+        activationGeneration: UInt64,
+        walletAddress: String,
+        snapshot suppliedSnapshot: WalletSnapshot? = nil
+    ) async {
+        let currentClientRevision = await self.runtime.currentClientRevision()
+        guard currentClientRevision != previousClientRevision,
+              self.activationGeneration == activationGeneration,
+              case let .wallet(info) = self.currentState.phase,
+              walletEngineAddressesEqual(info.address, walletAddress) else {
+            return
+        }
+        do {
+            let snapshot: WalletSnapshot
+            if let suppliedSnapshot {
+                snapshot = suppliedSnapshot
+            } else {
+                snapshot = try await self.runtime.snapshot()
+            }
+            self.beginObserving(snapshot: snapshot, generation: activationGeneration)
+        } catch {
+            self.errorLogger.error("wallet_engine_client_rebind_failed", error)
         }
     }
 
-    func loadMoreCollectibles() -> Signal<Void, WalletError> {
-        self.performOperation(.loadingMoreCollectibles) { context in
-            guard context.currentState.collectibles.canLoadMore else { return Void() }
-            let update = try await context.runtime.loadMoreNfts()
-            let items = await walletCollectibles(from: update.snapshot.nfts.items)
-            context.replaceState(
-                phase: context.currentState.phase,
-                balance: context.currentState.balance,
-                transactions: context.currentState.transactions,
-                collectibles: CollectiblesState(
-                    items: items,
-                    offset: items.count,
-                    canLoadMore: update.snapshot.nfts.hasMore,
-                    isLoadingMore: false,
-                    error: nil
-                ),
-                pendingTransfers: context.reconcilePendingTransfers(update.snapshot.send),
-                activeOperation: context.currentState.activeOperation
-            )
+    func loadMoreTransactions(operationId: UUID) async throws {
+        try await self.performOperation(.loadingMoreTransactions, operationId: operationId) {
+            guard self.currentState.transactions.canLoadMore,
+                  let offset = self.serverTransactionsNextOffset else { return Void() }
+            self.updateTransactionsPagination(isLoadingMore: true, error: nil)
+            do {
+                let response = try await WalletSignalRequestContext<TelegramCore.WalletTransactions>().run(
+                    self.engine.wallet.getTransactions(
+                        inbound: true,
+                        outbound: true,
+                        offset: offset,
+                        limit: Int32(walletTransactionFetchLimit)
+                    )
+                )
+                let items = mergeTransactions(
+                    existing: self.currentState.transactions.items,
+                    new: walletTransactions(from: response.items)
+                )
+                self.serverTransactionsNextOffset = response.nextOffset
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: TransactionsState(
+                        items: items,
+                        offset: items.count,
+                        canLoadMore: response.nextOffset != nil,
+                        isLoadingMore: false,
+                        error: nil
+                    ),
+                    pendingTransfers: self.currentState.pendingTransfers,
+                    activeOperation: self.currentState.activeOperation
+                )
+            } catch let error as CancellationError {
+                self.updateTransactionsPagination(isLoadingMore: false, error: nil)
+                throw error
+            } catch {
+                self.updateTransactionsPagination(isLoadingMore: false, error: synchronizationError(error))
+                throw error
+            }
+        }
+    }
+
+    func loadMoreCollectibles(operationId: UUID) async throws {
+        try await self.performOperation(.loadingMoreCollectibles, operationId: operationId) {
+            guard self.currentState.collectibles.canLoadMore else { return Void() }
+            self.updateCollectiblesPagination(isLoadingMore: true, error: nil)
+            do {
+                let update = try await self.runtime.loadMoreNfts()
+                let items = await walletCollectibles(
+                    from: update.snapshot.nfts.items,
+                    errorLogger: self.errorLogger
+                )
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: self.currentState.transactions,
+                    collectibles: CollectiblesState(
+                        items: items,
+                        offset: items.count,
+                        canLoadMore: update.snapshot.nfts.hasMore,
+                        isLoadingMore: false,
+                        error: nil
+                    ),
+                    pendingTransfers: self.reconcilePendingTransfers(update.snapshot.send),
+                    activeOperation: self.currentState.activeOperation
+                )
+            } catch let error as CancellationError {
+                self.updateCollectiblesPagination(isLoadingMore: false, error: nil)
+                throw error
+            } catch {
+                self.updateCollectiblesPagination(isLoadingMore: false, error: synchronizationError(error))
+                throw error
+            }
         }
     }
 }
 
-extension WalletContext {
-    @MainActor
+extension WalletContextImpl {
+    private func updateTransactionsPagination(isLoadingMore: Bool, error: SynchronizationError?) {
+        let transactions = self.currentState.transactions
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: TransactionsState(
+                items: transactions.items,
+                offset: transactions.offset,
+                canLoadMore: transactions.canLoadMore,
+                isLoadingMore: isLoadingMore,
+                error: error
+            ),
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+    }
+
+    private func updateCollectiblesPagination(isLoadingMore: Bool, error: SynchronizationError?) {
+        let collectibles = self.currentState.collectibles
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            collectibles: CollectiblesState(
+                items: collectibles.items,
+                offset: collectibles.offset,
+                canLoadMore: collectibles.canLoadMore,
+                isLoadingMore: isLoadingMore,
+                error: error
+            ),
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+    }
+
+    func discardReplacementForCleanup(recordId: String) async {
+        do {
+            try await self.runtime.discardReplacement(recordId: recordId)
+        } catch {
+            self.errorLogger.error("wallet_replacement_cleanup_failed", error)
+        }
+    }
+
     func prepareForRuntimeIdentityChange() async -> UInt64 {
+        self.clearStreamingPresentationOverlay()
         self.activationGeneration &+= 1
         let generation = self.activationGeneration
         self.activationTask?.cancel()
@@ -935,6 +1246,7 @@ extension WalletContext {
         self.cancelSynchronization()
         self.stopStreaming()
         self.preparedTransfers.removeAll()
+        self.deferredSynchronizationRequested = false
         let coordinator = self.tonConnectCoordinator
         self.tonConnectCoordinator = nil
         await coordinator?.shutdown()
@@ -942,7 +1254,6 @@ extension WalletContext {
     }
 
     @discardableResult
-    @MainActor
     func installRuntimeActivation(
         state: TelegramCore.WalletState,
         activation: WalletEngineActivation,
@@ -957,7 +1268,6 @@ extension WalletContext {
             preconditionFailure("A runtime activation requires a ready server wallet")
         }
         self.serverWalletState = state
-        self.canSignCurrentWallet = activation.canSign
         let info = WalletInfo(
             address: identity.address,
             publicKey: identity.publicKey.map { String(format: "%02x", $0) }.joined(),
@@ -984,9 +1294,10 @@ extension WalletContext {
             let coordinator = WalletTonConnectCoordinator(
                 runtime: self.runtime,
                 storage: self.storage,
+                errorLogger: self.errorLogger,
                 recordId: activation.snapshot.recordId,
                 event: { [weak self] event in
-                    self?.withMainQueue { self?.handleTonConnectEvent(event) }
+                    await self?.handleTonConnectEvent(event)
                 }
             )
             self.tonConnectCoordinator = coordinator
@@ -996,100 +1307,87 @@ extension WalletContext {
         return info
     }
 
-    func performUtility<Value>(
-        _ operation: @escaping @MainActor (WalletContext) async throws -> Value
-    ) -> Signal<Value, WalletError> {
-        Signal { [weak self] subscriber in
-            guard let self else {
-                subscriber.putError(.unavailable)
-                return EmptyDisposable
-            }
-            let cancellation = WalletOperationCancellation()
-            let task = Task { @MainActor [weak self] in
-                guard let self else { subscriber.putError(.unavailable); return }
-                do {
-                    let value = try await operation(self)
-                    try Task.checkCancellation()
-                    subscriber.putNext(value)
-                    subscriber.putCompletion()
-                } catch is CancellationError {
-                    subscriber.putError(.unavailable)
-                } catch {
-                    subscriber.putError(walletError(error))
-                }
-            }
-            cancellation.setTask(task)
-            return ActionDisposable { cancellation.cancel() }
-        }
-    }
-
-    func performOperation<Value>(
+    func performOperation<Value: Sendable>(
         _ activeOperation: ActiveOperation,
-        cancelOnDispose: Bool = true,
-        _ operation: @escaping @MainActor (WalletContext) async throws -> Value
-    ) -> Signal<Value, WalletError> {
-        Signal { [weak self] subscriber in
-            guard let self else {
-                subscriber.putError(.unavailable)
-                return EmptyDisposable
+        operationId: UUID,
+        _ operation: () async throws -> Value
+    ) async throws -> Value {
+        try Task.checkCancellation()
+        guard !self.isShutdown else {
+            throw WalletError.unavailable
+        }
+        guard self.currentState.activeOperation == nil else {
+            self.errorLogger.error(
+                "wallet_operation_rejected",
+                WalletError.operationInProgress,
+                context: "operation=\(activeOperation)"
+            )
+            throw WalletError.operationInProgress
+        }
+        switch activeOperation {
+        case .preparingTransfer, .submittingTransfer:
+            if self.synchronizationGate.isRunning || self.synchronizationGate.hasQueuedRequest {
+                self.deferredSynchronizationRequested = true
+                self.cancelSynchronization()
             }
-            let cancellation = WalletOperationCancellation()
-            self.withMainQueue { [weak self] in
-                guard let self else { subscriber.putError(.unavailable); return }
-                guard self.currentState.activeOperation == nil else {
-                    subscriber.putError(.operationInProgress)
-                    return
-                }
-                self.activeOperationCancellation = cancellation
+        case .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
+             .completingRecoveryPhraseImport, .enablingBackup, .preparingBackupDisable,
+             .disablingBackup, .loadingMoreTransactions, .loadingMoreCollectibles:
+            break
+        }
+        self.activeOperationId = operationId
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: activeOperation
+        )
+        defer {
+            if self.activeOperationId == operationId {
+                self.activeOperationId = nil
                 self.replaceState(
                     phase: self.currentState.phase,
                     balance: self.currentState.balance,
                     transactions: self.currentState.transactions,
                     pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: activeOperation
+                    activeOperation: nil
                 )
-                let task = Task { @MainActor [weak self] in
-                    guard let self else { subscriber.putError(.unavailable); return }
-                    let finishOperation = {
-                        if self.activeOperationCancellation === cancellation {
-                            self.activeOperationCancellation = nil
-                            self.replaceState(
-                                phase: self.currentState.phase,
-                                balance: self.currentState.balance,
-                                transactions: self.currentState.transactions,
-                                pendingTransfers: self.currentState.pendingTransfers,
-                                activeOperation: nil
-                            )
-                            if activeOperation == .creating || activeOperation == .importing {
-                                self.requestServerWalletState()
-                            }
-                        }
-                    }
-                    defer {
-                        finishOperation()
-                    }
-                    do {
-                        let value = try await operation(self)
-                        finishOperation()
-                        subscriber.putNext(value)
-                        subscriber.putCompletion()
-                    } catch is CancellationError {
-                        finishOperation()
-                        subscriber.putError(.unavailable)
-                    } catch {
-                        finishOperation()
-                        subscriber.putError(walletError(error))
-                    }
+                if activeOperation.defersServerWalletState {
+                    self.applyCompatibleDeferredServerWalletState()
+                    self.requestServerWalletState(forceRefreshAfterCurrent: true)
                 }
-                cancellation.setTask(task)
+                self.resumeDeferredSynchronizationIfNeeded()
             }
-            return ActionDisposable { if cancelOnDispose { cancellation.cancel() } }
         }
+        return try await operation()
     }
 
     func removeExpiredPreparedTransfers() {
         let now = currentWalletTimestamp()
         self.preparedTransfers = self.preparedTransfers.filter { $0.value.transfer.expiresAt > now }
+    }
+
+    var isTransferFlowBlockingSynchronization: Bool {
+        if !self.preparedTransfers.isEmpty {
+            return true
+        }
+        switch self.currentState.activeOperation {
+        case .preparingTransfer, .submittingTransfer:
+            return true
+        case .none, .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
+             .completingRecoveryPhraseImport, .enablingBackup, .preparingBackupDisable,
+             .disablingBackup, .loadingMoreTransactions, .loadingMoreCollectibles:
+            return false
+        }
+    }
+
+    func resumeDeferredSynchronizationIfNeeded() {
+        guard self.deferredSynchronizationRequested,
+              !self.isTransferFlowBlockingSynchronization else {
+            return
+        }
+        self.requestSynchronization(force: true)
     }
 
     func requestFiatRates() {
@@ -1099,10 +1397,8 @@ extension WalletContext {
             self.engine.payments.currencyRates(),
             self.engine.data.get(TelegramEngine.EngineData.Item.Configuration.App())
         )
-        |> take(1)
-        |> deliverOnMainQueue).start(next: { [weak self] currencyRates, configuration in
-            guard let self,
-                  let currencyRates,
+        |> take(1)).start(next: { [weak self] currencyRates, configuration in
+            guard let currencyRates,
                   let tonUsd = configuration.data?["ton_usd_rate"] as? Double,
                   tonUsd.isFinite,
                   tonUsd > 0 else { return }
@@ -1112,25 +1408,36 @@ extension WalletContext {
             }
             var rates: [FiatCurrency: FiatRate] = [:]
             for currency in FiatCurrency.allCases {
-                guard let perUsd = byCode[currency.rawValue] else { continue }
+                guard let perUsd = byCode[currency.code] else { continue }
                 rates[currency] = FiatRate(unitsPerUsd: perUsd, unitsPerGram: perUsd * tonUsd)
             }
-            let timestamp = currentWalletTimestamp()
-            self.fiatLastSuccessfulAt = timestamp
-            self.replaceState(
-                phase: self.currentState.phase,
-                balance: self.currentState.balance,
-                transactions: self.currentState.transactions,
-                pendingTransfers: self.currentState.pendingTransfers,
-                activeOperation: self.currentState.activeOperation,
-                fiat: FiatState(selectedCurrency: self.currentState.fiat.selectedCurrency, rates: .value(rates, updatedAt: timestamp))
-            )
-            self.fiatRefreshTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(walletFiatRatesRefreshInterval * 1_000_000_000))
-                guard let self, !Task.isCancelled else { return }
-                self.requestFiatRates()
+            Task {
+                await self?.applyFiatRates(rates)
             }
         }))
+    }
+
+    private func applyFiatRates(_ rates: [FiatCurrency: FiatRate]) {
+        guard !self.isShutdown else { return }
+        let timestamp = currentWalletTimestamp()
+        self.fiatLastSuccessfulAt = timestamp
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation,
+            fiat: FiatState(selectedCurrency: self.currentState.fiat.selectedCurrency, rates: .value(rates, updatedAt: timestamp))
+        )
+        self.fiatRefreshTask = Task { [weak self] in
+            await self?.performFiatRefreshDelay()
+        }
+    }
+
+    private func performFiatRefreshDelay() async {
+        try? await Task.sleep(nanoseconds: UInt64(walletFiatRatesRefreshInterval * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        self.requestFiatRates()
     }
 }
 

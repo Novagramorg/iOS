@@ -952,6 +952,23 @@ public extension Api {
                 return ("messageActionGiveawayResults", [("flags", ConstructorParameterDescription(self.flags)), ("winnersCount", ConstructorParameterDescription(self.winnersCount)), ("unclaimedCount", ConstructorParameterDescription(self.unclaimedCount))])
             }
         }
+        public class Cons_messageActionGramTransfer: TypeConstructorDescription {
+            public var flags: Int32
+            public var amount: Int64
+            public var peerAddress: String
+            public var transactionId: String
+            public var comment: String?
+            public init(flags: Int32, amount: Int64, peerAddress: String, transactionId: String, comment: String?) {
+                self.flags = flags
+                self.amount = amount
+                self.peerAddress = peerAddress
+                self.transactionId = transactionId
+                self.comment = comment
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("messageActionGramTransfer", [("flags", ConstructorParameterDescription(self.flags)), ("amount", ConstructorParameterDescription(self.amount)), ("peerAddress", ConstructorParameterDescription(self.peerAddress)), ("transactionId", ConstructorParameterDescription(self.transactionId)), ("comment", ConstructorParameterDescription(self.comment))])
+            }
+        }
         public class Cons_messageActionGroupCall: TypeConstructorDescription {
             public var flags: Int32
             public var call: Api.InputGroupCall
@@ -1480,6 +1497,7 @@ public extension Api {
         case messageActionGiftTon(Cons_messageActionGiftTon)
         case messageActionGiveawayLaunch(Cons_messageActionGiveawayLaunch)
         case messageActionGiveawayResults(Cons_messageActionGiveawayResults)
+        case messageActionGramTransfer(Cons_messageActionGramTransfer)
         case messageActionGroupCall(Cons_messageActionGroupCall)
         case messageActionGroupCallScheduled(Cons_messageActionGroupCallScheduled)
         case messageActionHistoryClear
@@ -1776,6 +1794,18 @@ public extension Api {
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt32(_data.winnersCount, buffer: buffer, boxed: false)
                 serializeInt32(_data.unclaimedCount, buffer: buffer, boxed: false)
+                break
+            case .messageActionGramTransfer(let _data):
+                if boxed {
+                    buffer.appendInt32(-1825969613)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.amount, buffer: buffer, boxed: false)
+                serializeString(_data.peerAddress, buffer: buffer, boxed: false)
+                serializeString(_data.transactionId, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.comment!, buffer: buffer, boxed: false)
+                }
                 break
             case .messageActionGroupCall(let _data):
                 if boxed {
@@ -2272,6 +2302,8 @@ public extension Api {
                 return ("messageActionGiveawayLaunch", [("flags", ConstructorParameterDescription(_data.flags)), ("stars", ConstructorParameterDescription(_data.stars))])
             case .messageActionGiveawayResults(let _data):
                 return ("messageActionGiveawayResults", [("flags", ConstructorParameterDescription(_data.flags)), ("winnersCount", ConstructorParameterDescription(_data.winnersCount)), ("unclaimedCount", ConstructorParameterDescription(_data.unclaimedCount))])
+            case .messageActionGramTransfer(let _data):
+                return ("messageActionGramTransfer", [("flags", ConstructorParameterDescription(_data.flags)), ("amount", ConstructorParameterDescription(_data.amount)), ("peerAddress", ConstructorParameterDescription(_data.peerAddress)), ("transactionId", ConstructorParameterDescription(_data.transactionId)), ("comment", ConstructorParameterDescription(_data.comment))])
             case .messageActionGroupCall(let _data):
                 return ("messageActionGroupCall", [("flags", ConstructorParameterDescription(_data.flags)), ("call", ConstructorParameterDescription(_data.call)), ("duration", ConstructorParameterDescription(_data.duration))])
             case .messageActionGroupCallScheduled(let _data):
@@ -2803,6 +2835,31 @@ public extension Api {
             let _c3 = _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.MessageAction.messageActionGiveawayResults(Cons_messageActionGiveawayResults(flags: _1!, winnersCount: _2!, unclaimedCount: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_messageActionGramTransfer(_ reader: BufferReader) -> MessageAction? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: String?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _5 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.MessageAction.messageActionGramTransfer(Cons_messageActionGramTransfer(flags: _1!, amount: _2!, peerAddress: _3!, transactionId: _4!, comment: _5))
             }
             else {
                 return nil

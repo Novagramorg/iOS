@@ -9,9 +9,11 @@ import PresentationDataUtils
 import ComponentFlow
 import ViewControllerComponent
 import SheetComponent
+import ResizableSheetComponent
 import BundleIconComponent
 import MultilineTextComponent
 import ButtonComponent
+import GlassBarButtonComponent
 import GlassControls
 import TableComponent
 import ContextUI
@@ -21,15 +23,135 @@ import TextFieldComponent
 import UndoUI
 import TooltipUI
 import AvatarComponent
+import ShimmeringMask
 import WalletContext
 import WalletCollectibleHeaderComponent
 
-private func walletTransactionModeId(_ mode: WalletTransactionScreenMode) -> String {
+private struct WalletTransactionPreviewSource: Equatable {
+    let id: String
+    let address: String
+    let amount: Int64
+    let comment: String?
+    let collectible: WalletContext.Collectible?
+    let preparedTransfer: WalletContext.PreparedTransfer?
+
+    init(preparedTransfer: WalletContext.PreparedTransfer) {
+        self.id = preparedTransfer.id
+        self.address = preparedTransfer.recipient
+        self.amount = preparedTransfer.amount
+        self.comment = preparedTransfer.comment
+        self.collectible = preparedTransfer.collectible
+        self.preparedTransfer = preparedTransfer
+    }
+
+    init(address: String, amount: Int64, comment: String?) {
+        self.id = UUID().uuidString
+        self.address = address
+        self.amount = amount
+        self.comment = comment
+        self.collectible = nil
+        self.preparedTransfer = nil
+    }
+}
+
+private enum WalletTransactionContentMode {
+    case transaction(WalletContext.Transaction)
+    case preview(
+        walletContext: WalletContext,
+        source: WalletTransactionPreviewSource,
+        dismissSendScreen: () -> Void
+    )
+}
+
+private protocol WalletTransactionContentController: AnyObject {
+    func setCloseAction(id: String, action: @escaping (Bool) -> Void)
+    func requestClose(animated: Bool)
+    func dismissAllTooltips()
+}
+
+private func walletTransactionModeId(_ mode: WalletTransactionContentMode) -> String {
     switch mode {
     case let .transaction(transaction):
         return "transaction:\(transaction.id):\(transaction.logicalTime)"
-    case let .preview(_, preparedTransfer, _):
-        return "preview:\(preparedTransfer.id)"
+    case let .preview(_, source, _):
+        return "preview:\(source.id)"
+    }
+}
+
+private final class WalletTransactionFeePlaceholderComponent: Component {
+    let color: UIColor
+
+    init(color: UIColor) {
+        self.color = color
+    }
+
+    static func ==(lhs: WalletTransactionFeePlaceholderComponent, rhs: WalletTransactionFeePlaceholderComponent) -> Bool {
+        return lhs.color.isEqual(rhs.color)
+    }
+
+    final class View: UIView {
+        private let shimmerView = ShimmeringMaskView(peakAlpha: 0.3, duration: 1.6)
+        private let shape = ComponentView<Empty>()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.isUserInteractionEnabled = false
+            self.shimmerView.isUserInteractionEnabled = false
+            self.addSubview(self.shimmerView)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(
+            component: WalletTransactionFeePlaceholderComponent,
+            state: EmptyComponentState,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let size = CGSize(width: 128.0, height: 16.0)
+            self.shape.parentState = state
+            let shapeSize = self.shape.update(
+                transition: transition,
+                component: AnyComponent(RoundedRectangle(
+                    color: component.color,
+                    cornerRadius: 8.0,
+                    size: size
+                )),
+                environment: {},
+                containerSize: size
+            )
+            if let shapeView = self.shape.view {
+                if shapeView.superview !== self.shimmerView.contentView {
+                    self.shimmerView.contentView.addSubview(shapeView)
+                }
+                transition.setFrame(view: shapeView, frame: CGRect(origin: CGPoint(x: 0.0, y: UIScreenPixel), size: shapeSize))
+            }
+            transition.setFrame(view: self.shimmerView, frame: CGRect(origin: CGPoint(x: 0.0, y: UIScreenPixel), size: size))
+            self.shimmerView.update(
+                size: size,
+                containerWidth: size.width,
+                offsetX: 0.0,
+                gradientWidth: 60.0,
+                transition: transition
+            )
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, state: state, transition: transition)
     }
 }
 
@@ -62,14 +184,14 @@ private final class WalletTransactionContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
-    let mode: WalletTransactionScreenMode
+    let mode: WalletTransactionContentMode
     let fiatWalletContext: WalletContext?
     let openExplorer: (String) -> Void
     let animateOut: ActionSlot<Action<Void>>
 
     init(
         context: AccountContext,
-        mode: WalletTransactionScreenMode,
+        mode: WalletTransactionContentMode,
         fiatWalletContext: WalletContext?,
         openExplorer: @escaping (String) -> Void,
         animateOut: ActionSlot<Action<Void>>
@@ -88,8 +210,8 @@ private final class WalletTransactionContentComponent: Component {
         switch (lhs.mode, rhs.mode) {
         case let (.transaction(lhsTransaction), .transaction(rhsTransaction)):
             return lhsTransaction == rhsTransaction
-        case let (.preview(lhsContext, lhsTransfer, _), .preview(rhsContext, rhsTransfer, _)):
-            return lhsContext === rhsContext && lhsTransfer == rhsTransfer
+        case let (.preview(lhsContext, lhsSource, _), .preview(rhsContext, rhsSource, _)):
+            return lhsContext === rhsContext && lhsSource == rhsSource
         default:
             return false
         }
@@ -134,7 +256,10 @@ private final class WalletTransactionContentComponent: Component {
 
         private var transaction: WalletContext.Transaction?
         private var walletContext: WalletContext?
+        private var previewSource: WalletTransactionPreviewSource?
+        private var previewComment: String?
         private var preparedTransfer: WalletContext.PreparedTransfer?
+        private var displayedFee: Int64?
         private var preparedTransferNeedsRefresh = false
         private var dismissSendScreen: (() -> Void)?
         private var didDismissSendScreen = false
@@ -150,6 +275,7 @@ private final class WalletTransactionContentComponent: Component {
 
         private let walletDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
+        private let discardTransferDisposables = DisposableSet()
         private let hapticFeedback = HapticFeedback()
         private var amountPending = false
         private var isUpdating = false
@@ -177,8 +303,10 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         deinit {
+            self.discardCurrentPreparedTransfer()
             self.walletDisposable.dispose()
             self.transferDisposable.dispose()
+            self.discardTransferDisposables.dispose()
         }
 
         private var isPreview: Bool {
@@ -192,12 +320,16 @@ private final class WalletTransactionContentComponent: Component {
             return self.previewOperation == .confirmed || self.previewOperation == .submissionUnknown
         }
 
-        private func configureMode(_ mode: WalletTransactionScreenMode, fiatWalletContext: WalletContext?) {
+        private func configureMode(_ mode: WalletTransactionContentMode, fiatWalletContext: WalletContext?) {
+            self.discardCurrentPreparedTransfer()
             self.walletDisposable.set(nil)
             self.transferDisposable.set(nil)
             self.transaction = nil
             self.walletContext = nil
+            self.previewSource = nil
+            self.previewComment = nil
             self.preparedTransfer = nil
+            self.displayedFee = nil
             self.preparedTransferNeedsRefresh = false
             self.dismissSendScreen = nil
             self.didDismissSendScreen = false
@@ -212,16 +344,28 @@ private final class WalletTransactionContentComponent: Component {
             case let .transaction(transaction):
                 self.modeId = "transaction:\(transaction.id):\(transaction.logicalTime)"
                 self.transaction = transaction
-            case let .preview(walletContext, preparedTransfer, dismissSendScreen):
-                self.modeId = "preview:\(preparedTransfer.id)"
+            case let .preview(walletContext, source, dismissSendScreen):
+                self.modeId = "preview:\(source.id)"
                 self.walletContext = walletContext
-                self.preparedTransfer = preparedTransfer
+                self.previewSource = source
+                self.previewComment = walletTransactionComment(source.comment)
+                self.preparedTransfer = source.preparedTransfer
+                self.displayedFee = source.preparedTransfer?.fee
                 self.dismissSendScreen = dismissSendScreen
                 self.previewTimestamp = Int32(Date().timeIntervalSince1970)
                 self.isApplyingInput = true
-                self.inputExternalState.initialText = NSAttributedString(string: preparedTransfer.comment ?? "")
+                self.inputExternalState.initialText = NSAttributedString(string: source.comment ?? "")
                 self.isApplyingInput = false
 
+                if source.preparedTransfer == nil {
+                    let revision = self.commentRevision
+                    Queue.mainQueue().justDispatch { [weak self] in
+                        guard let self, self.commentRevision == revision else {
+                            return
+                        }
+                        self.prepareCurrentComment(revision: revision, authorizeAfterPreparation: false)
+                    }
+                }
             }
 
             let observedContext = self.walletContext ?? fiatWalletContext
@@ -245,19 +389,23 @@ private final class WalletTransactionContentComponent: Component {
             if let transaction = self.transaction {
                 return transaction
             }
-            guard let preparedTransfer = self.preparedTransfer else {
+            guard let previewSource = self.previewSource else {
                 preconditionFailure()
             }
+            let preparedTransfer = self.preparedTransfer
+            let recipient = preparedTransfer?.recipient ?? previewSource.address
+            let amount = preparedTransfer?.amount ?? previewSource.amount
+            let collectible = preparedTransfer?.collectible ?? previewSource.collectible
             return WalletContext.Transaction(
-                id: "preview-\(preparedTransfer.id)",
-                logicalTime: preparedTransfer.id,
+                id: "preview-\(previewSource.id)",
+                logicalTime: previewSource.id,
                 timestamp: self.previewTimestamp,
                 direction: .outgoing,
-                amount: preparedTransfer.amount,
-                fee: preparedTransfer.fee,
-                peer: .address(preparedTransfer.recipient),
-                comment: walletTransactionComment(self.inputExternalState.text.string) ?? preparedTransfer.comment,
-                collectible: preparedTransfer.collectible.map(walletTransactionCollectible)
+                amount: amount,
+                fee: self.displayedFee ?? 0,
+                peer: .address(recipient, domain: nil),
+                comment: self.previewComment,
+                collectible: collectible.map(walletTransactionCollectible)
             )
         }
 
@@ -269,33 +417,37 @@ private final class WalletTransactionContentComponent: Component {
             self.dismissSendScreen?()
         }
 
-        private func close() {
+        private func close(animated: Bool = true) {
             guard let component = self.component,
-                  let controller = self.environment?.controller() as? WalletTransactionScreen else {
+                  let controller = self.environment?.controller() else {
                 return
             }
             switch self.previewOperation {
             case .submitting, .submissionUnknown, .confirmed:
                 self.dismissSendScreenIfNeeded()
-            case .preparing:
+            case .ready, .preparing:
                 self.commentRevision += 1
                 self.transferDisposable.set(nil)
+                self.discardCurrentPreparedTransfer()
                 self.previewOperation = .ready
                 self.preparingForSend = false
             case .authorizing:
+                self.discardCurrentPreparedTransfer()
                 self.previewOperation = .ready
                 self.preparingForSend = false
-            case .ready:
-                break
             }
-            controller.dismissAllTooltips()
-            controller.requestLayout(
-                forceUpdate: true,
-                transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition())
-            )
-            component.animateOut.invoke(Action { [weak controller] _ in
-                controller?.dismiss(completion: nil)
-            })
+            (controller as? WalletTransactionContentController)?.dismissAllTooltips()
+            if animated {
+                (controller as? ViewControllerComponentContainer)?.requestLayout(
+                    forceUpdate: true,
+                    transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition())
+                )
+                component.animateOut.invoke(Action { [weak controller] _ in
+                    controller?.dismiss(completion: nil)
+                })
+            } else {
+                controller.dismiss(completion: nil)
+            }
         }
 
         private func toggleAmountPending() {
@@ -308,14 +460,17 @@ private final class WalletTransactionContentComponent: Component {
 
         private func inputTextUpdated() {
             guard !self.isApplyingInput,
+                  !self.isUpdating,
                   self.isPreview,
                   self.previewOperation == .ready || (self.previewOperation == .preparing && !self.preparingForSend) else {
                 return
             }
             let comment = walletTransactionComment(self.inputExternalState.text.string)
-            if self.preparedTransfer?.comment == comment {
+            self.previewComment = comment
+            if let preparedTransfer = self.preparedTransfer, preparedTransfer.comment == comment {
                 self.commentRevision += 1
                 self.transferDisposable.set(nil)
+                self.displayedFee = preparedTransfer.fee
                 self.previewOperation = .ready
                 self.preparingForSend = false
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
@@ -323,9 +478,11 @@ private final class WalletTransactionContentComponent: Component {
             }
             self.commentRevision += 1
             let revision = self.commentRevision
-            self.previewOperation = .preparing
+            self.transferDisposable.set(nil)
+            self.previewOperation = .ready
+            self.preparingForSend = false
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            Queue.mainQueue().after(0.35) { [weak self] in
+            Queue.mainQueue().after(0.4) { [weak self] in
                 guard let self, self.commentRevision == revision else {
                     return
                 }
@@ -333,44 +490,52 @@ private final class WalletTransactionContentComponent: Component {
             }
         }
 
-        private func prepareCurrentComment(revision: Int? = nil, authorizeAfterPreparation: Bool) {
+        private func prepareCurrentComment(revision: Int, authorizeAfterPreparation: Bool) {
             guard let walletContext = self.walletContext,
-                  let preparedTransfer = self.preparedTransfer else {
+                  let previewSource = self.previewSource,
+                  self.commentRevision == revision else {
                 return
             }
-            if let revision, revision != self.commentRevision {
-                return
-            }
-            let comment = walletTransactionComment(self.inputExternalState.text.string)
+            let comment = self.previewComment
             self.previewOperation = .preparing
             self.preparingForSend = authorizeAfterPreparation
+            self.displayedFee = nil
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
-            if let collectible = preparedTransfer.collectible {
+            if let collectible = self.preparedTransfer?.collectible ?? previewSource.collectible {
                 preparation = walletContext.prepareCollectibleTransfer(
-                    address: preparedTransfer.recipient,
+                    address: self.preparedTransfer?.recipient ?? previewSource.address,
                     collectible: collectible,
                     comment: comment
                 )
             } else {
                 preparation = walletContext.prepareTransfer(
-                    address: preparedTransfer.recipient,
-                    amount: preparedTransfer.amount,
+                    address: self.preparedTransfer?.recipient ?? previewSource.address,
+                    amount: self.preparedTransfer?.amount ?? previewSource.amount,
                     comment: comment
                 )
             }
             self.transferDisposable.set((preparation
             |> deliverOnMainQueue).start(next: { [weak self] updatedTransfer in
                 guard let self else {
+                    _ = walletContext.discardPreparedTransfer(updatedTransfer).start()
                     return
                 }
-                if let revision, revision != self.commentRevision {
+                if revision != self.commentRevision {
+                    self.discardTransferDisposables.add(
+                        walletContext.discardPreparedTransfer(updatedTransfer).start()
+                    )
                     return
+                }
+                if self.preparedTransfer?.id != updatedTransfer.id {
+                    self.discardCurrentPreparedTransfer()
                 }
                 self.preparedTransfer = updatedTransfer
+                self.displayedFee = updatedTransfer.fee
                 self.preparedTransferNeedsRefresh = false
+                let shouldAuthorize = self.preparingForSend
                 self.preparingForSend = false
-                if authorizeAfterPreparation {
+                if shouldAuthorize {
                     self.authorizeAndSubmit(updatedTransfer)
                 } else {
                     self.previewOperation = .ready
@@ -380,9 +545,10 @@ private final class WalletTransactionContentComponent: Component {
                 guard let self else {
                     return
                 }
-                if let revision, revision != self.commentRevision {
+                if revision != self.commentRevision {
                     return
                 }
+                self.displayedFee = nil
                 self.previewOperation = .ready
                 self.preparingForSend = false
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
@@ -391,15 +557,28 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         private func send() {
-            guard self.isPreview, self.previewOperation == .ready, let preparedTransfer = self.preparedTransfer else {
+            guard self.isPreview, !self.preparingForSend else {
                 return
             }
-            let comment = walletTransactionComment(self.inputExternalState.text.string)
-            let isExpired = TimeInterval(preparedTransfer.expiresAt) <= Date().timeIntervalSince1970
-            if self.preparedTransferNeedsRefresh || preparedTransfer.comment != comment || isExpired {
-                self.prepareCurrentComment(authorizeAfterPreparation: true)
-            } else {
+            if self.previewOperation == .preparing {
+                self.preparingForSend = true
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                return
+            }
+            guard self.previewOperation == .ready else {
+                return
+            }
+            let comment = self.previewComment
+            if let preparedTransfer = self.preparedTransfer,
+               !self.preparedTransferNeedsRefresh,
+               preparedTransfer.comment == comment,
+               TimeInterval(preparedTransfer.expiresAt) > Date().timeIntervalSince1970 {
                 self.authorizeAndSubmit(preparedTransfer)
+            } else {
+                self.commentRevision += 1
+                let revision = self.commentRevision
+                self.transferDisposable.set(nil)
+                self.prepareCurrentComment(revision: revision, authorizeAfterPreparation: true)
             }
         }
 
@@ -435,21 +614,38 @@ private final class WalletTransactionContentComponent: Component {
                         isCollectible: submittedTransfer.pendingTransfer.collectibleAddress != nil
                     )
                 }
-            }, error: { [weak self] _ in
+            }, error: { [weak self] error in
                 guard let self else {
                     return
                 }
-                self.preparedTransferNeedsRefresh = true
+                switch error {
+                case .preparedTransferExpired, .preparedTransferNotFound:
+                    self.preparedTransferNeedsRefresh = true
+                default:
+                    self.preparedTransferNeedsRefresh = false
+                }
                 self.previewOperation = .ready
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 self.presentTransferError()
             }))
         }
 
+        private func discardCurrentPreparedTransfer() {
+            guard let walletContext = self.walletContext,
+                  let preparedTransfer = self.preparedTransfer else {
+                return
+            }
+            self.preparedTransfer = nil
+            self.preparedTransferNeedsRefresh = false
+            self.discardTransferDisposables.add(
+                walletContext.discardPreparedTransfer(preparedTransfer).start()
+            )
+        }
+
         private func showSuccessIfNeeded(address: String, isCollectible: Bool) {
             guard !self.didShowSuccess,
                   let component = self.component,
-                  let controller = self.environment?.controller() as? WalletTransactionScreen else {
+                  let controller = self.environment?.controller() else {
                 return
             }
             self.didShowSuccess = true
@@ -515,10 +711,10 @@ private final class WalletTransactionContentComponent: Component {
             self.hapticFeedback.tap()
 
             guard let component = self.component,
-                  let controller = self.environment?.controller() as? WalletTransactionScreen else {
+                  let controller = self.environment?.controller() else {
                 return
             }
-            controller.dismissAllTooltips()
+            (controller as? WalletTransactionContentController)?.dismissAllTooltips()
             
             //TODO:localize
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
@@ -537,11 +733,11 @@ private final class WalletTransactionContentComponent: Component {
 
         private func openPeer(_ peer: EnginePeer) {
             guard let component = self.component,
-                  let controller = self.environment?.controller() as? WalletTransactionScreen,
+                  let controller = self.environment?.controller(),
                   let navigationController = controller.navigationController as? NavigationController else {
                 return
             }
-            controller.dismissAllTooltips()
+            (controller as? WalletTransactionContentController)?.dismissAllTooltips()
             component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
                 navigationController: navigationController,
                 chatController: nil,
@@ -589,7 +785,7 @@ private final class WalletTransactionContentComponent: Component {
 
         private func openExplorer(sourceView: UIView) {
             guard let component = self.component,
-                  let controller = self.environment?.controller() as? WalletTransactionScreen,
+                  let controller = self.environment?.controller(),
                   let transaction = self.transaction else {
                 return
             }
@@ -643,8 +839,8 @@ private final class WalletTransactionContentComponent: Component {
             } else if case let .transaction(transaction) = component.mode {
                 self.transaction = transaction
             }
-            (environment.controller() as? WalletTransactionScreen)?.setCloseAction(id: incomingModeId, action: { [weak self] in
-                self?.close()
+            (environment.controller() as? WalletTransactionContentController)?.setCloseAction(id: incomingModeId, action: { [weak self] animated in
+                self?.close(animated: animated)
             })
 
             let theme = environment.theme
@@ -690,10 +886,12 @@ private final class WalletTransactionContentComponent: Component {
                 if controlsView.superview == nil {
                     self.addSubview(controlsView)
                 }
+                controlsView.isUserInteractionEnabled = !self.isPreview
                 transition.setFrame(
                     view: controlsView,
                     frame: CGRect(x: 16.0, y: 16.0, width: controlsSize.width, height: controlsSize.height)
                 )
+                transition.setAlpha(view: controlsView, alpha: self.isPreview ? 0.0 : 1.0)
             }
 
             let fiatCurrency = self.latestWalletState?.fiat.selectedCurrency ?? .usd
@@ -962,10 +1160,11 @@ private final class WalletTransactionContentComponent: Component {
                     counterpartyTitle = "Address"
                 }
             }
-            let counterpartyName = transaction.peer.displayName.flatMap { value -> String? in
+            let peerDisplayName = transaction.peer.displayName.flatMap { value -> String? in
                 let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 return value.isEmpty ? nil : value
             }
+            let counterpartyName = peerDisplayName ?? transaction.peer.domain
             let addressComponent: AnyComponent<Empty>?
             if let counterparty = transaction.peer.address {
                 let address = WalletContext.transferAddress(from: counterparty) ?? counterparty
@@ -987,7 +1186,7 @@ private final class WalletTransactionContentComponent: Component {
                 addressComponent = nil
             }
             let counterpartyComponent: AnyComponent<Empty>
-            if case let .user(peer, _) = transaction.peer {
+            if case let .user(peer, _, _) = transaction.peer {
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: "avatar",
@@ -1030,33 +1229,51 @@ private final class WalletTransactionContentComponent: Component {
                     maximumNumberOfLines: 0
                 ))
             }
-            var feeItems: [AnyComponentWithIdentity<Empty>] = [
-                AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
-                    name: "Ads/TonAbout",
-                    tintColor: UIColor(rgb: 0x30a1f5),
-                    maxSize: CGSize(width: 14.0, height: 14.0)
-                ))),
-                AnyComponentWithIdentity(id: "amount", component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: formatTonAmountText(transaction.fee, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 5),
-                        font: valueFont,
-                        textColor: valueColor
-                    )),
-                    maximumNumberOfLines: 1
-                )))
-            ]
-            if let fiatRate {
-                let usdFee = formatTonFiatValue(
-                    transaction.fee,
-                    rate: fiatRate.unitsPerGram,
-                    currencySymbol: fiatCurrency.symbol,
-                    maxDecimalPositions: 4,
-                    dateTimeFormat: environment.dateTimeFormat
-                )
-                feeItems.append(AnyComponentWithIdentity(id: "usd", component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "~ \(usdFee)", font: valueFont, textColor: secondaryValueColor)),
-                    maximumNumberOfLines: 1
-                ))))
+            let displayedFee: Int64? = self.isPreview ? self.displayedFee : transaction.fee
+            let feeComponent: AnyComponent<Empty>?
+            if let displayedFee {
+                if displayedFee > 0 {
+                    var feeItems: [AnyComponentWithIdentity<Empty>] = [
+                        AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
+                            name: "Ads/TonAbout",
+                            tintColor: UIColor(rgb: 0x30a1f5),
+                            maxSize: CGSize(width: 14.0, height: 14.0)
+                        ))),
+                        AnyComponentWithIdentity(id: "amount", component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: formatTonAmountText(displayedFee, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 5),
+                                font: valueFont,
+                                textColor: valueColor
+                            )),
+                            maximumNumberOfLines: 1
+                        )))
+                    ]
+                    if let fiatRate {
+                        let usdFee = formatTonFiatValue(
+                            displayedFee,
+                            rate: fiatRate.unitsPerGram,
+                            currencySymbol: fiatCurrency.symbol,
+                            maxDecimalPositions: 4,
+                            dateTimeFormat: environment.dateTimeFormat
+                        )
+                        feeItems.append(AnyComponentWithIdentity(id: "usd", component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: "~ \(usdFee)", font: valueFont, textColor: secondaryValueColor)),
+                            maximumNumberOfLines: 1
+                        ))))
+                    }
+                    feeComponent = AnyComponent(HStack(feeItems, spacing: 3.0))
+                } else {
+                    feeComponent = nil
+                }
+            } else {
+                feeComponent = AnyComponent(HStack([
+                    AnyComponentWithIdentity(
+                        id: "placeholder",
+                        component: AnyComponent(WalletTransactionFeePlaceholderComponent(
+                            color: theme.overallDarkAppearance ? theme.list.itemModalBlocksBackgroundColor : theme.list.itemInputField.backgroundColor
+                        ))
+                    )
+                ], spacing: 0.0))
             }
             //TODO:localize
             let feeTitle = "Fee"
@@ -1067,7 +1284,16 @@ private final class WalletTransactionContentComponent: Component {
                 title: counterpartyTitle,
                 component: counterpartyComponent
             )]
-            if case .user = transaction.peer, let addressComponent {
+            let displaysSeparateAddress: Bool
+            switch transaction.peer {
+            case .user:
+                displaysSeparateAddress = true
+            case .address:
+                displaysSeparateAddress = transaction.peer.domain != nil
+            case .unsupported:
+                displaysSeparateAddress = false
+            }
+            if displaysSeparateAddress, let addressComponent {
                 //TODO:localize
                 tableItems.append(TableComponent.Item(
                     id: "address",
@@ -1075,11 +1301,11 @@ private final class WalletTransactionContentComponent: Component {
                     component: addressComponent
                 ))
             }
-            if transaction.direction == .outgoing {
+            if transaction.direction == .outgoing, let feeComponent {
                 tableItems.append(TableComponent.Item(
                     id: "fee",
                     title: feeTitle,
-                    component: AnyComponent(HStack(feeItems, spacing: 3.0))
+                    component: feeComponent
                 ))
             }
             tableItems.append(TableComponent.Item(
@@ -1238,7 +1464,14 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 canSign = false
             }
-            let actionIsEnabled = !self.isPreview || self.isFinishedPreview || (self.previewOperation == .ready && canSign)
+            let actionIsEnabled: Bool
+            if !self.isPreview || self.isFinishedPreview {
+                actionIsEnabled = true
+            } else {
+                actionIsEnabled = canSign
+                    && !self.preparingForSend
+                    && (self.previewOperation == .ready || self.previewOperation == .preparing)
+            }
             let actionSize = self.actionButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
@@ -1254,7 +1487,7 @@ private final class WalletTransactionContentComponent: Component {
                         color: theme.list.itemCheckColors.foregroundColor
                     ))),
                     isEnabled: actionIsEnabled,
-                    displaysProgress: self.isPreview && self.previewOperation.displaysProgress,
+                    displaysProgress: self.isPreview && (self.previewOperation.displaysProgress || self.preparingForSend),
                     action: { [weak self] in
                         guard let self else {
                             return
@@ -1281,10 +1514,6 @@ private final class WalletTransactionContentComponent: Component {
                 ))
             }
             contentHeight += actionSize.height + 30.0
-            if displaysInput {
-                contentHeight += environment.inputHeight
-            }
-
             return CGSize(width: availableSize.width, height: contentHeight)
         }
     }
@@ -1374,8 +1603,8 @@ private final class WalletTransactionPagerComponent: Component {
             self.scrollView.isPagingEnabled = true
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.showsVerticalScrollIndicator = false
-            self.scrollView.alwaysBounceHorizontal = false
-            self.scrollView.bounces = false
+            self.scrollView.alwaysBounceHorizontal = true
+            self.scrollView.bounces = true
             self.scrollView.layer.cornerRadius = 10.0
             if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
                 self.scrollView.contentInsetAdjustmentBehavior = .never
@@ -1522,11 +1751,15 @@ private final class WalletTransactionPagerComponent: Component {
             }
             if let targetOffset {
                 let maximumOffset = max(0.0, contentSize.width - scrollFrame.width)
+                let resolvedOffset = self.isSwiping
+                    ? targetOffset
+                    : max(0.0, min(maximumOffset, targetOffset))
                 self.ignoreContentOffsetChange = true
-                self.scrollView.contentOffset = CGPoint(x: max(0.0, min(maximumOffset, targetOffset)), y: 0.0)
+                self.scrollView.contentOffset = CGPoint(x: resolvedOffset, y: 0.0)
                 self.ignoreContentOffsetChange = false
             }
 
+            let currentIndex = self.currentIndex(component: component, itemStride: itemStride)
             let viewportCenter = self.scrollView.contentOffset.x + availableSize.width * 0.5
             let isSwipingActive = self.isSwiping || CACurrentMediaTime() - self.lastScrollTime < 0.5
             var validIds = Set<String>()
@@ -1538,16 +1771,18 @@ private final class WalletTransactionPagerComponent: Component {
                 if (!isSwipingActive && abs(position) > 0.5) || (isSwipingActive && abs(position) > 1.5) {
                     continue
                 }
+                
+                let uniqueId = transaction.id + (transaction.peer.address ?? "")
 
-                validIds.insert(transaction.id)
+                validIds.insert(uniqueId)
                 let itemView: ComponentHostView<EnvironmentType>
                 var itemTransition = transition
-                if let current = self.itemViews[transaction.id] {
+                if let current = self.itemViews[uniqueId] {
                     itemView = current
                 } else {
                     itemTransition = transition.withAnimation(.none)
                     itemView = ComponentHostView<EnvironmentType>()
-                    self.itemViews[transaction.id] = itemView
+                    self.itemViews[uniqueId] = itemView
                     self.scrollView.addSubview(itemView)
                 }
 
@@ -1555,9 +1790,10 @@ private final class WalletTransactionPagerComponent: Component {
                     transition: itemTransition,
                     component: AnyComponent(WalletTransactionSheetComponent(
                         context: component.context,
-                        mode: .transaction(transaction),
+                        transaction: transaction,
                         fiatWalletContext: component.walletContext,
                         hasDimView: false,
+                        updatesPresentationContextLayout: index == currentIndex,
                         openExplorer: component.openExplorer
                     )),
                     environment: { environment[EnvironmentType.self] },
@@ -1610,39 +1846,36 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
-    let mode: WalletTransactionScreenMode
+    let transaction: WalletContext.Transaction
     let fiatWalletContext: WalletContext?
     let hasDimView: Bool
+    let updatesPresentationContextLayout: Bool
     let openExplorer: (String) -> Void
 
     init(
         context: AccountContext,
-        mode: WalletTransactionScreenMode,
+        transaction: WalletContext.Transaction,
         fiatWalletContext: WalletContext?,
         hasDimView: Bool,
+        updatesPresentationContextLayout: Bool,
         openExplorer: @escaping (String) -> Void
     ) {
         self.context = context
-        self.mode = mode
+        self.transaction = transaction
         self.fiatWalletContext = fiatWalletContext
         self.hasDimView = hasDimView
+        self.updatesPresentationContextLayout = updatesPresentationContextLayout
         self.openExplorer = openExplorer
     }
 
     static func ==(lhs: WalletTransactionSheetComponent, rhs: WalletTransactionSheetComponent) -> Bool {
         if lhs.context !== rhs.context
             || lhs.fiatWalletContext !== rhs.fiatWalletContext
-            || lhs.hasDimView != rhs.hasDimView {
+            || lhs.hasDimView != rhs.hasDimView
+            || lhs.updatesPresentationContextLayout != rhs.updatesPresentationContextLayout {
             return false
         }
-        switch (lhs.mode, rhs.mode) {
-        case let (.transaction(lhsTransaction), .transaction(rhsTransaction)):
-            return lhsTransaction == rhsTransaction
-        case let (.preview(lhsContext, lhsTransfer, _), .preview(rhsContext, rhsTransfer, _)):
-            return lhsContext === rhsContext && lhsTransfer == rhsTransfer
-        default:
-            return false
-        }
+        return lhs.transaction == rhs.transaction
     }
 
     static var body: Body {
@@ -1657,7 +1890,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                 component: SheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
                         context: context.component.context,
-                        mode: context.component.mode,
+                        mode: .transaction(context.component.transaction),
                         fiatWalletContext: context.component.fiatWalletContext,
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
@@ -1671,10 +1904,10 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                     externalState: sheetExternalState,
                     animateOut: animateOut,
                     onPan: {
-                        (controller() as? WalletTransactionScreen)?.dismissAllTooltips()
+                        (controller() as? WalletTransactionContentController)?.dismissAllTooltips()
                     },
                     willDismiss: {
-                        (controller() as? WalletTransactionScreen)?.requestLayout(
+                        (controller() as? ViewControllerComponentContainer)?.requestLayout(
                             forceUpdate: true,
                             transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition())
                         )
@@ -1689,8 +1922,138 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                         isCentered: environment.metrics.widthClass == .regular,
                         hasInputHeight: !environment.inputHeight.isZero,
                         regularMetricsSize: CGSize(width: 430.0, height: 900.0),
-                        dismiss: { _ in
-                            (controller() as? WalletTransactionScreen)?.requestClose()
+                        dismiss: { animated in
+                            (controller() as? WalletTransactionContentController)?.requestClose(animated: animated)
+                        }
+                    )
+                },
+                availableSize: context.availableSize,
+                transition: context.transition
+            )
+            context.add(sheetComponent.position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0)))
+
+            if context.component.updatesPresentationContextLayout,
+               let controller = controller(),
+               !controller.automaticallyControlPresentationContextLayout {
+                var sideInset: CGFloat = 0.0
+                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
+                if case .regular = environment.metrics.widthClass {
+                    sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
+                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
+                }
+                controller.presentationContext.containerLayoutUpdated(
+                    ContainerViewLayout(
+                        size: context.availableSize,
+                        metrics: environment.metrics,
+                        deviceMetrics: environment.deviceMetrics,
+                        intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0),
+                        safeInsets: UIEdgeInsets(
+                            top: 0.0,
+                            left: max(sideInset, environment.safeInsets.left),
+                            bottom: 0.0,
+                            right: max(sideInset, environment.safeInsets.right)
+                        ),
+                        additionalInsets: .zero,
+                        statusBarHeight: environment.statusBarHeight,
+                        inputHeight: nil,
+                        inputHeightIsInteractivellyChanging: false,
+                        inVoiceOver: false
+                    ),
+                    transition: context.transition.containedViewLayoutTransition
+                )
+            }
+            return context.availableSize
+        }
+    }
+}
+
+private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let walletContext: WalletContext
+    let source: WalletTransactionPreviewSource
+    let dismissSendScreen: () -> Void
+    let openExplorer: (String) -> Void
+
+    init(
+        context: AccountContext,
+        walletContext: WalletContext,
+        source: WalletTransactionPreviewSource,
+        dismissSendScreen: @escaping () -> Void,
+        openExplorer: @escaping (String) -> Void
+    ) {
+        self.context = context
+        self.walletContext = walletContext
+        self.source = source
+        self.dismissSendScreen = dismissSendScreen
+        self.openExplorer = openExplorer
+    }
+
+    static func ==(lhs: WalletTransactionPreviewSheetComponent, rhs: WalletTransactionPreviewSheetComponent) -> Bool {
+        return lhs.context === rhs.context
+            && lhs.walletContext === rhs.walletContext
+            && lhs.source == rhs.source
+    }
+
+    static var body: Body {
+        let sheet = Child(ResizableSheetComponent<EnvironmentType>.self)
+        let animateOut = StoredActionSlot(Action<Void>.self)
+        let sheetExternalState = ResizableSheetComponent<EnvironmentType>.ExternalState()
+
+        return { context in
+            let environment = context.environment[EnvironmentType.self]
+            let controller = environment.controller
+            let sheetComponent = sheet.update(
+                component: ResizableSheetComponent<EnvironmentType>(
+                    content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
+                        context: context.component.context,
+                        mode: .preview(
+                            walletContext: context.component.walletContext,
+                            source: context.component.source,
+                            dismissSendScreen: context.component.dismissSendScreen
+                        ),
+                        fiatWalletContext: context.component.walletContext,
+                        openExplorer: context.component.openExplorer,
+                        animateOut: animateOut
+                    )),
+                    leftItem: AnyComponent(GlassBarButtonComponent(
+                        size: CGSize(width: 44.0, height: 44.0),
+                        backgroundColor: nil,
+                        isDark: environment.theme.overallDarkAppearance,
+                        state: .glass,
+                        component: AnyComponentWithIdentity(
+                            id: "close",
+                            component: AnyComponent(BundleIconComponent(
+                                name: "Navigation/Close",
+                                tintColor: environment.theme.chat.inputPanel.panelControlColor
+                            ))
+                        ),
+                        action: { _ in
+                            (controller() as? WalletTransactionContentController)?.requestClose(animated: true)
+                        }
+                    )),
+                    hasTopEdgeEffect: false,
+                    backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
+                    clipsContent: true,
+                    externalState: sheetExternalState,
+                    animateOut: animateOut
+                ),
+                environment: {
+                    environment
+                    ResizableSheetComponentEnvironment(
+                        theme: environment.theme,
+                        statusBarHeight: environment.statusBarHeight,
+                        safeInsets: environment.safeInsets,
+                        inputHeight: environment.inputHeight,
+                        metrics: environment.metrics,
+                        deviceMetrics: environment.deviceMetrics,
+                        isDisplaying: environment.value.isVisible,
+                        isCentered: environment.metrics.widthClass == .regular,
+                        screenSize: context.availableSize,
+                        regularMetricsSize: CGSize(width: 430.0, height: 900.0),
+                        dismiss: { animated in
+                            (controller() as? WalletTransactionContentController)?.requestClose(animated: animated)
                         }
                     )
                 },
@@ -1700,11 +2063,12 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
             context.add(sheetComponent.position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0)))
 
             if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
+                let contentHeight = sheetExternalState.contentHeight + environment.inputHeight
                 var sideInset: CGFloat = 0.0
-                var bottomInset: CGFloat = max(environment.safeInsets.bottom, sheetExternalState.contentHeight)
+                var bottomInset: CGFloat = max(environment.safeInsets.bottom, contentHeight)
                 if case .regular = environment.metrics.widthClass {
                     sideInset = floor((context.availableSize.width - 430.0) / 2.0) - 12.0
-                    bottomInset = (context.availableSize.height - sheetExternalState.contentHeight) / 2.0 + sheetExternalState.contentHeight
+                    bottomInset = (context.availableSize.height - contentHeight) / 2.0 + contentHeight
                 }
                 controller.presentationContext.containerLayoutUpdated(
                     ContainerViewLayout(
@@ -1766,7 +2130,22 @@ private final class WalletTransactionRootComponent: Component {
     }
 }
 
-public final class WalletTransactionScreen: ViewControllerComponentContainer {
+private func walletTransactionOpenExplorer(context: AccountContext) -> (String) -> Void {
+    return { url in
+        context.sharedContext.openExternalUrl(
+            context: context,
+            urlContext: .generic,
+            url: url,
+            forceExternal: true,
+            presentationData: context.sharedContext.currentPresentationData.with { $0 },
+            navigationController: nil,
+            dismissInput: {
+            }
+        )
+    }
+}
+
+public final class WalletTransactionScreen: ViewControllerComponentContainer, WalletTransactionContentController {
     private let accountContext: AccountContext
     private let navigationWalletContext: WalletContext?
     private let openExplorer: (String) -> Void
@@ -1777,70 +2156,39 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer {
     private var transactions: [WalletContext.Transaction]
     private var currentTransactionId: String?
     private var currentCloseId: String
-    private var closeActions: [String: () -> Void] = [:]
+    private var closeActions: [String: (Bool) -> Void] = [:]
     private var requestedOffset: Int?
     private var failedOffset: Int?
 
     public init(
         context: AccountContext,
         walletContext: WalletContext? = nil,
-        mode: WalletTransactionScreenMode
+        transaction: WalletContext.Transaction
     ) {
-        let navigationWalletContext: WalletContext?
-        let fiatWalletContext: WalletContext?
-        let initialTransaction: WalletContext.Transaction?
-        switch mode {
-        case let .transaction(transaction):
-            navigationWalletContext = walletContext
-            fiatWalletContext = walletContext ?? context.walletContext
-            initialTransaction = transaction
-        case let .preview(walletContext, _, _):
-            navigationWalletContext = nil
-            fiatWalletContext = walletContext
-            initialTransaction = nil
-        }
-
-        let initialState = navigationWalletContext?.stateValue.transactions
+        let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
-        if let initialTransaction,
-           !initialTransactions.contains(where: { $0.id == initialTransaction.id }) {
-            initialTransactions.insert(initialTransaction, at: 0)
+        if !initialTransactions.contains(where: { $0.id == transaction.id }) {
+            initialTransactions.insert(transaction, at: 0)
         }
-        let initialIndex: Int
-        if let initialTransaction {
-            initialIndex = initialTransactions.firstIndex(where: { $0.id == initialTransaction.id }) ?? 0
-        } else {
-            initialIndex = 0
-        }
+        let initialIndex = initialTransactions.firstIndex(where: { $0.id == transaction.id }) ?? 0
 
-        let openExplorer: (String) -> Void = { url in
-            context.sharedContext.openExternalUrl(
-                context: context,
-                urlContext: .generic,
-                url: url,
-                forceExternal: true,
-                presentationData: context.sharedContext.currentPresentationData.with { $0 },
-                navigationController: nil,
-                dismissInput: {
-                }
-            )
-        }
+        let openExplorer = walletTransactionOpenExplorer(context: context)
 
         self.accountContext = context
-        self.navigationWalletContext = navigationWalletContext
+        self.navigationWalletContext = walletContext
         self.openExplorer = openExplorer
         self.transactionsState = initialState
         self.transactions = initialTransactions
-        self.currentTransactionId = initialTransaction?.id
-        self.currentCloseId = walletTransactionModeId(mode)
+        self.currentTransactionId = transaction.id
+        self.currentCloseId = walletTransactionModeId(.transaction(transaction))
 
         var indexUpdatedImpl: ((Int) -> Void)?
         var draggingBeganImpl: ((Int) -> Void)?
         let initialComponent: AnyComponent<ViewControllerComponentContainer.Environment>
-        if let navigationWalletContext, initialTransaction != nil {
+        if let walletContext {
             initialComponent = AnyComponent(WalletTransactionPagerComponent(
                 context: context,
-                walletContext: navigationWalletContext,
+                walletContext: walletContext,
                 transactions: initialTransactions,
                 initialIndex: initialIndex,
                 itemSpacing: 10.0,
@@ -1855,9 +2203,10 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer {
         } else {
             initialComponent = AnyComponent(WalletTransactionSheetComponent(
                 context: context,
-                mode: mode,
-                fiatWalletContext: fiatWalletContext,
+                transaction: transaction,
+                fiatWalletContext: context.walletContext,
                 hasDimView: true,
+                updatesPresentationContextLayout: true,
                 openExplorer: openExplorer
             ))
         }
@@ -1878,8 +2227,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer {
         self.navigationPresentation = .flatModal
         self.automaticallyControlPresentationContextLayout = false
 
-        if let navigationWalletContext {
-            self.stateDisposable.set((navigationWalletContext.state
+        if let walletContext {
+            self.stateDisposable.set((walletContext.state
             |> map { $0.transactions }
             |> distinctUntilChanged
             |> deliverOnMainQueue).start(next: { [weak self] transactions in
@@ -1910,21 +2259,21 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer {
         self.dismissAllTooltips()
     }
 
-    fileprivate func setCloseAction(id: String, action: @escaping () -> Void) {
+    fileprivate func setCloseAction(id: String, action: @escaping (Bool) -> Void) {
         self.closeActions[id] = action
     }
 
-    fileprivate func requestClose() {
+    fileprivate func requestClose(animated: Bool) {
         self.dismissAllTooltips()
         if let closeAction = self.closeActions[self.currentCloseId] {
-            closeAction()
+            closeAction(animated)
         } else {
             self.dismiss(completion: nil)
         }
     }
 
     public func dismissAnimated() {
-        self.requestClose()
+        self.requestClose(animated: true)
     }
 
     fileprivate func dismissAllTooltips() {
@@ -2016,6 +2365,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer {
     }
 
     private func draggingBegan(_ index: Int) {
+        self.dismissAllTooltips()
         if self.failedOffset == self.transactionsState?.offset {
             self.requestedOffset = nil
             self.failedOffset = nil
@@ -2046,6 +2396,126 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer {
             }
             self.failedOffset = offset
         }))
+    }
+}
+
+public final class WalletTransactionPreviewScreen: ViewControllerComponentContainer, WalletTransactionContentController {
+    private let currentCloseId: String
+    private var closeActions: [String: (Bool) -> Void] = [:]
+
+    public init(
+        context: AccountContext,
+        walletContext: WalletContext,
+        preparedTransfer: WalletContext.PreparedTransfer,
+        dismissSendScreen: @escaping () -> Void
+    ) {
+        let source = WalletTransactionPreviewSource(preparedTransfer: preparedTransfer)
+        self.currentCloseId = walletTransactionModeId(.preview(
+            walletContext: walletContext,
+            source: source,
+            dismissSendScreen: dismissSendScreen
+        ))
+
+        super.init(
+            context: context,
+            component: WalletTransactionPreviewSheetComponent(
+                context: context,
+                walletContext: walletContext,
+                source: source,
+                dismissSendScreen: dismissSendScreen,
+                openExplorer: walletTransactionOpenExplorer(context: context)
+            ),
+            navigationBarAppearance: .none,
+            statusBarStyle: .ignore,
+            theme: .default
+        )
+
+        self.navigationPresentation = .flatModal
+        self.automaticallyControlPresentationContextLayout = false
+    }
+
+    public init(
+        context: AccountContext,
+        walletContext: WalletContext,
+        address: String,
+        amount: Int64,
+        comment: String?,
+        dismissSendScreen: @escaping () -> Void
+    ) {
+        let source = WalletTransactionPreviewSource(address: address, amount: amount, comment: comment)
+        self.currentCloseId = walletTransactionModeId(.preview(
+            walletContext: walletContext,
+            source: source,
+            dismissSendScreen: dismissSendScreen
+        ))
+
+        super.init(
+            context: context,
+            component: WalletTransactionPreviewSheetComponent(
+                context: context,
+                walletContext: walletContext,
+                source: source,
+                dismissSendScreen: dismissSendScreen,
+                openExplorer: walletTransactionOpenExplorer(context: context)
+            ),
+            navigationBarAppearance: .none,
+            statusBarStyle: .ignore,
+            theme: .default
+        )
+
+        self.navigationPresentation = .flatModal
+        self.automaticallyControlPresentationContextLayout = false
+    }
+
+    required public init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func viewDidLoad() {
+        super.viewDidLoad()
+        self.view.disablesInteractiveModalDismiss = true
+    }
+
+    public override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        self.dismissAllTooltips()
+    }
+
+    fileprivate func setCloseAction(id: String, action: @escaping (Bool) -> Void) {
+        self.closeActions[id] = action
+    }
+
+    fileprivate func requestClose(animated: Bool) {
+        self.dismissAllTooltips()
+        if let closeAction = self.closeActions[self.currentCloseId] {
+            closeAction(animated)
+        } else {
+            self.dismiss(completion: nil)
+        }
+    }
+
+    public func dismissAnimated() {
+        self.requestClose(animated: true)
+    }
+
+    fileprivate func dismissAllTooltips() {
+        self.window?.forEachController({ controller in
+            if let controller = controller as? TooltipScreen {
+                controller.dismiss(inPlace: false)
+            }
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+        })
+        self.forEachController({ controller in
+            if let controller = controller as? TooltipScreen {
+                controller.dismiss(inPlace: false)
+            }
+            if let controller = controller as? UndoOverlayController {
+                controller.dismiss()
+            }
+            return true
+        })
     }
 }
 
@@ -2101,8 +2571,20 @@ private func walletTransactionDateText(
     return strings.Time_MediumDate(date, time).string
 }
 
+private func tonHashHex(fromBase64 hash: String) -> String? {
+    guard let data = Data(base64Encoded: hash),
+          data.count == 32 else {
+        return nil
+    }
+
+    return data.map { String(format: "%02x", $0) }.joined()
+}
+
 private func walletTransactionExplorerUrl(id: String) -> String? {
-    return "https://tonviewer.com/transaction/\(id)"
+    guard let encodedId = tonHashHex(fromBase64: id) else {
+        return nil
+    }
+    return "https://tonviewer.com/transaction/\(encodedId)"
 }
 
 private final class WalletTransactionContextReferenceContentSource: ContextReferenceContentSource {

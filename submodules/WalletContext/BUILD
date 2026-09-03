@@ -13,6 +13,7 @@ swift_library(
       "//third-party/wallet-engine:WalletEngineFFI",
       "//submodules/SSignalKit/SwiftSignalKit",
       "//submodules/TelegramCore",
+      "//submodules/TelegramUIPreferences",
       "//submodules/WalletBackupCrypto",
     ],
     visibility = [

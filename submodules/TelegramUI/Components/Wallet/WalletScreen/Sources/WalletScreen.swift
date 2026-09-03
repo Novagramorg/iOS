@@ -638,18 +638,15 @@ private final class WalletScreenComponent: Component {
     let context: AccountContext
     let walletContext: WalletContext
     let twoStepAuthData: Promise<TwoStepAuthData?>
-    let routeToSetup: ((ViewController) -> Void)?
 
     init(
         context: AccountContext,
         walletContext: WalletContext,
-        twoStepAuthData: Promise<TwoStepAuthData?>,
-        routeToSetup: ((ViewController) -> Void)?
+        twoStepAuthData: Promise<TwoStepAuthData?>
     ) {
         self.context = context
         self.walletContext = walletContext
         self.twoStepAuthData = twoStepAuthData
-        self.routeToSetup = routeToSetup
     }
 
     static func ==(lhs: WalletScreenComponent, rhs: WalletScreenComponent) -> Bool {
@@ -677,6 +674,7 @@ private final class WalletScreenComponent: Component {
         private let header = ComponentView<Empty>()
         private let navigationTitle = ComponentView<Empty>()
         private let navigationBalance = ComponentView<Empty>()
+        private let navigationBalanceButton = UIButton(type: .custom)
         private let cardContainerView: UIView
         private let cardScrollContainerView: UIView
         private let cardBalanceCoordinateView: UIView
@@ -703,7 +701,11 @@ private final class WalletScreenComponent: Component {
         private var walletContext: WalletContext?
         private var walletState: WalletContext.State?
         private var walletStateDisposable: Disposable?
+        private var suppressedCollectibleAddresses = Set<String>()
+        private var suppressedCollectiblesWalletAddress: String?
         private let loadMoreDisposable = MetaDisposable()
+        private var nextLoadMoreRequestId: Int = 0
+        private var loadMoreRequestId: Int?
         private let gramTooltipDisposable = MetaDisposable()
         private let signingAccessDisposable = MetaDisposable()
         private var accountContext: AccountContext?
@@ -735,7 +737,7 @@ private final class WalletScreenComponent: Component {
             self.cardVisualContainerView.clipsToBounds = false
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
-            self.scrollView.scrollsToTop = true
+            self.scrollView.scrollsToTop = false
             self.scrollView.delaysContentTouches = false
             self.scrollView.canCancelContentTouches = true
             self.scrollView.contentInsetAdjustmentBehavior = .never
@@ -756,6 +758,12 @@ private final class WalletScreenComponent: Component {
             self.addSubview(self.scrollView)
             self.addSubview(self.topEdgeEffectView)
             self.insertSubview(self.cardContainerView, aboveSubview: self.topEdgeEffectView)
+            self.addSubview(self.navigationBalanceButton)
+            self.navigationBalanceButton.addTarget(
+                self,
+                action: #selector(self.navigationBalancePressed),
+                for: .touchUpInside
+            )
         }
 
         required init?(coder: NSCoder) {
@@ -839,8 +847,11 @@ private final class WalletScreenComponent: Component {
         }
 
         func scrollToTop() {
-            self.updateCardCollapsedState(false)
             self.scrollView.setContentOffset(CGPoint(), animated: true)
+        }
+
+        @objc private func navigationBalancePressed() {
+            self.scrollToTop()
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -852,9 +863,7 @@ private final class WalletScreenComponent: Component {
             }
             self.updateScrolling(transition: .immediate)
             self.updateVisibleSections(transition: .immediate)
-            if scrollView.contentOffset.y + scrollView.bounds.height > scrollView.contentSize.height - 240.0 {
-                self.loadMoreItemsIfNeeded()
-            }
+            self.loadMoreItemsIfNeeded()
         }
 
         func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
@@ -911,6 +920,46 @@ private final class WalletScreenComponent: Component {
                 section.removeFromSuperview()
                 section.clearVisibleItems()
             })
+        }
+
+        private func updateSection(
+            _ section: LazySectionView,
+            theme: PresentationTheme,
+            state: EmptyComponentState,
+            items: [LazySectionView.Item],
+            footer: AnyComponent<Empty>?,
+            frame: CGRect,
+            viewportSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let wasVisible = section.superview != nil
+            let sectionSize = section.update(
+                theme: theme,
+                state: state,
+                items: items,
+                footer: footer,
+                width: frame.width,
+                visibleBounds: self.visibleBounds(for: frame, viewportSize: viewportSize),
+                transition: wasVisible ? transition : .immediate
+            )
+            if !wasVisible {
+                section.alpha = 1.0
+                self.scrollView.addSubview(section)
+            }
+            if !wasVisible && !transition.animation.isImmediate {
+                section.layer.allowsGroupOpacity = true
+                transition.animateAlpha(view: section, from: 0.0, to: 1.0, completion: { [weak section] _ in
+                    section?.layer.allowsGroupOpacity = false
+                })
+            } else {
+                transition.setAlpha(view: section, alpha: 1.0)
+            }
+            let layoutTransition: ComponentTransition = wasVisible ? transition : .immediate
+            layoutTransition.setFrame(
+                view: section,
+                frame: CGRect(origin: frame.origin, size: sectionSize)
+            )
+            return sectionSize
         }
 
         private func hideEmptyTransactionsFooter(transition: ComponentTransition) {
@@ -1008,20 +1057,55 @@ private final class WalletScreenComponent: Component {
         private func loadMoreItemsIfNeeded() {
             guard let component = self.component,
                   let walletState = self.walletState,
-                  walletState.activeOperation == nil else {
+                  walletState.activeOperation == nil,
+                  self.loadMoreRequestId == nil,
+                  self.scrollView.contentOffset.y + self.scrollView.bounds.height > self.scrollView.contentSize.height - 240.0 else {
                 return
             }
+
+            let signal: Signal<Void, WalletContext.WalletError>
             switch self.selectedSection {
             case .transactions:
                 guard walletState.transactions.canLoadMore, !walletState.transactions.isLoadingMore else {
                     return
                 }
-                self.loadMoreDisposable.set(component.walletContext.loadMoreTransactions().start())
+                signal = component.walletContext.loadMoreTransactions()
             case .collectibles:
                 guard walletState.collectibles.canLoadMore, !walletState.collectibles.isLoadingMore else {
                     return
                 }
-                self.loadMoreDisposable.set(component.walletContext.loadMoreCollectibles().start())
+                signal = component.walletContext.loadMoreCollectibles()
+            }
+
+            self.nextLoadMoreRequestId &+= 1
+            let requestId = self.nextLoadMoreRequestId
+            let walletContext = component.walletContext
+            self.loadMoreRequestId = requestId
+            self.loadMoreDisposable.set(signal.start(error: { [weak self, weak walletContext] _ in
+                guard let self, let walletContext else {
+                    return
+                }
+                self.finishLoadMoreRequest(id: requestId, walletContext: walletContext, loadNextPageIfNeeded: false)
+            }, completed: { [weak self, weak walletContext] in
+                guard let self, let walletContext else {
+                    return
+                }
+                self.finishLoadMoreRequest(id: requestId, walletContext: walletContext, loadNextPageIfNeeded: true)
+            }))
+        }
+
+        private func finishLoadMoreRequest(id: Int, walletContext: WalletContext, loadNextPageIfNeeded: Bool) {
+            guard self.walletContext === walletContext, self.loadMoreRequestId == id else {
+                return
+            }
+            self.loadMoreRequestId = nil
+            if loadNextPageIfNeeded {
+                Queue.mainQueue().async { [weak self] in
+                    guard let self, self.walletContext === walletContext else {
+                        return
+                    }
+                    self.loadMoreItemsIfNeeded()
+                }
             }
         }
 
@@ -1535,7 +1619,7 @@ private final class WalletScreenComponent: Component {
             controller.push(component.context.sharedContext.makeWalletTransactionScreen(
                 context: component.context,
                 walletContext: component.walletContext,
-                mode: .transaction(transaction)
+                transaction: transaction
             ))
         }
 
@@ -1543,11 +1627,40 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let walletContext = component.walletContext
             controller.push(component.context.sharedContext.makeWalletCollectibleScreen(
                 context: component.context,
-                walletContext: component.walletContext,
-                collectible: collectible
+                walletContext: walletContext,
+                collectible: collectible,
+                collectibleSent: { [weak self, weak walletContext] address in
+                    guard let self, let walletContext, self.walletContext === walletContext else {
+                        return
+                    }
+                    self.suppressCollectible(address: address)
+                }
             ))
+        }
+
+        private func suppressCollectible(address: String) {
+            guard self.suppressedCollectibleAddresses.insert(address).inserted else {
+                return
+            }
+            self.componentState?.updated(transition: .easeInOut(duration: 0.25))
+        }
+
+        private func updateSuppressedCollectiblesWalletIdentity(_ state: WalletContext.State) {
+            switch state.phase {
+            case let .wallet(info):
+                if let currentAddress = self.suppressedCollectiblesWalletAddress, currentAddress != info.address {
+                    self.suppressedCollectibleAddresses.removeAll()
+                }
+                self.suppressedCollectiblesWalletAddress = info.address
+            case .restoring:
+                break
+            case .creating, .empty, .failed:
+                self.suppressedCollectibleAddresses.removeAll()
+                self.suppressedCollectiblesWalletAddress = nil
+            }
         }
 
         private func openContextMenu(sourceView: UIView) {
@@ -1565,196 +1678,7 @@ private final class WalletScreenComponent: Component {
             //TODO:localize
             let howItWorks = "How It Works"
 
-            let currencies: [(currency: WalletContext.FiatCurrency, name: String)] = [
-                //TODO:localize
-                (.usd, "US Dollar"),
-                //TODO:localize
-                (.eur, "Euro"),
-                //TODO:localize
-                (.rub, "Russian Ruble"),
-                //TODO:localize
-                (.cny, "Chinese Yuan"),
-                //TODO:localize
-                (.aed, "UAE Dirham"),
-                //TODO:localize
-                (.afn, "Afghan Afghani"),
-                //TODO:localize
-                (.all, "Albanian Lek"),
-                //TODO:localize
-                (.amd, "Armenian Dram"),
-                //TODO:localize
-                (.ars, "Argentine Peso"),
-                //TODO:localize
-                (.aud, "Australian Dollar"),
-                //TODO:localize
-                (.azn, "Azerbaijani Manat"),
-                //TODO:localize
-                (.bam, "Bosnia-Herzegovina Convertible Mark"),
-                //TODO:localize
-                (.bdt, "Bangladeshi Taka"),
-                //TODO:localize
-                (.bgn, "Bulgarian Lev"),
-                //TODO:localize
-                (.bhd, "Bahraini Dinar"),
-                //TODO:localize
-                (.bnd, "Brunei Dollar"),
-                //TODO:localize
-                (.bob, "Bolivian Boliviano"),
-                //TODO:localize
-                (.brl, "Brazilian Real"),
-                //TODO:localize
-                (.byn, "Belarusian Ruble"),
-                //TODO:localize
-                (.cad, "Canadian Dollar"),
-                //TODO:localize
-                (.chf, "Swiss Franc"),
-                //TODO:localize
-                (.clp, "Chilean Peso"),
-                //TODO:localize
-                (.cop, "Colombian Peso"),
-                //TODO:localize
-                (.crc, "Costa Rican Colón"),
-                //TODO:localize
-                (.czk, "Czech Koruna"),
-                //TODO:localize
-                (.dkk, "Danish Krone"),
-                //TODO:localize
-                (.dop, "Dominican Peso"),
-                //TODO:localize
-                (.dzd, "Algerian Dinar"),
-                //TODO:localize
-                (.egp, "Egyptian Pound"),
-                //TODO:localize
-                (.etb, "Ethiopian Birr"),
-                //TODO:localize
-                (.gbp, "British Pound"),
-                //TODO:localize
-                (.gel, "Georgian Lari"),
-                //TODO:localize
-                (.ghs, "Ghanaian Cedi"),
-                //TODO:localize
-                (.gtq, "Guatemalan Quetzal"),
-                //TODO:localize
-                (.hkd, "Hong Kong Dollar"),
-                //TODO:localize
-                (.hnl, "Honduran Lempira"),
-                //TODO:localize
-                (.hrk, "Croatian Kuna"),
-                //TODO:localize
-                (.huf, "Hungarian Forint"),
-                //TODO:localize
-                (.idr, "Indonesian Rupiah"),
-                //TODO:localize
-                (.ils, "Israeli New Shekel"),
-                //TODO:localize
-                (.inr, "Indian Rupee"),
-                //TODO:localize
-                (.iqd, "Iraqi Dinar"),
-                //TODO:localize
-                (.irr, "Iranian Rial"),
-                //TODO:localize
-                (.isk, "Icelandic Króna"),
-                //TODO:localize
-                (.jmd, "Jamaican Dollar"),
-                //TODO:localize
-                (.jod, "Jordanian Dinar"),
-                //TODO:localize
-                (.jpy, "Japanese Yen"),
-                //TODO:localize
-                (.kes, "Kenyan Shilling"),
-                //TODO:localize
-                (.kgs, "Kyrgyzstani Som"),
-                //TODO:localize
-                (.krw, "South Korean Won"),
-                //TODO:localize
-                (.kzt, "Kazakhstani Tenge"),
-                //TODO:localize
-                (.lbp, "Lebanese Pound"),
-                //TODO:localize
-                (.lkr, "Sri Lankan Rupee"),
-                //TODO:localize
-                (.mad, "Moroccan Dirham"),
-                //TODO:localize
-                (.mdl, "Moldovan Leu"),
-                //TODO:localize
-                (.mmk, "Myanmar Kyat"),
-                //TODO:localize
-                (.mnt, "Mongolian Tögrög"),
-                //TODO:localize
-                (.mop, "Macanese Pataca"),
-                //TODO:localize
-                (.mur, "Mauritian Rupee"),
-                //TODO:localize
-                (.mvr, "Maldivian Rufiyaa"),
-                //TODO:localize
-                (.mxn, "Mexican Peso"),
-                //TODO:localize
-                (.myr, "Malaysian Ringgit"),
-                //TODO:localize
-                (.mzn, "Mozambican Metical"),
-                //TODO:localize
-                (.ngn, "Nigerian Naira"),
-                //TODO:localize
-                (.nio, "Nicaraguan Córdoba"),
-                //TODO:localize
-                (.nok, "Norwegian Krone"),
-                //TODO:localize
-                (.npr, "Nepalese Rupee"),
-                //TODO:localize
-                (.nzd, "New Zealand Dollar"),
-                //TODO:localize
-                (.pab, "Panamanian Balboa"),
-                //TODO:localize
-                (.pen, "Peruvian Sol"),
-                //TODO:localize
-                (.php, "Philippine Peso"),
-                //TODO:localize
-                (.pkr, "Pakistani Rupee"),
-                //TODO:localize
-                (.pln, "Polish Złoty"),
-                //TODO:localize
-                (.pyg, "Paraguayan Guaraní"),
-                //TODO:localize
-                (.qar, "Qatari Riyal"),
-                //TODO:localize
-                (.ron, "Romanian Leu"),
-                //TODO:localize
-                (.rsd, "Serbian Dinar"),
-                //TODO:localize
-                (.sar, "Saudi Riyal"),
-                //TODO:localize
-                (.sek, "Swedish Krona"),
-                //TODO:localize
-                (.sgd, "Singapore Dollar"),
-                //TODO:localize
-                (.syp, "Syrian Pound"),
-                //TODO:localize
-                (.thb, "Thai Baht"),
-                //TODO:localize
-                (.tjs, "Tajikistani Somoni"),
-                //TODO:localize
-                (.tryCurrency, "Turkish Lira"),
-                //TODO:localize
-                (.ttd, "Trinidad and Tobago Dollar"),
-                //TODO:localize
-                (.twd, "New Taiwan Dollar"),
-                //TODO:localize
-                (.tzs, "Tanzanian Shilling"),
-                //TODO:localize
-                (.uah, "Ukrainian Hryvnia"),
-                //TODO:localize
-                (.ugx, "Ugandan Shilling"),
-                //TODO:localize
-                (.uyu, "Uruguayan Peso"),
-                //TODO:localize
-                (.uzs, "Uzbekistani Som"),
-                //TODO:localize
-                (.vnd, "Vietnamese Đồng"),
-                //TODO:localize
-                (.yer, "Yemeni Rial"),
-                //TODO:localize
-                (.zar, "South African Rand")
-            ]
+            let currencies = walletCurrencyListItems()
             let selectedCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
             var orderedCurrencies = currencies
             let topCurrencies: Set<WalletContext.FiatCurrency> = [.usd, .eur, .rub, .cny, .aed]
@@ -1767,7 +1691,7 @@ private final class WalletScreenComponent: Component {
             let items: [ContextMenuItem] = [
                 .action(ContextMenuActionItem(
                     text: currency,
-                    textLayout: .secondLineWithValue(selectedCurrency.rawValue),
+                    textLayout: .secondLineWithValue(selectedCurrency.code),
                     icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Globe"), color: theme.contextMenu.primaryColor)
                     },
@@ -1854,105 +1778,13 @@ private final class WalletScreenComponent: Component {
             controller.presentInGlobalOverlay(contextController)
         }
 
-        func update(
+        private func updateHeader(
             component: WalletScreenComponent,
             availableSize: CGSize,
             state: EmptyComponentState,
-            environment: Environment<EnvironmentType>,
+            environment: EnvironmentType,
             transition: ComponentTransition
-        ) -> CGSize {
-            self.isUpdating = true
-            defer {
-                self.isUpdating = false
-            }
-
-            let environment = environment[EnvironmentType.self].value
-            self.component = component
-            self.environment = environment
-            self.componentState = state
-
-            if self.walletContext !== component.walletContext {
-                self.walletStateDisposable?.dispose()
-                let subscribedContext = component.walletContext
-                self.walletContext = subscribedContext
-                self.walletState = nil
-                self.walletStateDisposable = (subscribedContext.state
-                |> deliverOnMainQueue).start(next: { [weak self] walletState in
-                    guard let self, self.walletContext === subscribedContext else {
-                        return
-                    }
-                    self.walletState = walletState
-                    if !self.isUpdating {
-                        self.componentState?.updated(transition: .easeInOut(duration: 0.25))
-                    }
-                })
-            }
-
-            if self.twoStepAuthData !== component.twoStepAuthData {
-                self.twoStepAuthDataDisposable?.dispose()
-                let subscribedTwoStepAuthData = component.twoStepAuthData
-                self.twoStepAuthData = subscribedTwoStepAuthData
-                self.hasTwoStepAuth = nil
-                self.twoStepAuthDataDisposable = (subscribedTwoStepAuthData.get()
-                |> deliverOnMainQueue).start(next: { [weak self, weak subscribedTwoStepAuthData] data in
-                    guard let self, let subscribedTwoStepAuthData, self.twoStepAuthData === subscribedTwoStepAuthData else {
-                        return
-                    }
-                    let hadTwoStepAuthValue = self.hasTwoStepAuth != nil
-                    
-                    let hasTwoStepAuth: Bool?
-                    if let data {
-                        hasTwoStepAuth = data.currentPasswordDerivation != nil || data.unconfirmedEmailPattern != nil
-                    } else {
-                        hasTwoStepAuth = nil
-                    }
-                    if self.hasTwoStepAuth != hasTwoStepAuth {
-                        self.hasTwoStepAuth = hasTwoStepAuth
-                        if !self.isUpdating {
-                            self.componentState?.updated(transition: hadTwoStepAuthValue ? .easeInOut(duration: 0.2) : .immediate)
-                        }
-                    }
-                })
-            }
-
-            if self.accountContext !== component.context {
-                self.accountPeerDisposable?.dispose()
-                let subscribedContext = component.context
-                self.accountContext = subscribedContext
-                self.accountName = ""
-                self.accountPeerDisposable = (subscribedContext.engine.data.subscribe(
-                    TelegramEngine.EngineData.Item.Peer.Peer(id: subscribedContext.account.peerId)
-                )
-                |> deliverOnMainQueue).start(next: { [weak self] peer in
-                    guard let self, self.accountContext === subscribedContext else {
-                        return
-                    }
-                    let accountName = peer?.debugDisplayTitle.uppercased() ?? ""
-                    if self.accountName != accountName {
-                        self.accountName = accountName
-                        if !self.isUpdating {
-                            self.componentState?.updated(transition: .immediate)
-                        }
-                    }
-                })
-            }
-
-            let transactions = (self.walletState?.transactions.items ?? []).filter {
-                $0.isVisibleInWalletHistory && $0.kind != .deployContract
-            }
-            let collectibles = self.walletState?.collectibles.items ?? []
-            if collectibles.isEmpty && self.selectedSection == .collectibles {
-                self.selectedSection = .transactions
-            }
-            let hasEmptyTransactions = self.selectedSection == .transactions && transactions.isEmpty
-            if hasEmptyTransactions {
-                self.isCardCollapsed = false
-                if self.scrollView.contentOffset != CGPoint() {
-                    self.scrollView.setContentOffset(CGPoint(), animated: false)
-                }
-            }
-            self.scrollView.isScrollEnabled = !hasEmptyTransactions
-
+        ) -> (originY: CGFloat, size: CGSize) {
             //TODO:localize
             let title = "Wallet"
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
@@ -2082,25 +1914,48 @@ private final class WalletScreenComponent: Component {
                 )
             )
             if let navigationBalanceView = self.navigationBalance.view {
+                let navigationBalanceFrame = CGRect(
+                    origin: CGPoint(
+                        x: floor((availableSize.width - navigationBalanceSize.width) * 0.5),
+                        y: headerOriginY + floor((headerSize.height - navigationBalanceSize.height) * 0.5)
+                    ),
+                    size: navigationBalanceSize
+                )
                 if navigationBalanceView.superview == nil {
                     navigationBalanceView.isUserInteractionEnabled = false
                     self.insertSubview(navigationBalanceView, belowSubview: self.cardContainerView)
                 }
                 transition.setFrame(
                     view: navigationBalanceView,
-                    frame: CGRect(
-                        origin: CGPoint(
-                            x: floor((availableSize.width - navigationBalanceSize.width) * 0.5),
-                            y: headerOriginY + floor((headerSize.height - navigationBalanceSize.height) * 0.5)
-                        ),
-                        size: navigationBalanceSize
-                    )
+                    frame: navigationBalanceFrame
                 )
                 transition.setAlpha(view: navigationBalanceView, alpha: self.isCardCollapsed ? 1.0 : 0.0)
                 transition.setSublayerTransform(
                     view: navigationBalanceView,
                     transform: CATransform3DIdentity
                 )
+
+                let maximumHitWidth = max(
+                    0.0,
+                    availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 200.0
+                )
+                let hitSize = CGSize(
+                    width: max(44.0, min(maximumHitWidth, navigationBalanceSize.width + 16.0)),
+                    height: max(44.0, headerSize.height)
+                )
+                transition.setFrame(
+                    view: self.navigationBalanceButton,
+                    frame: CGRect(
+                        origin: CGPoint(
+                            x: floor((availableSize.width - hitSize.width) * 0.5),
+                            y: headerOriginY + floor((headerSize.height - hitSize.height) * 0.5)
+                        ),
+                        size: hitSize
+                    )
+                )
+                self.navigationBalanceButton.accessibilityLabel = environment.strings.Stars_Intro_Balance
+                self.navigationBalanceButton.isHidden = !self.isCardCollapsed
+                self.navigationBalanceButton.isUserInteractionEnabled = self.isCardCollapsed
             }
 
             let topEdgeEffectHeight = environment.navigationHeight
@@ -2117,7 +1972,124 @@ private final class WalletScreenComponent: Component {
                 edgeSize: 64.0,
                 transition: transition
             )
+            return (headerOriginY, headerSize)
+        }
 
+        func update(
+            component: WalletScreenComponent,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
+
+            let environment = environment[EnvironmentType.self].value
+            self.component = component
+            self.environment = environment
+            self.componentState = state
+
+            if self.walletContext !== component.walletContext {
+                self.walletStateDisposable?.dispose()
+                self.loadMoreRequestId = nil
+                self.loadMoreDisposable.set(nil)
+                self.suppressedCollectibleAddresses.removeAll()
+                self.suppressedCollectiblesWalletAddress = nil
+                let subscribedContext = component.walletContext
+                self.walletContext = subscribedContext
+                self.walletState = nil
+                self.walletStateDisposable = (subscribedContext.state
+                |> deliverOnMainQueue).start(next: { [weak self] walletState in
+                    guard let self, self.walletContext === subscribedContext else {
+                        return
+                    }
+                    self.updateSuppressedCollectiblesWalletIdentity(walletState)
+                    self.walletState = walletState
+                    if !self.isUpdating {
+                        self.componentState?.updated(transition: .easeInOut(duration: 0.25))
+                    }
+                })
+            }
+
+            if self.twoStepAuthData !== component.twoStepAuthData {
+                self.twoStepAuthDataDisposable?.dispose()
+                let subscribedTwoStepAuthData = component.twoStepAuthData
+                self.twoStepAuthData = subscribedTwoStepAuthData
+                self.hasTwoStepAuth = nil
+                self.twoStepAuthDataDisposable = (subscribedTwoStepAuthData.get()
+                |> deliverOnMainQueue).start(next: { [weak self, weak subscribedTwoStepAuthData] data in
+                    guard let self, let subscribedTwoStepAuthData, self.twoStepAuthData === subscribedTwoStepAuthData else {
+                        return
+                    }
+                    let hadTwoStepAuthValue = self.hasTwoStepAuth != nil
+                    
+                    let hasTwoStepAuth: Bool?
+                    if let data {
+                        hasTwoStepAuth = data.currentPasswordDerivation != nil || data.unconfirmedEmailPattern != nil
+                    } else {
+                        hasTwoStepAuth = nil
+                    }
+                    if self.hasTwoStepAuth != hasTwoStepAuth {
+                        self.hasTwoStepAuth = hasTwoStepAuth
+                        if !self.isUpdating {
+                            self.componentState?.updated(transition: hadTwoStepAuthValue ? .easeInOut(duration: 0.2) : .immediate)
+                        }
+                    }
+                })
+            }
+
+            if self.accountContext !== component.context {
+                self.accountPeerDisposable?.dispose()
+                let subscribedContext = component.context
+                self.accountContext = subscribedContext
+                self.accountName = ""
+                self.accountPeerDisposable = (subscribedContext.engine.data.subscribe(
+                    TelegramEngine.EngineData.Item.Peer.Peer(id: subscribedContext.account.peerId)
+                )
+                |> deliverOnMainQueue).start(next: { [weak self] peer in
+                    guard let self, self.accountContext === subscribedContext else {
+                        return
+                    }
+                    let accountName = peer?.debugDisplayTitle.uppercased() ?? ""
+                    if self.accountName != accountName {
+                        self.accountName = accountName
+                        if !self.isUpdating {
+                            self.componentState?.updated(transition: .immediate)
+                        }
+                    }
+                })
+            }
+
+            let transactions = (self.walletState?.transactions.items ?? []).filter {
+                $0.isVisibleInWalletHistory && $0.kind != .deployContract
+            }
+            let collectibles = (self.walletState?.collectibles.items ?? []).filter {
+                !self.suppressedCollectibleAddresses.contains($0.address)
+            }
+            if collectibles.isEmpty && self.selectedSection == .collectibles {
+                self.selectedSection = .transactions
+            }
+            let hasEmptyTransactions = self.selectedSection == .transactions && transactions.isEmpty
+            if hasEmptyTransactions {
+                self.isCardCollapsed = false
+                if self.scrollView.contentOffset != CGPoint() {
+                    self.scrollView.setContentOffset(CGPoint(), animated: false)
+                }
+            }
+            self.scrollView.isScrollEnabled = !hasEmptyTransactions
+
+            let headerLayout = self.updateHeader(
+                component: component,
+                availableSize: availableSize,
+                state: state,
+                environment: environment,
+                transition: transition
+            )
+            let headerOriginY = headerLayout.originY
+            let headerSize = headerLayout.size
             let sideInset: CGFloat = 16.0
             let cardWidth = max(
                 0.0,
@@ -2231,6 +2203,7 @@ private final class WalletScreenComponent: Component {
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
                     ),
+                    isEnabled: walletInfo != nil,
                     action: { [weak self] in
                         self?.openReceive()
                     }
@@ -2377,8 +2350,9 @@ private final class WalletScreenComponent: Component {
                 let itemStrings = environment.strings
                 let itemDateTimeFormat = environment.dateTimeFormat
                 let items: [LazySectionView.Item] = transactions.map { transaction in
+                    let uniqueId = transaction.id + (transaction.peer.address ?? "")
                     return LazySectionView.Item(
-                        id: AnyHashable(transaction.id),
+                        id: AnyHashable(uniqueId),
                         height: transaction.collectible == nil ? walletTransactionItemHeight : walletCollectibleTransactionItemHeight,
                         component: { [weak self] in
                             return AnyComponent(ListActionItemComponent(
@@ -2409,8 +2383,8 @@ private final class WalletScreenComponent: Component {
                     origin: CGPoint(x: environment.safeInsets.left + sideInset, y: transactionsOriginY),
                     size: CGSize(width: cardWidth, height: 0.0)
                 )
-                let wasVisible = self.transactionsSection.superview != nil
-                let transactionsSectionSize = self.transactionsSection.update(
+                let transactionsSectionSize = self.updateSection(
+                    self.transactionsSection,
                     theme: environment.theme,
                     state: state,
                     items: items,
@@ -2422,26 +2396,9 @@ private final class WalletScreenComponent: Component {
                         )),
                         maximumNumberOfLines: 0
                     )),
-                    width: cardWidth,
-                    visibleBounds: self.visibleBounds(for: transactionsFrame, viewportSize: availableSize),
-                    transition: wasVisible ? transition : .immediate
-                )
-                if !wasVisible {
-                    self.transactionsSection.alpha = 1.0
-                    self.scrollView.addSubview(self.transactionsSection)
-                }
-                if !wasVisible && !transition.animation.isImmediate {
-                    self.transactionsSection.layer.allowsGroupOpacity = true
-                    transition.animateAlpha(view: self.transactionsSection, from: 0.0, to: 1.0, completion: { [weak transactionsSection = self.transactionsSection] _ in
-                        transactionsSection?.layer.allowsGroupOpacity = false
-                    })
-                } else {
-                    transition.setAlpha(view: self.transactionsSection, alpha: 1.0)
-                }
-                let transactionsLayoutTransition: ComponentTransition = wasVisible ? transition : .immediate
-                transactionsLayoutTransition.setFrame(
-                    view: self.transactionsSection,
-                    frame: CGRect(origin: transactionsFrame.origin, size: transactionsSectionSize)
+                    frame: transactionsFrame,
+                    viewportSize: availableSize,
+                    transition: transition
                 )
                 contentHeight = transactionsOriginY + transactionsSectionSize.height
                 if let emptyTransactionsInfoView = self.emptyTransactionsInfo.view, emptyTransactionsInfoView.superview != nil {
@@ -2492,32 +2449,15 @@ private final class WalletScreenComponent: Component {
                     origin: CGPoint(x: environment.safeInsets.left + sideInset, y: collectiblesOriginY),
                     size: CGSize(width: cardWidth, height: 0.0)
                 )
-                let wasVisible = self.collectiblesSection.superview != nil
-                let collectiblesSectionSize = self.collectiblesSection.update(
+                let collectiblesSectionSize = self.updateSection(
+                    self.collectiblesSection,
                     theme: environment.theme,
                     state: state,
                     items: items,
                     footer: nil,
-                    width: cardWidth,
-                    visibleBounds: self.visibleBounds(for: collectiblesFrame, viewportSize: availableSize),
-                    transition: wasVisible ? transition : .immediate
-                )
-                if !wasVisible {
-                    self.collectiblesSection.alpha = 1.0
-                    self.scrollView.addSubview(self.collectiblesSection)
-                }
-                if !wasVisible && !transition.animation.isImmediate {
-                    self.collectiblesSection.layer.allowsGroupOpacity = true
-                    transition.animateAlpha(view: self.collectiblesSection, from: 0.0, to: 1.0, completion: { [weak collectiblesSection = self.collectiblesSection] _ in
-                        collectiblesSection?.layer.allowsGroupOpacity = false
-                    })
-                } else {
-                    transition.setAlpha(view: self.collectiblesSection, alpha: 1.0)
-                }
-                let collectiblesLayoutTransition: ComponentTransition = wasVisible ? transition : .immediate
-                collectiblesLayoutTransition.setFrame(
-                    view: self.collectiblesSection,
-                    frame: CGRect(origin: collectiblesFrame.origin, size: collectiblesSectionSize)
+                    frame: collectiblesFrame,
+                    viewportSize: availableSize,
+                    transition: transition
                 )
                 contentHeight = collectiblesOriginY + collectiblesSectionSize.height
 
@@ -2720,6 +2660,7 @@ private final class WalletScreenComponent: Component {
 
             self.updateScrolling(transition: transition)
             self.updateVisibleSections(transition: .immediate)
+            self.loadMoreItemsIfNeeded()
 
             return availableSize
         }
@@ -2750,16 +2691,14 @@ public final class WalletScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         walletContext: WalletContext,
-        twoStepAuthData: Promise<TwoStepAuthData?>,
-        routeToSetup: ((ViewController) -> Void)? = nil
+        twoStepAuthData: Promise<TwoStepAuthData?>
     ) {
         super.init(
             context: context,
             component: WalletScreenComponent(
                 context: context,
                 walletContext: walletContext,
-                twoStepAuthData: twoStepAuthData,
-                routeToSetup: routeToSetup
+                twoStepAuthData: twoStepAuthData
             ),
             navigationBarAppearance: .transparent,
             statusBarStyle: .default,

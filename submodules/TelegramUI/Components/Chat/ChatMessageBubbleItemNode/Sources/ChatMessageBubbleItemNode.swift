@@ -234,6 +234,9 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
                     result.append((message, ChatMessageGiftBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                 } else if case .giftTon = action.action {
                     result.append((message, ChatMessageGiftBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
+                } else if case .gramTransfer = action.action {
+                    result.append((message, ChatMessageTransferBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
+                    skipText = true
                 } else if case .starGift = action.action {
                     result.append((message, ChatMessageGiftBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
                     skipText = true
@@ -333,16 +336,6 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         if let updatingMedia = itemAttributes.updatingMedia {
             messageText = updatingMedia.text
         }
-        
-        #if DEBUG
-        
-        if parseWalletTransferMessageText(messageText) != nil {
-            result.append((message, ChatMessageTransferBubbleContentNode.self, itemAttributes, BubbleItemAttributes(isAttachment: false, neighborType: .text, neighborSpacing: .default)))
-            messageText = ""
-            skipText = true
-        }
-        
-        #endif
         
         var richText: RichTextMessageAttribute?
         if let updatingMedia = itemAttributes.updatingMedia {

@@ -2,6 +2,7 @@ import Foundation
 import SwiftSignalKit
 import TelegramCore
 import WalletBackupCrypto
+import WalletEngineFFI
 
 private enum WalletPhraseCodec {
     private static let encodedLength = 215
@@ -70,6 +71,7 @@ private func shouldRetryWalletPhraseExport(_ error: TelegramCore.WalletOperation
 private func exportWalletSecretPhraseAttempt(
     engine: TelegramEngine,
     password: String?,
+    expectedPublicKey: Data,
     retryFetchFailure: Bool
 ) -> Signal<[String], TelegramCore.WalletOperationError> {
     return engine.wallet.requestSecretPhraseExport(password: password)
@@ -100,6 +102,16 @@ private func exportWalletSecretPhraseAttempt(
                   let words = WalletPhraseCodec.decode(secret) else {
                 return .fail(.invalidBackupData)
             }
+            do {
+                let publicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
+                guard expectedPublicKey.count == 32,
+                      publicKey.count == 32,
+                      Data(publicKey) == expectedPublicKey else {
+                    return .fail(.invalidBackupData)
+                }
+            } catch {
+                return .fail(.invalidBackupData)
+            }
             return .single(words)
         }
         return fetch
@@ -110,6 +122,7 @@ private func exportWalletSecretPhraseAttempt(
             return exportWalletSecretPhraseAttempt(
                 engine: engine,
                 password: password,
+                expectedPublicKey: expectedPublicKey,
                 retryFetchFailure: false
             )
         }
@@ -118,12 +131,14 @@ private func exportWalletSecretPhraseAttempt(
 
 func exportWalletSecretPhrase(
     engine: TelegramEngine,
-    password: String?
+    password: String?,
+    expectedPublicKey: Data
 ) async throws -> [String] {
     return try await WalletSignalRequestContext<[String]>().run(
         exportWalletSecretPhraseAttempt(
             engine: engine,
             password: password,
+            expectedPublicKey: expectedPublicKey,
             retryFetchFailure: true
         )
     )

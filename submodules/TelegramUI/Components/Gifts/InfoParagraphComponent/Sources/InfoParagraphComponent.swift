@@ -4,6 +4,7 @@ import Display
 import TelegramPresentationData
 import ComponentFlow
 import MultilineTextComponent
+import BalancedTextComponent
 import BundleIconComponent
 import Markdown
 import TextFormat
@@ -71,7 +72,7 @@ public final class InfoParagraphComponent: CombinedComponent {
     
     public static var body: Body {
         let title = Child(MultilineTextComponent.self)
-        let text = Child(MultilineTextComponent.self)
+        let text = Child(BalancedTextComponent.self)
         let icon = Child(BundleIconComponent.self)
         let badgeBackground = Child(RoundedRectangle.self)
         let badgeText = Child(MultilineTextComponent.self)
@@ -148,7 +149,7 @@ public final class InfoParagraphComponent: CombinedComponent {
             )
                         
             let text = text.update(
-                component: MultilineTextComponent(
+                component: BalancedTextComponent(
                     text: .markdown(text: component.text, attributes: markdownAttributes),
                     horizontalAlignment: .natural,
                     maximumNumberOfLines: 0,

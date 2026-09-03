@@ -478,7 +478,7 @@ public final class WalletTransactionItemComponent: Component {
                     avatarPeer = nil
                 }
             }
-            if case let .user(peer, _) = transaction.peer {
+            if case let .user(peer, _, _) = transaction.peer {
                 avatarPeer = .transactionPeer(.peer(peer))
             }
             
@@ -693,10 +693,14 @@ public final class WalletTransactionItemComponent: Component {
 
             let peerTitle: String
             switch transaction.peer {
-            case let .user(peer, _):
+            case let .user(peer, _, _):
                 peerTitle = peer.debugDisplayTitle
-            case let .address(address):
-                peerTitle = walletTransactionCounterparty(address)
+            case let .address(address, domain):
+                if let domain = domain?.trimmingCharacters(in: .whitespacesAndNewlines), !domain.isEmpty {
+                    peerTitle = domain
+                } else {
+                    peerTitle = walletTransactionCounterparty(address)
+                }
             case .unsupported:
                 peerTitle = walletTransactionCounterparty(nil)
             }

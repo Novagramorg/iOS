@@ -27,23 +27,19 @@ final class WalletCurrencySearchContextItem: ContextMenuCustomItem {
 
     func node(
         presentationData: PresentationData,
-        getController: @escaping () -> ContextControllerProtocol?,
-        actionSelected: @escaping (ContextMenuActionResult) -> Void
+        getController _: @escaping () -> ContextControllerProtocol?,
+        actionSelected _: @escaping (ContextMenuActionResult) -> Void
     ) -> ContextMenuCustomNode {
         return WalletCurrencySearchContextItemNode(
             presentationData: presentationData,
-            item: self,
-            getController: getController,
-            actionSelected: actionSelected
+            item: self
         )
     }
 }
 
-private final class WalletCurrencySearchContextItemNode: ASDisplayNode, ContextMenuCustomNode, ContextActionNodeProtocol, ASScrollViewDelegate {
+private final class WalletCurrencySearchContextItemNode: ASDisplayNode, ContextMenuCustomNode, ContextActionNodeProtocol {
     private let item: WalletCurrencySearchContextItem
     private let presentationData: PresentationData
-    private let getController: () -> ContextControllerProtocol?
-    private let actionSelected: (ContextMenuActionResult) -> Void
 
     private let state = EmptyComponentState()
     private let icon = ComponentView<Empty>()
@@ -57,14 +53,10 @@ private final class WalletCurrencySearchContextItemNode: ASDisplayNode, ContextM
 
     init(
         presentationData: PresentationData,
-        item: WalletCurrencySearchContextItem,
-        getController: @escaping () -> ContextControllerProtocol?,
-        actionSelected: @escaping (ContextMenuActionResult) -> Void
+        item: WalletCurrencySearchContextItem
     ) {
         self.item = item
         self.presentationData = presentationData
-        self.getController = getController
-        self.actionSelected = actionSelected
 
         super.init()
 
