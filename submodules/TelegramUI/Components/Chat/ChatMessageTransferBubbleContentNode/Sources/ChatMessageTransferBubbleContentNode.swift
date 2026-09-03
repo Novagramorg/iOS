@@ -605,19 +605,10 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         comment: comment
                     )
                 }
-                let controller: ViewController
-                if let walletContext {
-                    controller = item.context.sharedContext.makeWalletTransactionScreen(
-                        context: item.context,
-                        walletContext: walletContext,
-                        transaction: transaction
-                    )
-                } else {
-                    controller = item.context.sharedContext.makeWalletTransactionScreen(
-                        context: item.context,
-                        transaction: transaction
-                    )
-                }
+                let controller = item.context.sharedContext.makeWalletTransactionScreen(
+                    context: item.context,
+                    transaction: transaction
+                )
                 if let navigationController = item.controllerInteraction.navigationController() {
                     navigationController.pushViewController(controller)
                 } else {

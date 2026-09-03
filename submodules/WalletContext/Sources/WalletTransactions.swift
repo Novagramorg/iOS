@@ -104,7 +104,13 @@ private func isTestnetAddress(_ format: TonAddressFormat) -> Bool {
 func walletTransactions(
     from transactions: [TelegramCore.WalletTransaction]
 ) -> [WalletContext.Transaction] {
-    transactions.map { transaction in
+    var seenIds = Set<String>()
+    var result: [WalletContext.Transaction] = []
+    result.reserveCapacity(transactions.count)
+    for transaction in transactions {
+        guard seenIds.insert(transaction.id).inserted else {
+            continue
+        }
         let peer: WalletContext.Transaction.Peer
         switch transaction.peer {
         case let .user(enginePeer, address, domain):
@@ -118,7 +124,7 @@ func walletTransactions(
         let status: WalletContext.Transaction.Status = transaction.failed ? .failed : .completed
         let logicalTime = transaction.id.split(separator: ":", maxSplits: 1).first.map(String.init)
             ?? transaction.id
-        return WalletContext.Transaction(
+        result.append(WalletContext.Transaction(
             id: transaction.id,
             transactionHash: transaction.txHash,
             logicalTime: logicalTime,
@@ -129,8 +135,9 @@ func walletTransactions(
             peer: peer,
             comment: transaction.comment,
             status: status
-        )
+        ))
     }
+    return result
 }
 
 func walletTransactions(

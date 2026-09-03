@@ -582,7 +582,11 @@ actor WalletContextImpl {
             var words: [String]?
             if needsSecret && canExportPhrase {
                 do {
-                    words = try await exportWalletSecretPhrase(engine: self.engine, password: nil)
+                    words = try await exportWalletSecretPhrase(
+                        engine: self.engine,
+                        password: nil,
+                        expectedPublicKey: publicKey
+                    )
                 } catch {
                     self.errorLogger.error("wallet_automatic_phrase_export_failed", error)
                 }

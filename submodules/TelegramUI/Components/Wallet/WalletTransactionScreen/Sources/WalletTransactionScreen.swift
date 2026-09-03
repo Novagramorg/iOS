@@ -1771,16 +1771,18 @@ private final class WalletTransactionPagerComponent: Component {
                 if (!isSwipingActive && abs(position) > 0.5) || (isSwipingActive && abs(position) > 1.5) {
                     continue
                 }
+                
+                let uniqueId = transaction.id + (transaction.peer.address ?? "")
 
-                validIds.insert(transaction.id)
+                validIds.insert(uniqueId)
                 let itemView: ComponentHostView<EnvironmentType>
                 var itemTransition = transition
-                if let current = self.itemViews[transaction.id] {
+                if let current = self.itemViews[uniqueId] {
                     itemView = current
                 } else {
                     itemTransition = transition.withAnimation(.none)
                     itemView = ComponentHostView<EnvironmentType>()
-                    self.itemViews[transaction.id] = itemView
+                    self.itemViews[uniqueId] = itemView
                     self.scrollView.addSubview(itemView)
                 }
 

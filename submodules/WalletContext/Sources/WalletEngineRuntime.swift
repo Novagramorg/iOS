@@ -412,6 +412,23 @@ actor WalletEngineRuntime {
         }
     }
 
+    func previewKeyRotation(
+        operationId: String,
+        signedBoc: String,
+        seqno: UInt32,
+        validUntil: UInt64
+    ) async throws -> SendPreview {
+        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
+            try await self.requireClient().previewSendBoc(request: SendBocRequest(
+                operationId: operationId,
+                force: false,
+                signedBoc: signedBoc,
+                seqno: seqno,
+                validUntil: validUntil
+            ))
+        }
+    }
+
     func keyRotationRecord() async throws -> WalletEngineKeyRotationRecord? {
         try await self.storage.loadKeyRotation()
     }

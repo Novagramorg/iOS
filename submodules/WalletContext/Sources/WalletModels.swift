@@ -435,6 +435,7 @@ public extension WalletContext {
         public let signedBoc: String
         public let seqno: UInt32
         public let expiresAt: Int32
+        public let networkFeeNanograms: Int64?
         let keyRotationPhase: KeyRotationPhase
         public init(
             id: String,
@@ -445,6 +446,7 @@ public extension WalletContext {
             signedBoc: String,
             seqno: UInt32,
             expiresAt: Int32,
+            networkFeeNanograms: Int64? = nil,
             keyRotationPhase: KeyRotationPhase = .prepared
         ) {
             self.id = id
@@ -455,6 +457,7 @@ public extension WalletContext {
             self.signedBoc = signedBoc
             self.seqno = seqno
             self.expiresAt = expiresAt
+            self.networkFeeNanograms = networkFeeNanograms
             self.keyRotationPhase = keyRotationPhase
         }
     }

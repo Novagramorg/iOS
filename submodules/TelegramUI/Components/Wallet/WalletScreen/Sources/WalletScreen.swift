@@ -2350,8 +2350,9 @@ private final class WalletScreenComponent: Component {
                 let itemStrings = environment.strings
                 let itemDateTimeFormat = environment.dateTimeFormat
                 let items: [LazySectionView.Item] = transactions.map { transaction in
+                    let uniqueId = transaction.id + (transaction.peer.address ?? "")
                     return LazySectionView.Item(
-                        id: AnyHashable(transaction.id),
+                        id: AnyHashable(uniqueId),
                         height: transaction.collectible == nil ? walletTransactionItemHeight : walletCollectibleTransactionItemHeight,
                         component: { [weak self] in
                             return AnyComponent(ListActionItemComponent(

@@ -367,7 +367,11 @@ extension WalletContextImpl {
             let generation = await self.prepareForRuntimeIdentityChange()
             let words: [String]
             do {
-                words = try await exportWalletSecretPhrase(engine: self.engine, password: password)
+                words = try await exportWalletSecretPhrase(
+                    engine: self.engine,
+                    password: password,
+                    expectedPublicKey: identity.publicKey
+                )
             } catch {
                 // Replacement has already committed on the server. Keep the new
                 // identity usable as read-only and let recovery retry later.
@@ -450,7 +454,11 @@ extension WalletContextImpl {
                   case let .ready(_, _, _, address, publicKey, _) = self.serverWalletState else {
                 throw WalletError.unavailable
             }
-            let words = try await exportWalletSecretPhrase(engine: self.engine, password: password)
+            let words = try await exportWalletSecretPhrase(
+                engine: self.engine,
+                password: password,
+                expectedPublicKey: publicKey
+            )
             let prepared = try await stageRecoveryPhraseImport(
                 runtime: self.runtime,
                 words: words,
@@ -683,6 +691,7 @@ extension WalletContextImpl {
                             signedBoc: "",
                             seqno: 0,
                             expiresAt: Int32(current.validUntil),
+                            networkFeeNanograms: nil,
                             keyRotationPhase: current.phase == .chainApplied || current.phase == .backupDisabled
                                 ? .confirmed
                                 : .pending
@@ -702,8 +711,21 @@ extension WalletContextImpl {
                   !prepared.signedBoc.isEmpty else {
                 throw WalletError.sdk("Wallet engine returned invalid key-rotation material")
             }
+            let id = UUID().uuidString.lowercased()
+            let preview = try await self.runtime.previewKeyRotation(
+                operationId: id,
+                signedBoc: prepared.signedBoc,
+                seqno: prepared.seqno,
+                validUntil: prepared.validUntil
+            )
+            guard preview.messageBocBase64 == prepared.signedBoc,
+                  preview.validUntil == prepared.validUntil,
+                  !preview.emulation.isIncomplete,
+                  let networkFeeNanograms = Int64(preview.emulation.walletFeesNanograms) else {
+                throw WalletError.previewFailed
+            }
             return PreparedBackupDisable(
-                id: UUID().uuidString.lowercased(),
+                id: id,
                 walletAddress: info.address,
                 walletPublicKey: info.publicKey,
                 words: words,
@@ -711,6 +733,7 @@ extension WalletContextImpl {
                 signedBoc: prepared.signedBoc,
                 seqno: prepared.seqno,
                 expiresAt: expiresAt,
+                networkFeeNanograms: networkFeeNanograms,
                 keyRotationPhase: .prepared
             )
         }
