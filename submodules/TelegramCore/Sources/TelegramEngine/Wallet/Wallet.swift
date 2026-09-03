@@ -47,8 +47,8 @@ public struct WalletUserAddress: Equatable {
 }
 
 public enum WalletTransactionPeer: Equatable {
-    case user(EnginePeer, address: String)
-    case address(String)
+    case user(EnginePeer, address: String, domain: String?)
+    case address(String, domain: String?)
     case unsupported
 }
 
@@ -171,7 +171,7 @@ private extension WalletTransactionPeer {
     init(apiPeer: Api.WalletTransactionPeer, transaction: Transaction) {
         switch apiPeer {
         case let .walletTransactionPeerAddress(peer):
-            self = .address(peer.address)
+            self = .address(peer.address, domain: peer.domain)
         case .walletTransactionPeerUnsupported:
             self = .unsupported
         case let .walletTransactionPeerUser(apiPeer):
@@ -180,9 +180,9 @@ private extension WalletTransactionPeer {
                 id: PeerId.Id._internalFromInt64Value(apiPeer.userId)
             )
             if let peer = transaction.getPeer(peerId) {
-                self = .user(EnginePeer(peer), address: apiPeer.address)
+                self = .user(EnginePeer(peer), address: apiPeer.address, domain: apiPeer.domain)
             } else {
-                self = .address(apiPeer.address)
+                self = .address(apiPeer.address, domain: apiPeer.domain)
             }
         }
     }

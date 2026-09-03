@@ -399,7 +399,7 @@ private final class WalletTransactionContentComponent: Component {
                 direction: .outgoing,
                 amount: amount,
                 fee: self.displayedFee ?? 0,
-                peer: .address(recipient),
+                peer: .address(recipient, domain: nil),
                 comment: self.previewComment,
                 collectible: collectible.map(walletTransactionCollectible)
             )
@@ -1130,10 +1130,11 @@ private final class WalletTransactionContentComponent: Component {
                     counterpartyTitle = "Address"
                 }
             }
-            let counterpartyName = transaction.peer.displayName.flatMap { value -> String? in
+            let peerDisplayName = transaction.peer.displayName.flatMap { value -> String? in
                 let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 return value.isEmpty ? nil : value
             }
+            let counterpartyName = peerDisplayName ?? transaction.peer.domain
             let addressComponent: AnyComponent<Empty>?
             if let counterparty = transaction.peer.address {
                 let address = WalletContext.transferAddress(from: counterparty) ?? counterparty
@@ -1155,7 +1156,7 @@ private final class WalletTransactionContentComponent: Component {
                 addressComponent = nil
             }
             let counterpartyComponent: AnyComponent<Empty>
-            if case let .user(peer, _) = transaction.peer {
+            if case let .user(peer, _, _) = transaction.peer {
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: "avatar",
@@ -1249,7 +1250,16 @@ private final class WalletTransactionContentComponent: Component {
                 title: counterpartyTitle,
                 component: counterpartyComponent
             )]
-            if case .user = transaction.peer, let addressComponent {
+            let displaysSeparateAddress: Bool
+            switch transaction.peer {
+            case .user:
+                displaysSeparateAddress = true
+            case .address:
+                displaysSeparateAddress = transaction.peer.domain != nil
+            case .unsupported:
+                displaysSeparateAddress = false
+            }
+            if displaysSeparateAddress, let addressComponent {
                 //TODO:localize
                 tableItems.append(TableComponent.Item(
                     id: "address",

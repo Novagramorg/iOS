@@ -102,10 +102,10 @@ func walletTransactions(
     transactions.map { transaction in
         let peer: WalletContext.Transaction.Peer
         switch transaction.peer {
-        case let .user(enginePeer, address):
-            peer = .user(enginePeer, address: address)
-        case let .address(address):
-            peer = .address(address)
+        case let .user(enginePeer, address, domain):
+            peer = .user(enginePeer, address: address, domain: domain)
+        case let .address(address, domain):
+            peer = .address(address, domain: domain)
         case .unsupported:
             peer = .unsupported
         }
@@ -179,6 +179,7 @@ func mergeTransactions(
 private func transactionInformationScore(_ value: WalletContext.Transaction) -> Int {
     var score = value.status == .completed ? 100 : 0
     if value.peer.displayName != nil { score += 4 }
+    if value.peer.domain != nil { score += 2 }
     if value.comment != nil { score += 1 }
     return score
 }

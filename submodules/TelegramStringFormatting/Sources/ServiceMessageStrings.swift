@@ -1766,6 +1766,23 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, price)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
+            case let .gramTransfer(amount, _, _):
+                let amountText = formatTonAmountText(
+                    amount,
+                    dateTimeFormat: dateTimeFormat,
+                    maxDecimalPositions: 3,
+                    formatString: strings.Currency_Grams
+                )
+                let text: String
+                if message.effectivelyIncoming(accountPeerId) {
+                    //TODO:localize
+                    text = "\(compactAuthorName) sent you \(amountText)"
+                } else {
+                    let conversationPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? compactAuthorName
+                    //TODO:localize
+                    text = "You sent \(conversationPeerName) \(amountText)"
+                }
+                attributedString = NSAttributedString(string: text, font: titleFont, textColor: primaryTextColor)
             case let .starGiftPurchaseOffer(gift, amount, _, _, _):
                 let peerName = message.peers[message.id.peerId].flatMap { EnginePeer($0) }?.compactDisplayTitle ?? ""
                                 

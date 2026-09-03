@@ -93,6 +93,12 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
     case let .messageActionGeoProximityReached(messageActionGeoProximityReachedData):
         let (fromId, toId, distance) = (messageActionGeoProximityReachedData.fromId, messageActionGeoProximityReachedData.toId, messageActionGeoProximityReachedData.distance)
         return TelegramMediaAction(action: .geoProximityReached(from: fromId.peerId, to: toId.peerId, distance: distance))
+    case let .messageActionGramTransfer(messageActionGramTransferData):
+        return TelegramMediaAction(action: .gramTransfer(
+            amount: messageActionGramTransferData.amount,
+            transactionId: messageActionGramTransferData.transactionId,
+            comment: messageActionGramTransferData.comment
+        ))
     case let .messageActionGroupCall(messageActionGroupCallData):
         let (call, duration) = (messageActionGroupCallData.call, messageActionGroupCallData.duration)
         switch call {

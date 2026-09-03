@@ -1,4 +1,5 @@
 import Foundation
+import TelegramCore
 
 public struct WalletTransferMessageData: Equatable {
     public enum Direction: Equatable {
@@ -8,51 +9,29 @@ public struct WalletTransferMessageData: Equatable {
 
     public let direction: Direction
     public let amount: Int64
+    public let transactionId: String
     public let caption: String
 
-    public init(direction: Direction, amount: Int64, caption: String) {
+    public init(direction: Direction, amount: Int64, transactionId: String, caption: String) {
         self.direction = direction
         self.amount = amount
+        self.transactionId = transactionId
         self.caption = caption
     }
 }
 
-public func parseWalletTransferMessageText(_ text: String) -> WalletTransferMessageData? {
-    let prefix = "_<transfer:"
-    guard text.hasPrefix(prefix) else {
-        return nil
+public func walletTransferMessageData(message: EngineMessage, accountPeerId: EnginePeer.Id) -> WalletTransferMessageData? {
+    for media in message.media {
+        guard let action = media as? TelegramMediaAction,
+              case let .gramTransfer(amount, transactionId, comment) = action.action else {
+            continue
+        }
+        return WalletTransferMessageData(
+            direction: message.effectivelyIncoming(accountPeerId) ? .incoming : .outgoing,
+            amount: amount,
+            transactionId: transactionId,
+            caption: comment ?? ""
+        )
     }
-
-    let payloadStartIndex = text.index(text.startIndex, offsetBy: prefix.count)
-    guard let payloadEndIndex = text[payloadStartIndex...].firstIndex(of: ">") else {
-        return nil
-    }
-
-    let payload = text[payloadStartIndex..<payloadEndIndex]
-    let components = payload.split(separator: ",", omittingEmptySubsequences: false)
-    guard components.count == 2 else {
-        return nil
-    }
-
-    let direction: WalletTransferMessageData.Direction
-    switch components[0] {
-    case "in":
-        direction = .incoming
-    case "out":
-        direction = .outgoing
-    default:
-        return nil
-    }
-
-    let amountText = components[1]
-    guard !amountText.isEmpty, amountText.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }), let amount = Int64(String(amountText)) else {
-        return nil
-    }
-
-    let captionStartIndex = text.index(after: payloadEndIndex)
-    return WalletTransferMessageData(
-        direction: direction,
-        amount: amount,
-        caption: String(text[captionStartIndex...])
-    )
+    return nil
 }
