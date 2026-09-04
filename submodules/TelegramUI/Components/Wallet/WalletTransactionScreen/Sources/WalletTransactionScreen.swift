@@ -38,6 +38,8 @@ private struct WalletTransactionPreviewSource: Equatable {
     let id: String
     let address: String
     let amount: Int64
+    let requestedAmount: Int64
+    let isSendAll: Bool
     let comment: String?
     let collectible: WalletContext.Collectible?
     let preparedTransfer: WalletContext.PreparedTransfer?
@@ -46,15 +48,19 @@ private struct WalletTransactionPreviewSource: Equatable {
         self.id = preparedTransfer.id
         self.address = preparedTransfer.recipient
         self.amount = preparedTransfer.amount
+        self.requestedAmount = preparedTransfer.requestedAmount
+        self.isSendAll = preparedTransfer.isSendAll
         self.comment = preparedTransfer.comment
         self.collectible = preparedTransfer.collectible
         self.preparedTransfer = preparedTransfer
     }
 
-    init(address: String, amount: Int64, comment: String?) {
+    init(address: String, amount: Int64, sendAll: Bool, comment: String?) {
         self.id = UUID().uuidString
         self.address = address
         self.amount = amount
+        self.requestedAmount = amount
+        self.isSendAll = sendAll
         self.comment = comment
         self.collectible = nil
         self.preparedTransfer = nil
@@ -872,7 +878,8 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 preparation = walletContext.prepareTransfer(
                     address: self.preparedTransfer?.recipient ?? previewSource.address,
-                    amount: self.preparedTransfer?.amount ?? previewSource.amount,
+                    amount: self.preparedTransfer?.requestedAmount ?? previewSource.requestedAmount,
+                    sendAll: self.preparedTransfer?.isSendAll ?? previewSource.isSendAll,
                     comment: comment
                 )
             }
@@ -3040,10 +3047,11 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
         walletContext: WalletContext,
         address: String,
         amount: Int64,
+        sendAll: Bool,
         comment: String?,
         dismissSendScreen: @escaping () -> Void
     ) {
-        let source = WalletTransactionPreviewSource(address: address, amount: amount, comment: comment)
+        let source = WalletTransactionPreviewSource(address: address, amount: amount, sendAll: sendAll, comment: comment)
         self.currentCloseId = walletTransactionModeId(.preview(
             walletContext: walletContext,
             source: source,
