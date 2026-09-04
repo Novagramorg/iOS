@@ -808,11 +808,28 @@ private final class WalletSendScreenComponent: Component {
                     switch submittedTransfer.pendingTransfer.status {
                     case .submissionUnknown:
                         self.presentSubmissionUnknown(on: controller, context: component.context)
-                    case .broadcasting, .pending:
-                        self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
                         component.completed?()
+                        controller.dismiss()
+                    case .broadcasting, .pending, .confirmed:
+                        var navigationController: NavigationController?
+                        var parentController: ViewController?
+                        if let current = controller.navigationController as? NavigationController {
+                            navigationController = current
+                        } else if let current = (controller as? AttachmentContainable)?.parentController() {
+                            parentController = current
+                            navigationController = current.navigationController as? NavigationController
+                        }
+                        component.completed?()
+                        controller.dismiss()
+                        Queue.mainQueue().after(0.4, { [weak navigationController] in
+                            guard let navigationController else {
+                                return
+                            }
+                            if let controller = navigationController.viewControllers.reversed().first(where: { $0 !== parentController }) as? ViewController {
+                                self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
+                            }
+                        })
                     }
-                    controller.dismiss()
                 }, error: { [weak self] error in
                     if error == .preparedTransferExpired || error == .preparedTransferNotFound {
                         self?.discardPeerPreparedTransfer()
@@ -863,7 +880,7 @@ private final class WalletSendScreenComponent: Component {
 
         private func presentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
             //TODO:localize
-            let text = "Grams have been sent to \(peer.compactDisplayTitle)."
+            let text = "Grams have been sent to **\(peer.compactDisplayTitle)**."
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             controller.present(
                 UndoOverlayController(
@@ -874,7 +891,7 @@ private final class WalletSendScreenComponent: Component {
                         return false
                     }
                 ),
-                in: .window(.root)
+                in: .current
             )
         }
 

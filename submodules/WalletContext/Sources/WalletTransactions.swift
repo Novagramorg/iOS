@@ -169,7 +169,7 @@ func mergeTransactions(
 ) -> [WalletContext.Transaction] {
     var values: [String: WalletContext.Transaction] = [:]
     for transaction in existing + new {
-        let key = transaction.transactionHash?.lowercased() ?? transaction.id.lowercased()
+        let key = walletTransactionMergeKey(transaction)
         if let current = values[key] {
             let currentScore = transactionInformationScore(current)
             let candidateScore = transactionInformationScore(transaction)
@@ -181,6 +181,36 @@ func mergeTransactions(
         }
     }
     return sortedWalletTransactions(Array(values.values))
+}
+
+func walletPendingTransferTransaction(
+    _ pending: WalletContext.PendingTransfer
+) -> WalletContext.Transaction? {
+    guard pending.collectibleAddress == nil, pending.amount > 0 else {
+        return nil
+    }
+    let status: WalletContext.Transaction.Status
+    switch pending.status {
+    case .broadcasting:
+        return nil
+    case .pending, .submissionUnknown:
+        status = .pending
+    case .confirmed:
+        status = .completed
+    }
+    return WalletContext.Transaction(
+        id: "pending:\(pending.id)",
+        presentationId: "pending:\(pending.id)",
+        transactionHash: pending.transactionHash,
+        logicalTime: pending.transactionLt ?? "0",
+        timestamp: pending.createdAt,
+        direction: .outgoing,
+        amount: -pending.amount,
+        fee: pending.fee ?? 0,
+        peer: .address(pending.recipient, domain: nil),
+        comment: pending.comment,
+        status: status
+    )
 }
 
 func transactionsWithStreamingOverlay(
@@ -224,6 +254,7 @@ private func transactionWithResolvedStreamingPeer(
     }
     return WalletContext.Transaction(
         id: transaction.id,
+        presentationId: transaction.presentationId,
         transactionHash: transaction.transactionHash,
         logicalTime: transaction.logicalTime,
         timestamp: transaction.timestamp,
@@ -239,8 +270,33 @@ private func transactionWithResolvedStreamingPeer(
     )
 }
 
-private func walletTransactionMergeKey(_ transaction: WalletContext.Transaction) -> String {
-    transaction.transactionHash?.lowercased() ?? transaction.id.lowercased()
+func walletTransactionWithPresentationId(
+    _ transaction: WalletContext.Transaction,
+    presentationId: String
+) -> WalletContext.Transaction {
+    guard transaction.presentationId != presentationId else {
+        return transaction
+    }
+    return WalletContext.Transaction(
+        id: transaction.id,
+        presentationId: presentationId,
+        transactionHash: transaction.transactionHash,
+        logicalTime: transaction.logicalTime,
+        timestamp: transaction.timestamp,
+        direction: transaction.direction,
+        amount: transaction.amount,
+        fee: transaction.fee,
+        peer: transaction.peer,
+        comment: transaction.comment,
+        currency: transaction.currency,
+        collectible: transaction.collectible,
+        status: transaction.status,
+        kind: transaction.kind
+    )
+}
+
+func walletTransactionMergeKey(_ transaction: WalletContext.Transaction) -> String {
+    transaction.transactionHash ?? transaction.id
 }
 
 private func sortedWalletTransactions(

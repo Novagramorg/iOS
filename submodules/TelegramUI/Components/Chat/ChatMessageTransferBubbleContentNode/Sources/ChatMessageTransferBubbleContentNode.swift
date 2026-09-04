@@ -13,6 +13,7 @@ import WallpaperBackgroundNode
 import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
 import WalletContext
+import TextSelectionNode
 
 public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleContentNode {
     private let labelNode: TextNode
@@ -28,6 +29,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let nameNode: TextNode
     private let addressNode: TextNode
     private let captionNode: TextNode
+    private var captionTextSelectionNode: TextSelectionNode?
     private let ribbonBackgroundNode: ASImageNode
     private let ribbonTextNode: TextNode
 
@@ -104,6 +106,87 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
     required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    private func removeCaptionTextSelection(animated: Bool) {
+        guard let textSelectionNode = self.captionTextSelectionNode else {
+            return
+        }
+        self.captionTextSelectionNode = nil
+        self.updateIsTextSelectionActive?(false)
+
+        if animated {
+            textSelectionNode.highlightAreaNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
+            textSelectionNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak textSelectionNode] _ in
+                textSelectionNode?.highlightAreaNode.removeFromSupernode()
+                textSelectionNode?.removeFromSupernode()
+            })
+        } else {
+            textSelectionNode.highlightAreaNode.removeFromSupernode()
+            textSelectionNode.removeFromSupernode()
+        }
+    }
+
+    override public func willUpdateIsExtractedToContextPreview(_ value: Bool) {
+        if !value {
+            self.removeCaptionTextSelection(animated: true)
+        }
+    }
+
+    override public func updateIsExtractedToContextPreview(_ value: Bool) {
+        if value {
+            guard self.captionTextSelectionNode == nil,
+                  let item = self.item,
+                  !self.captionNode.isHidden,
+                  let attributedText = self.captionNode.cachedLayout?.attributedString,
+                  attributedText.length > 0,
+                  let rootNode = item.controllerInteraction.chatControllerNode() else {
+                return
+            }
+
+            let knobColor: UIColor
+            if item.message.effectivelyIncoming(item.context.account.peerId) {
+                knobColor = item.presentationData.theme.theme.chat.message.incoming.textSelectionKnobColor
+            } else {
+                knobColor = item.presentationData.theme.theme.chat.message.outgoing.textSelectionKnobColor
+            }
+
+            let textSelectionNode = TextSelectionNode(
+                theme: TextSelectionTheme(
+                    selection: UIColor.white.withAlphaComponent(0.4),
+                    knob: knobColor,
+                    isDark: item.presentationData.theme.theme.overallDarkAppearance
+                ),
+                strings: item.presentationData.strings,
+                textNodeOrView: .node(self.captionNode),
+                updateIsActive: { [weak self] value in
+                    self?.updateIsTextSelectionActive?(value)
+                },
+                present: { [weak self] controller, arguments in
+                    self?.item?.controllerInteraction.presentGlobalOverlayController(controller, arguments)
+                },
+                rootView: { [weak rootNode] in
+                    return rootNode?.view
+                },
+                performAction: { [weak self] text, action in
+                    guard let self, let item = self.item else {
+                        return
+                    }
+                    item.controllerInteraction.performTextSelectionAction(item.message, true, text, nil, action)
+                }
+            )
+            textSelectionNode.enableCopy = true
+            textSelectionNode.enableQuote = false
+            textSelectionNode.enableShare = true
+
+            self.captionTextSelectionNode = textSelectionNode
+            self.addSubnode(textSelectionNode)
+            self.insertSubnode(textSelectionNode.highlightAreaNode, belowSubnode: self.captionNode)
+            textSelectionNode.frame = self.captionNode.frame
+            textSelectionNode.highlightAreaNode.frame = textSelectionNode.frame
+        } else {
+            self.removeCaptionTextSelection(animated: true)
+        }
     }
 
     override public func asyncLayoutContent() -> (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, unboundSize: CGSize?, maxWidth: CGFloat, layout: (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))) {
@@ -403,14 +486,24 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                         self.captionNode.isHidden = !hasCaption
                         if hasCaption {
-                            self.captionNode.frame = CGRect(
+                            let captionFrame = CGRect(
                                 origin: CGPoint(
                                     x: mediaFrame.minX + floorToScreenPixels((mediaFrame.width - captionLayout.size.width) * 0.5),
                                     y: cardFrame.maxY + captionSpacing
                                 ),
                                 size: captionLayout.size
                             )
+                            self.captionNode.frame = captionFrame
+                            if let textSelectionNode = self.captionTextSelectionNode {
+                                let shouldUpdateLayout = textSelectionNode.frame.size != captionFrame.size
+                                textSelectionNode.frame = captionFrame
+                                textSelectionNode.highlightAreaNode.frame = captionFrame
+                                if shouldUpdateLayout {
+                                    textSelectionNode.updateLayout()
+                                }
+                            }
                         } else {
+                            self.removeCaptionTextSelection(animated: false)
                             self.captionNode.frame = CGRect()
                         }
 

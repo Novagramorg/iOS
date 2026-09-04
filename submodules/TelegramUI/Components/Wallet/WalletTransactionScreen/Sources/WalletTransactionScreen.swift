@@ -26,6 +26,12 @@ import AvatarComponent
 import ShimmeringMask
 import WalletContext
 import WalletCollectibleHeaderComponent
+import TextSelectionNode
+import Pasteboard
+import Speak
+import TranslateUI
+import TelegramUIPreferences
+import TelegramNotices
 
 private struct WalletTransactionPreviewSource: Equatable {
     let id: String
@@ -63,6 +69,203 @@ private enum WalletTransactionContentMode {
     )
 }
 
+private final class SelectableWalletTransactionCommentComponent: Component {
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let text: NSAttributedString
+    let controller: () -> ViewController?
+    let performAction: (NSAttributedString, TextSelectionAction) -> Void
+
+    init(
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        text: NSAttributedString,
+        controller: @escaping () -> ViewController?,
+        performAction: @escaping (NSAttributedString, TextSelectionAction) -> Void
+    ) {
+        self.theme = theme
+        self.strings = strings
+        self.text = text
+        self.controller = controller
+        self.performAction = performAction
+    }
+
+    static func ==(lhs: SelectableWalletTransactionCommentComponent, rhs: SelectableWalletTransactionCommentComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let text = ComponentView<Empty>()
+        private var textSelectionNode: TextSelectionNode?
+        private weak var selectionTheme: PresentationTheme?
+        private weak var selectionStrings: PresentationStrings?
+        private var component: SelectableWalletTransactionCommentComponent?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            self.clipsToBounds = false
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if self.bounds.contains(point) {
+                return true
+            }
+            if let textSelectionNode {
+                let localPoint = self.convert(point, to: textSelectionNode.view)
+                return textSelectionNode.view.hitTest(localPoint, with: event) != nil
+            }
+            return false
+        }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if let textSelectionNode {
+                let localPoint = self.convert(point, to: textSelectionNode.view)
+                if let result = textSelectionNode.view.hitTest(localPoint, with: event) {
+                    return result
+                }
+            }
+            return super.hitTest(point, with: event)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil {
+                self.removeTextSelectionNode()
+            }
+        }
+
+        func cancelSelection() {
+            self.textSelectionNode?.cancelSelection()
+        }
+
+        private func removeTextSelectionNode() {
+            guard let textSelectionNode = self.textSelectionNode else {
+                return
+            }
+            self.textSelectionNode = nil
+            textSelectionNode.cancelSelection()
+            textSelectionNode.highlightAreaNode.view.removeFromSuperview()
+            textSelectionNode.view.removeFromSuperview()
+        }
+
+        private func ensureTextSelectionNode(textView: MultilineTextComponent.View) {
+            guard let component = self.component else {
+                return
+            }
+
+            if self.selectionTheme !== component.theme || self.selectionStrings !== component.strings {
+                self.removeTextSelectionNode()
+            }
+            self.selectionTheme = component.theme
+            self.selectionStrings = component.strings
+
+            let textSelectionNode: TextSelectionNode
+            if let current = self.textSelectionNode {
+                textSelectionNode = current
+            } else {
+                let accentColor = component.theme.actionSheet.controlAccentColor
+                textSelectionNode = TextSelectionNode(
+                    theme: TextSelectionTheme(
+                        selection: accentColor.withMultipliedAlpha(0.5),
+                        knob: accentColor,
+                        isDark: component.theme.overallDarkAppearance
+                    ),
+                    strings: component.strings,
+                    textNodeOrView: .view(textView),
+                    updateIsActive: { _ in
+                    },
+                    present: { [weak self] controller, arguments in
+                        self?.component?.controller()?.presentInGlobalOverlay(controller, with: arguments)
+                    },
+                    rootView: { [weak self] in
+                        return self?.component?.controller()?.displayNode.view
+                    },
+                    performAction: { [weak self] text, action in
+                        self?.component?.performAction(text, action)
+                    }
+                )
+                textSelectionNode.enableQuote = false
+                textSelectionNode.enableSpeak = isSpeakSelectionEnabled()
+
+                self.textSelectionNode = textSelectionNode
+                self.insertSubview(textSelectionNode.highlightAreaNode.view, belowSubview: textView)
+                self.addSubview(textSelectionNode.view)
+            }
+
+            textSelectionNode.enableCopy = true
+            textSelectionNode.enableShare = true
+        }
+
+        func update(
+            component: SelectableWalletTransactionCommentComponent,
+            availableSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            if let previousComponent = self.component,
+               previousComponent.text != component.text || previousComponent.theme !== component.theme {
+                self.removeTextSelectionNode()
+            }
+            self.component = component
+
+            let textSize = self.text.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(component.text),
+                    maximumNumberOfLines: 0
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+
+            if let textView = self.text.view as? MultilineTextComponent.View {
+                if textView.superview == nil {
+                    self.addSubview(textView)
+                }
+                textView.frame = CGRect(origin: .zero, size: textSize)
+
+                self.ensureTextSelectionNode(textView: textView)
+                if let textSelectionNode = self.textSelectionNode {
+                    let shouldUpdateLayout = textSelectionNode.frame.size != textSize
+                    textSelectionNode.frame = CGRect(origin: .zero, size: textSize)
+                    textSelectionNode.highlightAreaNode.frame = textSelectionNode.frame
+                    if shouldUpdateLayout {
+                        textSelectionNode.updateLayout()
+                    }
+                }
+            }
+
+            return textSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
 private protocol WalletTransactionContentController: AnyObject {
     func setCloseAction(id: String, action: @escaping (Bool) -> Void)
     func requestClose(animated: Bool)
@@ -72,7 +275,7 @@ private protocol WalletTransactionContentController: AnyObject {
 private func walletTransactionModeId(_ mode: WalletTransactionContentMode) -> String {
     switch mode {
     case let .transaction(transaction):
-        return "transaction:\(transaction.id):\(transaction.logicalTime)"
+        return "transaction:\(transaction.presentationId)"
     case let .preview(_, source, _):
         return "preview:\(source.id)"
     }
@@ -277,6 +480,7 @@ private final class WalletTransactionContentComponent: Component {
         private let transferDisposable = MetaDisposable()
         private let discardTransferDisposables = DisposableSet()
         private let hapticFeedback = HapticFeedback()
+        private var currentSpeechHolder: SpeechSynthesizerHolder?
         private var amountPending = false
         private var isUpdating = false
 
@@ -342,7 +546,7 @@ private final class WalletTransactionContentComponent: Component {
 
             switch mode {
             case let .transaction(transaction):
-                self.modeId = "transaction:\(transaction.id):\(transaction.logicalTime)"
+                self.modeId = walletTransactionModeId(.transaction(transaction))
                 self.transaction = transaction
             case let .preview(walletContext, source, dismissSendScreen):
                 self.modeId = "preview:\(source.id)"
@@ -606,7 +810,7 @@ private final class WalletTransactionContentComponent: Component {
                     self.previewOperation = .submissionUnknown
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     self.presentSubmissionUnknown()
-                case .broadcasting, .pending:
+                case .broadcasting, .pending, .confirmed:
                     self.previewOperation = .confirmed
                     self.componentState?.updated(transition: .easeInOut(duration: 0.25))
                     self.showSuccessIfNeeded(
@@ -650,10 +854,8 @@ private final class WalletTransactionContentComponent: Component {
             }
             self.didShowSuccess = true
             //TODO:localize
-            let successPrefix = isCollectible ? "NFT has been sent to " : "Grams have been sent to "
-            //TODO:localize
-            let successSuffix = "."
-            let text = successPrefix + walletTransactionShortAddress(address) + successSuffix
+            let successPrefix = isCollectible ? "Collectible has been sent to" : "Grams have been sent to"
+            let text = "\(successPrefix) **\(walletTransactionShortAddress(address))**."
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             controller.present(
                 UndoOverlayController(
@@ -729,6 +931,128 @@ private final class WalletTransactionContentComponent: Component {
                 ),
                 in: .current
             )
+        }
+
+        private func performCommentTextSelectionAction(text: NSAttributedString, action: TextSelectionAction) {
+            guard let component = self.component,
+                  let controller = self.environment?.controller() else {
+                return
+            }
+
+            switch action {
+            case .copy:
+                storeAttributedTextInPasteboard(text)
+
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                controller.present(
+                    UndoOverlayController(
+                        presentationData: presentationData,
+                        content: .copy(text: presentationData.strings.Conversation_TextCopied),
+                        position: .bottom,
+                        action: { _ in return true }
+                    ),
+                    in: .current
+                )
+            case .share:
+                let shareController = component.context.sharedContext.makeShareController(
+                    context: component.context,
+                    params: ShareControllerParams(
+                        subject: .text(text.string),
+                        externalShare: true,
+                        immediateExternalShare: false
+                    )
+                )
+                controller.present(shareController, in: .window(.root))
+            case .lookup:
+                let lookupController = UIReferenceLibraryViewController(term: text.string)
+                if let window = controller.view.window {
+                    lookupController.popoverPresentationController?.sourceView = window
+                    lookupController.popoverPresentationController?.sourceRect = CGRect(
+                        origin: CGPoint(x: window.bounds.width / 2.0, y: window.bounds.height - 1.0),
+                        size: CGSize(width: 1.0, height: 1.0)
+                    )
+                    window.rootViewController?.present(lookupController, animated: true)
+                }
+            case .speak:
+                if let speechHolder = speakText(text: text.string) {
+                    speechHolder.completion = { [weak self, weak speechHolder] in
+                        guard let self else {
+                            return
+                        }
+                        if self.currentSpeechHolder === speechHolder {
+                            self.currentSpeechHolder = nil
+                        }
+                    }
+                    self.currentSpeechHolder = speechHolder
+                }
+            case .translate:
+                let _ = (component.context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.translationSettings])
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] sharedData in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+
+                    let translationSettings: TranslationSettings
+                    if let current = sharedData.entries[ApplicationSpecificSharedDataKeys.translationSettings]?.get(TranslationSettings.self) {
+                        translationSettings = current
+                    } else {
+                        translationSettings = TranslationSettings.defaultSettings
+                    }
+
+                    let (_, language) = canTranslateText(
+                        context: component.context,
+                        text: text.string,
+                        showTranslate: translationSettings.showTranslate,
+                        showTranslateIfTopical: false,
+                        ignoredLanguages: translationSettings.ignoredLanguages
+                    )
+                    let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(
+                        accountManager: component.context.sharedContext.accountManager,
+                        timestamp: Int32(Date().timeIntervalSince1970)
+                    ).startStandalone()
+
+                    Task { @MainActor [weak self] in
+                        guard let self,
+                              let component = self.component,
+                              let controller = self.environment?.controller() else {
+                            return
+                        }
+                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                        let translationController = await component.context.sharedContext.makeTextProcessingScreen(
+                            context: component.context,
+                            theme: nil,
+                            mode: .translate(fromLanguage: language, applyResult: nil),
+                            inputText: .plain(text: text.string, entities: []),
+                            copyResult: { [weak controller] result in
+                                guard let controller else {
+                                    return
+                                }
+                                switch result {
+                                case let .plain(text, entities):
+                                    storeMessageTextInPasteboard(text, entities: entities)
+                                case .rich(_), .empty:
+                                    return
+                                }
+                                controller.present(
+                                    UndoOverlayController(
+                                        presentationData: presentationData,
+                                        content: .copy(text: presentationData.strings.Conversation_TextCopied),
+                                        elevatedLayout: true,
+                                        animateInAsReplacement: false,
+                                        action: { _ in return false }
+                                    ),
+                                    in: .window(.root)
+                                )
+                            },
+                            translateChat: nil
+                        )
+                        controller.present(translationController, in: .window(.root))
+                    }
+                })
+            case .quote:
+                break
+            }
         }
 
         private func openPeer(_ peer: EnginePeer) {
@@ -1096,13 +1420,18 @@ private final class WalletTransactionContentComponent: Component {
                 )
                 let commentSize = self.commentText.update(
                     transition: transition,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
+                    component: AnyComponent(SelectableWalletTransactionCommentComponent(
+                        theme: theme,
+                        strings: environment.strings,
+                        text: NSAttributedString(
                             string: comment,
                             font: Font.regular(15.0),
                             textColor: theme.actionSheet.primaryTextColor
-                        )),
-                        maximumNumberOfLines: 0
+                        ),
+                        controller: environment.controller,
+                        performAction: { [weak self] text, action in
+                            self?.performCommentTextSelectionAction(text: text, action: action)
+                        }
                     )),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - 122.0, height: 1000.0)
@@ -1123,6 +1452,7 @@ private final class WalletTransactionContentComponent: Component {
                     if commentView.superview == nil {
                         self.addSubview(commentView)
                     }
+                    commentView.isUserInteractionEnabled = true
                     transition.setFrame(view: commentView, frame: CGRect(
                         x: floorToScreenPixels((availableSize.width - commentSize.width) / 2.0),
                         y: contentHeight + floorToScreenPixels((bubbleSize.height - commentSize.height) / 2.0),
@@ -1135,6 +1465,8 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 0.0)
                 if let commentView = self.commentText.view {
+                    commentView.isUserInteractionEnabled = false
+                    (commentView as? SelectableWalletTransactionCommentComponent.View)?.cancelSelection()
                     transition.setAlpha(view: commentView, alpha: 0.0)
                 }
                 contentHeight += transaction.collectible == nil ? 44.0 : 22.0
@@ -1714,7 +2046,7 @@ private final class WalletTransactionPagerComponent: Component {
                previousItemStride > 0.0,
                !previousComponent.transactions.isEmpty {
                 let previousIndex = self.currentIndex(component: previousComponent, itemStride: previousItemStride)
-                anchorId = previousComponent.transactions[previousIndex].id
+                anchorId = previousComponent.transactions[previousIndex].presentationId
                 anchorFraction = self.scrollView.contentOffset.x / previousItemStride - CGFloat(previousIndex)
             }
 
@@ -1746,7 +2078,7 @@ private final class WalletTransactionPagerComponent: Component {
                 let initialIndex = max(0, min(component.transactions.count - 1, component.initialIndex))
                 targetOffset = CGFloat(initialIndex) * itemStride
             } else if let anchorId,
-                      let anchorIndex = component.transactions.firstIndex(where: { $0.id == anchorId }) {
+                      let anchorIndex = component.transactions.firstIndex(where: { $0.presentationId == anchorId }) {
                 targetOffset = (CGFloat(anchorIndex) + anchorFraction) * itemStride
             }
             if let targetOffset {
@@ -1772,7 +2104,7 @@ private final class WalletTransactionPagerComponent: Component {
                     continue
                 }
                 
-                let uniqueId = transaction.id + (transaction.peer.address ?? "")
+                let uniqueId = transaction.presentationId
 
                 validIds.insert(uniqueId)
                 let itemView: ComponentHostView<EnvironmentType>
@@ -2151,10 +2483,11 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private let openExplorer: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
+    private var walletScreenUpdatesDisposable: Disposable?
 
     private var transactionsState: WalletContext.TransactionsState?
     private var transactions: [WalletContext.Transaction]
-    private var currentTransactionId: String?
+    private var currentTransactionPresentationId: String?
     private var currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
     private var requestedOffset: Int?
@@ -2167,10 +2500,10 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     ) {
         let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
-        if !initialTransactions.contains(where: { $0.id == transaction.id }) {
+        if !initialTransactions.contains(where: { $0.presentationId == transaction.presentationId }) {
             initialTransactions.insert(transaction, at: 0)
         }
-        let initialIndex = initialTransactions.firstIndex(where: { $0.id == transaction.id }) ?? 0
+        let initialIndex = initialTransactions.firstIndex(where: { $0.presentationId == transaction.presentationId }) ?? 0
 
         let openExplorer = walletTransactionOpenExplorer(context: context)
 
@@ -2179,7 +2512,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.openExplorer = openExplorer
         self.transactionsState = initialState
         self.transactions = initialTransactions
-        self.currentTransactionId = transaction.id
+        self.currentTransactionPresentationId = transaction.presentationId
         self.currentCloseId = walletTransactionModeId(.transaction(transaction))
 
         var indexUpdatedImpl: ((Int) -> Void)?
@@ -2245,6 +2578,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 
     deinit {
+        self.walletScreenUpdatesDisposable?.dispose()
         self.stateDisposable.dispose()
         self.loadMoreDisposable.dispose()
     }
@@ -2254,9 +2588,24 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.view.disablesInteractiveModalDismiss = true
     }
 
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        if self.walletScreenUpdatesDisposable == nil, let navigationWalletContext = self.navigationWalletContext {
+            self.walletScreenUpdatesDisposable = navigationWalletContext.beginWalletScreenUpdates()
+        }
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         self.dismissAllTooltips()
+    }
+
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        self.walletScreenUpdatesDisposable?.dispose()
+        self.walletScreenUpdatesDisposable = nil
     }
 
     fileprivate func setCloseAction(id: String, action: @escaping (Bool) -> Void) {
@@ -2304,10 +2653,10 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         }
 
         var transactions = state.items.filter(\.isVisibleInWalletHistory)
-        if let currentTransactionId = self.currentTransactionId,
-           !transactions.contains(where: { $0.id == currentTransactionId }),
-           let currentTransaction = self.transactions.first(where: { $0.id == currentTransactionId }) {
-            let previousIndex = self.transactions.firstIndex(where: { $0.id == currentTransactionId }) ?? 0
+        if let currentTransactionPresentationId = self.currentTransactionPresentationId,
+           !transactions.contains(where: { $0.presentationId == currentTransactionPresentationId }),
+           let currentTransaction = self.transactions.first(where: { $0.presentationId == currentTransactionPresentationId }) {
+            let previousIndex = self.transactions.firstIndex(where: { $0.presentationId == currentTransactionPresentationId }) ?? 0
             transactions.insert(currentTransaction, at: min(previousIndex, transactions.count))
         }
         if transactions.isEmpty, let currentTransaction = self.transactions.first {
@@ -2317,8 +2666,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.transactionsState = state
         self.transactions = transactions
         let currentIndex: Int
-        if let currentTransactionId = self.currentTransactionId {
-            currentIndex = transactions.firstIndex(where: { $0.id == currentTransactionId }) ?? 0
+        if let currentTransactionPresentationId = self.currentTransactionPresentationId {
+            currentIndex = transactions.firstIndex(where: { $0.presentationId == currentTransactionPresentationId }) ?? 0
         } else {
             currentIndex = 0
         }
@@ -2350,7 +2699,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
                     }
                 ))
             )),
-            transition: .immediate
+            transition: .easeInOut(duration: 0.2)
         )
     }
 
@@ -2359,7 +2708,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             return
         }
         let transaction = self.transactions[index]
-        self.currentTransactionId = transaction.id
+        self.currentTransactionPresentationId = transaction.presentationId
         self.currentCloseId = walletTransactionModeId(.transaction(transaction))
         self.requestLoadMoreIfNeeded(index: index)
     }

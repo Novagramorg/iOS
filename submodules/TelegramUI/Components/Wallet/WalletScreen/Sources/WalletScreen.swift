@@ -2350,9 +2350,8 @@ private final class WalletScreenComponent: Component {
                 let itemStrings = environment.strings
                 let itemDateTimeFormat = environment.dateTimeFormat
                 let items: [LazySectionView.Item] = transactions.map { transaction in
-                    let uniqueId = transaction.id + (transaction.peer.address ?? "")
                     return LazySectionView.Item(
-                        id: AnyHashable(uniqueId),
+                        id: AnyHashable(transaction.presentationId),
                         height: transaction.collectible == nil ? walletTransactionItemHeight : walletCollectibleTransactionItemHeight,
                         component: { [weak self] in
                             return AnyComponent(ListActionItemComponent(
@@ -2688,11 +2687,15 @@ private final class WalletScreenComponent: Component {
 }
 
 public final class WalletScreen: ViewControllerComponentContainer {
+    private let walletContext: WalletContext
+    private var walletScreenUpdatesDisposable: Disposable?
+
     public init(
         context: AccountContext,
         walletContext: WalletContext,
         twoStepAuthData: Promise<TwoStepAuthData?>
     ) {
+        self.walletContext = walletContext
         super.init(
             context: context,
             component: WalletScreenComponent(
@@ -2720,10 +2723,25 @@ public final class WalletScreen: ViewControllerComponentContainer {
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
+        if self.walletScreenUpdatesDisposable == nil {
+            self.walletScreenUpdatesDisposable = self.walletContext.beginWalletScreenUpdates()
+        }
+
         guard let componentView = self.node.hostView.componentView as? WalletScreenComponent.View else {
             return
         }
         componentView.refreshTwoStepAuth()
+    }
+
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        self.walletScreenUpdatesDisposable?.dispose()
+        self.walletScreenUpdatesDisposable = nil
+    }
+
+    deinit {
+        self.walletScreenUpdatesDisposable?.dispose()
     }
 
     required public init(coder aDecoder: NSCoder) {

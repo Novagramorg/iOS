@@ -1,4 +1,5 @@
 import Foundation
+import Dispatch
 import SwiftSignalKit
 import TelegramCore
 import WalletEngineFFI
@@ -103,7 +104,8 @@ actor WalletStreamingURLProvider {
     private static func parse(_ value: WalletStreamingUrl, now: Int64) throws -> CachedValue {
         let expires = Int64(value.expires)
         guard expires > now,
-              var components = URLComponents(string: value.url),
+              let components = URLComponents(string: value.url),
+              components.scheme == "wss",
               components.host?.isEmpty == false,
               components.user == nil,
               components.password == nil,
@@ -113,26 +115,6 @@ actor WalletStreamingURLProvider {
             }
             throw WalletStreamingError.invalidURL
         }
-
-        switch components.scheme?.lowercased() {
-        case "https":
-            switch components.path {
-            case "/s/api/streaming/", "/s/api/streaming":
-                components.path = "/api/streaming/v2/ws"
-            case "/api/streaming/v2/ws":
-                break
-            default:
-                throw WalletStreamingError.invalidURL
-            }
-            components.scheme = "wss"
-        case "wss":
-            guard components.path == "/api/streaming/v2/ws" else {
-                throw WalletStreamingError.invalidURL
-            }
-        default:
-            throw WalletStreamingError.invalidURL
-        }
-
         guard components.percentEncodedQuery?.isEmpty == false,
               let url = components.url else {
             throw WalletStreamingError.invalidURL
@@ -236,8 +218,6 @@ actor WalletURLSessionStreamingTransport: WalletStreamingTransport {
         guard subscription.count <= walletStreamingMaximumFrameBytes else {
             throw WalletStreamingError.frameTooLarge
         }
-        // Every WebSocket reconnect asks Telegram for a current signed endpoint. If that
-        // request fails, the provider can still fall back to an unexpired cached URL.
         let url = try await self.provider.url(forceRefresh: true)
         try Task.checkCancellation()
 
@@ -329,10 +309,24 @@ enum WalletStreamingFinality: Int, Sendable, Equatable {
     case pending = 0
     case confirmed = 1
     case finalized = 2
+
+    var diagnosticName: String {
+        switch self {
+        case .pending:
+            return "pending"
+        case .confirmed:
+            return "confirmed"
+        case .finalized:
+            return "finalized"
+        }
+    }
 }
 
 enum WalletStreamingParsedEvent: Sendable, Equatable {
+    case connecting
     case subscribed
+    case disconnected
+    case pong
     case accountStateChanged(balance: Int64, finality: WalletStreamingFinality)
     case transactionsChanged(
         traceId: String,
@@ -343,18 +337,25 @@ enum WalletStreamingParsedEvent: Sendable, Equatable {
     case refreshOnly
 }
 
+enum WalletStreamingConnectionState: Sendable, Equatable {
+    case inactive
+    case connecting
+    case subscribed
+    case disconnected
+}
+
 enum WalletStreamingDemand {
     static func isActive(
         foreground: Bool,
         accountIsCurrent: Bool,
         networkAvailable: Bool,
-        subscriberCount: Int,
+        walletScreenCount: Int,
         hasPendingTransfer: Bool
     ) -> Bool {
         foreground
             && accountIsCurrent
             && networkAvailable
-            && (subscriberCount > 0 || hasPendingTransfer)
+            && (walletScreenCount > 0 || hasPendingTransfer)
     }
 
     static func acceptsEvent(
@@ -368,29 +369,49 @@ enum WalletStreamingDemand {
     }
 }
 
+struct WalletSynchronizationScope: OptionSet, Sendable {
+    let rawValue: Int
+
+    static let account = WalletSynchronizationScope(rawValue: 1 << 0)
+    static let transactions = WalletSynchronizationScope(rawValue: 1 << 1)
+    static let nfts = WalletSynchronizationScope(rawValue: 1 << 2)
+    static let all: WalletSynchronizationScope = [.account, .transactions, .nfts]
+}
+
 struct WalletSynchronizationRequestGate {
     private(set) var isRunning = false
-    private(set) var hasQueuedRequest = false
+    private(set) var activeScope: WalletSynchronizationScope = []
+    private(set) var queuedScope: WalletSynchronizationScope = []
 
-    mutating func beginOrQueue() -> Bool {
-        if self.isRunning {
-            self.hasQueuedRequest = true
-            return false
-        }
-        self.isRunning = true
-        return true
+    var hasQueuedRequest: Bool {
+        !self.queuedScope.isEmpty
     }
 
-    mutating func complete() -> Bool {
+    mutating func beginOrQueue(_ scope: WalletSynchronizationScope) -> WalletSynchronizationScope? {
+        guard !scope.isEmpty else {
+            return nil
+        }
+        if self.isRunning {
+            self.queuedScope.formUnion(scope)
+            return nil
+        }
+        self.isRunning = true
+        self.activeScope = scope
+        return scope
+    }
+
+    mutating func complete() -> WalletSynchronizationScope {
         self.isRunning = false
-        let shouldRestart = self.hasQueuedRequest
-        self.hasQueuedRequest = false
-        return shouldRestart
+        self.activeScope = []
+        let queuedScope = self.queuedScope
+        self.queuedScope = []
+        return queuedScope
     }
 
     mutating func cancel() {
         self.isRunning = false
-        self.hasQueuedRequest = false
+        self.activeScope = []
+        self.queuedScope = []
     }
 }
 
@@ -488,6 +509,9 @@ enum WalletStreamingEventParser {
         }
         if envelope.status == "subscribed" {
             return .subscribed
+        }
+        if envelope.status == "pong" {
+            return .pong
         }
         let expected = expectedRawAddress.lowercased()
         switch envelope.type {
@@ -680,7 +704,7 @@ struct WalletStreamingPresentationOverlay {
 
     mutating func apply(_ event: WalletStreamingParsedEvent, updatedAt: Int32) -> Bool {
         switch event {
-        case .subscribed, .refreshOnly:
+        case .connecting, .subscribed, .disconnected, .pong, .refreshOnly:
             return false
         case let .accountStateChanged(balance, _):
             self.revision &+= 1
@@ -715,10 +739,40 @@ struct WalletStreamingPresentationOverlay {
         return true
     }
 
-    mutating func clearTransactions(through revision: UInt64) -> Bool {
+    mutating func clearTransactions(
+        through revision: UInt64,
+        presentIn authoritativeTransactions: [WalletContext.Transaction],
+        resolvedTraceIds: Set<String>
+    ) -> Int {
+        let authoritativeKeys = Set(authoritativeTransactions.map(walletTransactionMergeKey))
         let previousCount = self.traces.count
-        self.traces = self.traces.filter { $0.value.revision > revision }
-        return self.traces.count != previousCount
+        self.traces = self.traces.filter { traceId, trace in
+            guard trace.revision <= revision else {
+                return true
+            }
+            if resolvedTraceIds.contains(traceId) {
+                return false
+            }
+            return !trace.transactions.allSatisfy {
+                authoritativeKeys.contains(walletTransactionMergeKey($0))
+            }
+        }
+        return previousCount - self.traces.count
+    }
+
+    func transactionHashes(forTraceId traceId: String) -> [String]? {
+        guard let trace = self.traces[traceId] else {
+            return nil
+        }
+        let hashes = trace.transactions.compactMap(\.transactionHash)
+        guard !hashes.isEmpty, hashes.count == trace.transactions.count else {
+            return nil
+        }
+        return hashes
+    }
+
+    func containsTrace(_ traceId: String) -> Bool {
+        self.traces[traceId] != nil
     }
 
     mutating func removeAll() -> Bool {
@@ -732,7 +786,9 @@ struct WalletStreamingPresentationOverlay {
 
     func applying(
         to state: WalletContext.State,
-        peerByAddress: [String: EnginePeer]
+        peerByAddress: [String: EnginePeer],
+        presentationIdByTraceId: [String: String],
+        presentationIdByTransactionHash: [String: String]
     ) -> WalletContext.State {
         let balance: WalletContext.Resource<Int64>
         if let overlayBalance = self.balance {
@@ -741,14 +797,50 @@ struct WalletStreamingPresentationOverlay {
             balance = state.balance
         }
 
-        let overlayTransactions = self.traces.values.flatMap(\.transactions)
+        let authoritativeTransactions = state.transactions.items.map { transaction in
+            guard let transactionHash = transaction.transactionHash,
+                  let presentationId = presentationIdByTransactionHash[transactionHash] else {
+                return transaction
+            }
+            return walletTransactionWithPresentationId(
+                transaction,
+                presentationId: presentationId
+            )
+        }
+        let localTransactions = state.pendingTransfers.compactMap { pending -> WalletContext.Transaction? in
+            if let normalizedHash = pending.normalizedHash, self.traces[normalizedHash] != nil {
+                return nil
+            }
+            return walletPendingTransferTransaction(pending)
+        }
+        let streamingTransactions = self.traces.flatMap { traceId, trace in
+            trace.transactions.map { transaction in
+                let presentationId: String?
+                if trace.transactions.count == 1,
+                   let value = presentationIdByTraceId[traceId] {
+                    presentationId = value
+                } else if let transactionHash = transaction.transactionHash {
+                    presentationId = presentationIdByTransactionHash[transactionHash]
+                } else {
+                    presentationId = nil
+                }
+                guard let presentationId else {
+                    return transaction
+                }
+                return walletTransactionWithPresentationId(
+                    transaction,
+                    presentationId: presentationId
+                )
+            }
+        }
+        let overlayTransactions = localTransactions + streamingTransactions
         let transactions: WalletContext.TransactionsState
-        if overlayTransactions.isEmpty {
+        if overlayTransactions.isEmpty && authoritativeTransactions == state.transactions.items {
             transactions = state.transactions
         } else {
             transactions = WalletContext.TransactionsState(
                 items: transactionsWithStreamingOverlay(
-                    authoritative: state.transactions.items,
+                    authoritative: authoritativeTransactions,
                     streaming: overlayTransactions,
                     peerByAddress: peerByAddress
                 ),
@@ -799,15 +891,18 @@ actor WalletToncenterStreamingClient {
         let initialBackoff: TimeInterval
         let maximumBackoff: TimeInterval
         let pingInterval: TimeInterval
+        let inactivityTimeout: TimeInterval
 
         init(
             initialBackoff: TimeInterval = 1,
             maximumBackoff: TimeInterval = 60,
-            pingInterval: TimeInterval = 15
+            pingInterval: TimeInterval = 15,
+            inactivityTimeout: TimeInterval = 45
         ) {
             self.initialBackoff = initialBackoff
             self.maximumBackoff = maximumBackoff
             self.pingInterval = pingInterval
+            self.inactivityTimeout = inactivityTimeout
         }
     }
 
@@ -823,6 +918,7 @@ actor WalletToncenterStreamingClient {
     private var pump: Task<Void, Never>?
     private var continuation: AsyncStream<WalletStreamingParsedEvent>.Continuation?
     private var connectionSubscribed = false
+    private var lastConnectionActivityNanoseconds: UInt64?
 
     init(
         factory: any WalletStreamingTransportFactory,
@@ -861,6 +957,8 @@ actor WalletToncenterStreamingClient {
         self.pump = nil
         await self.transport?.close()
         self.transport = nil
+        self.connectionSubscribed = false
+        self.lastConnectionActivityNanoseconds = nil
         self.continuation?.finish()
         self.continuation = nil
     }
@@ -888,6 +986,8 @@ actor WalletToncenterStreamingClient {
             guard !Task.isCancelled else { return }
 
             self.connectionSubscribed = false
+            self.lastConnectionActivityNanoseconds = nil
+            self.continuation?.yield(.connecting)
             do {
                 self.log("event=wallet_stream_connect_start attempt=\(attempt)")
                 try await self.runConnection(rawAddress: rawAddress)
@@ -899,9 +999,15 @@ actor WalletToncenterStreamingClient {
             } catch {
                 self.log("event=wallet_stream_connection_failed attempt=\(attempt) subscribed=\(self.connectionSubscribed ? 1 : 0) \(walletContextErrorFields(error))")
             }
+            let wasSubscribed = self.connectionSubscribed
             await self.transport?.close()
             self.transport = nil
-            attempt = self.connectionSubscribed ? 1 : min(attempt + 1, 16)
+            self.connectionSubscribed = false
+            self.lastConnectionActivityNanoseconds = nil
+            if !Task.isCancelled {
+                self.continuation?.yield(.disconnected)
+            }
+            attempt = wasSubscribed ? 1 : min(attempt + 1, 16)
         }
     }
 
@@ -920,6 +1026,7 @@ actor WalletToncenterStreamingClient {
 
         let sleep = self.sleep
         let pingInterval = self.configuration.pingInterval
+        let inactivityTimeout = self.configuration.inactivityTimeout
         let log = self.log
         let pingTask = Task {
             while !Task.isCancelled {
@@ -943,8 +1050,31 @@ actor WalletToncenterStreamingClient {
             pingTask.cancel()
         }
 
+        let watchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await sleep(UInt64(max(0, pingInterval) * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, let self else { return }
+                if await self.connectionIsStale(
+                    nowNanoseconds: DispatchTime.now().uptimeNanoseconds,
+                    timeout: inactivityTimeout
+                ) {
+                    log("event=wallet_stream_inactivity_timeout")
+                    await transport.close()
+                    return
+                }
+            }
+        }
+        defer {
+            watchdogTask.cancel()
+        }
+
         while !Task.isCancelled {
             let data = try await transport.receive()
+            self.lastConnectionActivityNanoseconds = DispatchTime.now().uptimeNanoseconds
             if WalletStreamingEventParser.isServerError(data) {
                 self.log("event=wallet_stream_server_rejected")
                 throw WalletStreamingError.invalidResponse
@@ -957,12 +1087,35 @@ actor WalletToncenterStreamingClient {
             if case .subscribed = event {
                 self.connectionSubscribed = true
                 self.log("event=wallet_stream_subscribed")
+            } else if case .pong = event {
+                self.log("event=wallet_stream_pong_received")
             } else {
-                self.log("event=wallet_stream_change_received")
+                switch event {
+                case let .accountStateChanged(_, finality):
+                    self.log("event=wallet_stream_change_received kind=account_state_change finality=\(finality.diagnosticName)")
+                case let .transactionsChanged(_, finality, transactions):
+                    self.log("event=wallet_stream_change_received kind=transactions finality=\(finality.diagnosticName) transaction_count=\(transactions.count)")
+                case .traceInvalidated:
+                    self.log("event=wallet_stream_change_received kind=trace_invalidated")
+                case .refreshOnly:
+                    self.log("event=wallet_stream_change_received kind=refresh_only")
+                case .connecting, .subscribed, .disconnected, .pong:
+                    break
+                }
             }
             self.continuation?.yield(event)
         }
         throw CancellationError()
+    }
+
+    private func connectionIsStale(nowNanoseconds: UInt64, timeout: TimeInterval) -> Bool {
+        guard self.connectionSubscribed,
+              let lastConnectionActivityNanoseconds = self.lastConnectionActivityNanoseconds else {
+            return false
+        }
+        let timeoutNanoseconds = UInt64(max(0, timeout) * 1_000_000_000)
+        return nowNanoseconds >= lastConnectionActivityNanoseconds
+            && nowNanoseconds - lastConnectionActivityNanoseconds >= timeoutNanoseconds
     }
 }
 
@@ -972,12 +1125,12 @@ extension WalletContextImpl {
             foreground: self.isApplicationInForeground,
             accountIsCurrent: self.isAccountCurrent,
             networkAvailable: self.isNetworkAvailable,
-            subscriberCount: self.stateSubscriberCount,
+            walletScreenCount: self.walletScreenCount,
             hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
         )
         guard demandIsActive else {
             if self.streamingTask != nil || self.streamingClient != nil {
-                self.streamingLog("event=wallet_stream_demand_inactive foreground=\(self.isApplicationInForeground ? 1 : 0) account_current=\(self.isAccountCurrent ? 1 : 0) network_available=\(self.isNetworkAvailable ? 1 : 0) has_subscribers=\(self.stateSubscriberCount > 0 ? 1 : 0) has_pending_transfer=\(self.currentState.pendingTransfers.isEmpty ? 0 : 1)")
+                self.streamingLog("event=wallet_stream_demand_inactive foreground=\(self.isApplicationInForeground ? 1 : 0) account_current=\(self.isAccountCurrent ? 1 : 0) network_available=\(self.isNetworkAvailable ? 1 : 0) wallet_screen_visible=\(self.walletScreenCount > 0 ? 1 : 0) has_pending_transfer=\(self.currentState.pendingTransfers.isEmpty ? 0 : 1)")
             }
             self.stopStreaming()
             return
@@ -1008,6 +1161,8 @@ extension WalletContextImpl {
         self.streamingClient = client
         self.streamingAddress = rawAddress
         self.streamingGeneration = generation
+        self.streamingConnectionState = .connecting
+        self.streamingHasSubscribed = false
         self.streamingTask = Task { [weak self] in
             await self?.runStreaming(client: client, generation: generation, rawAddress: rawAddress)
         }
@@ -1032,17 +1187,56 @@ extension WalletContextImpl {
                         foreground: self.isApplicationInForeground,
                         accountIsCurrent: self.isAccountCurrent,
                         networkAvailable: self.isNetworkAvailable,
-                        subscriberCount: self.stateSubscriberCount,
+                        walletScreenCount: self.walletScreenCount,
                         hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
                     )
                   ) else {
                 break
             }
             switch event {
-            case .subscribed, .refreshOnly:
+            case .connecting:
+                self.streamingConnectionState = .connecting
+            case .subscribed:
+                let isReconnect = self.streamingHasSubscribed
+                self.streamingHasSubscribed = true
+                self.streamingConnectionState = .subscribed
+                self.cancelWalletStateFallbackRefresh()
+                if isReconnect || !self.synchronizationGate.isRunning {
+                    self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
+                }
+            case .disconnected:
+                self.streamingConnectionState = .disconnected
+            case .pong:
+                break
+            case .refreshOnly:
                 self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
-            case .accountStateChanged, .transactionsChanged, .traceInvalidated:
-                if self.streamingPresentationOverlay.apply(event, updatedAt: currentWalletTimestamp()) {
+            case let .accountStateChanged(_, finality):
+                let changed = self.streamingPresentationOverlay.apply(
+                    event,
+                    updatedAt: currentWalletTimestamp()
+                )
+                self.streamingLog("event=wallet_stream_overlay_applied kind=account_state_change finality=\(finality.diagnosticName) changed=\(changed ? 1 : 0)")
+                if changed {
+                    self.publishPresentationState()
+                }
+                self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
+            case let .transactionsChanged(_, finality, transactions):
+                let changed = self.streamingPresentationOverlay.apply(
+                    event,
+                    updatedAt: currentWalletTimestamp()
+                )
+                self.streamingLog("event=wallet_stream_overlay_applied kind=transactions finality=\(finality.diagnosticName) transaction_count=\(transactions.count) changed=\(changed ? 1 : 0)")
+                if changed {
+                    self.publishPresentationState()
+                }
+                self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
+            case .traceInvalidated:
+                let changed = self.streamingPresentationOverlay.apply(
+                    event,
+                    updatedAt: currentWalletTimestamp()
+                )
+                self.streamingLog("event=wallet_stream_overlay_applied kind=trace_invalidated changed=\(changed ? 1 : 0)")
+                if changed {
                     self.publishPresentationState()
                 }
                 self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
@@ -1054,6 +1248,8 @@ extension WalletContextImpl {
             self.streamingTask = nil
             self.streamingAddress = nil
             self.streamingGeneration = nil
+            self.streamingConnectionState = .inactive
+            self.streamingHasSubscribed = false
         }
     }
 
@@ -1069,6 +1265,8 @@ extension WalletContextImpl {
         self.streamingRefreshGate.consume()
         self.streamingAddress = nil
         self.streamingGeneration = nil
+        self.streamingConnectionState = .inactive
+        self.streamingHasSubscribed = false
         let client = self.streamingClient
         self.streamingClient = nil
         if let client {
@@ -1108,7 +1306,7 @@ extension WalletContextImpl {
               self.streamingGeneration == generation,
               self.streamingAddress == rawAddress,
               self.canUseNetworkRuntime,
-              self.stateSubscriberCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
+              self.walletScreenCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
             return
         }
         self.streamingRefreshTask = nil
