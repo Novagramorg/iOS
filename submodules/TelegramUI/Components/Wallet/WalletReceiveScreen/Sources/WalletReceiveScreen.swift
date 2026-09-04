@@ -151,6 +151,8 @@ private final class WalletReceiveAddressRingComponent: Component {
     }
 
     final class View: UIView {
+        private static let animationSpeed: CGFloat = 18.0
+
         private struct RoundedRectPerimeter {
             struct Sample {
                 let point: CGPoint
@@ -319,6 +321,10 @@ private final class WalletReceiveAddressRingComponent: Component {
 
         private var component: WalletReceiveAddressRingComponent?
         private var availableSize: CGSize = .zero
+        private var cachedGlyphLayout: (text: String, fontSize: CGFloat, layout: GlyphLayout)?
+        private var animationOffset: CGFloat = 0.0
+        private var animationCycleLength: CGFloat?
+        private var displayLink: SharedDisplayLinkDriver.Link?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -329,10 +335,64 @@ private final class WalletReceiveAddressRingComponent: Component {
             self.isUserInteractionEnabled = false
             self.isAccessibilityElement = false
             self.accessibilityElementsHidden = true
+
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(self.reduceMotionStatusDidChange),
+                name: UIAccessibility.reduceMotionStatusDidChangeNotification,
+                object: nil
+            )
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+
+        deinit {
+            self.stopAnimation()
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+
+            self.updateAnimationState()
+        }
+
+        private func updateAnimationState() {
+            let shouldAnimate = self.window != nil
+                && self.component?.address.isEmpty == false
+                && !UIAccessibility.isReduceMotionEnabled
+            if shouldAnimate {
+                if self.displayLink == nil {
+                    self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .fps(60), { [weak self] deltaTime in
+                        self?.advanceAnimation(deltaTime: deltaTime)
+                    })
+                }
+            } else {
+                self.stopAnimation()
+            }
+        }
+
+        private func stopAnimation() {
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+        }
+
+        private func advanceAnimation(deltaTime: CGFloat) {
+            guard deltaTime.isFinite, deltaTime > 0.0 else {
+                return
+            }
+
+            self.animationOffset += deltaTime * Self.animationSpeed
+            if let animationCycleLength = self.animationCycleLength, animationCycleLength > 0.0 {
+                self.animationOffset = self.animationOffset.truncatingRemainder(dividingBy: animationCycleLength)
+            }
+            self.setNeedsDisplay()
+        }
+
+        @objc private func reduceMotionStatusDidChange() {
+            self.updateAnimationState()
         }
 
         private static func groupedAddress(_ address: String) -> [String] {
@@ -424,7 +484,7 @@ private final class WalletReceiveAddressRingComponent: Component {
                 return
             }
 
-            let baseFontSize = max(8.0, min(11.0, bounds.width / 31.0)) * 1.2
+            let baseFontSize: CGFloat = max(8.0, min(11.0, bounds.width / 31.0)) * 1.2
             let baseFont = Font.with(size: baseFontSize, design: .monospace, weight: .semibold)
 
             let cardSize = CGSize(
@@ -466,8 +526,17 @@ private final class WalletReceiveAddressRingComponent: Component {
             }
 
             let unitText = "· \(groupedAddress) "
-            guard let glyphLayout = Self.glyphLayout(text: unitText, font: baseFont) else {
-                return
+            let glyphLayout: GlyphLayout
+            if let cachedGlyphLayout = self.cachedGlyphLayout,
+               cachedGlyphLayout.text == unitText,
+               cachedGlyphLayout.fontSize == baseFontSize {
+                glyphLayout = cachedGlyphLayout.layout
+            } else {
+                guard let updatedGlyphLayout = Self.glyphLayout(text: unitText, font: baseFont) else {
+                    return
+                }
+                self.cachedGlyphLayout = (unitText, baseFontSize, updatedGlyphLayout)
+                glyphLayout = updatedGlyphLayout
             }
             let glyphScale: CGFloat
             if glyphLayout.width > halfLength {
@@ -487,6 +556,8 @@ private final class WalletReceiveAddressRingComponent: Component {
                 return
             }
             let firstCenter = (firstItem.position.x + firstItem.advance * 0.5) * glyphScale
+            self.animationCycleLength = halfLength
+            self.animationOffset = self.animationOffset.truncatingRemainder(dividingBy: halfLength)
 
             graphicsContext.saveGState()
             graphicsContext.setFillColor(component.color.cgColor)
@@ -497,7 +568,7 @@ private final class WalletReceiveAddressRingComponent: Component {
                 for index in 0 ..< glyphLayout.items.count {
                     let item = glyphLayout.items[index]
                     let centerOffset = (item.position.x + item.advance * 0.5) * glyphScale - firstCenter
-                    let distance = copyOffset + centerOffset + CGFloat(index) * tracking
+                    let distance = self.animationOffset + copyOffset + centerOffset + CGFloat(index) * tracking
                     let sample = perimeter.sample(at: distance)
                     let angle = atan2(sample.tangent.dy, sample.tangent.dx)
 
@@ -533,6 +604,7 @@ private final class WalletReceiveAddressRingComponent: Component {
 
             self.component = component
             self.availableSize = availableSize
+            self.updateAnimationState()
             if needsDisplay {
                 self.setNeedsDisplay()
             }

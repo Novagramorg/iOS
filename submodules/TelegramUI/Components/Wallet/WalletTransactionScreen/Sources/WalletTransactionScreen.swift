@@ -1710,10 +1710,11 @@ private final class WalletTransactionContentComponent: Component {
                 let address = WalletContext.transferAddress(from: counterparty) ?? counterparty
                 addressComponent = AnyComponent(Button(
                     content: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: walletTransactionFormattedAddress(address),
+                        text: .plain(walletTransactionFormattedAddress(
+                            address,
                             font: Font.monospace(15.0),
-                            textColor: valueColor
+                            primaryTextColor: valueColor,
+                            secondaryTextColor: theme.actionSheet.secondaryTextColor
                         )),
                         maximumNumberOfLines: 0,
                         lineSpacing: 0.12
@@ -3144,20 +3145,32 @@ private func walletTransactionShortAddress(_ address: String) -> String {
     return "\(address.prefix(4))…\(address.suffix(4))"
 }
 
-private func walletTransactionFormattedAddress(_ address: String) -> String {
-    var groups: [String] = []
+private func walletTransactionFormattedAddress(
+    _ address: String,
+    font: UIFont,
+    primaryTextColor: UIColor,
+    secondaryTextColor: UIColor
+) -> NSAttributedString {
+    let result = NSMutableAttributedString()
     var index = address.startIndex
+    var groupIndex = 0
     while index < address.endIndex {
         let endIndex = address.index(index, offsetBy: 4, limitedBy: address.endIndex) ?? address.endIndex
-        groups.append(String(address[index ..< endIndex]))
+        if groupIndex != 0 {
+            let separator = groupIndex.isMultiple(of: 4) ? "\n" : " "
+            result.append(NSAttributedString(string: separator, font: font, textColor: primaryTextColor))
+        }
+        let rowIndex = groupIndex / 4
+        let columnIndex = groupIndex % 4
+        result.append(NSAttributedString(
+            string: String(address[index ..< endIndex]),
+            font: font,
+            textColor: (rowIndex + columnIndex).isMultiple(of: 2) ? primaryTextColor : secondaryTextColor
+        ))
         index = endIndex
+        groupIndex += 1
     }
-    var lines: [String] = []
-    for lineStart in stride(from: 0, to: groups.count, by: 4) {
-        let lineEnd = min(lineStart + 4, groups.count)
-        lines.append(groups[lineStart ..< lineEnd].joined(separator: " "))
-    }
-    return lines.joined(separator: "\n")
+    return result
 }
 
 private func walletTransactionDateText(

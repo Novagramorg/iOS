@@ -13,13 +13,15 @@ import ComponentFlow
 import ViewControllerComponent
 import BundleIconComponent
 import MultilineTextComponent
+import AnimatedTextComponent
 import ButtonComponent
 import GlassControls
 import PlainButtonComponent
 import ContextUI
 import AttachmentUI
 import AlertComponent
-import AlertInputFieldComponent
+import AlertCheckComponent
+import AlertMultilineInputFieldComponent
 import WalletContext
 import WalletAuthorizationUI
 import QrCodeUI
@@ -684,15 +686,18 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
 
-            let inputState = AlertInputFieldComponent.ExternalState()
+            let inputState = AlertMultilineInputFieldComponent.ExternalState()
+            let isEditingComment = self.comment?.isEmpty == false
             //TODO:localize
-            let title = "Add public comment"
+            let title = isEditingComment ? "Edit Comment" : "Add comment"
             //TODO:localize
             let placeholder = "Optional message"
             //TODO:localize
+            let publicCommentTitle = "Make comment public"
+            //TODO:localize
             let cancel = "Cancel"
             //TODO:localize
-            let add = "Add"
+            let actionTitle = isEditingComment ? "Save" : "Add"
 
             let content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                 AnyComponentWithIdentity(
@@ -701,17 +706,24 @@ private final class WalletSendScreenComponent: Component {
                 ),
                 AnyComponentWithIdentity(
                     id: "input",
-                    component: AnyComponent(AlertInputFieldComponent(
+                    component: AnyComponent(AlertMultilineInputFieldComponent(
                         context: component.context,
-                        initialValue: self.comment ?? "",
+                        initialValue: NSAttributedString(string: self.comment ?? ""),
                         placeholder: placeholder,
-                        hasClearButton: true,
-                        returnKeyType: .done,
+                        returnKeyType: .default,
                         keyboardType: .default,
                         autocapitalizationType: .sentences,
                         autocorrectionType: .default,
                         isInitiallyFocused: true,
                         externalState: inputState
+                    ))
+                ),
+                AnyComponentWithIdentity(
+                    id: "publicComment",
+                    component: AnyComponent(AlertCheckComponent(
+                        title: publicCommentTitle,
+                        initialValue: false,
+                        externalState: AlertCheckComponent.ExternalState()
                     ))
                 )
             ]
@@ -722,11 +734,11 @@ private final class WalletSendScreenComponent: Component {
                 content: content,
                 actions: [
                     AlertScreen.Action(title: cancel),
-                    AlertScreen.Action(title: add, type: .default, action: { [weak self] in
+                    AlertScreen.Action(title: actionTitle, type: .default, action: { [weak self] in
                         guard let self else {
                             return
                         }
-                        let value = inputState.value.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let value = inputState.value.string.trimmingCharacters(in: .whitespacesAndNewlines)
                         let comment = value.isEmpty ? nil : value
                         if self.comment != comment {
                             self.discardPeerPreparedTransfer()
@@ -763,9 +775,9 @@ private final class WalletSendScreenComponent: Component {
             ]
             if component.peer != nil {
                 //TODO:localize
-                let addComment = "Add comment"
+                let commentActionTitle = self.comment?.isEmpty == false ? "Edit Comment" : "Add comment"
                 items.append(.action(ContextMenuActionItem(
-                    text: addComment,
+                    text: commentActionTitle,
                     icon: { theme in
                         return generateTintedImage(
                             image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"),
@@ -1419,13 +1431,13 @@ private final class WalletSendScreenComponent: Component {
             let rateItems: [AnyComponentWithIdentity<Empty>] = [
                 AnyComponentWithIdentity(
                     id: "title",
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: self.lastRateText,
-                            font: Font.with(size: 13.0, design: .round, weight: .semibold),
-                            textColor: theme.list.itemSecondaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
+                    component: AnyComponent(AnimatedTextComponent(
+                        font: Font.with(size: 13.0, design: .round, weight: .semibold, traits: .monospacedNumbers),
+                        color: theme.list.itemSecondaryTextColor,
+                        items: [
+                            AnimatedTextComponent.Item(id: "rate", content: .text(self.lastRateText))
+                        ],
+                        noDelay: true
                     ))
                 ),
                 AnyComponentWithIdentity(
@@ -1438,7 +1450,7 @@ private final class WalletSendScreenComponent: Component {
                 )
             ]
             let rateButtonSize = self.rateButton.update(
-                transition: .immediate,
+                transition: .easeInOut(duration: 0.2),
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(HStack(rateItems, spacing: 3.0)),
                     background: AnyComponent(RoundedRectangle(
@@ -1576,10 +1588,12 @@ private final class WalletSendScreenComponent: Component {
             }
 
             if component.peer != nil, let comment = self.comment, !comment.isEmpty {
+                let isInitialCommentLayout = self.commentText.view?.superview == nil
                 var commentTransition = transition
-                if self.commentText.view?.superview == nil {
+                if isInitialCommentLayout {
                     commentTransition = .immediate
                 }
+                let commentPositionTransition: ComponentTransition = isInitialCommentLayout ? .immediate : .easeInOut(duration: 0.2)
 
                 self.commentBackgroundView.isUserInteractionEnabled = true
 
@@ -1605,11 +1619,11 @@ private final class WalletSendScreenComponent: Component {
                             font: Font.semibold(16.0),
                             textColor: theme.list.itemSecondaryTextColor
                         )),
-                        horizontalAlignment: .center,
-                        maximumNumberOfLines: 1
+                        horizontalAlignment: .natural,
+                        maximumNumberOfLines: 0
                     )),
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - 120.0, height: 24.0)
+                    containerSize: CGSize(width: availableSize.width - 120.0, height: 1000.0)
                 )
                 let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(34.0, commentSize.height + 14.0))
                 let commentOriginY: CGFloat
@@ -1624,21 +1638,27 @@ private final class WalletSendScreenComponent: Component {
                     width: bubbleSize.width,
                     height: bubbleSize.height
                 )
-                commentTransition.setFrame(view: self.commentBackgroundView, frame: bubbleFrame)
+                ComponentTransition.immediate.setBounds(
+                    view: self.commentBackgroundView,
+                    bounds: CGRect(origin: .zero, size: bubbleFrame.size)
+                )
+                commentPositionTransition.setPosition(view: self.commentBackgroundView, position: bubbleFrame.center)
                 if let commentTextView = self.commentText.view {
                     if commentTextView.superview == nil {
                         commentTextView.isUserInteractionEnabled = false
                         self.addSubview(commentTextView)
                     }
-                    commentTransition.setFrame(
-                        view: commentTextView,
-                        frame: CGRect(
-                            x: bubbleFrame.minX + 12.0,
-                            y: bubbleFrame.minY + floorToScreenPixels((bubbleFrame.height - commentSize.height) / 2.0),
-                            width: commentSize.width,
-                            height: commentSize.height
-                        )
+                    let commentTextFrame = CGRect(
+                        x: bubbleFrame.minX + 12.0,
+                        y: bubbleFrame.minY + floorToScreenPixels((bubbleFrame.height - commentSize.height) / 2.0),
+                        width: commentSize.width,
+                        height: commentSize.height
                     )
+                    ComponentTransition.immediate.setBounds(
+                        view: commentTextView,
+                        bounds: CGRect(origin: .zero, size: commentTextFrame.size)
+                    )
+                    commentPositionTransition.setPosition(view: commentTextView, position: commentTextFrame.center)
                     transition.setAlpha(view: commentTextView, alpha: 1.0)
                 }
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
