@@ -55,6 +55,10 @@ public struct ExperimentalUISettings: Codable, Equatable {
     public var dustEffect: Bool
     public var disableCallV2: Bool
     public var experimentalCallMute: Bool
+    // Group calls: use the PeerConnection-based GroupInstanceReferenceImpl instead of
+    // GroupInstanceCustomImpl (the ios_calls_group_reference_impl app-config flag can
+    // also turn it on; live streams always use the custom engine).
+    public var groupCallReferenceEngine: Bool
     public var allowWebViewInspection: Bool
     public var disableReloginTokens: Bool
     public var liveStreamV2: Bool
@@ -107,6 +111,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
             dustEffect: false,
             disableCallV2: false,
             experimentalCallMute: false,
+            groupCallReferenceEngine: false,
             allowWebViewInspection: false,
             disableReloginTokens: false,
             liveStreamV2: false,
@@ -160,6 +165,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         dustEffect: Bool,
         disableCallV2: Bool,
         experimentalCallMute: Bool,
+        groupCallReferenceEngine: Bool,
         allowWebViewInspection: Bool,
         disableReloginTokens: Bool,
         liveStreamV2: Bool,
@@ -210,6 +216,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.dustEffect = dustEffect
         self.disableCallV2 = disableCallV2
         self.experimentalCallMute = experimentalCallMute
+        self.groupCallReferenceEngine = groupCallReferenceEngine
         self.allowWebViewInspection = allowWebViewInspection
         self.disableReloginTokens = disableReloginTokens
         self.liveStreamV2 = liveStreamV2
@@ -264,6 +271,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.dustEffect = try container.decodeIfPresent(Bool.self, forKey: "dustEffect") ?? false
         self.disableCallV2 = try container.decodeIfPresent(Bool.self, forKey: "disableCallV2") ?? false
         self.experimentalCallMute = try container.decodeIfPresent(Bool.self, forKey: "experimentalCallMute") ?? false
+        self.groupCallReferenceEngine = try container.decodeIfPresent(Bool.self, forKey: "groupCallReferenceEngine") ?? false
         self.allowWebViewInspection = try container.decodeIfPresent(Bool.self, forKey: "allowWebViewInspection") ?? false
         self.disableReloginTokens = try container.decodeIfPresent(Bool.self, forKey: "disableReloginTokens") ?? false
         self.liveStreamV2 = try container.decodeIfPresent(Bool.self, forKey: "liveStreamV2") ?? false
@@ -318,6 +326,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         try container.encode(self.dustEffect, forKey: "dustEffect")
         try container.encode(self.disableCallV2, forKey: "disableCallV2")
         try container.encode(self.experimentalCallMute, forKey: "experimentalCallMute")
+        try container.encode(self.groupCallReferenceEngine, forKey: "groupCallReferenceEngine")
         try container.encode(self.allowWebViewInspection, forKey: "allowWebViewInspection")
         try container.encode(self.disableReloginTokens, forKey: "disableReloginTokens")
         try container.encode(self.liveStreamV2, forKey: "liveStreamV2")

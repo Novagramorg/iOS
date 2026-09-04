@@ -1860,12 +1860,12 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
                         prioritizeVP8 = value != 0.0
                     }
                     
-                    var useReferenceImpl = false
-                    #if DEBUG && true
-                    useReferenceImpl = "".isEmpty
-                    #endif
-                    if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data, let value = data["ios_calls_group_reference_impl"] as? Double {
-                        useReferenceImpl = value != 0.0
+                    // The PeerConnection-based GroupInstanceReferenceImpl is opt-in through
+                    // Debug Settings ▸ "Group calls: reference engine" (any build); the
+                    // ios_calls_group_reference_impl app-config flag can turn it on as well.
+                    var useReferenceImpl = self.accountContext.sharedContext.immediateExperimentalUISettings.groupCallReferenceEngine
+                    if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data, let value = data["ios_calls_group_reference_impl"] as? Double, value != 0.0 {
+                        useReferenceImpl = true
                     }
                     // The reference engine has no broadcast mode (its setConnectionMode is a no-op and it
                     // never requests broadcast parts), so a live stream routed through it builds a
