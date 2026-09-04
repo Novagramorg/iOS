@@ -427,6 +427,9 @@ public final class CoreVirtualListView: UIView {
         let view: UIView
         var settledX: CGFloat
         var settledWidth: CGFloat
+        /// The same fact a ghost block records as `GhostBlockAnchoring`: a carry promoted out of a
+        /// carousel pass lives in `carouselExitOverlay`, in viewport coordinates.
+        var isScreenAnchored: Bool = false
     }
 
     struct CrossingCarrySnapshot: Equatable {
@@ -501,6 +504,25 @@ public final class CoreVirtualListView: UIView {
     let attachmentContainer = AttachmentContainerView()
     let crossingOverlay = UIView()
     let exitOverlay = UIView()
+    /// Where a CAROUSEL's outgoing content is parked — outside `engine.contentHost`, so no engine
+    /// offset write reaches it.
+    ///
+    /// A carousel travels between two disjoint windows, so its departed strip has no position in the
+    /// destination's content space; the adjacent placement it is given is a fiction that holds only
+    /// while the shared viewport track is the sole thing moving. Parked in `exitOverlay` it also
+    /// moved with the user's finger, so reversing direction mid-travel dragged the old window back
+    /// over the new one's rows — and the strip's fictional placement is exactly where the
+    /// destination's own older rows live.
+    ///
+    /// Its travel is the viewport travel, carried by registering its layer as a viewport MIRROR —
+    /// the same track, not a second one. Children are placed in content coordinates minus the frozen
+    /// destination engine offset, which is forced by equating the two renderings:
+    /// `contentY - (offset + correction)` in the content host, `mirrorY - correction` here.
+    ///
+    /// `ListViewImpl` has always done this: `temporaryPreviousNodes` are added to the list view
+    /// itself at their final frames and travel on one additive `sublayerTransform`
+    /// (`Display/Source/ListView.swift:3625-3634`, `:3803`), so scrolling never repositions them.
+    let carouselExitOverlay = UIView()
     let animationController: ListAnimationController
     let scheduler: Scheduler
     private(set) var logicalSize: CGSize = .zero
@@ -515,6 +537,11 @@ public final class CoreVirtualListView: UIView {
     private(set) var containerOriginY: CGFloat = 0
     private var viewportCarries: [ViewportCarry] = []
     var viewportCarryViews: [UIView] { viewportCarries.map(\.view) }
+    /// The carries promoted out of a carousel pass, which live in `carouselExitOverlay` and are
+    /// therefore in viewport coordinates. The ghost-block counterpart is `GhostBlockAnchoring`.
+    var screenAnchoredViewportCarryViews: [UIView] {
+        viewportCarries.filter(\.isScreenAnchored).map(\.view)
+    }
     private var crossingCarries: [AnyHashable: CrossingCarry] = [:]
     var crossingCarrySnapshots: [CrossingCarrySnapshot] {
         crossingCarries.values.map {
@@ -925,8 +952,17 @@ public final class CoreVirtualListView: UIView {
         exitOverlay.backgroundColor = .clear
         exitOverlay.clipsToBounds = false
         exitOverlay.isUserInteractionEnabled = false
+        carouselExitOverlay.backgroundColor = .clear
+        carouselExitOverlay.clipsToBounds = false
+        carouselExitOverlay.isUserInteractionEnabled = false
         attachmentContainer.backgroundColor = .clear
         attachmentContainer.clipsToBounds = false
+        // BELOW the content host, matching ListViewImpl's `insertSubnode(_:belowSubnode:)` for its
+        // temporary previous nodes. Nothing paints over the strip during a correct travel — the
+        // incoming rows are off-screen at t=0 and `container` has no background — so this changes
+        // nothing about the intended appearance. It is here so that if the geometry is ever wrong
+        // again, live rows win instead of losing.
+        addSubview(carouselExitOverlay)
         addSubview(engine.contentHost)
         engine.contentHost.addSubview(container)
         engine.contentHost.addSubview(crossingOverlay)
@@ -940,6 +976,7 @@ public final class CoreVirtualListView: UIView {
         engine.contentHost.addSubview(attachmentContainer)
         animationController.setReferenceLayer(container.layer)
         animationController.seedViewport(layer: engine.contentHost.layer)
+        animationController.addViewportMirrorLayer(carouselExitOverlay.layer)
     }
 
     public override func layoutSubviews() {
@@ -1948,6 +1985,7 @@ public final class CoreVirtualListView: UIView {
                               transactionTime: transactionTime,
                               fadesInSerials: fadingIn)
 
+        let carriesBeforePass = viewportCarries.count
         if let track = viewportTrack, let viewportFrom = transitionViewportFrom {
             for index in viewportCarries.indices {
                 viewportCarries[index].generation = track.generation
@@ -1999,6 +2037,14 @@ public final class CoreVirtualListView: UIView {
             transitionGhostBlocks(liveEdges: liveEdges,
                                   transition: transition,
                                   transactionTime: transactionTime)
+        }
+
+        if isCarouselScroll, viewportTrack != nil {
+            promoteCarouselExitContent(
+                ghostBlockIDs: newGhostBlockIDs,
+                carryRange: carriesBeforePass..<viewportCarries.count,
+                transactionOffset: transactionOffset
+            )
         }
 
         let sharedDisplacementSamples: [CrossingDisplacementSample] = oldIDs
@@ -2323,12 +2369,14 @@ public final class CoreVirtualListView: UIView {
         container.subviews.forEach { $0.removeFromSuperview() }
         crossingOverlay.subviews.forEach { $0.removeFromSuperview() }
         exitOverlay.subviews.forEach { $0.removeFromSuperview() }
+        carouselExitOverlay.subviews.forEach { $0.removeFromSuperview() }
         engine.contentHost.frame = bounds
         layoutExitOverlay()
         engine.setEdges(min: 0, max: 0)
         declaredEdges = (0, 0)
         containerOriginY = 0
         animationController.seedViewport(layer: engine.contentHost.layer)
+        animationController.addViewportMirrorLayer(carouselExitOverlay.layer)
         assertGhostInvariants()
 
         guard contentWidth > 0,
@@ -3966,6 +4014,20 @@ public final class CoreVirtualListView: UIView {
             for: .viewport,
             property: .viewportOffset
         )?.generation
+        // A replacement STEPS the shared correction: `replacementFrom` is the current correction plus
+        // (oldSettled - newSettled), because the settled base moved and the correction has to absorb
+        // that for content to stay continuous. Content-space children are carried through it by the
+        // engine's own write to `contentHost.bounds.origin`; mirror children are not, and their
+        // rendering subtracts only the correction — so the step lands on them undiluted.
+        //
+        // Sampling the correction either side of the mutation states the requirement directly
+        // ("keep the mirror's rendering continuous") rather than re-deriving the algebra, and it
+        // covers the immediate case, where the correction drops to zero rather than stepping.
+        //
+        // Without this, two carousels in a row stacked the first strip exactly on top of the second:
+        // both were placed against their own pass's `transactionOffset`, and nothing rebased the
+        // first when the correction stepped underneath it.
+        let correctionBeforeReplacement = animationController.viewportOffset(at: transactionTime)
         let mutation = animationController.transitionViewport(
             layer: engine.contentHost.layer,
             oldSettledOffset: oldSettledOffset,
@@ -3973,6 +4035,10 @@ public final class CoreVirtualListView: UIView {
             transition: transition,
             transactionTime: transactionTime,
             completion: completion
+        )
+        shiftCarouselExitChildren(
+            by: animationController.viewportOffset(at: transactionTime)
+                - correctionBeforeReplacement
         )
         migrateCrossingViewportReleases(
             from: previousGeneration,
@@ -4009,6 +4075,11 @@ public final class CoreVirtualListView: UIView {
                                        size: engine.contentHost.bounds.size)
         exitOverlay.frame = CGRect(origin: .zero,
                                    size: engine.contentHost.bounds.size)
+        // `.frame` is safe next to the mirrored additive animation: `CALayer.frame` is derived from
+        // `position` and `bounds.size` only, so `bounds.origin.y` — which is what the mirror writes —
+        // is untouched. Same reason it is safe on `contentHost`.
+        carouselExitOverlay.frame = CGRect(origin: .zero,
+                                           size: engine.contentHost.bounds.size)
     }
 
     private func applyEngineShift(_ delta: CGFloat) {
@@ -4018,6 +4089,71 @@ public final class CoreVirtualListView: UIView {
         shiftExitOverlayChildren(by: engine.offset - offsetBeforeShift)
     }
 
+    /// Moves this pass's carousel exit content out of content space and into `carouselExitOverlay`.
+    ///
+    /// The subtraction is forced, not chosen. In the content host a child at content `y` renders at
+    /// `y - (transactionOffset + correction)`; in the mirror overlay at `y - correction`. Equating
+    /// them at every value of the correction gives `mirrorY = y - transactionOffset`, so t=0 is
+    /// pixel-identical to the old rendering and t=1 leaves the strip off-screen, where it stays.
+    ///
+    /// It runs as ONE hand-off after every parking site rather than at each site, because
+    /// `makeGhostBlock` runs with OLD content coordinates — `transactionOffset` is not even captured
+    /// until later in the pass — and the wrappers only reach the destination base afterwards, via the
+    /// pass's rebase shift and then `prepareViewportCarriesForReplacement`.
+    ///
+    /// Membership is passed in, never re-derived. In particular it must NOT be derived from carry
+    /// generation: the viewport block re-stamps EVERY live carry to the new track generation,
+    /// including ones an earlier content-space pass parked, and promoting one of those would freeze
+    /// content-space content on screen — this bug inverted.
+    ///
+    /// Departing ATTACHMENTS need no entry here. A genuine departure joins a departing run when its
+    /// old member indices all lie inside that run's range, `AttachmentRuns.PriorRun.memberIdentities`
+    /// holds only the run's LOADED members, and a full replace departs the entire loaded window as
+    /// one contiguous run — so every departing attachment already travels inside a ghost wrapper this
+    /// method moves. The fade-in-place branch (the merge-loser case) is unreachable in a carousel,
+    /// and `AttachmentAnimationTests` pins that rather than leaving it to be rediscovered.
+    private func promoteCarouselExitContent(ghostBlockIDs: [GhostBlockID],
+                                            carryRange: Range<Int>,
+                                            transactionOffset: CGFloat) {
+        var views: [UIView] = []
+        for id in ghostBlockIDs {
+            guard let render = ghostRenders[id],
+                  let block = ghostLedger.snapshot(for: id) else { continue }
+            // Root and wrapper position move together, exactly as in `shiftExitOverlayChildren`: the
+            // animation model holds only an additive offset for a ghost block, so a matched shift of
+            // the settled root and the layer is invisible to it.
+            ghostLedger.setSettledRootY(block.settledRootY - transactionOffset, for: id)
+            ghostLedger.setAnchoring(.viewport, for: id)
+            views.append(render.wrapper)
+        }
+        for index in carryRange where viewportCarries.indices.contains(index) {
+            views.append(viewportCarries[index].view)
+            viewportCarries[index].isScreenAnchored = true
+        }
+        for view in views {
+            view.layer.position.y -= transactionOffset
+            carouselExitOverlay.addSubview(view)
+        }
+        assertGhostInvariants()
+        assertOverlayInvariants()
+    }
+
+    /// Rebases the mirror overlay's children when the shared viewport correction steps under them.
+    /// The counterpart of `shiftExitOverlayChildren`, for the other coordinate space: root and layer
+    /// move together, which the animation model does not see because a ghost block holds only an
+    /// additive offset.
+    private func shiftCarouselExitChildren(by delta: CGFloat) {
+        guard delta != 0 else { return }
+        for view in carouselExitOverlay.subviews {
+            view.layer.position.y += delta
+        }
+        ghostLedger.shiftRoots(by: delta, anchoring: .viewport)
+        assertGhostInvariants()
+    }
+
+    /// Content-space rebase only. Promoted carousel content is no longer in `exitOverlay`, and
+    /// `ghostLedger.shiftRoots(by:)` skips viewport-anchored blocks, so the two halves of a promoted
+    /// block stay in step by construction.
     private func shiftExitOverlayChildren(by delta: CGFloat) {
         guard delta != 0 else { return }
         for view in crossingOverlay.subviews {
@@ -4053,7 +4189,7 @@ public final class CoreVirtualListView: UIView {
         let ghostWrappers = Set(ghostRenders.values.map { ObjectIdentifier($0.wrapper) })
         let fadingAttachments = Set(fadingAttachmentViews.allObjects.map { ObjectIdentifier($0) })
 
-        for view in exitOverlay.subviews {
+        for view in exitOverlay.subviews + carouselExitOverlay.subviews {
             let key = ObjectIdentifier(view)
             if carriedViews.contains(key)
                 || ghostWrappers.contains(key)
@@ -4069,8 +4205,9 @@ public final class CoreVirtualListView: UIView {
 
         // The reverse direction: a carry whose view has drifted out of its overlay is equally broken.
         for carry in viewportCarries {
-            assert(carry.view.superview === exitOverlay,
-                   "viewport carry view is not in exitOverlay")
+            let expected = carry.isScreenAnchored ? carouselExitOverlay : exitOverlay
+            assert(carry.view.superview === expected,
+                   "viewport carry view is not in its exit overlay")
         }
 #endif
     }
@@ -4089,7 +4226,12 @@ public final class CoreVirtualListView: UIView {
             }
             assert(render.members.count == snapshot.visibleMemberCount)
             assert(render.owner == .ghostBlock(snapshot.id.rawValue))
-            assert(render.wrapper.superview === exitOverlay)
+            switch snapshot.anchoring {
+            case .content:
+                assert(render.wrapper.superview === exitOverlay)
+            case .viewport:
+                assert(render.wrapper.superview === carouselExitOverlay)
+            }
             assert(animationController.model.contains(render.owner))
         }
 #endif

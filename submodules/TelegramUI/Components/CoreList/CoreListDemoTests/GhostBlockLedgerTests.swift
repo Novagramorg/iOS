@@ -123,4 +123,39 @@ final class GhostBlockLedgerTests: XCTestCase {
 
         ledger.assertInvariants()
     }
+
+    /// A carousel's departed strip is parked in viewport space, where a content-coordinate rebase is
+    /// not a thing that happened to it. `shiftExitOverlayChildren` moves content-space children to
+    /// hold their SCREEN position across a rebase; applying the same delta to a child that is already
+    /// screen-anchored would move it instead.
+    func testShiftRootsSkipsViewportAnchoredBlocks() {
+        let ledger = GhostBlockLedger()
+        let content = ledger.insert(rootY: 100,
+                                    localMinY: 0,
+                                    localMaxY: 50,
+                                    witness: .unresolved,
+                                    visibleMemberCount: 1)
+        let viewportAnchored = ledger.insert(rootY: 200,
+                                             localMinY: 0,
+                                             localMaxY: 50,
+                                             witness: .unresolved,
+                                             visibleMemberCount: 1)
+        ledger.setAnchoring(.viewport, for: viewportAnchored)
+
+        ledger.shiftRoots(by: -40)
+
+        XCTAssertEqual(ledger.snapshot(for: content)?.settledRootY, 60)
+        XCTAssertEqual(ledger.snapshot(for: viewportAnchored)?.settledRootY, 200)
+    }
+
+    /// Blocks are born in content space; only an explicit promotion changes that.
+    func testBlocksAreBornContentAnchored() {
+        let ledger = GhostBlockLedger()
+        let id = ledger.insert(rootY: 0,
+                               localMinY: 0,
+                               localMaxY: 10,
+                               witness: .unresolved,
+                               visibleMemberCount: 1)
+        XCTAssertEqual(ledger.snapshot(for: id)?.anchoring, .content)
+    }
 }

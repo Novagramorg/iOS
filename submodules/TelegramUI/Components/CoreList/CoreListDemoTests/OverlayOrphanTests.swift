@@ -36,11 +36,14 @@ final class OverlayOrphanTests: XCTestCase {
         )
         let ghostWrappers = Set(list.ghostBlockWrapperViews.map(ObjectIdentifier.init))
 
-        for view in list.exitOverlay.subviews {
+        // `carouselExitOverlay` is swept on the same terms: it holds the same kinds of tenant,
+        // reaped by the same completions, and a view stranded there renders over live rows exactly
+        // as one stranded in `exitOverlay` does.
+        for view in list.exitOverlay.subviews + list.carouselExitOverlay.subviews {
             let key = ObjectIdentifier(view)
             XCTAssertTrue(owned.contains(key) || ghostWrappers.contains(key),
-                          "\(label): exitOverlay holds an unowned view — it will never be removed "
-                          + "and will render above live rows",
+                          "\(label): an exit overlay holds an unowned view — it will never be "
+                          + "removed and will render above live rows",
                           file: file, line: line)
         }
         for view in list.crossingOverlay.subviews {
@@ -64,6 +67,10 @@ final class OverlayOrphanTests: XCTestCase {
                        file: file, line: line)
         XCTAssertEqual(fixture.listView.crossingOverlay.subviews.count, 0,
                        "\(label): crossingOverlay still populated long after all animations settled",
+                       file: file, line: line)
+        XCTAssertEqual(fixture.listView.carouselExitOverlay.subviews.count, 0,
+                       "\(label): carouselExitOverlay still populated long after all animations "
+                       + "settled",
                        file: file, line: line)
     }
 

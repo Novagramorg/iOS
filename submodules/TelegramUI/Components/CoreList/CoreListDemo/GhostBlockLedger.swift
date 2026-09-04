@@ -14,6 +14,21 @@ enum GhostBlockEdge: Equatable {
     case maxY
 }
 
+/// Which coordinate space a ghost block's `settledRootY` is expressed in.
+///
+/// `.content` is the ordinary case: the block sits in `exitOverlay` inside the scrolling content
+/// host, and a coordinate rebase must move it to hold its screen position.
+///
+/// `.viewport` is a carousel's departed strip. A carousel travels to a different region of the
+/// collection, so the strip has NO position in the destination's content space — the adjacent
+/// placement it is given is a fiction that survives only while the shared viewport track is the sole
+/// thing moving. It is parked in `carouselExitOverlay`, outside the content host, so its root is
+/// already a screen quantity and content-space shifts must not reach it.
+enum GhostBlockAnchoring: Equatable {
+    case content
+    case viewport
+}
+
 enum GhostBoundaryWitness: Equatable {
     case liveMinY(AnyHashable)
     case liveMaxY(AnyHashable)
@@ -33,6 +48,7 @@ struct GhostBlockSnapshot: Equatable {
     let attachmentEdge: GhostBlockEdge
     let isBoundaryOpen: Bool
     let settledRootY: CGFloat
+    let anchoring: GhostBlockAnchoring
     let localMinY: CGFloat
     let localMaxY: CGFloat
     let visibleMemberCount: Int
@@ -46,6 +62,7 @@ final class GhostBlockLedger {
         var attachmentEdge: GhostBlockEdge
         var isBoundaryOpen: Bool
         var settledRootY: CGFloat
+        var anchoring: GhostBlockAnchoring
         let localMinY: CGFloat
         let localMaxY: CGFloat
         var visibleMemberCount: Int
@@ -79,6 +96,7 @@ final class GhostBlockLedger {
                          attachmentEdge: attachmentEdge,
                          isBoundaryOpen: true,
                          settledRootY: rootY,
+                         anchoring: .content,
                          localMinY: localMinY,
                          localMaxY: localMaxY,
                          visibleMemberCount: visibleMemberCount,
@@ -89,7 +107,20 @@ final class GhostBlockLedger {
 
     func canSetWitness(_ witness: GhostBoundaryWitness,
                        for id: GhostBlockID) -> Bool {
-        guard nodes[id] != nil else { return false }
+        guard let node = nodes[id] else { return false }
+        // A viewport-anchored block has no content neighbourhood to attach to — having travelled to a
+        // different region of the collection is what made it one. A witness there hands it a second
+        // vertical owner alongside the viewport track, which walks it onto whatever it witnessed.
+        //
+        // `CoreVirtualListView` already declines to attach one at CREATION (`:1710`), but that guard
+        // only covers blocks born in the carousel pass. An EXISTING strip is re-linked later by the
+        // geometry/migration path: with two carousels in a row, the first strip acquired
+        // `.ghostMinY` onto the second strip's block and both resolved to the same screen Y — the old
+        // window landing exactly on top of the new one. Refusing here covers every path at once,
+        // which is the only way to state "never" about a graph edge.
+        if node.anchoring == .viewport {
+            return witness == .unresolved
+        }
         switch witness {
         case let .ghostMinY(target), let .ghostMaxY(target):
             return nodes[target] != nil && target != id && !reaches(id, from: target)
@@ -139,13 +170,22 @@ final class GhostBlockLedger {
         nodes[id]?.settledRootY = value
     }
 
+    func setAnchoring(_ anchoring: GhostBlockAnchoring, for id: GhostBlockID) {
+        nodes[id]?.anchoring = anchoring
+    }
+
     func sealBoundary(for id: GhostBlockID) {
         nodes[id]?.isBoundaryOpen = false
     }
 
-    func shiftRoots(by delta: CGFloat) {
+    /// Rebases one coordinate space's roots. The default is the content-space rebase; viewport-
+    /// anchored blocks are excluded from it because their roots are screen quantities, so a delta
+    /// that keeps content children still would MOVE them. They have their own, unrelated rebase:
+    /// a viewport track replacement steps the shared correction, and their rendering subtracts only
+    /// that correction.
+    func shiftRoots(by delta: CGFloat, anchoring: GhostBlockAnchoring = .content) {
         guard delta != 0 else { return }
-        for id in Array(nodes.keys) {
+        for id in Array(nodes.keys) where nodes[id]?.anchoring == anchoring {
             nodes[id]?.settledRootY += delta
         }
     }
@@ -210,6 +250,7 @@ final class GhostBlockLedger {
                            attachmentEdge: node.attachmentEdge,
                            isBoundaryOpen: node.isBoundaryOpen,
                            settledRootY: node.settledRootY,
+                           anchoring: node.anchoring,
                            localMinY: node.localMinY,
                            localMaxY: node.localMaxY,
                            visibleMemberCount: node.visibleMemberCount,

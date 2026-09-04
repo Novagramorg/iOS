@@ -100,7 +100,7 @@ final class VirtualListFixture {
         guard let remembered = rememberedViews[identity],
               let carry = viewportCarryViews.first(where: { $0 === remembered })
         else { return nil }
-        return carry.layer.position.y - (driver.engine.offset + viewportCorrection)
+        return driver.viewportCarryScreenY(view: carry)
     }
 
     func simulateDrag(by deltaY: CGFloat) {

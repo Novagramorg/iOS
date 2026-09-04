@@ -52,6 +52,18 @@ final class ListAnimationController {
     private let animationInstaller: AnimationInstaller?
     private var bindings: [ListAnimationOwner: WeakLayer] = [:]
 
+    /// Extra output layers for the ONE `.viewport` / `.viewportOffset` track.
+    ///
+    /// A mirror carries the emitted animation and nothing else — no binding, no model state, no
+    /// settled write, no completion. That is only sound because the viewport property already writes
+    /// no endpoint (`writeEndpoint` returns early for it): the engine owns `contentHost`'s settled
+    /// `bounds.origin.y`, and the model contributes purely the additive correction. A mirror's own
+    /// `bounds.origin.y` therefore rests at 0 and carries only that correction.
+    ///
+    /// Registration is expected at construction, before any viewport track exists; a mirror added
+    /// mid-flight would need `rebind`'s explicit-phase treatment, which nothing needs.
+    private var viewportMirrorLayers: [WeakLayer] = []
+
     /// Per-PASS snapshot of each bound layer's additive position contribution, taken at pass ENTRY.
     ///
     /// `presented - layer.position.y` is the additive contribution only while the layer's model value
@@ -213,6 +225,11 @@ final class ListAnimationController {
         if model.value(for: owner, property: .viewportOffset, at: now()) == nil {
             model.seedViewport()
         }
+    }
+
+    func addViewportMirrorLayer(_ layer: CALayer) {
+        viewportMirrorLayers.removeAll { $0.value == nil || $0.value === layer }
+        viewportMirrorLayers.append(WeakLayer(layer))
     }
 
     func seedLive(identity: AnyHashable, layer: CALayer) {
@@ -865,6 +882,10 @@ final class ListAnimationController {
                 removeModelAnimations(from: layer)
             }
         }
+        // Deliberately does NOT clear `viewportMirrorLayers`: `CoreVirtualListView.rebuildFromScratch`
+        // resets and then re-seeds the viewport, but the overlay view itself survives, so its
+        // registration must too.
+        removeViewportMirrorAnimations()
         bindings.removeAll()
         knownOwners.removeAll()
         pendingCompletions.removeAll()
@@ -890,6 +911,9 @@ final class ListAnimationController {
             discardPendingCompletions(owner: owner, property: property)
             writeEndpoint(value, property: property, on: layer)
             compiler.remove(property: property, from: layer)
+            if owner == .viewport && property == .viewportOffset {
+                removeViewportMirrorAnimations()
+            }
             if removesOwner {
                 finishOwner(owner, binding: binding, cleanup: cleanup)
             }
@@ -934,6 +958,12 @@ final class ListAnimationController {
         } else {
             compiler.install(track, property: property, on: layer,
                              origin: origin, completion: completion)
+        }
+        // The `animationInstaller` seam intercepts the model->CA hand-off for the OWNER's layer. A
+        // mirror has no model state to intercept, so it always goes through the compiler — and is
+        // gated by `compiler.emitsAnimations` like every other emission.
+        if owner == .viewport && property == .viewportOffset {
+            emitViewportMirrors(track, origin: origin)
         }
         // The model deadline must never be LATER than the CA end. It is not: `startTime` stays at the
         // pass clock while the commit that starts the animation is at or after it (and a `.explicit`
@@ -997,6 +1027,9 @@ final class ListAnimationController {
         }
 
         compiler.remove(property: pending.property, from: layer)
+        if pending.owner == .viewport && pending.property == .viewportOffset {
+            removeViewportMirrorAnimations()
+        }
         if pending.removesOwner {
             finishOwner(pending.owner, binding: pending.binding,
                         cleanup: pending.cleanup)
@@ -1143,6 +1176,24 @@ final class ListAnimationController {
                                     generation: generation,
                                     at: callbackTime)
             self.pruneUnboundSettledLiveOwner(owner, at: callbackTime)
+        }
+    }
+
+    private func emitViewportMirrors(_ track: ListAnimationTrack,
+                                     origin: CoreListAnimationOrigin) {
+        viewportMirrorLayers.removeAll { $0.value == nil }
+        for mirror in viewportMirrorLayers {
+            guard let layer = mirror.value else { continue }
+            // No completion: the primary emission owns the single model completion for this track.
+            compiler.install(track, property: .viewportOffset, on: layer, origin: origin)
+        }
+    }
+
+    private func removeViewportMirrorAnimations() {
+        viewportMirrorLayers.removeAll { $0.value == nil }
+        for mirror in viewportMirrorLayers {
+            guard let layer = mirror.value else { continue }
+            compiler.remove(property: .viewportOffset, from: layer)
         }
     }
 

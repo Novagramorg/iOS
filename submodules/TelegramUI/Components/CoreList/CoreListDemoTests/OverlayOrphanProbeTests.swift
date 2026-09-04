@@ -12,6 +12,7 @@ final class OverlayOrphanProbeTests: XCTestCase {
         var peak = 0
         let sample = {
             peak = max(peak, fixture.listView.exitOverlay.subviews.count
+                       + fixture.listView.carouselExitOverlay.subviews.count
                        + fixture.listView.crossingOverlay.subviews.count)
         }
         sample()

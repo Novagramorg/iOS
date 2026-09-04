@@ -282,6 +282,44 @@ final class AttachmentAnimationTests: XCTestCase {
         }
     }
 
+    /// A carousel leaves NOTHING in the content-space exit overlay — attachments included.
+    ///
+    /// The outgoing strip is screen-anchored, so an attachment left behind in `exitOverlay` would
+    /// ride the user's finger back over the destination's rows while the rows it belongs to do not.
+    /// It cannot currently happen, and this pins the reason rather than the symptom: a genuine
+    /// departure joins a departing run when its old member indices all lie inside that run's range,
+    /// `PriorRun.memberIdentities` holds only the run's LOADED members, and in a full replace the
+    /// entire loaded window departs as one contiguous run. So every departing attachment travels
+    /// inside a ghost block's wrapper, which the promotion moves, and the fade-in-place branch —
+    /// the merge-loser case — is unreachable here.
+    ///
+    /// Group size 7 against a 50pt row and an 800pt viewport puts the loaded window's edges
+    /// mid-group, which is the shape most likely to strand a run if that reasoning were wrong.
+    func testACarouselParksNoAttachmentInTheContentSpaceOverlay() {
+        let fixture = VirtualListFixture(viewport: CGSize(width: 390, height: 800),
+                                         items: groupedItems(count: 200, groupSize: 7))
+        fixture.listView.applyChanges(scrollTo: CoreListScrollTarget(index: 100, pointOffset: 0),
+                                      transition: .easeInOut(duration: 0))
+        let replacement: [CoreListItem] = (0..<200).map { index in
+            let group = index / 7
+            return AttachedItem(id: 10_000 + index, height: 50,
+                                attachedItems: ["far\(group)": FixedHeightAttachment(
+                                    label: "far\(group)", height: 30,
+                                    placement: .overlay, edge: .top, isFloating: true)])
+        }
+        fixture.listView.applyChanges(items: replacement,
+                                      scrollTo: CoreListScrollTarget(index: 40, pointOffset: 0),
+                                      transition: .easeInOut(duration: 0.3))
+
+        XCTAssertTrue(fixture.listView.fadingAttachmentViews.allObjects.isEmpty,
+                      "a carousel attachment took the fade-in-place branch — it is parked in the "
+                      + "content-space overlay while the strip it belongs to is screen-anchored")
+        XCTAssertTrue(fixture.listView.exitOverlay.subviews.isEmpty,
+                      "a carousel left content-space exit content behind")
+        XCTAssertFalse(fixture.listView.carouselExitOverlay.subviews.isEmpty,
+                       "precondition: the carousel must have parked its strip")
+    }
+
     /// The suppression must stay scoped: a genuinely new run inserted among survivors still fades,
     /// even though this pass also scrolls.
     func testAnOverlappingScrollStillFadesAGenuinelyNewRun() {
