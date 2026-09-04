@@ -220,7 +220,7 @@ private final class WalletSettingsScreenComponent: Component {
                         title: disableTitle,
                         type: .destructive,
                         action: { [weak self] in
-                            self?.prepareDisableBackup()
+                            self?.beginDisableBackupPreparation()
                         },
                         autoDismiss: false,
                         isEnabled: actionsEnabled,
@@ -239,6 +239,21 @@ private final class WalletSettingsScreenComponent: Component {
                 self.isPreparingBackupDisable = false
             }
             controller.present(alertController, in: .window(.root))
+        }
+
+        private func beginDisableBackupPreparation() {
+            guard self.walletState?.balance.currentValue != 0 else {
+                let presentTopUp = { [weak self] in
+                    self?.presentZeroBalanceAlert()
+                }
+                if let alertController = self.disableBackupPreparationController {
+                    alertController.dismiss(completion: { presentTopUp() })
+                } else {
+                    presentTopUp()
+                }
+                return
+            }
+            self.prepareDisableBackup()
         }
 
         private func prepareDisableBackup() {
@@ -357,6 +372,25 @@ private final class WalletSettingsScreenComponent: Component {
                 context: component.context,
                 title: "Not enough Gram",
                 text: "You need \(amountText) to update your recovery phrase.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Not now", action: {}),
+                    TextAlertAction(type: .defaultAction, title: "Top up", action: { [weak self] in
+                        Queue.mainQueue().after(0.2) { [weak self] in
+                            self?.openBackupTopUp()
+                        }
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func presentZeroBalanceAlert() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Not enough Gram",
+                text: "You need to have non-zero balance to update your recovery phrase.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Not now", action: {}),
                     TextAlertAction(type: .defaultAction, title: "Top up", action: { [weak self] in
