@@ -12,7 +12,6 @@ import TelegramStringFormatting
 import WallpaperBackgroundNode
 import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
-import WalletContext
 import TextSelectionNode
 
 public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleContentNode {
@@ -209,14 +208,27 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, _ in
                 let engineMessage = EngineMessage(item.message)
-                guard let transfer = walletTransferMessageData(
-                    message: engineMessage,
-                    accountPeerId: item.context.account.peerId
-                ) else {
+                guard let action = item.message.media.first(where: { media in
+                    guard let action = media as? TelegramMediaAction else {
+                        return false
+                    }
+                    if case .gramTransfer = action.action {
+                        return true
+                    } else {
+                        return false
+                    }
+                }) as? TelegramMediaAction else {
                     return (0.0, { _ in
                         return (CGSize(), { _, _, _ in })
                     })
                 }
+                guard case let .gramTransfer(amount, peerAddress, _, comment) = action.action else {
+                    return (0.0, { _ in
+                        return (CGSize(), { _, _, _ in })
+                    })
+                }
+                let isIncoming = engineMessage.effectivelyIncoming(item.context.account.peerId)
+                let caption = comment ?? ""
 
                 let tonUsdRate = item.context.currentAppConfiguration.with { configuration -> Double? in
                     return configuration.data?["ton_usd_rate"] as? Double
@@ -226,7 +238,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     strings: item.presentationData.strings,
                     dateTimeFormat: item.presentationData.dateTimeFormat,
                     message: engineMessage,
-                    transfer: transfer,
+                    isIncoming: isIncoming,
+                    amount: amount,
                     tonUsdRate: tonUsdRate
                 )
 
@@ -256,14 +269,13 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     traits: .monospacedNumbers
                 )
                 let sign: String
-                switch transfer.direction {
-                case .incoming:
+                if isIncoming {
                     sign = "+"
-                case .outgoing:
+                } else {
                     sign = "−"
                 }
                 let formattedAmount = sign + formatTonAmountText(
-                    transfer.amount,
+                    amount,
                     dateTimeFormat: item.presentationData.dateTimeFormat,
                     maxDecimalPositions: 3
                 )
@@ -311,7 +323,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                 let (addressLayout, addressApply) = makeAddressLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
-                        string: transfer.peerAddress.isEmpty ? "" : formatTonAddress(transfer.peerAddress),
+                        string: peerAddress.isEmpty ? "" : formatTonAddress(peerAddress),
                         font: Font.with(size: 10.0, design: .monospace, weight: .medium),
                         textColor: UIColor(rgb: 0x005fdb),
                         paragraphAlignment: .center
@@ -328,10 +340,10 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     textShadowBlur: 0.0
                 ))
 
-                let hasCaption = !transfer.caption.isEmpty
+                let hasCaption = !caption.isEmpty
                 let (captionLayout, captionApply) = makeCaptionLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
-                        string: transfer.caption,
+                        string: caption,
                         font: Font.regular(13.0),
                         textColor: .white,
                         paragraphAlignment: .center
@@ -347,12 +359,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                 let ribbonTitle: String
                 let ribbonColor: UIColor
-                switch transfer.direction {
-                case .incoming:
+                if isIncoming {
                     //TODO:localize
                     ribbonTitle = "received"
                     ribbonColor = UIColor(rgb: 0x0075f6)
-                case .outgoing:
+                } else {
                     //TODO:localize
                     ribbonTitle = "sent"
                     ribbonColor = UIColor(rgb: 0x5ec2ff)
@@ -642,70 +653,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
 
         if self.cardNode.frame.contains(point) || self.captionNode.frame.contains(point) || self.mediaBackgroundContent?.frame.contains(point) == true {
-            guard gesture == .tap else {
-                return ChatMessageBubbleContentTapAction(content: .openMessage)
-            }
-            return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
-                guard let item = self?.item else {
-                    return
-                }
-                let engineMessage = EngineMessage(item.message)
-                guard let transfer = walletTransferMessageData(
-                    message: engineMessage,
-                    accountPeerId: item.context.account.peerId
-                ) else {
-                    return
-                }
-
-                let direction: WalletContext.Transaction.Direction
-                switch transfer.direction {
-                case .incoming:
-                    direction = .incoming
-                case .outgoing:
-                    direction = .outgoing
-                }
-
-                let comment: String?
-                if transfer.caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    comment = nil
-                } else {
-                    comment = transfer.caption
-                }
-                let walletContext = item.context.walletContext
-                let transaction: WalletContext.Transaction
-                if let current = walletContext?.stateValue.transactions.items.first(where: { $0.id == transfer.transactionId }) {
-                    transaction = current
-                } else {
-                    let peer: WalletContext.Transaction.Peer
-                    if let enginePeer = item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init),
-                       enginePeer.id.namespace == Namespaces.Peer.CloudUser {
-                        peer = .user(enginePeer, address: transfer.peerAddress, domain: nil)
-                    } else if !transfer.peerAddress.isEmpty {
-                        peer = .address(transfer.peerAddress, domain: nil)
-                    } else {
-                        peer = .unsupported
-                    }
-                    let logicalTime = transfer.transactionId.split(separator: ":", maxSplits: 1).first.map(String.init)
-                        ?? transfer.transactionId
-                    transaction = WalletContext.Transaction(
-                        id: transfer.transactionId,
-                        logicalTime: logicalTime,
-                        timestamp: item.message.timestamp,
-                        direction: direction,
-                        amount: transfer.amount,
-                        fee: 0,
-                        peer: peer,
-                        comment: comment
-                    )
-                }
-                let controller = item.context.sharedContext.makeWalletTransactionScreen(
-                    context: item.context,
-                    transaction: transaction
-                )
-                if let navigationController = item.controllerInteraction.navigationController() {
-                    navigationController.pushViewController(controller)
-                }
-            }))
+            return ChatMessageBubbleContentTapAction(content: .openMessage)
         }
         return ChatMessageBubbleContentTapAction(content: .none)
     }

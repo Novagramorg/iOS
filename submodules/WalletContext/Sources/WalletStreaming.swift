@@ -775,6 +775,29 @@ struct WalletStreamingPresentationOverlay {
         self.traces[traceId] != nil
     }
 
+    mutating func expirePendingTraces(
+        _ traceIds: Set<String>
+    ) -> (removedCount: Int, suppressedTraceIds: Set<String>) {
+        var removedCount = 0
+        var suppressedTraceIds = Set<String>()
+        for traceId in traceIds {
+            guard let trace = self.traces[traceId] else {
+                suppressedTraceIds.insert(traceId)
+                continue
+            }
+            guard trace.finality == .pending else {
+                continue
+            }
+            self.traces.removeValue(forKey: traceId)
+            suppressedTraceIds.insert(traceId)
+            removedCount += 1
+        }
+        if removedCount != 0 {
+            self.revision &+= 1
+        }
+        return (removedCount, suppressedTraceIds)
+    }
+
     mutating func removeAll() -> Bool {
         guard !self.isEmpty else {
             return false
@@ -1220,7 +1243,16 @@ extension WalletContextImpl {
                     self.publishPresentationState()
                 }
                 self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
-            case let .transactionsChanged(_, finality, transactions):
+            case let .transactionsChanged(traceId, finality, transactions):
+                if finality == .pending,
+                   self.expiredPendingStreamingTraceIds.contains(traceId) {
+                    self.streamingLog("event=wallet_stream_pending_trace_suppressed")
+                    self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
+                    continue
+                }
+                if finality != .pending {
+                    self.expiredPendingStreamingTraceIds.remove(traceId)
+                }
                 let changed = self.streamingPresentationOverlay.apply(
                     event,
                     updatedAt: currentWalletTimestamp()
@@ -1230,7 +1262,8 @@ extension WalletContextImpl {
                     self.publishPresentationState()
                 }
                 self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
-            case .traceInvalidated:
+            case let .traceInvalidated(traceId):
+                self.expiredPendingStreamingTraceIds.remove(traceId)
                 let changed = self.streamingPresentationOverlay.apply(
                     event,
                     updatedAt: currentWalletTimestamp()

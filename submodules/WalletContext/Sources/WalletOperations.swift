@@ -6,7 +6,8 @@ import WalletEngineFFI
 private func acceptedWalletEngineSubmission(
     pending: WalletContext.PendingTransfer,
     messageHash: String?,
-    phase: SendPhase
+    phase: SendPhase,
+    acceptedAt: Int32
 ) -> WalletContext.PendingTransfer? {
     let status: WalletContext.PendingTransfer.Status
     switch phase {
@@ -31,6 +32,7 @@ private func acceptedWalletEngineSubmission(
         fee: pending.fee,
         transactionHash: pending.transactionHash,
         transactionLt: pending.transactionLt,
+        uiExpiresAt: walletPendingTransferUIExpirationTimestamp(from: acceptedAt),
         createdAt: pending.createdAt,
         status: status
     )
@@ -122,7 +124,8 @@ public extension WalletContext {
         if let address = normalizedMainnetAddress(value) {
             return .single(ResolvedTransferRecipient(address: address, displayName: nil))
         }
-        guard value.lowercased().hasSuffix(".ton"),
+        let lowercaseValue = value.lowercased()
+        guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".t.me")),
               !value.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
             return .single(nil)
         }
@@ -460,7 +463,9 @@ extension WalletContextImpl {
                 await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
-            let generation = await self.prepareForRuntimeIdentityChange()
+            let generation = await self.prepareForRuntimeIdentityChange(
+                preserveCurrentWalletState: true
+            )
             let activation = try await self.runtime.commitReplacement(
                 recordId: prepared.recordId,
                 serverAddress: address,
@@ -536,7 +541,9 @@ extension WalletContextImpl {
                 if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                     self.preparedRecoveryPhraseImportRecordId = nil
                 }
-                let generation = await self.prepareForRuntimeIdentityChange()
+                let generation = await self.prepareForRuntimeIdentityChange(
+                    preserveCurrentWalletState: true
+                )
                 let activation = try await self.runtime.commitReplacement(
                     recordId: prepared.recordId,
                     serverAddress: currentIdentity.address,
@@ -986,7 +993,8 @@ extension WalletContextImpl {
                 guard let accepted = acceptedWalletEngineSubmission(
                     pending: pending,
                     messageHash: messageHash,
-                    phase: phase
+                    phase: phase,
+                    acceptedAt: currentWalletTimestamp()
                 ) else {
                     return nil
                 }
@@ -1244,8 +1252,13 @@ extension WalletContextImpl {
         }
     }
 
-    func prepareForRuntimeIdentityChange() async -> UInt64 {
-        self.outgoingTransactionPresentationIdentities.removeAll()
+    func prepareForRuntimeIdentityChange(
+        preserveCurrentWalletState: Bool = false
+    ) async -> UInt64 {
+        if !preserveCurrentWalletState {
+            self.resetPendingTransferExpiration(clearSuppressedTraceIds: true)
+            self.outgoingTransactionPresentationIdentities.removeAll()
+        }
         self.clearStreamingPresentationOverlay()
         self.activationGeneration &+= 1
         let generation = self.activationGeneration

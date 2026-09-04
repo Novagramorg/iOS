@@ -235,6 +235,9 @@ actor WalletContextImpl {
     var pollingTaskId: UUID?
     var walletStateFallbackRefreshTask: Task<Void, Never>?
     var walletStateFallbackRefreshTaskId: UUID?
+    var pendingTransferExpirationTask: Task<Void, Never>?
+    var pendingTransferExpirationTaskId: UUID?
+    var pendingTransferExpirationDeadline: Int32?
     var fiatRefreshTask: Task<Void, Never>?
     var streamingClient: WalletToncenterStreamingClient?
     var streamingTask: Task<Void, Never>?
@@ -246,6 +249,7 @@ actor WalletContextImpl {
     var streamingConnectionState: WalletStreamingConnectionState = .inactive
     var streamingHasSubscribed = false
     var streamingPresentationOverlay = WalletStreamingPresentationOverlay()
+    var expiredPendingStreamingTraceIds = Set<String>()
     var activationGeneration: UInt64 = 0
     var balanceLastSuccessfulAt: Int32?
     var fiatLastSuccessfulAt: Int32?
@@ -291,6 +295,7 @@ actor WalletContextImpl {
         self.serverStateRetryTask?.cancel()
         self.pollingTask?.cancel()
         self.walletStateFallbackRefreshTask?.cancel()
+        self.pendingTransferExpirationTask?.cancel()
         self.fiatRefreshTask?.cancel()
         self.streamingTask?.cancel()
         self.streamingRefreshTask?.cancel()
@@ -539,7 +544,25 @@ actor WalletContextImpl {
             }
             return
         }
+        let shouldClearExpiredPendingTraceIds: Bool
+        switch value {
+        case .empty:
+            shouldClearExpiredPendingTraceIds = true
+        case let .ready(_, _, _, address, _, _):
+            let previousAddress: String?
+            if case let .wallet(info) = self.currentState.phase {
+                previousAddress = info.address
+            } else {
+                previousAddress = self.storedState.walletAddress
+            }
+            shouldClearExpiredPendingTraceIds = previousAddress.map {
+                !walletEngineAddressesEqual($0, address)
+            } ?? true
+        }
         _ = self.streamingPresentationOverlay.removeAll()
+        self.resetPendingTransferExpiration(
+            clearSuppressedTraceIds: shouldClearExpiredPendingTraceIds
+        )
         self.outgoingTransactionPresentationIdentities.removeAll()
         self.activationGeneration &+= 1
         self.stopStreaming()
@@ -1063,6 +1086,7 @@ actor WalletContextImpl {
                 transactionLt: send.phase == .confirmed
                     ? (send.resolution?.transactionLt ?? current.transactionLt)
                     : current.transactionLt,
+                uiExpiresAt: current.uiExpiresAt,
                 createdAt: current.createdAt,
                 status: status
             )
@@ -1199,6 +1223,11 @@ actor WalletContextImpl {
         activeOperation: ActiveOperation?,
         fiat: FiatState? = nil
     ) {
+        let expirationResult = self.removingExpiredPendingTransfers(
+            pendingTransfers,
+            now: currentWalletTimestamp()
+        )
+        let pendingTransfers = expirationResult.pendingTransfers
         let presentationIdentitiesChanged = self.rememberOutgoingTransactionPresentationIdentities(
             pendingTransfers
         )
@@ -1216,12 +1245,17 @@ actor WalletContextImpl {
             state: value
         )
         guard value != self.currentState else {
-            if peerMappingsChanged || presentationIdentitiesChanged || presentationIdentitiesPruned {
+            self.updatePendingTransferExpirationSchedule(for: pendingTransfers)
+            if peerMappingsChanged
+                || presentationIdentitiesChanged
+                || presentationIdentitiesPruned
+                || expirationResult.streamingOverlayChanged {
                 self.publishPresentationState()
             }
             return
         }
         self.currentState = value
+        self.updatePendingTransferExpirationSchedule(for: pendingTransfers)
         self.publishPresentationState()
         self.persistStoredState(value)
         self.evaluateStreamingDemand()
@@ -1237,6 +1271,103 @@ actor WalletContextImpl {
             presentationIdByTraceId: presentationIds.byTraceId,
             presentationIdByTransactionHash: presentationIds.byTransactionHash
         ))
+    }
+
+    private func pendingTransferUIExpirationDeadline(_ pending: PendingTransfer) -> Int32? {
+        switch pending.status {
+        case .broadcasting, .pending, .submissionUnknown:
+            return pending.uiExpiresAt
+                ?? walletPendingTransferUIExpirationTimestamp(from: pending.createdAt)
+        case .confirmed:
+            return nil
+        }
+    }
+
+    private func removingExpiredPendingTransfers(
+        _ pendingTransfers: [PendingTransfer],
+        now: Int32
+    ) -> (pendingTransfers: [PendingTransfer], streamingOverlayChanged: Bool) {
+        var retained: [PendingTransfer] = []
+        retained.reserveCapacity(pendingTransfers.count)
+        var expiredTraceIds = Set<String>()
+        var expiredCount = 0
+        for pending in pendingTransfers {
+            if let deadline = self.pendingTransferUIExpirationDeadline(pending), deadline <= now {
+                expiredCount += 1
+                if let normalizedHash = pending.normalizedHash {
+                    expiredTraceIds.insert(normalizedHash)
+                }
+            } else {
+                retained.append(pending)
+            }
+        }
+        guard expiredCount != 0 else {
+            return (pendingTransfers, false)
+        }
+
+        let traceExpiration = self.streamingPresentationOverlay.expirePendingTraces(expiredTraceIds)
+        self.expiredPendingStreamingTraceIds.formUnion(traceExpiration.suppressedTraceIds)
+        self.errorLogger.log(
+            "event=wallet_pending_ui_expired pending_removed=\(expiredCount) trace_removed=\(traceExpiration.removedCount)"
+        )
+        return (retained, traceExpiration.removedCount != 0)
+    }
+
+    private func updatePendingTransferExpirationSchedule(for pendingTransfers: [PendingTransfer]) {
+        let deadline = pendingTransfers.compactMap {
+            self.pendingTransferUIExpirationDeadline($0)
+        }.min()
+        if deadline == self.pendingTransferExpirationDeadline,
+           self.pendingTransferExpirationTask != nil {
+            return
+        }
+
+        self.pendingTransferExpirationTask?.cancel()
+        self.pendingTransferExpirationTask = nil
+        self.pendingTransferExpirationTaskId = nil
+        self.pendingTransferExpirationDeadline = deadline
+        guard let deadline else {
+            return
+        }
+
+        let taskId = UUID()
+        self.pendingTransferExpirationTaskId = taskId
+        self.pendingTransferExpirationTask = Task { [weak self] in
+            await self?.waitForPendingTransferExpiration(deadline: deadline, taskId: taskId)
+        }
+    }
+
+    private func waitForPendingTransferExpiration(deadline: Int32, taskId: UUID) async {
+        let remainingSeconds = max(0, Int64(deadline) - Int64(currentWalletTimestamp()))
+        do {
+            try await Task.sleep(nanoseconds: UInt64(remainingSeconds) * 1_000_000_000)
+        } catch {
+            return
+        }
+        guard !self.isShutdown,
+              self.pendingTransferExpirationTaskId == taskId else {
+            return
+        }
+        self.pendingTransferExpirationTask = nil
+        self.pendingTransferExpirationTaskId = nil
+        self.pendingTransferExpirationDeadline = nil
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+    }
+
+    func resetPendingTransferExpiration(clearSuppressedTraceIds: Bool) {
+        self.pendingTransferExpirationTask?.cancel()
+        self.pendingTransferExpirationTask = nil
+        self.pendingTransferExpirationTaskId = nil
+        self.pendingTransferExpirationDeadline = nil
+        if clearSuppressedTraceIds {
+            self.expiredPendingStreamingTraceIds.removeAll()
+        }
     }
 
     @discardableResult

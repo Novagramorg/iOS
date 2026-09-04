@@ -1,6 +1,12 @@
 import Foundation
 import TelegramCore
 
+let walletPendingTransferUILifetime: Int32 = 60
+
+func walletPendingTransferUIExpirationTimestamp(from timestamp: Int32) -> Int32 {
+    Int32(clamping: Int64(timestamp) + Int64(walletPendingTransferUILifetime))
+}
+
 public extension WalletContext {
     enum FiatCurrency: Int32, CaseIterable, Codable, Hashable, Sendable {
         case usd, eur, rub, cny
@@ -416,6 +422,7 @@ public extension WalletContext {
         public let fee: Int64?
         public let transactionHash: String?
         public let transactionLt: String?
+        public let uiExpiresAt: Int32?
         public let createdAt: Int32
         public let status: Status
         public init(
@@ -428,13 +435,14 @@ public extension WalletContext {
             fee: Int64? = nil,
             transactionHash: String? = nil,
             transactionLt: String? = nil,
+            uiExpiresAt: Int32? = nil,
             createdAt: Int32,
             status: Status
         ) {
             self.id = id; self.recipient = recipient; self.amount = amount; self.comment = comment
             self.collectibleAddress = collectibleAddress; self.normalizedHash = normalizedHash
             self.fee = fee; self.transactionHash = transactionHash; self.transactionLt = transactionLt
-            self.createdAt = createdAt; self.status = status
+            self.uiExpiresAt = uiExpiresAt; self.createdAt = createdAt; self.status = status
         }
     }
 

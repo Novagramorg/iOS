@@ -470,16 +470,22 @@ private final class SendButtonContentComponent: Component {
     }
 }
 
+private enum CounterpartyContentId: Hashable {
+    case peer(EnginePeer.Id)
+    case address(String)
+    case unknown
+}
+
 private final class CounterpartyRowComponent: CombinedComponent {
     typealias EnvironmentType = Empty
 
-    let counterparty: AnyComponent<Empty>
+    let counterparty: AnyComponentWithIdentity<Empty>
     let sendButton: AnyComponent<Empty>
     let spacing: CGFloat
     let alignSendButtonToTop: Bool
 
     init(
-        counterparty: AnyComponent<Empty>,
+        counterparty: AnyComponentWithIdentity<Empty>,
         sendButton: AnyComponent<Empty>,
         spacing: CGFloat,
         alignSendButtonToTop: Bool
@@ -498,7 +504,7 @@ private final class CounterpartyRowComponent: CombinedComponent {
     }
 
     static var body: Body {
-        let counterparty = Child(environment: Empty.self)
+        let counterparties = ChildMap(environment: Empty.self, keyedBy: AnyHashable.self)
         let sendButton = Child(environment: Empty.self)
 
         return { context in
@@ -507,8 +513,8 @@ private final class CounterpartyRowComponent: CombinedComponent {
                 availableSize: context.availableSize,
                 transition: context.transition
             )
-            let counterparty = counterparty.update(
-                component: context.component.counterparty,
+            let counterparty = counterparties[context.component.counterparty.id].update(
+                component: context.component.counterparty.component,
                 availableSize: CGSize(
                     width: max(0.0, context.availableSize.width - sendButton.size.width - context.component.spacing),
                     height: context.availableSize.height
@@ -1704,7 +1710,16 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 addressComponent = nil
             }
-            let counterpartyContentComponent: AnyComponent<Empty>
+            let counterpartyContentId: CounterpartyContentId
+            switch transaction.peer {
+            case let .user(peer, _, _):
+                counterpartyContentId = .peer(peer.id)
+            case let .address(address, _):
+                counterpartyContentId = .address(address)
+            case .unsupported:
+                counterpartyContentId = .unknown
+            }
+            let counterpartyContent: AnyComponent<Empty>
             if case let .user(peer, _, _) = transaction.peer {
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
@@ -1728,26 +1743,30 @@ private final class WalletTransactionContentComponent: Component {
                         ))
                     )
                 ]
-                counterpartyContentComponent = AnyComponent(Button(
+                counterpartyContent = AnyComponent(Button(
                     content: AnyComponent(HStack(peerItems, spacing: 6.0)),
                     action: { [weak self] in
                         self?.openPeer(peer)
                     }
                 ))
             } else if let counterpartyName {
-                counterpartyContentComponent = AnyComponent(MultilineTextComponent(
+                counterpartyContent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: counterpartyName, font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
             } else if let addressComponent {
-                counterpartyContentComponent = addressComponent
+                counterpartyContent = addressComponent
             } else {
                 //TODO:localize
-                counterpartyContentComponent = AnyComponent(MultilineTextComponent(
+                counterpartyContent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: "Unknown Address", font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
             }
+            let counterpartyContentComponent = AnyComponentWithIdentity(
+                id: counterpartyContentId,
+                component: counterpartyContent
+            )
             let displaysSendButton: Bool
             if !self.isPreview, component.walletContext != nil, transaction.peer.address != nil {
                 switch transaction.direction {
@@ -1784,7 +1803,7 @@ private final class WalletTransactionContentComponent: Component {
                     alignSendButtonToTop: alignSendButtonToTop
                 ))
             } else {
-                counterpartyComponent = counterpartyContentComponent
+                counterpartyComponent = counterpartyContentComponent.component
             }
             let displayedFee: Int64? = self.isPreview ? self.displayedFee : transaction.fee
             let feeComponent: AnyComponent<Empty>?

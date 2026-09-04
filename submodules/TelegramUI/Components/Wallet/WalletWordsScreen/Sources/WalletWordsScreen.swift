@@ -452,7 +452,7 @@ private final class WalletWordsSheetComponent: CombinedComponent {
                             (controller() as? WalletWordsScreen)?.complete()
                         }
                     )),
-                    backgroundColor: .color(theme.list.plainBackgroundColor),
+                    backgroundColor: .color(theme.list.modalPlainBackgroundColor),
                     animateOut: animateOut
                 ),
                 environment: {

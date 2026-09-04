@@ -22,7 +22,6 @@ swift_library(
         "//submodules/WallpaperBackgroundNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageItemCommon",
-        "//submodules/WalletContext",
         "//submodules/TextSelectionNode",
     ],
     visibility = [
