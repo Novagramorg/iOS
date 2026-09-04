@@ -267,19 +267,19 @@ private enum DebugControllerEntry: ItemListNodeEntry {
         case .experimentalCallMute:
             return 55
         case .groupCallReferenceEngine:
-            return 105
-        case .playerV2:
             return 56
-        case .devRequests:
+        case .playerV2:
             return 57
-        case .pwa:
+        case .devRequests:
             return 58
-        case .enableLocalTranslation:
+        case .pwa:
             return 59
-        case .enableUpdates:
+        case .enableLocalTranslation:
             return 60
+        case .enableUpdates:
+            return 61
         case let .preferredVideoCodec(index, _, _, _):
-            return 61 + index
+            return 62 + index
         case .disableVideoAspectScaling:
             return 100
         case .enableNetworkFramework:
