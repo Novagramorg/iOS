@@ -663,7 +663,23 @@ func sha512Digest(_ data : Data) -> Data {
     }
 }
 
-func passwordUpdateKDF(encryptionProvider: EncryptionProvider, password: String, derivation: TwoStepPasswordDerivation) -> (Data, TwoStepPasswordDerivation)? {
+private func isValidSRPGroup(encryptionProvider: EncryptionProvider, g: Int32, p: Data, keychain: MTKeychain) -> Bool {
+    guard g >= 0, MTCheckIsSafeG(UInt32(g)) else {
+        Logger.shared.log("SRP", "Invalid g")
+        return false
+    }
+    if !MTCheckMod(encryptionProvider, p, UInt32(g), keychain) {
+        Logger.shared.log("SRP", "Invalid p or g")
+        return false
+    }
+    if !MTCheckIsSafePrime(encryptionProvider, p, keychain) {
+        Logger.shared.log("SRP", "Invalid p")
+        return false
+    }
+    return true
+}
+
+func passwordUpdateKDF(encryptionProvider: EncryptionProvider, keychain: MTKeychain, password: String, derivation: TwoStepPasswordDerivation) -> (Data, TwoStepPasswordDerivation)? {
     guard let passwordData = password.data(using: .utf8, allowLossyConversion: true) else {
         return nil
     }
@@ -672,6 +688,10 @@ func passwordUpdateKDF(encryptionProvider: EncryptionProvider, password: String,
         case .unknown:
             return nil
         case let .sha256_sha256_PBKDF2_HMAC_sha512_sha256_srp(salt1, salt2, iterations, gValue, p):
+            guard isValidSRPGroup(encryptionProvider: encryptionProvider, g: gValue, p: p, keychain: keychain) else {
+                return nil
+            }
+            
             var nextSalt1 = salt1
             var randomSalt1 = Data()
             randomSalt1.count = 32
@@ -749,7 +769,7 @@ private func paddedXor(_ a: Data, _ b: Data) -> Data {
     return a
 }
 
-func passwordKDF(encryptionProvider: EncryptionProvider, password: String, derivation: TwoStepPasswordDerivation, srpSessionData: TwoStepSRPSessionData) -> PasswordKDFResult? {
+func passwordKDF(encryptionProvider: EncryptionProvider, keychain: MTKeychain, password: String, derivation: TwoStepPasswordDerivation, srpSessionData: TwoStepSRPSessionData) -> PasswordKDFResult? {
     guard let passwordData = password.data(using: .utf8, allowLossyConversion: true) else {
         return nil
     }
@@ -758,6 +778,10 @@ func passwordKDF(encryptionProvider: EncryptionProvider, password: String, deriv
         case .unknown:
             return nil
         case let .sha256_sha256_PBKDF2_HMAC_sha512_sha256_srp(salt1, salt2, iterations, gValue, p):
+            guard isValidSRPGroup(encryptionProvider: encryptionProvider, g: gValue, p: p, keychain: keychain) else {
+                return nil
+            }
+            
             var a = Data(count: p.count)
             let aLength = a.count
             a.withUnsafeMutableBytes { rawBytes -> Void in
@@ -888,7 +912,7 @@ func verifyPassword(_ account: UnauthorizedAccount, password: String) -> Signal<
             return .fail(MTRpcError(errorCode: 400, errorDescription: "INTERNAL_NO_PASSWORD"))
         }
         
-        let kdfResult = passwordKDF(encryptionProvider: account.network.encryptionProvider, password: password, derivation: currentPasswordDerivation, srpSessionData: srpSessionData)
+        let kdfResult = passwordKDF(encryptionProvider: account.network.encryptionProvider, keychain: account.network.context.keychain, password: password, derivation: currentPasswordDerivation, srpSessionData: srpSessionData)
         
         if let kdfResult = kdfResult {
             return account.network.request(Api.functions.auth.checkPassword(password: .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))), automaticFloodWait: false)
