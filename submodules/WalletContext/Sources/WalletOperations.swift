@@ -238,9 +238,15 @@ public extension WalletContext {
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, comment: String?) -> Signal<PreparedTransfer, WalletError> {
+    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?) -> Signal<PreparedTransfer, WalletError> {
         self.signal(name: "preparing_transfer") { impl, operationId in
-            try await impl.prepareTransfer(address: address, amount: amount, comment: comment, operationId: operationId)
+            try await impl.prepareTransfer(
+                address: address,
+                amount: amount,
+                sendAll: sendAll,
+                comment: comment,
+                operationId: operationId
+            )
         }
     }
 
@@ -858,6 +864,7 @@ extension WalletContextImpl {
     func prepareTransfer(
         address: String,
         amount: Int64,
+        sendAll: Bool,
         comment: String?,
         operationId: UUID
     ) async throws -> PreparedTransfer {
@@ -867,11 +874,15 @@ extension WalletContextImpl {
                 throw WalletError.unavailable
             }
             let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
+            let resolvedSendAll = sendAll && !resolved.hasLinkAmount
+            let sendAmount: SendAmount = resolvedSendAll
+                ? .all
+                : .exact(nanograms: String(resolved.amount))
             let intent = SendIntent(
                 expiration: resolved.expiration,
                 messages: [SendMessage(
                     destination: resolved.address,
-                    amount: .exact(nanograms: String(resolved.amount)),
+                    amount: sendAmount,
                     body: resolved.body,
                     bounce: false,
                     stateInit: nil
@@ -881,14 +892,26 @@ extension WalletContextImpl {
             try Task.checkCancellation()
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
-            if let balance = self.currentState.balance.currentValue,
-               resolved.amount > balance || fee > balance - resolved.amount {
-                throw WalletError.insufficientBalance(required: resolved.amount + fee)
+            let effectiveAmount: Int64
+            if resolvedSendAll {
+                guard fee < resolved.amount else {
+                    throw WalletError.insufficientBalance(required: resolved.amount)
+                }
+                effectiveAmount = resolved.amount - fee
+            } else {
+                if let balance = self.currentState.balance.currentValue,
+                   resolved.amount > balance || fee > balance - resolved.amount {
+                    let (required, overflow) = resolved.amount.addingReportingOverflow(fee)
+                    throw WalletError.insufficientBalance(required: overflow ? Int64.max : required)
+                }
+                effectiveAmount = resolved.amount
             }
             let transfer = PreparedTransfer(
                 id: UUID().uuidString.lowercased(),
                 recipient: resolved.address,
-                amount: resolved.amount,
+                amount: effectiveAmount,
+                requestedAmount: resolved.amount,
+                isSendAll: resolvedSendAll,
                 comment: resolved.comment,
                 fee: fee,
                 expiresAt: Int32(clamping: preview.validUntil)

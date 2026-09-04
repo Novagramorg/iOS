@@ -30,6 +30,11 @@ private enum WalletSendInputMode: Equatable {
     case fiat
 }
 
+private enum WalletSendAmountSource: Equatable {
+    case manual
+    case transferLink
+}
+
 private func walletSendShortAddress(_ address: String) -> String {
     guard address.count > 8 else {
         return address
@@ -532,9 +537,11 @@ private final class WalletSendScreenComponent: Component {
 
         private var inputMode: WalletSendInputMode = .gram
         private var amount: Int64 = 0
+        private var amountSource: WalletSendAmountSource = .manual
         private var comment: String?
         private var currentFiatCurrency: WalletContext.FiatCurrency = .usd
         private var currentRate: Double?
+        private var lastRateText = ""
         private var recipientAddress = ""
         private var initialAddress: String?
 
@@ -546,7 +553,9 @@ private final class WalletSendScreenComponent: Component {
                 guard let self else {
                     return
                 }
-                if self.amount != amount {
+                let previousSendAll = self.shouldSendAll
+                self.amountSource = .manual
+                if self.amount != amount || previousSendAll != self.shouldSendAll {
                     self.discardPeerPreparedTransfer()
                 }
                 self.amount = amount
@@ -588,9 +597,17 @@ private final class WalletSendScreenComponent: Component {
             return !self.amountField.isInputActive
         }
 
+        private var shouldSendAll: Bool {
+            guard self.amountSource == .manual, self.amount > 0, let walletBalance = self.walletBalance else {
+                return false
+            }
+            return self.amount == walletBalance
+        }
+
         private func applyRecipient(_ value: String) {
             let previousAddress = self.recipientAddress
             let previousAmount = self.amount
+            let previousSendAll = self.shouldSendAll
             let previousComment = self.comment
             var address = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if let components = URLComponents(string: address), components.scheme?.lowercased() == "ton" {
@@ -602,6 +619,7 @@ private final class WalletSendScreenComponent: Component {
                 if let amountValue = components.queryItems?.first(where: { $0.name == "amount" })?.value,
                    let amount = Int64(amountValue), amount > 0 {
                     self.amount = amount
+                    self.amountSource = .transferLink
                 }
                 if let comment = components.queryItems?.first(where: { $0.name == "text" })?.value, !comment.isEmpty {
                     self.comment = comment
@@ -610,6 +628,7 @@ private final class WalletSendScreenComponent: Component {
             self.recipientAddress = address
             if previousAddress != self.recipientAddress
                 || previousAmount != self.amount
+                || previousSendAll != self.shouldSendAll
                 || previousComment != self.comment {
                 self.discardPeerPreparedTransfer()
             }
@@ -933,13 +952,15 @@ private final class WalletSendScreenComponent: Component {
                   !self.recipientAddress.isEmpty else {
                 return
             }
+            let sendAll = self.shouldSendAll
             if let peer = component.peer {
                 self.isPreparingTransfer = true
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
                 if let prepared = self.peerPreparedTransfer,
                    prepared.recipient == self.recipientAddress,
-                   prepared.amount == self.amount,
+                   prepared.requestedAmount == self.amount,
+                   prepared.isSendAll == sendAll,
                    prepared.comment == self.comment,
                    prepared.collectible == nil,
                    prepared.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) {
@@ -949,6 +970,7 @@ private final class WalletSendScreenComponent: Component {
                     preparation = component.walletContext.prepareTransfer(
                         address: self.recipientAddress,
                         amount: self.amount,
+                        sendAll: sendAll,
                         comment: self.comment
                     )
                 }
@@ -1022,6 +1044,7 @@ private final class WalletSendScreenComponent: Component {
                 walletContext: component.walletContext,
                 address: self.recipientAddress,
                 amount: self.amount,
+                sendAll: sendAll,
                 comment: self.comment,
                 dismissSendScreen: dismissSendScreen
             ))
@@ -1135,7 +1158,11 @@ private final class WalletSendScreenComponent: Component {
                     guard let self, self.walletContext === observedWalletContext else {
                         return
                     }
+                    let previousSendAll = self.shouldSendAll
                     self.walletBalance = walletState.balance.currentValue
+                    if previousSendAll != self.shouldSendAll {
+                        self.discardPeerPreparedTransfer()
+                    }
                     if case let .wallet(info) = walletState.phase {
                         self.walletInfo = info
                         self.walletAddress = info.address
@@ -1386,12 +1413,15 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
             let showRate = hasAmount && !rateText.isEmpty
+            if showRate {
+                self.lastRateText = rateText
+            }
             let rateItems: [AnyComponentWithIdentity<Empty>] = [
                 AnyComponentWithIdentity(
                     id: "title",
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: rateText,
+                            string: self.lastRateText,
                             font: Font.with(size: 13.0, design: .round, weight: .semibold),
                             textColor: theme.list.itemSecondaryTextColor
                         )),
@@ -1408,7 +1438,7 @@ private final class WalletSendScreenComponent: Component {
                 )
             ]
             let rateButtonSize = self.rateButton.update(
-                transition: transition,
+                transition: .immediate,
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(HStack(rateItems, spacing: 3.0)),
                     background: AnyComponent(RoundedRectangle(
@@ -1432,11 +1462,15 @@ private final class WalletSendScreenComponent: Component {
                 height: rateButtonSize.height
             )
             if let rateButtonView = self.rateButton.view {
+                var rateVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if rateButtonView.superview == nil {
                     self.addSubview(rateButtonView)
+                    rateVisibilityTransition = .immediate
                 }
-                transition.setFrame(view: rateButtonView, frame: rateButtonFrame)
-                transition.setAlpha(view: rateButtonView, alpha: showRate ? 1.0 : 0.0)
+                rateButtonView.bounds = CGRect(origin: .zero, size: rateButtonFrame.size)
+                transition.setPosition(view: rateButtonView, position: rateButtonFrame.center)
+                rateVisibilityTransition.setAlpha(view: rateButtonView, alpha: showRate ? 1.0 : 0.0)
+                rateVisibilityTransition.setScale(view: rateButtonView, scale: showRate ? 1.0 : 0.01)
             }
 
             //TODO:localize
@@ -1462,10 +1496,12 @@ private final class WalletSendScreenComponent: Component {
                 height: 22.0
             )
             if let insufficientTextView = self.insufficientText.view {
+                var insufficientVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if insufficientTextView.superview == nil {
                     self.addSubview(insufficientTextView)
+                    insufficientVisibilityTransition = .immediate
                 }
-                transition.setFrame(
+                ComponentTransition.immediate.setFrame(
                     view: insufficientTextView,
                     frame: CGRect(
                         x: floorToScreenPixels((availableSize.width - insufficientTextSize.width) / 2.0),
@@ -1474,7 +1510,7 @@ private final class WalletSendScreenComponent: Component {
                         height: insufficientTextSize.height
                     )
                 )
-                transition.setAlpha(view: insufficientTextView, alpha: isInsufficient ? 1.0 : 0.0)
+                insufficientVisibilityTransition.setAlpha(view: insufficientTextView, alpha: isInsufficient ? 1.0 : 0.0)
             }
 
             //TODO:localize
@@ -1527,11 +1563,16 @@ private final class WalletSendScreenComponent: Component {
                 height: depositButtonSize.height
             )
             if let depositButtonView = self.depositButton.view {
+                let isNewlyAdded = depositButtonView.superview == nil
+                var depositVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if depositButtonView.superview == nil {
                     self.addSubview(depositButtonView)
+                    depositVisibilityTransition = .immediate
                 }
-                transition.setFrame(view: depositButtonView, frame: depositButtonFrame)
-                transition.setAlpha(view: depositButtonView, alpha: showDeposit ? 1.0 : 0.0)
+                if isNewlyAdded || showDeposit {
+                    ComponentTransition.immediate.setFrame(view: depositButtonView, frame: depositButtonFrame)
+                }
+                depositVisibilityTransition.setAlpha(view: depositButtonView, alpha: showDeposit ? 1.0 : 0.0)
             }
 
             if component.peer != nil, let comment = self.comment, !comment.isEmpty {

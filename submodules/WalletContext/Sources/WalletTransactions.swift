@@ -13,6 +13,7 @@ struct WalletPeerAddressMapping: @unchecked Sendable {
 struct ResolvedTransferInput {
     let address: String
     let amount: Int64
+    let hasLinkAmount: Bool
     let body: SendMessageBody
     let comment: String?
     let expiration: SendExpiration
@@ -86,6 +87,7 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
     return ResolvedTransferInput(
         address: normalized,
         amount: resolvedAmount,
+        hasLinkAmount: link?.amount != nil,
         body: body,
         comment: resolvedComment,
         expiration: link?.expiration ?? .engineDefault

@@ -1587,7 +1587,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction) -> ViewController
     func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, preparedTransfer: WalletContext.PreparedTransfer, dismissSendScreen: @escaping () -> Void) -> ViewController
-    func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController
+    func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController
     func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible, collectibleSent: @escaping (String) -> Void) -> ViewController
     func authorizeWalletAccess(context: AccountContext, completion: @escaping (Bool) -> Void)
     func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController

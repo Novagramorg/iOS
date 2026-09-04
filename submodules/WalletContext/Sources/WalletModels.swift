@@ -564,12 +564,15 @@ public extension WalletContext {
     struct PreparedTransfer: Equatable, Sendable {
         public let id: String, recipient: String
         public let amount: Int64
+        public let requestedAmount: Int64
+        public let isSendAll: Bool
         public let comment: String?
         public let collectible: Collectible?
         public let fee: Int64
         public let expiresAt: Int32
-        public init(id: String, recipient: String, amount: Int64, comment: String?, collectible: Collectible? = nil, fee: Int64, expiresAt: Int32) {
-            self.id = id; self.recipient = recipient; self.amount = amount; self.comment = comment
+        public init(id: String, recipient: String, amount: Int64, requestedAmount: Int64? = nil, isSendAll: Bool = false, comment: String?, collectible: Collectible? = nil, fee: Int64, expiresAt: Int32) {
+            self.id = id; self.recipient = recipient; self.amount = amount
+            self.requestedAmount = requestedAmount ?? amount; self.isSendAll = isSendAll; self.comment = comment
             self.collectible = collectible; self.fee = fee; self.expiresAt = expiresAt
         }
     }
