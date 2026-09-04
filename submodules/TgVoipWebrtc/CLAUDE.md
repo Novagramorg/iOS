@@ -178,6 +178,8 @@ The group call implementation in `tgcalls/group/GroupInstanceCustomImpl.cpp` (~4
 
 An alternative group call implementation that uses standard WebRTC PeerConnection instead of the manual ICE/DTLS/SRTP management in `GroupInstanceCustomImpl`. Supports both audio and video (H264 simulcast). Implements the same `GroupInstanceInterface`.
 
+**Selection in the app:** opt-in in any build through Debug Settings ▸ "Group calls: reference engine" (`ExperimentalUISettings.groupCallReferenceEngine`, read in `PresentationGroupCall.swift` when the call context is created — a running call keeps its engine), or from the server via the `ios_calls_group_reference_impl` app-config flag (non-zero turns it on; it cannot turn the debug switch off). Live streams always use the custom engine: the reference engine has no broadcast mode. Before 2026-09-04 the reference engine was the default of every DEBUG build, which is what the fixed real-call bugs above were found under.
+
 ### Architecture
 
 ```
