@@ -26,6 +26,7 @@ import AvatarComponent
 import ShimmeringMask
 import WalletContext
 import WalletCollectibleHeaderComponent
+import WalletSendScreen
 import TextSelectionNode
 import Pasteboard
 import Speak
@@ -383,31 +384,181 @@ private func walletTransactionCollectible(
     )
 }
 
+private final class SendButtonContentComponent: Component {
+    let text: String
+    let color: UIColor
+
+    init(text: String, color: UIColor) {
+        self.text = text
+        self.color = color
+    }
+
+    static func ==(lhs: SendButtonContentComponent, rhs: SendButtonContentComponent) -> Bool {
+        return lhs.text == rhs.text && lhs.color == rhs.color
+    }
+
+    final class View: UIView {
+        private let backgroundLayer = SimpleLayer()
+        private let title = ComponentView<Empty>()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.layer.addSublayer(self.backgroundLayer)
+            self.backgroundLayer.masksToBounds = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(
+            component: SendButtonContentComponent,
+            availableSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: component.text,
+                        font: Font.regular(11.0),
+                        textColor: component.color
+                    )),
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+
+            let size = CGSize(width: titleSize.width + 12.0, height: 18.0)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                transition.setFrame(
+                    view: titleView,
+                    frame: CGRect(
+                        x: floorToScreenPixels((size.width - titleSize.width) / 2.0),
+                        y: floorToScreenPixels((size.height - titleSize.height) / 2.0),
+                        width: titleSize.width,
+                        height: titleSize.height
+                    )
+                )
+            }
+
+            self.backgroundLayer.backgroundColor = component.color.withAlphaComponent(0.1).cgColor
+            self.backgroundLayer.cornerRadius = size.height / 2.0
+            transition.setFrame(layer: self.backgroundLayer, frame: CGRect(origin: .zero, size: size))
+
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
+private final class CounterpartyRowComponent: CombinedComponent {
+    typealias EnvironmentType = Empty
+
+    let counterparty: AnyComponent<Empty>
+    let sendButton: AnyComponent<Empty>
+    let spacing: CGFloat
+    let alignSendButtonToTop: Bool
+
+    init(
+        counterparty: AnyComponent<Empty>,
+        sendButton: AnyComponent<Empty>,
+        spacing: CGFloat,
+        alignSendButtonToTop: Bool
+    ) {
+        self.counterparty = counterparty
+        self.sendButton = sendButton
+        self.spacing = spacing
+        self.alignSendButtonToTop = alignSendButtonToTop
+    }
+
+    static func ==(lhs: CounterpartyRowComponent, rhs: CounterpartyRowComponent) -> Bool {
+        return lhs.counterparty == rhs.counterparty
+            && lhs.sendButton == rhs.sendButton
+            && lhs.spacing == rhs.spacing
+            && lhs.alignSendButtonToTop == rhs.alignSendButtonToTop
+    }
+
+    static var body: Body {
+        let counterparty = Child(environment: Empty.self)
+        let sendButton = Child(environment: Empty.self)
+
+        return { context in
+            let sendButton = sendButton.update(
+                component: context.component.sendButton,
+                availableSize: context.availableSize,
+                transition: context.transition
+            )
+            let counterparty = counterparty.update(
+                component: context.component.counterparty,
+                availableSize: CGSize(
+                    width: max(0.0, context.availableSize.width - sendButton.size.width - context.component.spacing),
+                    height: context.availableSize.height
+                ),
+                transition: context.transition
+            )
+
+            let size = CGSize(
+                width: counterparty.size.width + context.component.spacing + sendButton.size.width,
+                height: max(counterparty.size.height, sendButton.size.height)
+            )
+            context.add(counterparty.position(CGPoint(
+                x: counterparty.size.width / 2.0,
+                y: size.height / 2.0
+            )))
+            context.add(sendButton.position(CGPoint(
+                x: counterparty.size.width + context.component.spacing + sendButton.size.width / 2.0,
+                y: context.component.alignSendButtonToTop ? sendButton.size.height / 2.0 : size.height / 2.0
+            )))
+
+            return size
+        }
+    }
+}
+
 private final class WalletTransactionContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
     let mode: WalletTransactionContentMode
-    let fiatWalletContext: WalletContext?
+    let walletContext: WalletContext?
     let openExplorer: (String) -> Void
     let animateOut: ActionSlot<Action<Void>>
 
     init(
         context: AccountContext,
         mode: WalletTransactionContentMode,
-        fiatWalletContext: WalletContext?,
+        walletContext: WalletContext?,
         openExplorer: @escaping (String) -> Void,
         animateOut: ActionSlot<Action<Void>>
     ) {
         self.context = context
         self.mode = mode
-        self.fiatWalletContext = fiatWalletContext
+        self.walletContext = walletContext
         self.openExplorer = openExplorer
         self.animateOut = animateOut
     }
 
     static func ==(lhs: WalletTransactionContentComponent, rhs: WalletTransactionContentComponent) -> Bool {
-        if lhs.context !== rhs.context || lhs.fiatWalletContext !== rhs.fiatWalletContext {
+        if lhs.context !== rhs.context || lhs.walletContext !== rhs.walletContext {
             return false
         }
         switch (lhs.mode, rhs.mode) {
@@ -524,7 +675,7 @@ private final class WalletTransactionContentComponent: Component {
             return self.previewOperation == .confirmed || self.previewOperation == .submissionUnknown
         }
 
-        private func configureMode(_ mode: WalletTransactionContentMode, fiatWalletContext: WalletContext?) {
+        private func configureMode(_ mode: WalletTransactionContentMode, walletContext: WalletContext?) {
             self.discardCurrentPreparedTransfer()
             self.walletDisposable.set(nil)
             self.transferDisposable.set(nil)
@@ -572,13 +723,13 @@ private final class WalletTransactionContentComponent: Component {
                 }
             }
 
-            let observedContext = self.walletContext ?? fiatWalletContext
+            let observedContext = self.walletContext ?? walletContext
             if let observedContext {
                 self.walletDisposable.set((observedContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] state in
                     guard let self,
                           self.walletContext === observedContext
-                            || (self.walletContext == nil && self.component?.fiatWalletContext === observedContext) else {
+                            || (self.walletContext == nil && self.component?.walletContext === observedContext) else {
                         return
                     }
                     self.latestWalletState = state
@@ -933,6 +1084,42 @@ private final class WalletTransactionContentComponent: Component {
             )
         }
 
+        private func openSend(peer transactionPeer: WalletContext.Transaction.Peer) {
+            guard !self.isPreview,
+                  let component = self.component,
+                  let walletContext = component.walletContext,
+                  let controller = self.environment?.controller(),
+                  let counterpartyAddress = transactionPeer.address else {
+                return
+            }
+
+            let address = WalletContext.transferAddress(from: counterpartyAddress) ?? counterpartyAddress
+            let sendScreen: WalletSendScreen
+            switch transactionPeer {
+            case let .user(peer, _, _):
+                sendScreen = WalletSendScreen(
+                    context: component.context,
+                    peer: peer,
+                    walletContext: walletContext,
+                    address: address
+                )
+            case .address:
+                sendScreen = WalletSendScreen(
+                    context: component.context,
+                    walletContext: walletContext,
+                    address: address
+                )
+            case .unsupported:
+                return
+            }
+            sendScreen.navigationPresentation = .modal
+            controller.push(sendScreen)
+
+            Queue.mainQueue().after(0.6) { [weak self] in
+                self?.close(animated: false)
+            }
+        }
+
         private func performCommentTextSelectionAction(text: NSAttributedString, action: TextSelectionAction) {
             guard let component = self.component,
                   let controller = self.environment?.controller() else {
@@ -1159,7 +1346,7 @@ private final class WalletTransactionContentComponent: Component {
 
             let incomingModeId = walletTransactionModeId(component.mode)
             if self.modeId != incomingModeId {
-                self.configureMode(component.mode, fiatWalletContext: component.fiatWalletContext)
+                self.configureMode(component.mode, walletContext: component.walletContext)
             } else if case let .transaction(transaction) = component.mode {
                 self.transaction = transaction
             }
@@ -1517,7 +1704,7 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 addressComponent = nil
             }
-            let counterpartyComponent: AnyComponent<Empty>
+            let counterpartyContentComponent: AnyComponent<Empty>
             if case let .user(peer, _, _) = transaction.peer {
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
@@ -1541,25 +1728,63 @@ private final class WalletTransactionContentComponent: Component {
                         ))
                     )
                 ]
-                counterpartyComponent = AnyComponent(Button(
+                counterpartyContentComponent = AnyComponent(Button(
                     content: AnyComponent(HStack(peerItems, spacing: 6.0)),
                     action: { [weak self] in
                         self?.openPeer(peer)
                     }
                 ))
             } else if let counterpartyName {
-                counterpartyComponent = AnyComponent(MultilineTextComponent(
+                counterpartyContentComponent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: counterpartyName, font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
             } else if let addressComponent {
-                counterpartyComponent = addressComponent
+                counterpartyContentComponent = addressComponent
             } else {
                 //TODO:localize
-                counterpartyComponent = AnyComponent(MultilineTextComponent(
+                counterpartyContentComponent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: "Unknown Address", font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
+            }
+            let displaysSendButton: Bool
+            if !self.isPreview, component.walletContext != nil, transaction.peer.address != nil {
+                switch transaction.direction {
+                case .incoming, .outgoing:
+                    displaysSendButton = true
+                case .unknown:
+                    displaysSendButton = false
+                }
+            } else {
+                displaysSendButton = false
+            }
+            let alignSendButtonToTop: Bool
+            switch transaction.peer {
+            case .address:
+                alignSendButtonToTop = true
+            case .user, .unsupported:
+                alignSendButtonToTop = false
+            }
+            let counterpartyComponent: AnyComponent<Empty>
+            if displaysSendButton {
+                counterpartyComponent = AnyComponent(CounterpartyRowComponent(
+                    counterparty: counterpartyContentComponent,
+                    sendButton: AnyComponent(Button(
+                        content: AnyComponent(SendButtonContentComponent(
+                            //TODO:localize
+                            text: "send",
+                            color: theme.list.itemAccentColor
+                        )),
+                        action: { [weak self] in
+                            self?.openSend(peer: transaction.peer)
+                        }
+                    )),
+                    spacing: 6.0,
+                    alignSendButtonToTop: alignSendButtonToTop
+                ))
+            } else {
+                counterpartyComponent = counterpartyContentComponent
             }
             let displayedFee: Int64? = self.isPreview ? self.displayedFee : transaction.fee
             let feeComponent: AnyComponent<Empty>?
@@ -2123,7 +2348,7 @@ private final class WalletTransactionPagerComponent: Component {
                     component: AnyComponent(WalletTransactionSheetComponent(
                         context: component.context,
                         transaction: transaction,
-                        fiatWalletContext: component.walletContext,
+                        walletContext: component.walletContext,
                         hasDimView: false,
                         updatesPresentationContextLayout: index == currentIndex,
                         openExplorer: component.openExplorer
@@ -2179,7 +2404,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
 
     let context: AccountContext
     let transaction: WalletContext.Transaction
-    let fiatWalletContext: WalletContext?
+    let walletContext: WalletContext?
     let hasDimView: Bool
     let updatesPresentationContextLayout: Bool
     let openExplorer: (String) -> Void
@@ -2187,14 +2412,14 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
     init(
         context: AccountContext,
         transaction: WalletContext.Transaction,
-        fiatWalletContext: WalletContext?,
+        walletContext: WalletContext?,
         hasDimView: Bool,
         updatesPresentationContextLayout: Bool,
         openExplorer: @escaping (String) -> Void
     ) {
         self.context = context
         self.transaction = transaction
-        self.fiatWalletContext = fiatWalletContext
+        self.walletContext = walletContext
         self.hasDimView = hasDimView
         self.updatesPresentationContextLayout = updatesPresentationContextLayout
         self.openExplorer = openExplorer
@@ -2202,7 +2427,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
 
     static func ==(lhs: WalletTransactionSheetComponent, rhs: WalletTransactionSheetComponent) -> Bool {
         if lhs.context !== rhs.context
-            || lhs.fiatWalletContext !== rhs.fiatWalletContext
+            || lhs.walletContext !== rhs.walletContext
             || lhs.hasDimView != rhs.hasDimView
             || lhs.updatesPresentationContextLayout != rhs.updatesPresentationContextLayout {
             return false
@@ -2223,7 +2448,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                     content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
                         context: context.component.context,
                         mode: .transaction(context.component.transaction),
-                        fiatWalletContext: context.component.fiatWalletContext,
+                        walletContext: context.component.walletContext,
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -2345,7 +2570,7 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
                             source: context.component.source,
                             dismissSendScreen: context.component.dismissSendScreen
                         ),
-                        fiatWalletContext: context.component.walletContext,
+                        walletContext: context.component.walletContext,
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -2537,7 +2762,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             initialComponent = AnyComponent(WalletTransactionSheetComponent(
                 context: context,
                 transaction: transaction,
-                fiatWalletContext: context.walletContext,
+                walletContext: context.walletContext,
                 hasDimView: true,
                 updatesPresentationContextLayout: true,
                 openExplorer: openExplorer

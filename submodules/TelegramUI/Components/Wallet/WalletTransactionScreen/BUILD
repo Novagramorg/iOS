@@ -40,6 +40,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ShimmeringMask",
         "//submodules/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletCollectibleHeaderComponent",
+        "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TooltipUI",
         "//submodules/UndoUI",
     ],

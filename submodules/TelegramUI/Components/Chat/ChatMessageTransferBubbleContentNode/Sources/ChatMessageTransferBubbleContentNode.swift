@@ -704,8 +704,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 )
                 if let navigationController = item.controllerInteraction.navigationController() {
                     navigationController.pushViewController(controller)
-                } else {
-                    item.controllerInteraction.presentControllerInCurrent(controller, nil)
                 }
             }))
         }
