@@ -792,6 +792,21 @@ public final class CoreVirtualListView: UIView {
     // The height of the currently loaded (settled) window.
     public var settledContentHeight: CGFloat { activeWindow.height }
 
+    /// The top-inset slack currently reserved for the lowest `pinsToBottomEdge` row — the public read
+    /// of `bottomEdgePinSlack(for:)`, which is `ListViewImpl.calculatePinToEdgeTopInset`
+    /// (`Display/Source/ListView.swift:1106`). Zero unless index 0 is loaded and a pinned row is in
+    /// the window.
+    ///
+    /// A host needs it wherever it asks "how much viewport is left over once the whole collection is
+    /// on screen": the underfill alignment places the window on `viewportInsets.top + this`, so the
+    /// free space beyond the last row is short by exactly this much. `ListViewImpl` folds the same
+    /// term into `effectiveInsets.top` before it measures that leftover (`ListView.swift:1238-1241`).
+    ///
+    /// Offset-independent, like `settledContentHeight` and for the same reason: it is built from
+    /// intra-window spans (`pinned.frame.maxY - window.minY`), never from a placement, so a
+    /// rubber-band overscroll cannot move it.
+    public var currentBottomEdgePinSlack: CGFloat { bottomEdgePinSlack(for: activeWindow) }
+
     private var dirtyIndices: Set<Int> = []
     private var dirtyAnimated = false
     /// Identities whose content was reconciled in the pass currently being applied. Window

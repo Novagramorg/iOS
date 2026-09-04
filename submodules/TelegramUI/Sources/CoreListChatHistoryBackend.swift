@@ -618,6 +618,11 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             // momentum, so "where is it now" is both the question and the answer, and any single frame
             // being slightly off is corrected by the next one.
             self.updateVisibleContentOffset(transition: .immediate, geometry: .presented)
+            // `ListViewImpl` reaches the same block from `updateScrollViewDidScroll` → `snapToBounds`,
+            // with no size/inset update in hand and therefore an immediate transition. What can change
+            // here is the LOADED WINDOW — a rebalance loading or dropping rows moves both terms of the
+            // "whole collection is on screen" test.
+            self.updateTrailingItemSpace(transition: .immediate)
         }
         self.coreList.onLoadedEdgeReached = { [weak self] _ in
             guard let self else { return }
@@ -1082,6 +1087,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let offsetTransition: ContainedViewLayoutTransition = ComponentTransition(transition).containedViewLayoutTransition
         self.updateVisibleItemRange(force: false)
         self.updateVisibleContentOffset(transition: offsetTransition, geometry: .settled)
+        // On the pass transition, so the item's re-centring travels with the content-height or inset
+        // change that moved it. `ListViewImpl` derives snapToBounds' transition from the same two
+        // producers (`updateSizeAndInsets`/`scrollToItem`); this value additionally covers the
+        // `customAnimationTransition` and insertion arms, which is the better answer for a quantity
+        // that is a pure function of the content height those arms are animating.
+        self.updateTrailingItemSpace(transition: offsetTransition)
         self.pushHeaderFlashingState(animated: false)
         completion(self.displayedItemRange)
     }
@@ -1391,6 +1402,83 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             self.displayedItemRangeChanged(currentRange, self.opaqueTransactionState)
         }
     }
+    // Parity with the trailing-item-space block of ListViewImpl.snapToBounds
+    // (Display/Source/ListView.swift:1345-1357).
+    //
+    // WHAT IT IS. When the whole collection is on screen with room to spare, the list tells its LAST
+    // item how much empty viewport lies beyond it, and the item may move its own content into that
+    // space. The three chat items that opt in (`wantsTrailingItemSpaceUpdates`) all do the same thing
+    // with it: shift their content container by half the space, which centres the block in the gap.
+    // `ChatBotInfoItemNode` and `ChatUserInfoItemNode` set the flag in `init`; a message bubble sets it
+    // per-layout, for the centred-link `.messageOptions` preview only.
+    //
+    // WHICH ITEM. `items.count - 1`, i.e. the OLDEST entry (index 0 is the newest — see
+    // `arrivingBlockStableIds`), which the wrapper's π renders at the top of the screen with the free
+    // space above it. The offset the item applies is `y: -space/2` in its own coordinates, and its own
+    // π composes with the wrapper's to identity, so that reads as "up the screen, into the gap".
+    //
+    // OFFSET-INDEPENDENT BY CONSTRUCTION, which is the property that makes it safe to call from the
+    // scroll path: `settledContentHeight` is an intra-window height and `currentBottomEdgePinSlack` an
+    // intra-window span, so a rubber-band overscroll on an underfilled list — the one kind of scrolling
+    // that regime allows — cannot make the item drift. `ListViewImpl` computes the same quantity from
+    // `visibleAreaHeight - completeHeight` for exactly this reason, rather than from where the last
+    // node currently sits.
+    //
+    // THE PIN TERM. `ListViewImpl` measures the leftover against `effectiveInsets.top`, which
+    // `calculatePinToEdgeTopInset` has already widened by the slack an unread separator needs to rest
+    // on the far edge. CoreList spends that same slack in its underfill alignment (it places the window
+    // on `viewportInsets.top + pinSlack`), so the gap really is smaller by that much and subtracting it
+    // is geometry, not bookkeeping. In an underfilled chat the slack always exceeds the leftover — the
+    // pin has pushed the oldest content off the far edge, taking the info item with it — so a short
+    // chat with an unread separator reports zero and the item stays put. That is `ListViewImpl`'s
+    // answer too.
+    //
+    // Insets come from `currentInsets`, which excludes `overscrollHoldDistance`, matching
+    // `ListViewImpl` reading `self.insets` rather than `scroller.contentInset`. CoreList's slack is
+    // computed against the held insets and so shrinks by the hold, leaving this up to the hold
+    // distance too generous while an overscroll action is live. Unreachable in practice and invisible
+    // if reached: it needs an underfilled chat that also has a pinned row, where the leftover is
+    // already zero with margin.
+    //
+    // NOT `updateSizeAndInsets`-gated. The two call sites are the transaction end (where the geometry,
+    // the entry set and the loaded window can all have changed) and the scroll callback, which is where
+    // `ListViewImpl` reaches `snapToBounds` from as well. A CoreList self-update flush is NOT a third
+    // site: `CoreListNodeHostView` declares `onContentDidChange` but never CALLS it — only the demo and
+    // test rows do — so a chat row that re-measures itself comes back through `chatHistoryTransaction`
+    // as `customAnimationTransition` like any other content change, and there is no path that changes a
+    // row's height behind this backend's back.
+    private func updateTrailingItemSpace(transition: ContainedViewLayoutTransition) {
+        guard let lastIndex = self.entries.indices.last else {
+            return
+        }
+        // Mirrors ListViewImpl's `bottomItemNode`: resolved only when the collection's last entry is
+        // itself loaded, so an unloaded last item gets no call at all rather than a fabricated zero.
+        guard let hostView = self.coreList.loadedItemView(at: lastIndex) as? CoreListNodeHostView,
+              let itemNode = hostView.itemNode,
+              itemNode.wantsTrailingItemSpaceUpdates else {
+            return
+        }
+
+        var trailingItemSpace: CGFloat = 0.0
+        // `topItemFound && bottomItemFound`: the leftover is only meaningful when the window spans the
+        // WHOLE collection, since `settledContentHeight` measures the loaded window and nothing more.
+        if let loadedRange = self.coreList.loadedIndexRange,
+           loadedRange.first == 0,
+           loadedRange.last == lastIndex {
+            let visibleAreaHeight = self.currentSize.height
+                - self.currentInsets.top
+                - self.currentInsets.bottom
+                - self.coreList.currentBottomEdgePinSlack
+            let completeHeight = self.coreList.settledContentHeight
+            if visibleAreaHeight > completeHeight {
+                trailingItemSpace = visibleAreaHeight - completeHeight
+            }
+        }
+        // The zero is as load-bearing as the positive value: it is what RESETS an item that was
+        // centred by an earlier pass once the content has grown past the viewport.
+        itemNode.updateTrailingItemSpace(trailingItemSpace, transition: transition)
+    }
+
     // ListViewImpl scans its item nodes for `index == index`; hosted nodes can never carry a ListView
     // index, so resolve through CoreList, which owns activeWindow and is the authority on the
     // index ↔ view mapping. `index` is in the same space as `self.entries` — which is also the space
