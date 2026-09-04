@@ -21,6 +21,7 @@ import AttachmentUI
 import AlertComponent
 import AlertInputFieldComponent
 import WalletContext
+import WalletAuthorizationUI
 import QrCodeUI
 import UndoUI
 
@@ -517,12 +518,17 @@ private final class WalletSendScreenComponent: Component {
         private var walletContext: WalletContext?
         private let walletDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
+        private let signingAccessDisposable = MetaDisposable()
         private let discardTransferDisposables = DisposableSet()
         private var peerPreparedTransfer: WalletContext.PreparedTransfer?
+        private var walletInfo: WalletContext.WalletInfo?
         private var walletBalance: Int64?
         private var walletAddress: String?
         private var walletIsLoading = true
         private var isPreparingTransfer = false
+        private var isResolvingSigningAccess = false
+        private var continueSendingAfterSigningAccess = false
+        private weak var recoveryPhraseImportController: ViewController?
 
         private var inputMode: WalletSendInputMode = .gram
         private var amount: Int64 = 0
@@ -574,6 +580,7 @@ private final class WalletSendScreenComponent: Component {
             self.discardPeerPreparedTransfer()
             self.walletDisposable.dispose()
             self.transferDisposable.dispose()
+            self.signingAccessDisposable.dispose()
             self.discardTransferDisposables.dispose()
         }
 
@@ -765,12 +772,165 @@ private final class WalletSendScreenComponent: Component {
             guard let component = self.component,
                   self.amount > 0,
                   !self.isPreparingTransfer,
+                  !self.isResolvingSigningAccess,
                   !self.walletIsLoading,
+                  let walletInfo = self.walletInfo,
                   let balance = self.walletBalance,
                   self.amount <= balance else {
                 return
             }
             guard !self.recipientAddress.isEmpty else {
+                return
+            }
+            guard walletInfo.canSign else {
+                self.resolveSigningAccess(walletInfo: walletInfo)
+                return
+            }
+            self.performSend(component: component)
+        }
+
+        private func resolveSigningAccess(walletInfo: WalletContext.WalletInfo) {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  !self.isResolvingSigningAccess else {
+                return
+            }
+            self.continueSendingAfterSigningAccess = false
+            if walletInfo.canExportPhrase {
+                self.isResolvingSigningAccess = true
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                self.signingAccessDisposable.set(performWalletAuthorizedOperation(
+                    context: component.context,
+                    present: { [weak controller] alert in
+                        controller?.present(alert, in: .window(.root))
+                    },
+                    operation: { password in
+                        component.walletContext.recoveryPhrase(password: password)
+                    },
+                    next: { [weak self] _ in
+                        guard let self, self.component?.walletContext === component.walletContext else {
+                            return
+                        }
+                        self.isResolvingSigningAccess = false
+                        self.continueSendingAfterSigningAccess = true
+                        self.resumeSendingAfterSigningAccessIfReady()
+                        self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                    },
+                    failed: { [weak self] error in
+                        self?.finishResolvingSigningAccess(error: error)
+                    }
+                ))
+            } else {
+                self.presentRecoveryPhraseImportAlert()
+            }
+        }
+
+        private func resumeSendingAfterSigningAccessIfReady() {
+            guard self.continueSendingAfterSigningAccess,
+                  !self.isResolvingSigningAccess,
+                  !self.walletIsLoading,
+                  self.walletInfo?.canSign == true,
+                  let component = self.component else {
+                return
+            }
+            self.continueSendingAfterSigningAccess = false
+            self.performSend(component: component)
+        }
+
+        private func finishResolvingSigningAccess(error: WalletContext.WalletError) {
+            self.isResolvingSigningAccess = false
+            self.continueSendingAfterSigningAccess = false
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            guard error != .authorizationCancelled,
+                  let component = self.component,
+                  let controller = self.environment?.controller() else {
+                return
+            }
+            let message = walletAuthorizationErrorMessage(error)
+            controller.present(textAlertController(
+                context: component.context,
+                title: message?.title ?? "Couldn’t Restore Wallet",
+                text: message?.text ?? "Check the network connection and try again.",
+                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+            ), in: .window(.root))
+        }
+
+        private func presentRecoveryPhraseImportAlert() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            controller.present(textAlertController(
+                context: component.context,
+                title: "Recovery Phrase Required",
+                text: "To send funds, you’ll need to enter your 12- or 24-word recovery phrase to restore access to this wallet.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
+                    TextAlertAction(type: .defaultAction, title: "Proceed", action: { [weak self] in
+                        Queue.mainQueue().after(0.25) { [weak self] in
+                            self?.openRecoveryPhraseImport()
+                        }
+                    })
+                ]
+            ), in: .window(.root))
+        }
+
+        private func openRecoveryPhraseImport() {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let hostController: ViewController
+            if controller.navigationController != nil {
+                hostController = controller
+            } else if let parentController = (controller as? AttachmentContainable)?.parentController(),
+                      parentController.navigationController != nil {
+                hostController = parentController
+            } else {
+                return
+            }
+            let importController = component.context.sharedContext.makeWalletImportScreen(
+                context: component.context,
+                mode: .enterRecoveryPhrase,
+                completion: { [weak self] in
+                    self?.completeRecoveryPhraseImport()
+                }
+            )
+            self.recoveryPhraseImportController = importController
+            hostController.push(importController)
+        }
+
+        private func completeRecoveryPhraseImport() {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let importController = self.recoveryPhraseImportController else {
+                return
+            }
+            self.recoveryPhraseImportController = nil
+            importController.dismiss(animated: true)
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            Queue.mainQueue().after(0.4) { [weak controller] in
+                controller?.present(UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .actionSucceeded(
+                        title: "Wallet Imported",
+                        text: "Your wallet was restored from your recovery phrase.",
+                        cancel: nil,
+                        destructive: false
+                    ),
+                    position: .bottom,
+                    action: { _ in false }
+                ), in: .current)
+            }
+        }
+
+        private func performSend(component: WalletSendScreenComponent) {
+            guard self.amount > 0,
+                  !self.isPreparingTransfer,
+                  !self.isResolvingSigningAccess,
+                  !self.walletIsLoading,
+                  self.walletInfo?.canSign == true,
+                  let balance = self.walletBalance,
+                  self.amount <= balance,
+                  !self.recipientAddress.isEmpty else {
                 return
             }
             if let peer = component.peer {
@@ -959,9 +1119,13 @@ private final class WalletSendScreenComponent: Component {
             if self.walletContext !== component.walletContext {
                 self.discardPeerPreparedTransfer()
                 self.walletContext = component.walletContext
+                self.signingAccessDisposable.set(nil)
+                self.walletInfo = nil
                 self.walletBalance = nil
                 self.walletAddress = nil
                 self.walletIsLoading = true
+                self.isResolvingSigningAccess = false
+                self.continueSendingAfterSigningAccess = false
                 self.currentFiatCurrency = .usd
                 self.currentRate = nil
                 self.inputMode = .gram
@@ -973,8 +1137,10 @@ private final class WalletSendScreenComponent: Component {
                     }
                     self.walletBalance = walletState.balance.currentValue
                     if case let .wallet(info) = walletState.phase {
+                        self.walletInfo = info
                         self.walletAddress = info.address
                     } else {
+                        self.walletInfo = nil
                         self.walletAddress = nil
                     }
                     switch walletState.balance {
@@ -992,6 +1158,7 @@ private final class WalletSendScreenComponent: Component {
                         self.currentRate = nil
                         self.inputMode = .gram
                     }
+                    self.resumeSendingAfterSigningAccessIfReady()
                     if !self.isUpdating {
                         self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     }
@@ -1534,8 +1701,10 @@ private final class WalletSendScreenComponent: Component {
             let canSend = hasAmount
                 && hasRecipient
                 && !self.isPreparingTransfer
+                && !self.isResolvingSigningAccess
                 && !self.walletIsLoading
                 && !isInsufficient
+                && self.walletInfo != nil
                 && self.walletBalance != nil
             let sendButtonSize = self.sendButton.update(
                 transition: transition,
@@ -1559,7 +1728,7 @@ private final class WalletSendScreenComponent: Component {
                         ))
                     ),
                     isEnabled: canSend,
-                    displaysProgress: component.peer != nil && self.isPreparingTransfer,
+                    displaysProgress: self.isResolvingSigningAccess || (component.peer != nil && self.isPreparingTransfer),
                     action: { [weak self] in
                         self?.send()
                     }
@@ -1613,6 +1782,9 @@ private final class WalletSendScreenComponent: Component {
 }
 
 public final class WalletSendScreen: ViewControllerComponentContainer, AttachmentContainable {
+    private let walletContext: WalletContext
+    private var walletScreenUpdatesDisposable: Disposable?
+
     public var requestAttachmentMenuExpansion: () -> Void = {
     }
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in
@@ -1652,6 +1824,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         address: String,
         completed: (() -> Void)? = nil
     ) {
+        self.walletContext = walletContext
         super.init(
             context: context,
             component: WalletSendScreenComponent(
@@ -1676,6 +1849,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         address: String,
         completed: (() -> Void)? = nil
     ) {
+        self.walletContext = walletContext
         super.init(
             context: context,
             component: WalletSendScreenComponent(
@@ -1691,6 +1865,25 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         )
 
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
+    }
+
+    override public func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        if self.walletScreenUpdatesDisposable == nil {
+            self.walletScreenUpdatesDisposable = self.walletContext.beginWalletScreenUpdates()
+        }
+    }
+
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        self.walletScreenUpdatesDisposable?.dispose()
+        self.walletScreenUpdatesDisposable = nil
+    }
+
+    deinit {
+        self.walletScreenUpdatesDisposable?.dispose()
     }
 
     required public init(coder aDecoder: NSCoder) {
