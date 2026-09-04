@@ -162,10 +162,11 @@ public final class WalletTransactionItemComponent: Component {
 
     public final class View: UIView {
         private let avatarContainer = UIView()
-        private let avatarMask = CAShapeLayer()
+        private var avatarMask: UIView?
+        private var avatarMaskCutout: UIView?
         private let avatar = ComponentView<Empty>()
         private let deployIcon = ComponentView<Empty>()
-        private let activityIndicatorBackground = UIView()
+        private var activityIndicatorBackground: UIView?
         private var activityIndicator: ActivityIndicator?
         private let title = ComponentView<Empty>()
         private let subtitle = ComponentView<Empty>()
@@ -189,10 +190,7 @@ public final class WalletTransactionItemComponent: Component {
 
             self.isUserInteractionEnabled = false
             self.avatarContainer.isUserInteractionEnabled = false
-            self.activityIndicatorBackground.isUserInteractionEnabled = false
-            self.activityIndicatorBackground.isHidden = true
             self.addSubview(self.avatarContainer)
-            self.addSubview(self.activityIndicatorBackground)
         }
 
         required public init?(coder: NSCoder) {
@@ -202,7 +200,7 @@ public final class WalletTransactionItemComponent: Component {
         private func setTransactionContentHidden(_ hidden: Bool) {
             self.avatarContainer.isHidden = hidden
             self.deployIcon.view?.isHidden = hidden
-            self.activityIndicatorBackground.isHidden = hidden
+            self.activityIndicatorBackground?.isHidden = hidden
             self.activityIndicator?.view.isHidden = hidden
             self.title.view?.isHidden = hidden
             self.subtitle.view?.isHidden = hidden
@@ -576,19 +574,40 @@ public final class WalletTransactionItemComponent: Component {
                     height: indicatorDiameter
                 )
 
-                self.avatarMask.frame = CGRect(origin: CGPoint(), size: avatarSize)
-                self.avatarMask.fillRule = .evenOdd
-                let maskPath = UIBezierPath(rect: self.avatarMask.bounds)
-                maskPath.append(UIBezierPath(
-                    ovalIn: backgroundFrame.insetBy(dx: -2.0, dy: -2.0)
-                ))
-                self.avatarMask.path = maskPath.cgPath
-                self.avatarContainer.layer.mask = self.avatarMask
+                let avatarMask: UIView
+                let avatarMaskCutout: UIView
+                if let currentAvatarMask = self.avatarMask, let currentAvatarMaskCutout = self.avatarMaskCutout {
+                    avatarMask = currentAvatarMask
+                    avatarMaskCutout = currentAvatarMaskCutout
+                } else {
+                    avatarMask = UIView()
+                    avatarMask.backgroundColor = .white
+                    if let filter = CALayer.luminanceToAlpha() {
+                        avatarMask.layer.filters = [filter]
+                    }
+                    avatarMaskCutout = UIView()
+                    avatarMaskCutout.backgroundColor = .black
+                    avatarMask.addSubview(avatarMaskCutout)
+                    self.avatarMask = avatarMask
+                    self.avatarMaskCutout = avatarMaskCutout
+                }
+                avatarMask.frame = CGRect(origin: CGPoint(), size: avatarSize)
+                avatarMaskCutout.frame = backgroundFrame.insetBy(dx: -2.0, dy: -2.0)
+                avatarMaskCutout.layer.cornerRadius = avatarMaskCutout.bounds.width / 2.0
+                self.avatarContainer.mask = avatarMask
 
-                self.activityIndicatorBackground.isHidden = false
-                self.activityIndicatorBackground.backgroundColor = component.theme.list.itemSecondaryTextColor
-                self.activityIndicatorBackground.layer.cornerRadius = backgroundDiameter / 2.0
-                self.activityIndicatorBackground.frame = backgroundFrame.offsetBy(
+                let activityIndicatorBackground: UIView
+                if let current = self.activityIndicatorBackground {
+                    activityIndicatorBackground = current
+                } else {
+                    activityIndicatorBackground = UIView()
+                    activityIndicatorBackground.isUserInteractionEnabled = false
+                    self.activityIndicatorBackground = activityIndicatorBackground
+                    self.addSubview(activityIndicatorBackground)
+                }
+                activityIndicatorBackground.backgroundColor = component.theme.list.itemSecondaryTextColor
+                activityIndicatorBackground.layer.cornerRadius = backgroundDiameter / 2.0
+                activityIndicatorBackground.frame = backgroundFrame.offsetBy(
                     dx: avatarFrame.minX,
                     dy: avatarFrame.minY
                 )
@@ -621,11 +640,47 @@ public final class WalletTransactionItemComponent: Component {
                     dy: avatarFrame.minY
                 )
             } else {
-                self.avatarContainer.layer.mask = nil
-                self.activityIndicatorBackground.isHidden = true
-                if let activityIndicator = self.activityIndicator {
-                    self.activityIndicator = nil
-                    activityIndicator.view.removeFromSuperview()
+                let avatarMask = self.avatarMask
+                let avatarMaskCutout = self.avatarMaskCutout
+                let activityIndicatorBackground = self.activityIndicatorBackground
+                let activityIndicatorView = self.activityIndicator?.view
+
+                self.avatarMask = nil
+                self.avatarMaskCutout = nil
+                self.activityIndicatorBackground = nil
+                self.activityIndicator = nil
+
+                if transition.animation.isImmediate {
+                    if self.avatarContainer.mask === avatarMask {
+                        self.avatarContainer.mask = nil
+                    }
+                    avatarMaskCutout?.removeFromSuperview()
+                    activityIndicatorBackground?.removeFromSuperview()
+                    activityIndicatorView?.removeFromSuperview()
+                } else {
+                    if let avatarMask, let avatarMaskCutout {
+                        transition.setScale(view: avatarMaskCutout, scale: 0.001, completion: { [weak self, weak avatarMask, weak avatarMaskCutout] _ in
+                            guard let self else {
+                                return
+                            }
+                            if self.avatarContainer.mask === avatarMask {
+                                self.avatarContainer.mask = nil
+                            }
+                            avatarMaskCutout?.removeFromSuperview()
+                        })
+                    }
+                    if let activityIndicatorBackground {
+                        transition.setScale(view: activityIndicatorBackground, scale: 0.001)
+                        transition.setAlpha(view: activityIndicatorBackground, alpha: 0.0, completion: { [weak activityIndicatorBackground] _ in
+                            activityIndicatorBackground?.removeFromSuperview()
+                        })
+                    }
+                    if let activityIndicatorView {
+                        transition.setScale(view: activityIndicatorView, scale: 0.001)
+                        transition.setAlpha(view: activityIndicatorView, alpha: 0.0, completion: { [weak activityIndicatorView] _ in
+                            activityIndicatorView?.removeFromSuperview()
+                        })
+                    }
                 }
             }
 
@@ -659,7 +714,7 @@ public final class WalletTransactionItemComponent: Component {
                 amountText,
                 integralFont: Font.semibold(15.0),
                 fractionalFont: Font.semibold(12.0),
-                color: amountColor,
+                color: .white,
                 decimalSeparator: component.dateTimeFormat.decimalSeparator
             )
             let amountIconSize = self.amountIcon.update(
@@ -676,7 +731,8 @@ public final class WalletTransactionItemComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(amountAttributedText),
-                    maximumNumberOfLines: 1
+                    maximumNumberOfLines: 1,
+                    tintColor: amountColor
                 )),
                 environment: {},
                 containerSize: CGSize(width: max(0.0, textAvailableWidth - amountIconSize.width - 3.0), height: 100.0)

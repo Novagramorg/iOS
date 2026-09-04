@@ -15,6 +15,7 @@ import DeviceAccess
 import TextFormat
 import TelegramBaseController
 import AccountContext
+import WalletContext
 import TelegramStringFormatting
 import OverlayStatusController
 import DeviceLocationManager
@@ -1140,6 +1141,47 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             } else {
                                 self.present(BotReceiptController(context: self.context, messageId: message.id), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
                             }
+                            return true
+                        case let .gramTransfer(amount, peerAddress, transactionId, messageComment):
+                            let direction: WalletContext.Transaction.Direction
+                            if message.effectivelyIncoming(self.context.account.peerId) {
+                                direction = .incoming
+                            } else {
+                                direction = .outgoing
+                            }
+
+                            let comment: String?
+                            if let messageComment, !messageComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                comment = messageComment
+                            } else {
+                                comment = nil
+                            }
+
+                            let peer: WalletContext.Transaction.Peer
+                            if let enginePeer = message.peers[message.id.peerId].flatMap(EnginePeer.init),
+                               enginePeer.id.namespace == Namespaces.Peer.CloudUser {
+                                peer = .user(enginePeer, address: peerAddress, domain: nil)
+                            } else if !peerAddress.isEmpty {
+                                peer = .address(peerAddress, domain: nil)
+                            } else {
+                                peer = .unsupported
+                            }
+
+                            let logicalTime = transactionId.split(separator: ":", maxSplits: 1).first.map(String.init) ?? transactionId
+                            let transaction = WalletContext.Transaction(
+                                id: transactionId,
+                                logicalTime: logicalTime,
+                                timestamp: message.timestamp,
+                                direction: direction,
+                                amount: amount,
+                                fee: 0,
+                                peer: peer,
+                                comment: comment
+                            )
+                            self.push(self.context.sharedContext.makeWalletTransactionScreen(
+                                context: self.context,
+                                transaction: transaction
+                            ))
                             return true
                         case let .setChatTheme(chatTheme):
                             switch chatTheme {

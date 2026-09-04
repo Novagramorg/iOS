@@ -90,6 +90,7 @@ public final class WalletContext {
     private let environmentRevision = Atomic<UInt64>(value: 0)
     private let walletStateRevision = Atomic<UInt64>(value: 0)
     private let subscriberDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
+    private let walletScreenDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
     let fiatCurrencyRevision = Atomic<UInt64>(value: 0)
 
     public var state: Signal<State, NoError> {
@@ -133,6 +134,39 @@ public final class WalletContext {
     public var tonConnectPresentations: Signal<TonConnectPresentation, NoError> {
         self.output.tonConnectPresentationPipe.signal()
         |> deliverOnMainQueue
+    }
+
+    public func beginWalletScreenUpdates() -> Disposable {
+        let impl = self.impl
+        let walletScreenDemand = self.walletScreenDemand
+        let demand = walletScreenDemand.modify { value in
+            var value = value
+            value.count += 1
+            value.revision &+= 1
+            return value
+        }
+        Task {
+            await impl.updateWalletScreenDemand(
+                count: demand.count,
+                revision: demand.revision,
+                refreshOnOpen: true
+            )
+        }
+        return ActionDisposable {
+            let demand = walletScreenDemand.modify { value in
+                var value = value
+                value.count = max(0, value.count - 1)
+                value.revision &+= 1
+                return value
+            }
+            Task {
+                await impl.updateWalletScreenDemand(
+                    count: demand.count,
+                    revision: demand.revision,
+                    refreshOnOpen: false
+                )
+            }
+        }
     }
 
     public init(

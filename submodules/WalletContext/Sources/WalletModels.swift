@@ -1,6 +1,12 @@
 import Foundation
 import TelegramCore
 
+let walletPendingTransferUILifetime: Int32 = 60
+
+func walletPendingTransferUIExpirationTimestamp(from timestamp: Int32) -> Int32 {
+    Int32(clamping: Int64(timestamp) + Int64(walletPendingTransferUILifetime))
+}
+
 public extension WalletContext {
     enum FiatCurrency: Int32, CaseIterable, Codable, Hashable, Sendable {
         case usd, eur, rub, cny
@@ -324,6 +330,7 @@ public extension WalletContext {
             }
         }
         public let id: String
+        public let presentationId: String
         public let transactionHash: String?
         public let logicalTime: String
         public let timestamp: Int32
@@ -336,8 +343,8 @@ public extension WalletContext {
         public let currency: Currency
         public let collectible: CollectibleTransfer?
         public let status: Status
-        public init(id: String, transactionHash: String? = nil, logicalTime: String, timestamp: Int32, direction: Direction, amount: Int64, fee: Int64, peer: Peer, comment: String?, currency: Currency = .ton, collectible: CollectibleTransfer? = nil, status: Status = .completed, kind: Kind = .transfer) {
-            self.id = id; self.transactionHash = transactionHash
+        public init(id: String, presentationId: String? = nil, transactionHash: String? = nil, logicalTime: String, timestamp: Int32, direction: Direction, amount: Int64, fee: Int64, peer: Peer, comment: String?, currency: Currency = .ton, collectible: CollectibleTransfer? = nil, status: Status = .completed, kind: Kind = .transfer) {
+            self.id = id; self.presentationId = presentationId ?? id; self.transactionHash = transactionHash
             self.logicalTime = logicalTime; self.timestamp = timestamp; self.kind = kind; self.direction = direction
             self.amount = amount; self.fee = fee; self.peer = peer; self.comment = comment; self.currency = currency
             self.collectible = collectible; self.status = status
@@ -404,6 +411,7 @@ public extension WalletContext {
             case broadcasting = 0
             case pending = 1
             case submissionUnknown = 2
+            case confirmed = 3
         }
         public let id: String
         public let recipient: String
@@ -411,12 +419,30 @@ public extension WalletContext {
         public let comment: String?
         public let collectibleAddress: String?
         public let normalizedHash: String?
+        public let fee: Int64?
+        public let transactionHash: String?
+        public let transactionLt: String?
+        public let uiExpiresAt: Int32?
         public let createdAt: Int32
         public let status: Status
-        public init(id: String, recipient: String, amount: Int64, comment: String?, collectibleAddress: String? = nil, normalizedHash: String? = nil, createdAt: Int32, status: Status) {
+        public init(
+            id: String,
+            recipient: String,
+            amount: Int64,
+            comment: String?,
+            collectibleAddress: String? = nil,
+            normalizedHash: String? = nil,
+            fee: Int64? = nil,
+            transactionHash: String? = nil,
+            transactionLt: String? = nil,
+            uiExpiresAt: Int32? = nil,
+            createdAt: Int32,
+            status: Status
+        ) {
             self.id = id; self.recipient = recipient; self.amount = amount; self.comment = comment
             self.collectibleAddress = collectibleAddress; self.normalizedHash = normalizedHash
-            self.createdAt = createdAt; self.status = status
+            self.fee = fee; self.transactionHash = transactionHash; self.transactionLt = transactionLt
+            self.uiExpiresAt = uiExpiresAt; self.createdAt = createdAt; self.status = status
         }
     }
 

@@ -75,7 +75,8 @@ public func walletTransferServiceMessageString(
     strings: PresentationStrings,
     dateTimeFormat: PresentationDateTimeFormat,
     message: EngineMessage,
-    transfer: WalletTransferMessageData,
+    isIncoming: Bool,
+    amount: Int64,
     tonUsdRate: Double?
 ) -> NSAttributedString {
     let primaryTextColor = serviceMessageColorComponents(theme: presentationData.0, wallpaper: presentationData.1).primaryText
@@ -118,11 +119,10 @@ public func walletTransferServiceMessageString(
     //TODO:localize
     let learnMoreText = "Learn more"
 
-    switch transfer.direction {
-    case .incoming:
+    if isIncoming {
         append(peerName, font: semiboldFont, additionalAttributes: peerMentionAttributes)
         append(sentYouText, font: regularFont)
-    case .outgoing:
+    } else {
         append(youText, font: semiboldFont)
         append(sentText, font: regularFont)
         append(peerName, font: regularFont, additionalAttributes: peerMentionAttributes)
@@ -130,7 +130,7 @@ public func walletTransferServiceMessageString(
     }
 
     let amountText = formatTonAmountText(
-        transfer.amount,
+        amount,
         dateTimeFormat: dateTimeFormat,
         maxDecimalPositions: 3,
         formatString: strings.Currency_Grams
@@ -140,7 +140,7 @@ public func walletTransferServiceMessageString(
 
     if let tonUsdRate {
         append(worthPrefixText, font: regularFont)
-        append(formatTonUsdValue(transfer.amount, rate: tonUsdRate, dateTimeFormat: dateTimeFormat), font: regularFont)
+        append(formatTonUsdValue(amount, rate: tonUsdRate, dateTimeFormat: dateTimeFormat), font: regularFont)
         append(worthSuffixText, font: regularFont)
     }
     append(

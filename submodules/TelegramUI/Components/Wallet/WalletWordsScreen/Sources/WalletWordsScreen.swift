@@ -452,7 +452,7 @@ private final class WalletWordsSheetComponent: CombinedComponent {
                             (controller() as? WalletWordsScreen)?.complete()
                         }
                     )),
-                    backgroundColor: .color(theme.list.plainBackgroundColor),
+                    backgroundColor: .color(theme.list.modalPlainBackgroundColor),
                     animateOut: animateOut
                 ),
                 environment: {
@@ -543,7 +543,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
                 context: self.context,
                 title: "Sure done?",
                 text: "You didn't have enough time to write these words down.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK, sorry", action: {
+                actions: [TextAlertAction(type: .genericAction, title: "OK, sorry", action: {
                 })]
             ), in: .window(.root))
             return
