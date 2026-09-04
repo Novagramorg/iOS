@@ -178,6 +178,8 @@ The group call implementation in `tgcalls/group/GroupInstanceCustomImpl.cpp` (~4
 
 An alternative group call implementation that uses standard WebRTC PeerConnection instead of the manual ICE/DTLS/SRTP management in `GroupInstanceCustomImpl`. Supports both audio and video (H264 simulcast). Implements the same `GroupInstanceInterface`.
 
+**Selection in the app:** opt-in in any build through Debug Settings ▸ "Group calls: reference engine" (`ExperimentalUISettings.groupCallReferenceEngine`, read in `PresentationGroupCall.swift` when the call context is created — a running call keeps its engine), or from the server via the `ios_calls_group_reference_impl` app-config flag (non-zero turns it on; it cannot turn the debug switch off). Live streams always use the custom engine: the reference engine has no broadcast mode. Before 2026-09-04 the reference engine was the default of every DEBUG build, which is what the fixed real-call bugs above were found under.
+
 ### Architecture
 
 ```
@@ -218,22 +220,116 @@ GroupInstanceReferenceImpl
 
 **Audio (per-receiver frame transformer):**
 1. The first packet for an unknown SSRC X reaches mid=0's receiver — PeerConnection's catch-all for unsignaled audio. The voice channel creates a `WebRtcAudioReceiveStream` for X and attaches `GRAudioFrameTransformer` (registered as `unsignaled_frame_transformer_` on mid=0).
-2. The transformer's `Transform(frame)` reads `frame->GetSsrc() = X`, sees X for the first time, **buffers the frame** in a per-SSRC FIFO, and posts the SSRC to the media thread.
+2. The transformer's `Transform(frame)` reads `frame->GetSsrc() = X`, sees X for the first time, posts the SSRC to the media thread, and forwards the frame straight through — there is **no buffering**. (An earlier design buffered into a per-SSRC FIFO and drained it via `releaseSsrc`; that was removed. CustomImpl does not buffer either: `MissingSsrcPacketBuffer` is vestigial, its `add()` is never called and `maybeDeliverBufferedPackets` is commented out, and `GroupNetworkManager` discards the packet after reporting `(ssrc, payloadType)`.)
 3. `handleDiscoveredAudioSsrc(X)` inserts X into `_remoteSsrcs` with a fresh mid, fires `_requestMediaChannelDescriptions({X}, ...)` (matches CustomImpl's contract), and calls `scheduleDiscoveryRenegotiation()` (250 ms debounce).
-4. After the debounce, `renegotiate()` adds a recvonly audio transceiver bound to mid=`_nextMid++` for every entry in `_remoteSsrcs` that doesn't have one. `buildRemoteAnswer` includes X on the new m-line; `WebRtcVoiceReceiveChannel::AddRecvStream(X)` PROMOTES the existing unsignaled stream in place (`webrtc_voice_engine.cc:2258-2266`) — the transformer stays attached.
-5. `onRenegotiationComplete` runs `wireRemoteAudioLevelSinks()` (attaches `GRAudioLevelSink` per receiver), then calls `_audioFrameTransformer->releaseSsrc(ssrc)` for every SSRC whose transceiver now has a mid. The transformer drains the per-SSRC FIFO via `OnTransformedFrame` so the buffered audio plays without a startup gap.
-6. Subsequent live frames for X take the transformer's `kDrained` branch (immediate passthrough). The per-receiver `GRAudioLevelSink` reads real PCM levels.
+4. After the debounce, `renegotiate()` adds a recvonly audio transceiver bound to mid=`_nextMid++` for every entry in `_remoteSsrcs` that doesn't have one. `buildRemoteAnswer` includes X on the new m-line; each recvonly transceiver gets its **own** `SetDepacketizerToDecoderFrameTransformer` instance, installed right after `AddTransceiver` and before the SDP cycle assigns the signaled SSRC.
+5. `onRenegotiationComplete` runs `wireRemoteAudioLevelSinks()`, attaching a `GRAudioLevelSink` per receiver.
+6. Once the transceiver is negotiated, frames for X arrive at that receiver's **per-receiver** transformer, not the mid=0 tap. Measured 2026-09-04: `perRecv[...]: first Transform ssrc=... sink=ok` fires for the promoted SSRC. (This settles a contradiction that stood in this file: the claim that the unsignaled stream is promoted in place and the tap stays attached was wrong.) The per-receiver `GRAudioLevelSink` reads real PCM levels.
 
 The `colibriClass=ActiveAudioSsrcs` data-channel mechanism (test-SFU only) was removed; the tap is the single audio-discovery path. Removed-SSRC handling is the same as CustomImpl: stale recvonly transceivers stay in the SDP indefinitely; participant departures are tracked at the application layer (MTProto).
 
-The transformer is installed once on mid=0's receiver only — re-installing on the recvonly receivers triggers `Register{Sink,}TransformedFrameCallback` re-runs that overwrite valid registrations and misroute frames. Stream promotion keeps the single instance valid for every signaled SSRC.
+The **discovery tap** is installed once on mid=0's receiver only. Each recvonly receiver gets its own separate transformer instance — sharing ONE instance across receivers triggers `Register{Sink,}TransformedFrameCallback` re-runs that overwrite valid registrations and misroute frames.
 
 **Video:**
-1. SFU sends `ActiveVideoSsrcs` over data channel → forwarded to app via `dataChannelMessageReceived`
-2. App calls `setRequestedVideoChannels()` → adds recvonly video transceivers, sends `ReceiverVideoConstraints` over data channel
+1. SFU sends `ActiveVideoSsrcs` over data channel → forwarded to app via `dataChannelMessageReceived` (test SFU only; the real app learns endpoints + SSRC groups from the MTProto participant list, usually BEFORE joining)
+2. App calls `setRequestedVideoChannels()` → the full set is stored in `_requestedVideoChannels`; if the join response has not been applied yet (`!_isJoined`) it is only recorded and `onJoined()` applies it later. Otherwise `applyRequestedVideoChannels()` adds recvonly video transceivers (and re-flags any existing endpoint whose transceiver still has no mid, so a failed cycle is retried) and sends `ReceiverVideoConstraints` over the data channel
 3. Renegotiate: new offer → munge outgoing video SSRCs → `SetLocalDescription` → build answer with incoming video SSRCs → `SetRemoteDescription`
 4. `wirePendingVideoSinks()`: attach `FakeVideoSink` to the recvonly transceiver's receiver track after `SetRemoteDescription` completes
-5. Renegotiations are serialized (`_isRenegotiating` / `_pendingRenegotiation` flags) to prevent overlapping offer/answer cycles
+5. Renegotiations are serialized (`_isRenegotiating` / `_pendingRenegotiation` flags) to prevent overlapping offer/answer cycles, and `renegotiate()` refuses to run before `_isJoined`
+6. `onDataChannelStateChanged()` re-sends `ReceiverVideoConstraints` for `_requestedVideoChannels` when the channel opens — `sendReceiverVideoConstraints` silently drops the message while the channel is still connecting, and the SFU forwards no video until it has received constraints
+
+**Why the join gate exists (2026-09-04, from a real-call log):** the app calls `setRequestedVideoChannels` right after the context issues `emitJoinPayload`, so the request lands on the media thread behind the initial `CreateOffer` and before its `SetLocalDescription`. Renegotiating there is unrecoverable: a transceiver with no mid gets a FRESH mid from PeerConnection's monotonic `UniqueNumberGenerator` on every `CreateOffer` (`pc/sdp_offer_answer.cc` `GetOptionsForUnifiedPlanOffer`), so the initial offer took mids 0/1/2 and the renegotiation offer got 3/4/5/6; `SetLocalDescription` rejected it with "The order of m-lines in subsequent offer doesn't match order from previous offer/answer", nothing retried (later identical requests hit the "endpoint already known" early-continue), the constraints had been dropped on the closed data channel, and incoming video never arrived. Even with a matching offer, `buildRemoteAnswer()` before the join response runs on an empty `_remoteTransport`. The CLI reproduces it with `--early-video-request` (fails 1/2 video pairs on the old code, 2/2 after the fix).
+
+### A failed audio-unit start is permanent for the call
+
+`AudioDeviceIOS::StartPlayout` returns -1 *before* `playing_.store(1)` when
+`audio_unit_->Start()` fails (`tgcalls_audio_device_ios.mm:231-235` vs `:239`), and `playing_`
+is written in exactly two places — that line and `StopPlayout:255`. `UpdateAudioUnit` (route
+changes, interruption recovery) restarts the unit but never sets it, and
+`notifyAudioUnitStartFailedWithError` only notifies delegates that nothing implements. So a
+single failed start silently disables playout for the rest of the call while capture keeps
+working: the render callback is gated on `playing_` (`:446`).
+
+Observed 2026-09-04 on the simulator, on a fast leave→rejoin. The second join's `StartPlayout`
+raced the `AVAudioSession` activation against a HAL still disposing the previous device
+(`AudioObjectGetPropertyData: no object with given ID`, `AQMEIO … (maybe stale)`) and got
+`AUIOClient_StartIO failed (-66637)`; `StartRecording` then started the *same*
+Voice-Processing I/O unit successfully 7 ms later. Result: mic worked, video worked, incoming
+audio was silent for the whole call. A simulator restart cleared it.
+
+The symptom reads exactly like a decryption failure in an encrypted conference — the frame
+transformers drop silently — so check `playing_` before suspecting crypto.
+
+### End-to-end encryption (conference)
+
+`GroupInstanceDescriptor::e2eEncryptDecrypt` is honoured since 2026-09-04. Before that the
+reference engine ignored it, so a conference routed here sent plaintext and could not decrypt
+anything — `PresentationGroupCall` always builds an encryption context for a conference, so the
+callback is always set there.
+
+**The frame layout is shared, not reimplemented.** `group/GroupFrameTransformer.{h,cpp}` holds
+the `FrameTransformer` class, the H264/VP8 plaintext-prefix helpers, `ValidateEncryptedFrame`
+and four free functions (`encryptGroupAudioFrame` / `encryptGroupVideoFrame` /
+`decryptGroupAudioFrame` / `decryptGroupVideoFrame`), all moved out of
+`GroupInstanceCustomImpl.cpp`. A conference can mix engines, so the bytes must match
+CustomImpl's exactly — including the two-byte Opus trailer and the 3→4 byte NAL start-code
+widening. `//submodules/TgVoipWebrtc:group_frame_transformer_test` pins that layout.
+
+**Four attachment points**, every one gated on `_e2eEncryptDecrypt` alone:
+
+| Direction | Site | userId |
+|---|---|---|
+| Outgoing audio | `_outgoingAudioTransceiver->sender()->SetEncoderToPacketizerFrameTransformer`, `start()` | 0 |
+| Outgoing video | `_outgoingVideoTransceiver->sender()->…`, `start()` | 0 |
+| Incoming audio | the per-receiver transformer in `renegotiate()` | resolver |
+| Incoming video | `receiver()->SetDepacketizerToDecoderFrameTransformer` in `applyRequestedVideoChannels()` | resolver |
+
+One instance covers all outgoing simulcast layers: `WebRtcVideoSendChannel`'s `send_streams_` is
+keyed by `StreamParams::first_ssrc()` only, so CustomImpl's per-SSRC install loop already
+collapses to one. Installing on a sender before negotiation is safe — `RtpSenderBase` stores it
+and re-applies from `SetSsrc`.
+
+**`isConference` is NOT read by this engine, and must not be.** It is unrelated to encryption
+(CustomImpl gates every transformer install on the callback too; `_isConference` there controls
+only the simulcast layer count). Setting it drops outgoing video to one layer, which removes the
+`SIM` ssrc-group that the SFU resolves a sender's video through — in the CLI that silently took
+video from 2/2 to 0/2.
+
+**`ssrc → userId` comes from a shared registry, not a constructor argument.** CustomImpl creates
+an incoming channel *from* the `requestMediaChannelDescriptions` response, so it knows the id up
+front. This engine adds its recvonly transceiver on a 250 ms debounce after SSRC discovery, which
+can precede the response — and it used to discard the response entirely. `GRUserIdRegistry` is
+filled from that response (audio) and from `VideoChannelDescription::userId` × its `ssrcGroups`
+(video), and each decryptor resolves per frame.
+
+**Membership decides, not the value.** An unresolved SSRC and a genuine `userId` of 0 are
+indistinguishable by value (CustomImpl passes `int64_t()` for its own encryptors), so the drop
+decision uses `GRUserIdRegistry::isKnown`.
+
+**The discovery tap decrypts too.** Forwarding ciphertext to Opus renders a noise burst, and
+dropping unconditionally would have been wrong under the routing claim this file used to make.
+Decrypting is correct either way and keeps the discovery window audible.
+
+**Unresolved SSRCs are re-asked.** `handleDiscoveredAudioSsrc` used to early-return on
+`_remoteSsrcs.count(ssrc) > 0`, i.e. it asked exactly once ever; a response omitting the SSRC left
+that participant permanently undecryptable. It now re-asks while the sender is unknown, de-duped
+on the in-flight request exactly as CustomImpl's `maybeRequestUnknownSsrc` does. Transceiver
+creation stays one-shot.
+
+**The local audio level is real now.** Every outgoing Opus frame carries a level/speech trailer
+before encryption, and with encryption on that trailer is the only way a CustomImpl peer learns
+we are speaking (it sets `takeAudioLevelFromNetwork = false`). CustomImpl's RNNoise
+`AudioCapturePostProcessor` — extracted to `group/GroupAudioCapturePostProcessor.{h,cpp}` — is
+installed on this engine's APM. Two side effects reach non-conference calls: `pollAudioLevels`
+now emits the **ssrc-0 self level** this engine never reported, and `setIsNoiseSuppressionEnabled`
+does something (both it and its outer forwarder were no-ops).
+
+**Testing.** `--e2e` on the CLI installs a reversible per-participant keyed transform. Note the
+CLI's pass counters do **not** discriminate decrypted media from garbage: the tap used to forward
+ciphertext to Opus and the level sink scored the noise, and the error-resilient H264 decoder emits
+corrupt frames rather than refusing. Judge by the level *value* — a real 440 Hz sine reads a
+steady ~0.126–0.133, garbage swings 0.157–1.000 — and by the wrong-key negative control, which
+must drive the run to 0/2.
 
 ### Outgoing Video: SDP Munging for Simulcast
 
@@ -244,6 +340,12 @@ PeerConnection's API doesn't support SSRC-based simulcast directly (only RID-bas
 3. Before `SetLocalDescription`, `mungeVideoSsrcsInOffer()` replaces the video m-line's auto-generated `StreamParams` with our pre-allocated SSRCs + SIM + FID groups
 4. `UpdateLocalStreams_w()` in WebRTC's `channel.cc` sees SSRCs already present and skips generation
 5. Later, `setVideoSource()` just calls `sender()->SetTrack()` — no renegotiation
+
+### Video payload types are pinned, not negotiated
+
+Group calls never negotiate payload types per pair: every client sends with the table `GroupInstanceCustomImpl::assignPayloadTypes` produces — VP8 100, VP9 102, H264 104, each followed by its RTX at +1 — and the SFU forwards RTP unchanged. PeerConnection's **receive** table comes from the LOCAL description (`VideoChannel::SetLocalContent_w`; the remote answer only syncs codec parameters by name), and `CreateOffer` numbers it by walking the platform factory's format list (96, 98, 100, ... with RTX at +1). On iOS that list is H264, H264, VP8, VP9, H265, so PT 104 was **H265**: a remote participant's H264 packets went to the H265 depacketizer, nothing decoded, and `VideoReceiveStream2` sat "active" (RTP timestamps advancing) logging `No decodable frame in 200ms requesting keyframe` forever. The host testbench never saw it because the builtin macOS factory lists five H264 profiles and lands one on PT 104 by luck.
+
+`mungeVideoCodecsInOffer()` therefore rewrites the codec list of EVERY video m-line in every local offer (initial and renegotiation, outgoing and recvonly) to that table, copying each entry from the engine's own codec list (so feedback params stay what the engine supports; H264 = the constrained-baseline packetization-mode 1 entry, VP9 = profile 0) and dropping red/ulpfec/flexfec. The synthesized answer (`buildRemoteAnswer`) already speaks 104/105. Do not "clean this up" by removing the munge or by trusting `SetCodecPreferences` — preferences reorder but never renumber. The CLI reproduces the failure because `FakeInterface` now advertises formats in the iOS order (`--builtin-codec-order` restores the raw one): with the munge removed, `--participants 1 --reference-participants 1 --video` fails 1/2 pairs.
 
 ### Incoming Video: SSRC-Based Demux
 
@@ -257,9 +359,14 @@ The answer for incoming video m-lines includes remote SSRCs from `VideoChannelDe
 - **RTP header extensions**: Copied from the local offer per m-line (minus MID), ensuring BUNDLE-safe IDs. Hardcoding IDs risks collisions across the BUNDLE group.
 - **SDP mid matching**: During renegotiation, the constructed remote answer mirrors the local offer's m-line structure and mids exactly. Mismatched mids cause `SetRemoteDescription` to fail.
 - **Audio level reporting**: Uses synthetic levels (0.1) for all known remote SSRCs, since the SFU forwards RTP with extension IDs that may not match PeerConnection's negotiated mapping
-- **Video sink wiring**: `OnTrack` doesn't fire for locally-created recvonly transceivers. Sinks are wired explicitly in `wirePendingVideoSinks()` after `SetRemoteDescription` completes, and also in `addIncomingVideoOutput()` if the track already exists.
-- **H264 codec in answer**: PT 104 (primary) + PT 105 (RTX, apt=104), matching WebRTC's `assignPayloadTypes` order. RTCP feedback: nack, nack pli, ccm fir, goog-remb, transport-cc.
-- **Renegotiation serialization**: Only one offer/answer cycle runs at a time. Deferred renegotiations only fire if there are unnegotiated transceivers (no mid assigned yet), avoiding redundant cycles.
+- **Video sink wiring — never the app's sink, always the proxy**: the app hands `addIncomingVideoOutput` a `weak_ptr` because the tile's view owns the sink and is recreated on every quality switch. `AddOrUpdateSink` takes a raw pointer the track's `rtc::VideoBroadcaster` keeps until `RemoveSink`, so registering the app's sink directly was a use-after-free on the next decoded frame (crash in `rtc::VideoBroadcaster::OnFrame`, reproduced 2026-09-04 by "request full quality, switch back to medium"). Each endpoint therefore owns one `GRVideoSinkProxy` (`_videoSinkProxies`) — the only object ever registered on the receiver track — which locks each weak sink per frame and prunes dead ones, exactly CustomImpl's `VideoSinkImpl`. `attachVideoSinkProxy` registers it once the endpoint's track exists (`wirePendingVideoSinks()` after `SetRemoteDescription`, `onTrackAdded`, or immediately from `addIncomingVideoOutput`); `detachVideoSinkProxy` removes it on endpoint removal and `stop()`/destruction detach all before `Close()`. Several sinks per endpoint are normal (main view, clone, extra outputs). CLI regression: `--video-sink-churn`.
+- **H264 codec in answer**: PT 104 (primary) + PT 105 (RTX, apt=104), matching CustomImpl's `assignPayloadTypes` table — and, since 2026-09-04, the LOCAL offer's video m-lines are munged to the same table (see "Video payload types are pinned, not negotiated"). RTCP feedback: nack, nack pli, ccm fir, goog-remb, transport-cc.
+- **Renegotiation serialization**: Only one offer/answer cycle runs at a time, and none before the join response has been applied (`_isJoined`). Deferred renegotiations only fire if there are unnegotiated transceivers (no mid assigned yet), avoiding redundant cycles.
+- **`setRequestedVideoChannels` is the full set, at any time**: it may arrive before the join response (the app's normal order) or before the data channel opens; the engine stores it, applies it in `onJoined()`, and replays the constraints on data-channel open. Never add a transceiver or renegotiate from it while `!_isJoined`.
+
+### Known issue: host reference SENDER throttles
+
+In the CLI, a ReferenceImpl participant's outgoing video reaches everyone (CustomImpl and ReferenceImpl receivers alike) at only ~1–3 fps after the first seconds — 41–65 frames in 30 s at 640x360 versus ~750 from CustomImpl senders — so group validation passes only because it requires ≥1 frame. Unrelated to the receive-side fixes above (a 30 s stock mixed run shows it with no sink churn); the likely cause is loopback BWE drift (the same ~80 kbps drift `group_participant.cpp` documents for CustomImpl) combined with `_minOutgoingVideoBitrateKbit` being stored but never applied in ReferenceImpl. Unverified on device. Measured 2026-09-04.
 
 ### Key Files
 - `tgcalls/group/GroupInstanceReferenceImpl.h/.cpp` — implementation

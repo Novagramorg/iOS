@@ -1291,6 +1291,56 @@ existing CoreList suite applies its geometry *after* `VirtualListDriver.init` an
 reality). Whether this reaches the app — where a layout pass can land between `applyChanges` and the
 next frame — has not been established.
 
+## Trailing item space
+
+When the whole collection fits on screen with room to spare, the list tells its **last** item how much
+empty viewport lies beyond it (`ListViewItemNode.updateTrailingItemSpace`, driven from the tail of
+`ListViewImpl.snapToBounds`, `ListView.swift:1345-1357`). Three chat items opt in via
+`wantsTrailingItemSpaceUpdates` and all do the same thing with it — shift their content container by
+half the space, centring the block in the gap: `ChatBotInfoItemNode` and `ChatUserInfoItemNode` (set in
+`init`), and `ChatMessageBubbleItemNode` per-layout, for the centred-link `.messageOptions` preview
+only. (`ChatNewThreadInfoItemNode` overrides the method with a commented-out body and never sets the
+flag.)
+
+The last item is the **oldest** entry — index 0 is the newest — which the wrapper's π renders at the
+top of the screen with the free space above it. The offset the item applies is `y: -space/2` in its own
+coordinates, and the item's own π composes with the wrapper's to identity, so that reads as "up the
+screen, into the gap".
+
+**The quantity is offset-independent, deliberately.** `ListViewImpl` computes it as
+`visibleAreaHeight - completeHeight` rather than from where the last node currently sits, and the
+backend keeps that property: `settledContentHeight` is an intra-window height and
+`currentBottomEdgePinSlack` an intra-window span. Reading a presented or settled *frame* instead would
+make the centred item drift under a rubber-band overscroll — the one kind of scrolling an underfilled
+list allows.
+
+**The pin slack is part of the answer.** `ListViewImpl` measures the leftover against
+`effectiveInsets.top`, which `calculatePinToEdgeTopInset` has already widened; CoreList spends the same
+slack in its underfill alignment (it places the window on `viewportInsets.top + pinSlack`), so the gap
+really is smaller by that much. `CoreVirtualListView.currentBottomEdgePinSlack` was added as the public
+read of `bottomEdgePinSlack(for:)` so there stays one implementation of that formula. In an underfilled
+chat the slack always exceeds the leftover, so a short chat with an unread separator reports zero and
+the info item stays put — the pin has pushed the oldest content off the far edge and taken the info
+item with it. That is `ListViewImpl`'s answer too.
+
+**Two call sites, and the zero matters as much as the positive value.** The transaction end (on the
+pass transition, so the re-centring travels with the content-height or inset change that caused it) and
+`onVisibleWindowChanged` (immediate — where `ListViewImpl` reaches `snapToBounds` from as well, and
+where a rebalance can move both terms of the "whole collection is loaded" test). The zero is what
+*resets* an item centred by an earlier pass once the content grows past the viewport. There is no third
+site: `CoreListNodeHostView` declares `onContentDidChange` but never calls it, so no chat row's height
+changes behind the backend's back — a row that re-measures itself returns through
+`chatHistoryTransaction` as `customAnimationTransition`.
+
+Known imprecision, unreachable in practice: the leftover is measured against `currentInsets` (which
+excludes `overscrollHoldDistance`, matching `ListViewImpl` reading `self.insets` rather than
+`scroller.contentInset`), while CoreList's slack is computed against the held insets and so shrinks by
+the hold. It would need an underfilled chat that also has a pinned row — where the leftover is already
+zero with margin — and the error is bounded by the hold distance.
+
+**Runtime-unverified.** Built and reasoned against `ListViewImpl`; the empty-bot-chat and
+new-private-chat greetings have not been eyeballed on this backend.
+
 ## Send animation
 
 The outgoing-message morph (`ChatMessageTransitionNodeImpl`) parents its animating content **under the
