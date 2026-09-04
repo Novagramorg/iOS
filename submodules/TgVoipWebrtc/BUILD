@@ -215,6 +215,8 @@ sources = glob([
     "tgcalls/tgcalls/group/AudioStreamingPartInternal.cpp",
     "tgcalls/tgcalls/group/AudioStreamingPartPersistentDecoder.cpp",
     "tgcalls/tgcalls/group/AVIOContextImpl.cpp",
+    "tgcalls/tgcalls/group/GroupAudioCapturePostProcessor.cpp",
+    "tgcalls/tgcalls/group/GroupFrameTransformer.cpp",
     "tgcalls/tgcalls/group/GroupInstanceCustomImpl.cpp",
     "tgcalls/tgcalls/group/GroupInstanceReferenceImpl.cpp",
     "tgcalls/tgcalls/group/GroupJoinPayloadInternal.cpp",
@@ -363,6 +365,30 @@ cc_test(
     deps = [":tgcalls_core"],
 )
 
+cc_test(
+    name = "group_frame_transformer_test",
+    srcs = ["tgcalls/tgcalls/group/GroupFrameTransformerTest.cpp"],
+    copts = [
+        "-I{}/tgcalls/tgcalls".format("submodules/TgVoipWebrtc"),
+        "-Ithird-party/webrtc/webrtc",
+        "-Ithird-party/webrtc/dependencies",
+        "-Ithird-party/webrtc/absl",
+        "-Ithird-party/libyuv",
+        "-DRTC_ENABLE_VP9",
+        "-DNDEBUG",
+        "-std=c++17",
+        "-w",
+    ] + select({
+        "@platforms//os:linux": ["-DWEBRTC_LINUX", "-DWEBRTC_POSIX"],
+        "//conditions:default": ["-DWEBRTC_MAC", "-DWEBRTC_POSIX"],
+    }),
+    linkopts = select({
+        "@platforms//os:linux": ["-lpthread", "-lm", "-ldl"],
+        "//conditions:default": ["-framework", "CoreFoundation", "-framework", "Security"],
+    }),
+    deps = [":tgcalls_core"],
+)
+
 # Pure C++ core library for non-iOS targets (e.g. CLI tools).
 # Uses FakeInterface instead of darwin platform files.
 cc_library(
@@ -408,6 +434,8 @@ cc_library(
         "tgcalls/tgcalls/group/AudioStreamingPartInternal.cpp",
         "tgcalls/tgcalls/group/AudioStreamingPartPersistentDecoder.cpp",
         "tgcalls/tgcalls/group/AVIOContextImpl.cpp",
+        "tgcalls/tgcalls/group/GroupAudioCapturePostProcessor.cpp",
+        "tgcalls/tgcalls/group/GroupFrameTransformer.cpp",
         "tgcalls/tgcalls/group/GroupInstanceCustomImpl.cpp",
         "tgcalls/tgcalls/group/GroupInstanceReferenceImpl.cpp",
         "tgcalls/tgcalls/group/GroupJoinPayloadInternal.cpp",
