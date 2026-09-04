@@ -378,6 +378,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private let peerAddressDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
         private var resolveTimer: SwiftSignalKit.Timer?
+        private var navigationButtonsRevealTimer: SwiftSignalKit.Timer?
         private var resolveGeneration: Int = 0
         private var query: String = ""
         private var peers: [PeerInfo]?
@@ -387,6 +388,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var resolvingPeerId: EnginePeer.Id?
         private var isPreparingTransfer = false
         private var hasPasteboardText = UIPasteboard.general.hasStrings
+        private var navigationButtonsVisible = true
+        private var navigationButtonsFieldAlpha: CGFloat = 1.0
         private let searchQueryComponentSeparationCharacterSet: CharacterSet
 
         override init(frame: CGRect) {
@@ -427,6 +430,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         deinit {
             NotificationCenter.default.removeObserver(self)
             self.resolveTimer?.invalidate()
+            self.navigationButtonsRevealTimer?.invalidate()
             self.chatListDisposable?.dispose()
             self.resolveDisposable.dispose()
             self.peerAddressDisposable.dispose()
@@ -532,6 +536,77 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.resetQuery()
             self.activeSearch = nil
             self.state?.updated(transition: .spring(duration: 0.4))
+
+            self.navigationButtonsRevealTimer?.invalidate()
+            let timer = SwiftSignalKit.Timer(timeout: 0.3, repeat: false, completion: { [weak self] in
+                guard let self, self.activeSearch == nil else {
+                    return
+                }
+                self.navigationButtonsRevealTimer = nil
+                self.navigationButtonsVisible = true
+                self.state?.updated(transition: .easeInOut(duration: 0.2))
+            }, queue: Queue.mainQueue())
+            self.navigationButtonsRevealTimer = timer
+            timer.start()
+        }
+
+        private func hideNavigationButtons() {
+            self.navigationButtonsRevealTimer?.invalidate()
+            self.navigationButtonsRevealTimer = nil
+            self.navigationButtonsVisible = false
+
+            self.scanQrButton.layer.removeAllAnimations()
+            self.scanQrButton.alpha = 0.0
+            self.scanQrButton.isUserInteractionEnabled = false
+            if let pasteButtonView = self.pasteButton.view {
+                pasteButtonView.layer.removeAllAnimations()
+                pasteButtonView.alpha = 0.0
+                pasteButtonView.isUserInteractionEnabled = false
+            }
+        }
+
+        private func updateNavigationButtonsAppearance(transition: ComponentTransition) {
+            let displaysNavigationButtons = self.activeSearch == nil && self.navigationButtonsVisible
+            let alpha: CGFloat = displaysNavigationButtons ? self.navigationButtonsFieldAlpha : 0.0
+            let alphaTransition: ComponentTransition = displaysNavigationButtons ? transition : .immediate
+            alphaTransition.setAlpha(view: self.scanQrButton, alpha: alpha)
+
+            let buttonsAreInteractive = alpha >= 0.999
+                && self.resolvingPeerId == nil
+                && !self.isPreparingTransfer
+            self.scanQrButton.isUserInteractionEnabled = buttonsAreInteractive
+            if let pasteButtonView = self.pasteButton.view {
+                alphaTransition.setAlpha(
+                    view: pasteButtonView,
+                    alpha: self.hasPasteboardText ? alpha : 0.0
+                )
+                pasteButtonView.isUserInteractionEnabled = self.hasPasteboardText
+                    && buttonsAreInteractive
+            }
+        }
+
+        private func updateNavigationButtonsPosition() {
+            guard let navigationBarView = self.navigationBarView.view as? ChatListNavigationBar.View,
+                  let placeholderNode = navigationBarView.searchContentNode?.placeholderNode else {
+                return
+            }
+            self.navigationButtonsFieldAlpha = placeholderNode.labelNode.alpha
+
+            let searchFieldView = placeholderNode.backgroundView
+            let searchFieldFrame = searchFieldView.convert(searchFieldView.bounds, to: self)
+            guard !searchFieldFrame.isEmpty else {
+                return
+            }
+
+            var scanQrFrame = self.scanQrButton.frame
+            scanQrFrame.origin.y = floor(searchFieldFrame.midY - scanQrFrame.height / 2.0)
+            ComponentTransition.immediate.setFrame(view: self.scanQrButton, frame: scanQrFrame)
+
+            if let pasteButtonView = self.pasteButton.view {
+                var pasteButtonFrame = pasteButtonView.frame
+                pasteButtonFrame.origin.y = floor(searchFieldFrame.midY - pasteButtonFrame.height / 2.0)
+                ComponentTransition.immediate.setFrame(view: pasteButtonView, frame: pasteButtonFrame)
+            }
         }
 
         private func peerMatchesQuery(_ peer: EnginePeer, query: String) -> Bool {
@@ -686,6 +761,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 query = value
             }
 
+            self.hideNavigationButtons()
             self.activeSearch = ChatListNavigationBar.ActiveSearch(isExternal: false)
             self.updateQuery(query)
             self.state?.updated(transition: .spring(duration: 0.4))
@@ -903,6 +979,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         guard let self else {
                             return
                         }
+                        self.hideNavigationButtons()
                         self.activeSearch = ChatListNavigationBar.ActiveSearch(isExternal: false)
                         self.state?.updated(transition: .spring(duration: 0.4))
                     },
@@ -950,6 +1027,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
 
             guard let navigationBarView = self.navigationBarView.view as? ChatListNavigationBar.View else {
+                self.updateNavigationButtonsAppearance(transition: transition)
                 return
             }
             navigationBarView.applyScroll(
@@ -961,6 +1039,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     crossfadeStoryPeers: false
                 ))
             )
+            self.updateNavigationButtonsPosition()
+            self.updateNavigationButtonsAppearance(transition: transition)
         }
 
         func update(
@@ -1059,13 +1139,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 width: 44.0,
                 height: 44.0
             )
-            transition.setFrame(view: self.scanQrButton, frame: scanQrFrame)
-            transition.setAlpha(view: self.scanQrButton, alpha: self.activeSearch == nil ? 1.0 : 0.0)
-            self.scanQrButton.isUserInteractionEnabled = self.activeSearch == nil
-                && self.resolvingPeerId == nil
-                && !self.isPreparingTransfer
+            ComponentTransition.immediate.setFrame(view: self.scanQrButton, frame: scanQrFrame)
+            let displaysNavigationButtons = self.activeSearch == nil && self.navigationButtonsVisible
 
-            let displaysPasteButton = self.activeSearch == nil && self.hasPasteboardText
+            let displaysPasteButton = displaysNavigationButtons && self.hasPasteboardText
             if displaysPasteButton {
                 let pasteButtonHeight: CGFloat = 28.0
                 let pasteButtonSize = self.pasteButton.update(
@@ -1073,9 +1150,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     component: AnyComponent(ButtonComponent(
                         background: ButtonComponent.Background(
                             style: .legacy,
-                            color: environment.theme.overallDarkAppearance
-                                ? environment.theme.actionSheet.opaqueItemBackgroundColor
-                                : environment.theme.list.plainBackgroundColor,
+                            color: environment.theme.list.itemAccentColor.withMultipliedAlpha(0.1),
                             foreground: environment.theme.list.itemAccentColor,
                             pressedColor: environment.theme.list.itemInputField.backgroundColor,
                             cornerRadius: pasteButtonHeight / 2.0
@@ -1110,9 +1185,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 )
                 if let pasteButtonView = self.pasteButton.view {
                     if pasteButtonView.superview == nil {
+                        pasteButtonView.alpha = 0.0
                         self.addSubview(pasteButtonView)
                     }
-                    transition.setFrame(
+                    ComponentTransition.immediate.setFrame(
                         view: pasteButtonView,
                         frame: CGRect(
                             x: scanQrFrame.minX - 4.0 - pasteButtonSize.width,
@@ -1121,14 +1197,13 @@ private final class WalletPeerSelectionScreenComponent: Component {
                             height: pasteButtonSize.height
                         )
                     )
-                    transition.setAlpha(view: pasteButtonView, alpha: 1.0)
-                    pasteButtonView.isUserInteractionEnabled = self.resolvingPeerId == nil
-                        && !self.isPreparingTransfer
                 }
             } else if let pasteButtonView = self.pasteButton.view {
-                transition.setAlpha(view: pasteButtonView, alpha: 0.0)
+                ComponentTransition.immediate.setAlpha(view: pasteButtonView, alpha: 0.0)
                 pasteButtonView.isUserInteractionEnabled = false
             }
+            self.updateNavigationButtonsPosition()
+            self.updateNavigationButtonsAppearance(transition: transition)
 
             var removedSearchBar: SearchBarNode?
             if self.activeSearch != nil {
@@ -1163,9 +1238,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                             return
                         }
                         self.openRecipient()
-                    }
-                    if !self.query.isEmpty {
-                        searchBarNode.text = self.query
                     }
                     self.searchBarNode = searchBarNode
                     DispatchQueue.main.async { [weak self, weak searchBarNode] in
@@ -1213,6 +1285,9 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         }
                         searchBarNode.animateIn(from: placeholderNode, duration: duration, timingFunction: timingFunction)
                     }
+                    if !self.query.isEmpty {
+                        searchBarNode.text = self.query
+                    }
                 }
             } else if let searchBarNode = self.searchBarNode {
                 searchBarNode.deactivate()
@@ -1250,7 +1325,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     recipient: recipient,
                     theme: environment.theme,
                     size: recipientFrame.size,
-                    transition: transition
+                    transition: .immediate
                 )
             }
 
@@ -1533,6 +1608,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 navigationBarView.deferScrollApplication = false
                 navigationBarView.applyCurrentScroll(transition: transition)
             }
+            self.updateNavigationButtonsPosition()
+            self.updateNavigationButtonsAppearance(transition: transition)
 
             if let removedSearchBar {
                 if !transition.animation.isImmediate,

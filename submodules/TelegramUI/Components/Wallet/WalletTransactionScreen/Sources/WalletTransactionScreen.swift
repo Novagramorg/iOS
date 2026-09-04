@@ -1629,9 +1629,16 @@ private final class WalletTransactionContentComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - 122.0, height: 1000.0)
                 )
+                
+                var commentTransition = transition
+                if self.commentText.view?.superview == nil {
+                    self.commentBackgroundView.alpha = 0.0
+                    commentTransition = .immediate
+                }
+                
                 let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(commentSize.height + 14.0, bubbleImage.size.height))
                 self.commentBackgroundView.image = bubbleImage
-                transition.setFrame(view: self.commentBackgroundView, frame: CGRect(
+                commentTransition.setFrame(view: self.commentBackgroundView, frame: CGRect(
                     x: floorToScreenPixels(
                         (availableSize.width - bubbleSize.width) / 2.0
                         + (transaction.direction == .incoming ? -3.0 : 3.0)
@@ -1643,10 +1650,11 @@ private final class WalletTransactionContentComponent: Component {
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
                 if let commentView = self.commentText.view {
                     if commentView.superview == nil {
+                        commentView.alpha = 0.0
                         self.addSubview(commentView)
                     }
                     commentView.isUserInteractionEnabled = true
-                    transition.setFrame(view: commentView, frame: CGRect(
+                    commentTransition.setFrame(view: commentView, frame: CGRect(
                         x: floorToScreenPixels((availableSize.width - commentSize.width) / 2.0),
                         y: contentHeight + floorToScreenPixels((bubbleSize.height - commentSize.height) / 2.0),
                         width: commentSize.width,
