@@ -159,7 +159,7 @@ func withDecryptedMessageContents(parameters: SecretChatEncryptionParameters, da
             }
             
             let paddingLength = decryptedData.count - (Int(payloadLength) + 4)
-            if Int(payloadLength) > decryptedData.count - 4 || paddingLength > 16 {
+            if Int(payloadLength) <= 0 || Int(payloadLength) > decryptedData.count - 4 || paddingLength > 16 {
                 return nil
             }
             
