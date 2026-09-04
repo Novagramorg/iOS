@@ -175,6 +175,10 @@ private final class FetchImpl {
                     Logger.shared.log("FetchV2", "\(loggingIdentifier): not decrypting part \(offset) ..< \(offset + data.count) (decryptedSize == 0)")
                     return nil
                 }
+                if self.aesKey.count != 32 || self.aesIv.count != 32 {
+                    Logger.shared.log("FetchV2", "\(loggingIdentifier): not decrypting part \(offset) ..< \(offset + data.count) (invalid key/iv length: key=\(self.aesKey.count) iv=\(self.aesIv.count))")
+                    return nil
+                }
                 if decryptedData.count % 16 != 0 {
                     Logger.shared.log("FetchV2", "\(loggingIdentifier): not decrypting part \(offset) ..< \(offset + data.count) (decryptedData.count % 16 != 0)")
                 }

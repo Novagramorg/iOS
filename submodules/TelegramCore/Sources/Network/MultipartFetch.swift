@@ -26,7 +26,7 @@ private final class MultipartDownloadState {
     }
     
     func transform(offset: Int64, data: Data) -> Data {
-        if self.aesKey.count != 0 {
+        if self.aesKey.count == 32 && self.aesIv.count == 32 {
             var decryptedData = data
             assert(decryptedSize != nil)
             assert(decryptedData.count % 16 == 0)
