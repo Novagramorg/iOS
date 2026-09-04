@@ -35,10 +35,10 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
                 .map(ObjectIdentifier.init)
         )
         let wrappers = Set(list.ghostBlockWrapperViews.map(ObjectIdentifier.init))
-        for view in list.exitOverlay.subviews {
+        for view in list.exitOverlay.subviews + list.carouselExitOverlay.subviews {
             let key = ObjectIdentifier(view)
             XCTAssertTrue(owned.contains(key) || wrappers.contains(key),
-                          "\(label): exitOverlay holds an unowned view", file: file, line: line)
+                          "\(label): an exit overlay holds an unowned view", file: file, line: line)
         }
         for view in list.crossingOverlay.subviews {
             XCTAssertTrue(owned.contains(ObjectIdentifier(view)),
@@ -58,6 +58,9 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
                        file: file, line: line)
         XCTAssertEqual(fixture.listView.crossingOverlay.subviews.count, 0,
                        "\(label): crossingOverlay still populated after settling",
+                       file: file, line: line)
+        XCTAssertEqual(fixture.listView.carouselExitOverlay.subviews.count, 0,
+                       "\(label): carouselExitOverlay still populated after settling",
                        file: file, line: line)
     }
 
@@ -155,14 +158,14 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         reentrancy.listView.applyChanges(scrollTo: .init(index: 120, pointOffset: 0),
                                          transition: .easeInOut(duration: 0.3))
         reentrancy.advance(by: 0.1)
-        peak = max(peak, reentrancy.listView.exitOverlay.subviews.count
+        peak = max(peak, reentrancy.listView.exitOverlay.subviews.count + reentrancy.listView.carouselExitOverlay.subviews.count
                    + reentrancy.listView.crossingOverlay.subviews.count)
         let view = try XCTUnwrap(visibleSelfUpdatingView(reentrancy))
         view.simulateContentChange(newHeight: 140, animated: true)
         reentrancy.flushScheduler()
         for _ in 0..<20 {
             reentrancy.advance(by: 0.02)
-            peak = max(peak, reentrancy.listView.exitOverlay.subviews.count
+            peak = max(peak, reentrancy.listView.exitOverlay.subviews.count + reentrancy.listView.carouselExitOverlay.subviews.count
                        + reentrancy.listView.crossingOverlay.subviews.count)
         }
         XCTAssertGreaterThan(peak, 0, "re-entrancy sequence never parked a view — it is vacuous")
@@ -176,7 +179,7 @@ final class OverlayOrphanReentrancyTests: XCTestCase {
         drag.scroll(to: drag.boundsOriginY + 600)
         for _ in 0..<20 {
             drag.advance(by: 0.02)
-            dragPeak = max(dragPeak, drag.listView.exitOverlay.subviews.count
+            dragPeak = max(dragPeak, drag.listView.exitOverlay.subviews.count + drag.listView.carouselExitOverlay.subviews.count
                            + drag.listView.crossingOverlay.subviews.count)
         }
         XCTAssertGreaterThan(dragPeak, 0, "drag sequence never parked a view — it is vacuous")

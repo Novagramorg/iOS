@@ -669,7 +669,33 @@ left to attach to — the destination is a different region of the collection, w
 pass a carousel — and the shared additive viewport track already owns the travel for the outgoing
 strip exactly as much as for the incoming one. Blocks created there stay `.unresolved` and hold their
 remapped roots; this is the outgoing counterpart of the destination-only-survivor rule above. See the
-gotcha below for what a witness does there.
+gotcha below for what a witness does there. **A viewport-anchored block refuses a witness outright**
+(`GhostBlockLedger.canSetWitness`): declining at creation only covers blocks born in that pass, and
+with two carousels in a row the geometry/migration path re-linked the FIRST strip onto the second's
+block, resolving both to the same screen Y — the old window landing exactly on top of the new one.
+Refusing in the ledger is the only way to state "never" about a graph edge.
+
+**And a carousel's exit content is parked in the VIEWPORT, not in content space.** `exitOverlay` is a
+child of `engine.contentHost`, so the user's finger moved the outgoing strip too: jump to a disjoint
+region, drag back toward the side the strip sits on, and it travels along superimposed on the
+destination's own messages for the whole pass. Measured on an 800pt viewport at the production 1.15s
+curve, visible stale content grew from 96pt to 776pt, every visible pixel of it over a live row.
+(Dragging the *other* way sweeps the strip off-screen and was always clean — which is exactly how a
+first probe of this reads as "no bug".) Ghost wrappers and viewport carries born in an
+`isCarouselScroll` pass are promoted into `carouselExitOverlay`, a sibling of `contentHost` ordered
+BELOW it, at `contentY − transactionOffset` — forced, not chosen, by equating the two renderings
+(`contentY − (offset + correction)` in the content host, `mirrorY − correction` in the mirror). The
+promotion is ONE hand-off after every parking site, because `makeGhostBlock` runs before
+`transactionOffset` is even captured, and its membership is PASSED IN, never derived from carry
+generation — the viewport block re-stamps every live carry, including ones an earlier content-space
+pass parked, and promoting one of those freezes content-space content on screen. Departing
+attachments need no entry: `PriorRun.memberIdentities` holds only LOADED members and a full replace
+departs the whole window as one run, so they already travel inside a ghost wrapper.
+`ListViewImpl` has always done this — `temporaryPreviousNodes` go into the list view itself at their
+final frames and travel on one additive `sublayerTransform` (`Display/Source/ListView.swift:3625-3634`,
+`:3803`), below the live nodes — and CoreList had taken only the opacity half of that parity. A
+residual crossing remains on a short viewport and is inherent (a held strip and sliding content must
+cross): 48/10 peak/mean against 179/65 for content-anchoring, which is what the z-ordering is for.
 
 Mutation anchors use the engine offset clamped to the currently known loaded edges. Rubber-band displacement
 is presentation-only: it is restored to the displayed engine offset after settled geometry is resolved and
@@ -714,6 +740,21 @@ for the same reason `scrollTo` does, except under `.preserveVisibleContent` — 
 branch does not halt either. It also opts the pass out of the loaded-top pin, which would otherwise swallow the
 displacement whole; ListViewImpl's equivalent (`snapToBounds`) only closes a gap above the top item, so a
 downward displacement at the top edge is clipped by both and an upward one is honoured by both.
+
+The viewport correction is **one track with more than one output layer**:
+`ListAnimationController.addViewportMirrorLayer(_:)` registers extra layers that receive the identical
+emission, and `carouselExitOverlay` is the only production mirror. A mirror carries the animation and
+nothing else — no binding, no model state, no settled write, no completion — which is sound only
+because `writeEndpoint` already returns early for `.viewportOffset`: the engine owns `contentHost`'s
+settled `bounds.origin.y` and the model contributes purely the additive correction, so a mirror's own
+`bounds.origin.y` rests at 0. One generation, one phase, one deadline. A second owner with a duplicate
+track was rejected — two tracks describing one motion is the same failure family as
+`enableUnreadAlignment`, `itemNodeFrame` and `settledContentOffsets`. **A replacement STEPS that
+correction** (`replacementFrom` is the current correction plus `oldSettled − newSettled`, absorbing the
+settled-base move so content stays continuous); content-space children ride it through the engine's own
+write to `contentHost.bounds.origin`, mirror children do not, so `shiftCarouselExitChildren` rebases
+them by the correction sampled either side of the mutation. Without it, two carousels in a row stacked
+both strips.
 
 Every changed positive-duration viewport replacement first remaps all detached overlay content from the old
 rendered viewport coordinate base into the replacement base. The exact mapping subtracts the engine shift

@@ -76,9 +76,8 @@ final class ProgrammaticScrollAnimationTests: XCTestCase {
 
     private func viewportCarryScreenYs(_ fixture: VirtualListFixture)
         -> [ObjectIdentifier: CGFloat] {
-        let renderedViewport = fixture.boundsOriginY + fixture.viewportCorrection
         return Dictionary(uniqueKeysWithValues: fixture.viewportCarryViews.map {
-            (ObjectIdentifier($0), $0.layer.position.y - renderedViewport)
+            (ObjectIdentifier($0), fixture.driver.viewportCarryScreenY(view: $0))
         })
     }
 

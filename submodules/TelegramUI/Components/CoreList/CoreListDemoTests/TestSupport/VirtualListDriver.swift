@@ -117,6 +117,16 @@ final class VirtualListDriver {
         listView.viewportCarryViews
     }
 
+    /// Screen Y of a parked viewport carry, resolving its coordinate space. A carry promoted out of
+    /// a carousel pass lives outside the scrolling content host, so only the viewport correction
+    /// applies to it — subtracting the engine offset as well puts it millions of points away, in the
+    /// private virtual canvas.
+    func viewportCarryScreenY(view: UIView) -> CGFloat {
+        let correction = animationController.viewportOffset(at: animationController.now())
+        let isScreenAnchored = listView.screenAnchoredViewportCarryViews.contains { $0 === view }
+        return view.layer.position.y - (isScreenAnchored ? correction : engine.offset + correction)
+    }
+
     var crossingCarryIdentities: [AnyHashable] {
         listView.crossingCarrySnapshots.map(\.identity)
     }
@@ -155,8 +165,12 @@ final class VirtualListDriver {
         let offset = animationController.ghostBlockOffset(
             owner: render.owner, at: animationController.now()
         ) ?? 0
-        let renderedViewport = engine.offset
-            + animationController.viewportOffset(at: animationController.now())
+        let correction = animationController.viewportOffset(at: animationController.now())
+        // A viewport-anchored block's root is already a screen quantity: it lives outside the
+        // scrolling content host, so only the viewport correction applies to it.
+        let renderedViewport = block.anchoring == .viewport
+            ? correction
+            : engine.offset + correction
         return block.settledRootY + offset - renderedViewport
     }
 
