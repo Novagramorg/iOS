@@ -32,6 +32,14 @@ source ~/.zshrc 2>/dev/null; python3 build-system/Make/Make.py --overrideXcodeVe
 
 The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` (the mention/date link codecs). An `ios_unit_test` here needs an `ios_test_runner` pinned to a real device/OS (e.g. `iPhone 17` / `26.5`) — the default runner picks an invalid device and the test process exits 15. **Run new targets via `--target`, not the default suite:** `Tests/AllTests` currently references a dangling `//submodules/TgVoipWebrtc:TgCallsTests`, so the default would fail to build until that suite is repaired.
 
+Pure C++ tgcalls units have host `cc_test`s that bypass Make.py entirely (macOS build, no codesigning):
+`./build-input/bazel-8.4.2-darwin-arm64 test //submodules/TgVoipWebrtc:streaming_audio_renderer_test --test_output=all`
+(likewise `:mtproto_ice_transport_test`). They follow a plain `CHECK_TRUE` + `main()` pattern, are listed
+explicitly in `submodules/TgVoipWebrtc/BUILD` (group sources are not globbed), and must be added to the
+`exclude:` list in `tgcalls/Package.swift` so SwiftPM does not compile their `main()`. The first run compiles
+WebRTC for the host (~2.5 min); later runs take seconds. Note the binary is `bazel-8.4.2-darwin-arm64`, not
+the `bazel-8.4.2` the tgcalls CLAUDE.md names.
+
 ### Updating the running simulator after a rebuild (whole-`.app` copy)
 
 `simctl install` will NOT replace an already-installed app when the build number is unchanged (installd keeps a hard-link cache), so a rebuilt binary silently doesn't take effect. **Preferred fix: copy the whole freshly-built `.app` over the installed bundle in place.** This is more robust than swapping only the `Frameworks/TelegramUIFramework` binary (no risk of app↔framework version skew), and it preserves the account/login because the **data container is a separate path** (`.../data/Containers/Data/Application/<uuid>/`, keyed by bundle id) — only the **bundle** container is replaced, and the install-DB entry stays valid since the path + bundle id are unchanged.
