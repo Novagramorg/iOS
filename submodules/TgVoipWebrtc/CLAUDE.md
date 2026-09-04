@@ -229,11 +229,14 @@ The `colibriClass=ActiveAudioSsrcs` data-channel mechanism (test-SFU only) was r
 The transformer is installed once on mid=0's receiver only — re-installing on the recvonly receivers triggers `Register{Sink,}TransformedFrameCallback` re-runs that overwrite valid registrations and misroute frames. Stream promotion keeps the single instance valid for every signaled SSRC.
 
 **Video:**
-1. SFU sends `ActiveVideoSsrcs` over data channel → forwarded to app via `dataChannelMessageReceived`
-2. App calls `setRequestedVideoChannels()` → adds recvonly video transceivers, sends `ReceiverVideoConstraints` over data channel
+1. SFU sends `ActiveVideoSsrcs` over data channel → forwarded to app via `dataChannelMessageReceived` (test SFU only; the real app learns endpoints + SSRC groups from the MTProto participant list, usually BEFORE joining)
+2. App calls `setRequestedVideoChannels()` → the full set is stored in `_requestedVideoChannels`; if the join response has not been applied yet (`!_isJoined`) it is only recorded and `onJoined()` applies it later. Otherwise `applyRequestedVideoChannels()` adds recvonly video transceivers (and re-flags any existing endpoint whose transceiver still has no mid, so a failed cycle is retried) and sends `ReceiverVideoConstraints` over the data channel
 3. Renegotiate: new offer → munge outgoing video SSRCs → `SetLocalDescription` → build answer with incoming video SSRCs → `SetRemoteDescription`
 4. `wirePendingVideoSinks()`: attach `FakeVideoSink` to the recvonly transceiver's receiver track after `SetRemoteDescription` completes
-5. Renegotiations are serialized (`_isRenegotiating` / `_pendingRenegotiation` flags) to prevent overlapping offer/answer cycles
+5. Renegotiations are serialized (`_isRenegotiating` / `_pendingRenegotiation` flags) to prevent overlapping offer/answer cycles, and `renegotiate()` refuses to run before `_isJoined`
+6. `onDataChannelStateChanged()` re-sends `ReceiverVideoConstraints` for `_requestedVideoChannels` when the channel opens — `sendReceiverVideoConstraints` silently drops the message while the channel is still connecting, and the SFU forwards no video until it has received constraints
+
+**Why the join gate exists (2026-09-04, from a real-call log):** the app calls `setRequestedVideoChannels` right after the context issues `emitJoinPayload`, so the request lands on the media thread behind the initial `CreateOffer` and before its `SetLocalDescription`. Renegotiating there is unrecoverable: a transceiver with no mid gets a FRESH mid from PeerConnection's monotonic `UniqueNumberGenerator` on every `CreateOffer` (`pc/sdp_offer_answer.cc` `GetOptionsForUnifiedPlanOffer`), so the initial offer took mids 0/1/2 and the renegotiation offer got 3/4/5/6; `SetLocalDescription` rejected it with "The order of m-lines in subsequent offer doesn't match order from previous offer/answer", nothing retried (later identical requests hit the "endpoint already known" early-continue), the constraints had been dropped on the closed data channel, and incoming video never arrived. Even with a matching offer, `buildRemoteAnswer()` before the join response runs on an empty `_remoteTransport`. The CLI reproduces it with `--early-video-request` (fails 1/2 video pairs on the old code, 2/2 after the fix).
 
 ### Outgoing Video: SDP Munging for Simulcast
 
@@ -244,6 +247,12 @@ PeerConnection's API doesn't support SSRC-based simulcast directly (only RID-bas
 3. Before `SetLocalDescription`, `mungeVideoSsrcsInOffer()` replaces the video m-line's auto-generated `StreamParams` with our pre-allocated SSRCs + SIM + FID groups
 4. `UpdateLocalStreams_w()` in WebRTC's `channel.cc` sees SSRCs already present and skips generation
 5. Later, `setVideoSource()` just calls `sender()->SetTrack()` — no renegotiation
+
+### Video payload types are pinned, not negotiated
+
+Group calls never negotiate payload types per pair: every client sends with the table `GroupInstanceCustomImpl::assignPayloadTypes` produces — VP8 100, VP9 102, H264 104, each followed by its RTX at +1 — and the SFU forwards RTP unchanged. PeerConnection's **receive** table comes from the LOCAL description (`VideoChannel::SetLocalContent_w`; the remote answer only syncs codec parameters by name), and `CreateOffer` numbers it by walking the platform factory's format list (96, 98, 100, ... with RTX at +1). On iOS that list is H264, H264, VP8, VP9, H265, so PT 104 was **H265**: a remote participant's H264 packets went to the H265 depacketizer, nothing decoded, and `VideoReceiveStream2` sat "active" (RTP timestamps advancing) logging `No decodable frame in 200ms requesting keyframe` forever. The host testbench never saw it because the builtin macOS factory lists five H264 profiles and lands one on PT 104 by luck.
+
+`mungeVideoCodecsInOffer()` therefore rewrites the codec list of EVERY video m-line in every local offer (initial and renegotiation, outgoing and recvonly) to that table, copying each entry from the engine's own codec list (so feedback params stay what the engine supports; H264 = the constrained-baseline packetization-mode 1 entry, VP9 = profile 0) and dropping red/ulpfec/flexfec. The synthesized answer (`buildRemoteAnswer`) already speaks 104/105. Do not "clean this up" by removing the munge or by trusting `SetCodecPreferences` — preferences reorder but never renumber. The CLI reproduces the failure because `FakeInterface` now advertises formats in the iOS order (`--builtin-codec-order` restores the raw one): with the munge removed, `--participants 1 --reference-participants 1 --video` fails 1/2 pairs.
 
 ### Incoming Video: SSRC-Based Demux
 
@@ -257,9 +266,14 @@ The answer for incoming video m-lines includes remote SSRCs from `VideoChannelDe
 - **RTP header extensions**: Copied from the local offer per m-line (minus MID), ensuring BUNDLE-safe IDs. Hardcoding IDs risks collisions across the BUNDLE group.
 - **SDP mid matching**: During renegotiation, the constructed remote answer mirrors the local offer's m-line structure and mids exactly. Mismatched mids cause `SetRemoteDescription` to fail.
 - **Audio level reporting**: Uses synthetic levels (0.1) for all known remote SSRCs, since the SFU forwards RTP with extension IDs that may not match PeerConnection's negotiated mapping
-- **Video sink wiring**: `OnTrack` doesn't fire for locally-created recvonly transceivers. Sinks are wired explicitly in `wirePendingVideoSinks()` after `SetRemoteDescription` completes, and also in `addIncomingVideoOutput()` if the track already exists.
-- **H264 codec in answer**: PT 104 (primary) + PT 105 (RTX, apt=104), matching WebRTC's `assignPayloadTypes` order. RTCP feedback: nack, nack pli, ccm fir, goog-remb, transport-cc.
-- **Renegotiation serialization**: Only one offer/answer cycle runs at a time. Deferred renegotiations only fire if there are unnegotiated transceivers (no mid assigned yet), avoiding redundant cycles.
+- **Video sink wiring — never the app's sink, always the proxy**: the app hands `addIncomingVideoOutput` a `weak_ptr` because the tile's view owns the sink and is recreated on every quality switch. `AddOrUpdateSink` takes a raw pointer the track's `rtc::VideoBroadcaster` keeps until `RemoveSink`, so registering the app's sink directly was a use-after-free on the next decoded frame (crash in `rtc::VideoBroadcaster::OnFrame`, reproduced 2026-09-04 by "request full quality, switch back to medium"). Each endpoint therefore owns one `GRVideoSinkProxy` (`_videoSinkProxies`) — the only object ever registered on the receiver track — which locks each weak sink per frame and prunes dead ones, exactly CustomImpl's `VideoSinkImpl`. `attachVideoSinkProxy` registers it once the endpoint's track exists (`wirePendingVideoSinks()` after `SetRemoteDescription`, `onTrackAdded`, or immediately from `addIncomingVideoOutput`); `detachVideoSinkProxy` removes it on endpoint removal and `stop()`/destruction detach all before `Close()`. Several sinks per endpoint are normal (main view, clone, extra outputs). CLI regression: `--video-sink-churn`.
+- **H264 codec in answer**: PT 104 (primary) + PT 105 (RTX, apt=104), matching CustomImpl's `assignPayloadTypes` table — and, since 2026-09-04, the LOCAL offer's video m-lines are munged to the same table (see "Video payload types are pinned, not negotiated"). RTCP feedback: nack, nack pli, ccm fir, goog-remb, transport-cc.
+- **Renegotiation serialization**: Only one offer/answer cycle runs at a time, and none before the join response has been applied (`_isJoined`). Deferred renegotiations only fire if there are unnegotiated transceivers (no mid assigned yet), avoiding redundant cycles.
+- **`setRequestedVideoChannels` is the full set, at any time**: it may arrive before the join response (the app's normal order) or before the data channel opens; the engine stores it, applies it in `onJoined()`, and replays the constraints on data-channel open. Never add a transceiver or renegotiate from it while `!_isJoined`.
+
+### Known issue: host reference SENDER throttles
+
+In the CLI, a ReferenceImpl participant's outgoing video reaches everyone (CustomImpl and ReferenceImpl receivers alike) at only ~1–3 fps after the first seconds — 41–65 frames in 30 s at 640x360 versus ~750 from CustomImpl senders — so group validation passes only because it requires ≥1 frame. Unrelated to the receive-side fixes above (a 30 s stock mixed run shows it with no sink churn); the likely cause is loopback BWE drift (the same ~80 kbps drift `group_participant.cpp` documents for CustomImpl) combined with `_minOutgoingVideoBitrateKbit` being stored but never applied in ReferenceImpl. Unverified on device. Measured 2026-09-04.
 
 ### Key Files
 - `tgcalls/group/GroupInstanceReferenceImpl.h/.cpp` — implementation
