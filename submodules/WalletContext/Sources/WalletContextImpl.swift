@@ -43,6 +43,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         switch error {
         case .generic: return "telegram_generic"
         case .network: return "telegram_network"
+        case .preflightNetwork: return "telegram_preflight_network"
         case .requestPassword: return "request_password"
         case .invalidPassword: return "invalid_password"
         case .twoStepAuthMissing: return "two_step_auth_missing"
@@ -52,6 +53,8 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .backupNotAvailable: return "backup_not_available"
         case .replacementInvalid: return "replacement_invalid"
         case .publicKeyInvalid: return "public_key_invalid"
+        case .proofInvalid: return "proof_invalid"
+        case .proofExpired: return "proof_expired"
         case .tokenInvalid: return "token_invalid"
         case .tokenExpired: return "token_expired"
         case .clientKeyInvalid: return "client_key_invalid"
@@ -91,7 +94,13 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .backupNotAvailable: return "backup_not_available"
         case .replacementInvalid: return "replacement_invalid"
         case .publicKeyInvalid: return "public_key_invalid"
+        case .proofInvalid: return "proof_invalid"
+        case .proofExpired: return "proof_expired"
         case .keyRotationFailed: return "key_rotation_failed"
+        case .commentTooLong: return "comment_too_long"
+        case .commentEncryptionRecipientUnavailable: return "comment_encryption_recipient_unavailable"
+        case .commentEncryptionFailed: return "comment_encryption_failed"
+        case .commentDecryptionFailed: return "comment_decryption_failed"
         case .tokenInvalid: return "token_invalid"
         case .tokenExpired: return "token_expired"
         case .clientKeyInvalid: return "client_key_invalid"
@@ -219,6 +228,7 @@ actor WalletContextImpl {
     var walletScreenCount = 0
     var latestEnvironmentRevision: UInt64 = 0
     var latestWalletStateRevision: UInt64 = 0
+    var latestTwoStepAuthRevision: UInt64 = 0
     var latestSubscriberDemandRevision: UInt64 = 0
     var latestWalletScreenDemandRevision: UInt64 = 0
     var latestFiatCurrencyRevision: UInt64 = 0
@@ -251,6 +261,10 @@ actor WalletContextImpl {
     var streamingPresentationOverlay = WalletStreamingPresentationOverlay()
     var expiredPendingStreamingTraceIds = Set<String>()
     var activationGeneration: UInt64 = 0
+    var twoStepAuthRequired: Bool? = nil
+    var automaticPhraseRecoveryAttemptRevision: UInt64? = nil
+    var automaticPhraseRecoveryAttemptAddress: String? = nil
+    var automaticPhraseRecoveryGeneration: UInt64? = nil
     var balanceLastSuccessfulAt: Int32?
     var fiatLastSuccessfulAt: Int32?
     var storedStateMutationRevision: UInt64 = 0
@@ -319,6 +333,45 @@ actor WalletContextImpl {
         self.isAccountCurrent = accountIsCurrent
         self.isNetworkAvailable = networkAvailable
         self.evaluateRuntimeDemand(refreshIfPollingBecomesActive: !wasPollingEligible)
+    }
+
+    func updateTwoStepAuthRequirement(_ required: Bool?, revision: UInt64) {
+        guard !self.isShutdown else { return }
+        guard revision > self.latestTwoStepAuthRevision else { return }
+        self.latestTwoStepAuthRevision = revision
+        self.twoStepAuthRequired = required
+        if required != false,
+           self.automaticPhraseRecoveryGeneration == self.activationGeneration,
+           self.currentState.activeOperation == nil,
+           let serverWalletState = self.serverWalletState {
+            self.automaticPhraseRecoveryGeneration = nil
+            self.activationTask?.cancel()
+            self.applyServerWalletState(serverWalletState, forceActivation: true)
+            return
+        }
+        self.scheduleAutomaticPhraseRecoveryIfNeeded()
+    }
+
+    func scheduleAutomaticPhraseRecoveryIfNeeded() {
+        guard self.twoStepAuthRequired == false,
+              self.currentState.activeOperation == nil,
+              case let .wallet(info) = self.currentState.phase,
+              !info.canSign,
+              info.canExportPhrase,
+              let serverWalletState = self.serverWalletState,
+              case let .ready(_, _, _, address, publicKey, _) = serverWalletState,
+              walletEngineAddressesEqual(info.address, address),
+              info.publicKey == publicKey.map({ String(format: "%02x", $0) }).joined() else {
+            return
+        }
+        if self.automaticPhraseRecoveryAttemptRevision == self.latestTwoStepAuthRevision,
+           let attemptedAddress = self.automaticPhraseRecoveryAttemptAddress,
+           walletEngineAddressesEqual(attemptedAddress, address) {
+            return
+        }
+        self.automaticPhraseRecoveryAttemptRevision = self.latestTwoStepAuthRevision
+        self.automaticPhraseRecoveryAttemptAddress = address
+        self.applyServerWalletState(serverWalletState, forceActivation: true)
     }
 
     func receiveServerWalletState(_ value: TelegramCore.WalletState, revision: UInt64) {
@@ -641,6 +694,11 @@ actor WalletContextImpl {
         previousCoordinator: WalletTonConnectCoordinator?,
         generation: UInt64
     ) async {
+        defer {
+            if self.automaticPhraseRecoveryGeneration == generation {
+                self.automaticPhraseRecoveryGeneration = nil
+            }
+        }
         do {
             await previousCoordinator?.shutdown()
             let stored = try await self.storage.loadDescriptor()
@@ -660,13 +718,22 @@ actor WalletContextImpl {
             }
             let needsSecret = !hasStoredSecret
             var words: [String]?
-            if needsSecret && canExportPhrase {
+            if needsSecret && canExportPhrase && self.twoStepAuthRequired == false {
+                self.automaticPhraseRecoveryAttemptRevision = self.latestTwoStepAuthRevision
+                self.automaticPhraseRecoveryAttemptAddress = address
+                self.automaticPhraseRecoveryGeneration = generation
                 do {
-                    words = try await exportWalletSecretPhrase(
+                    let exportedWords = try await exportWalletSecretPhrase(
                         engine: self.engine,
                         password: nil,
                         expectedPublicKey: publicKey
                     )
+                    guard !self.isShutdown, self.activationGeneration == generation else {
+                        return
+                    }
+                    if self.twoStepAuthRequired == false {
+                        words = exportedWords
+                    }
                 } catch {
                     self.errorLogger.error("wallet_automatic_phrase_export_failed", error)
                 }
@@ -738,6 +805,7 @@ actor WalletContextImpl {
                 Task { await coordinator.restore() }
             }
             self.requestSynchronization()
+            self.scheduleAutomaticPhraseRecoveryIfNeeded()
         } catch is CancellationError {
         } catch let error as WalletEngineStorageError {
             guard !self.isShutdown, self.activationGeneration == generation else { return }
@@ -1077,6 +1145,7 @@ actor WalletContextImpl {
                 recipient: current.recipient,
                 amount: current.amount,
                 comment: current.comment,
+                commentEncrypted: current.commentEncrypted,
                 collectibleAddress: current.collectibleAddress,
                 normalizedHash: current.normalizedHash,
                 fee: current.fee,
@@ -1707,6 +1776,7 @@ func walletError(_ error: Error) -> WalletContext.WalletError {
         switch value {
         case .generic: return .unavailable
         case .network: return .network
+        case .preflightNetwork: return .network
         case .requestPassword: return .requestPassword
         case .invalidPassword: return .invalidPassword
         case .twoStepAuthMissing: return .twoStepAuthMissing
@@ -1716,6 +1786,8 @@ func walletError(_ error: Error) -> WalletContext.WalletError {
         case .backupNotAvailable: return .backupNotAvailable
         case .replacementInvalid: return .replacementInvalid
         case .publicKeyInvalid: return .publicKeyInvalid
+        case .proofInvalid: return .proofInvalid
+        case .proofExpired: return .proofExpired
         case .tokenInvalid: return .tokenInvalid
         case .tokenExpired: return .tokenExpired
         case .clientKeyInvalid: return .clientKeyInvalid

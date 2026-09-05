@@ -14863,6 +14863,20 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
+    static func getProofChallenge() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.ProofChallenge>) {
+        let buffer = Buffer()
+        buffer.appendInt32(539354775)
+        return (FunctionDescription(name: "wallet.getProofChallenge", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.ProofChallenge? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.ProofChallenge?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.ProofChallenge
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
     static func getState() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WalletState>) {
         let buffer = Buffer()
         buffer.appendInt32(-1417432262)

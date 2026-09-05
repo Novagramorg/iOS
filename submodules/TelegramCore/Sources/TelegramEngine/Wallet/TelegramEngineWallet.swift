@@ -80,6 +80,10 @@ public extension TelegramEngine {
             return _internal_replaceWallet(account: self.account, replacement: replacement, password: password)
         }
 
+        public func getProofChallenge() -> Signal<WalletProofChallenge, WalletOperationError> {
+            return _internal_getWalletProofChallenge(account: self.account)
+        }
+
         public func getStreamingUrl() -> Signal<WalletStreamingUrl, TonApiRequestError> {
             return _internal_getStreamingUrl(account: self.account)
         }

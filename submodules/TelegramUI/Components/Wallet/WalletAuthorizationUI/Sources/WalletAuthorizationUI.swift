@@ -4,6 +4,7 @@ import AlertInputFieldComponent
 import ComponentFlow
 import Display
 import SwiftSignalKit
+import TelegramCore
 import WalletContext
 
 private final class WalletAuthorizedOperation<Value>: Disposable {
@@ -12,29 +13,78 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     private let operation: (String?) -> Signal<Value, WalletContext.WalletError>
     private let next: (Value) -> Void
     private let failed: (WalletContext.WalletError) -> Void
-    private let disposable = MetaDisposable()
+    private let initialAuthorizationDisposable = MetaDisposable()
+    private let authorizationRequestDisposable = MetaDisposable()
+    private let operationDisposable = MetaDisposable()
     private weak var passwordController: ViewController?
     private var isDisposed = false
+    private var didRetryWithoutRemovedPassword = false
 
     init(
         context: AccountContext,
         present: @escaping (ViewController) -> Void,
         operation: @escaping (String?) -> Signal<Value, WalletContext.WalletError>,
         next: @escaping (Value) -> Void,
-        failed: @escaping (WalletContext.WalletError) -> Void
+        failed: @escaping (WalletContext.WalletError) -> Void,
+        preauthorize: Bool
     ) {
         self.context = context
         self.present = present
         self.operation = operation
         self.next = next
         self.failed = failed
-        self.start(password: nil, inputState: nil, progress: nil)
+        if preauthorize {
+            self.resolveInitialAuthorization()
+        } else {
+            self.start(password: nil, inputState: nil, progress: nil)
+        }
     }
 
     func dispose() {
         self.isDisposed = true
-        self.disposable.dispose()
+        self.initialAuthorizationDisposable.dispose()
+        self.authorizationRequestDisposable.dispose()
+        self.operationDisposable.dispose()
         self.passwordController?.dismiss(completion: nil)
+    }
+
+    private func resolveInitialAuthorization() {
+        self.initialAuthorizationDisposable.set((self.context.twoStepAuthData.get()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { [weak self] data in
+            guard let self, !self.isDisposed else {
+                return
+            }
+            if let data {
+                self.continueWithAuthorizationData(data)
+            } else {
+                self.loadAuthorizationData()
+            }
+        }))
+    }
+
+    private func loadAuthorizationData() {
+        self.authorizationRequestDisposable.set((self.context.engine.auth.twoStepAuthData()
+        |> deliverOnMainQueue).start(next: { [weak self] data in
+            guard let self, !self.isDisposed else {
+                return
+            }
+            self.context.twoStepAuthData.set(.single(data))
+            self.continueWithAuthorizationData(data)
+        }, error: { [weak self] _ in
+            guard let self, !self.isDisposed else {
+                return
+            }
+            self.failed(.network)
+        }))
+    }
+
+    private func continueWithAuthorizationData(_ data: TwoStepAuthData) {
+        if data.currentPasswordDerivation != nil {
+            self.presentPasswordPrompt()
+        } else {
+            self.start(password: nil, inputState: nil, progress: nil)
+        }
     }
 
     private func start(
@@ -44,7 +94,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     ) {
         guard !self.isDisposed else { return }
         progress?.set(true)
-        self.disposable.set((self.operation(password)
+        self.operationDisposable.set((self.operation(password)
         |> deliverOnMainQueue).start(next: { [weak self] value in
             guard let self, !self.isDisposed else { return }
             progress?.set(false)
@@ -55,13 +105,56 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
             progress?.set(false)
             switch error {
             case .requestPassword where inputState == nil:
+                self.refreshCachedAuthorizationData()
                 self.presentPasswordPrompt()
             case .requestPassword, .invalidPassword:
                 inputState?.animateError()
+            case .twoStepAuthMissing where password != nil && !self.didRetryWithoutRemovedPassword:
+                self.retryAfterRemovedPassword(inputState: inputState, progress: progress)
             default:
                 self.passwordController?.dismiss(completion: nil)
                 self.failed(error)
             }
+        }))
+    }
+
+    private func refreshCachedAuthorizationData() {
+        self.authorizationRequestDisposable.set((self.context.engine.auth.twoStepAuthData()
+        |> deliverOnMainQueue).start(next: { [weak self] data in
+            guard let self, !self.isDisposed else {
+                return
+            }
+            self.context.twoStepAuthData.set(.single(data))
+        }, error: { _ in
+        }))
+    }
+
+    private func retryAfterRemovedPassword(
+        inputState: AlertInputFieldComponent.ExternalState?,
+        progress: ValuePromise<Bool>?
+    ) {
+        self.didRetryWithoutRemovedPassword = true
+        progress?.set(true)
+        self.authorizationRequestDisposable.set((self.context.engine.auth.twoStepAuthData()
+        |> deliverOnMainQueue).start(next: { [weak self] data in
+            guard let self, !self.isDisposed else {
+                return
+            }
+            self.context.twoStepAuthData.set(.single(data))
+            guard data.currentPasswordDerivation == nil else {
+                progress?.set(false)
+                self.passwordController?.dismiss(completion: nil)
+                self.failed(.twoStepAuthMissing)
+                return
+            }
+            self.start(password: nil, inputState: inputState, progress: progress)
+        }, error: { [weak self] _ in
+            guard let self, !self.isDisposed else {
+                return
+            }
+            progress?.set(false)
+            self.passwordController?.dismiss(completion: nil)
+            self.failed(.network)
         }))
     }
 
@@ -135,21 +228,23 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     }
 }
 
-/// Runs a protected wallet operation without a password first. If Telegram asks
-/// for 2FA, presents one secure prompt and retries with fresh SRP parameters.
+/// Resolves Telegram 2FA before a protected wallet operation and obtains fresh
+/// SRP parameters only when the operation is submitted with a password.
 public func performWalletAuthorizedOperation<Value>(
     context: AccountContext,
     present: @escaping (ViewController) -> Void,
     operation: @escaping (String?) -> Signal<Value, WalletContext.WalletError>,
     next: @escaping (Value) -> Void,
-    failed: @escaping (WalletContext.WalletError) -> Void
+    failed: @escaping (WalletContext.WalletError) -> Void,
+    preauthorize: Bool = true
 ) -> Disposable {
     WalletAuthorizedOperation(
         context: context,
         present: present,
         operation: operation,
         next: next,
-        failed: failed
+        failed: failed,
+        preauthorize: preauthorize
     )
 }
 
@@ -169,6 +264,16 @@ public func walletAuthorizationErrorMessage(_ error: WalletContext.WalletError) 
         return (
             "Couldn't Update Recovery Phrase",
             "The new recovery phrase was not activated. Your previous phrase and encrypted backup are still valid."
+        )
+    case .proofInvalid:
+        return (
+            "Couldn't Verify Wallet",
+            "Telegram couldn't verify that you own this wallet. Please try importing it again."
+        )
+    case .proofExpired:
+        return (
+            "Verification Expired",
+            "The wallet verification request expired. Please try importing it again."
         )
     default:
         return nil

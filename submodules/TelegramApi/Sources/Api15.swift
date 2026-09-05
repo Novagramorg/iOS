@@ -2,11 +2,13 @@ public extension Api {
     enum InputWalletReplacement: TypeConstructorDescription {
         public class Cons_inputWalletImported: TypeConstructorDescription {
             public var publicKey: Buffer
-            public init(publicKey: Buffer) {
+            public var proof: Api.WalletOwnershipProof
+            public init(publicKey: Buffer, proof: Api.WalletOwnershipProof) {
                 self.publicKey = publicKey
+                self.proof = proof
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputWalletImported", [("publicKey", ConstructorParameterDescription(self.publicKey))])
+                return ("inputWalletImported", [("publicKey", ConstructorParameterDescription(self.publicKey)), ("proof", ConstructorParameterDescription(self.proof))])
             }
         }
         case inputWalletImported(Cons_inputWalletImported)
@@ -16,9 +18,10 @@ public extension Api {
             switch self {
             case .inputWalletImported(let _data):
                 if boxed {
-                    buffer.appendInt32(856446476)
+                    buffer.appendInt32(693699964)
                 }
                 serializeBytes(_data.publicKey, buffer: buffer, boxed: false)
+                _data.proof.serialize(buffer, true)
                 break
             case .inputWalletNew:
                 if boxed {
@@ -31,7 +34,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inputWalletImported(let _data):
-                return ("inputWalletImported", [("publicKey", ConstructorParameterDescription(_data.publicKey))])
+                return ("inputWalletImported", [("publicKey", ConstructorParameterDescription(_data.publicKey)), ("proof", ConstructorParameterDescription(_data.proof))])
             case .inputWalletNew:
                 return ("inputWalletNew", [])
             }
@@ -40,9 +43,14 @@ public extension Api {
         public static func parse_inputWalletImported(_ reader: BufferReader) -> InputWalletReplacement? {
             var _1: Buffer?
             _1 = parseBytes(reader)
+            var _2: Api.WalletOwnershipProof?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.WalletOwnershipProof
+            }
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.InputWalletReplacement.inputWalletImported(Cons_inputWalletImported(publicKey: _1!))
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputWalletReplacement.inputWalletImported(Cons_inputWalletImported(publicKey: _1!, proof: _2!))
             }
             else {
                 return nil

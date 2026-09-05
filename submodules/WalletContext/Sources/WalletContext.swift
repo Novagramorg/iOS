@@ -86,9 +86,11 @@ public final class WalletContext {
     private let environmentDisposable = MetaDisposable()
     private let walletStateUpdatesDisposable = MetaDisposable()
     private let storedStateDisposable = MetaDisposable()
+    private let twoStepAuthDisposable = MetaDisposable()
     private let operationTaskRegistry: WalletOperationTaskRegistry
     private let environmentRevision = Atomic<UInt64>(value: 0)
     private let walletStateRevision = Atomic<UInt64>(value: 0)
+    private let twoStepAuthRevision = Atomic<UInt64>(value: 0)
     private let subscriberDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
     private let walletScreenDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
     let fiatCurrencyRevision = Atomic<UInt64>(value: 0)
@@ -175,6 +177,7 @@ public final class WalletContext {
         applicationInForeground: Signal<Bool, NoError>,
         accountIsCurrent: Signal<Bool, NoError>,
         networkAvailable: Signal<Bool, NoError>,
+        twoStepAuthRequired: Signal<Bool?, NoError> = .single(nil),
         log: @escaping (String) -> Void = { Logger.shared.log("WalletContext", $0) }
     ) {
         let initialState = State(
@@ -211,6 +214,17 @@ public final class WalletContext {
             }
             Task {
                 await impl.receiveServerWalletState(value, revision: revision)
+            }
+        }))
+
+        self.twoStepAuthDisposable.set(twoStepAuthRequired.start(next: { [weak self] value in
+            guard let self else { return }
+            let revision = self.twoStepAuthRevision.modify { value in
+                let next = value &+ 1
+                return next
+            }
+            Task {
+                await impl.updateTwoStepAuthRequirement(value, revision: revision)
             }
         }))
 
@@ -264,6 +278,7 @@ public final class WalletContext {
         self.environmentDisposable.dispose()
         self.walletStateUpdatesDisposable.dispose()
         self.storedStateDisposable.dispose()
+        self.twoStepAuthDisposable.dispose()
         self.operationTaskRegistry.shutdown()
         let impl = self.impl
         Task {

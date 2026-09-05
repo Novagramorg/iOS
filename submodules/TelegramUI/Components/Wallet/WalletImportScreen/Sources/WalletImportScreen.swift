@@ -373,6 +373,7 @@ private final class WalletImportScreenComponent: Component {
         private let operationDisposable = MetaDisposable()
         private let discardDisposable = MetaDisposable()
         private var isImporting = false
+        private var activePreparedRecoveryPhraseImport: WalletContext.PreparedRecoveryPhraseImport?
         private var didCompleteVerification = false
         private var words = Array(repeating: "", count: 12)
         private var isImportPhraseValid = false
@@ -523,6 +524,10 @@ private final class WalletImportScreenComponent: Component {
         }
 
         deinit {
+            if let prepared = self.activePreparedRecoveryPhraseImport,
+               let walletContext = self.component?.walletContext {
+                let _ = walletContext.discardRecoveryPhraseImport(prepared).start()
+            }
             NotificationCenter.default.removeObserver(self)
             self.titleTransformContainer.removeFromSuperview()
             self.operationDisposable.dispose()
@@ -1047,6 +1052,7 @@ private final class WalletImportScreenComponent: Component {
                 guard let self else {
                     return
                 }
+                self.activePreparedRecoveryPhraseImport = prepared
                 switch prepared.disposition {
                 case .currentWallet:
                     self.completeRecoveryPhraseImport(prepared, password: nil)
@@ -1099,6 +1105,8 @@ private final class WalletImportScreenComponent: Component {
                 failed: { [weak self] error in
                     if error == .authorizationCancelled {
                         self?.discardPreparedRecoveryPhraseImport(prepared)
+                    } else {
+                        self?.activePreparedRecoveryPhraseImport = nil
                     }
                     self?.finishImportWithError(error: error)
                 }
@@ -1119,6 +1127,7 @@ private final class WalletImportScreenComponent: Component {
             |> deliverOnMainQueue).start(next: { [weak self] _ in
                 self?.finishRecoveryPhraseImport()
             }, error: { [weak self] error in
+                self?.activePreparedRecoveryPhraseImport = nil
                 self?.finishImportWithError(error: error)
             }))
         }
@@ -1127,6 +1136,7 @@ private final class WalletImportScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
+            self.activePreparedRecoveryPhraseImport = nil
             self.discardDisposable.set(component.walletContext.discardRecoveryPhraseImport(prepared).start())
         }
 
@@ -1134,6 +1144,7 @@ private final class WalletImportScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
+            self.activePreparedRecoveryPhraseImport = nil
             self.isImporting = false
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             if let completion = component.completion {

@@ -637,20 +637,17 @@ private final class WalletScreenComponent: Component {
 
     let context: AccountContext
     let walletContext: WalletContext
-    let twoStepAuthData: Promise<TwoStepAuthData?>
 
     init(
         context: AccountContext,
-        walletContext: WalletContext,
-        twoStepAuthData: Promise<TwoStepAuthData?>
+        walletContext: WalletContext
     ) {
         self.context = context
         self.walletContext = walletContext
-        self.twoStepAuthData = twoStepAuthData
     }
 
     static func ==(lhs: WalletScreenComponent, rhs: WalletScreenComponent) -> Bool {
-        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext && lhs.twoStepAuthData === rhs.twoStepAuthData
+        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
     }
 
     private final class ScrollView: UIScrollView {
@@ -820,7 +817,7 @@ private final class WalletScreenComponent: Component {
                     self?.presentPasswordSetToast()
                 }
             }
-            component.twoStepAuthData.set(updatedData)
+            component.context.twoStepAuthData.set(updatedData)
         }
 
         private func presentPasswordSetToast() {
@@ -1678,15 +1675,7 @@ private final class WalletScreenComponent: Component {
             //TODO:localize
             let howItWorks = "How It Works"
 
-            let currencies = walletCurrencyListItems()
             let selectedCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
-            var orderedCurrencies = currencies
-            let topCurrencies: Set<WalletContext.FiatCurrency> = [.usd, .eur, .rub, .cny, .aed]
-            if !topCurrencies.contains(selectedCurrency),
-               let selectedCurrencyIndex = orderedCurrencies.firstIndex(where: { $0.currency == selectedCurrency }) {
-                let selectedCurrencyItem = orderedCurrencies.remove(at: selectedCurrencyIndex)
-                orderedCurrencies.insert(selectedCurrencyItem, at: 0)
-            }
 
             let items: [ContextMenuItem] = [
                 .action(ContextMenuActionItem(
@@ -1699,6 +1688,15 @@ private final class WalletScreenComponent: Component {
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Arrow"), color: theme.contextMenu.primaryColor)
                     },
                     action: { [weak self] contextController, _ in
+                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                        let selectedCurrency = self?.walletState?.fiat.selectedCurrency ?? .usd
+                        let orderedCurrencies = walletCurrencyListItems(
+                            selectedCurrency: selectedCurrency,
+                            appLanguageCode: presentationData.strings.primaryComponent.languageCode,
+                            fallbackAppLanguageCode: presentationData.strings.baseLanguageCode,
+                            systemLanguageCode: Locale.preferredLanguages.first,
+                            keyboardLanguageCodes: UITextInputMode.activeInputModes.compactMap { $0.primaryLanguage }
+                        )
                         let searchQueryPromise = ValuePromise<String>("")
                         let currencyItems: [ContextMenuItem] = [
                             .action(ContextMenuActionItem(
@@ -2014,9 +2012,9 @@ private final class WalletScreenComponent: Component {
                 })
             }
 
-            if self.twoStepAuthData !== component.twoStepAuthData {
+            if self.twoStepAuthData !== component.context.twoStepAuthData {
                 self.twoStepAuthDataDisposable?.dispose()
-                let subscribedTwoStepAuthData = component.twoStepAuthData
+                let subscribedTwoStepAuthData = component.context.twoStepAuthData
                 self.twoStepAuthData = subscribedTwoStepAuthData
                 self.hasTwoStepAuth = nil
                 self.twoStepAuthDataDisposable = (subscribedTwoStepAuthData.get()
@@ -2692,16 +2690,14 @@ public final class WalletScreen: ViewControllerComponentContainer {
 
     public init(
         context: AccountContext,
-        walletContext: WalletContext,
-        twoStepAuthData: Promise<TwoStepAuthData?>
+        walletContext: WalletContext
     ) {
         self.walletContext = walletContext
         super.init(
             context: context,
             component: WalletScreenComponent(
                 context: context,
-                walletContext: walletContext,
-                twoStepAuthData: twoStepAuthData
+                walletContext: walletContext
             ),
             navigationBarAppearance: .transparent,
             statusBarStyle: .default,

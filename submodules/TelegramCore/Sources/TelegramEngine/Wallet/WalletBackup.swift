@@ -41,6 +41,10 @@ private func walletOperationError(_ error: MTRpcError, passwordProvided: Bool) -
         return .replacementInvalid
     case "WALLET_PUBLIC_KEY_INVALID":
         return .publicKeyInvalid
+    case "WALLET_PROOF_INVALID":
+        return .proofInvalid
+    case "WALLET_PROOF_EXPIRED":
+        return .proofExpired
     case "WALLET_TOKEN_INVALID":
         return .tokenInvalid
     case "WALLET_TOKEN_EXPIRED":
@@ -101,13 +105,25 @@ func _internal_replaceWallet(
     switch replacement {
     case .new:
         apiReplacement = .inputWalletNew
-    case let .imported(publicKey):
+    case let .imported(publicKey, ownershipProof):
         guard publicKey.count == 32 else {
             return .fail(.publicKeyInvalid)
         }
-        apiReplacement = .inputWalletImported(.init(publicKey: Buffer(data: publicKey)))
+        guard ownershipProof.timestamp > 0, ownershipProof.signature.count == 64 else {
+            return .fail(.proofInvalid)
+        }
+        apiReplacement = .inputWalletImported(.init(
+            publicKey: Buffer(data: publicKey),
+            proof: .walletOwnershipProof(.init(
+                timestamp: ownershipProof.timestamp,
+                signature: Buffer(data: ownershipProof.signature)
+            ))
+        ))
     }
     return walletPasswordProof(account: account, password: password)
+    |> mapError { error in
+        return error == .network ? .preflightNetwork : error
+    }
     |> mapToSignal { proof -> Signal<WalletState, WalletOperationError> in
         let flags: Int32 = proof == nil ? 0 : (1 << 0)
         return account.network.request(
@@ -118,6 +134,25 @@ func _internal_replaceWallet(
             return walletOperationError(error, passwordProvided: password != nil)
         }
         |> map(WalletState.init(apiState:))
+    }
+}
+
+func _internal_getWalletProofChallenge(account: Account) -> Signal<WalletProofChallenge, WalletOperationError> {
+    return account.network.request(Api.functions.wallet.getProofChallenge(), automaticFloodWait: false)
+    |> mapError { error in
+        let error = walletOperationError(error, passwordProvided: false)
+        return error == .network ? .preflightNetwork : error
+    }
+    |> map { challenge in
+        switch challenge {
+        case let .proofChallenge(challenge):
+            return WalletProofChallenge(
+                payload: challenge.payload,
+                expires: challenge.expires,
+                domain: challenge.domain,
+                timestamp: account.network.getApproximateRemoteTimestamp()
+            )
+        }
     }
 }
 

@@ -58,6 +58,7 @@ actor WalletEngineRuntime {
     private var clientConfig: WalletClientConfig?
     private var clientRevision: UInt64 = 0
     private var descriptor: WalletDescriptor?
+    private var transientReplacementDescriptor: WalletDescriptor?
     private var tonConnectSession: TonConnectSession?
     private var ffiBusy = false
     private var userInitiatedFfiWaiters: [CheckedContinuation<Void, Never>] = []
@@ -89,6 +90,7 @@ actor WalletEngineRuntime {
 
     func stageReplacement(words: [String]) async throws -> WalletEngineStagedWallet {
         try await self.withFfi {
+            await self.discardTransientReplacementUnlocked()
             let words = normalizedEngineMnemonic(words)
             guard detectMnemonicSchemes(words: words).contains(.rotation) else {
                 throw WalletContext.WalletError.invalidMnemonic
@@ -121,12 +123,95 @@ actor WalletEngineRuntime {
         }
     }
 
+    func stageTransientReplacement(words: [String]) async throws -> WalletEngineStagedWallet {
+        let recordId = UUID().uuidString.lowercased()
+        do {
+            return try await self.withFfi {
+                guard try await self.storage.loadReplacementCandidate() == nil else {
+                    throw WalletContext.WalletError.operationInProgress
+                }
+                guard self.transientReplacementDescriptor == nil else {
+                    throw WalletContext.WalletError.operationInProgress
+                }
+                let words = normalizedEngineMnemonic(words)
+                guard detectMnemonicSchemes(words: words).contains(.rotation) else {
+                    throw WalletContext.WalletError.invalidMnemonic
+                }
+                await self.platformHost.beginTransientProtectedSecretCapture()
+                let imported: WalletDescriptor
+                do {
+                    imported = try await self.lifecycle.importWallet(request: ImportWalletRequest(
+                        recordId: recordId,
+                        network: .mainnet,
+                        recoveryWords: words
+                    ))
+                } catch {
+                    await self.platformHost.cancelTransientProtectedSecretCapture()
+                    await self.platformHost.removeAllTransientProtectedSecrets()
+                    throw error
+                }
+                await self.platformHost.cancelTransientProtectedSecretCapture()
+                guard await self.platformHost.containsTransientProtectedSecret(secretRef: imported.secretRef) else {
+                    throw WalletContext.WalletError.storage(.corrupted)
+                }
+                self.transientReplacementDescriptor = imported
+                return WalletEngineStagedWallet(
+                    recordId: imported.recordId,
+                    address: imported.address,
+                    publicKey: imported.publicKey
+                )
+            }
+        } catch {
+            if self.transientReplacementDescriptor?.recordId == recordId {
+                await self.discardTransientReplacementUnlocked(recordId: recordId)
+            }
+            throw error
+        }
+    }
+
+    func signReplacementProof(
+        recordId: String,
+        expectedPublicKey: Data,
+        domain: String,
+        timestamp: UInt64,
+        payload: String
+    ) async throws -> Data {
+        try await self.withFfi {
+            guard expectedPublicKey.count == 32,
+                  let descriptor = self.transientReplacementDescriptor,
+                  descriptor.recordId == recordId,
+                  descriptor.publicKey == expectedPublicKey,
+                  await self.platformHost.containsTransientProtectedSecret(secretRef: descriptor.secretRef) else {
+                throw WalletContext.WalletError.storage(.identityMismatch)
+            }
+            let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
+                descriptor: descriptor,
+                domain: domain,
+                timestamp: timestamp,
+                payload: payload
+            ))
+            guard proof.signature.count == 64 else {
+                throw WalletContext.WalletError.proofInvalid
+            }
+            return proof.signature
+        }
+    }
+
+    func persistReplacementCandidate(recordId: String) async throws {
+        try await self.withFfi {
+            _ = try await self.materializeTransientReplacementUnlocked(recordId: recordId)
+        }
+    }
+
     func commitReplacement(
         recordId: String,
         serverAddress: String,
         serverPublicKey: Data
     ) async throws -> WalletEngineActivation {
         try await self.withFfi {
+            if self.transientReplacementDescriptor?.recordId == recordId {
+                _ = try await self.materializeTransientReplacementUnlocked(recordId: recordId)
+            }
             guard let candidate = try await self.storage.loadReplacementCandidate(),
                   candidate.recordId == recordId,
                   walletEngineAddressesEqual(candidate.address, serverAddress),
@@ -169,6 +254,10 @@ actor WalletEngineRuntime {
 
     func discardReplacement(recordId: String) async throws {
         try await self.withFfi {
+            if self.transientReplacementDescriptor?.recordId == recordId {
+                await self.discardTransientReplacementUnlocked(recordId: recordId)
+                return
+            }
             guard let candidate = try await self.storage.loadReplacementCandidate(),
                   candidate.recordId == recordId else {
                 return
@@ -180,6 +269,7 @@ actor WalletEngineRuntime {
 
     func discardReplacementAfterAuthoritativeEmptyState() async throws {
         try await self.withFfi {
+            await self.discardTransientReplacementUnlocked()
             guard let candidate = try await self.storage.loadReplacementCandidate() else {
                 return
             }
@@ -305,6 +395,29 @@ actor WalletEngineRuntime {
         }
     }
 
+    private func materializeTransientReplacementUnlocked(recordId: String) async throws -> WalletEngineDescriptorRecord {
+        guard let descriptor = self.transientReplacementDescriptor,
+              descriptor.recordId == recordId,
+              let secret = await self.platformHost.transientProtectedSecret(secretRef: descriptor.secretRef),
+              !secret.isEmpty else {
+            throw WalletContext.WalletError.storage(.identityMismatch)
+        }
+        let record = WalletEngineDescriptorRecord(descriptor: descriptor)
+        try await self.storage.installReplacementCandidate(record, secret: secret)
+        await self.platformHost.removeTransientProtectedSecret(secretRef: descriptor.secretRef)
+        self.transientReplacementDescriptor = nil
+        return record
+    }
+
+    private func discardTransientReplacementUnlocked(recordId: String? = nil) async {
+        guard let descriptor = self.transientReplacementDescriptor,
+              recordId == nil || descriptor.recordId == recordId else {
+            return
+        }
+        await self.platformHost.removeTransientProtectedSecret(secretRef: descriptor.secretRef)
+        self.transientReplacementDescriptor = nil
+    }
+
     private func deleteLocalWallet(_ record: WalletEngineDescriptorRecord) async throws {
         if let secretRef = record.secretRef {
             try await self.storage.deleteProtectedSecret(ProtectedSecretRef(value: secretRef))
@@ -350,6 +463,26 @@ actor WalletEngineRuntime {
     func previewSend(intent: SendIntent) async throws -> SendPreview {
         try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try await self.requireClient().previewSend(request: SendPreviewRequest(intent: intent))
+        }
+    }
+
+    func createEncryptedComment(recipient: String, comment: String) async throws -> String {
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.ensureKeyRotationAllowsSigning()
+            return try await self.requireClient().createEncryptedComment(request: CreateEncryptedCommentRequest(
+                recipient: recipient,
+                comment: comment
+            ))
+        }
+    }
+
+    func decryptComment(sender: String, body: String) async throws -> String {
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.ensureKeyRotationAllowsSigning()
+            return try await self.requireClient().decryptComment(request: DecryptCommentRequest(
+                sender: sender,
+                body: body
+            ))
         }
     }
 
@@ -768,6 +901,8 @@ actor WalletEngineRuntime {
     func shutdown() async {
         do {
             try await self.withFfi {
+                await self.discardTransientReplacementUnlocked()
+                await self.platformHost.removeAllTransientProtectedSecrets()
                 self.tonConnectSession = nil
                 try await self.shutdownClient()
             }

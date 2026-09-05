@@ -133,6 +133,7 @@ public final class AccountContextImpl: AccountContext {
     public let starsContext: StarsContext?
     public let tonContext: StarsContext?
     public let walletContext: WalletContext?
+    public let twoStepAuthData = Promise<TwoStepAuthData?>(nil)
     public let giftAuctionsManager: GiftAuctionsManager?
 
     private var tonConnectPresentationDisposable: Disposable?
@@ -345,6 +346,14 @@ public final class AccountContextImpl: AccountContext {
                 applicationInForeground: sharedContext.applicationBindings.applicationInForeground,
                 accountIsCurrent: accountIsCurrent,
                 networkAvailable: networkAvailable,
+                twoStepAuthRequired: self.twoStepAuthData.get()
+                |> map { data -> Bool? in
+                    guard let data else {
+                        return nil
+                    }
+                    return data.currentPasswordDerivation != nil
+                }
+                |> distinctUntilChanged,
                 log: { message in
                     Logger.shared.log("WalletContext", message)
                 }
@@ -606,6 +615,17 @@ public final class AccountContextImpl: AccountContext {
             }
             (self.animationRenderer as? DCTMultiAnimationRendererImpl)?.useYuvA = settings.compressedEmojiCache
         })
+
+        self.twoStepAuthData.set(
+            .single(nil)
+            |> then(
+                self.engine.auth.twoStepAuthData()
+                |> map(Optional.init)
+                |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
+                    return .single(nil)
+                }
+            )
+        )
 
         if let walletContext = self.walletContext {
             self.tonConnectPresentationDisposable = (walletContext.tonConnectPresentations

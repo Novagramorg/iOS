@@ -164,10 +164,6 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         return self.accountSettingsController?.privacySettings
     }
     
-    public func getTwoStepAuthData() -> Promise<TwoStepAuthData?>? {
-        return self.accountSettingsController?.twoStepAuthData
-    }
-    
     public func getNotificationExceptions() -> Promise<NotificationExceptionsList?>? {
         return self.accountSettingsController?.notificationExceptions
     }

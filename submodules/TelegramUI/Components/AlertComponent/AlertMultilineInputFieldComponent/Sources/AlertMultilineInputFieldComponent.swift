@@ -258,6 +258,18 @@ public final class AlertMultilineInputFieldComponent: Component {
             let topInset: CGFloat = 15.0
             let horizontalInset: CGFloat = 4.0
             let verticalInset: CGFloat = 11.0 - UIScreenPixel
+
+            let returnKeyAction: (() -> Void)?
+            if component.returnKeyAction != nil {
+                returnKeyAction = { [weak self] in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    component.returnKeyAction?()
+                }
+            } else {
+                returnKeyAction = nil
+            }
             
             let textFieldSize = self.textField.update(
                 transition: transition,
@@ -291,12 +303,7 @@ public final class AlertMultilineInputFieldComponent: Component {
                     },
                     paste: { _ in
                     },
-                    returnKeyAction: { [weak self] in
-                        guard let self, let component = self.component else {
-                            return
-                        }
-                        component.returnKeyAction?()
-                    },
+                    returnKeyAction: returnKeyAction,
                     backspaceKeyAction: {
                     }
                 )),

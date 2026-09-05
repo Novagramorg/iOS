@@ -98,7 +98,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             amount: messageActionGramTransferData.amount,
             peerAddress: messageActionGramTransferData.peerAddress,
             transactionId: messageActionGramTransferData.transactionId,
-            comment: messageActionGramTransferData.comment
+            comment: messageActionGramTransferData.comment,
+            commentEncrypted: (messageActionGramTransferData.flags & (1 << 1)) != 0
         ))
     case let .messageActionGroupCall(messageActionGroupCallData):
         let (call, duration) = (messageActionGroupCallData.call, messageActionGroupCallData.duration)

@@ -11,10 +11,76 @@ import WalletContext
 
 typealias WalletCurrencyListItem = (currency: WalletContext.FiatCurrency, name: String)
 
-func walletCurrencyListItems() -> [WalletCurrencyListItem] {
-    return WalletContext.FiatCurrency.allCases.map { currency in
+func walletCurrencyListItems(
+    selectedCurrency: WalletContext.FiatCurrency,
+    appLanguageCode: String,
+    fallbackAppLanguageCode: String,
+    systemLanguageCode: String?,
+    keyboardLanguageCodes: [String]
+) -> [WalletCurrencyListItem] {
+    var currencies: [WalletContext.FiatCurrency] = [.usd, .eur]
+    let appLocale = walletCurrencyLanguageLocale(appLanguageCode) ?? walletCurrencyLanguageLocale(fallbackAppLanguageCode)
+    let systemLocale = systemLanguageCode.flatMap { walletCurrencyLanguageLocale($0) }
+
+    if #available(iOS 16.0, *) {
+        var locales = [appLocale, systemLocale].compactMap { $0 }
+        locales.append(contentsOf: keyboardLanguageCodes.compactMap { walletCurrencyLanguageLocale($0) })
+        for locale in locales {
+            if let currency = walletCurrencyForLocale(locale), !currencies.contains(currency) {
+                currencies.append(currency)
+            }
+        }
+    } else {
+        if appLocale.map({ ($0 as NSLocale).languageCode }) == "ru" || systemLocale.map({ ($0 as NSLocale).languageCode }) == "ru" {
+            currencies.append(.rub)
+        }
+        currencies.append(.cny)
+    }
+
+    var includedCurrencies = Set(currencies)
+    if includedCurrencies.insert(selectedCurrency).inserted {
+        currencies.insert(selectedCurrency, at: 0)
+    }
+    currencies.append(contentsOf: WalletContext.FiatCurrency.allCases.filter {
+        !includedCurrencies.contains($0)
+    }.sorted { $0.code < $1.code })
+
+    return currencies.map { currency in
         return (currency, walletCurrencyName(currency))
     }
+}
+
+private let walletCurrencyLanguageCodes: Set<String> = Set(Locale.availableIdentifiers.map {
+    (Locale(identifier: $0) as NSLocale).languageCode
+})
+
+private func walletCurrencyLanguageLocale(_ languageCode: String) -> Locale? {
+    let languageCode = languageCode.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !languageCode.isEmpty else {
+        return nil
+    }
+    let locale = Locale(identifier: Locale.canonicalIdentifier(from: languageCode))
+    let language = (locale as NSLocale).languageCode
+    guard language != "und", walletCurrencyLanguageCodes.contains(language) else {
+        return nil
+    }
+    return locale
+}
+
+@available(iOS 16.0, *)
+private func walletCurrencyForLocale(_ locale: Locale) -> WalletContext.FiatCurrency? {
+    let nsLocale = locale as NSLocale
+    let regionCode: String?
+    if let explicitRegionCode = nsLocale.object(forKey: .countryCode) as? String {
+        regionCode = explicitRegionCode
+    } else {
+        let identifier = Locale.Language(identifier: locale.identifier).maximalIdentifier
+        regionCode = Locale(identifier: identifier).region?.identifier
+    }
+    guard let regionCode, let currencyCode = NSLocale(localeIdentifier: "und_\(regionCode)").currencyCode else {
+        return nil
+    }
+    return WalletContext.FiatCurrency.allCases.first(where: { $0.code == currencyCode })
 }
 
 //TODO:localize

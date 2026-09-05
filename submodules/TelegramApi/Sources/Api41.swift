@@ -1,4 +1,71 @@
 public extension Api.stories {
+    enum Albums: TypeConstructorDescription {
+        public class Cons_albums: TypeConstructorDescription {
+            public var hash: Int64
+            public var albums: [Api.StoryAlbum]
+            public init(hash: Int64, albums: [Api.StoryAlbum]) {
+                self.hash = hash
+                self.albums = albums
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("albums", [("hash", ConstructorParameterDescription(self.hash)), ("albums", ConstructorParameterDescription(self.albums))])
+            }
+        }
+        case albums(Cons_albums)
+        case albumsNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .albums(let _data):
+                if boxed {
+                    buffer.appendInt32(-1013417414)
+                }
+                serializeInt64(_data.hash, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.albums.count))
+                for item in _data.albums {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .albumsNotModified:
+                if boxed {
+                    buffer.appendInt32(1448008427)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .albums(let _data):
+                return ("albums", [("hash", ConstructorParameterDescription(_data.hash)), ("albums", ConstructorParameterDescription(_data.albums))])
+            case .albumsNotModified:
+                return ("albumsNotModified", [])
+            }
+        }
+
+        public static func parse_albums(_ reader: BufferReader) -> Albums? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.StoryAlbum]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StoryAlbum.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.stories.Albums.albums(Cons_albums(hash: _1!, albums: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_albumsNotModified(_ reader: BufferReader) -> Albums? {
+            return Api.stories.Albums.albumsNotModified
+        }
+    }
+}
+public extension Api.stories {
     enum AllStories: TypeConstructorDescription {
         public class Cons_allStories: TypeConstructorDescription {
             public var flags: Int32
@@ -1929,112 +1996,6 @@ public extension Api.wallet {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.wallet.EncryptedSecretPhrasePart.encryptedSecretPhrasePart(Cons_encryptedSecretPhrasePart(data: _1!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.wallet {
-    enum HolderDc: TypeConstructorDescription {
-        public class Cons_holderDc: TypeConstructorDescription {
-            public var dc: Int32
-            public var publicKey: Buffer
-            public init(dc: Int32, publicKey: Buffer) {
-                self.dc = dc
-                self.publicKey = publicKey
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("holderDc", [("dc", ConstructorParameterDescription(self.dc)), ("publicKey", ConstructorParameterDescription(self.publicKey))])
-            }
-        }
-        case holderDc(Cons_holderDc)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .holderDc(let _data):
-                if boxed {
-                    buffer.appendInt32(-103410961)
-                }
-                serializeInt32(_data.dc, buffer: buffer, boxed: false)
-                serializeBytes(_data.publicKey, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .holderDc(let _data):
-                return ("holderDc", [("dc", ConstructorParameterDescription(_data.dc)), ("publicKey", ConstructorParameterDescription(_data.publicKey))])
-            }
-        }
-
-        public static func parse_holderDc(_ reader: BufferReader) -> HolderDc? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Buffer?
-            _2 = parseBytes(reader)
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.wallet.HolderDc.holderDc(Cons_holderDc(dc: _1!, publicKey: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.wallet {
-    enum SecretPhraseParts: TypeConstructorDescription {
-        public class Cons_secretPhraseParts: TypeConstructorDescription {
-            public var token: String
-            public var dcs: [Int32]
-            public init(token: String, dcs: [Int32]) {
-                self.token = token
-                self.dcs = dcs
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("secretPhraseParts", [("token", ConstructorParameterDescription(self.token)), ("dcs", ConstructorParameterDescription(self.dcs))])
-            }
-        }
-        case secretPhraseParts(Cons_secretPhraseParts)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .secretPhraseParts(let _data):
-                if boxed {
-                    buffer.appendInt32(-422514943)
-                }
-                serializeString(_data.token, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.dcs.count))
-                for item in _data.dcs {
-                    serializeInt32(item, buffer: buffer, boxed: false)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .secretPhraseParts(let _data):
-                return ("secretPhraseParts", [("token", ConstructorParameterDescription(_data.token)), ("dcs", ConstructorParameterDescription(_data.dcs))])
-            }
-        }
-
-        public static func parse_secretPhraseParts(_ reader: BufferReader) -> SecretPhraseParts? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: [Int32]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.wallet.SecretPhraseParts.secretPhraseParts(Cons_secretPhraseParts(token: _1!, dcs: _2!))
             }
             else {
                 return nil

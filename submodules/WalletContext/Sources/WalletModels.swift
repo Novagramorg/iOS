@@ -339,14 +339,16 @@ public extension WalletContext {
         public let amount: Int64
         public let fee: Int64
         public let peer: Peer
+        /// Plaintext, or a Base64 message-body BOC when `commentEncrypted` is set.
         public let comment: String?
+        public let commentEncrypted: Bool
         public let currency: Currency
         public let collectible: CollectibleTransfer?
         public let status: Status
-        public init(id: String, presentationId: String? = nil, transactionHash: String? = nil, logicalTime: String, timestamp: Int32, direction: Direction, amount: Int64, fee: Int64, peer: Peer, comment: String?, currency: Currency = .ton, collectible: CollectibleTransfer? = nil, status: Status = .completed, kind: Kind = .transfer) {
+        public init(id: String, presentationId: String? = nil, transactionHash: String? = nil, logicalTime: String, timestamp: Int32, direction: Direction, amount: Int64, fee: Int64, peer: Peer, comment: String?, commentEncrypted: Bool = false, currency: Currency = .ton, collectible: CollectibleTransfer? = nil, status: Status = .completed, kind: Kind = .transfer) {
             self.id = id; self.presentationId = presentationId ?? id; self.transactionHash = transactionHash
             self.logicalTime = logicalTime; self.timestamp = timestamp; self.kind = kind; self.direction = direction
-            self.amount = amount; self.fee = fee; self.peer = peer; self.comment = comment; self.currency = currency
+            self.amount = amount; self.fee = fee; self.peer = peer; self.comment = comment; self.commentEncrypted = commentEncrypted; self.currency = currency
             self.collectible = collectible; self.status = status
         }
         public var isVisibleInWalletHistory: Bool {
@@ -416,7 +418,9 @@ public extension WalletContext {
         public let id: String
         public let recipient: String
         public let amount: Int64
+        /// Encrypted comments are stored as BOCs, never as the draft plaintext.
         public let comment: String?
+        public let commentEncrypted: Bool
         public let collectibleAddress: String?
         public let normalizedHash: String?
         public let fee: Int64?
@@ -430,6 +434,7 @@ public extension WalletContext {
             recipient: String,
             amount: Int64,
             comment: String?,
+            commentEncrypted: Bool = false,
             collectibleAddress: String? = nil,
             normalizedHash: String? = nil,
             fee: Int64? = nil,
@@ -439,10 +444,29 @@ public extension WalletContext {
             createdAt: Int32,
             status: Status
         ) {
-            self.id = id; self.recipient = recipient; self.amount = amount; self.comment = comment
+            self.id = id; self.recipient = recipient; self.amount = amount; self.comment = comment; self.commentEncrypted = commentEncrypted
             self.collectibleAddress = collectibleAddress; self.normalizedHash = normalizedHash
             self.fee = fee; self.transactionHash = transactionHash; self.transactionLt = transactionLt
             self.uiExpiresAt = uiExpiresAt; self.createdAt = createdAt; self.status = status
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                id: try container.decode(String.self, forKey: .id),
+                recipient: try container.decode(String.self, forKey: .recipient),
+                amount: try container.decode(Int64.self, forKey: .amount),
+                comment: try container.decodeIfPresent(String.self, forKey: .comment),
+                commentEncrypted: try container.decodeIfPresent(Bool.self, forKey: .commentEncrypted) ?? false,
+                collectibleAddress: try container.decodeIfPresent(String.self, forKey: .collectibleAddress),
+                normalizedHash: try container.decodeIfPresent(String.self, forKey: .normalizedHash),
+                fee: try container.decodeIfPresent(Int64.self, forKey: .fee),
+                transactionHash: try container.decodeIfPresent(String.self, forKey: .transactionHash),
+                transactionLt: try container.decodeIfPresent(String.self, forKey: .transactionLt),
+                uiExpiresAt: try container.decodeIfPresent(Int32.self, forKey: .uiExpiresAt),
+                createdAt: try container.decode(Int32.self, forKey: .createdAt),
+                status: try container.decode(Status.self, forKey: .status)
+            )
         }
     }
 
@@ -521,7 +545,7 @@ public extension WalletContext {
     enum ActiveOperation: Equatable, Sendable {
         case creating, importing, recoveringPhrase, preparingRecoveryPhraseImport, completingRecoveryPhraseImport
         case enablingBackup, preparingBackupDisable, disablingBackup
-        case preparingTransfer, submittingTransfer, loadingMoreTransactions, loadingMoreCollectibles
+        case preparingTransfer, submittingTransfer, decryptingComment, loadingMoreTransactions, loadingMoreCollectibles
     }
     enum Phase: Equatable, Sendable { case restoring, creating, empty, wallet(WalletInfo), failed(FatalStorageError) }
 
@@ -546,7 +570,9 @@ public extension WalletContext {
         case requestPassword, invalidPassword, twoStepAuthMissing, authorizationCancelled
         case passwordTooFresh(Int32), sessionTooFresh(Int32)
         case backupDisabled, backupNotAvailable, replacementInvalid, publicKeyInvalid
+        case proofInvalid, proofExpired
         case keyRotationFailed
+        case commentTooLong, commentEncryptionRecipientUnavailable, commentEncryptionFailed, commentDecryptionFailed
         case tokenInvalid, tokenExpired, clientKeyInvalid, partUnavailable, invalidBackupData
         case insufficientBalance(required: Int64)
         case storage(FatalStorageError)
@@ -566,13 +592,15 @@ public extension WalletContext {
         public let amount: Int64
         public let requestedAmount: Int64
         public let isSendAll: Bool
+        /// The draft plaintext. The encrypted BOC is retained in the prepared engine intent.
         public let comment: String?
+        public let commentEncrypted: Bool
         public let collectible: Collectible?
         public let fee: Int64
         public let expiresAt: Int32
-        public init(id: String, recipient: String, amount: Int64, requestedAmount: Int64? = nil, isSendAll: Bool = false, comment: String?, collectible: Collectible? = nil, fee: Int64, expiresAt: Int32) {
+        public init(id: String, recipient: String, amount: Int64, requestedAmount: Int64? = nil, isSendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, collectible: Collectible? = nil, fee: Int64, expiresAt: Int32) {
             self.id = id; self.recipient = recipient; self.amount = amount
-            self.requestedAmount = requestedAmount ?? amount; self.isSendAll = isSendAll; self.comment = comment
+            self.requestedAmount = requestedAmount ?? amount; self.isSendAll = isSendAll; self.comment = comment; self.commentEncrypted = commentEncrypted
             self.collectible = collectible; self.fee = fee; self.expiresAt = expiresAt
         }
     }
@@ -591,7 +619,7 @@ extension WalletContext.ActiveOperation {
         case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport:
             return true
         case .recoveringPhrase, .enablingBackup, .preparingBackupDisable, .disablingBackup,
-             .preparingTransfer, .submittingTransfer, .loadingMoreTransactions, .loadingMoreCollectibles:
+             .preparingTransfer, .submittingTransfer, .decryptingComment, .loadingMoreTransactions, .loadingMoreCollectibles:
             return false
         }
     }

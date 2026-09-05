@@ -1074,7 +1074,6 @@ public protocol TelegramRootControllerInterface: NavigationController {
     func getSettingsController() -> ViewController?
     
     func getPrivacySettings() -> Promise<AccountPrivacySettings?>?
-    func getTwoStepAuthData() -> Promise<TwoStepAuthData?>?
     func getNotificationExceptions() -> Promise<NotificationExceptionsList?>?
         
     func openContacts()
@@ -1758,6 +1757,7 @@ public protocol AccountContext: AnyObject {
     var sharedContext: SharedAccountContext { get }
     var account: Account { get }
     var engine: TelegramEngine { get }
+    var twoStepAuthData: Promise<TwoStepAuthData?> { get }
     
     var liveLocationManager: LiveLocationManager? { get }
     var fetchManager: FetchManager { get }
