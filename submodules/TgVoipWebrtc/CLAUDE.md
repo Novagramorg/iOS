@@ -240,25 +240,73 @@ The **discovery tap** is installed once on mid=0's receiver only. Each recvonly 
 
 **Why the join gate exists (2026-09-04, from a real-call log):** the app calls `setRequestedVideoChannels` right after the context issues `emitJoinPayload`, so the request lands on the media thread behind the initial `CreateOffer` and before its `SetLocalDescription`. Renegotiating there is unrecoverable: a transceiver with no mid gets a FRESH mid from PeerConnection's monotonic `UniqueNumberGenerator` on every `CreateOffer` (`pc/sdp_offer_answer.cc` `GetOptionsForUnifiedPlanOffer`), so the initial offer took mids 0/1/2 and the renegotiation offer got 3/4/5/6; `SetLocalDescription` rejected it with "The order of m-lines in subsequent offer doesn't match order from previous offer/answer", nothing retried (later identical requests hit the "endpoint already known" early-continue), the constraints had been dropped on the closed data channel, and incoming video never arrived. Even with a matching offer, `buildRemoteAnswer()` before the join response runs on an empty `_remoteTransport`. The CLI reproduces it with `--early-video-request` (fails 1/2 video pairs on the old code, 2/2 after the fix).
 
-### A failed audio-unit start is permanent for the call
+### A failed audio-unit start used to be permanent for the call (fixed 2026-09-05)
 
-`AudioDeviceIOS::StartPlayout` returns -1 *before* `playing_.store(1)` when
-`audio_unit_->Start()` fails (`tgcalls_audio_device_ios.mm:231-235` vs `:239`), and `playing_`
-is written in exactly two places — that line and `StopPlayout:255`. `UpdateAudioUnit` (route
-changes, interruption recovery) restarts the unit but never sets it, and
-`notifyAudioUnitStartFailedWithError` only notifies delegates that nothing implements. So a
-single failed start silently disables playout for the rest of the call while capture keeps
-working: the render callback is gated on `playing_` (`:446`).
+Before the fix, `AudioDeviceIOS::StartPlayout` returned -1 *before* `playing_.store(1)` when
+`audio_unit_->Start()` failed, and nothing above it retried: the app's shared device
+(`WrappedAudioDeviceModuleIOS::Start()` in `Sources/OngoingCallThreadLocalContext.mm`) latched
+`_isStarted` before knowing the outcome and ignored the StartPlayout/StartRecording results,
+`AudioDeviceModuleIOS::StartPlayout` reported `Playing() == true` after the failure so every later
+attempt skipped the device, and `UpdateAudioUnit` (route changes, interruption recovery) only
+restarts a unit whose `playing_`/`recording_` is already set. One failed start silently disabled
+playout for the rest of the call while capture kept working.
 
 Observed 2026-09-04 on the simulator, on a fast leave→rejoin. The second join's `StartPlayout`
 raced the `AVAudioSession` activation against a HAL still disposing the previous device
 (`AudioObjectGetPropertyData: no object with given ID`, `AQMEIO … (maybe stale)`) and got
 `AUIOClient_StartIO failed (-66637)`; `StartRecording` then started the *same*
 Voice-Processing I/O unit successfully 7 ms later. Result: mic worked, video worked, incoming
-audio was silent for the whole call. A simulator restart cleared it.
+audio was silent for the whole call. The symptom reads exactly like a decryption failure in an
+encrypted conference — the frame transformers drop silently — so check the device start before
+suspecting crypto.
 
-The symptom reads exactly like a decryption failure in an encrypted conference — the frame
-transformers drop silently — so check `playing_` before suspecting crypto.
+What changed (2026-09-05, runtime unverified at the time of writing):
+
+- `AudioDeviceModuleIOS::StartPlayout`/`StartRecording` unwind the audio device buffer on
+  failure and leave `Playing()` false; `StopPlayout` resets it; `Terminate` unwinds the module
+  state and, in `AudioDeviceIOS::Terminate`, releases a unit that was initialized but never
+  started (`ShutdownPlayOrRecord`). `Init()` after `Terminate()` creates a fresh device and
+  re-applies the last tone (`lastTone_`), so a retry starts clean.
+- The shared device's `Start()` checks every step, rolls back with `Terminate()` on failure,
+  returns a bool, and `SharedAudioDeviceModuleImpl` retries on the worker thread
+  (`PostDelayedTask`, 6 attempts 500 ms apart, re-armed by the next activation). The outcome
+  reaches the app log as `CallAudioDevice: audio device started …` /
+  `… start attempt N failed: <step> failed with <code>`. The old `sleep(1)` retry loop is gone.
+- `SharedCallAudioDevice` forwards only activation *transitions* to `RTCAudioSession`, and a
+  `stop` retires a device for good. `SharedCallAudioContext` retires the previous call's context
+  when the next one is created (if that call had terminated), so a redial no longer restarts the
+  old Voice-Processing unit next to the new one — the overlap that produced the -66637 above.
+- The vendored `RTCAudioSession` can no longer deactivate the real `AVAudioSession`.
+  `updateAudioSessionAfterEvent` (reached from interruption-ended, media-services-lost/reset
+  and app-became-active-while-interrupted) was the last real `setActive:` call in the file
+  (`-setActive:error:` is `shouldSetActive && false`), and with the pre-fix negative activation
+  count it resolved to `setActive:NO` on the CallKit session mid-call. It now only activates
+  (count > 0) or updates the `isActive` flag (count == 0); activation and deactivation are owned
+  by CallKit and `ManagedAudioSession`.
+
+All of the above is on by default and reverts as a unit under the server killswitch
+`ios_killswitch_disable_call_audio_device_fixes` (presence of the key, like the other
+`ios_killswitch_` keys). It is read where the other call killswitches are read
+(`PresentationCallImpl.init`, `PresentationGroupCallImpl.init`) and applied process-wide through
+`OngoingCallContext.AudioDevice.setLegacyBehaviorEnabled` → `+[SharedCallAudioDevice
+setLegacyBehaviorEnabled:]` → `+[RTCAudioSession setLegacyDeactivationEnabled:]`, because one
+device creator (`GroupCallContext`, used when group shared audio is itself killswitched) has no
+app-config access. Under the switch a new device runs the old `StartLegacy()` verbatim (latched
+`_isStarted`, `sleep(1)` retries, unchecked results), forwards every session-state value to
+`RTCAudioSession` unconditionally, is never retired by the next call, and
+`updateAudioSessionAfterEvent` may deactivate the session again, and `SharedCallAudioContext.get`
+reuses an existing context for a group call unconditionally. Without the switch, reuse requires
+the same (absent) CallKit integration on both sides: a context created for a CallKit 1:1 call
+follows that call's activation through `CallKitIntegration.audioSessionActive`, so a non-CallKit
+group call that reused it inherited a device nothing would re-activate once CallKit deactivated
+the finished call (silent group call; invisible on the simulator, where no call has CallKit). Such
+a context is now retired and the group call gets its own. The `AudioDeviceModuleIOS` /
+`AudioDeviceIOS` bookkeeping fixes are not gated: on the paths the legacy flow exercises they are
+behaviour-preserving (they only change failure-path state and teardown of a never-started unit).
+
+A raw `AudioDeviceModuleIOS` driven by WebRTC's own `AudioState` (no shared device) also
+benefits: `AudioState` re-issues `InitPlayout`/`StartPlayout` whenever `!adm->Playing()` on a
+receive-stream change, which the honest `Playing()` now lets through.
 
 ### End-to-end encryption (conference)
 

@@ -342,10 +342,13 @@ public final class PresentationCallImpl: PresentationCall {
             })
         }
         
+        let legacyAudioDeviceBehavior = SharedCallAudioContext.isLegacyBehaviorEnabled(appConfiguration: context.currentAppConfiguration.with({ $0 }))
+        OngoingCallContext.AudioDevice.setLegacyBehaviorEnabled(legacyAudioDeviceBehavior)
+        
         if let data = context.currentAppConfiguration.with({ $0 }).data, let _ = data["ios_killswitch_disable_call_device"] {
             self.sharedAudioContext = nil
         } else {
-            self.sharedAudioContext = SharedCallAudioContext.get(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: startWithVideo || initialState?.type == .video)
+            self.sharedAudioContext = SharedCallAudioContext.get(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: startWithVideo || initialState?.type == .video, legacyBehavior: legacyAudioDeviceBehavior)
         }
         
         if let _ = self.sharedAudioContext {
@@ -1314,6 +1317,15 @@ public final class PresentationCallImpl: PresentationCall {
         }
         
         if terminating, !wasTerminated {
+            if self.conferenceCallImpl == nil && self.conferenceCallContext == nil {
+                // No conference shares this call's audio context, so the next call may retire it
+                // (stop its device) instead of waiting for this object to be released; see
+                // SharedCallAudioContext.get. A conference upgrade never gets here: the session
+                // layer reports it as .dropping(.ended(.switchedToConference)), excluded above, or
+                // as .switchedToConference (CallSessionState.init maps the migrate discard reason
+                // to it), and ignores every later update for that session.
+                self.sharedAudioContext?.markCallFinished()
+            }
             if !self.didSetCanBeRemoved {
                 self.didSetCanBeRemoved = true
                 self.canBeRemovedPromise.set(.single(true) |> delay(2.0, queue: Queue.mainQueue()))

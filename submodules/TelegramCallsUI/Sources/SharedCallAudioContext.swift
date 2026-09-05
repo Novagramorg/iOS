@@ -1,5 +1,6 @@
 import Foundation
 import SwiftSignalKit
+import TelegramCore
 import TelegramVoip
 import TelegramAudio
 import DeviceProximity
@@ -40,20 +41,90 @@ public final class SharedCallAudioContext {
     private var isInitialOutputPending: Bool = false
     
     private var proximityManagerIndex: Int?
+    
+    /// Set by the owning call once it has terminated for good (see `markCallFinished`). A finished
+    /// context is retired the moment the next context is created instead of living on until its
+    /// call object is released, which is at least 2 s after termination.
+    private var isCallFinished: Bool = false
+    private var isRetired: Bool = false
 
-    static func get(audioSession: ManagedAudioSession, callKitIntegration: CallKitIntegration?, defaultToSpeaker: Bool = false, reuseCurrent: Bool = false, enableMicrophone: Bool = true) -> SharedCallAudioContext {
-        if let current = self.current, reuseCurrent {
+    /// Server killswitch that puts the call audio device back on its pre-2026-09-05 code paths:
+    /// one-shot device start without result checks or retries, unconditional forwarding of every
+    /// audio-session state value to RTCAudioSession, no retirement of the previous call's device
+    /// when the next call starts, RTCAudioSession allowed to deactivate the AVAudioSession, and
+    /// unconditional reuse of an existing context by a group call (see `get`).
+    /// Presence of the key is what matters, as with the other `ios_killswitch_` keys.
+    static let legacyBehaviorKillswitchKey = "ios_killswitch_disable_call_audio_device_fixes"
+    
+    static func isLegacyBehaviorEnabled(appConfiguration: AppConfiguration) -> Bool {
+        return appConfiguration.data?[self.legacyBehaviorKillswitchKey] != nil
+    }
+
+    static func get(audioSession: ManagedAudioSession, callKitIntegration: CallKitIntegration?, defaultToSpeaker: Bool = false, reuseCurrent: Bool = false, enableMicrophone: Bool = true, legacyBehavior: Bool = false) -> SharedCallAudioContext {
+        // Devices read the switch at creation, so it must be applied before the context is built.
+        OngoingCallContext.AudioDevice.setLegacyBehaviorEnabled(legacyBehavior)
+        
+        // A context created for a CallKit call follows that call's activation cycle through
+        // CallKitIntegration.audioSessionActive, and a caller without CallKit integration has no
+        // way to re-activate it: once CallKit deactivates the finished call, the reused device
+        // stays stopped and the group call is silent. (Invisible on the simulator, where no call
+        // has CallKit integration.) So reuse only across callers with the same integration; a
+        // CallKit-bound context is retired below like any other finished context, and the new
+        // context activates through ManagedAudioSession. The killswitch restores unconditional
+        // reuse.
+        if let current = self.current, reuseCurrent, legacyBehavior || current.callKitIntegration === callKitIntegration {
             // The reused context was configured for the call that created it (a 1:1 audio call
             // defaults to the receiver), so without this the caller's defaultToSpeaker is dropped
             // and a group call silently inherits the earpiece.
             if defaultToSpeaker && !audioSession.getIsHeadsetPluggedIn() {
                 current.switchToSpeakerIfBuiltin()
             }
+            // It now belongs to a live call again; the previous owner's termination must not let a
+            // later context retire it.
+            current.isCallFinished = false
             return current
         }
+        let previous = self.current
         let context = SharedCallAudioContext(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: defaultToSpeaker, enableMicrophone: enableMicrophone)
         self.current = context
+        // A finished call's device kept running until its PresentationCallImpl was released and
+        // kept following the process-wide CallKit activation signal. A redial inside that window
+        // restarted it next to the new device (two Voice-Processing units), and the second start is
+        // the one that fails. Retire it after the new holder has been pushed, so ManagedAudioSession
+        // never sees an empty holder list in between (that would deactivate the real session).
+        if !legacyBehavior, let previous, previous.isCallFinished {
+            previous.retire()
+        }
         return context
+    }
+    
+    /// The owning call has terminated for good. Lets the next `get` retire this context.
+    func markCallFinished() {
+        self.isCallFinished = true
+    }
+    
+    private func retire() {
+        if self.isRetired {
+            return
+        }
+        self.isRetired = true
+        
+        self.initialSetupTimer?.invalidate()
+        self.initialSetupTimer = nil
+        self.audioSessionShouldBeActiveDisposable?.dispose()
+        self.audioSessionShouldBeActiveDisposable = nil
+        self.isAudioSessionActiveDisposable?.dispose()
+        self.isAudioSessionActiveDisposable = nil
+        self.audioOutputStateDisposable?.dispose()
+        self.audioOutputStateDisposable = nil
+        
+        self.audioDevice?.stop()
+        
+        // Release the ManagedAudioSession holder now rather than at deinit, so the replacing
+        // context's holder is activated (and its device started) without waiting for this
+        // call object to go away.
+        self.audioSessionDisposable?.dispose()
+        self.audioSessionDisposable = nil
     }
     
     private init(audioSession: ManagedAudioSession, callKitIntegration: CallKitIntegration?, defaultToSpeaker: Bool = false, enableMicrophone: Bool = true) {
@@ -89,7 +160,7 @@ public final class SharedCallAudioContext {
         var didReceiveAudioOutputs = false
         self.audioSessionDisposable = audioSession.push(audioSessionType: enableMicrophone ? .voiceCall : .play(mixWithOthers: true), manualActivate: { [weak self] control in
             Queue.mainQueue().async {
-                guard let self else {
+                guard let self, !self.isRetired else {
                     return
                 }
                 let previousControl = self.audioSessionControl

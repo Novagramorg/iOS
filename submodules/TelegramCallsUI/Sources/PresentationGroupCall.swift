@@ -958,6 +958,9 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         if sharedAudioContext == nil {
             var useSharedAudio = true
             var canReuseCurrent = !isStream
+            // Also covers the device GroupCallContext creates itself when shared audio is off.
+            let legacyAudioDeviceBehavior = SharedCallAudioContext.isLegacyBehaviorEnabled(appConfiguration: self.accountContext.currentAppConfiguration.with({ $0 }))
+            OngoingCallContext.AudioDevice.setLegacyBehaviorEnabled(legacyAudioDeviceBehavior)
             if let data = self.accountContext.currentAppConfiguration.with({ $0 }).data {
                 if data["ios_killswitch_group_shared_audio"] != nil {
                     useSharedAudio = false
@@ -972,7 +975,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
             }
             
             if useSharedAudio {
-                let sharedAudioContextValue = SharedCallAudioContext.get(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: true, reuseCurrent: canReuseCurrent && callKitIntegration == nil, enableMicrophone: !isStream)
+                let sharedAudioContextValue = SharedCallAudioContext.get(audioSession: audioSession, callKitIntegration: callKitIntegration, defaultToSpeaker: true, reuseCurrent: canReuseCurrent && callKitIntegration == nil, enableMicrophone: !isStream, legacyBehavior: legacyAudioDeviceBehavior)
                 sharedAudioContext = sharedAudioContextValue
             }
         }

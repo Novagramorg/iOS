@@ -836,12 +836,35 @@ public final class OngoingCallContext {
             return AudioDevice(impl: SharedCallAudioDevice(disableRecording: !enableMicrophone, enableSystemMute: enableSystemMute))
         }
         
+        /// Server killswitch `ios_killswitch_disable_call_audio_device_fixes`: devices created after
+        /// this call run the pre-2026-09-05 code paths (one-shot start without result checks or
+        /// retries, unconditional audio-session state forwarding, RTCAudioSession allowed to
+        /// deactivate the session). Process-wide, because one creator (`GroupCallContext`) has no
+        /// access to the app configuration. Off by default.
+        public static func setLegacyBehaviorEnabled(_ enabled: Bool) {
+            SharedCallAudioDevice.setLegacyBehaviorEnabled(enabled)
+        }
+        
         private init(impl: SharedCallAudioDevice) {
             self.impl = impl
+            // The start outcome used to be invisible: RTC logs only reach the app log while a
+            // call instance holds a log sink, and this device starts before one exists.
+            impl.startResultHandler = { started, failure, failedAttempts in
+                if started {
+                    Logger.shared.log("CallAudioDevice", "audio device started" + (failedAttempts > 0 ? " after \(failedAttempts) failed attempt(s)" : ""))
+                } else {
+                    Logger.shared.log("CallAudioDevice", "audio device start attempt \(failedAttempts) failed: \(failure ?? "unknown")")
+                }
+            }
         }
         
         public func setIsAudioSessionActive(_ isActive: Bool) {
             self.impl.setManualAudioSessionIsActive(isActive)
+        }
+        
+        /// Stops the device for good. Later activation changes are ignored.
+        public func stop() {
+            self.impl.stop()
         }
         
         public func setTone(tone: Tone?) {
