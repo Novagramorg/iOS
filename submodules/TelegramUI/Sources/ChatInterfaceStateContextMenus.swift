@@ -2172,7 +2172,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             for attribute in message.attributes {
                 if let attribute = attribute as? AutoremoveTimeoutMessageAttribute {
                     if let countdownBeginTime = attribute.countdownBeginTime {
-                        autoremoveDeadline = countdownBeginTime + attribute.timeout
+                        autoremoveDeadline = autoremoveExpiryTimestamp(countdownBeginTime: countdownBeginTime, timeout: attribute.timeout)
                     }
                     break
                 }

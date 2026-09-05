@@ -4113,7 +4113,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 case let .MessageEntry(message, _, _, _, _, _):
                     if !existingStableIds.contains(message.stableId) {
                         if let autoremoveAttribute = message.autoremoveAttribute, let countdownBeginTime = autoremoveAttribute.countdownBeginTime {
-                            let exipiresAt = countdownBeginTime + autoremoveAttribute.timeout
+                            let exipiresAt = autoremoveExpiryTimestamp(countdownBeginTime: countdownBeginTime, timeout: autoremoveAttribute.timeout)
                             if exipiresAt >= currentTimestamp - 1 {
                                 expiredMessageStableIds.insert(message.stableId)
                             }
@@ -4131,7 +4131,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     }
                     if isRemoved, let message = messages.first?.0 {
                         if let autoremoveAttribute = message.autoremoveAttribute, let countdownBeginTime = autoremoveAttribute.countdownBeginTime {
-                            let exipiresAt = countdownBeginTime + autoremoveAttribute.timeout
+                            let exipiresAt = autoremoveExpiryTimestamp(countdownBeginTime: countdownBeginTime, timeout: autoremoveAttribute.timeout)
                             if exipiresAt >= currentTimestamp - 1 {
                                 expiredMessageStableIds.insert(message.stableId)
                             }
