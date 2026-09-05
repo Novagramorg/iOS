@@ -136,6 +136,7 @@ func walletTransactions(
             fee: transaction.fee,
             peer: peer,
             comment: transaction.comment,
+            commentEncrypted: transaction.commentEncrypted,
             status: status
         ))
     }
@@ -211,6 +212,7 @@ func walletPendingTransferTransaction(
         fee: pending.fee ?? 0,
         peer: .address(pending.recipient, domain: nil),
         comment: pending.comment,
+        commentEncrypted: pending.commentEncrypted,
         status: status
     )
 }
@@ -265,6 +267,7 @@ private func transactionWithResolvedStreamingPeer(
         fee: transaction.fee,
         peer: .user(peer, address: address, domain: domain),
         comment: transaction.comment,
+        commentEncrypted: transaction.commentEncrypted,
         currency: transaction.currency,
         collectible: transaction.collectible,
         status: transaction.status,
@@ -290,6 +293,7 @@ func walletTransactionWithPresentationId(
         fee: transaction.fee,
         peer: transaction.peer,
         comment: transaction.comment,
+        commentEncrypted: transaction.commentEncrypted,
         currency: transaction.currency,
         collectible: transaction.collectible,
         status: transaction.status,

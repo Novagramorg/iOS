@@ -1142,7 +1142,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 self.present(BotReceiptController(context: self.context, messageId: message.id), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
                             }
                             return true
-                        case let .gramTransfer(amount, peerAddress, transactionId, messageComment):
+                        case let .gramTransfer(amount, peerAddress, transactionId, messageComment, commentEncrypted):
                             let direction: WalletContext.Transaction.Direction
                             if message.effectivelyIncoming(self.context.account.peerId) {
                                 direction = .incoming
@@ -1176,7 +1176,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 amount: amount,
                                 fee: 0,
                                 peer: peer,
-                                comment: comment
+                                comment: comment,
+                                commentEncrypted: commentEncrypted
                             )
                             self.push(self.context.sharedContext.makeWalletTransactionScreen(
                                 context: self.context,

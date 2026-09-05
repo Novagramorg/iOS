@@ -80,6 +80,8 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     let peerAddress: String?
     let peerDomain: String?
     let comment: String?
+    // Optional so caches written before encrypted comments remain decodable.
+    let commentEncrypted: Bool?
     let currency: WalletContext.Transaction.Currency
     let collectible: WalletContext.Transaction.CollectibleTransfer?
     let status: WalletContext.Transaction.Status
@@ -108,6 +110,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             self.peerDomain = nil
         }
         self.comment = transaction.comment
+        self.commentEncrypted = transaction.commentEncrypted
         self.currency = transaction.currency
         self.collectible = transaction.collectible
         self.status = transaction.status
@@ -139,6 +142,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             fee: self.fee,
             peer: peer,
             comment: self.comment,
+            commentEncrypted: self.commentEncrypted ?? false,
             currency: self.currency,
             collectible: self.collectible,
             status: self.status,

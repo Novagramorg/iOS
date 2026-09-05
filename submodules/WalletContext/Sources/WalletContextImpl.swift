@@ -97,6 +97,10 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .proofInvalid: return "proof_invalid"
         case .proofExpired: return "proof_expired"
         case .keyRotationFailed: return "key_rotation_failed"
+        case .commentTooLong: return "comment_too_long"
+        case .commentEncryptionRecipientUnavailable: return "comment_encryption_recipient_unavailable"
+        case .commentEncryptionFailed: return "comment_encryption_failed"
+        case .commentDecryptionFailed: return "comment_decryption_failed"
         case .tokenInvalid: return "token_invalid"
         case .tokenExpired: return "token_expired"
         case .clientKeyInvalid: return "client_key_invalid"
@@ -1141,6 +1145,7 @@ actor WalletContextImpl {
                 recipient: current.recipient,
                 amount: current.amount,
                 comment: current.comment,
+                commentEncrypted: current.commentEncrypted,
                 collectibleAddress: current.collectibleAddress,
                 normalizedHash: current.normalizedHash,
                 fee: current.fee,

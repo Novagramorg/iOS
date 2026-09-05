@@ -29,6 +29,7 @@ private func acceptedWalletEngineSubmission(
         recipient: pending.recipient,
         amount: pending.amount,
         comment: pending.comment,
+        commentEncrypted: pending.commentEncrypted,
         collectibleAddress: pending.collectibleAddress,
         normalizedHash: messageHash ?? pending.normalizedHash,
         fee: pending.fee,
@@ -240,15 +241,22 @@ public extension WalletContext {
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?) -> Signal<PreparedTransfer, WalletError> {
+    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false) -> Signal<PreparedTransfer, WalletError> {
         self.signal(name: "preparing_transfer") { impl, operationId in
             try await impl.prepareTransfer(
                 address: address,
                 amount: amount,
                 sendAll: sendAll,
                 comment: comment,
+                commentEncrypted: commentEncrypted,
                 operationId: operationId
             )
+        }
+    }
+
+    func decryptTransactionComment(_ transaction: Transaction) -> Signal<String, WalletError> {
+        self.signal(name: "decrypting_comment") { impl, operationId in
+            try await impl.decryptTransactionComment(transaction, operationId: operationId)
         }
     }
 
@@ -937,6 +945,7 @@ extension WalletContextImpl {
         amount: Int64,
         sendAll: Bool,
         comment: String?,
+        commentEncrypted: Bool,
         operationId: UUID
     ) async throws -> PreparedTransfer {
         return try await self.performOperation(.preparingTransfer, operationId: operationId) {
@@ -945,6 +954,35 @@ extension WalletContextImpl {
                 throw WalletError.unavailable
             }
             let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
+            let activationGeneration = self.activationGeneration
+            let encryptComment = commentEncrypted && resolved.comment != nil
+            let body: SendMessageBody
+            if encryptComment, let comment = resolved.comment {
+                guard comment.utf8.count <= 960 else {
+                    throw WalletError.commentTooLong
+                }
+                let boc: String
+                do {
+                    boc = try await self.runtime.createEncryptedComment(recipient: resolved.address, comment: comment)
+                } catch {
+                    try Task.checkCancellation()
+                    self.errorLogger.error("wallet_comment_encryption_failed", error)
+                    if let error = error as? WalletClientError, case .EncryptedCommentUnavailable = error {
+                        throw WalletError.commentEncryptionRecipientUnavailable
+                    }
+                    throw WalletError.commentEncryptionFailed
+                }
+                try Task.checkCancellation()
+                guard let data = Data(base64Encoded: boc) else {
+                    throw WalletError.commentEncryptionFailed
+                }
+                guard data.count <= 1024 else {
+                    throw WalletError.commentTooLong
+                }
+                body = .rawPayload(boc: boc)
+            } else {
+                body = resolved.body
+            }
             let resolvedSendAll = sendAll && !resolved.hasLinkAmount
             let sendAmount: SendAmount = resolvedSendAll
                 ? .all
@@ -954,13 +992,14 @@ extension WalletContextImpl {
                 messages: [SendMessage(
                     destination: resolved.address,
                     amount: sendAmount,
-                    body: resolved.body,
+                    body: body,
                     bounce: false,
                     stateInit: nil
                 )]
             )
             let preview = try await self.runtime.previewSend(intent: intent)
             try Task.checkCancellation()
+            guard self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
             let effectiveAmount: Int64
@@ -984,6 +1023,7 @@ extension WalletContextImpl {
                 requestedAmount: resolved.amount,
                 isSendAll: resolvedSendAll,
                 comment: resolved.comment,
+                commentEncrypted: encryptComment,
                 fee: fee,
                 expiresAt: Int32(clamping: preview.validUntil)
             )
@@ -994,6 +1034,44 @@ extension WalletContextImpl {
             )
             self.removeExpiredPreparedTransfers()
             return transfer
+        }
+    }
+
+    func decryptTransactionComment(
+        _ transaction: WalletContext.Transaction,
+        operationId: UUID
+    ) async throws -> String {
+        try await self.performOperation(.decryptingComment, operationId: operationId) {
+            guard case let .wallet(info) = self.currentState.phase, info.canSign else {
+                throw WalletError.unavailable
+            }
+            guard transaction.commentEncrypted,
+                  let body = transaction.comment,
+                  let data = Data(base64Encoded: body), !data.isEmpty, data.count <= 1024 else {
+                throw WalletError.commentDecryptionFailed
+            }
+            let sender: String
+            switch transaction.direction {
+            case .incoming:
+                guard let address = transaction.peer.address else { throw WalletError.commentDecryptionFailed }
+                sender = address
+            case .outgoing:
+                sender = info.address
+            case .unknown:
+                throw WalletError.commentDecryptionFailed
+            }
+            let activationGeneration = self.activationGeneration
+            let comment: String
+            do {
+                comment = try await self.runtime.decryptComment(sender: sender, body: body)
+            } catch {
+                try Task.checkCancellation()
+                self.errorLogger.error("wallet_comment_decryption_failed", error)
+                throw WalletError.commentDecryptionFailed
+            }
+            try Task.checkCancellation()
+            guard self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+            return comment
         }
     }
 
@@ -1061,11 +1139,23 @@ extension WalletContextImpl {
                 self.preparedTransfers[prepared.id] = nil
                 throw WalletError.preparedTransferExpired
             }
+            let pendingComment: String?
+            if prepared.commentEncrypted {
+                guard case let .send(intent) = record.request,
+                      let message = intent.messages.first,
+                      case let .rawPayload(boc) = message.body else {
+                    throw WalletError.preparedTransferNotFound
+                }
+                pendingComment = boc
+            } else {
+                pendingComment = prepared.comment
+            }
             let pending = PendingTransfer(
                 id: prepared.id,
                 recipient: prepared.recipient,
                 amount: prepared.amount,
-                comment: prepared.comment,
+                comment: pendingComment,
+                commentEncrypted: prepared.commentEncrypted,
                 collectibleAddress: prepared.collectible?.address,
                 fee: prepared.fee,
                 createdAt: currentWalletTimestamp(),
@@ -1443,7 +1533,7 @@ extension WalletContextImpl {
             throw WalletError.operationInProgress
         }
         switch activeOperation {
-        case .preparingTransfer, .submittingTransfer:
+        case .preparingTransfer, .submittingTransfer, .decryptingComment:
             if self.synchronizationGate.isRunning || self.synchronizationGate.hasQueuedRequest {
                 self.deferredSynchronizationScope.formUnion(.all)
                 self.cancelSynchronization()
@@ -1492,7 +1582,7 @@ extension WalletContextImpl {
             return true
         }
         switch self.currentState.activeOperation {
-        case .preparingTransfer, .submittingTransfer:
+        case .preparingTransfer, .submittingTransfer, .decryptingComment:
             return true
         case .none, .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
              .completingRecoveryPhraseImport, .enablingBackup, .preparingBackupDisable,

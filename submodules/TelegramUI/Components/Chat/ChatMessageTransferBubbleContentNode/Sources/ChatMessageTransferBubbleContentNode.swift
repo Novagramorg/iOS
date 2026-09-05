@@ -13,6 +13,7 @@ import WallpaperBackgroundNode
 import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
 import TextSelectionNode
+import InvisibleInkDustNode
 
 public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleContentNode {
     private let labelNode: TextNode
@@ -29,6 +30,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let addressNode: TextNode
     private let captionNode: TextNode
     private var captionTextSelectionNode: TextSelectionNode?
+    private var captionDustNode: InvisibleInkDustNode?
     private let ribbonBackgroundNode: ASImageNode
     private let ribbonTextNode: TextNode
 
@@ -222,13 +224,14 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         return (CGSize(), { _, _, _ in })
                     })
                 }
-                guard case let .gramTransfer(amount, peerAddress, _, comment) = action.action else {
+                guard case let .gramTransfer(amount, peerAddress, _, comment, commentEncrypted) = action.action else {
                     return (0.0, { _ in
                         return (CGSize(), { _, _, _ in })
                     })
                 }
                 let isIncoming = engineMessage.effectivelyIncoming(item.context.account.peerId)
-                let caption = comment ?? ""
+                let caption = commentEncrypted ? "" : (comment ?? "")
+                let hasEncryptedCaption = commentEncrypted && comment?.isEmpty == false
 
                 let tonUsdRate = item.context.currentAppConfiguration.with { configuration -> Double? in
                     return configuration.data?["ton_usd_rate"] as? Double
@@ -340,7 +343,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     textShadowBlur: 0.0
                 ))
 
-                let hasCaption = !caption.isEmpty
+                let hasCaption = hasEncryptedCaption || !caption.isEmpty
                 let (captionLayout, captionApply) = makeCaptionLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
                         string: caption,
@@ -356,6 +359,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     cutout: nil,
                     insets: UIEdgeInsets()
                 ))
+                let captionSize = hasEncryptedCaption
+                    ? CGSize(width: 120.0, height: ceil(Font.regular(13.0).lineHeight))
+                    : captionLayout.size
 
                 let ribbonTitle: String
                 let ribbonColor: UIColor
@@ -425,7 +431,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 let captionBottomInset = hasCaption ? 4.0 : 0.0
                 let mediaSize = CGSize(
                     width: cardSize.width + outerInset * 2.0,
-                    height: cardSize.height + outerInset * 2.0 + captionSpacing + (hasCaption ? captionLayout.size.height : 0.0) + captionBottomInset
+                    height: cardSize.height + outerInset * 2.0 + captionSpacing + (hasCaption ? captionSize.height : 0.0) + captionBottomInset
                 )
                 let totalSize = CGSize(
                     width: max(mediaSize.width, labelLayout.size.width),
@@ -495,16 +501,39 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         self.ribbonTextNode.bounds = CGRect(origin: .zero, size: ribbonTextLayout.size)
                         self.ribbonTextNode.position = ribbonFrame.center.offsetBy(dx: 7.0, dy: -6.0)
 
-                        self.captionNode.isHidden = !hasCaption
+                        self.captionNode.isHidden = !hasCaption || hasEncryptedCaption
+                        if hasEncryptedCaption {
+                            self.removeCaptionTextSelection(animated: false)
+                        } else if let captionDustNode = self.captionDustNode {
+                            captionDustNode.removeFromSupernode()
+                            self.captionDustNode = nil
+                        }
                         if hasCaption {
                             let captionFrame = CGRect(
                                 origin: CGPoint(
-                                    x: mediaFrame.minX + floorToScreenPixels((mediaFrame.width - captionLayout.size.width) * 0.5),
+                                    x: mediaFrame.minX + floorToScreenPixels((mediaFrame.width - captionSize.width) * 0.5),
                                     y: cardFrame.maxY + captionSpacing
                                 ),
-                                size: captionLayout.size
+                                size: captionSize
                             )
                             self.captionNode.frame = captionFrame
+                            if hasEncryptedCaption {
+                                let dustNode: InvisibleInkDustNode
+                                if let current = self.captionDustNode {
+                                    dustNode = current
+                                } else {
+                                    dustNode = InvisibleInkDustNode(textNode: nil, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
+                                    dustNode.isUserInteractionEnabled = false
+                                    dustNode.isAccessibilityElement = true
+                                    //TODO:localize
+                                    dustNode.accessibilityLabel = "Encrypted comment"
+                                    self.captionDustNode = dustNode
+                                    self.addSubnode(dustNode)
+                                }
+                                dustNode.frame = captionFrame.insetBy(dx: -3.0, dy: -3.0)
+                                let rect = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: captionSize).insetBy(dx: 0.0, dy: 2.0)
+                                dustNode.update(size: dustNode.frame.size, color: .white, textColor: .white, rects: [rect], wordRects: [rect])
+                            }
                             if let textSelectionNode = self.captionTextSelectionNode {
                                 let shouldUpdateLayout = textSelectionNode.frame.size != captionFrame.size
                                 textSelectionNode.frame = captionFrame

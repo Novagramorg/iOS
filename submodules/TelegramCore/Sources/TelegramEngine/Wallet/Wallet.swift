@@ -85,6 +85,7 @@ public struct WalletTransaction: Equatable {
     public let date: Int32
     public let peer: WalletTransactionPeer
     public let comment: String?
+    public let commentEncrypted: Bool
     public let txHash: String?
 
     public init(
@@ -96,6 +97,7 @@ public struct WalletTransaction: Equatable {
         date: Int32,
         peer: WalletTransactionPeer,
         comment: String?,
+        commentEncrypted: Bool = false,
         txHash: String?
     ) {
         self.incoming = incoming
@@ -106,6 +108,7 @@ public struct WalletTransaction: Equatable {
         self.date = date
         self.peer = peer
         self.comment = comment
+        self.commentEncrypted = commentEncrypted
         self.txHash = txHash
     }
 }
@@ -228,6 +231,7 @@ private extension WalletTransaction {
                 date: walletTransaction.date,
                 peer: WalletTransactionPeer(apiPeer: walletTransaction.peer, transaction: transaction),
                 comment: walletTransaction.comment,
+                commentEncrypted: (walletTransaction.flags & (1 << 6)) != 0,
                 txHash: walletTransaction.txHash
             )
         }

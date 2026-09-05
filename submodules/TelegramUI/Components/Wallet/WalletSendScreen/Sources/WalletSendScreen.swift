@@ -283,12 +283,12 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.gramIconSize = self.gramIcon.update(
             transition: transition,
             component: AnyComponent(BundleIconComponent(
-                name: "Ads/TonBig",
+                name: "Wallet/SendGram",
                 tintColor: UIColor(rgb: 0x30A1F5),
-                maxSize: CGSize(width: 40.0, height: 40.0)
+                maxSize: CGSize(width: 44.0, height: 44.0)
             )),
             environment: {},
-            containerSize: CGSize(width: 40.0, height: 74.0)
+            containerSize: CGSize(width: 44.0, height: 74.0)
         )
         if let gramIconView = self.gramIcon.view {
             if gramIconView.superview == nil {
@@ -356,7 +356,7 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         super.layoutSubviews()
 
         let iconLayoutSize = CGSize(width: 40.0, height: 40.0)
-        let iconSpacing: CGFloat = 11.0
+        let iconSpacing: CGFloat = self.mode == .fiat ? 0.0 : 2.0
         let suffixSpacing: CGFloat = 2.0
         let displayText = (self.textField.text ?? "").isEmpty ? "0" : (self.textField.text ?? "")
         let displayTextBounds = self.amountAttributedText(displayText).boundingRect(
@@ -541,6 +541,7 @@ private final class WalletSendScreenComponent: Component {
         private var amount: Int64 = 0
         private var amountSource: WalletSendAmountSource = .manual
         private var comment: String?
+        private var isCommentPublic = false
         private var currentFiatCurrency: WalletContext.FiatCurrency = .usd
         private var currentRate: Double?
         private var lastRateText = ""
@@ -682,11 +683,13 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func showCommentAlert() {
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard !self.isPreparingTransfer, !self.isResolvingSigningAccess,
+                  let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
 
             let inputState = AlertMultilineInputFieldComponent.ExternalState()
+            let publicCommentState = AlertCheckComponent.ExternalState()
             let isEditingComment = self.comment?.isEmpty == false
             //TODO:localize
             let title = isEditingComment ? "Edit Comment" : "Add comment"
@@ -722,8 +725,8 @@ private final class WalletSendScreenComponent: Component {
                     id: "publicComment",
                     component: AnyComponent(AlertCheckComponent(
                         title: publicCommentTitle,
-                        initialValue: false,
-                        externalState: AlertCheckComponent.ExternalState()
+                        initialValue: self.isCommentPublic,
+                        externalState: publicCommentState
                     ))
                 )
             ]
@@ -740,9 +743,10 @@ private final class WalletSendScreenComponent: Component {
                         }
                         let value = inputState.value.string.trimmingCharacters(in: .whitespacesAndNewlines)
                         let comment = value.isEmpty ? nil : value
-                        if self.comment != comment {
+                        if self.comment != comment || self.isCommentPublic != publicCommentState.value {
                             self.discardPeerPreparedTransfer()
                             self.comment = comment
+                            self.isCommentPublic = publicCommentState.value
                         }
                         self.componentState?.updated(transition: .spring(duration: 0.35))
                     })
@@ -974,6 +978,7 @@ private final class WalletSendScreenComponent: Component {
                    prepared.requestedAmount == self.amount,
                    prepared.isSendAll == sendAll,
                    prepared.comment == self.comment,
+                   prepared.commentEncrypted == (self.comment != nil && !self.isCommentPublic),
                    prepared.collectible == nil,
                    prepared.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) {
                     preparation = .single(prepared)
@@ -983,7 +988,8 @@ private final class WalletSendScreenComponent: Component {
                         address: self.recipientAddress,
                         amount: self.amount,
                         sendAll: sendAll,
-                        comment: self.comment
+                        comment: self.comment,
+                        commentEncrypted: !self.isCommentPublic
                     )
                 }
                 self.transferDisposable.set((preparation
@@ -1030,7 +1036,7 @@ private final class WalletSendScreenComponent: Component {
                     }
                     self?.isPreparingTransfer = false
                     self?.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                    self?.presentTransferError()
+                    self?.presentTransferError(error)
                 }))
                 return
             }
@@ -1106,14 +1112,27 @@ private final class WalletSendScreenComponent: Component {
             ), in: .window(.root))
         }
 
-        private func presentTransferError() {
+        private func presentTransferError(_ error: WalletContext.WalletError? = nil) {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
             //TODO:localize
-            let title = "Transfer Failed"
-            //TODO:localize
-            let text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+            let title: String
+            let text: String
+            switch error {
+            case .commentTooLong:
+                title = "Comment Too Long"
+                text = "The encrypted comment is too long. Shorten it and try again."
+            case .commentEncryptionRecipientUnavailable:
+                title = "Couldn't Encrypt Comment"
+                text = "This user can't receive encrypted messages now."
+            case .commentEncryptionFailed:
+                title = "Couldn't Encrypt Comment"
+                text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
+            default:
+                title = "Transfer Failed"
+                text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+            }
             //TODO:localize
             let ok = "OK"
             controller.present(textAlertController(
@@ -1432,7 +1451,7 @@ private final class WalletSendScreenComponent: Component {
                 AnyComponentWithIdentity(
                     id: "title",
                     component: AnyComponent(AnimatedTextComponent(
-                        font: Font.with(size: 13.0, design: .round, weight: .semibold, traits: .monospacedNumbers),
+                        font: Font.with(size: 13.0, design: .round, weight: .semibold),
                         color: theme.list.itemSecondaryTextColor,
                         items: [
                             AnimatedTextComponent.Item(id: "rate", content: .text(self.lastRateText))
@@ -1658,7 +1677,7 @@ private final class WalletSendScreenComponent: Component {
                         view: commentTextView,
                         bounds: CGRect(origin: .zero, size: commentTextFrame.size)
                     )
-                    commentPositionTransition.setPosition(view: commentTextView, position: commentTextFrame.center)
+                    commentPositionTransition.setPosition(view: commentTextView, position: commentTextFrame.center.offsetBy(dx: 2.0 - UIScreenPixel, dy: 0.0))
                     transition.setAlpha(view: commentTextView, alpha: 1.0)
                 }
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)

@@ -466,6 +466,26 @@ actor WalletEngineRuntime {
         }
     }
 
+    func createEncryptedComment(recipient: String, comment: String) async throws -> String {
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.ensureKeyRotationAllowsSigning()
+            return try await self.requireClient().createEncryptedComment(request: CreateEncryptedCommentRequest(
+                recipient: recipient,
+                comment: comment
+            ))
+        }
+    }
+
+    func decryptComment(sender: String, body: String) async throws -> String {
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.ensureKeyRotationAllowsSigning()
+            return try await self.requireClient().decryptComment(request: DecryptCommentRequest(
+                sender: sender,
+                body: body
+            ))
+        }
+    }
+
     func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
         try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
