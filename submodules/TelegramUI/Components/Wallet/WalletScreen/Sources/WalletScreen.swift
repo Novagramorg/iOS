@@ -1675,15 +1675,7 @@ private final class WalletScreenComponent: Component {
             //TODO:localize
             let howItWorks = "How It Works"
 
-            let currencies = walletCurrencyListItems()
             let selectedCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
-            var orderedCurrencies = currencies
-            let topCurrencies: Set<WalletContext.FiatCurrency> = [.usd, .eur, .rub, .cny, .aed]
-            if !topCurrencies.contains(selectedCurrency),
-               let selectedCurrencyIndex = orderedCurrencies.firstIndex(where: { $0.currency == selectedCurrency }) {
-                let selectedCurrencyItem = orderedCurrencies.remove(at: selectedCurrencyIndex)
-                orderedCurrencies.insert(selectedCurrencyItem, at: 0)
-            }
 
             let items: [ContextMenuItem] = [
                 .action(ContextMenuActionItem(
@@ -1696,6 +1688,15 @@ private final class WalletScreenComponent: Component {
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Arrow"), color: theme.contextMenu.primaryColor)
                     },
                     action: { [weak self] contextController, _ in
+                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                        let selectedCurrency = self?.walletState?.fiat.selectedCurrency ?? .usd
+                        let orderedCurrencies = walletCurrencyListItems(
+                            selectedCurrency: selectedCurrency,
+                            appLanguageCode: presentationData.strings.primaryComponent.languageCode,
+                            fallbackAppLanguageCode: presentationData.strings.baseLanguageCode,
+                            systemLanguageCode: Locale.preferredLanguages.first,
+                            keyboardLanguageCodes: UITextInputMode.activeInputModes.compactMap { $0.primaryLanguage }
+                        )
                         let searchQueryPromise = ValuePromise<String>("")
                         let currencyItems: [ContextMenuItem] = [
                             .action(ContextMenuActionItem(
