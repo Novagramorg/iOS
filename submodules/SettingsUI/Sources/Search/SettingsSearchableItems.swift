@@ -3022,19 +3022,7 @@ private func privacySearchableItems(context: AccountContext, privacySettings: Ac
             icon: icon,
             breadcrumbs: [strings.Settings_PrivacySettings],
             present: { context, navigationController, present in
-                let settingsPromise: Promise<TwoStepAuthData?>
-                if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface, let current = rootController.getTwoStepAuthData() {
-                    settingsPromise = current
-                } else {
-                    settingsPromise = Promise()
-                    settingsPromise.set(
-                        context.engine.auth.twoStepAuthData()
-                        |> map(Optional.init)
-                        |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
-                            return .single(nil)
-                        }
-                    )
-                }
+                let settingsPromise = context.twoStepAuthData
                 
                 let _ = (settingsPromise.get()
                 |> take(1)

@@ -2233,6 +2233,56 @@ public extension Api {
     }
 }
 public extension Api {
+    enum WalletOwnershipProof: TypeConstructorDescription {
+        public class Cons_walletOwnershipProof: TypeConstructorDescription {
+            public var timestamp: Int32
+            public var signature: Buffer
+            public init(timestamp: Int32, signature: Buffer) {
+                self.timestamp = timestamp
+                self.signature = signature
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("walletOwnershipProof", [("timestamp", ConstructorParameterDescription(self.timestamp)), ("signature", ConstructorParameterDescription(self.signature))])
+            }
+        }
+        case walletOwnershipProof(Cons_walletOwnershipProof)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .walletOwnershipProof(let _data):
+                if boxed {
+                    buffer.appendInt32(1622985485)
+                }
+                serializeInt32(_data.timestamp, buffer: buffer, boxed: false)
+                serializeBytes(_data.signature, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .walletOwnershipProof(let _data):
+                return ("walletOwnershipProof", [("timestamp", ConstructorParameterDescription(_data.timestamp)), ("signature", ConstructorParameterDescription(_data.signature))])
+            }
+        }
+
+        public static func parse_walletOwnershipProof(_ reader: BufferReader) -> WalletOwnershipProof? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Buffer?
+            _2 = parseBytes(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.WalletOwnershipProof.walletOwnershipProof(Cons_walletOwnershipProof(timestamp: _1!, signature: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum WalletState: TypeConstructorDescription {
         public class Cons_walletState: TypeConstructorDescription {
             public var flags: Int32
@@ -2412,128 +2462,6 @@ public extension Api {
             let _c8 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _8 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
                 return Api.WalletTransaction.walletTransaction(Cons_walletTransaction(flags: _1!, id: _2!, amount: _3!, fee: _4!, date: _5!, peer: _6!, comment: _7, txHash: _8))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum WalletTransactionPeer: TypeConstructorDescription {
-        public class Cons_walletTransactionPeerAddress: TypeConstructorDescription {
-            public var flags: Int32
-            public var address: String
-            public var domain: String?
-            public init(flags: Int32, address: String, domain: String?) {
-                self.flags = flags
-                self.address = address
-                self.domain = domain
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("walletTransactionPeerAddress", [("flags", ConstructorParameterDescription(self.flags)), ("address", ConstructorParameterDescription(self.address)), ("domain", ConstructorParameterDescription(self.domain))])
-            }
-        }
-        public class Cons_walletTransactionPeerUser: TypeConstructorDescription {
-            public var flags: Int32
-            public var userId: Int64
-            public var address: String
-            public var domain: String?
-            public init(flags: Int32, userId: Int64, address: String, domain: String?) {
-                self.flags = flags
-                self.userId = userId
-                self.address = address
-                self.domain = domain
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("walletTransactionPeerUser", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("address", ConstructorParameterDescription(self.address)), ("domain", ConstructorParameterDescription(self.domain))])
-            }
-        }
-        case walletTransactionPeerAddress(Cons_walletTransactionPeerAddress)
-        case walletTransactionPeerUnsupported
-        case walletTransactionPeerUser(Cons_walletTransactionPeerUser)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .walletTransactionPeerAddress(let _data):
-                if boxed {
-                    buffer.appendInt32(103596476)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeString(_data.address, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeString(_data.domain!, buffer: buffer, boxed: false)
-                }
-                break
-            case .walletTransactionPeerUnsupported:
-                if boxed {
-                    buffer.appendInt32(1921772890)
-                }
-                break
-            case .walletTransactionPeerUser(let _data):
-                if boxed {
-                    buffer.appendInt32(-722833299)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeInt64(_data.userId, buffer: buffer, boxed: false)
-                serializeString(_data.address, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeString(_data.domain!, buffer: buffer, boxed: false)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .walletTransactionPeerAddress(let _data):
-                return ("walletTransactionPeerAddress", [("flags", ConstructorParameterDescription(_data.flags)), ("address", ConstructorParameterDescription(_data.address)), ("domain", ConstructorParameterDescription(_data.domain))])
-            case .walletTransactionPeerUnsupported:
-                return ("walletTransactionPeerUnsupported", [])
-            case .walletTransactionPeerUser(let _data):
-                return ("walletTransactionPeerUser", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("address", ConstructorParameterDescription(_data.address)), ("domain", ConstructorParameterDescription(_data.domain))])
-            }
-        }
-
-        public static func parse_walletTransactionPeerAddress(_ reader: BufferReader) -> WalletTransactionPeer? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
-                _3 = parseString(reader)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.WalletTransactionPeer.walletTransactionPeerAddress(Cons_walletTransactionPeerAddress(flags: _1!, address: _2!, domain: _3))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_walletTransactionPeerUnsupported(_ reader: BufferReader) -> WalletTransactionPeer? {
-            return Api.WalletTransactionPeer.walletTransactionPeerUnsupported
-        }
-        public static func parse_walletTransactionPeerUser(_ reader: BufferReader) -> WalletTransactionPeer? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: String?
-            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
-                _4 = parseString(reader)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.WalletTransactionPeer.walletTransactionPeerUser(Cons_walletTransactionPeerUser(flags: _1!, userId: _2!, address: _3!, domain: _4))
             }
             else {
                 return nil

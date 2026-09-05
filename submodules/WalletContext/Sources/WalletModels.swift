@@ -546,6 +546,7 @@ public extension WalletContext {
         case requestPassword, invalidPassword, twoStepAuthMissing, authorizationCancelled
         case passwordTooFresh(Int32), sessionTooFresh(Int32)
         case backupDisabled, backupNotAvailable, replacementInvalid, publicKeyInvalid
+        case proofInvalid, proofExpired
         case keyRotationFailed
         case tokenInvalid, tokenExpired, clientKeyInvalid, partUnavailable, invalidBackupData
         case insufficientBalance(required: Int64)

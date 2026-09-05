@@ -7,6 +7,7 @@ swift_library(
     copts = ["-warnings-as-errors"],
     deps = [
         "//submodules/AccountContext",
+        "//submodules/TelegramCore",
         "//submodules/ComponentFlow",
         "//submodules/Display",
         "//submodules/SSignalKit/SwiftSignalKit",

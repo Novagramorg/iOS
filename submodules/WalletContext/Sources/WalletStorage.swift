@@ -111,6 +111,31 @@ actor WalletEngineStorage {
         try self.writeCodable(descriptor, service: self.descriptorService, account: "replacement-candidate")
     }
 
+    func installReplacementCandidate(
+        _ descriptor: WalletEngineDescriptorRecord,
+        secret: Data
+    ) throws {
+        guard let secretRef = descriptor.secretRef,
+              !secretRef.isEmpty,
+              !secret.isEmpty else {
+            throw WalletEngineStorageError.corrupted
+        }
+        if let existing = try self.loadReplacementCandidate(), existing != descriptor {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.write(secret, service: self.secretService, account: secretRef)
+        do {
+            try self.saveReplacementCandidate(descriptor)
+        } catch let saveError {
+            do {
+                try self.remove(service: self.secretService, account: secretRef)
+            } catch let cleanupError {
+                throw cleanupError
+            }
+            throw saveError
+        }
+    }
+
     func removeReplacementCandidate() throws {
         try self.remove(service: self.descriptorService, account: "replacement-candidate")
     }
@@ -452,6 +477,8 @@ actor WalletEngineStorage {
 actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
     private let errorLogger: WalletContextErrorLogger
+    private var captureNextProtectedSecret = false
+    private var transientProtectedSecrets: [String: Data] = [:]
 
     init(storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
         self.storage = storage
@@ -462,7 +489,35 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         UInt64(max(0, Date().timeIntervalSince1970.rounded(.down)))
     }
 
+    func beginTransientProtectedSecretCapture() {
+        self.captureNextProtectedSecret = true
+    }
+
+    func cancelTransientProtectedSecretCapture() {
+        self.captureNextProtectedSecret = false
+    }
+
+    func transientProtectedSecret(secretRef: ProtectedSecretRef) -> Data? {
+        self.transientProtectedSecrets[secretRef.value]
+    }
+
+    func containsTransientProtectedSecret(secretRef: ProtectedSecretRef) -> Bool {
+        self.transientProtectedSecrets[secretRef.value] != nil
+    }
+
+    func removeTransientProtectedSecret(secretRef: ProtectedSecretRef) {
+        self.transientProtectedSecrets[secretRef.value] = nil
+    }
+
+    func removeAllTransientProtectedSecrets() {
+        self.captureNextProtectedSecret = false
+        self.transientProtectedSecrets.removeAll()
+    }
+
     func readProtectedSecret(request: ProtectedSecretRead) async throws -> Data {
+        if let data = self.transientProtectedSecrets[request.secretRef.value] {
+            return data
+        }
         do {
             return try await self.storage.readProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
@@ -475,6 +530,14 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
     }
 
     func storeProtectedSecret(request: ProtectedSecretStore) async throws {
+        if self.captureNextProtectedSecret {
+            self.captureNextProtectedSecret = false
+            guard !request.secretRef.value.isEmpty, !request.bytes.isEmpty else {
+                throw protectedSecretFailure(.policyViolation, "Protected secret is empty")
+            }
+            self.transientProtectedSecrets[request.secretRef.value] = request.bytes
+            return
+        }
         do {
             try await self.storage.storeProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
@@ -487,6 +550,9 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
     }
 
     func deleteProtectedSecret(secretRef: ProtectedSecretRef) async throws {
+        if self.transientProtectedSecrets.removeValue(forKey: secretRef.value) != nil {
+            return
+        }
         do {
             try await self.storage.deleteProtectedSecret(secretRef)
         } catch {

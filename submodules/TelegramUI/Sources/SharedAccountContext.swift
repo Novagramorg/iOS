@@ -4161,26 +4161,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             fatalError()
         }
 
-        let twoStepAuthData: Promise<TwoStepAuthData?>
-        if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface, let current = rootController.getTwoStepAuthData() {
-            twoStepAuthData = current
-        } else {
-            twoStepAuthData = Promise()
-            twoStepAuthData.set(
-                .single(nil)
-                |> then(
-                    context.engine.auth.twoStepAuthData()
-                    |> map(Optional.init)
-                    |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
-                        return .single(nil)
-                    }
-                )
-            )
-        }
         return WalletScreen(
             context: context,
-            walletContext: walletContext,
-            twoStepAuthData: twoStepAuthData
+            walletContext: walletContext
         )
     }
 

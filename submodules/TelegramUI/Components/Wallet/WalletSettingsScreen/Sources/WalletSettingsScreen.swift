@@ -101,6 +101,12 @@ private final class WalletSettingsScreenComponent: Component {
                     guard let self, let component = self.component, let controller = self.environment?.controller() else {
                         return
                     }
+                    let canRevealLocally: Bool
+                    if let walletState = self.walletState, case let .wallet(info) = walletState.phase {
+                        canRevealLocally = info.canSign
+                    } else {
+                        canRevealLocally = false
+                    }
                     self.operationDisposable.set(performWalletAuthorizedOperation(
                         context: component.context,
                         present: { [weak controller] alert in
@@ -119,7 +125,8 @@ private final class WalletSettingsScreenComponent: Component {
                         },
                         failed: { [weak self] error in
                             self?.presentRecoveryPhraseError(error: error)
-                        }
+                        },
+                        preauthorize: !canRevealLocally
                     ))
                 }
             ))

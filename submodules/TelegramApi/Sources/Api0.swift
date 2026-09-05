@@ -583,7 +583,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-433014407] = { return Api.InputWallPaper.parse_inputWallPaper($0) }
     dict[-1770371538] = { return Api.InputWallPaper.parse_inputWallPaperNoFile($0) }
     dict[1913199744] = { return Api.InputWallPaper.parse_inputWallPaperSlug($0) }
-    dict[856446476] = { return Api.InputWalletReplacement.parse_inputWalletImported($0) }
+    dict[693699964] = { return Api.InputWalletReplacement.parse_inputWalletImported($0) }
     dict[1671708892] = { return Api.InputWalletReplacement.parse_inputWalletNew($0) }
     dict[-1678949555] = { return Api.InputWebDocument.parse_inputWebDocument($0) }
     dict[-193992412] = { return Api.InputWebFileLocation.parse_inputWebFileAudioAlbumThumbLocation($0) }
@@ -1378,6 +1378,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1539849235] = { return Api.WallPaper.parse_wallPaper($0) }
     dict[-528465642] = { return Api.WallPaper.parse_wallPaperNoFile($0) }
     dict[925826256] = { return Api.WallPaperSettings.parse_wallPaperSettings($0) }
+    dict[1622985485] = { return Api.WalletOwnershipProof.parse_walletOwnershipProof($0) }
     dict[-1782238101] = { return Api.WalletState.parse_walletState($0) }
     dict[-1665551636] = { return Api.WalletState.parse_walletStateEmpty($0) }
     dict[1872332449] = { return Api.WalletTransaction.parse_walletTransaction($0) }
@@ -1741,6 +1742,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[828000628] = { return Api.users.Users.parse_usersSlice($0) }
     dict[417867063] = { return Api.wallet.EncryptedSecretPhrasePart.parse_encryptedSecretPhrasePart($0) }
     dict[-103410961] = { return Api.wallet.HolderDc.parse_holderDc($0) }
+    dict[-1713105145] = { return Api.wallet.ProofChallenge.parse_proofChallenge($0) }
     dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
     dict[1126356389] = { return Api.wallet.Transactions.parse_transactions($0) }
     return dict
@@ -2583,6 +2585,8 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.WallPaperSettings:
             _1.serialize(buffer, boxed)
+        case let _1 as Api.WalletOwnershipProof:
+            _1.serialize(buffer, boxed)
         case let _1 as Api.WalletState:
             _1.serialize(buffer, boxed)
         case let _1 as Api.WalletTransaction:
@@ -3058,6 +3062,8 @@ public extension Api {
         case let _1 as Api.wallet.EncryptedSecretPhrasePart:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.HolderDc:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.ProofChallenge:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.SecretPhraseParts:
             _1.serialize(buffer, boxed)

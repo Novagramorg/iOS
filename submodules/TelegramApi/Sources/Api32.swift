@@ -1,4 +1,115 @@
 public extension Api.account {
+    enum EmojiStatuses: TypeConstructorDescription {
+        public class Cons_emojiStatuses: TypeConstructorDescription {
+            public var hash: Int64
+            public var statuses: [Api.EmojiStatus]
+            public init(hash: Int64, statuses: [Api.EmojiStatus]) {
+                self.hash = hash
+                self.statuses = statuses
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("emojiStatuses", [("hash", ConstructorParameterDescription(self.hash)), ("statuses", ConstructorParameterDescription(self.statuses))])
+            }
+        }
+        case emojiStatuses(Cons_emojiStatuses)
+        case emojiStatusesNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .emojiStatuses(let _data):
+                if boxed {
+                    buffer.appendInt32(-1866176559)
+                }
+                serializeInt64(_data.hash, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.statuses.count))
+                for item in _data.statuses {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .emojiStatusesNotModified:
+                if boxed {
+                    buffer.appendInt32(-796072379)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .emojiStatuses(let _data):
+                return ("emojiStatuses", [("hash", ConstructorParameterDescription(_data.hash)), ("statuses", ConstructorParameterDescription(_data.statuses))])
+            case .emojiStatusesNotModified:
+                return ("emojiStatusesNotModified", [])
+            }
+        }
+
+        public static func parse_emojiStatuses(_ reader: BufferReader) -> EmojiStatuses? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.EmojiStatus]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.EmojiStatus.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.account.EmojiStatuses.emojiStatuses(Cons_emojiStatuses(hash: _1!, statuses: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_emojiStatusesNotModified(_ reader: BufferReader) -> EmojiStatuses? {
+            return Api.account.EmojiStatuses.emojiStatusesNotModified
+        }
+    }
+}
+public extension Api.account {
+    enum PaidMessagesRevenue: TypeConstructorDescription {
+        public class Cons_paidMessagesRevenue: TypeConstructorDescription {
+            public var starsAmount: Int64
+            public init(starsAmount: Int64) {
+                self.starsAmount = starsAmount
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("paidMessagesRevenue", [("starsAmount", ConstructorParameterDescription(self.starsAmount))])
+            }
+        }
+        case paidMessagesRevenue(Cons_paidMessagesRevenue)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .paidMessagesRevenue(let _data):
+                if boxed {
+                    buffer.appendInt32(504403720)
+                }
+                serializeInt64(_data.starsAmount, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .paidMessagesRevenue(let _data):
+                return ("paidMessagesRevenue", [("starsAmount", ConstructorParameterDescription(_data.starsAmount))])
+            }
+        }
+
+        public static func parse_paidMessagesRevenue(_ reader: BufferReader) -> PaidMessagesRevenue? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.account.PaidMessagesRevenue.paidMessagesRevenue(Cons_paidMessagesRevenue(starsAmount: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.account {
     enum PasskeyRegistrationOptions: TypeConstructorDescription {
         public class Cons_passkeyRegistrationOptions: TypeConstructorDescription {
             public var options: Api.DataJSON
@@ -1461,76 +1572,6 @@ public extension Api.auth {
             else {
                 return nil
             }
-        }
-    }
-}
-public extension Api.auth {
-    enum CodeType: TypeConstructorDescription {
-        case codeTypeCall
-        case codeTypeFlashCall
-        case codeTypeFragmentSms
-        case codeTypeMissedCall
-        case codeTypeSms
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .codeTypeCall:
-                if boxed {
-                    buffer.appendInt32(1948046307)
-                }
-                break
-            case .codeTypeFlashCall:
-                if boxed {
-                    buffer.appendInt32(577556219)
-                }
-                break
-            case .codeTypeFragmentSms:
-                if boxed {
-                    buffer.appendInt32(116234636)
-                }
-                break
-            case .codeTypeMissedCall:
-                if boxed {
-                    buffer.appendInt32(-702884114)
-                }
-                break
-            case .codeTypeSms:
-                if boxed {
-                    buffer.appendInt32(1923290508)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .codeTypeCall:
-                return ("codeTypeCall", [])
-            case .codeTypeFlashCall:
-                return ("codeTypeFlashCall", [])
-            case .codeTypeFragmentSms:
-                return ("codeTypeFragmentSms", [])
-            case .codeTypeMissedCall:
-                return ("codeTypeMissedCall", [])
-            case .codeTypeSms:
-                return ("codeTypeSms", [])
-            }
-        }
-
-        public static func parse_codeTypeCall(_ reader: BufferReader) -> CodeType? {
-            return Api.auth.CodeType.codeTypeCall
-        }
-        public static func parse_codeTypeFlashCall(_ reader: BufferReader) -> CodeType? {
-            return Api.auth.CodeType.codeTypeFlashCall
-        }
-        public static func parse_codeTypeFragmentSms(_ reader: BufferReader) -> CodeType? {
-            return Api.auth.CodeType.codeTypeFragmentSms
-        }
-        public static func parse_codeTypeMissedCall(_ reader: BufferReader) -> CodeType? {
-            return Api.auth.CodeType.codeTypeMissedCall
-        }
-        public static func parse_codeTypeSms(_ reader: BufferReader) -> CodeType? {
-            return Api.auth.CodeType.codeTypeSms
         }
     }
 }

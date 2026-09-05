@@ -24,6 +24,30 @@ public struct WalletStreamingUrl: Equatable, Sendable {
     }
 }
 
+public struct WalletProofChallenge: Equatable, Sendable {
+    public let payload: String
+    public let expires: Int32
+    public let domain: String
+    public let timestamp: Int32
+
+    public init(payload: String, expires: Int32, domain: String, timestamp: Int32) {
+        self.payload = payload
+        self.expires = expires
+        self.domain = domain
+        self.timestamp = timestamp
+    }
+}
+
+public struct WalletOwnershipProof: Equatable, Sendable {
+    public let timestamp: Int32
+    public let signature: Data
+
+    public init(timestamp: Int32, signature: Data) {
+        self.timestamp = timestamp
+        self.signature = signature
+    }
+}
+
 public enum WalletState: Equatable, Sendable {
     case empty(creating: Bool)
     case ready(
@@ -110,14 +134,15 @@ public enum WalletGetTransactionsError: Error {
     case generic
 }
 
-public enum WalletReplacement: Equatable {
+public enum WalletReplacement: Equatable, Sendable {
     case new
-    case imported(publicKey: Data)
+    case imported(publicKey: Data, proof: WalletOwnershipProof)
 }
 
 public enum WalletOperationError: Error, Equatable {
     case generic
     case network
+    case preflightNetwork
     case requestPassword
     case invalidPassword
     case twoStepAuthMissing
@@ -127,6 +152,8 @@ public enum WalletOperationError: Error, Equatable {
     case backupNotAvailable
     case replacementInvalid
     case publicKeyInvalid
+    case proofInvalid
+    case proofExpired
     case tokenInvalid
     case tokenExpired
     case clientKeyInvalid

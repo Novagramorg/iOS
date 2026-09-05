@@ -312,7 +312,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let blockedPeers = Promise<BlockedPeersContext?>(nil)
     let hasTwoStepAuth = Promise<Bool?>(nil)
     let twoStepAccessConfiguration = Promise<TwoStepVerificationAccessConfiguration?>(nil)
-    let twoStepAuthData = Promise<TwoStepAuthData?>(nil)
+    let twoStepAuthData: Promise<TwoStepAuthData?>
     let supportPeerDisposable = MetaDisposable()
     let tipsPeerDisposable = MetaDisposable()
     
@@ -375,6 +375,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     ) {
         self.controller = controller
         self.context = context
+        self.twoStepAuthData = context.twoStepAuthData
         self.peerId = peerId
         self.isOpenedFromChat = isOpenedFromChat
         self.videoCallsEnabled = true
@@ -2126,15 +2127,6 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             |> map { value -> TwoStepVerificationAccessConfiguration? in
                 return TwoStepVerificationAccessConfiguration(configuration: value, password: nil)
             }))
-            
-            self.twoStepAuthData.set(.single(nil)
-            |> then(
-                context.engine.auth.twoStepAuthData()
-                |> map(Optional.init)
-                |> `catch` { _ -> Signal<TwoStepAuthData?, NoError> in
-                    return .single(nil)
-                }
-            ))
             
             let hasPassport = self.twoStepAuthData.get()
             |> map { data -> Bool in
