@@ -218,8 +218,6 @@ private final class WalletReceiveAddressRingComponent: Component {
                     normalizedDistance += self.length
                 }
 
-                // The primitive path starts at the top-left tangency. Apply a phase so that
-                // distance zero is the center of the top edge.
                 var segmentDistance = normalizedDistance + self.horizontalLength * 0.5
                 if segmentDistance >= self.length {
                     segmentDistance -= self.length
@@ -437,7 +435,6 @@ private final class WalletReceiveAddressRingComponent: Component {
                 for index in 0 ..< glyphCount {
                     let advance = max(0.0, advances[index].width)
                     var transform = CGAffineTransform(translationX: -advance * 0.5, y: baselineOffset)
-                    // Cache outlines so font pixel snapping cannot shift moving glyphs between frames.
                     let path = CTFontCreatePathForGlyph(runFont, glyphs[index], &transform)
                     items.append(GlyphItem(
                         path: path,
@@ -775,6 +772,7 @@ private final class WalletReceiveSheetContent: Component {
         private let background = ComponentView<Empty>()
         private let closeButton = ComponentView<Empty>()
         private let addressRing = ComponentView<Empty>()
+        private let cardContainerView = UIView()
         private let cardView = UIView()
         private let cardBackground = ComponentView<Empty>()
         private let qrCode = ComponentView<Empty>()
@@ -795,6 +793,7 @@ private final class WalletReceiveSheetContent: Component {
             super.init(frame: frame)
 
             self.cardView.clipsToBounds = true
+            self.cardContainerView.addSubview(self.cardView)
         }
 
         required init?(coder: NSCoder) {
@@ -814,7 +813,8 @@ private final class WalletReceiveSheetContent: Component {
                 return
             }
             self.cardFlipView = nil
-            self.cardView.isHidden = false
+            self.cardContainerView.addSubview(self.cardView)
+            self.cardView.frame = self.cardContainerView.bounds
             self.cardView.isUserInteractionEnabled = true
             flipView.layer.removeAllAnimations()
             for faceView in flipView.subviews {
@@ -828,19 +828,22 @@ private final class WalletReceiveSheetContent: Component {
 
         private func animateCardFlip(from previousSnapshot: UIView) {
             self.cardView.layoutIfNeeded()
-            guard let nextSnapshot = self.cardView.snapshotView(afterScreenUpdates: true) else {
-                return
-            }
 
-            let flipView = UIView(frame: self.cardView.frame)
+            let flipView = UIView(frame: self.cardContainerView.bounds)
             flipView.isUserInteractionEnabled = false
             flipView.accessibilityElementsHidden = true
+            flipView.layer.rasterizationScale = UIScreenScale
+            flipView.layer.shouldRasterize = true
+            flipView.layer.allowsEdgeAntialiasing = true
+
             var perspective = CATransform3DIdentity
             perspective.m34 = -1.0 / 650.0
             flipView.layer.sublayerTransform = perspective
 
-            // Scale and shading follow the rotation angle, reaching their strongest
-            // effect when the visible face changes halfway through the flip.
+            self.cardFlipView = flipView
+            self.cardContainerView.addSubview(flipView)
+            self.cardView.isUserInteractionEnabled = false
+
             let shadeValues: [AnyObject] = (0 ... 60).map { index in
                 let progress = CGFloat(index) / 60.0
                 return NSNumber(value: Double(sin(progress * .pi) * Self.cardFlipMaximumShadeOpacity))
@@ -856,13 +859,15 @@ private final class WalletReceiveSheetContent: Component {
                 keyPath: "transform.scale",
                 timingFunction: timingFunction
             )
-            for (index, snapshot) in [previousSnapshot, nextSnapshot].enumerated() {
+            // Keep the destination live: a snapshot with afterScreenUpdates: false
+            // may still contain the previous frame immediately after updating it.
+            for (index, contentView) in [previousSnapshot, self.cardView].enumerated() {
                 let faceView = UIView(frame: flipView.bounds)
                 faceView.clipsToBounds = true
                 faceView.layer.cornerRadius = self.cardView.layer.cornerRadius
                 faceView.layer.isDoubleSided = false
-                snapshot.frame = faceView.bounds
-                faceView.addSubview(snapshot)
+                contentView.frame = faceView.bounds
+                faceView.addSubview(contentView)
                 flipView.addSubview(faceView)
 
                 let shadeLayer = CALayer()
@@ -896,11 +901,6 @@ private final class WalletReceiveSheetContent: Component {
                     }
                 )
             }
-
-            self.cardFlipView = flipView
-            self.insertSubview(flipView, aboveSubview: self.cardView)
-            self.cardView.isHidden = true
-            self.cardView.isUserInteractionEnabled = false
         }
 
         private func dismiss(animated: Bool) {
@@ -980,7 +980,7 @@ private final class WalletReceiveSheetContent: Component {
                 width: cardWidth,
                 height: cardHeight
             )
-            if self.cardView.frame != cardFrame {
+            if self.cardContainerView.frame != cardFrame {
                 self.finishCardFlip()
             }
             let ringFrame = CGRect(
@@ -1171,12 +1171,13 @@ private final class WalletReceiveSheetContent: Component {
                 transition.setFrame(view: addressRingView, frame: CGRect(origin: ringFrame.origin, size: addressRingSize))
             }
 
-            if self.cardView.superview !== self {
-                self.cardView.removeFromSuperview()
-                self.addSubview(self.cardView)
+            if self.cardContainerView.superview !== self {
+                self.cardContainerView.removeFromSuperview()
+                self.addSubview(self.cardContainerView)
             }
             self.cardView.layer.cornerRadius = cardCornerRadius
-            transition.setFrame(view: self.cardView, frame: cardFrame)
+            transition.setFrame(view: self.cardContainerView, frame: cardFrame)
+            transition.setFrame(view: self.cardView, frame: CGRect(origin: .zero, size: cardFrame.size))
             if let cardBackgroundView = self.cardBackground.view {
                 if cardBackgroundView.superview == nil {
                     self.cardView.addSubview(cardBackgroundView)
