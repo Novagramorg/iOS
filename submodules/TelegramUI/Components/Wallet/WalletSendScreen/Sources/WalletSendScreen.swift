@@ -241,6 +241,27 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.setNeedsLayout()
     }
 
+    func setAmount(_ amount: Int64) {
+        self.amount = amount
+        guard let dateTimeFormat = self.dateTimeFormat else {
+            return
+        }
+        self.isApplyingText = true
+        let inputText = walletSendInputText(
+            amount: amount,
+            mode: self.mode,
+            rate: self.rate,
+            dateTimeFormat: dateTimeFormat
+        )
+        self.textField.attributedText = self.amountAttributedText(inputText)
+        self.textField.selectedTextRange = self.textField.textRange(
+            from: self.textField.endOfDocument,
+            to: self.textField.endOfDocument
+        )
+        self.isApplyingText = false
+        self.setNeedsLayout()
+    }
+
     func update(
         mode: WalletSendInputMode,
         amount: Int64,
@@ -336,15 +357,7 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         }
 
         if modeChanged || ((amountChanged || rateChanged || decimalSeparatorChanged) && !self.textField.isFirstResponder) {
-            self.isApplyingText = true
-            let inputText = walletSendInputText(
-                amount: amount,
-                mode: mode,
-                rate: rate,
-                dateTimeFormat: dateTimeFormat
-            )
-            self.textField.attributedText = self.amountAttributedText(inputText)
-            self.isApplyingText = false
+            self.setAmount(amount)
             self.textField.reloadInputViews()
         } else if textColorChanged {
             self.textField.attributedText = self.amountAttributedText(self.textField.text ?? "")
@@ -448,6 +461,10 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
         if updatedText.count > 1 && updatedText.hasPrefix("0") && !updatedText.hasPrefix("0" + decimalSeparator) {
             updatedText.removeFirst()
         }
+        let shouldAppendDecimalSeparator = !replacement.isEmpty && updatedText == "0"
+        if shouldAppendDecimalSeparator {
+            updatedText += decimalSeparator
+        }
         guard walletSendNanograms(
             text: updatedText,
             mode: self.mode,
@@ -459,6 +476,9 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         self.isApplyingText = true
         textField.attributedText = self.amountAttributedText(updatedText)
+        if shouldAppendDecimalSeparator {
+            textField.selectedTextRange = textField.textRange(from: textField.endOfDocument, to: textField.endOfDocument)
+        }
         self.isApplyingText = false
         self.textChanged()
         return false
@@ -472,6 +492,7 @@ private final class WalletSendScreenComponent: Component {
     let peer: EnginePeer?
     let initialAddress: String
     let walletContext: WalletContext
+    let displaySuccessToast: Bool
     let completed: (() -> Void)?
 
     init(
@@ -479,12 +500,14 @@ private final class WalletSendScreenComponent: Component {
         peer: EnginePeer?,
         initialAddress: String,
         walletContext: WalletContext,
+        displaySuccessToast: Bool,
         completed: (() -> Void)?
     ) {
         self.context = context
         self.peer = peer
         self.initialAddress = initialAddress
         self.walletContext = walletContext
+        self.displaySuccessToast = displaySuccessToast
         self.completed = completed
     }
 
@@ -499,6 +522,9 @@ private final class WalletSendScreenComponent: Component {
             return false
         }
         if lhs.walletContext !== rhs.walletContext {
+            return false
+        }
+        if lhs.displaySuccessToast != rhs.displaySuccessToast {
             return false
         }
         return true
@@ -568,12 +594,16 @@ private final class WalletSendScreenComponent: Component {
                 guard let self else {
                     return
                 }
+                let previousAmount = self.amount
                 let previousSendAll = self.shouldSendAll
                 self.amountSource = .manual
-                if self.amount != amount || previousSendAll != self.shouldSendAll {
+                self.amount = amount
+                guard self.validateTransferAmount() else {
+                    return
+                }
+                if previousAmount != self.amount || previousSendAll != self.shouldSendAll {
                     self.discardPeerPreparedTransfer()
                 }
-                self.amount = amount
                 if !self.isUpdating {
                     self.componentState?.updated(transition: .immediate)
                 }
@@ -894,6 +924,26 @@ private final class WalletSendScreenComponent: Component {
             controller.presentInGlobalOverlay(contextController)
         }
 
+        private func validateTransferAmount() -> Bool {
+            guard let component = self.component, self.amount > 0 else {
+                return true
+            }
+            let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+            guard self.amount < configuration.transferMinAmount else {
+                return true
+            }
+
+            self.amount = configuration.transferMinAmount
+            self.discardPeerPreparedTransfer()
+            self.amountField.setAmount(self.amount)
+            self.amountField.layer.addShakeAnimation()
+            HapticFeedback().error()
+            if !self.isUpdating {
+                self.componentState?.updated(transition: .immediate)
+            }
+            return false
+        }
+
         private func send() {
             guard let component = self.component,
                   self.amount > 0,
@@ -906,6 +956,9 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
             guard !self.recipientAddress.isEmpty else {
+                return
+            }
+            guard self.validateTransferAmount() else {
                 return
             }
             guard walletInfo.canSign else {
@@ -1059,6 +1112,9 @@ private final class WalletSendScreenComponent: Component {
                   !self.recipientAddress.isEmpty else {
                 return
             }
+            guard self.validateTransferAmount() else {
+                return
+            }
             let sendAll = self.shouldSendAll
             if let peer = component.peer {
                 self.isPreparingTransfer = true
@@ -1112,14 +1168,16 @@ private final class WalletSendScreenComponent: Component {
                         }
                         component.completed?()
                         controller.dismiss()
-                        Queue.mainQueue().after(0.4, { [weak navigationController] in
-                            guard let navigationController else {
-                                return
-                            }
-                            if let controller = navigationController.viewControllers.reversed().first(where: { $0 !== parentController }) as? ViewController {
-                                self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
-                            }
-                        })
+                        if component.displaySuccessToast {
+                            Queue.mainQueue().after(0.4, { [weak navigationController] in
+                                guard let navigationController else {
+                                    return
+                                }
+                                if let controller = navigationController.viewControllers.reversed().first(where: { $0 !== parentController }) as? ViewController {
+                                    self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
+                                }
+                            })
+                        }
                     }
                 }, error: { [weak self] error in
                     if error == .preparedTransferExpired || error == .preparedTransferNotFound {
@@ -1994,6 +2052,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         peer: EnginePeer,
         walletContext: WalletContext,
+        displaySuccessToast: Bool = true,
         completed: (() -> Void)? = nil
     ) {
         self.walletContext = walletContext
@@ -2004,6 +2063,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 peer: peer,
                 initialAddress: "",
                 walletContext: walletContext,
+                displaySuccessToast: displaySuccessToast,
                 completed: completed
             ),
             navigationBarAppearance: .none,
@@ -2028,6 +2088,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 peer: nil,
                 initialAddress: address,
                 walletContext: walletContext,
+                displaySuccessToast: true,
                 completed: completed
             ),
             navigationBarAppearance: .none,

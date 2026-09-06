@@ -84,11 +84,13 @@ public final class WalletContext {
     let errorLogger: WalletContextErrorLogger
     private let output: WalletContextOutput
     private let environmentDisposable = MetaDisposable()
+    private let walletConfigurationDisposable = MetaDisposable()
     private let walletStateUpdatesDisposable = MetaDisposable()
     private let storedStateDisposable = MetaDisposable()
     private let twoStepAuthDisposable = MetaDisposable()
     private let operationTaskRegistry: WalletOperationTaskRegistry
     private let environmentRevision = Atomic<UInt64>(value: 0)
+    private let walletConfigurationRevision = Atomic<UInt64>(value: 0)
     private let walletStateRevision = Atomic<UInt64>(value: 0)
     private let twoStepAuthRevision = Atomic<UInt64>(value: 0)
     private let subscriberDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
@@ -206,6 +208,21 @@ public final class WalletContext {
         self.impl = impl
         self.operationTaskRegistry = operationTaskRegistry
 
+        self.walletConfigurationDisposable.set((engine.data.subscribe(
+            TelegramEngine.EngineData.Item.Configuration.App()
+        )
+        |> map { WalletConfiguration.with(appConfiguration: $0).transferMinAmount }
+        |> distinctUntilChanged).start(next: { [weak self] transferMinAmount in
+            guard let self else { return }
+            let revision = self.walletConfigurationRevision.modify { value in
+                let next = value &+ 1
+                return next
+            }
+            Task {
+                await impl.updateWalletConfiguration(transferMinAmount: transferMinAmount, revision: revision)
+            }
+        }))
+
         self.walletStateUpdatesDisposable.set(engine.wallet.stateUpdates().start(next: { [weak self] value in
             guard let self else { return }
             let revision = self.walletStateRevision.modify { value in
@@ -276,6 +293,7 @@ public final class WalletContext {
 
     deinit {
         self.environmentDisposable.dispose()
+        self.walletConfigurationDisposable.dispose()
         self.walletStateUpdatesDisposable.dispose()
         self.storedStateDisposable.dispose()
         self.twoStepAuthDisposable.dispose()
@@ -343,5 +361,26 @@ public final class WalletContext {
             return ActionDisposable { task.cancel() }
         }
         return source |> deliverOnMainQueue
+    }
+}
+
+public struct WalletConfiguration {
+    public static var defaultValue: WalletConfiguration {
+        return WalletConfiguration(transferMinAmount: 100_000_000)
+    }
+
+    public let transferMinAmount: Int64
+
+    private init(transferMinAmount: Int64) {
+        self.transferMinAmount = transferMinAmount
+    }
+
+    public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
+        guard let value = appConfiguration.data?["wallet_transfer_amount_min"] as? Double,
+              let transferMinAmount = Int64(exactly: value),
+              transferMinAmount >= 0 else {
+            return .defaultValue
+        }
+        return WalletConfiguration(transferMinAmount: transferMinAmount)
     }
 }

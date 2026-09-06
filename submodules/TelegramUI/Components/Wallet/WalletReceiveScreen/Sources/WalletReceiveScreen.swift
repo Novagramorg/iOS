@@ -308,10 +308,9 @@ private final class WalletReceiveAddressRingComponent: Component {
         }
 
         private struct GlyphItem {
-            let glyph: CGGlyph
+            let path: CGPath?
             let position: CGPoint
             let advance: CGFloat
-            let font: CTFont
         }
 
         private struct GlyphLayout {
@@ -434,12 +433,16 @@ private final class WalletReceiveAddressRingComponent: Component {
                     continue
                 }
 
+                let baselineOffset = (CTFontGetDescent(runFont) - CTFontGetAscent(runFont)) * 0.5
                 for index in 0 ..< glyphCount {
+                    let advance = max(0.0, advances[index].width)
+                    var transform = CGAffineTransform(translationX: -advance * 0.5, y: baselineOffset)
+                    // Cache outlines so font pixel snapping cannot shift moving glyphs between frames.
+                    let path = CTFontCreatePathForGlyph(runFont, glyphs[index], &transform)
                     items.append(GlyphItem(
-                        glyph: glyphs[index],
+                        path: path,
                         position: positions[index],
-                        advance: max(0.0, advances[index].width),
-                        font: runFont
+                        advance: advance
                     ))
                 }
             }
@@ -561,12 +564,16 @@ private final class WalletReceiveAddressRingComponent: Component {
 
             graphicsContext.saveGState()
             graphicsContext.setFillColor(component.color.cgColor)
-            graphicsContext.setTextDrawingMode(.fill)
+            graphicsContext.setAllowsAntialiasing(true)
+            graphicsContext.setShouldAntialias(true)
 
             for copyIndex in 0 ..< 2 {
                 let copyOffset = CGFloat(copyIndex) * halfLength
                 for index in 0 ..< glyphLayout.items.count {
                     let item = glyphLayout.items[index]
+                    guard let path = item.path else {
+                        continue
+                    }
                     let centerOffset = (item.position.x + item.advance * 0.5) * glyphScale - firstCenter
                     let distance = self.animationOffset + copyOffset + centerOffset + CGFloat(index) * tracking
                     let sample = perimeter.sample(at: distance)
@@ -576,14 +583,8 @@ private final class WalletReceiveAddressRingComponent: Component {
                     graphicsContext.translateBy(x: sample.point.x, y: sample.point.y)
                     graphicsContext.rotate(by: angle)
                     graphicsContext.scaleBy(x: glyphScale, y: -glyphScale)
-                    graphicsContext.textMatrix = .identity
-
-                    var glyph = item.glyph
-                    var glyphPosition = CGPoint(
-                        x: -item.advance * 0.5,
-                        y: (CTFontGetDescent(item.font) - CTFontGetAscent(item.font)) * 0.5
-                    )
-                    CTFontDrawGlyphs(item.font, &glyph, &glyphPosition, 1, graphicsContext)
+                    graphicsContext.addPath(path)
+                    graphicsContext.fillPath()
                     graphicsContext.restoreGState()
                 }
             }
@@ -813,7 +814,7 @@ private final class WalletReceiveSheetContent: Component {
                 return
             }
             UIPasteboard.general.string = component.address
-            self.hapticFeedback.tap()
+            self.hapticFeedback.success()
             if !self.displaysAddress {
                 self.displaysAddress = true
                 self.state?.updated(transition: .immediate)
@@ -935,7 +936,7 @@ private final class WalletReceiveSheetContent: Component {
                                 color: UIColor(rgb: 0x087cff)
                             ))
                         )
-                    ], spacing: 7.0))
+                    ], spacing: 2.0))
                 )
                 copyButtonAction = { [weak self] in
                     self?.copyAddress()

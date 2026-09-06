@@ -544,7 +544,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: qrView,
                     frame: CGRect(
-                        origin: CGPoint(x: width - 96.0 * scale, y: 82.0 * scale),
+                        origin: CGPoint(x: width - 97.0 * scale, y: 82.0 * scale),
                         size: qrSize
                     )
                 )
@@ -561,7 +561,7 @@ public final class WalletCardComponent: Component {
                         textColor: UIColor(rgb: 0xffffff, alpha: 0.1)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: 0.1
+                    lineSpacing: -0.05
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
@@ -572,10 +572,10 @@ public final class WalletCardComponent: Component {
                     text: .plain(NSAttributedString(
                         string: addressText.uppercased(),
                         font: Font.monospace(11.0),
-                        textColor: UIColor(rgb: 0x1a4eb6, alpha: 0.6)
+                        textColor: UIColor(rgb: 0x055ac4, alpha: 0.8)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: 0.1
+                    lineSpacing: -0.05
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
@@ -586,7 +586,7 @@ public final class WalletCardComponent: Component {
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 24.0, y: size.height * 0.5 + 1.0)
+                addressView.center = CGPoint(x: width - 27.0, y: size.height * 0.5 + 1.0)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
             if let addressView = self.address.view {
@@ -595,7 +595,7 @@ public final class WalletCardComponent: Component {
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 24.0, y: size.height * 0.5)
+                addressView.center = CGPoint(x: width - 27.0, y: size.height * 0.5)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
 

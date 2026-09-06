@@ -390,7 +390,7 @@ final class WalletWordSuggestionsComponent: Component {
                 button.setAttributedTitle(title, for: .highlighted)
                 button.setAttributedTitle(title, for: .disabled)
                 button.isEnabled = component.isInteractive
-                button.restingBackgroundColor = component.isInteractive && index == 0
+                button.restingBackgroundColor = component.isInteractive && component.words.count > 1 && index == 0
                     ? UIColor(rgb: 0xffffff, alpha: 0.1)
                     : .clear
                 button.touchesLeftEdge = index == component.words.startIndex

@@ -1253,11 +1253,14 @@ extension WalletContextImpl {
                 if finality != .pending {
                     self.expiredPendingStreamingTraceIds.remove(traceId)
                 }
+                let filteredTransactions = transactions.filter {
+                    $0.direction != .incoming || $0.amount >= self.transferMinAmount
+                }
                 let changed = self.streamingPresentationOverlay.apply(
-                    event,
+                    .transactionsChanged(traceId: traceId, finality: finality, transactions: filteredTransactions),
                     updatedAt: currentWalletTimestamp()
                 )
-                self.streamingLog("event=wallet_stream_overlay_applied kind=transactions finality=\(finality.diagnosticName) transaction_count=\(transactions.count) changed=\(changed ? 1 : 0)")
+                self.streamingLog("event=wallet_stream_overlay_applied kind=transactions finality=\(finality.diagnosticName) transaction_count=\(filteredTransactions.count) changed=\(changed ? 1 : 0)")
                 if changed {
                     self.publishPresentationState()
                 }

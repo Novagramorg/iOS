@@ -1,4 +1,5 @@
 import Foundation
+import Display
 import Metal
 import MetalKit
 import MetalEngine
@@ -110,7 +111,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
 
         self.isOpaque = false
         self.backgroundColor = nil
-        self.contentsScale = UIScreen.main.scale
+        self.contentsScale = UIScreenScale
         self.contentsGravity = .resize
         self.masksToBounds = false
     }
@@ -166,7 +167,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
             return
         }
 
-        let displayScale = max(self.contentsScale, 1.0)
+        let displayScale = UIScreenScale
         let drawableSize = CGSize(
             width: self.bounds.width * displayScale,
             height: self.bounds.height * displayScale

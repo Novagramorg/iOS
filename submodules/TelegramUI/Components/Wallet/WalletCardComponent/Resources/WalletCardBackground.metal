@@ -109,8 +109,8 @@ fragment float4 walletCardBackgroundFragment(
     float2 radial = radius > 0.0001 ? cardPosition / radius : float2(1.0, 0.0);
     float2 tangent = float2(-radial.y, radial.x);
 
-    constexpr float radialFrequencyScale = 0.9;
-    constexpr float finishDetail = 1.65 * 0.12;
+    constexpr float radialFrequencyScale = 0.65;
+    constexpr float finishDetail = 0.05;
     float ringFrequency = 180.0 * radialFrequencyScale;
     float waveFrequency = 560.0 * radialFrequencyScale;
     float ringIndex = floor(radius * ringFrequency);
@@ -256,7 +256,7 @@ fragment float4 walletCardBackgroundFragment(
     float roundedDistance = length(max(roundedPoint, 0.0))
         + min(max(roundedPoint.x, roundedPoint.y), 0.0)
         - radiusPoints;
-    const float edgeWidth = max(fwidth(roundedDistance), 0.001);
+    const float edgeWidth = max(0.5 * fwidth(roundedDistance), 0.001);
     float coverage = 1.0 - smoothstep(-edgeWidth, edgeWidth, roundedDistance);
 
     // MetalEngine renders into a bgra8Unorm IOSurface. The reference renderer

@@ -206,6 +206,7 @@ actor WalletContextImpl {
     let storedStateWriter: WalletStoredStateWriter
     let output: WalletContextOutput
     var currentState: State
+    var transferMinAmount = WalletConfiguration.defaultValue.transferMinAmount
     var storedState = WalletStoredState()
     var serverWalletState: TelegramCore.WalletState?
     var pendingInitialServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
@@ -227,6 +228,7 @@ actor WalletContextImpl {
     var stateSubscriberCount = 0
     var walletScreenCount = 0
     var latestEnvironmentRevision: UInt64 = 0
+    var latestWalletConfigurationRevision: UInt64 = 0
     var latestWalletStateRevision: UInt64 = 0
     var latestTwoStepAuthRevision: UInt64 = 0
     var latestSubscriberDemandRevision: UInt64 = 0
@@ -333,6 +335,13 @@ actor WalletContextImpl {
         self.isAccountCurrent = accountIsCurrent
         self.isNetworkAvailable = networkAvailable
         self.evaluateRuntimeDemand(refreshIfPollingBecomesActive: !wasPollingEligible)
+    }
+
+    func updateWalletConfiguration(transferMinAmount: Int64, revision: UInt64) {
+        guard !self.isShutdown else { return }
+        guard revision > self.latestWalletConfigurationRevision else { return }
+        self.latestWalletConfigurationRevision = revision
+        self.transferMinAmount = transferMinAmount
     }
 
     func updateTwoStepAuthRequirement(_ required: Bool?, revision: UInt64) {

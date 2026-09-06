@@ -1732,18 +1732,16 @@ private final class WalletTransactionContentComponent: Component {
                             dateTimeFormat: environment.dateTimeFormat
                         )
                     } else {
-                        //TODO:localize
                         usdText = "—"
                     }
                 case .usdt:
                     if let fiatRate {
                         usdText = formatFiatValue(
-                            Double(transaction.amount) / 1_000_000.0 * fiatRate.unitsPerUsd,
+                            abs(Double(transaction.amount)) / 1_000_000.0 * fiatRate.unitsPerUsd,
                             currencySymbol: fiatCurrency.symbol,
                             dateTimeFormat: environment.dateTimeFormat
                         )
                     } else {
-                        //TODO:localize
                         usdText = "—"
                     }
                 }

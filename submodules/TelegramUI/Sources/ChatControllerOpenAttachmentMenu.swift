@@ -546,7 +546,8 @@ extension ChatControllerImpl {
                         let controller = WalletSendScreen(
                             context: strongSelf.context,
                             peer: peer,
-                            walletContext: walletContext
+                            walletContext: walletContext,
+                            displaySuccessToast: false
                         )
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)
