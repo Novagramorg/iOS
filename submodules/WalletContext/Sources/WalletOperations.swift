@@ -1046,8 +1046,8 @@ extension WalletContextImpl {
                 throw WalletError.unavailable
             }
             guard transaction.commentEncrypted,
-                  let body = transaction.comment,
-                  let data = Data(base64Encoded: body), !data.isEmpty, data.count <= 1024 else {
+                  let encryptedComment = transaction.comment,
+                  let body = walletEncryptedCommentBoc(encryptedComment) else {
                 throw WalletError.commentDecryptionFailed
             }
             let sender: String

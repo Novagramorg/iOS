@@ -648,16 +648,16 @@ extension PeerInfoScreenNode {
                         }
                     }
 
-                    if strongSelf.peerId.namespace == Namespaces.Peer.CloudUser, user.id != strongSelf.context.account.peerId, !user.isDeleted, user.botInfo == nil, !user.flags.contains(.isSupport), let cachedData = data.cachedData as? CachedUserData, cachedData.gramAddress != nil {
+                    if strongSelf.peerId.namespace == Namespaces.Peer.CloudUser, user.id != strongSelf.context.account.peerId, !user.isDeleted, user.botInfo == nil, !user.flags.contains(.isSupport) {
                         items.append(.action(ContextMenuActionItem(text: "Send Money", icon: { theme in
                             generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, f in
                             f(.dismissWithoutContent)
 
-                            guard let self, let controller = self.controller, let peer = self.data?.peer, let walletContext = self.context.walletContext, let gramAddress = (self.data?.cachedData as? CachedUserData)?.gramAddress else {
+                            guard let self, let controller = self.controller, let peer = self.data?.peer, let walletContext = self.context.walletContext else {
                                 return
                             }
-                            let sendController = WalletSendScreen(context: self.context, peer: peer, walletContext: walletContext, address: gramAddress)
+                            let sendController = WalletSendScreen(context: self.context, peer: peer, walletContext: walletContext)
                             sendController.navigationPresentation = .modal
                             controller.push(sendController)
                         })))

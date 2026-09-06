@@ -324,9 +324,16 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     insets: UIEdgeInsets()
                 ))
 
+                var addressGroups: [String] = []
+                var addressIndex = peerAddress.startIndex
+                while addressIndex < peerAddress.endIndex {
+                    let endIndex = peerAddress.index(addressIndex, offsetBy: 4, limitedBy: peerAddress.endIndex) ?? peerAddress.endIndex
+                    addressGroups.append(String(peerAddress[addressIndex ..< endIndex]))
+                    addressIndex = endIndex
+                }
                 let (addressLayout, addressApply) = makeAddressLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
-                        string: peerAddress.isEmpty ? "" : formatTonAddress(peerAddress),
+                        string: addressGroups.joined(separator: " "),
                         font: Font.with(size: 10.0, design: .monospace, weight: .medium),
                         textColor: UIColor(rgb: 0x005fdb),
                         paragraphAlignment: .center

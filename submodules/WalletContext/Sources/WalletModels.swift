@@ -339,7 +339,6 @@ public extension WalletContext {
         public let amount: Int64
         public let fee: Int64
         public let peer: Peer
-        /// Plaintext, or a Base64 message-body BOC when `commentEncrypted` is set.
         public let comment: String?
         public let commentEncrypted: Bool
         public let currency: Currency

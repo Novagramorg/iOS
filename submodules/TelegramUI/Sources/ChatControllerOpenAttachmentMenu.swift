@@ -260,7 +260,7 @@ extension ChatControllerImpl {
                 isScheduledMessages = true
             }
 
-            if case .default = subject, !isScheduledMessages, banSendText == nil, self.presentationInterfaceState.gramAddress != nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, user.botInfo == nil, let fileIndex = availableButtons.firstIndex(of: .file) {
+            if case .default = subject, !isScheduledMessages, banSendText == nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, user.botInfo == nil, let fileIndex = availableButtons.firstIndex(of: .file) {
                 availableButtons.insert(.money, at: fileIndex + 1)
             }
 
@@ -537,7 +537,7 @@ extension ChatControllerImpl {
                         }
                         return true
                     case .money:
-                        guard let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer.flatMap(EnginePeer.init), let gramAddress = strongSelf.presentationInterfaceState.gramAddress else {
+                        guard let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer.flatMap(EnginePeer.init) else {
                             return true
                         }
                         guard let walletContext = strongSelf.context.walletContext else {
@@ -546,8 +546,7 @@ extension ChatControllerImpl {
                         let controller = WalletSendScreen(
                             context: strongSelf.context,
                             peer: peer,
-                            walletContext: walletContext,
-                            address: gramAddress
+                            walletContext: walletContext
                         )
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)

@@ -505,6 +505,15 @@ private final class WalletSendScreenComponent: Component {
     }
 
     final class View: UIView {
+        private enum PeerAddressState {
+            case notRequested
+            case loading
+            case resolved
+            case failed
+            case errorPresented
+            case cancelled
+        }
+
         private let controlButtons = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
         private let amountField = WalletSendAmountField()
@@ -524,6 +533,9 @@ private final class WalletSendScreenComponent: Component {
 
         private var walletContext: WalletContext?
         private let walletDisposable = MetaDisposable()
+        private let peerAddressDisposable = MetaDisposable()
+        private var peerAddressState: PeerAddressState = .notRequested
+        private var isVisible = false
         private let transferDisposable = MetaDisposable()
         private let signingAccessDisposable = MetaDisposable()
         private let discardTransferDisposables = DisposableSet()
@@ -591,6 +603,7 @@ private final class WalletSendScreenComponent: Component {
         deinit {
             self.discardPeerPreparedTransfer()
             self.walletDisposable.dispose()
+            self.peerAddressDisposable.dispose()
             self.transferDisposable.dispose()
             self.signingAccessDisposable.dispose()
             self.discardTransferDisposables.dispose()
@@ -598,6 +611,74 @@ private final class WalletSendScreenComponent: Component {
 
         func isPanGestureEnabled() -> Bool {
             return !self.amountField.isInputActive
+        }
+
+        func viewDidAppear() {
+            self.isVisible = true
+            self.resolvePeerAddressIfNeeded()
+            self.presentRecipientErrorIfNeeded()
+        }
+
+        func viewWillDisappear() {
+            self.isVisible = false
+        }
+
+        private func resolvePeerAddressIfNeeded() {
+            guard self.peerAddressState == .notRequested,
+                  let component = self.component,
+                  let peer = component.peer else {
+                return
+            }
+            self.peerAddressState = .loading
+            self.peerAddressDisposable.set((component.context.engine.wallet.getUserAddresses(
+                userIds: [peer.id],
+                force: true
+            )
+            |> deliverOnMainQueue).start(next: { [weak self] addresses in
+                self?.completePeerAddressResolution(address: addresses.first(where: { $0.userId == peer.id })?.address)
+            }, error: { [weak self] _ in
+                self?.completePeerAddressResolution(address: nil)
+            }))
+        }
+
+        private func completePeerAddressResolution(address: String?) {
+            guard self.peerAddressState == .loading,
+                  let component = self.component,
+                  let peer = component.peer else {
+                return
+            }
+            if let address = address?.trimmingCharacters(in: .whitespacesAndNewlines), !address.isEmpty {
+                self.peerAddressState = .resolved
+                self.recipientAddress = address
+                self.discardPeerPreparedTransfer()
+                component.walletContext.rememberWalletPeer(peer, address: address)
+            } else {
+                self.peerAddressState = .failed
+            }
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            self.presentRecipientErrorIfNeeded()
+        }
+
+        private func presentRecipientErrorIfNeeded() {
+            guard self.isVisible,
+                  self.peerAddressState == .failed,
+                  let component = self.component,
+                  let environment = self.environment,
+                  let controller = environment.controller() as? WalletSendScreen else {
+                return
+            }
+            self.peerAddressState = .errorPresented
+            //TODO:localize
+            let text = "An unknown error occurred. Please try again later."
+            controller.present(textAlertController(
+                context: component.context,
+                title: nil,
+                text: text,
+                actions: [TextAlertAction(type: .defaultAction, title: environment.strings.Common_OK, action: { [weak self] in
+                    self?.dismiss()
+                })],
+                dismissOnOutsideTap: false
+            ), in: .window(.root))
         }
 
         private var shouldSendAll: Bool {
@@ -654,7 +735,17 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func dismiss() {
-            (self.environment?.controller() as? WalletSendScreen)?.dismiss()
+            self.isVisible = false
+            self.peerAddressState = .cancelled
+            self.peerAddressDisposable.set(nil)
+            guard let controller = self.environment?.controller() as? WalletSendScreen else {
+                return
+            }
+            if let parentController = controller.parentController() {
+                parentController.dismiss(animated: true)
+            } else {
+                controller.dismiss()
+            }
         }
 
         @objc private func commentPressed() {
@@ -1166,8 +1257,8 @@ private final class WalletSendScreenComponent: Component {
                 self.initialAddress = component.initialAddress
                 if !component.initialAddress.isEmpty {
                     self.applyRecipient(component.initialAddress)
-                    shouldFocusAmountField = true
                 }
+                shouldFocusAmountField = component.peer != nil || !component.initialAddress.isEmpty
             }
 
             if self.walletContext !== component.walletContext {
@@ -1778,6 +1869,8 @@ private final class WalletSendScreenComponent: Component {
                 sendTitle = sendPrefix + amountTitle
             }
             let hasRecipient = !self.recipientAddress.isEmpty
+            let isResolvingPeerAddress = component.peer != nil
+                && (self.peerAddressState == .notRequested || self.peerAddressState == .loading)
             let canSend = hasAmount
                 && hasRecipient
                 && !self.isPreparingTransfer
@@ -1808,7 +1901,7 @@ private final class WalletSendScreenComponent: Component {
                         ))
                     ),
                     isEnabled: canSend,
-                    displaysProgress: self.isResolvingSigningAccess || (component.peer != nil && self.isPreparingTransfer),
+                    displaysProgress: isResolvingPeerAddress || self.isResolvingSigningAccess || (component.peer != nil && self.isPreparingTransfer),
                     action: { [weak self] in
                         self?.send()
                     }
@@ -1832,7 +1925,7 @@ private final class WalletSendScreenComponent: Component {
                         height: sendButtonSize.height
                     )
                 )
-                transition.setAlpha(view: sendButtonView, alpha: hasAmount || !component.initialAddress.isEmpty ? 1.0 : 0.0)
+                transition.setAlpha(view: sendButtonView, alpha: hasAmount || component.peer != nil || !component.initialAddress.isEmpty ? 1.0 : 0.0)
                 sendButtonView.isUserInteractionEnabled = hasAmount
             }
 
@@ -1901,7 +1994,6 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         peer: EnginePeer,
         walletContext: WalletContext,
-        address: String,
         completed: (() -> Void)? = nil
     ) {
         self.walletContext = walletContext
@@ -1910,7 +2002,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             component: WalletSendScreenComponent(
                 context: context,
                 peer: peer,
-                initialAddress: address,
+                initialAddress: "",
                 walletContext: walletContext,
                 completed: completed
             ),
@@ -1919,7 +2011,6 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             theme: .default
         )
 
-        walletContext.rememberWalletPeer(peer, address: address)
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }
 
@@ -1960,6 +2051,18 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
 
         self.walletScreenUpdatesDisposable?.dispose()
         self.walletScreenUpdatesDisposable = nil
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        (self.node.hostView.componentView as? WalletSendScreenComponent.View)?.viewDidAppear()
+    }
+
+    override public func viewWillDisappear(_ animated: Bool) {
+        (self.node.hostView.componentView as? WalletSendScreenComponent.View)?.viewWillDisappear()
+
+        super.viewWillDisappear(animated)
     }
 
     deinit {

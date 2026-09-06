@@ -1025,7 +1025,7 @@ private final class WalletTransactionContentComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: authorizationMessage?.title ?? "Couldn't Decrypt Comment",
-                text: authorizationMessage?.text ?? "The comment could not be decrypted with this wallet. Check that access to the wallet is restored and try again.",
+                text: authorizationMessage?.text ?? "The comment could not be decrypted.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
             ), in: .window(.root))
         }
@@ -1307,22 +1307,23 @@ private final class WalletTransactionContentComponent: Component {
             guard !self.isPreview,
                   let component = self.component,
                   let walletContext = component.walletContext,
-                  let controller = self.environment?.controller(),
-                  let counterpartyAddress = transactionPeer.address else {
+                  let controller = self.environment?.controller() else {
                 return
             }
 
-            let address = WalletContext.transferAddress(from: counterpartyAddress) ?? counterpartyAddress
             let sendScreen: WalletSendScreen
             switch transactionPeer {
             case let .user(peer, _, _):
                 sendScreen = WalletSendScreen(
                     context: component.context,
                     peer: peer,
-                    walletContext: walletContext,
-                    address: address
+                    walletContext: walletContext
                 )
             case .address:
+                guard let counterpartyAddress = transactionPeer.address else {
+                    return
+                }
+                let address = WalletContext.transferAddress(from: counterpartyAddress) ?? counterpartyAddress
                 sendScreen = WalletSendScreen(
                     context: component.context,
                     walletContext: walletContext,
@@ -1829,9 +1830,11 @@ private final class WalletTransactionContentComponent: Component {
             let displayedComment = transaction.commentEncrypted ? self.decryptedComment : walletTransactionComment(transaction.comment)
             let isCommentConcealed = transaction.commentEncrypted && transaction.comment?.isEmpty == false && self.decryptedComment == nil
             self.commentButton.view?.isHidden = !displaysCommentBubble || !isCommentConcealed
-            if !displaysCommentBubble || !isCommentConcealed {
-                self.commentDustNode?.view.removeFromSuperview()
+            if !displaysCommentBubble || !isCommentConcealed, let dustNode = self.commentDustNode {
                 self.commentDustNode = nil
+                transition.setAlpha(view: dustNode.view, alpha: 0.0, completion: { _ in
+                    dustNode.view.removeFromSuperview()
+                })
             }
             if !displaysCommentBubble || !isCommentConcealed || !self.commentDecryptionInProgress {
                 self.commentActivityIndicator?.view.removeFromSuperview()
@@ -1951,6 +1954,7 @@ private final class WalletTransactionContentComponent: Component {
                     }
                 } else if let commentView = self.commentText.view {
                     if commentView.superview == nil {
+                        commentTransition = .immediate
                         commentView.alpha = 0.0
                         self.addSubview(commentView)
                     }
@@ -2073,8 +2077,17 @@ private final class WalletTransactionContentComponent: Component {
                 id: counterpartyContentId,
                 component: counterpartyContent
             )
+            let canSendToPeer: Bool
+            switch transaction.peer {
+            case .user:
+                canSendToPeer = true
+            case .address:
+                canSendToPeer = transaction.peer.address != nil
+            case .unsupported:
+                canSendToPeer = false
+            }
             let displaysSendButton: Bool
-            if !self.isPreview, component.walletContext != nil, transaction.peer.address != nil {
+            if !self.isPreview, component.walletContext != nil, canSendToPeer {
                 switch transaction.direction {
                 case .incoming, .outgoing:
                     displaysSendButton = true
