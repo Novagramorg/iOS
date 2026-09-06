@@ -626,7 +626,7 @@ enum WalletStreamingEventParser {
         }
 
         let status: WalletContext.Transaction.Status
-        if value.description?.aborted == true || candidate.bounced {
+        if candidate.bounced {
             status = .failed
         } else if finality == .pending {
             status = .pending
