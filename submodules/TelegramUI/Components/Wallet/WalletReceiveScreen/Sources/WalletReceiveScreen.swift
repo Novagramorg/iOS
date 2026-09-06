@@ -767,6 +767,11 @@ private final class WalletReceiveSheetContent: Component {
     }
 
     final class View: UIView {
+        private static let cardFlipDuration: Double = 0.4
+        private static let cardFlipMinimumScale: CGFloat = 0.9
+        private static let cardFlipShadeColor = UIColor(rgb: 0x003a80)
+        private static let cardFlipMaximumShadeOpacity: CGFloat = 0.55
+
         private let background = ComponentView<Empty>()
         private let closeButton = ComponentView<Empty>()
         private let addressRing = ComponentView<Empty>()
@@ -784,6 +789,7 @@ private final class WalletReceiveSheetContent: Component {
         private let hapticFeedback = HapticFeedback()
         private var displaysAddress = false
         private var appliedDisplaysAddress: Bool?
+        private var cardFlipView: UIView?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -795,11 +801,114 @@ private final class WalletReceiveSheetContent: Component {
             fatalError("init(coder:) has not been implemented")
         }
 
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+
+            if self.window == nil {
+                self.finishCardFlip()
+            }
+        }
+
+        private func finishCardFlip() {
+            guard let flipView = self.cardFlipView else {
+                return
+            }
+            self.cardFlipView = nil
+            self.cardView.isHidden = false
+            self.cardView.isUserInteractionEnabled = true
+            flipView.layer.removeAllAnimations()
+            for faceView in flipView.subviews {
+                faceView.layer.removeAllAnimations()
+                for layer in faceView.layer.sublayers ?? [] {
+                    layer.removeAllAnimations()
+                }
+            }
+            flipView.removeFromSuperview()
+        }
+
+        private func animateCardFlip(from previousSnapshot: UIView) {
+            self.cardView.layoutIfNeeded()
+            guard let nextSnapshot = self.cardView.snapshotView(afterScreenUpdates: true) else {
+                return
+            }
+
+            let flipView = UIView(frame: self.cardView.frame)
+            flipView.isUserInteractionEnabled = false
+            flipView.accessibilityElementsHidden = true
+            var perspective = CATransform3DIdentity
+            perspective.m34 = -1.0 / 650.0
+            flipView.layer.sublayerTransform = perspective
+
+            // Scale and shading follow the rotation angle, reaching their strongest
+            // effect when the visible face changes halfway through the flip.
+            let shadeValues: [AnyObject] = (0 ... 60).map { index in
+                let progress = CGFloat(index) / 60.0
+                return NSNumber(value: Double(sin(progress * .pi) * Self.cardFlipMaximumShadeOpacity))
+            }
+            let scaleValues: [AnyObject] = (0 ... 60).map { index in
+                let progress = CGFloat(index) / 60.0
+                return NSNumber(value: Double(1.0 - sin(progress * .pi) * (1.0 - Self.cardFlipMinimumScale)))
+            }
+            let timingFunction = CAMediaTimingFunctionName.easeOut.rawValue
+            flipView.layer.animateKeyframes(
+                values: scaleValues,
+                duration: Self.cardFlipDuration,
+                keyPath: "transform.scale",
+                timingFunction: timingFunction
+            )
+            for (index, snapshot) in [previousSnapshot, nextSnapshot].enumerated() {
+                let faceView = UIView(frame: flipView.bounds)
+                faceView.clipsToBounds = true
+                faceView.layer.cornerRadius = self.cardView.layer.cornerRadius
+                faceView.layer.isDoubleSided = false
+                snapshot.frame = faceView.bounds
+                faceView.addSubview(snapshot)
+                flipView.addSubview(faceView)
+
+                let shadeLayer = CALayer()
+                shadeLayer.frame = faceView.bounds
+                shadeLayer.cornerRadius = faceView.layer.cornerRadius
+                shadeLayer.backgroundColor = Self.cardFlipShadeColor.cgColor
+                shadeLayer.opacity = 0.0
+                faceView.layer.addSublayer(shadeLayer)
+                shadeLayer.animateKeyframes(
+                    values: shadeValues,
+                    duration: Self.cardFlipDuration,
+                    keyPath: "opacity",
+                    timingFunction: timingFunction
+                )
+
+                let isOutgoing = index == 0
+                let fromAngle: CGFloat = isOutgoing ? 0.0 : -.pi
+                let toAngle: CGFloat = isOutgoing ? .pi : 0.0
+                faceView.layer.transform = CATransform3DMakeRotation(toAngle, 0.0, 1.0, 0.0)
+                faceView.layer.animate(
+                    from: fromAngle,
+                    to: toAngle,
+                    keyPath: "transform.rotation.y",
+                    timingFunction: timingFunction,
+                    duration: Self.cardFlipDuration,
+                    completion: { [weak self, weak flipView] _ in
+                        guard !isOutgoing, let self, let flipView, self.cardFlipView === flipView else {
+                            return
+                        }
+                        self.finishCardFlip()
+                    }
+                )
+            }
+
+            self.cardFlipView = flipView
+            self.insertSubview(flipView, aboveSubview: self.cardView)
+            self.cardView.isHidden = true
+            self.cardView.isUserInteractionEnabled = false
+        }
+
         private func dismiss(animated: Bool) {
             guard let component = self.component,
                   let controller = component.getController() as? WalletReceiveScreen else {
                 return
             }
+            self.finishCardFlip()
             if animated {
                 component.animateOut.invoke(Action { [weak controller] _ in
                     controller?.dismiss(completion: nil)
@@ -810,7 +919,7 @@ private final class WalletReceiveSheetContent: Component {
         }
 
         private func copyAddress() {
-            guard let component = self.component else {
+            guard self.cardFlipView == nil, let component = self.component else {
                 return
             }
             UIPasteboard.general.string = component.address
@@ -822,7 +931,7 @@ private final class WalletReceiveSheetContent: Component {
         }
 
         private func showQrCode() {
-            guard self.displaysAddress else {
+            guard self.cardFlipView == nil, self.displaysAddress else {
                 return
             }
             self.displaysAddress = false
@@ -836,6 +945,9 @@ private final class WalletReceiveSheetContent: Component {
             environment: Environment<EnvironmentType>,
             transition: ComponentTransition
         ) -> CGSize {
+            if self.component?.address != component.address || UIAccessibility.isReduceMotionEnabled {
+                self.finishCardFlip()
+            }
             self.component = component
             self.state = state
 
@@ -868,6 +980,9 @@ private final class WalletReceiveSheetContent: Component {
                 width: cardWidth,
                 height: cardHeight
             )
+            if self.cardView.frame != cardFrame {
+                self.finishCardFlip()
+            }
             let ringFrame = CGRect(
                 x: floor((availableWidth - ringSize.width) / 2.0),
                 y: cardFrame.minY - 28.0,
@@ -1072,6 +1187,13 @@ private final class WalletReceiveSheetContent: Component {
             let shouldAnimateCardFlip = self.appliedDisplaysAddress != nil
                 && self.appliedDisplaysAddress != self.displaysAddress
             let cardContentTransition: ComponentTransition = shouldAnimateCardFlip ? .immediate : transition
+            var previousCardSnapshot: UIView?
+            if shouldAnimateCardFlip {
+                self.finishCardFlip()
+                if !UIAccessibility.isReduceMotionEnabled, self.window != nil {
+                    previousCardSnapshot = self.cardView.snapshotView(afterScreenUpdates: false)
+                }
+            }
             let updateCardContents = {
                 //TODO:localize
                 let copiedTitle = "Address copied"
@@ -1209,15 +1331,9 @@ private final class WalletReceiveSheetContent: Component {
                 }
             }
 
-            if shouldAnimateCardFlip {
-                UIView.transition(
-                    with: self.cardView,
-                    duration: 0.4,
-                    options: [.transitionFlipFromLeft, .curveEaseOut],
-                    animations: updateCardContents
-                )
-            } else {
-                updateCardContents()
+            updateCardContents()
+            if let previousCardSnapshot {
+                self.animateCardFlip(from: previousCardSnapshot)
             }
             self.appliedDisplaysAddress = self.displaysAddress
 
