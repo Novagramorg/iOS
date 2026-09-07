@@ -4415,7 +4415,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return incomingMessagePrivacyScreen(context: context, value: value, exceptions: exceptions, update: update)
     }
 
-    public func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool) {
+    public func openBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool, willOpen: @escaping () -> Void, completion: @escaping () -> Void) {
         ChatControllerImpl.presentBotApp(
             context: context,
             parentController: parentController,
@@ -4423,7 +4423,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             botPeer: botPeer,
             payload: payload,
             mode: mode,
-            isOnramp: isOnramp
+            isOnramp: isOnramp,
+            willOpen: willOpen,
+            opened: completion
         )
     }
     
