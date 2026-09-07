@@ -4915,3 +4915,69 @@ legitimately needs to keep saying "Telegram" — a new product name, a new legal
 in the spirit of the existing `protectedPhrases` entries — must be added to that list in
 `FenixuzBrandStrings.swift`, or it will silently get rebranded to "Novagram" the next time the
 server sends it.
+
+---
+
+## 📌 TelegramUI module — Feature #47 Admin/Owner auto-folders (2026-09-07)
+
+Auto-managed folders for the groups/channels the user owns or admins. When the
+"Admin papkalar" toggle (Settings → Novagram → Features) is on, up to 4 **real** Telegram
+folders (cloud dialog filters) are created and kept in sync: `👑 Guruhlar` (owner groups),
+`👑 Kanallar` (owner channels), `🔑 Guruhlar` (admin non-owner groups), `🔑 Kanallar`
+(admin channels) — localized en/uz/ru at creation time, emoticon `👥`/`📢` so the folder edit
+screen shows the proper icon.
+
+Real folders on purpose: every standard folder surface (tabs, edit screen, reorder, tags,
+other devices) keeps working with zero extra UI code. The manager only ever touches
+`includePeers` of the folders it created (ids remembered per account in the `pro_messager`
+UserDefaults suite under `fenix_admin_folders_map_<accountPeerId>`), so a user's rename/edit
+of a managed folder sticks. A folder the user deletes by hand becomes a tombstone (`-1` in the
+map) and is not recreated until the toggle is cycled; folders left over from a reinstall are
+adopted by title instead of duplicated. Toggle OFF deletes only the managed folders, on every
+account in the working set.
+
+**Implementation file (Fenixuz module, no upstream change):**
+`submodules/Fenixuz/ProMessager/Sources/FenixAdminFoldersManager.swift` — manager + strings
+(picked up by the ProMessager BUILD glob). Sync scans `engine.messages.chatList` (root 1000 +
+archive 500), classifies via `TelegramChannel.flags.isCreator` / `.adminRights` /
+`TelegramChannel.info` and `TelegramGroup.role` (skipping left/kicked/deactivated peers),
+truncates each folder to `UserLimits.maxFolderChatsCount`, and applies everything in one
+`updateChatListFiltersInteractively` transform (no-op transforms don't trigger a server sync).
+Re-syncs on launch, account switch, app foreground (NotificationCenter observer inside the
+manager — no extra upstream hook), throttled to 30 s.
+
+**Settings toggle (Fenixuz module):** `FenixSettingsController.swift` — `.adminFolders` row
+(features section, stableId 82; folderStyle→featuresFooter renumbered 83–90 and the ads section
+93–95 to make room — stableIds are in-memory diff identities, safe to renumber) + deep-link slug
+`admin-folders` in `FenixSettingsDeepLink.swift`.
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift` (UPSTREAM hook)
+
+**+18-line launch block** right after the Feature #45 Auto-Accept block (before
+`self.context.set(...)`), same shape: takes `sharedContextPromise |> take(1)`, observes
+`sharedContext.activeAccountContexts` and calls
+`FenixAdminFoldersManager.startGlobalMonitor(context: primary)` (or `stopGlobalMonitor()` when
+no account is active), so the sync follows the active account across switches:
+
+```swift
+        // Fenixuz Admin Folders — Feature #47. When an authorized account is active, keep the
+        // auto-managed owner/admin folders (👑/🔑) in sync with the user's actual rights
+        // (gated on the "fenix_admin_folders" toggle).
+        _ = (self.sharedContextPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { sharedApplicationContext in
+            _ = (sharedApplicationContext.sharedContext.activeAccountContexts
+            |> map { primary, _, _ -> AccountContext? in
+                return primary
+            }
+            |> deliverOnMainQueue).start(next: { primary in
+                if let primary = primary {
+                    FenixAdminFoldersManager.startGlobalMonitor(context: primary)
+                } else {
+                    FenixAdminFoldersManager.stopGlobalMonitor()
+                }
+            })
+        })
+```
+
+`import FenixuzProMessager` already present (Feature #45) — **no import and no BUILD change.**

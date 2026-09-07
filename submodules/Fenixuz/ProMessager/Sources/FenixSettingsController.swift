@@ -131,6 +131,8 @@ private enum FenixEntry: ItemListNodeEntry {
     case featuresHeader(String, Bool)
     // Feature #19: add 4 recommended folders in one tap
     case addRecommendedFolders(PresentationTheme, String, String, Bool)
+    // Feature #47: auto-managed owner/admin folders (👑/🔑)
+    case adminFolders(PresentationTheme, String, String, Bool, Bool)
     // Feature #21: folder display style picker (icon/text/auto)
     case folderStyle(PresentationTheme, String, String, Bool)
     // Feature #32: channel history button (scaffold — behavior in later phase)
@@ -184,7 +186,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.secretVault.rawValue
         case .reminderHeader, .reminderEnabled, .reminderTime, .reminderSound, .reminderFooter:
             return FenixSection.reminder.rawValue
-        case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
+        case .featuresHeader, .addRecommendedFolders, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return FenixSection.features.rawValue
         case .adsHeader, .showAds, .adsAbout:
             return FenixSection.ads.rawValue
@@ -254,21 +256,22 @@ private enum FenixEntry: ItemListNodeEntry {
         case .reminderTime:              return 72
         case .reminderSound:             return 73
         case .reminderFooter:            return 74
-        // Features (#19, #21, #32, #40, #45)
+        // Features (#19, #21, #32, #40, #45, #47)
         case .featuresHeader:            return 80
         case .addRecommendedFolders:     return 81
-        case .folderStyle:               return 82
-        case .channelHistoryButton:      return 83
-        case .settingsLinks:             return 84
-        case .autoAcceptRequests:        return 85
-        case .shareNovagramProLink:      return 86
-        case .storyUnlockEnabled:        return 87
-        case .translateChatsUnlock:      return 88
-        case .featuresFooter:            return 89
+        case .adminFolders:              return 82
+        case .folderStyle:               return 83
+        case .channelHistoryButton:      return 84
+        case .settingsLinks:             return 85
+        case .autoAcceptRequests:        return 86
+        case .shareNovagramProLink:      return 87
+        case .storyUnlockEnabled:        return 88
+        case .translateChatsUnlock:      return 89
+        case .featuresFooter:            return 90
         // Ads section (hidden Easter-egg)
-        case .adsHeader:                 return 90
-        case .showAds:                   return 91
-        case .adsAbout:                  return 92
+        case .adsHeader:                 return 93
+        case .showAds:                   return 94
+        case .adsAbout:                  return 95
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
@@ -402,6 +405,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .featuresHeader(rhsText, rhsIsNew) = rhs, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .addRecommendedFolders(lhsTheme, lhsTitle, lhsText, lhsIsNew):
             if case let .addRecommendedFolders(rhsTheme, rhsTitle, rhsText, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .adminFolders(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .adminFolders(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .folderStyle(lhsTheme, lhsTitle, lhsLabel, lhsIsNew):
             if case let .folderStyle(rhsTheme, rhsTitle, rhsLabel, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .channelHistoryButton(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
@@ -495,6 +500,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .reminderSound(_, title, _):               return (.reminderSound, title)
 
         case let .addRecommendedFolders(_, title, _, _):    return (.recommendedFolders, title)
+        case let .adminFolders(_, title, _, _, _):          return (.adminFolders, title)
         case let .folderStyle(_, title, _, _):              return (.folderStyle, title)
         case let .channelHistoryButton(_, title, _, _, _):  return (.channelHistory, title)
         case let .settingsLinks(_, title, _, _, _):         return (.settingsLinks, title)
@@ -864,6 +870,23 @@ private enum FenixEntry: ItemListNodeEntry {
                 },
                 tag: self.fenixTag
             )
+        case let .adminFolders(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "crown.fill", color: .gold),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateAdminFolders(val)
+                },
+                tag: self.fenixTag
+            )
         case let .folderStyle(_, title, label, _):
             return ItemListDisclosureItem(
                 presentationData: presentationData,
@@ -1064,6 +1087,7 @@ private struct FenixSettingsState: Equatable {
     var channelHistoryEnabled: Bool
     var settingsLinksEnabled: Bool
     var autoAcceptEnabled: Bool
+    var adminFoldersEnabled: Bool
     // Mirrors FenixuzStoryUnlock.isEnabled; default false.
     var storyUnlockEnabled: Bool
     // Mirrors FenixuzPremiumUnlock.isTranslateChatsUnlocked; default false.
@@ -1121,6 +1145,7 @@ private struct FenixSettingsState: Equatable {
         self.channelHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_channel_history_button") ?? false
         self.settingsLinksEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_settings_links") ?? false
         self.autoAcceptEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_autoaccept_global") ?? false
+        self.adminFoldersEnabled = FenixAdminFoldersManager.isEnabled
         self.storyUnlockEnabled = FenixuzStoryUnlock.isEnabled
         self.translateChatsUnlock = FenixuzPremiumUnlock.isTranslateChatsUnlocked
         // Ads section — default true (show ads) and false (section hidden)
@@ -1235,6 +1260,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.autoAcceptEnabled != rhs.autoAcceptEnabled {
+            return false
+        }
+        if lhs.adminFoldersEnabled != rhs.adminFoldersEnabled {
             return false
         }
         if lhs.storyUnlockEnabled != rhs.storyUnlockEnabled {
@@ -1428,6 +1456,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     // isNew: hardcoded true — set to false here when this section is no longer new.
     entries.append(.featuresHeader(FenixFeaturesStrings.sectionTitle(langCode: langCode), true))
     entries.append(.addRecommendedFolders(presentationData.theme, FenixFeaturesStrings.addFoldersTitle(langCode: langCode), FenixFeaturesStrings.addFoldersTip(langCode: langCode), false))
+    entries.append(.adminFolders(presentationData.theme, FenixAdminFoldersStrings.toggleTitle(langCode: langCode), FenixAdminFoldersStrings.toggleSubtitle(langCode: langCode), state.adminFoldersEnabled, true))
     let folderStyleLabel = FenixFeaturesStrings.folderStyleLabel(state.folderStyle, langCode: langCode)
     entries.append(.folderStyle(presentationData.theme, FenixFeaturesStrings.folderStyleTitle(langCode: langCode), folderStyleLabel, false))
     entries.append(.channelHistoryButton(presentationData.theme, FenixFeaturesStrings.channelHistoryTitle(langCode: langCode), FenixFeaturesStrings.channelHistoryTip(langCode: langCode), state.channelHistoryEnabled, true))
@@ -1498,12 +1527,13 @@ private final class FenixSettingsArguments {
     let updateSettingsLinks: (Bool) -> Void
     let shareNovagramProLink: () -> Void
     let updateAutoAccept: (Bool) -> Void
+    let updateAdminFolders: (Bool) -> Void
     // Ads section (Feature #6 — hidden Easter-egg)
     let updateShowAds: (Bool) -> Void
     let updateStoryUnlock: (Bool) -> Void
     let updateTranslateChatsUnlock: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1547,6 +1577,7 @@ private final class FenixSettingsArguments {
         self.updateSettingsLinks = updateSettingsLinks
         self.shareNovagramProLink = shareNovagramProLink
         self.updateAutoAccept = updateAutoAccept
+        self.updateAdminFolders = updateAdminFolders
         self.updateShowAds = updateShowAds
         self.updateStoryUnlock = updateStoryUnlock
         self.updateTranslateChatsUnlock = updateTranslateChatsUnlock
@@ -1688,7 +1719,7 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
             // the store back to know which ids it added. Clearing the store synchronously here
             // emptied it first, so the trim found nothing and silently unpinned nothing. Clear the
             // remaining accounts only once it has finished; it clears the active account itself.
-            let _ = context.engine.peers.fenixuzTrimPinnedChatsToServerLimit().startStandalone(completed: {
+            _ = context.engine.peers.fenixuzTrimPinnedChatsToServerLimit().startStandalone(completed: {
                 FenixuzLocalPins.clearAllAccounts()
             })
         }
@@ -2120,6 +2151,37 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
         updateState { state in
             var state = state
             state.autoAcceptEnabled = value
+            return state
+        }
+    }, updateAdminFolders: { value in
+        // Feature #47: auto-managed owner/admin folders. The manager owns the UserDefaults
+        // key so enable/disable stay a single code path (AppDelegate re-enters via
+        // startGlobalMonitor on the next launch).
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let langCode = presentationData.strings.primaryComponent.languageCode
+        if value {
+            FenixAdminFoldersManager.enable(context: context, completion: { outcome in
+                let text: String
+                switch outcome {
+                case let .foldersReady(created, _):
+                    text = created > 0 ? FenixAdminFoldersStrings.createdAlert(count: created, langCode: langCode) : FenixAdminFoldersStrings.upToDateAlert(langCode: langCode)
+                case .nothingToManage:
+                    text = FenixAdminFoldersStrings.emptyAlert(langCode: langCode)
+                }
+                let alert = textAlertController(
+                    context: context,
+                    title: nil,
+                    text: text,
+                    actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+                )
+                presentControllerImpl?(alert)
+            })
+        } else {
+            FenixAdminFoldersManager.disable(context: context)
+        }
+        updateState { state in
+            var state = state
+            state.adminFoldersEnabled = value
             return state
         }
     }, updateShowAds: { value in

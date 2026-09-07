@@ -1262,6 +1262,25 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             })
         })
 
+        // Fenixuz Admin Folders — Feature #47. When an authorized account is active, keep the
+        // auto-managed owner/admin folders (👑/🔑) in sync with the user's actual rights
+        // (gated on the "fenix_admin_folders" toggle).
+        _ = (self.sharedContextPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { sharedApplicationContext in
+            _ = (sharedApplicationContext.sharedContext.activeAccountContexts
+            |> map { primary, _, _ -> AccountContext? in
+                return primary
+            }
+            |> deliverOnMainQueue).start(next: { primary in
+                if let primary = primary {
+                    FenixAdminFoldersManager.startGlobalMonitor(context: primary)
+                } else {
+                    FenixAdminFoldersManager.stopGlobalMonitor()
+                }
+            })
+        })
+
         self.context.set(self.sharedContextPromise.get()
         |> deliverOnMainQueue
         |> mapToSignal { sharedApplicationContext -> Signal<AuthorizedApplicationContext?, NoError> in
