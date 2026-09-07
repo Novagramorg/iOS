@@ -771,7 +771,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
             environment: {},
             containerSize: topNavigationButtonSide
         )
-        let topNavigationButtonTopInset: CGFloat = (layout.statusBarHeight ?? 0.0) == 0.0 ? 16.0 : 5.0
+        let topNavigationButtonTopInset: CGFloat = (layout.statusBarHeight ?? 0.0) == 0.0 ? 16.0 : 10.0
         if let topNavigationButtonView = self.topNavigationButton.view {
             if topNavigationButtonView.superview == nil {
                 self.view.addSubview(topNavigationButtonView)

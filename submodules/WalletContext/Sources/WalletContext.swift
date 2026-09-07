@@ -366,21 +366,37 @@ public final class WalletContext {
 
 public struct WalletConfiguration {
     public static var defaultValue: WalletConfiguration {
-        return WalletConfiguration(transferMinAmount: 100_000_000)
+        return WalletConfiguration(
+            transferMinAmount: 100_000_000,
+            transferGaslessMinAmount: 100_000_000
+        )
     }
 
     public let transferMinAmount: Int64
+    public let transferGaslessMinAmount: Int64
 
-    private init(transferMinAmount: Int64) {
+    private init(
+        transferMinAmount: Int64,
+        transferGaslessMinAmount: Int64
+    ) {
         self.transferMinAmount = transferMinAmount
+        self.transferGaslessMinAmount = transferGaslessMinAmount
     }
 
     public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
-        guard let value = appConfiguration.data?["wallet_transfer_amount_min"] as? Double,
-              let transferMinAmount = Int64(exactly: value),
-              transferMinAmount >= 0 else {
-            return .defaultValue
+        var transferMinAmount = self.defaultValue.transferMinAmount
+        if let value = appConfiguration.data?["wallet_transfer_min_nanos"] as? Double,
+           let intValue = Int64(exactly: value) {
+            transferMinAmount = intValue
         }
-        return WalletConfiguration(transferMinAmount: transferMinAmount)
+        var transferGaslessMinAmount = self.defaultValue.transferGaslessMinAmount
+        if let value = appConfiguration.data?["wallet_gasless_min_nanos"] as? Double,
+           let intValue = Int64(exactly: value), intValue >= 0 {
+            transferGaslessMinAmount = intValue
+        }
+        return WalletConfiguration(
+            transferMinAmount: transferMinAmount,
+            transferGaslessMinAmount: transferGaslessMinAmount
+        )
     }
 }

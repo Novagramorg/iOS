@@ -277,25 +277,32 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 } else {
                     sign = "−"
                 }
-                let formattedAmount = sign + formatTonAmountText(
+                let formattedAmount = formatTonAmountText(
                     amount,
                     dateTimeFormat: item.presentationData.dateTimeFormat,
                     maxDecimalPositions: 3
                 )
-                let amountText = NSMutableAttributedString(attributedString: tonAmountAttributedString(
-                    formattedAmount,
-                    integralFont: amountFont,
-                    fractionalFont: fractionalAmountFont,
-                    color: .white,
-                    decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator
-                ))
-                //TODO:localize
-                let currencyTitle = " Grams"
-                amountText.append(NSAttributedString(
-                    string: currencyTitle,
+                let localizedAmount = formatTonAmountText(
+                    amount,
+                    dateTimeFormat: item.presentationData.dateTimeFormat,
+                    maxDecimalPositions: 3,
+                    formatString: item.presentationData.strings.Currency_Grams
+                )
+                let amountText = NSMutableAttributedString(
+                    string: localizedAmount,
                     font: amountFont,
                     textColor: UIColor(rgb: 0x0fddff)
-                ))
+                )
+                let amountRange = (localizedAmount as NSString).range(of: formattedAmount)
+                if amountRange.location != NSNotFound {
+                    amountText.replaceCharacters(in: amountRange, with: tonAmountAttributedString(
+                        sign + formattedAmount,
+                        integralFont: amountFont,
+                        fractionalFont: fractionalAmountFont,
+                        color: .white,
+                        decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator
+                    ))
+                }
                 let (amountLayout, amountApply) = makeAmountLayout(TextNodeLayoutArguments(
                     attributedString: amountText,
                     backgroundColor: nil,

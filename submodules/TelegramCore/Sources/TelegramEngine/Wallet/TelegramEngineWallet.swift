@@ -16,6 +16,18 @@ public extension TelegramEngine {
             return _internal_getWalletState(account: self.account)
         }
 
+        public func getGaslessInfo() -> Signal<WalletGaslessInfo, WalletGetGaslessInfoError> {
+            return _internal_getWalletGaslessInfo(account: self.account)
+        }
+
+        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil) -> Signal<WalletSentTransfer, WalletSendTransferError> {
+            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless)
+        }
+
+        public func getTransactionsByIDs(ids: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
+            return _internal_getWalletTransactionsByIDs(account: self.account, ids: ids)
+        }
+
         public func stateUpdates() -> Signal<WalletState, NoError> {
             return self.account.stateManager.walletStateUpdates()
             |> map { WalletState(apiState: $0) }

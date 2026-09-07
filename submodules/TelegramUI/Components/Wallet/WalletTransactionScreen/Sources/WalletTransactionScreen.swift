@@ -83,7 +83,7 @@ private enum WalletTransactionContentMode {
     )
 }
 
-private final class SelectableWalletTransactionCommentComponent: Component {
+private final class TransactionCommentComponent: Component {
     let theme: PresentationTheme
     let strings: PresentationStrings
     let text: NSAttributedString
@@ -104,7 +104,7 @@ private final class SelectableWalletTransactionCommentComponent: Component {
         self.performAction = performAction
     }
 
-    static func ==(lhs: SelectableWalletTransactionCommentComponent, rhs: SelectableWalletTransactionCommentComponent) -> Bool {
+    static func ==(lhs: TransactionCommentComponent, rhs: TransactionCommentComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -122,7 +122,7 @@ private final class SelectableWalletTransactionCommentComponent: Component {
         private var textSelectionNode: TextSelectionNode?
         private weak var selectionTheme: PresentationTheme?
         private weak var selectionStrings: PresentationStrings?
-        private var component: SelectableWalletTransactionCommentComponent?
+        private var component: TransactionCommentComponent?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -224,7 +224,7 @@ private final class SelectableWalletTransactionCommentComponent: Component {
         }
 
         func update(
-            component: SelectableWalletTransactionCommentComponent,
+            component: TransactionCommentComponent,
             availableSize: CGSize,
             transition: ComponentTransition
         ) -> CGSize {
@@ -238,7 +238,8 @@ private final class SelectableWalletTransactionCommentComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(component.text),
-                    maximumNumberOfLines: 0
+                    maximumNumberOfLines: 0,
+                    insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0)
                 )),
                 environment: {},
                 containerSize: availableSize
@@ -866,7 +867,7 @@ private final class WalletTransactionContentComponent: Component {
             self.isImportingCommentKey = false
             self.commentRecoveryController = nil
             if self.decryptedComment != nil {
-                (self.commentText.view as? SelectableWalletTransactionCommentComponent.View)?.cancelSelection()
+                (self.commentText.view as? TransactionCommentComponent.View)?.cancelSelection()
                 self.commentText.view?.removeFromSuperview()
                 self.commentText = ComponentView<Empty>()
                 self.decryptedComment = nil
@@ -1726,7 +1727,7 @@ private final class WalletTransactionContentComponent: Component {
                 case .ton:
                     if let fiatRate {
                         usdText = formatTonFiatValue(
-                            transaction.amount,
+                            abs(transaction.amount),
                             rate: fiatRate.unitsPerGram,
                             currencySymbol: fiatCurrency.symbol,
                             dateTimeFormat: environment.dateTimeFormat
@@ -1850,11 +1851,11 @@ private final class WalletTransactionContentComponent: Component {
                 if isCommentConcealed {
                     commentSize = CGSize(width: 120.0, height: ceil(Font.regular(15.0).lineHeight))
                     self.commentText.view?.isHidden = true
-                    (self.commentText.view as? SelectableWalletTransactionCommentComponent.View)?.cancelSelection()
+                    (self.commentText.view as? TransactionCommentComponent.View)?.cancelSelection()
                 } else {
                     commentSize = self.commentText.update(
                         transition: transition,
-                        component: AnyComponent(SelectableWalletTransactionCommentComponent(
+                        component: AnyComponent(TransactionCommentComponent(
                             theme: theme,
                             strings: environment.strings,
                             text: NSAttributedString(
@@ -1966,7 +1967,7 @@ private final class WalletTransactionContentComponent: Component {
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 0.0)
                 if let commentView = self.commentText.view {
                     commentView.isUserInteractionEnabled = false
-                    (commentView as? SelectableWalletTransactionCommentComponent.View)?.cancelSelection()
+                    (commentView as? TransactionCommentComponent.View)?.cancelSelection()
                     transition.setAlpha(view: commentView, alpha: 0.0)
                 }
                 contentHeight += transaction.collectible == nil ? 44.0 : 22.0
