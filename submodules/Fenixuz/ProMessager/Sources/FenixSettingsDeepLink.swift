@@ -75,6 +75,7 @@ public enum FenixSettingsFeature: String, CaseIterable {
 
     // Features
     case recommendedFolders = "recommended-folders"
+    case adminFolders = "admin-folders"
     case folderStyle = "folder-style"
     case channelHistory = "channel-history"
     case settingsLinks = "settings-links"
