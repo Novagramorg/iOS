@@ -5,7 +5,7 @@ import TelegramUIPreferences
 
 struct WalletStoredTransaction: Codable, Equatable, Sendable {
     enum Peer: Codable, Equatable, @unchecked Sendable {
-        case user(id: EnginePeer.Id, displayName: String)
+        case user(id: EnginePeer.Id)
         case address(String)
         case unsupported
 
@@ -18,7 +18,6 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         private enum CodingKeys: String, CodingKey {
             case kind
             case userId
-            case displayName
             case address
         }
 
@@ -35,8 +34,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             switch kind {
             case .user:
                 self = .user(
-                    id: EnginePeer.Id(try container.decode(Int64.self, forKey: .userId)),
-                    displayName: try container.decode(String.self, forKey: .displayName)
+                    id: EnginePeer.Id(try container.decode(Int64.self, forKey: .userId))
                 )
             case .address:
                 self = .address(try container.decode(String.self, forKey: .address))
@@ -48,10 +46,9 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             switch self {
-            case let .user(id, displayName):
+            case let .user(id):
                 try container.encode(Kind.user.rawValue, forKey: .kind)
                 try container.encode(id.toInt64(), forKey: .userId)
-                try container.encode(displayName, forKey: .displayName)
             case let .address(address):
                 try container.encode(Kind.address.rawValue, forKey: .kind)
                 try container.encode(address, forKey: .address)
@@ -61,7 +58,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         }
 
         var userId: EnginePeer.Id? {
-            if case let .user(id, _) = self {
+            if case let .user(id) = self {
                 return id
             }
             return nil
@@ -80,7 +77,6 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     let peerAddress: String?
     let peerDomain: String?
     let comment: String?
-    // Optional so caches written before encrypted comments remain decodable.
     let commentEncrypted: Bool?
     let currency: WalletContext.Transaction.Currency
     let collectible: WalletContext.Transaction.CollectibleTransfer?
@@ -97,7 +93,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         self.fee = transaction.fee
         switch transaction.peer {
         case let .user(peer, address, domain):
-            self.peer = .user(id: peer.id, displayName: peer.debugDisplayTitle)
+            self.peer = .user(id: peer.id)
             self.peerAddress = address
             self.peerDomain = domain
         case let .address(address, domain):
@@ -119,7 +115,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     func transaction(peers: [EnginePeer.Id: EnginePeer]) -> WalletContext.Transaction {
         let peer: WalletContext.Transaction.Peer
         switch self.peer {
-        case let .user(id, _):
+        case let .user(id):
             if let value = peers[id] {
                 peer = .user(value, address: self.peerAddress ?? "", domain: self.peerDomain)
             } else if let peerAddress = self.peerAddress, !peerAddress.isEmpty {

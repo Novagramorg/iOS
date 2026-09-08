@@ -232,19 +232,17 @@ public extension Api.wallet {
     enum SentTransfer: TypeConstructorDescription {
         public class Cons_sentTransfer: TypeConstructorDescription {
             public var flags: Int32
-            public var transactionId: String
-            public var msgHash: Buffer
+            public var msgHash: String
             public var gaslessLeft: Int32
             public var gaslessResetAt: Int32
-            public init(flags: Int32, transactionId: String, msgHash: Buffer, gaslessLeft: Int32, gaslessResetAt: Int32) {
+            public init(flags: Int32, msgHash: String, gaslessLeft: Int32, gaslessResetAt: Int32) {
                 self.flags = flags
-                self.transactionId = transactionId
                 self.msgHash = msgHash
                 self.gaslessLeft = gaslessLeft
                 self.gaslessResetAt = gaslessResetAt
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("sentTransfer", [("flags", ConstructorParameterDescription(self.flags)), ("transactionId", ConstructorParameterDescription(self.transactionId)), ("msgHash", ConstructorParameterDescription(self.msgHash)), ("gaslessLeft", ConstructorParameterDescription(self.gaslessLeft)), ("gaslessResetAt", ConstructorParameterDescription(self.gaslessResetAt))])
+                return ("sentTransfer", [("flags", ConstructorParameterDescription(self.flags)), ("msgHash", ConstructorParameterDescription(self.msgHash)), ("gaslessLeft", ConstructorParameterDescription(self.gaslessLeft)), ("gaslessResetAt", ConstructorParameterDescription(self.gaslessResetAt))])
             }
         }
         case sentTransfer(Cons_sentTransfer)
@@ -253,11 +251,10 @@ public extension Api.wallet {
             switch self {
             case .sentTransfer(let _data):
                 if boxed {
-                    buffer.appendInt32(625819418)
+                    buffer.appendInt32(1882463590)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeString(_data.transactionId, buffer: buffer, boxed: false)
-                serializeBytes(_data.msgHash, buffer: buffer, boxed: false)
+                serializeString(_data.msgHash, buffer: buffer, boxed: false)
                 serializeInt32(_data.gaslessLeft, buffer: buffer, boxed: false)
                 serializeInt32(_data.gaslessResetAt, buffer: buffer, boxed: false)
                 break
@@ -267,7 +264,7 @@ public extension Api.wallet {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .sentTransfer(let _data):
-                return ("sentTransfer", [("flags", ConstructorParameterDescription(_data.flags)), ("transactionId", ConstructorParameterDescription(_data.transactionId)), ("msgHash", ConstructorParameterDescription(_data.msgHash)), ("gaslessLeft", ConstructorParameterDescription(_data.gaslessLeft)), ("gaslessResetAt", ConstructorParameterDescription(_data.gaslessResetAt))])
+                return ("sentTransfer", [("flags", ConstructorParameterDescription(_data.flags)), ("msgHash", ConstructorParameterDescription(_data.msgHash)), ("gaslessLeft", ConstructorParameterDescription(_data.gaslessLeft)), ("gaslessResetAt", ConstructorParameterDescription(_data.gaslessResetAt))])
             }
         }
 
@@ -276,19 +273,16 @@ public extension Api.wallet {
             _1 = reader.readInt32()
             var _2: String?
             _2 = parseString(reader)
-            var _3: Buffer?
-            _3 = parseBytes(reader)
+            var _3: Int32?
+            _3 = reader.readInt32()
             var _4: Int32?
             _4 = reader.readInt32()
-            var _5: Int32?
-            _5 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.wallet.SentTransfer.sentTransfer(Cons_sentTransfer(flags: _1!, transactionId: _2!, msgHash: _3!, gaslessLeft: _4!, gaslessResetAt: _5!))
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.wallet.SentTransfer.sentTransfer(Cons_sentTransfer(flags: _1!, msgHash: _2!, gaslessLeft: _3!, gaslessResetAt: _4!))
             }
             else {
                 return nil

@@ -20,3 +20,4 @@ swift_library(
         "//visibility:public",
     ],
 )
+

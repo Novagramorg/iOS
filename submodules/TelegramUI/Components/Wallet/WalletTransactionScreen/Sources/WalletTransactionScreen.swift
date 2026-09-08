@@ -26,6 +26,7 @@ import TooltipUI
 import AvatarComponent
 import ShimmeringMask
 import WalletContext
+import WalletPagerComponent
 import WalletCollectibleHeaderComponent
 import WalletSendScreen
 import TextSelectionNode
@@ -213,6 +214,8 @@ private final class TransactionCommentComponent: Component {
                 )
                 textSelectionNode.enableQuote = false
                 textSelectionNode.enableSpeak = isSpeakSelectionEnabled()
+                textSelectionNode.enableAutomaticScrolling = false
+                textSelectionNode.cancelSelectionOnOutsideTap = true
 
                 self.textSelectionNode = textSelectionNode
                 self.insertSubview(textSelectionNode.highlightAreaNode.view, belowSubview: textView)
@@ -663,7 +666,6 @@ private final class WalletTransactionContentComponent: Component {
         private let discardTransferDisposables = DisposableSet()
         private let hapticFeedback = HapticFeedback()
         private var currentSpeechHolder: SpeechSynthesizerHolder?
-        private var amountPending = false
         private var isUpdating = false
 
         private var cachedCommentBubbleImage: (
@@ -727,7 +729,6 @@ private final class WalletTransactionContentComponent: Component {
             self.preparingForSend = false
             self.latestWalletState = nil
             self.didShowSuccess = false
-            self.amountPending = false
             self.commentRevision += 1
 
             switch mode {
@@ -849,14 +850,6 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 controller.dismiss(completion: nil)
             }
-        }
-
-        private func toggleAmountPending() {
-            guard !self.isPreview else {
-                return
-            }
-            self.amountPending.toggle()
-            self.componentState?.updated(transition: .easeInOut(duration: 0.25))
         }
 
         private func resetCommentDecryption() {
@@ -1170,13 +1163,13 @@ private final class WalletTransactionContentComponent: Component {
             self.previewOperation = .submitting
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             self.transferDisposable.set((walletContext.submitTransfer(preparedTransfer)
-            |> deliverOnMainQueue).start(next: { [weak self] submittedTransfer in
+            |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
                 guard let self else {
                     return
                 }
                 self.preparedTransferNeedsRefresh = false
                 self.dismissSendScreenIfNeeded()
-                switch submittedTransfer.pendingTransfer.status {
+                switch pendingTransfer.status {
                 case .submissionUnknown:
                     self.previewOperation = .submissionUnknown
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
@@ -1185,8 +1178,8 @@ private final class WalletTransactionContentComponent: Component {
                     self.previewOperation = .confirmed
                     self.componentState?.updated(transition: .easeInOut(duration: 0.25))
                     self.showSuccessIfNeeded(
-                        address: submittedTransfer.pendingTransfer.recipient,
-                        isCollectible: submittedTransfer.pendingTransfer.collectibleAddress != nil
+                        address: pendingTransfer.recipient,
+                        isCollectible: pendingTransfer.collectibleAddress != nil
                     )
                 }
             }, error: { [weak self] error in
@@ -1312,13 +1305,15 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
 
+            let refreshBalanceOnOpen = (controller as? WalletTransactionScreen)?.refreshBalanceOnSend ?? true
             let sendScreen: WalletSendScreen
             switch transactionPeer {
             case let .user(peer, _, _):
                 sendScreen = WalletSendScreen(
                     context: component.context,
                     peer: peer,
-                    walletContext: walletContext
+                    walletContext: walletContext,
+                    refreshBalanceOnOpen: refreshBalanceOnOpen
                 )
             case .address:
                 guard let counterpartyAddress = transactionPeer.address else {
@@ -1328,7 +1323,8 @@ private final class WalletTransactionContentComponent: Component {
                 sendScreen = WalletSendScreen(
                     context: component.context,
                     walletContext: walletContext,
-                    address: address
+                    address: address,
+                    refreshBalanceOnOpen: refreshBalanceOnOpen
                 )
             case .unsupported:
                 return
@@ -1699,7 +1695,7 @@ private final class WalletTransactionContentComponent: Component {
                         amount: transaction.amount,
                         direction: transaction.direction,
                         currency: transaction.currency,
-                        pending: self.isPreview ? false : (transaction.status == .pending || self.amountPending)
+                        pending: !self.isPreview && transaction.status == .pending
                     )),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width, height: 100.0)
@@ -1760,7 +1756,7 @@ private final class WalletTransactionContentComponent: Component {
                     containerSize: CGSize(width: availableSize.width - 64.0, height: 24.0)
                 )
                 let displaysTransactionStatus = !self.isPreview
-                    && (transaction.status == .pending || transaction.status == .failed || self.amountPending)
+                    && (transaction.status == .pending || transaction.status == .failed)
                 let dotSize = self.processingDot.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
@@ -2473,253 +2469,7 @@ private final class WalletTransactionPagerComponent: Component {
             && lhs.itemSpacing == rhs.itemSpacing
     }
 
-    final class View: UIView, UIScrollViewDelegate {
-        private let dimView: UIView
-        private let scrollView: UIScrollView
-        private var itemViews: [String: ComponentHostView<EnvironmentType>] = [:]
-
-        private var component: WalletTransactionPagerComponent?
-        private var environment: Environment<EnvironmentType>?
-        private var previousItemStride: CGFloat?
-        private var previousIsDisplaying = false
-        private var lastReportedIndex: Int?
-        private var isUpdating = false
-        private var ignoreContentOffsetChange = false
-        private var isSwiping = false
-        private var lastScrollTime: TimeInterval = 0.0
-
-        override init(frame: CGRect) {
-            self.dimView = UIView()
-            self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.4)
-
-            self.scrollView = UIScrollView(frame: frame)
-            self.scrollView.clipsToBounds = true
-            self.scrollView.isPagingEnabled = true
-            self.scrollView.showsHorizontalScrollIndicator = false
-            self.scrollView.showsVerticalScrollIndicator = false
-            self.scrollView.alwaysBounceHorizontal = true
-            self.scrollView.bounces = true
-            self.scrollView.layer.cornerRadius = 10.0
-            if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
-                self.scrollView.contentInsetAdjustmentBehavior = .never
-            }
-
-            super.init(frame: frame)
-
-            self.addSubview(self.dimView)
-            self.scrollView.delegate = self
-            self.addSubview(self.scrollView)
-        }
-
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        private func itemStride(component: WalletTransactionPagerComponent, availableWidth: CGFloat) -> CGFloat {
-            return availableWidth + component.itemSpacing * 2.0
-        }
-
-        private func currentIndex(component: WalletTransactionPagerComponent, itemStride: CGFloat) -> Int {
-            guard !component.transactions.isEmpty, itemStride > 0.0 else {
-                return 0
-            }
-            return max(0, min(component.transactions.count - 1, Int(round(self.scrollView.contentOffset.x / itemStride))))
-        }
-
-        private func reportCurrentIndex(force: Bool = false) {
-            guard let component = self.component, !component.transactions.isEmpty else {
-                return
-            }
-            let itemStride = self.previousItemStride
-                ?? self.itemStride(component: component, availableWidth: self.bounds.width)
-            let index = self.currentIndex(component: component, itemStride: itemStride)
-            if force || self.lastReportedIndex != index {
-                self.lastReportedIndex = index
-                component.indexUpdated(index)
-            }
-        }
-
-        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-            guard let component = self.component, !component.transactions.isEmpty else {
-                return
-            }
-            self.isSwiping = true
-            self.lastScrollTime = CACurrentMediaTime()
-            component.draggingBegan(self.currentIndex(
-                component: component,
-                itemStride: self.previousItemStride
-                    ?? self.itemStride(component: component, availableWidth: self.bounds.width)
-            ))
-        }
-
-        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-            if !decelerate {
-                self.isSwiping = false
-                self.reportCurrentIndex(force: true)
-            }
-        }
-
-        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            self.isSwiping = false
-            self.reportCurrentIndex(force: true)
-        }
-
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            guard let component = self.component,
-                  let environment = self.environment,
-                  !self.ignoreContentOffsetChange,
-                  !self.isUpdating else {
-                return
-            }
-            if self.isSwiping {
-                self.lastScrollTime = CACurrentMediaTime()
-            }
-
-            self.ignoreContentOffsetChange = true
-            let _ = self.update(
-                component: component,
-                availableSize: self.bounds.size,
-                environment: environment,
-                transition: .immediate
-            )
-            self.ignoreContentOffsetChange = false
-            self.reportCurrentIndex()
-        }
-
-        func update(
-            component: WalletTransactionPagerComponent,
-            availableSize: CGSize,
-            environment: Environment<EnvironmentType>,
-            transition: ComponentTransition
-        ) -> CGSize {
-            self.isUpdating = true
-            defer {
-                self.isUpdating = false
-            }
-
-            transition.setFrame(view: self.dimView, frame: CGRect(origin: .zero, size: availableSize))
-
-            let previousComponent = self.component
-            let previousItemStride = self.previousItemStride
-            var anchorId: String?
-            var anchorFraction: CGFloat = 0.0
-            if let previousComponent,
-               let previousItemStride,
-               previousItemStride > 0.0,
-               !previousComponent.transactions.isEmpty {
-                let previousIndex = self.currentIndex(component: previousComponent, itemStride: previousItemStride)
-                anchorId = previousComponent.transactions[previousIndex].presentationId
-                anchorFraction = self.scrollView.contentOffset.x / previousItemStride - CGFloat(previousIndex)
-            }
-
-            self.component = component
-            self.environment = environment
-
-            let itemWidth = availableSize.width
-            let itemStride = self.itemStride(component: component, availableWidth: itemWidth)
-            self.previousItemStride = itemStride
-            let totalWidth = itemWidth * CGFloat(component.transactions.count)
-                + component.itemSpacing * 2.0 * CGFloat(component.transactions.count)
-            let contentSize = CGSize(width: totalWidth, height: availableSize.height)
-            if self.scrollView.contentSize != contentSize {
-                self.scrollView.contentSize = contentSize
-            }
-            let scrollFrame = CGRect(
-                x: -component.itemSpacing / 2.0,
-                y: 0.0,
-                width: availableSize.width + component.itemSpacing * 2.0,
-                height: availableSize.height
-            )
-            if self.scrollView.frame != scrollFrame {
-                self.scrollView.frame = scrollFrame
-            }
-
-            let isFirstUpdate = previousComponent == nil || self.itemViews.isEmpty
-            var targetOffset: CGFloat?
-            if isFirstUpdate {
-                let initialIndex = max(0, min(component.transactions.count - 1, component.initialIndex))
-                targetOffset = CGFloat(initialIndex) * itemStride
-            } else if let anchorId,
-                      let anchorIndex = component.transactions.firstIndex(where: { $0.presentationId == anchorId }) {
-                targetOffset = (CGFloat(anchorIndex) + anchorFraction) * itemStride
-            }
-            if let targetOffset {
-                let maximumOffset = max(0.0, contentSize.width - scrollFrame.width)
-                let resolvedOffset = self.isSwiping
-                    ? targetOffset
-                    : max(0.0, min(maximumOffset, targetOffset))
-                self.ignoreContentOffsetChange = true
-                self.scrollView.contentOffset = CGPoint(x: resolvedOffset, y: 0.0)
-                self.ignoreContentOffsetChange = false
-            }
-
-            let currentIndex = self.currentIndex(component: component, itemStride: itemStride)
-            let viewportCenter = self.scrollView.contentOffset.x + availableSize.width * 0.5
-            let isSwipingActive = self.isSwiping || CACurrentMediaTime() - self.lastScrollTime < 0.5
-            var validIds = Set<String>()
-
-            for (index, transaction) in component.transactions.enumerated() {
-                let itemOriginX = component.itemSpacing * 0.5 + itemStride * CGFloat(index)
-                let itemFrame = CGRect(x: itemOriginX, y: 0.0, width: itemWidth, height: availableSize.height)
-                let position = (itemFrame.midX - viewportCenter) / (availableSize.width * 0.75)
-                if (!isSwipingActive && abs(position) > 0.5) || (isSwipingActive && abs(position) > 1.5) {
-                    continue
-                }
-                
-                let uniqueId = transaction.presentationId
-
-                validIds.insert(uniqueId)
-                let itemView: ComponentHostView<EnvironmentType>
-                var itemTransition = transition
-                if let current = self.itemViews[uniqueId] {
-                    itemView = current
-                } else {
-                    itemTransition = transition.withAnimation(.none)
-                    itemView = ComponentHostView<EnvironmentType>()
-                    self.itemViews[uniqueId] = itemView
-                    self.scrollView.addSubview(itemView)
-                }
-
-                let _ = itemView.update(
-                    transition: itemTransition,
-                    component: AnyComponent(WalletTransactionSheetComponent(
-                        context: component.context,
-                        transaction: transaction,
-                        walletContext: component.walletContext,
-                        hasDimView: false,
-                        updatesPresentationContextLayout: index == currentIndex,
-                        openExplorer: component.openExplorer
-                    )),
-                    environment: { environment[EnvironmentType.self] },
-                    containerSize: availableSize
-                )
-                itemView.frame = itemFrame
-            }
-
-            var removeIds: [String] = []
-            for (id, itemView) in self.itemViews where !validIds.contains(id) {
-                removeIds.append(id)
-                itemView.removeFromSuperview()
-            }
-            for id in removeIds {
-                self.itemViews.removeValue(forKey: id)
-            }
-
-            let viewEnvironment = environment[EnvironmentType.self].value
-            if let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {
-                self.dimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
-            } else if self.previousIsDisplaying,
-                      let _ = transition.userData(ViewControllerComponentContainer.AnimateOutTransition.self) {
-                self.dimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
-            }
-            self.previousIsDisplaying = viewEnvironment.isVisible
-
-            if isFirstUpdate {
-                self.reportCurrentIndex(force: true)
-            }
-            return availableSize
-        }
-    }
+    typealias View = WalletPagerView
 
     func makeView() -> View {
         return View(frame: .zero)
@@ -2732,7 +2482,26 @@ private final class WalletTransactionPagerComponent: Component {
         environment: Environment<EnvironmentType>,
         transition: ComponentTransition
     ) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, environment: environment, transition: transition)
+        return view.update(
+            itemIds: self.transactions.map(\.presentationId),
+            initialIndex: self.initialIndex,
+            itemSpacing: self.itemSpacing,
+            availableSize: availableSize,
+            environment: environment,
+            transition: transition,
+            makeContent: { index, isCurrent in
+                return AnyComponent(WalletTransactionSheetComponent(
+                    context: self.context,
+                    transaction: self.transactions[index],
+                    walletContext: self.walletContext,
+                    hasDimView: false,
+                    updatesPresentationContextLayout: isCurrent,
+                    openExplorer: self.openExplorer
+                ))
+            },
+            indexUpdated: self.indexUpdated,
+            draggingBegan: self.draggingBegan
+        )
     }
 }
 
@@ -3045,7 +2814,9 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private let openExplorer: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
-    private var walletScreenUpdatesDisposable: Disposable?
+    fileprivate var refreshBalanceOnSend: Bool {
+        self.navigationWalletContext == nil
+    }
 
     private var transactionsState: WalletContext.TransactionsState?
     private var transactions: [WalletContext.Transaction]
@@ -3141,7 +2912,6 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 
     deinit {
-        self.walletScreenUpdatesDisposable?.dispose()
         self.stateDisposable.dispose()
         self.loadMoreDisposable.dispose()
     }
@@ -3155,10 +2925,6 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         super.viewWillAppear(animated)
 
         self.commentVisibilityActions[self.currentCloseId]?(true)
-
-        if self.walletScreenUpdatesDisposable == nil, let navigationWalletContext = self.navigationWalletContext {
-            self.walletScreenUpdatesDisposable = navigationWalletContext.beginWalletScreenUpdates()
-        }
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
@@ -3167,13 +2933,6 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             action(false)
         }
         self.dismissAllTooltips()
-    }
-
-    public override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-
-        self.walletScreenUpdatesDisposable?.dispose()
-        self.walletScreenUpdatesDisposable = nil
     }
 
     fileprivate func setCloseAction(id: String, action: @escaping (Bool) -> Void) {

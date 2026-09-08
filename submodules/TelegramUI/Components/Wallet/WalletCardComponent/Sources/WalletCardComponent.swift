@@ -20,6 +20,7 @@ public final class WalletCardComponent: Component {
     public let dateTimeFormat: PresentationDateTimeFormat
     public let name: String
     public let address: String
+    public let isVisible: Bool
     public let qrPressed: () -> Void
 
     public init(
@@ -29,6 +30,7 @@ public final class WalletCardComponent: Component {
         dateTimeFormat: PresentationDateTimeFormat,
         name: String,
         address: String,
+        isVisible: Bool,
         qrPressed: @escaping () -> Void
     ) {
         self.balance = balance
@@ -37,6 +39,7 @@ public final class WalletCardComponent: Component {
         self.dateTimeFormat = dateTimeFormat
         self.name = name
         self.address = address
+        self.isVisible = isVisible
         self.qrPressed = qrPressed
     }
 
@@ -54,6 +57,9 @@ public final class WalletCardComponent: Component {
             return false
         }
         if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.isVisible != rhs.isVisible {
             return false
         }
         return true
@@ -199,11 +205,7 @@ public final class WalletCardComponent: Component {
         override public func didMoveToWindow() {
             super.didMoveToWindow()
 
-            if self.window == nil {
-                self.stopAnimation()
-            } else {
-                self.startAnimationIfPossible()
-            }
+            self.updateAnimationState()
         }
 
         func update(
@@ -599,6 +601,7 @@ public final class WalletCardComponent: Component {
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
 
+            self.updateAnimationState()
             self.renderCurrentFrame()
 
             return size
@@ -654,8 +657,11 @@ public final class WalletCardComponent: Component {
             self.renderCurrentFrame()
         }
 
-        private func startAnimationIfPossible() {
-            guard self.window != nil, UIApplication.shared.applicationState == .active else {
+        private func updateAnimationState() {
+            guard self.component?.isVisible == true,
+                  self.window != nil,
+                  UIApplication.shared.applicationState == .active else {
+                self.stopAnimation()
                 return
             }
 
@@ -668,6 +674,7 @@ public final class WalletCardComponent: Component {
         }
 
         private func stopAnimation() {
+            self.displayLink?.invalidate()
             self.displayLink = nil
             self.motionManager.stopDeviceMotionUpdates()
             self.baseAttitude = nil
@@ -677,6 +684,7 @@ public final class WalletCardComponent: Component {
 
         private func startMotionIfPossible() {
             guard
+                self.displayLink != nil,
                 !UIAccessibility.isReduceMotionEnabled,
                 self.motionManager.isDeviceMotionAvailable,
                 !self.motionManager.isDeviceMotionActive
@@ -686,7 +694,7 @@ public final class WalletCardComponent: Component {
 
             self.motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
             self.motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] data, _ in
-                guard let self, let data else {
+                guard let self, self.displayLink != nil, let data else {
                     return
                 }
 
@@ -996,7 +1004,7 @@ public final class WalletCardComponent: Component {
             self.currentDepthY = self.currentCardY
             self.idleTiltX = 0.0
             self.idleTiltY = 0.0
-            self.startAnimationIfPossible()
+            self.updateAnimationState()
         }
 
         @objc private func applicationWillResignActive() {

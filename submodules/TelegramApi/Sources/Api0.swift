@@ -1745,7 +1745,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-103410961] = { return Api.wallet.HolderDc.parse_holderDc($0) }
     dict[-1713105145] = { return Api.wallet.ProofChallenge.parse_proofChallenge($0) }
     dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
-    dict[625819418] = { return Api.wallet.SentTransfer.parse_sentTransfer($0) }
+    dict[1882463590] = { return Api.wallet.SentTransfer.parse_sentTransfer($0) }
     dict[1126356389] = { return Api.wallet.Transactions.parse_transactions($0) }
     return dict
 }()

@@ -598,7 +598,7 @@ private final class WalletSendScreenComponent: Component {
                 let previousSendAll = self.shouldSendAll
                 self.amountSource = .manual
                 self.amount = amount
-                guard self.validateTransferAmount() else {
+                if self.inputMode == .gram, !self.validateTransferAmount() {
                     return
                 }
                 if previousAmount != self.amount || previousSendAll != self.shouldSendAll {
@@ -760,6 +760,9 @@ private final class WalletSendScreenComponent: Component {
                 self.inputMode = .fiat
             case .fiat:
                 self.inputMode = .gram
+                guard self.validateTransferAmount() else {
+                    return
+                }
             }
             self.componentState?.updated(transition: .easeInOut(duration: 0.25))
         }
@@ -1144,7 +1147,7 @@ private final class WalletSendScreenComponent: Component {
                     self?.peerPreparedTransfer = prepared
                     return component.walletContext.submitTransfer(prepared)
                 }
-                |> deliverOnMainQueue).start(next: { [weak self] submittedTransfer in
+                |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
                     guard let self, let controller = self.environment?.controller() else {
                         return
                     }
@@ -1152,7 +1155,7 @@ private final class WalletSendScreenComponent: Component {
                     self.isPreparingTransfer = false
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
 
-                    switch submittedTransfer.pendingTransfer.status {
+                    switch pendingTransfer.status {
                     case .submissionUnknown:
                         self.presentSubmissionUnknown(on: controller, context: component.context)
                         component.completed?()
@@ -2014,7 +2017,8 @@ private final class WalletSendScreenComponent: Component {
 
 public final class WalletSendScreen: ViewControllerComponentContainer, AttachmentContainable {
     private let walletContext: WalletContext
-    private var walletScreenUpdatesDisposable: Disposable?
+    private var balanceRefreshDisposable: Disposable?
+    private var refreshBalanceOnOpen: Bool
 
     public var requestAttachmentMenuExpansion: () -> Void = {
     }
@@ -2052,10 +2056,12 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         peer: EnginePeer,
         walletContext: WalletContext,
+        refreshBalanceOnOpen: Bool = true,
         displaySuccessToast: Bool = true,
         completed: (() -> Void)? = nil
     ) {
         self.walletContext = walletContext
+        self.refreshBalanceOnOpen = refreshBalanceOnOpen
         super.init(
             context: context,
             component: WalletSendScreenComponent(
@@ -2078,9 +2084,11 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         walletContext: WalletContext,
         address: String,
+        refreshBalanceOnOpen: Bool = true,
         completed: (() -> Void)? = nil
     ) {
         self.walletContext = walletContext
+        self.refreshBalanceOnOpen = refreshBalanceOnOpen
         super.init(
             context: context,
             component: WalletSendScreenComponent(
@@ -2102,16 +2110,17 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        if self.walletScreenUpdatesDisposable == nil {
-            self.walletScreenUpdatesDisposable = self.walletContext.beginWalletScreenUpdates()
+        if self.refreshBalanceOnOpen {
+            self.refreshBalanceOnOpen = false
+            self.balanceRefreshDisposable = self.walletContext.refreshBalance()
         }
     }
 
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
 
-        self.walletScreenUpdatesDisposable?.dispose()
-        self.walletScreenUpdatesDisposable = nil
+        self.balanceRefreshDisposable?.dispose()
+        self.balanceRefreshDisposable = nil
     }
 
     override public func viewDidAppear(_ animated: Bool) {
@@ -2127,7 +2136,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     }
 
     deinit {
-        self.walletScreenUpdatesDisposable?.dispose()
+        self.balanceRefreshDisposable?.dispose()
     }
 
     required public init(coder aDecoder: NSCoder) {

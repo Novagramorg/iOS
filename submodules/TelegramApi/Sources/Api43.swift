@@ -14941,6 +14941,25 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
+    static func getTransactionsByMsgHash(msgHash: [String]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.Transactions>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1497663139)
+        buffer.appendInt32(481674261)
+        buffer.appendInt32(Int32(msgHash.count))
+        for item in msgHash {
+            serializeString(item, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.getTransactionsByMsgHash", parameters: [("msgHash", ConstructorParameterDescription(msgHash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.Transactions? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.Transactions?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.Transactions
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
     static func getUserAddresses(flags: Int32, id: [Api.InputUser]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
         let buffer = Buffer()
         buffer.appendInt32(501050385)

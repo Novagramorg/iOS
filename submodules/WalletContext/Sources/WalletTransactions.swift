@@ -343,3 +343,185 @@ private func normalizedUnsignedDecimal(_ value: String) -> String? {
     let trimmed = value.drop(while: { $0 == "0" })
     return trimmed.isEmpty ? "0" : String(trimmed)
 }
+
+struct WalletTransactionHistory {
+    struct Page {
+        let items: [WalletContext.Transaction]
+        let nextOffset: String?
+    }
+
+    struct PageRequest: Hashable {
+        let offset: String
+        fileprivate let generation: UInt64
+        fileprivate let routeRevision: UInt64
+    }
+
+    private var hasLoadedFirstPage = false
+    private var nextOffset: String?
+    private var generation: UInt64 = 0
+    private var routeRevision: UInt64 = 0
+
+    var nextPageRequest: PageRequest? {
+        self.nextOffset.map {
+            PageRequest(offset: $0, generation: self.generation, routeRevision: self.routeRevision)
+        }
+    }
+
+    mutating func reset() {
+        self.hasLoadedFirstPage = false
+        self.nextOffset = nil
+        self.generation &+= 1
+    }
+
+    mutating func applyRefresh(
+        _ page: Page,
+        previous: WalletContext.TransactionsState
+    ) -> WalletContext.TransactionsState {
+        let existingIds = Set(previous.items.map(\.id))
+        let hasGap = !page.items.isEmpty && !page.items.contains { existingIds.contains($0.id) }
+        if !self.hasLoadedFirstPage || hasGap {
+            self.nextOffset = page.nextOffset
+            self.routeRevision &+= 1
+        }
+        self.hasLoadedFirstPage = true
+        let items = mergeTransactions(existing: previous.items, new: page.items)
+        return WalletContext.TransactionsState(
+            items: items,
+            offset: items.count,
+            canLoadMore: self.nextOffset != nil,
+            isLoadingMore: previous.isLoadingMore,
+            error: nil
+        )
+    }
+
+    mutating func applyPage(
+        _ page: Page,
+        request: PageRequest,
+        previous: WalletContext.TransactionsState
+    ) -> (state: WalletContext.TransactionsState, shouldContinue: Bool) {
+        guard request.generation == self.generation else { return (previous, false) }
+        let items = mergeTransactions(existing: previous.items, new: page.items)
+        if request.routeRevision == self.routeRevision && request.offset == self.nextOffset {
+            self.nextOffset = page.nextOffset
+        }
+        let shouldContinue = items.count == previous.items.count && self.nextOffset != nil
+        return (
+            WalletContext.TransactionsState(
+                items: items,
+                offset: items.count,
+                canLoadMore: self.nextOffset != nil,
+                isLoadingMore: shouldContinue,
+                error: nil
+            ),
+            shouldContinue
+        )
+    }
+
+    func failed(
+        _ error: Error,
+        previous: WalletContext.TransactionsState,
+        pagination: Bool
+    ) -> WalletContext.TransactionsState {
+        WalletContext.TransactionsState(
+            items: previous.items,
+            offset: previous.offset,
+            canLoadMore: previous.canLoadMore,
+            isLoadingMore: pagination ? false : previous.isLoadingMore,
+            error: error is CancellationError ? previous.error : synchronizationError(error)
+        )
+    }
+}
+
+func loadWalletTransactionHistoryPages(
+    isolation: isolated (any Actor)? = #isolation,
+    nextRequest: () throws -> WalletTransactionHistory.PageRequest?,
+    fetch: (String) async throws -> WalletTransactionHistory.Page,
+    apply: (WalletTransactionHistory.PageRequest, WalletTransactionHistory.Page) throws -> Bool
+) async throws {
+    var requestedPages = Set<WalletTransactionHistory.PageRequest>()
+    while true {
+        try Task.checkCancellation()
+        guard let request = try nextRequest() else { return }
+        guard requestedPages.insert(request).inserted else {
+            throw WalletContext.SynchronizationError.invalidData
+        }
+        let page = try await fetch(request.offset)
+        try Task.checkCancellation()
+        if try !apply(request, page) { return }
+    }
+}
+
+struct WalletEngineTransferSubmission: Sendable {
+    let recordId: String
+    let walletAddress: String
+    let pendingTransfer: WalletContext.PendingTransfer
+}
+
+struct WalletEngineTransferReceipt: Codable, Equatable, Sendable {
+    let recordId: String
+    let walletAddress: String
+    let pendingTransfer: WalletContext.PendingTransfer
+    let receivedAt: Int32
+    let transfer: WalletSentTransfer
+}
+
+func walletTransferSubmissionData(_ request: HttpRequest) throws -> Data? {
+    guard request.method == .post,
+          let url = URLComponents(string: request.url),
+          url.path == "/api/v2/jsonRPC",
+          let object = try? JSONSerialization.jsonObject(with: request.body),
+          let body = object as? [String: Any],
+          body["method"] as? String == "sendBoc" else {
+        return nil
+    }
+    guard let params = body["params"] as? [String: Any],
+          let encoded = params["boc"] as? String,
+          encoded.utf8.count <= ((16 * 1024 + 2) / 3) * 4,
+          let data = Data(base64Encoded: encoded),
+          !data.isEmpty, data.count <= 16 * 1024 else {
+        throw WalletSendTransferError.invalidData
+    }
+    return data
+}
+
+func walletTransferSubmissionRejection(_ error: WalletSendTransferError) -> Data? {
+    let description: String
+    switch error {
+    case .invalidData:
+        description = "WALLET_TRANSFER_DATA_INVALID"
+    case .sendFailed:
+        description = "WALLET_TRANSFER_SEND_FAILED"
+    case .network, .generic:
+        return nil
+    }
+    return Data("{\"ok\":false,\"code\":400,\"error\":\"\(description)\"}".utf8)
+}
+
+let walletTransferSubmissionAccepted = Data("{\"result\":{\"@type\":\"ok\"}}".utf8)
+
+func walletPerformTransferSubmission(
+    _ request: HttpRequest,
+    submission: WalletEngineTransferSubmission?,
+    send: (Data) async throws -> WalletSentTransfer,
+    persist: (WalletEngineTransferReceipt) async throws -> Void,
+    now: () -> Int32
+) async throws -> Data? {
+    guard let submission else { return nil }
+    do {
+        guard let data = try walletTransferSubmissionData(request) else { return nil }
+        let transfer = try await send(data)
+        try await persist(WalletEngineTransferReceipt(
+            recordId: submission.recordId,
+            walletAddress: submission.walletAddress,
+            pendingTransfer: submission.pendingTransfer,
+            receivedAt: now(),
+            transfer: transfer
+        ))
+        return walletTransferSubmissionAccepted
+    } catch let error as WalletSendTransferError {
+        if let rejection = walletTransferSubmissionRejection(error) {
+            return rejection
+        }
+        throw error
+    }
+}

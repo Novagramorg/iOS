@@ -143,14 +143,12 @@ public struct WalletGaslessInfo: Codable, Equatable, Sendable {
 
 public struct WalletSentTransfer: Codable, Equatable, Sendable {
     public let gasless: Bool
-    public let transactionId: String
-    public let msgHash: Data
+    public let msgHash: String
     public let gaslessLeft: Int32
     public let gaslessResetAt: Int32
 
-    public init(gasless: Bool, transactionId: String, msgHash: Data, gaslessLeft: Int32, gaslessResetAt: Int32) {
+    public init(gasless: Bool, msgHash: String, gaslessLeft: Int32, gaslessResetAt: Int32) {
         self.gasless = gasless
-        self.transactionId = transactionId
         self.msgHash = msgHash
         self.gaslessLeft = gaslessLeft
         self.gaslessResetAt = gaslessResetAt
@@ -407,15 +405,9 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
     |> mapToSignal { result -> Signal<WalletSentTransfer, WalletSendTransferError> in
         switch result {
         case let .sentTransfer(transfer):
-            let hash = transfer.msgHash.makeData()
-            // A malformed acknowledgement is ambiguous: the message may already be submitted.
-            guard !transfer.transactionId.isEmpty, hash.count == 32 else {
-                return .fail(.generic)
-            }
             return .single(WalletSentTransfer(
                 gasless: (transfer.flags & (1 << 0)) != 0,
-                transactionId: transfer.transactionId,
-                msgHash: hash,
+                msgHash: transfer.msgHash,
                 gaslessLeft: transfer.gaslessLeft,
                 gaslessResetAt: transfer.gaslessResetAt
             ))
@@ -425,6 +417,14 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
 
 func _internal_getWalletTransactionsByIDs(account: Account, ids: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
     return account.network.request(Api.functions.wallet.getTransactionsByIDs(id: ids), automaticFloodWait: false)
+    |> mapError { _ -> WalletGetTransactionsError in .generic }
+    |> mapToSignal { result in
+        return _internal_walletTransactionsResult(account: account, result: result)
+    }
+}
+
+func _internal_getWalletTransactionsByMsgHash(account: Account, msgHash: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
+    return account.network.request(Api.functions.wallet.getTransactionsByMsgHash(msgHash: msgHash), automaticFloodWait: false)
     |> mapError { _ -> WalletGetTransactionsError in .generic }
     |> mapToSignal { result in
         return _internal_walletTransactionsResult(account: account, result: result)

@@ -29,6 +29,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Gifts/TableComponent",
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/Wallet/WalletCollectibleHeaderComponent",
+        "//submodules/TelegramUI/Components/Wallet/WalletPagerComponent",
         "//submodules/TelegramUI/Components/Wallet/WalletPeerSelectionScreen",
         "//submodules/WalletContext",
         "//submodules/TooltipUI",

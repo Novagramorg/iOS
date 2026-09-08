@@ -5,11 +5,12 @@ import WalletEngineFFI
 
 private let walletOwnershipProofDomain = "telegram.org"
 
-private func acceptedWalletEngineSubmission(
+func acceptedWalletEngineSubmission(
     pending: WalletContext.PendingTransfer,
     messageHash: String?,
     phase: SendPhase,
-    acceptedAt: Int32
+    acceptedAt: Int32,
+    sentTransfer: WalletSentTransfer? = nil
 ) -> WalletContext.PendingTransfer? {
     let status: WalletContext.PendingTransfer.Status
     switch phase {
@@ -32,6 +33,7 @@ private func acceptedWalletEngineSubmission(
         commentEncrypted: pending.commentEncrypted,
         collectibleAddress: pending.collectibleAddress,
         normalizedHash: messageHash ?? pending.normalizedHash,
+        sentTransfer: sentTransfer ?? pending.sentTransfer,
         fee: pending.fee,
         transactionHash: pending.transactionHash,
         transactionLt: pending.transactionLt,
@@ -114,6 +116,18 @@ public extension WalletContext {
         normalizedMainnetAddress(value)
     }
 
+    static func transferRecipient(from value: String) -> ResolvedTransferRecipient? {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let address = normalizedMainnetAddress(value) else {
+            return nil
+        }
+        return ResolvedTransferRecipient(
+            address: address,
+            displayName: nil,
+            transferLink: value.lowercased().hasPrefix("ton://") ? value : nil
+        )
+    }
+
     func rememberWalletPeer(_ peer: EnginePeer, address: String) {
         let mapping = WalletPeerAddressMapping(peer: peer, address: address)
         Task { [impl = self.impl, mapping] in
@@ -124,8 +138,8 @@ public extension WalletContext {
     func resolveTransferRecipient(_ value: String) -> Signal<ResolvedTransferRecipient?, WalletError> {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return .single(nil) }
-        if let address = normalizedMainnetAddress(value) {
-            return .single(ResolvedTransferRecipient(address: address, displayName: nil))
+        if let recipient = Self.transferRecipient(from: value) {
+            return .single(recipient)
         }
         let lowercaseValue = value.lowercased()
         guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".t.me")),
@@ -184,7 +198,7 @@ public extension WalletContext {
         detectMnemonicSchemes(words: normalizedEngineMnemonic(words)).contains(.rotation)
     }
 
-    func createWallet(password: String? = nil) -> Signal<CreatedWallet, WalletError> {
+    func createWallet(password: String? = nil) -> Signal<WalletInfo, WalletError> {
         self.signal(name: "creating", cancelOnDispose: false) { impl, operationId in
             try await impl.createWallet(password: password, operationId: operationId)
         }
@@ -275,7 +289,7 @@ public extension WalletContext {
         }
     }
 
-    func submitTransfer(_ prepared: PreparedTransfer) -> Signal<SubmittedTransfer, WalletError> {
+    func submitTransfer(_ prepared: PreparedTransfer) -> Signal<PendingTransfer, WalletError> {
         self.signal(name: "submitting_transfer", cancelOnDispose: false) { impl, operationId in
             try await impl.submitTransfer(prepared, operationId: operationId)
         }
@@ -361,7 +375,7 @@ extension WalletContextImpl {
         do {
             try await coordinator.start(link: value)
         } catch {
-            self.errorLogger.error("wallet_ton_connect_start_failed", error)
+            self.logger.error("wallet_ton_connect_start_failed", error)
             self.output.publish(presentation: .error(
                 sanitizedWalletEngineDiagnostic(String(describing: error))
             ))
@@ -385,8 +399,10 @@ extension WalletContextImpl {
               let coordinator = self.tonConnectCoordinator else {
             throw WalletError.unavailable
         }
-        try await coordinator.approveOperation(id: id)
-        self.requestSynchronization(force: true)
+        let method = try await coordinator.approveOperation(id: id)
+        if method == .sendTransaction {
+            self.requestSynchronization(scope: .all, force: true)
+        }
     }
 
     func rejectTonConnectRequest(id: String) async {
@@ -409,7 +425,7 @@ extension WalletContextImpl {
         )
     }
 
-    func createWallet(password: String?, operationId: UUID) async throws -> CreatedWallet {
+    func createWallet(password: String?, operationId: UUID) async throws -> WalletInfo {
         return try await self.performOperation(.creating, operationId: operationId) {
             let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
                 self.engine.wallet.replaceWallet(replacement: .new, password: password)
@@ -428,8 +444,7 @@ extension WalletContextImpl {
                 // identity usable as read-only and let recovery retry later.
                 let activation = try await self.runtime.activate(
                     serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey,
-                    exportedWords: nil
+                    serverPublicKey: identity.publicKey
                 )
                 _ = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
                 throw error
@@ -440,8 +455,7 @@ extension WalletContextImpl {
                 await self.discardReplacementForCleanup(recordId: staged.recordId)
                 let activation = try await self.runtime.activate(
                     serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey,
-                    exportedWords: nil
+                    serverPublicKey: identity.publicKey
                 )
                 _ = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
                 throw WalletError.storage(.identityMismatch)
@@ -451,8 +465,7 @@ extension WalletContextImpl {
                 serverAddress: identity.address,
                 serverPublicKey: identity.publicKey
             )
-            let info = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
-            return CreatedWallet(info: info)
+            return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
         }
     }
 
@@ -755,7 +768,7 @@ extension WalletContextImpl {
                         do {
                             _ = try await self.runtime.resolveKeyRotation()
                         } catch {
-                            self.errorLogger.error("wallet_key_rotation_resolution_failed", error)
+                            self.logger.error("wallet_key_rotation_resolution_failed", error)
                         }
                     }
                     if let current = try await self.runtime.keyRotationRecord() {
@@ -792,7 +805,7 @@ extension WalletContextImpl {
                   prepared.newPublicKey.count == 32,
                   prepared.validUntil == UInt64(expiresAt),
                   !prepared.signedBoc.isEmpty else {
-                throw WalletError.sdk("Wallet engine returned invalid key-rotation material")
+                throw WalletError.engine("Wallet engine returned invalid key-rotation material")
             }
             let id = UUID().uuidString.lowercased()
             let preview = try await self.runtime.previewKeyRotation(
@@ -860,7 +873,7 @@ extension WalletContextImpl {
                     do {
                         currentRotation = try await self.runtime.keyRotationRecord()
                     } catch {
-                        self.errorLogger.error("wallet_key_rotation_recovery_read_failed", error)
+                        self.logger.error("wallet_key_rotation_recovery_read_failed", error)
                         currentRotation = nil
                     }
                     if currentRotation == nil {
@@ -954,6 +967,7 @@ extension WalletContextImpl {
                 throw WalletError.unavailable
             }
             let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
+            self.requestGaslessInfo()
             let activationGeneration = self.activationGeneration
             let encryptComment = commentEncrypted && resolved.comment != nil
             let body: SendMessageBody
@@ -966,7 +980,7 @@ extension WalletContextImpl {
                     boc = try await self.runtime.createEncryptedComment(recipient: resolved.address, comment: comment)
                 } catch {
                     try Task.checkCancellation()
-                    self.errorLogger.error("wallet_comment_encryption_failed", error)
+                    self.logger.error("wallet_comment_encryption_failed", error)
                     if let error = error as? WalletClientError, case .EncryptedCommentUnavailable = error {
                         throw WalletError.commentEncryptionRecipientUnavailable
                     }
@@ -1066,7 +1080,7 @@ extension WalletContextImpl {
                 comment = try await self.runtime.decryptComment(sender: sender, body: body)
             } catch {
                 try Task.checkCancellation()
-                self.errorLogger.error("wallet_comment_decryption_failed", error)
+                self.logger.error("wallet_comment_decryption_failed", error)
                 throw WalletError.commentDecryptionFailed
             }
             try Task.checkCancellation()
@@ -1126,7 +1140,7 @@ extension WalletContextImpl {
     func submitTransfer(
         _ prepared: PreparedTransfer,
         operationId: UUID
-    ) async throws -> SubmittedTransfer {
+    ) async throws -> PendingTransfer {
         return try await self.performOperation(.submittingTransfer, operationId: operationId) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign,
@@ -1170,21 +1184,29 @@ extension WalletContextImpl {
                 pendingTransfers: values,
                 activeOperation: self.currentState.activeOperation
             )
+            let useWalletTransferApi = WalletContext.useWalletTransferApi
             let clientRevisionBeforeSend = await self.runtime.currentClientRevision()
             let activationGenerationBeforeSend = self.activationGeneration
 
-            let applyAcceptedSubmission: (SendPhase, String?) -> SubmittedTransfer? = { phase, messageHash in
-                guard let accepted = acceptedWalletEngineSubmission(
+            let applyAcceptedSubmission: (SendPhase, String?, WalletEngineTransferReceipt?) -> PendingTransfer? = { phase, messageHash, receipt in
+                guard self.activationGeneration == activationGenerationBeforeSend,
+                      case let .wallet(currentInfo) = self.currentState.phase,
+                      walletEngineAddressesEqual(currentInfo.address, record.walletAddress),
+                      let accepted = acceptedWalletEngineSubmission(
                     pending: pending,
                     messageHash: messageHash,
                     phase: phase,
-                    acceptedAt: currentWalletTimestamp()
+                    acceptedAt: receipt?.receivedAt ?? currentWalletTimestamp(),
+                    sentTransfer: receipt?.transfer
                 ) else {
                     return nil
                 }
                 var updated = self.currentState.pendingTransfers.filter { $0.id != accepted.id }
                 updated.append(accepted)
                 self.preparedTransfers[prepared.id] = nil
+                if let receipt {
+                    self.applyGaslessQuota(receipt.transfer, receivedAt: receipt.receivedAt)
+                }
                 self.replaceState(
                     phase: self.currentState.phase,
                     balance: self.currentState.balance,
@@ -1192,15 +1214,15 @@ extension WalletContextImpl {
                     pendingTransfers: updated,
                     activeOperation: self.currentState.activeOperation
                 )
-                self.requestSynchronization(force: true)
-                return SubmittedTransfer(pendingTransfer: accepted)
+                self.requestSynchronization(scope: accepted.collectibleAddress == nil ? [.account, .transactions] : .all, force: true)
+                return accepted
             }
 
             do {
                 let execution: WalletEngineSendExecution
                 switch record.request {
                 case let .send(intent):
-                    execution = try await self.runtime.send(operationId: prepared.id, intent: intent)
+                    execution = try await self.runtime.send(pendingTransfer: pending, intent: intent, useWalletTransferApi: useWalletTransferApi)
                 case let .nft(intent):
                     execution = try await self.runtime.sendNft(operationId: prepared.id, intent: intent)
                 }
@@ -1212,25 +1234,26 @@ extension WalletContextImpl {
                     )
                 }
                 let result = execution.result
-                guard let submitted = applyAcceptedSubmission(result.phase, result.messageHash) else {
+                guard let submitted = applyAcceptedSubmission(result.phase, result.messageHash, execution.receipt) else {
                     if walletEngineSendPhaseIsTerminal(result.phase) {
                         self.preparedTransfers[prepared.id] = nil
                         throw WalletError.preparedTransferNotFound
                     }
-                    throw WalletError.sdk("wallet-engine send ended in \(result.phase)")
+                    throw WalletError.engine("wallet-engine send ended in \(result.phase)")
                 }
                 return submitted
             } catch {
-                self.errorLogger.error("wallet_send_failed", error)
+                self.logger.error("wallet_send_failed", error)
                 var preparedTransferWasInvalidated = false
                 let snapshot: WalletSnapshot?
                 do {
                     snapshot = try await self.runtime.snapshot()
                 } catch {
-                    self.errorLogger.error("wallet_send_recovery_snapshot_failed", error)
+                    self.logger.error("wallet_send_recovery_snapshot_failed", error)
                     snapshot = nil
                 }
                 if let snapshot {
+                    let receipt = await self.runtime.transferReceipt(operationId: pending.id)
                     await self.rebindRuntimeObservationAfterClientRecreation(
                         previousClientRevision: clientRevisionBeforeSend,
                         activationGeneration: activationGenerationBeforeSend,
@@ -1238,7 +1261,7 @@ extension WalletContextImpl {
                         snapshot: snapshot
                     )
                     if snapshot.send.operationId == pending.id,
-                       let submitted = applyAcceptedSubmission(snapshot.send.phase, nil) {
+                       let submitted = applyAcceptedSubmission(snapshot.send.phase, nil, receipt) {
                         return submitted
                     }
                     if snapshot.send.operationId == pending.id,
@@ -1292,66 +1315,80 @@ extension WalletContextImpl {
             }
             self.beginObserving(snapshot: snapshot, generation: activationGeneration)
         } catch {
-            self.errorLogger.error("wallet_engine_client_rebind_failed", error)
+            self.logger.error("wallet_engine_client_rebind_failed", error)
         }
     }
 
     func loadMoreTransactions(operationId: UUID) async throws {
         try await self.performOperation(.loadingMoreTransactions, operationId: operationId) {
             guard self.currentState.transactions.canLoadMore,
-                  let offset = self.serverTransactionsNextOffset else { return Void() }
+                  self.transactionHistory.nextPageRequest != nil else { return Void() }
+            let generation = self.activationGeneration
             let streamingOverlayWatermark = self.streamingPresentationOverlay.revision
             self.updateTransactionsPagination(isLoadingMore: true, error: nil)
             do {
-                let response = try await WalletSignalRequestContext<TelegramCore.WalletTransactions>().run(
-                    self.engine.wallet.getTransactions(
-                        inbound: true,
-                        outbound: true,
-                        offset: offset,
-                        limit: Int32(walletTransactionFetchLimit)
+                try await loadWalletTransactionHistoryPages(nextRequest: {
+                    try self.checkPaginationOperation(operationId, generation: generation)
+                    return self.transactionHistory.nextPageRequest
+                }, fetch: { offset in
+                    let response = try await WalletSignalRequestContext<TelegramCore.WalletTransactions>().run(
+                        self.engine.wallet.getTransactions(
+                            inbound: true,
+                            outbound: true,
+                            offset: offset,
+                            limit: Int32(walletTransactionFetchLimit)
+                        )
                     )
-                )
-                let items = mergeTransactions(
-                    existing: self.currentState.transactions.items,
-                    new: walletTransactions(from: response.items)
-                )
-                let historyReconciliation = self.pendingTransfers(
-                    self.currentState.pendingTransfers,
-                    reconcilingWith: items
-                )
-                let removedStreamingTraceCount = self.streamingPresentationOverlay.clearTransactions(
-                    through: streamingOverlayWatermark,
-                    presentIn: items,
-                    resolvedTraceIds: historyReconciliation.resolvedStreamingTraceIds
-                )
-                let streamingOverlayChanged = removedStreamingTraceCount != 0
-                self.logPendingTransferHistoryReconciliation(
-                    historyReconciliation,
-                    removedStreamingTraceCount: removedStreamingTraceCount
-                )
-                self.serverTransactionsNextOffset = response.nextOffset
-                let previousState = self.currentState
+                    return WalletTransactionHistory.Page(
+                        items: walletTransactions(from: response.items),
+                        nextOffset: response.nextOffset
+                    )
+                }, apply: { request, page in
+                    try self.checkPaginationOperation(operationId, generation: generation)
+                    let result = self.transactionHistory.applyPage(page, request: request, previous: self.currentState.transactions)
+                    let historyReconciliation = self.pendingTransfers(
+                        self.currentState.pendingTransfers,
+                        reconcilingWith: result.state.items
+                    )
+                    let removedStreamingTraceCount = self.streamingPresentationOverlay.clearTransactions(
+                        through: streamingOverlayWatermark,
+                        presentIn: result.state.items,
+                        resolvedTraceIds: historyReconciliation.resolvedStreamingTraceIds
+                    )
+                    self.logPendingTransferHistoryReconciliation(
+                        historyReconciliation,
+                        removedStreamingTraceCount: removedStreamingTraceCount
+                    )
+                    let previousState = self.currentState
+                    self.replaceState(
+                        phase: self.currentState.phase,
+                        balance: self.currentState.balance,
+                        transactions: result.state,
+                        pendingTransfers: historyReconciliation.pendingTransfers,
+                        activeOperation: self.currentState.activeOperation
+                    )
+                    if removedStreamingTraceCount != 0 && self.currentState == previousState {
+                        self.publishPresentationState()
+                    }
+                    return result.shouldContinue
+                })
+            } catch {
+                guard self.isCurrentPaginationOperation(operationId, generation: generation) else {
+                    throw CancellationError()
+                }
+                let isCancelled = Task.isCancelled || error is CancellationError
                 self.replaceState(
                     phase: self.currentState.phase,
                     balance: self.currentState.balance,
-                    transactions: TransactionsState(
-                        items: items,
-                        offset: items.count,
-                        canLoadMore: response.nextOffset != nil,
-                        isLoadingMore: false,
-                        error: nil
+                    transactions: self.transactionHistory.failed(
+                        isCancelled ? CancellationError() : error,
+                        previous: self.currentState.transactions,
+                        pagination: true
                     ),
-                    pendingTransfers: historyReconciliation.pendingTransfers,
+                    pendingTransfers: self.currentState.pendingTransfers,
                     activeOperation: self.currentState.activeOperation
                 )
-                if streamingOverlayChanged && self.currentState == previousState {
-                    self.publishPresentationState()
-                }
-            } catch let error as CancellationError {
-                self.updateTransactionsPagination(isLoadingMore: false, error: nil)
-                throw error
-            } catch {
-                self.updateTransactionsPagination(isLoadingMore: false, error: synchronizationError(error))
+                if isCancelled { throw CancellationError() }
                 throw error
             }
         }
@@ -1360,32 +1397,60 @@ extension WalletContextImpl {
     func loadMoreCollectibles(operationId: UUID) async throws {
         try await self.performOperation(.loadingMoreCollectibles, operationId: operationId) {
             guard self.currentState.collectibles.canLoadMore else { return Void() }
+            let generation = self.activationGeneration
+            let observationId = self.runtimeObservationId
+            let previousRevision = self.collectiblesRevision.latest
+            var resultRevision: UInt64?
             self.updateCollectiblesPagination(isLoadingMore: true, error: nil)
             do {
                 let update = try await self.runtime.loadMoreNfts()
-                let items = await walletCollectibles(
-                    from: update.snapshot.nfts.items,
-                    errorLogger: self.errorLogger
-                )
+                resultRevision = update.snapshot.revision
+                try self.checkPaginationOperation(operationId, generation: generation)
+                let items = try await walletEngineCollectibles(update, pagination: true) { items in
+                    try await walletCollectibles(from: items, logger: self.logger)
+                }
+                try self.checkPaginationOperation(operationId, generation: generation)
+                guard self.runtimeObservationId == observationId else { throw CancellationError() }
+                guard items == nil || self.collectiblesRevision.accept(update.snapshot.revision) else {
+                    self.updateCollectiblesPagination(isLoadingMore: false, error: self.currentState.collectibles.error)
+                    return
+                }
                 self.replaceState(
                     phase: self.currentState.phase,
                     balance: self.currentState.balance,
                     transactions: self.currentState.transactions,
-                    collectibles: CollectiblesState(
+                    collectibles: walletEngineCollectiblesState(
+                        previous: self.currentState.collectibles,
                         items: items,
-                        offset: items.count,
-                        canLoadMore: update.snapshot.nfts.hasMore,
-                        isLoadingMore: false,
-                        error: nil
+                        hasMore: update.snapshot.nfts.hasMore
                     ),
-                    pendingTransfers: self.reconcilePendingTransfers(update.snapshot.send),
+                    pendingTransfers: self.currentState.pendingTransfers,
                     activeOperation: self.currentState.activeOperation
                 )
-            } catch let error as CancellationError {
-                self.updateCollectiblesPagination(isLoadingMore: false, error: nil)
-                throw error
             } catch {
-                self.updateCollectiblesPagination(isLoadingMore: false, error: synchronizationError(error))
+                guard self.isCurrentPaginationOperation(operationId, generation: generation),
+                      self.runtimeObservationId == observationId else {
+                    throw CancellationError()
+                }
+                let isCancelled = Task.isCancelled || error is CancellationError
+                let canApply = resultRevision.map { self.collectiblesRevision.isCurrent($0) }
+                    ?? (self.collectiblesRevision.latest == previousRevision)
+                if !canApply {
+                    self.updateCollectiblesPagination(isLoadingMore: false, error: self.currentState.collectibles.error)
+                    throw error
+                }
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: self.currentState.transactions,
+                    collectibles: walletEngineCollectiblesState(
+                        previous: self.currentState.collectibles,
+                        failure: isCancelled ? CancellationError() : error
+                    ),
+                    pendingTransfers: self.currentState.pendingTransfers,
+                    activeOperation: self.currentState.activeOperation
+                )
+                if isCancelled { throw CancellationError() }
                 throw error
             }
         }
@@ -1393,6 +1458,19 @@ extension WalletContextImpl {
 }
 
 extension WalletContextImpl {
+    private func isCurrentPaginationOperation(_ operationId: UUID, generation: UInt64) -> Bool {
+        !self.isShutdown
+            && self.activationGeneration == generation
+            && self.activeOperationId == operationId
+    }
+
+    private func checkPaginationOperation(_ operationId: UUID, generation: UInt64) throws {
+        try Task.checkCancellation()
+        guard self.isCurrentPaginationOperation(operationId, generation: generation) else {
+            throw CancellationError()
+        }
+    }
+
     private func updateTransactionsPagination(isLoadingMore: Bool, error: SynchronizationError?) {
         let transactions = self.currentState.transactions
         self.replaceState(
@@ -1432,7 +1510,7 @@ extension WalletContextImpl {
         do {
             try await self.runtime.discardReplacement(recordId: recordId)
         } catch {
-            self.errorLogger.error("wallet_replacement_cleanup_failed", error)
+            self.logger.error("wallet_replacement_cleanup_failed", error)
         }
     }
 
@@ -1444,6 +1522,7 @@ extension WalletContextImpl {
             self.outgoingTransactionPresentationIdentities.removeAll()
         }
         self.clearStreamingPresentationOverlay()
+        self.streamingRefreshTracker = WalletStreamingRefreshTracker()
         self.activationGeneration &+= 1
         let generation = self.activationGeneration
         self.activationTask?.cancel()
@@ -1485,7 +1564,7 @@ extension WalletContextImpl {
             canSign: activation.canSign
         )
         if !preserveCurrentWalletState {
-            self.serverTransactionsNextOffset = nil
+            self.transactionHistory.reset()
         }
         self.replaceState(
             phase: .wallet(info),
@@ -1502,7 +1581,7 @@ extension WalletContextImpl {
             let coordinator = WalletTonConnectCoordinator(
                 runtime: self.runtime,
                 storage: self.storage,
-                errorLogger: self.errorLogger,
+                logger: self.logger,
                 recordId: activation.snapshot.recordId,
                 event: { [weak self] event in
                     await self?.handleTonConnectEvent(event)
@@ -1511,7 +1590,13 @@ extension WalletContextImpl {
             self.tonConnectCoordinator = coordinator
             Task { await coordinator.restore() }
         }
-        self.requestSynchronization(force: true)
+        if !preserveCurrentWalletState {
+            self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)
+        }
+        if self.hasActiveWalletRefreshDemand {
+            self.deferredSynchronizationScope.formUnion([.account, .transactions])
+        }
+        self.resumeDeferredSynchronizationIfNeeded()
         return info
     }
 
@@ -1525,7 +1610,7 @@ extension WalletContextImpl {
             throw WalletError.unavailable
         }
         guard self.currentState.activeOperation == nil else {
-            self.errorLogger.error(
+            self.logger.error(
                 "wallet_operation_rejected",
                 WalletError.operationInProgress,
                 context: "operation=\(activeOperation)"
@@ -1534,8 +1619,8 @@ extension WalletContextImpl {
         }
         switch activeOperation {
         case .preparingTransfer, .submittingTransfer, .decryptingComment:
-            if self.synchronizationGate.isRunning || self.synchronizationGate.hasQueuedRequest {
-                self.deferredSynchronizationScope.formUnion(.all)
+            if !self.activeSynchronizationScope.isEmpty {
+                self.deferredSynchronizationScope.formUnion(self.activeSynchronizationScope.subtracting(self.pendingScreenSynchronizationScope))
                 self.cancelSynchronization()
             }
         case .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
@@ -1592,61 +1677,10 @@ extension WalletContextImpl {
     }
 
     func resumeDeferredSynchronizationIfNeeded() {
-        guard !self.deferredSynchronizationScope.isEmpty,
-              !self.isTransferFlowBlockingSynchronization else {
-            return
-        }
-        self.requestSynchronization(scope: self.deferredSynchronizationScope, force: true)
-    }
-
-    func requestFiatRates() {
-        guard self.canUseNetworkRuntime, self.stateSubscriberCount > 0 else { return }
-        self.fiatRefreshTask?.cancel()
-        self.fiatRatesDisposable.set((combineLatest(
-            self.engine.payments.currencyRates(),
-            self.engine.data.get(TelegramEngine.EngineData.Item.Configuration.App())
-        )
-        |> take(1)).start(next: { [weak self] currencyRates, configuration in
-            guard let currencyRates,
-                  let tonUsd = configuration.data?["ton_usd_rate"] as? Double,
-                  tonUsd.isFinite,
-                  tonUsd > 0 else { return }
-            var byCode: [String: Double] = [:]
-            for value in currencyRates where value.rate.isFinite && value.rate > 0 {
-                byCode[value.currency] = value.rate
-            }
-            var rates: [FiatCurrency: FiatRate] = [:]
-            for currency in FiatCurrency.allCases {
-                guard let perUsd = byCode[currency.code] else { continue }
-                rates[currency] = FiatRate(unitsPerUsd: perUsd, unitsPerGram: perUsd * tonUsd)
-            }
-            Task {
-                await self?.applyFiatRates(rates)
-            }
-        }))
-    }
-
-    private func applyFiatRates(_ rates: [FiatCurrency: FiatRate]) {
-        guard !self.isShutdown else { return }
-        let timestamp = currentWalletTimestamp()
-        self.fiatLastSuccessfulAt = timestamp
-        self.replaceState(
-            phase: self.currentState.phase,
-            balance: self.currentState.balance,
-            transactions: self.currentState.transactions,
-            pendingTransfers: self.currentState.pendingTransfers,
-            activeOperation: self.currentState.activeOperation,
-            fiat: FiatState(selectedCurrency: self.currentState.fiat.selectedCurrency, rates: .value(rates, updatedAt: timestamp))
-        )
-        self.fiatRefreshTask = Task { [weak self] in
-            await self?.performFiatRefreshDelay()
-        }
-    }
-
-    private func performFiatRefreshDelay() async {
-        try? await Task.sleep(nanoseconds: UInt64(walletFiatRatesRefreshInterval * 1_000_000_000))
-        guard !Task.isCancelled else { return }
-        self.requestFiatRates()
+        let scope = self.deferredSynchronizationScope.union(self.pendingScreenSynchronizationScope)
+            .subtracting(self.activeSynchronizationScope)
+        guard !scope.isEmpty, !self.isTransferFlowBlockingSynchronization else { return }
+        self.requestSynchronization(scope: scope)
     }
 }
 
@@ -1707,4 +1741,69 @@ private func encryptedCommentBoc(_ comment: String) -> String? {
     boc.append(0)
     boc.append(cells)
     return boc.base64EncodedString()
+}
+
+final class WalletOperationTaskRegistry {
+    private let lock = NSLock()
+    private var operations: [UUID: WalletOperationCancellation] = [:]
+    private var isShutdown = false
+
+    func register(id: UUID, cancellation: WalletOperationCancellation) {
+        self.lock.lock()
+        if self.isShutdown {
+            self.lock.unlock()
+            cancellation.cancel()
+        } else {
+            self.operations[id] = cancellation
+            self.lock.unlock()
+        }
+    }
+
+    func remove(id: UUID) {
+        self.lock.lock()
+        self.operations[id] = nil
+        self.lock.unlock()
+    }
+
+    func cancel(id: UUID) {
+        self.lock.lock()
+        let cancellation = self.operations.removeValue(forKey: id)
+        self.lock.unlock()
+        cancellation?.cancel()
+    }
+
+    func shutdown() {
+        self.lock.lock()
+        self.isShutdown = true
+        let operations = Array(self.operations.values)
+        self.operations.removeAll()
+        self.lock.unlock()
+        for operation in operations {
+            operation.cancel()
+        }
+    }
+}
+
+final class WalletOperationCancellation {
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var cancelled = false
+    func setTask(_ value: Task<Void, Never>) {
+        self.lock.lock()
+        if self.cancelled {
+            self.lock.unlock()
+            value.cancel()
+        } else {
+            self.task = value
+            self.lock.unlock()
+        }
+    }
+    func cancel() {
+        self.lock.lock()
+        self.cancelled = true
+        let task = self.task
+        self.task = nil
+        self.lock.unlock()
+        task?.cancel()
+    }
 }
