@@ -85,7 +85,6 @@ import UIKitRuntimeUtils
 import ChatMessageTransitionNode
 import AnimatedStickerNode
 import TelegramAnimatedStickerNode
-import LottieMetal
 import AvatarNode
 import ChatMessageSuggestedPostInfoNode
 import PremiumAlertController

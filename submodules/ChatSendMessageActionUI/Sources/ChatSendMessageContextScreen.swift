@@ -15,7 +15,6 @@ import ComponentDisplayAdapters
 import WallpaperBackgroundNode
 import ReactionSelectionNode
 import EntityKeyboard
-import LottieMetal
 import TelegramAnimatedStickerNode
 import AnimatedStickerNode
 import ChatInputTextNode
@@ -1079,12 +1078,6 @@ final class ChatSendMessageContextScreenComponent: Component {
                                 #else
                                 standaloneReactionAnimation = DirectAnimatedStickerNode()
                                 effectiveScale = 1.4
-                                /*if "".isEmpty {
-                                    standaloneReactionAnimation = DirectAnimatedStickerNode()
-                                    effectiveScale = 1.4
-                                } else {
-                                    standaloneReactionAnimation = LottieMetalAnimatedStickerNode()
-                                }*/
                                 #endif
                                 
                                 standaloneReactionAnimation.isUserInteractionEnabled = false
