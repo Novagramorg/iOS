@@ -8,11 +8,10 @@ import SwiftSignalKit
 // Fenixuz Feature #47: auto-managed folders for the groups/channels the user owns or admins.
 // Enabled by "fenix_admin_folders" in the "pro_messager" UserDefaults suite.
 //
-// When enabled, up to 2 REAL Telegram folders (cloud dialog filters) are created and kept in
-// sync: 👑 Owner (groups + channels the user owns) and 🔑 Admin (where the user is admin but
-// not owner). Real folders on purpose — every standard folder surface (tabs, edit screen,
-// reorder, tags) keeps working with zero extra UI code, and the folders follow the account to
-// other devices.
+// When enabled, up to 4 REAL Telegram folders (cloud dialog filters) are created and kept in
+// sync: 👑 owner groups, 👑 owner channels, 🔑 admin groups, 🔑 admin channels. Real folders on
+// purpose — every standard folder surface (tabs, edit screen, reorder, tags) keeps working with
+// zero extra UI code, and the folders follow the account to other devices.
 //
 // Sync rules:
 //   - only membership (includePeers) and the DEFAULT title are managed. While a folder still
@@ -22,8 +21,8 @@ import SwiftSignalKit
 //   - a managed folder the user deletes by hand stays deleted (tombstone) until the toggle
 //     is turned off and on again — re-enabling is explicit consent to recreate everything
 //   - folders left over from a reinstall are adopted by title instead of duplicated
-//   - folders from the unreleased 4-per-type beta layout are migrated (removed and rebuilt
-//     as the 2-folder layout) on the first sync after update
+//   - folders from a previous layout (e.g. the 2-folder 👑 Owner / 🔑 Admin) are migrated
+//     (removed and rebuilt as the current layout) on the first sync after update
 //   - turning the toggle off deletes only the folders this feature created, on every account
 public final class FenixAdminFoldersManager {
 
@@ -34,13 +33,16 @@ public final class FenixAdminFoldersManager {
     private static let tombstoneId: Int32 = -1
 
     private enum Category: String, CaseIterable {
-        case owner
-        case admin
+        case ownerGroups
+        case ownerChannels
+        case adminGroups
+        case adminChannels
 
+        // Standard emoticons so the folder edit screen shows the proper group/channel icon.
         var emoticon: String {
             switch self {
-            case .owner: return "👑"
-            case .admin: return "🔑"
+            case .ownerGroups, .adminGroups: return "👥"
+            case .ownerChannels, .adminChannels: return "📢"
             }
         }
 
@@ -48,17 +50,29 @@ public final class FenixAdminFoldersManager {
         // emoji included — every variant below is 11 UTF-16 units or fewer.
         func title(langCode: String) -> String {
             switch self {
-            case .owner:
+            case .ownerGroups:
                 switch langCode {
-                case "uz": return "👑 Egalik"
-                case "ru": return "👑 Владелец"
-                default: return "👑 Owner"
+                case "uz": return "👑 Guruhlar"
+                case "ru": return "👑 Группы"
+                default: return "👑 Groups"
                 }
-            case .admin:
+            case .ownerChannels:
                 switch langCode {
-                case "uz": return "🔑 Admin"
-                case "ru": return "🔑 Админ"
-                default: return "🔑 Admin"
+                case "uz": return "👑 Kanallar"
+                case "ru": return "👑 Каналы"
+                default: return "👑 Channels"
+                }
+            case .adminGroups:
+                switch langCode {
+                case "uz": return "🔑 Guruhlar"
+                case "ru": return "🔑 Группы"
+                default: return "🔑 Groups"
+                }
+            case .adminChannels:
+                switch langCode {
+                case "uz": return "🔑 Kanallar"
+                case "ru": return "🔑 Каналы"
+                default: return "🔑 Channels"
                 }
             }
         }
@@ -78,16 +92,13 @@ public final class FenixAdminFoldersManager {
         }
     }
 
-    // Titles used by the unreleased 4-folders-per-type beta layout (2026-09-07, never shipped).
-    // Any unmapped folder still carrying one of these was created by that beta and is removed
-    // during sync so the 2-folder layout can take its place.
-    private static let legacyBetaTitles: Set<String> = [
-        "👑 Guruhlar", "👑 Группы", "👑 Groups",
-        "👑 Kanallar", "👑 Каналы", "👑 Channels",
-        "🔑 Guruhlar", "🔑 Группы", "🔑 Groups",
-        "🔑 Kanallar", "🔑 Каналы", "🔑 Channels"
+    // Titles from the previous 2-folder layout (👑 Owner + 🔑 Admin, en/uz/ru). Any unmapped
+    // folder still carrying one of these belongs to that layout and is removed during sync so
+    // the 4-folder layout can take its place — covers devices that reinstalled with no map.
+    private static let legacyLayoutTitles: Set<String> = [
+        "👑 Owner", "👑 Egalik", "👑 Владелец",
+        "🔑 Admin", "🔑 Админ"
     ]
-    private static let legacyBetaMapKeys = ["ownerGroups", "ownerChannels", "adminGroups", "adminChannels"]
 
     public static var isEnabled: Bool {
         return UserDefaults(suiteName: suiteName)?.bool(forKey: enabledKey) == true
@@ -284,13 +295,14 @@ public final class FenixAdminFoldersManager {
     private static func classify(peer: Peer) -> Category? {
         if let channel = peer as? TelegramChannel {
             guard case .member = channel.participationStatus else { return nil }
-            if channel.flags.contains(.isCreator) {
-                return .owner
+            let isOwner = channel.flags.contains(.isCreator)
+            guard isOwner || channel.adminRights != nil else { return nil }
+            switch channel.info {
+            case .broadcast:
+                return isOwner ? .ownerChannels : .adminChannels
+            case .group:
+                return isOwner ? .ownerGroups : .adminGroups
             }
-            if channel.adminRights != nil {
-                return .admin
-            }
-            return nil
         } else if let group = peer as? TelegramGroup {
             if group.flags.contains(.deactivated) {
                 return nil
@@ -298,9 +310,9 @@ public final class FenixAdminFoldersManager {
             guard case .Member = group.membership else { return nil }
             switch group.role {
             case .creator:
-                return .owner
+                return .ownerGroups
             case .admin:
-                return .admin
+                return .adminGroups
             case .member:
                 return nil
             }
@@ -317,14 +329,17 @@ public final class FenixAdminFoldersManager {
             var map = storedMap(accountPeerId: accountPeerId)
             var created = 0
 
-            // One-time migration off the unreleased 4-per-type beta layout: drop the old
-            // folders (by remembered id, and by beta title for reinstalled devices) so the
-            // loop below rebuilds the current 2-folder layout from scratch.
+            // Migrate off any previous layout (e.g. the 2-folder 👑 Owner / 🔑 Admin): drop
+            // every folder whose map key is no longer a valid category, plus any unmapped
+            // folder still carrying a known previous-layout title (reinstalled devices), so the
+            // loop below rebuilds the current layout from scratch.
+            let validKeys = Set(Category.allCases.map { $0.rawValue })
             var legacyIds = Set<Int32>()
-            for key in legacyBetaMapKeys {
-                if let id = map.removeValue(forKey: key), id != tombstoneId {
+            for (key, id) in map where !validKeys.contains(key) {
+                if id != tombstoneId {
                     legacyIds.insert(id)
                 }
+                map.removeValue(forKey: key)
             }
             let mappedIdsAfterMigration = Set(map.values)
             result.removeAll(where: { filter in
@@ -332,7 +347,7 @@ public final class FenixAdminFoldersManager {
                     if legacyIds.contains(id) {
                         return true
                     }
-                    if legacyBetaTitles.contains(title.text) && !mappedIdsAfterMigration.contains(id) {
+                    if legacyLayoutTitles.contains(title.text) && !mappedIdsAfterMigration.contains(id) {
                         return true
                     }
                 }
@@ -444,9 +459,9 @@ enum FenixAdminFoldersStrings {
 
     static func toggleSubtitle(langCode: String) -> String {
         switch langCode {
-        case "uz": return "Siz ega yoki admin bo'lgan guruh va kanallarni ikkita avtomatik papkaga ajratib beradi: 👑 Egalik va 🔑 Admin. Huquqlaringiz o'zgarsa papkalar o'z-o'zidan yangilanadi; o'chirilganda papkalar olib tashlanadi."
-        case "ru": return "Раскладывает группы и каналы, где вы владелец или админ, по двум автоматическим папкам: 👑 Владелец и 🔑 Админ. Папки обновляются сами при изменении ваших прав; при отключении они удаляются."
-        default:   return "Sorts the groups and channels you own or admin into two automatic folders: 👑 Owner and 🔑 Admin. They keep updating as your rights change; turning this off removes them."
+        case "uz": return "Siz ega (👑) yoki admin (🔑) bo'lgan guruh va kanallarni 4 ta avtomatik papkaga ajratib beradi. Huquqlaringiz o'zgarsa papkalar o'z-o'zidan yangilanadi; o'chirilganda papkalar olib tashlanadi."
+        case "ru": return "Раскладывает группы и каналы, где вы владелец (👑) или админ (🔑), по 4 автоматическим папкам. Папки обновляются сами при изменении ваших прав; при отключении они удаляются."
+        default:   return "Sorts the groups and channels you own (👑) or admin (🔑) into 4 automatic folders. They keep updating as your rights change; turning this off removes them."
         }
     }
 
