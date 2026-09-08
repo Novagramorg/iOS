@@ -4990,12 +4990,13 @@ server sends it.
 ## 📌 TelegramUI module — Feature #47 Admin/Owner auto-folders (2026-09-07)
 
 Auto-managed folders for the groups/channels the user owns or admins. When the
-"Admin papkalar" toggle (Settings → Novagram → Features) is on, up to 2 **real** Telegram
-folders (cloud dialog filters) are created and kept in sync: `👑 Owner / 👑 Egalik /
-👑 Владелец` (groups + channels the user owns) and `🔑 Admin / 🔑 Админ` (admin but not
-owner). 2 folders instead of the original 4-per-type split (2026-09-07 same-day redesign,
-beta never shipped): distinct names — the per-type split forced duplicate "Groups/Channels"
-labels because folder names cap at 12 characters — and half the folder-slot cost.
+"Admin papkalar" toggle (Settings → Novagram → Features) is on, up to 4 **real** Telegram
+folders (cloud dialog filters) are created and kept in sync: `👑 Guruhlar/Groups/Группы`
+(owner groups), `👑 Kanallar/Channels/Каналы` (owner channels), `🔑 Guruhlar` (admin groups),
+`🔑 Kanallar` (admin channels), localized en/uz/ru, emoticon `👥`/`📢` so the folder edit
+screen shows the proper icon. (A 2-folder 👑 Owner / 🔑 Admin layout was tried on 2026-09-07
+and reverted the same day — the 4-folder split is the chosen product design; the migration
+code below carries devices off the 2-folder layout automatically.)
 
 Real folders on purpose: every standard folder surface (tabs, edit screen, reorder, tags,
 other devices) keeps working with zero extra UI code. The manager only ever touches
@@ -5006,9 +5007,10 @@ language on every sync (folder names are server data, not UI strings — without
 stay frozen in the creation-time language); once the user renames it, the custom name sticks
 forever. A folder the user deletes by hand becomes a tombstone (`-1` in the map) and is not
 recreated until the toggle is cycled; folders left over from a reinstall are adopted by title
-instead of duplicated; folders from the unreleased 4-per-type beta are migrated away on the
-first sync (by remembered id + by beta title, see `legacyBetaTitles`). Toggle OFF deletes only
-the managed folders, on every account in the working set.
+instead of duplicated; folders from any previous layout are migrated away on the first sync —
+every map entry whose key is no longer a valid category is dropped, plus any unmapped folder
+still carrying a known previous-layout title (see `legacyLayoutTitles`). Toggle OFF deletes
+only the managed folders, on every account in the working set.
 
 **Implementation file (Fenixuz module, no upstream change):**
 `submodules/Fenixuz/ProMessager/Sources/FenixAdminFoldersManager.swift` — manager + strings
