@@ -424,6 +424,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                     dateTimeFormat: environment.dateTimeFormat,
                     name: state.accountName,
                     address: walletInfo?.address ?? "",
+                    isVisible: environment.isVisible,
                     qrPressed: { [weak state] in
                         guard let walletInfo else {
                             return

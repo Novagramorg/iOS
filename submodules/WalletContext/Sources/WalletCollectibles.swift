@@ -30,22 +30,28 @@ struct WalletCollectibleMetadata {
 
 func walletCollectibles(
     from values: [NftItem],
-    errorLogger: WalletContextErrorLogger
-) async -> [WalletContext.Collectible] {
+    logger: WalletLogger
+) async throws -> [WalletContext.Collectible] {
+    try Task.checkCancellation()
     var result: [WalletContext.Collectible] = []
     result.reserveCapacity(values.count)
     for value in values {
+        try Task.checkCancellation()
         var metadata = walletCollectibleMetadata(from: value)
         if walletCollectibleNeedsRemoteMetadata(value, metadata: metadata),
            let url = walletCollectibleMetadataUrl(from: value) {
             do {
                 metadata.merge(try await walletCollectibleMetadata(from: url))
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
-                errorLogger.error("wallet_collectible_metadata_fetch_failed", error)
+                try Task.checkCancellation()
+                logger.error("wallet_collectible_metadata_fetch_failed", error)
             }
         }
         result.append(walletCollectible(from: value, metadata: metadata))
     }
+    try Task.checkCancellation()
     return result
 }
 
@@ -83,8 +89,7 @@ func walletCollectible(
         collectionName: collectionName,
         collectionUrl: metadata.collectionUrl,
         attributes: metadata.attributes,
-        giftSlug: kind == .gift ? walletCollectibleGiftSlug(name: name, metadataUrl: walletCollectibleMetadataUrl(from: nft)) : nil,
-        receivedAt: nil
+        giftSlug: kind == .gift ? walletCollectibleGiftSlug(name: name, metadataUrl: walletCollectibleMetadataUrl(from: nft)) : nil
     )
 }
 

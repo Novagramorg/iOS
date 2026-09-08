@@ -99,36 +99,44 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
     }
 }
 
-/// Executes the logical Toncenter request through Telegram's authenticated relay.
 actor WalletEngineStatuslessHost: WalletStatuslessHost {
     private static let maximumEarlyCancellations = 256
 
     private let engine: TelegramEngine
-    private let errorLogger: WalletContextErrorLogger
+    private let storage: WalletEngineStorage
+    private let logger: WalletLogger
+    private var transferSubmission: WalletEngineTransferSubmission?
     private var tasks: [UInt64: Task<Data, Error>] = [:]
     private var cancelledBeforeStart = Set<UInt64>()
 
-    init(engine: TelegramEngine, errorLogger: WalletContextErrorLogger) {
+    init(engine: TelegramEngine, storage: WalletEngineStorage, logger: WalletLogger) {
         self.engine = engine
-        self.errorLogger = errorLogger
+        self.storage = storage
+        self.logger = logger
+    }
+
+    func setTransferSubmission(_ submission: WalletEngineTransferSubmission?) {
+        self.transferSubmission = submission
     }
 
     func executeStatusless(request: HttpRequest) async throws -> Data {
         let id = request.id.value
         guard self.tasks[id] == nil else {
             let error = Self.failure(.policyViolation, "Duplicate provider request identifier")
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw error
         }
         guard self.cancelledBeforeStart.remove(id) == nil else {
             let error = Self.failure(.cancelled, "Provider request was cancelled")
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw error
         }
 
         let engine = self.engine
+        let storage = self.storage
+        let transferSubmission = self.transferSubmission
         let task = Task<Data, Error> {
-            try await Self.perform(request, engine: engine)
+            try await Self.perform(request, engine: engine, storage: storage, transferSubmission: transferSubmission)
         }
         self.tasks[id] = task
         defer { self.tasks[id] = nil }
@@ -136,19 +144,19 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         do {
             return try await task.value
         } catch let error as CancellationError {
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw Self.failure(.cancelled, "Provider request was cancelled")
         } catch let error as StatuslessHostError {
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw error
         } catch let error as TonApiRequestError {
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw Self.failure(.other, "Telegram relay failed (\(error.code))")
         } catch let error as URLError {
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw Self.failure(walletEngineTransportKind(error.code), error.localizedDescription)
         } catch let error as WalletEngineRelayError {
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             switch error {
             case .responseTooLarge:
                 throw Self.failure(.responseTooLarge, "Provider response exceeds 4 MiB")
@@ -160,7 +168,7 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
                 throw Self.failure(.other, "Telegram relay completed without a response")
             }
         } catch {
-            self.errorLogger.error("wallet_statusless_request_failed", error)
+            self.logger.error("wallet_statusless_request_failed", error)
             throw Self.failure(.other, String(describing: error))
         }
     }
@@ -177,8 +185,6 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         }
     }
 
-    /// Reads the contract's current signing key independently from send
-    /// resolution. An indexed transaction alone can still have aborted.
     func walletPublicKey(address: String) async throws -> Data {
         try Task.checkCancellation()
         guard !address.isEmpty else {
@@ -222,7 +228,9 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
 
     private static func perform(
         _ request: HttpRequest,
-        engine: TelegramEngine
+        engine: TelegramEngine,
+        storage: WalletEngineStorage,
+        transferSubmission: WalletEngineTransferSubmission?
     ) async throws -> Data {
         guard let components = URLComponents(string: request.url),
               components.scheme?.lowercased() == "https",
@@ -236,6 +244,19 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         let endpoint = components.path.isEmpty ? "/" : components.path
         let response: String = try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
+                if let response = try await walletPerformTransferSubmission(
+                    request,
+                    submission: transferSubmission,
+                    send: { data in
+                        try await WalletSignalRequestContext<WalletSentTransfer>().run(
+                            engine.wallet.sendTransfer(dataNormal: data, dataGasless: nil)
+                        )
+                    },
+                    persist: { receipt in try await storage.saveTransferReceipt(receipt) },
+                    now: currentWalletTimestamp
+                ) {
+                    return String(decoding: response, as: UTF8.self)
+                }
                 switch request.method {
                 case .get:
                     return try await WalletSignalRequestContext<String>().run(

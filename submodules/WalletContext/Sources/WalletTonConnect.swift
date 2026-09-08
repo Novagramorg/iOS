@@ -285,7 +285,7 @@ actor WalletTonConnectTransport {
 actor WalletTonConnectCoordinator {
     private let runtime: WalletEngineRuntime
     private let storage: WalletEngineStorage
-    private let errorLogger: WalletContextErrorLogger
+    private let logger: WalletLogger
     private let recordId: String
     private let transport = WalletTonConnectTransport()
     private let event: @Sendable (WalletTonConnectEvent) async -> Void
@@ -301,13 +301,13 @@ actor WalletTonConnectCoordinator {
     init(
         runtime: WalletEngineRuntime,
         storage: WalletEngineStorage,
-        errorLogger: WalletContextErrorLogger,
+        logger: WalletLogger,
         recordId: String,
         event: @escaping @Sendable (WalletTonConnectEvent) async -> Void
     ) {
         self.runtime = runtime
         self.storage = storage
-        self.errorLogger = errorLogger
+        self.logger = logger
         self.recordId = recordId
         self.event = event
     }
@@ -350,7 +350,7 @@ actor WalletTonConnectCoordinator {
                 }
             }
         } catch {
-            self.errorLogger.error("wallet_ton_connect_restore_failed", error)
+            self.logger.error("wallet_ton_connect_restore_failed", error)
             await self.event(.error(sanitizedWalletEngineDiagnostic(String(describing: error))))
         }
     }
@@ -409,19 +409,22 @@ actor WalletTonConnectCoordinator {
         self.startListening()
     }
 
-    func approveOperation(id: String) async throws {
+    func approveOperation(id: String) async throws -> WalletContext.TonConnectOperationRequest.Method {
         guard !self.isShutdown, self.hasSession, let request = self.pending[id] else {
             throw WalletTonConnectError.requestUnavailable
         }
         let post: TonConnectPreparedPost
+        let method: WalletContext.TonConnectOperationRequest.Method
         switch request {
         case let .sendTransaction(requestId, _, value):
+            method = .sendTransaction
             let result = try await self.runtime.sendTonConnect(value)
             guard walletEngineAcceptsSubmission(result.phase) else {
                 throw WalletTonConnectError.unsuccessfulSend
             }
             post = try await self.runtime.tonConnectPrepareSendSuccess(requestId: requestId, signedBoc: result.signedBoc)
         case let .signMessage(requestId, _, value):
+            method = .signMessage
             let result = try await self.runtime.signMessage(value)
             guard walletEngineAcceptsSignHandoff(result.phase) else {
                 throw WalletTonConnectError.unsuccessfulSend
@@ -437,6 +440,7 @@ actor WalletTonConnectCoordinator {
         await self.event(.dismiss(id))
         try await self.deliver(post)
         await self.presentNextPendingRequest()
+        return method
     }
 
     func reject(id: String) async {
@@ -466,7 +470,7 @@ actor WalletTonConnectCoordinator {
             try await self.deliver(post)
             await self.presentNextPendingRequest()
         } catch {
-            self.errorLogger.error("wallet_ton_connect_reject_failed", error)
+            self.logger.error("wallet_ton_connect_reject_failed", error)
             await self.event(.error(sanitizedWalletEngineDiagnostic(String(describing: error))))
         }
     }
@@ -499,14 +503,14 @@ actor WalletTonConnectCoordinator {
                     try await self.receive(chunk)
                 }
             } catch let error as CancellationError {
-                self.errorLogger.error("wallet_ton_connect_listener_cancelled", error)
+                self.logger.error("wallet_ton_connect_listener_cancelled", error)
                 return
             } catch {
-                self.errorLogger.error("wallet_ton_connect_listener_failed", error)
+                self.logger.error("wallet_ton_connect_listener_failed", error)
                 do {
                     try await Task.sleep(nanoseconds: 2_000_000_000)
                 } catch {
-                    self.errorLogger.error("wallet_ton_connect_listener_cancelled", error)
+                    self.logger.error("wallet_ton_connect_listener_cancelled", error)
                     return
                 }
             }
@@ -530,7 +534,7 @@ actor WalletTonConnectCoordinator {
                 let model = Self.operationModel(manifest: manifest, request: request, sendPreview: preview, signPreview: nil)
                 await self.enqueue(request: request, model: model)
             } catch {
-                self.errorLogger.error("wallet_ton_connect_send_preview_failed", error)
+                self.logger.error("wallet_ton_connect_send_preview_failed", error)
                 let diagnostic = sanitizedWalletEngineDiagnostic(String(describing: error))
                 await self.event(.error("TON Connect preview failed: \(diagnostic)"))
                 await self.respondWithError(request: request, message: "Request preview failed: \(diagnostic)")
@@ -541,7 +545,7 @@ actor WalletTonConnectCoordinator {
                 let model = Self.operationModel(manifest: manifest, request: request, sendPreview: nil, signPreview: preview)
                 await self.enqueue(request: request, model: model)
             } catch {
-                self.errorLogger.error("wallet_ton_connect_sign_preview_failed", error)
+                self.logger.error("wallet_ton_connect_sign_preview_failed", error)
                 let diagnostic = sanitizedWalletEngineDiagnostic(String(describing: error))
                 await self.event(.error("TON Connect signing preview failed: \(diagnostic)"))
                 await self.respondWithError(request: request, message: "Request preview failed: \(diagnostic)")
@@ -553,7 +557,7 @@ actor WalletTonConnectCoordinator {
                 try await self.deliver(post, terminal: true)
                 await self.clear()
             } catch {
-                self.errorLogger.error("wallet_ton_connect_disconnect_failed", error)
+                self.logger.error("wallet_ton_connect_disconnect_failed", error)
                 await self.event(.error(sanitizedWalletEngineDiagnostic(String(describing: error))))
             }
         case let .unsupported(id, _, code, message):
@@ -561,7 +565,7 @@ actor WalletTonConnectCoordinator {
                 guard self.hasSession else { return }
                 try await self.deliver(try await self.runtime.tonConnectPrepareError(requestId: id, code: code, message: message))
             } catch {
-                self.errorLogger.error("wallet_ton_connect_unsupported_response_failed", error)
+                self.logger.error("wallet_ton_connect_unsupported_response_failed", error)
                 await self.event(.error(sanitizedWalletEngineDiagnostic(String(describing: error))))
             }
         }
@@ -576,7 +580,7 @@ actor WalletTonConnectCoordinator {
                 message: message
             ))
         } catch {
-            self.errorLogger.error("wallet_ton_connect_error_response_failed", error)
+            self.logger.error("wallet_ton_connect_error_response_failed", error)
             await self.event(.error(sanitizedWalletEngineDiagnostic(String(describing: error))))
         }
     }
@@ -624,7 +628,7 @@ actor WalletTonConnectCoordinator {
             do {
                 isConnected = try await self.runtime.tonConnectPhase() == .connected
             } catch {
-                self.errorLogger.error("wallet_ton_connect_phase_check_failed", error)
+                self.logger.error("wallet_ton_connect_phase_check_failed", error)
                 isConnected = false
             }
             if isConnected {

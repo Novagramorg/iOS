@@ -33,66 +33,63 @@ final class WalletContextOutput {
     }
 }
 
-private final class WalletOperationTaskRegistry {
-    private let lock = NSLock()
-    private var operations: [UUID: WalletOperationCancellation] = [:]
-    private var isShutdown = false
-
-    func register(id: UUID, cancellation: WalletOperationCancellation) {
-        self.lock.lock()
-        if self.isShutdown {
-            self.lock.unlock()
-            cancellation.cancel()
-        } else {
-            self.operations[id] = cancellation
-            self.lock.unlock()
-        }
-    }
-
-    func remove(id: UUID) {
-        self.lock.lock()
-        self.operations[id] = nil
-        self.lock.unlock()
-    }
-
-    func cancel(id: UUID) {
-        self.lock.lock()
-        let cancellation = self.operations.removeValue(forKey: id)
-        self.lock.unlock()
-        cancellation?.cancel()
-    }
-
-    func shutdown() {
-        self.lock.lock()
-        self.isShutdown = true
-        let operations = Array(self.operations.values)
-        self.operations.removeAll()
-        self.lock.unlock()
-        for operation in operations {
-            operation.cancel()
-        }
-    }
-}
-
 private struct WalletSubscriberDemand: Sendable {
     var count: Int = 0
     var revision: UInt64 = 0
 }
 
+struct WalletScreenDemand: Sendable {
+    var walletCount = 0
+    var collectiblesCount = 0
+    var walletOpenRevision: UInt64 = 0
+    var collectiblesOpenRevision: UInt64 = 0
+    var balanceRequests = Set<UUID>()
+    var revision: UInt64 = 0
+
+    var visibleScope: WalletSynchronizationScope {
+        if self.walletCount > 0 {
+            return .all
+        }
+        if self.collectiblesCount > 0 {
+            return .nfts
+        }
+        return []
+    }
+
+    func openedScope(since previous: WalletScreenDemand) -> WalletSynchronizationScope {
+        guard self.revision > previous.revision else { return [] }
+        var scope: WalletSynchronizationScope = []
+        if self.walletCount > 0, self.walletOpenRevision > previous.walletOpenRevision {
+            scope = .all
+        }
+        if self.collectiblesCount > 0, self.collectiblesOpenRevision > previous.collectiblesOpenRevision {
+            scope.insert(.nfts)
+        }
+        if !self.balanceRequests.subtracting(previous.balanceRequests).isEmpty {
+            scope.insert(.account)
+        }
+        return scope
+    }
+}
+
 public final class WalletContext {
+    static let useWalletTransferApi = false
+
     let impl: WalletContextImpl
-    let errorLogger: WalletContextErrorLogger
+    let logger: WalletLogger
     private let output: WalletContextOutput
     private let environmentDisposable = MetaDisposable()
+    private let walletConfigurationDisposable = MetaDisposable()
     private let walletStateUpdatesDisposable = MetaDisposable()
     private let storedStateDisposable = MetaDisposable()
     private let twoStepAuthDisposable = MetaDisposable()
     private let operationTaskRegistry: WalletOperationTaskRegistry
     private let environmentRevision = Atomic<UInt64>(value: 0)
+    private let walletConfigurationRevision = Atomic<UInt64>(value: 0)
     private let walletStateRevision = Atomic<UInt64>(value: 0)
     private let twoStepAuthRevision = Atomic<UInt64>(value: 0)
     private let subscriberDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
-    private let walletScreenDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
+    private let walletScreenDemand = Atomic<WalletScreenDemand>(value: WalletScreenDemand())
     let fiatCurrencyRevision = Atomic<UInt64>(value: 0)
 
     public var state: Signal<State, NoError> {
@@ -139,35 +136,52 @@ public final class WalletContext {
     }
 
     public func beginWalletScreenUpdates() -> Disposable {
-        let impl = self.impl
-        let walletScreenDemand = self.walletScreenDemand
-        let demand = walletScreenDemand.modify { value in
+        return self.beginScreenUpdates(collectiblesOnly: false)
+    }
+
+    public func beginCollectiblesScreenUpdates() -> Disposable {
+        return self.beginScreenUpdates(collectiblesOnly: true)
+    }
+
+    public func refreshBalance() -> Disposable {
+        let id = UUID()
+        self.updateScreenDemand { $0.balanceRequests.insert(id) }
+        return ActionDisposable { [weak self] in
+            self?.updateScreenDemand { $0.balanceRequests.remove(id) }
+        }
+    }
+
+    private func beginScreenUpdates(collectiblesOnly: Bool) -> Disposable {
+        self.updateScreenDemand {
+            if collectiblesOnly {
+                $0.collectiblesCount += 1
+                $0.collectiblesOpenRevision &+= 1
+            } else {
+                $0.walletCount += 1
+                $0.walletOpenRevision &+= 1
+            }
+        }
+        return ActionDisposable { [weak self] in
+            self?.updateScreenDemand {
+                if collectiblesOnly {
+                    $0.collectiblesCount -= 1
+                } else {
+                    $0.walletCount -= 1
+                }
+            }
+        }
+    }
+
+    private func updateScreenDemand(_ update: (inout WalletScreenDemand) -> Void) {
+        let demand = self.walletScreenDemand.modify { value in
             var value = value
-            value.count += 1
+            update(&value)
             value.revision &+= 1
             return value
         }
+        let impl = self.impl
         Task {
-            await impl.updateWalletScreenDemand(
-                count: demand.count,
-                revision: demand.revision,
-                refreshOnOpen: true
-            )
-        }
-        return ActionDisposable {
-            let demand = walletScreenDemand.modify { value in
-                var value = value
-                value.count = max(0, value.count - 1)
-                value.revision &+= 1
-                return value
-            }
-            Task {
-                await impl.updateWalletScreenDemand(
-                    count: demand.count,
-                    revision: demand.revision,
-                    refreshOnOpen: false
-                )
-            }
+            await impl.updateWalletScreenDemand(demand)
         }
     }
 
@@ -192,19 +206,33 @@ public final class WalletContext {
             initialState: initialState,
             cancelOperation: { operationTaskRegistry.cancel(id: $0) }
         )
-        let errorLogger = WalletContextErrorLogger(log)
+        let logger = WalletLogger(log)
         let impl = WalletContextImpl(
             engine: engine,
             storageNamespace: storageNamespace,
             initialState: initialState,
             output: output,
-            errorLogger: errorLogger,
-            log: log
+            logger: logger
         )
         self.output = output
-        self.errorLogger = errorLogger
+        self.logger = logger
         self.impl = impl
         self.operationTaskRegistry = operationTaskRegistry
+
+        self.walletConfigurationDisposable.set((engine.data.subscribe(
+            TelegramEngine.EngineData.Item.Configuration.App()
+        )
+        |> map { WalletConfiguration.with(appConfiguration: $0).transferMinAmount }
+        |> distinctUntilChanged).start(next: { [weak self] transferMinAmount in
+            guard let self else { return }
+            let revision = self.walletConfigurationRevision.modify { value in
+                let next = value &+ 1
+                return next
+            }
+            Task {
+                await impl.updateWalletConfiguration(transferMinAmount: transferMinAmount, revision: revision)
+            }
+        }))
 
         self.walletStateUpdatesDisposable.set(engine.wallet.stateUpdates().start(next: { [weak self] value in
             guard let self else { return }
@@ -276,6 +304,7 @@ public final class WalletContext {
 
     deinit {
         self.environmentDisposable.dispose()
+        self.walletConfigurationDisposable.dispose()
         self.walletStateUpdatesDisposable.dispose()
         self.storedStateDisposable.dispose()
         self.twoStepAuthDisposable.dispose()
@@ -299,7 +328,7 @@ public final class WalletContext {
             let operationId = UUID()
             let cancellation = WalletOperationCancellation()
             let registry = self.operationTaskRegistry
-            let errorLogger = self.errorLogger
+            let logger = self.logger
             let impl = self.impl
             registry.register(id: operationId, cancellation: cancellation)
             let task = Task {
@@ -312,10 +341,10 @@ public final class WalletContext {
                     subscriber.putNext(value)
                     subscriber.putCompletion()
                 } catch let error as CancellationError {
-                    errorLogger.error("wallet_operation_cancelled", error, context: "operation=\(name)")
+                    logger.error("wallet_operation_cancelled", error, context: "operation=\(name)")
                     subscriber.putError(.unavailable)
                 } catch {
-                    errorLogger.error("wallet_operation_failed", error, context: "operation=\(name)")
+                    logger.error("wallet_operation_failed", error, context: "operation=\(name)")
                     subscriber.putError(walletError(error))
                 }
             }
@@ -343,5 +372,42 @@ public final class WalletContext {
             return ActionDisposable { task.cancel() }
         }
         return source |> deliverOnMainQueue
+    }
+}
+
+public struct WalletConfiguration {
+    public static var defaultValue: WalletConfiguration {
+        return WalletConfiguration(
+            transferMinAmount: 100_000_000,
+            transferGaslessMinAmount: 100_000_000
+        )
+    }
+
+    public let transferMinAmount: Int64
+    public let transferGaslessMinAmount: Int64
+
+    private init(
+        transferMinAmount: Int64,
+        transferGaslessMinAmount: Int64
+    ) {
+        self.transferMinAmount = transferMinAmount
+        self.transferGaslessMinAmount = transferGaslessMinAmount
+    }
+
+    public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
+        var transferMinAmount = self.defaultValue.transferMinAmount
+        if let value = appConfiguration.data?["wallet_transfer_min_nanos"] as? Double,
+           let intValue = Int64(exactly: value) {
+            transferMinAmount = intValue
+        }
+        var transferGaslessMinAmount = self.defaultValue.transferGaslessMinAmount
+        if let value = appConfiguration.data?["wallet_gasless_min_nanos"] as? Double,
+           let intValue = Int64(exactly: value), intValue >= 0 {
+            transferGaslessMinAmount = intValue
+        }
+        return WalletConfiguration(
+            transferMinAmount: transferMinAmount,
+            transferGaslessMinAmount: transferGaslessMinAmount
+        )
     }
 }

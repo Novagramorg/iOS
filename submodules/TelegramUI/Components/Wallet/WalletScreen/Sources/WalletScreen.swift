@@ -1393,10 +1393,10 @@ private final class WalletScreenComponent: Component {
                         scanner?.dismiss()
                         component.walletContext.processTonConnectUrl(value)
                     }
-                } else if let address = WalletContext.transferAddress(from: value) {
+                } else if let recipient = WalletContext.transferRecipient(from: value) {
                     Queue.mainQueue().after(0.15) {
                         scanner?.dismiss()
-                        self.openSend(address: address)
+                        self.openSend(address: recipient.transferInput)
                     }
                 }
             }
@@ -1460,7 +1460,7 @@ private final class WalletScreenComponent: Component {
                 return
             }
             if let address {
-                let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address)
+                let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address, refreshBalanceOnOpen: false)
                 sendScreen.navigationPresentation = .modal
                 controller.push(sendScreen)
             } else {
@@ -2107,6 +2107,7 @@ private final class WalletScreenComponent: Component {
                     dateTimeFormat: environment.dateTimeFormat,
                     name: self.accountName,
                     address: walletInfo?.address ?? "",
+                    isVisible: environment.isVisible && !self.isCardCollapsed,
                     qrPressed: { [weak self] in
                         self?.openReceive()
                     }

@@ -1,4 +1,72 @@
 public extension Api.wallet {
+    enum GaslessInfo: TypeConstructorDescription {
+        public class Cons_gaslessInfo: TypeConstructorDescription {
+            public var flags: Int32
+            public var left: Int32
+            public var resetAt: Int32
+            public var minAmount: Int64
+            public var relayerAddress: String
+            public init(flags: Int32, left: Int32, resetAt: Int32, minAmount: Int64, relayerAddress: String) {
+                self.flags = flags
+                self.left = left
+                self.resetAt = resetAt
+                self.minAmount = minAmount
+                self.relayerAddress = relayerAddress
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("gaslessInfo", [("flags", ConstructorParameterDescription(self.flags)), ("left", ConstructorParameterDescription(self.left)), ("resetAt", ConstructorParameterDescription(self.resetAt)), ("minAmount", ConstructorParameterDescription(self.minAmount)), ("relayerAddress", ConstructorParameterDescription(self.relayerAddress))])
+            }
+        }
+        case gaslessInfo(Cons_gaslessInfo)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .gaslessInfo(let _data):
+                if boxed {
+                    buffer.appendInt32(-459792708)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt32(_data.left, buffer: buffer, boxed: false)
+                serializeInt32(_data.resetAt, buffer: buffer, boxed: false)
+                serializeInt64(_data.minAmount, buffer: buffer, boxed: false)
+                serializeString(_data.relayerAddress, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .gaslessInfo(let _data):
+                return ("gaslessInfo", [("flags", ConstructorParameterDescription(_data.flags)), ("left", ConstructorParameterDescription(_data.left)), ("resetAt", ConstructorParameterDescription(_data.resetAt)), ("minAmount", ConstructorParameterDescription(_data.minAmount)), ("relayerAddress", ConstructorParameterDescription(_data.relayerAddress))])
+            }
+        }
+
+        public static func parse_gaslessInfo(_ reader: BufferReader) -> GaslessInfo? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int64?
+            _4 = reader.readInt64()
+            var _5: String?
+            _5 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.wallet.GaslessInfo.gaslessInfo(Cons_gaslessInfo(flags: _1!, left: _2!, resetAt: _3!, minAmount: _4!, relayerAddress: _5!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
     enum HolderDc: TypeConstructorDescription {
         public class Cons_holderDc: TypeConstructorDescription {
             public var dc: Int32
@@ -153,6 +221,68 @@ public extension Api.wallet {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.wallet.SecretPhraseParts.secretPhraseParts(Cons_secretPhraseParts(token: _1!, dcs: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
+    enum SentTransfer: TypeConstructorDescription {
+        public class Cons_sentTransfer: TypeConstructorDescription {
+            public var flags: Int32
+            public var msgHash: String
+            public var gaslessLeft: Int32
+            public var gaslessResetAt: Int32
+            public init(flags: Int32, msgHash: String, gaslessLeft: Int32, gaslessResetAt: Int32) {
+                self.flags = flags
+                self.msgHash = msgHash
+                self.gaslessLeft = gaslessLeft
+                self.gaslessResetAt = gaslessResetAt
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("sentTransfer", [("flags", ConstructorParameterDescription(self.flags)), ("msgHash", ConstructorParameterDescription(self.msgHash)), ("gaslessLeft", ConstructorParameterDescription(self.gaslessLeft)), ("gaslessResetAt", ConstructorParameterDescription(self.gaslessResetAt))])
+            }
+        }
+        case sentTransfer(Cons_sentTransfer)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .sentTransfer(let _data):
+                if boxed {
+                    buffer.appendInt32(1882463590)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.msgHash, buffer: buffer, boxed: false)
+                serializeInt32(_data.gaslessLeft, buffer: buffer, boxed: false)
+                serializeInt32(_data.gaslessResetAt, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .sentTransfer(let _data):
+                return ("sentTransfer", [("flags", ConstructorParameterDescription(_data.flags)), ("msgHash", ConstructorParameterDescription(_data.msgHash)), ("gaslessLeft", ConstructorParameterDescription(_data.gaslessLeft)), ("gaslessResetAt", ConstructorParameterDescription(_data.gaslessResetAt))])
+            }
+        }
+
+        public static func parse_sentTransfer(_ reader: BufferReader) -> SentTransfer? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int32?
+            _4 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.wallet.SentTransfer.sentTransfer(Cons_sentTransfer(flags: _1!, msgHash: _2!, gaslessLeft: _3!, gaslessResetAt: _4!))
             }
             else {
                 return nil

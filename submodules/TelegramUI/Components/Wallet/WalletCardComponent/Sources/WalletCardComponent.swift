@@ -20,6 +20,7 @@ public final class WalletCardComponent: Component {
     public let dateTimeFormat: PresentationDateTimeFormat
     public let name: String
     public let address: String
+    public let isVisible: Bool
     public let qrPressed: () -> Void
 
     public init(
@@ -29,6 +30,7 @@ public final class WalletCardComponent: Component {
         dateTimeFormat: PresentationDateTimeFormat,
         name: String,
         address: String,
+        isVisible: Bool,
         qrPressed: @escaping () -> Void
     ) {
         self.balance = balance
@@ -37,6 +39,7 @@ public final class WalletCardComponent: Component {
         self.dateTimeFormat = dateTimeFormat
         self.name = name
         self.address = address
+        self.isVisible = isVisible
         self.qrPressed = qrPressed
     }
 
@@ -54,6 +57,9 @@ public final class WalletCardComponent: Component {
             return false
         }
         if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.isVisible != rhs.isVisible {
             return false
         }
         return true
@@ -199,11 +205,7 @@ public final class WalletCardComponent: Component {
         override public func didMoveToWindow() {
             super.didMoveToWindow()
 
-            if self.window == nil {
-                self.stopAnimation()
-            } else {
-                self.startAnimationIfPossible()
-            }
+            self.updateAnimationState()
         }
 
         func update(
@@ -544,7 +546,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: qrView,
                     frame: CGRect(
-                        origin: CGPoint(x: width - 96.0 * scale, y: 82.0 * scale),
+                        origin: CGPoint(x: width - 97.0 * scale, y: 82.0 * scale),
                         size: qrSize
                     )
                 )
@@ -561,7 +563,7 @@ public final class WalletCardComponent: Component {
                         textColor: UIColor(rgb: 0xffffff, alpha: 0.1)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: 0.1
+                    lineSpacing: -0.05
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
@@ -572,10 +574,10 @@ public final class WalletCardComponent: Component {
                     text: .plain(NSAttributedString(
                         string: addressText.uppercased(),
                         font: Font.monospace(11.0),
-                        textColor: UIColor(rgb: 0x1a4eb6, alpha: 0.6)
+                        textColor: UIColor(rgb: 0x055ac4, alpha: 0.8)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: 0.1
+                    lineSpacing: -0.05
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
@@ -586,7 +588,7 @@ public final class WalletCardComponent: Component {
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 24.0, y: size.height * 0.5 + 1.0)
+                addressView.center = CGPoint(x: width - 27.0, y: size.height * 0.5 + 1.0)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
             if let addressView = self.address.view {
@@ -595,10 +597,11 @@ public final class WalletCardComponent: Component {
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 24.0, y: size.height * 0.5)
+                addressView.center = CGPoint(x: width - 27.0, y: size.height * 0.5)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
 
+            self.updateAnimationState()
             self.renderCurrentFrame()
 
             return size
@@ -654,8 +657,11 @@ public final class WalletCardComponent: Component {
             self.renderCurrentFrame()
         }
 
-        private func startAnimationIfPossible() {
-            guard self.window != nil, UIApplication.shared.applicationState == .active else {
+        private func updateAnimationState() {
+            guard self.component?.isVisible == true,
+                  self.window != nil,
+                  UIApplication.shared.applicationState == .active else {
+                self.stopAnimation()
                 return
             }
 
@@ -668,6 +674,7 @@ public final class WalletCardComponent: Component {
         }
 
         private func stopAnimation() {
+            self.displayLink?.invalidate()
             self.displayLink = nil
             self.motionManager.stopDeviceMotionUpdates()
             self.baseAttitude = nil
@@ -677,6 +684,7 @@ public final class WalletCardComponent: Component {
 
         private func startMotionIfPossible() {
             guard
+                self.displayLink != nil,
                 !UIAccessibility.isReduceMotionEnabled,
                 self.motionManager.isDeviceMotionAvailable,
                 !self.motionManager.isDeviceMotionActive
@@ -686,7 +694,7 @@ public final class WalletCardComponent: Component {
 
             self.motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
             self.motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] data, _ in
-                guard let self, let data else {
+                guard let self, self.displayLink != nil, let data else {
                     return
                 }
 
@@ -996,7 +1004,7 @@ public final class WalletCardComponent: Component {
             self.currentDepthY = self.currentCardY
             self.idleTiltX = 0.0
             self.idleTiltY = 0.0
-            self.startAnimationIfPossible()
+            self.updateAnimationState()
         }
 
         @objc private func applicationWillResignActive() {

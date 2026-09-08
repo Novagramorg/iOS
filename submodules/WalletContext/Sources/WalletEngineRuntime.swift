@@ -5,7 +5,6 @@ import WalletEngineFFI
 struct WalletEngineActivation: @unchecked Sendable {
     let snapshot: WalletSnapshot
     let canSign: Bool
-    let descriptor: WalletDescriptor?
 }
 
 struct WalletEngineStagedWallet: Equatable, Sendable {
@@ -17,6 +16,13 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
 struct WalletEngineSendExecution: @unchecked Sendable {
     let result: SendResult
     let didRecreateClient: Bool
+    let receipt: WalletEngineTransferReceipt?
+
+    init(result: SendResult, didRecreateClient: Bool, receipt: WalletEngineTransferReceipt? = nil) {
+        self.result = result
+        self.didRecreateClient = didRecreateClient
+        self.receipt = receipt
+    }
 }
 
 enum WalletEngineKeyRotationResolution: Equatable, Sendable {
@@ -32,7 +38,6 @@ private enum WalletEngineKeyRotationChainState: Equatable {
     case different
 }
 
-/// Serializes all UniFFI calls and owns the callback objects for one wallet identity.
 actor WalletEngineRuntime {
     private enum FfiPriority {
         case background
@@ -50,7 +55,7 @@ actor WalletEngineRuntime {
 
     let storage: WalletEngineStorage
     private let engine: TelegramEngine
-    private let errorLogger: WalletContextErrorLogger
+    private let logger: WalletLogger
     private let platformHost: WalletEnginePlatformHost
     private var statuslessHost: WalletEngineStatuslessHost
     private let lifecycle: WalletLifecycle
@@ -65,25 +70,23 @@ actor WalletEngineRuntime {
     private var backgroundFfiWaiters: [CheckedContinuation<Void, Never>] = []
     private var activeFfiOperation: (id: UUID, cancellation: FfiCancellation)?
 
-    init(engine: TelegramEngine, storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
+    init(engine: TelegramEngine, storage: WalletEngineStorage, logger: WalletLogger) {
         self.storage = storage
         self.engine = engine
-        self.errorLogger = errorLogger
-        self.platformHost = WalletEnginePlatformHost(storage: storage, errorLogger: errorLogger)
-        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, errorLogger: errorLogger)
+        self.logger = logger
+        self.platformHost = WalletEnginePlatformHost(storage: storage, logger: logger)
+        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, storage: storage, logger: logger)
         self.lifecycle = WalletLifecycle(platformHost: self.platformHost)
     }
 
     func activate(
         serverAddress: String,
-        serverPublicKey: Data,
-        exportedWords: [String]?
+        serverPublicKey: Data
     ) async throws -> WalletEngineActivation {
         try await self.withFfi {
             try await self.activateUnlocked(
                 serverAddress: serverAddress,
-                serverPublicKey: serverPublicKey,
-                exportedWords: exportedWords
+                serverPublicKey: serverPublicKey
             )
         }
     }
@@ -111,7 +114,7 @@ actor WalletEngineRuntime {
                 do {
                     try await self.storage.deleteProtectedSecret(imported.secretRef)
                 } catch {
-                    self.errorLogger.error("wallet_replacement_secret_cleanup_failed", error)
+                    self.logger.error("wallet_replacement_secret_cleanup_failed", error)
                 }
                 throw error
             }
@@ -222,8 +225,7 @@ actor WalletEngineRuntime {
             try await self.promoteReplacementCandidate(candidate)
             return try await self.activateUnlocked(
                 serverAddress: serverAddress,
-                serverPublicKey: serverPublicKey,
-                exportedWords: nil
+                serverPublicKey: serverPublicKey
             )
         }
     }
@@ -280,8 +282,7 @@ actor WalletEngineRuntime {
 
     private func activateUnlocked(
         serverAddress: String,
-        serverPublicKey: Data,
-        exportedWords: [String]?
+        serverPublicKey: Data
     ) async throws -> WalletEngineActivation {
         guard serverPublicKey.count == 32 else {
             throw WalletContext.WalletError.storage(.identityMismatch)
@@ -300,7 +301,7 @@ actor WalletEngineRuntime {
             if let secretRef = stored.secretRef,
                try await self.storage.containsProtectedSecret(ProtectedSecretRef(value: secretRef)) {
                 selectedRecord = stored
-            } else if exportedWords == nil {
+            } else {
                 selectedRecord = WalletEngineDescriptorRecord(
                     recordId: stored.recordId,
                     address: stored.address,
@@ -308,39 +309,6 @@ actor WalletEngineRuntime {
                     secretRef: nil
                 )
             }
-        }
-
-        if selectedRecord == nil, let exportedWords {
-            let words = normalizedEngineMnemonic(exportedWords)
-            guard detectMnemonicSchemes(words: words).contains(.rotation) else {
-                throw WalletContext.WalletError.invalidMnemonic
-            }
-            let imported = try await self.lifecycle.importWallet(request: ImportWalletRequest(
-                recordId: UUID().uuidString.lowercased(),
-                network: .mainnet,
-                recoveryWords: words
-            ))
-            guard walletEngineAddressesEqual(imported.address, serverAddress),
-                  imported.publicKey == serverPublicKey else {
-                do {
-                    try await self.storage.deleteProtectedSecret(imported.secretRef)
-                } catch {
-                    self.errorLogger.error("wallet_imported_secret_cleanup_failed", error)
-                }
-                throw WalletContext.WalletError.storage(.identityMismatch)
-            }
-            let record = WalletEngineDescriptorRecord(descriptor: imported)
-            do {
-                try await self.storage.saveDescriptor(record)
-            } catch {
-                do {
-                    try await self.storage.deleteProtectedSecret(imported.secretRef)
-                } catch {
-                    self.errorLogger.error("wallet_imported_secret_cleanup_failed", error)
-                }
-                throw error
-            }
-            selectedRecord = record
         }
 
         let record = selectedRecord ?? WalletEngineDescriptorRecord(
@@ -378,8 +346,7 @@ actor WalletEngineRuntime {
         try await self.recoverKeyRotationAfterActivation(record: record, client: client)
         return WalletEngineActivation(
             snapshot: try client.snapshot(),
-            canSign: record.secretRef != nil,
-            descriptor: record.descriptor
+            canSign: record.secretRef != nil
         )
     }
 
@@ -486,17 +453,38 @@ actor WalletEngineRuntime {
         }
     }
 
-    func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
+    func send(pendingTransfer: WalletContext.PendingTransfer, intent: SendIntent, useWalletTransferApi: Bool) async throws -> WalletEngineSendExecution {
         try await self.withFfi(priority: .userInitiated, cancellation: .send) {
             try await self.ensureKeyRotationAllowsSigning()
+            guard let config = self.clientConfig else {
+                throw WalletContext.WalletError.unavailable
+            }
             let request = SendRequest(
-                operationId: operationId,
+                operationId: pendingTransfer.id,
                 force: false,
                 intent: intent
             )
-            return try await self.sendRecoveringStuckClient { client in
+            // Keep the selected route for the entire operation, including client recreation.
+            let submission: WalletEngineTransferSubmission? = useWalletTransferApi ? WalletEngineTransferSubmission(
+                recordId: config.recordId,
+                walletAddress: config.address,
+                pendingTransfer: pendingTransfer
+            ) : nil
+            return try await self.sendRecoveringStuckClient(transferSubmission: submission) { client in
                 try await client.send(request: request)
             }
+        }
+    }
+
+    func transferReceipt(operationId: String) async -> WalletEngineTransferReceipt? {
+        guard let recordId = self.clientConfig?.recordId else { return nil }
+        do {
+            return try await self.storage.loadTransferReceipts().last {
+                $0.recordId == recordId && $0.pendingTransfer.id == operationId
+            }
+        } catch {
+            self.logger.error("wallet_transfer_receipt_load_failed", error)
+            return nil
         }
     }
 
@@ -650,14 +638,14 @@ actor WalletEngineRuntime {
                 do {
                     snapshot = try client.snapshot()
                 } catch {
-                    self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
+                    self.logger.error("wallet_key_rotation_snapshot_failed", error)
                     snapshot = nil
                 }
                 if let snapshot {
                     do {
                         _ = try await self.reconcileKeyRotation(send: snapshot.send)
                     } catch {
-                        self.errorLogger.error("wallet_key_rotation_reconciliation_failed", error)
+                        self.logger.error("wallet_key_rotation_reconciliation_failed", error)
                     }
                 }
                 // submissionStarted is the app's durable boundary. An absent or
@@ -692,7 +680,7 @@ actor WalletEngineRuntime {
                 do {
                     snapshot = try self.requireClient().snapshot()
                 } catch {
-                    self.errorLogger.error("wallet_key_rotation_snapshot_failed", error)
+                    self.logger.error("wallet_key_rotation_snapshot_failed", error)
                     snapshot = nil
                 }
                 if let snapshot, snapshot.send.operationId == record.operationId {
@@ -806,12 +794,12 @@ actor WalletEngineRuntime {
             if publicKey == record.previousPublicKey {
                 return .previous
             }
-            self.errorLogger.log("event=wallet_key_rotation_public_key_mismatch")
+            self.logger.log("event=wallet_key_rotation_public_key_mismatch")
             return .different
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            self.errorLogger.error("wallet_key_rotation_public_key_check_failed", error)
+            self.logger.error("wallet_key_rotation_public_key_check_failed", error)
             return nil
         }
     }
@@ -907,7 +895,7 @@ actor WalletEngineRuntime {
                 try await self.shutdownClient()
             }
         } catch {
-            self.errorLogger.error("wallet_engine_shutdown_failed", error)
+            self.logger.error("wallet_engine_shutdown_failed", error)
         }
     }
 
@@ -1034,7 +1022,7 @@ actor WalletEngineRuntime {
             } catch {
                 // A transport failure is ambiguous. Keep both the replacement
                 // secret and rollback material until provider evidence is available.
-                self.errorLogger.error("wallet_key_rotation_recovery_failed", error)
+                self.logger.error("wallet_key_rotation_recovery_failed", error)
             }
         case .chainApplied, .backupDisabled:
             _ = try await self.resolveAppliedKeyRotation(rotation)
@@ -1063,13 +1051,15 @@ actor WalletEngineRuntime {
     }
 
     private func sendRecoveringStuckClient(
+        transferSubmission: WalletEngineTransferSubmission? = nil,
         _ operation: (WalletClient) async throws -> SendResult
     ) async throws -> WalletEngineSendExecution {
         let client = try self.requireClient()
         do {
             return WalletEngineSendExecution(
-                result: try await operation(client),
-                didRecreateClient: false
+                result: try await self.performSend(client, transferSubmission: transferSubmission, operation: operation),
+                didRecreateClient: false,
+                receipt: await self.receiptForSubmission(transferSubmission)
             )
         } catch {
             guard walletEngineIsSendAlreadyInProgress(error) else {
@@ -1079,12 +1069,13 @@ actor WalletEngineRuntime {
                 throw error
             }
 
-            self.errorLogger.error("wallet_engine_stuck_send_recovery_started", error)
+            self.logger.error("wallet_engine_stuck_send_recovery_started", error)
             try await client.shutdown()
             self.client = nil
             let replacementStatuslessHost = WalletEngineStatuslessHost(
                 engine: self.engine,
-                errorLogger: self.errorLogger
+                storage: self.storage,
+                logger: self.logger
             )
             let replacement: WalletClient
             do {
@@ -1100,10 +1091,33 @@ actor WalletEngineRuntime {
             self.client = replacement
             self.clientRevision &+= 1
             return WalletEngineSendExecution(
-                result: try await operation(replacement),
-                didRecreateClient: true
+                result: try await self.performSend(replacement, transferSubmission: transferSubmission, operation: operation),
+                didRecreateClient: true,
+                receipt: await self.receiptForSubmission(transferSubmission)
             )
         }
+    }
+
+    private func performSend(
+        _ client: WalletClient,
+        transferSubmission: WalletEngineTransferSubmission?,
+        operation: (WalletClient) async throws -> SendResult
+    ) async throws -> SendResult {
+        let host = self.statuslessHost
+        await host.setTransferSubmission(transferSubmission)
+        do {
+            let result = try await operation(client)
+            await host.setTransferSubmission(nil)
+            return result
+        } catch {
+            await host.setTransferSubmission(nil)
+            throw error
+        }
+    }
+
+    private func receiptForSubmission(_ submission: WalletEngineTransferSubmission?) async -> WalletEngineTransferReceipt? {
+        guard let submission else { return nil }
+        return await self.transferReceipt(operationId: submission.pendingTransfer.id)
     }
 
     private func ensureKeyRotationAllowsSigning() async throws {
@@ -1205,7 +1219,7 @@ actor WalletEngineRuntime {
                 try await client.cancelSend()
             }
         } catch {
-            self.errorLogger.error("wallet_engine_operation_cancellation_failed", error)
+            self.logger.error("wallet_engine_operation_cancellation_failed", error)
         }
     }
 }

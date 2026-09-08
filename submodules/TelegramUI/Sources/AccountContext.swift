@@ -353,10 +353,7 @@ public final class AccountContextImpl: AccountContext {
                     }
                     return data.currentPasswordDerivation != nil
                 }
-                |> distinctUntilChanged,
-                log: { message in
-                    Logger.shared.log("WalletContext", message)
-                }
+                |> distinctUntilChanged
             )
             self.giftAuctionsManager = GiftAuctionsManager(account: account)
         } else {

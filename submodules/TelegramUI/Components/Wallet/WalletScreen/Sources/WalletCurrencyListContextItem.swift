@@ -283,6 +283,7 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
     private let actionSelected: (ContextMenuActionResult) -> Void
 
     private let scrollNode: ASScrollNode
+    private let scrollMaskView: UIImageView
     private var actionNodes: [AnyHashable: ContextControllerActionsListActionItemNode] = [:]
 
     private var searchDisposable: Disposable?
@@ -306,6 +307,20 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
         self.getController = getController
         self.actionSelected = actionSelected
         self.scrollNode = ASScrollNode()
+        self.scrollMaskView = UIImageView()
+
+        let gradientHeight: CGFloat = 12.0
+        let maskHeight = gradientHeight * 2.0 + 1.0
+        self.scrollMaskView.image = generateGradientImage(
+            size: CGSize(width: 1.0, height: maskHeight),
+            colors: [
+                UIColor(white: 1.0, alpha: 0.0),
+                UIColor(white: 1.0, alpha: 1.0),
+                UIColor(white: 1.0, alpha: 1.0),
+                UIColor(white: 1.0, alpha: 0.0)
+            ],
+            locations: [0.0, gradientHeight / maskHeight, (gradientHeight + 1.0) / maskHeight, 1.0]
+        )?.resizableImage(withCapInsets: UIEdgeInsets(top: gradientHeight, left: 0.0, bottom: gradientHeight, right: 0.0), resizingMode: .stretch)
 
         super.init()
 
@@ -335,6 +350,8 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
 
     override func didLoad() {
         super.didLoad()
+
+        self.view.mask = self.scrollMaskView
 
         self.scrollNode.view.delegate = self.wrappedScrollViewDelegate
         self.scrollNode.view.alwaysBounceVertical = false
@@ -467,6 +484,7 @@ private final class WalletCurrencyListContextItemNode: ASDisplayNode, ContextMen
         return (CGSize(width: maxWidth, height: min(maxHeight, self.totalContentHeight)), { size, transition in
             self.maxWidth = maxWidth
             transition.updateFrame(node: self.scrollNode, frame: CGRect(origin: .zero, size: size))
+            transition.updateFrame(view: self.scrollMaskView, frame: CGRect(origin: .zero, size: size))
             self.scrollNode.view.contentSize = CGSize(width: size.width, height: self.totalContentHeight)
             self.updateScrolling(maxWidth: maxWidth)
         })

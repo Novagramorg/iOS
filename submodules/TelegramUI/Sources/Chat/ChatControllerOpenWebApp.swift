@@ -30,6 +30,8 @@ func openWebAppImpl(
     payload: String?,
     verifyAgeCompletion: ((Int) -> Void)?,
     isOnramp: Bool = false,
+    willOpen: @escaping () -> Void = {},
+    opened: @escaping () -> Void = {},
     /// When supplied, the caller renders the loading state itself (an InstantPage V2 button pill
     /// shimmers) and the `.requestInProgress` title panel is suppressed — two simultaneous progress
     /// indicators for one tap read as a bug. When nil, the panel behaves exactly as before, which is
@@ -223,7 +225,10 @@ func openWebAppImpl(
                     return navigationController ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
                 })
                 controller.navigationPresentation = .flatModal
-                parentController.push(controller)
+                if let navigationController = parentController.navigationController as? NavigationController {
+                    willOpen()
+                    navigationController.pushViewController(controller, completion: opened)
+                }
                 
                 presentImpl = { [weak controller] c, a in
                     controller?.present(c, in: .window(.root), with: a)
@@ -292,7 +297,10 @@ func openWebAppImpl(
                         return navigationController ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
                     }, verifyAgeCompletion: verifyAgeCompletion)
                     controller.navigationPresentation = .flatModal
-                    parentController.push(controller)
+                    if let navigationController = parentController.navigationController as? NavigationController {
+                        willOpen()
+                        navigationController.pushViewController(controller, completion: opened)
+                    }
                     
                     presentImpl = { [weak controller] c, a in
                         controller?.present(c, in: .window(.root), with: a)
@@ -345,7 +353,10 @@ func openWebAppImpl(
                         return navigationController ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
                     })
                     controller.navigationPresentation = .flatModal
-                    parentController.push(controller)
+                    if let navigationController = parentController.navigationController as? NavigationController {
+                        willOpen()
+                        navigationController.pushViewController(controller, completion: opened)
+                    }
                     
                     presentImpl = { [weak controller] c, a in
                         controller?.present(c, in: .window(.root), with: a)
@@ -710,7 +721,7 @@ public extension ChatControllerImpl {
         ChatControllerImpl.presentBotApp(context: self.context, parentController: self, botApp: botApp, botPeer: botPeer, payload: payload, mode: mode, concealed: concealed, commit: commit)
     }
     
-    internal static func presentBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool = false, concealed: Bool = false, commit: @escaping () -> Void = {}) {
+    internal static func presentBotApp(context: AccountContext, parentController: ViewController, botApp: BotApp?, botPeer: EnginePeer, payload: String?, mode: ResolvedStartAppMode, isOnramp: Bool = false, willOpen: @escaping () -> Void = {}, opened: @escaping () -> Void = {}, concealed: Bool = false, commit: @escaping () -> Void = {}) {
         let chatController = parentController as? ChatControllerImpl
         let peerId: EnginePeer.Id
         let threadId = chatController?.chatLocation.threadId
@@ -805,7 +816,10 @@ public extension ChatControllerImpl {
                         }
                     })
                     controller.navigationPresentation = .flatModal
-                    parentController?.push(controller)
+                    if let navigationController = parentController?.navigationController as? NavigationController {
+                        willOpen()
+                        navigationController.pushViewController(controller, completion: opened)
+                    }
                         
                     presentImpl = { [weak controller] c, a in
                         controller?.present(c, in: .window(.root), with: a)
@@ -894,7 +908,9 @@ public extension ChatControllerImpl {
                 skipTermsOfService: false,
                 payload: payload,
                 verifyAgeCompletion: nil,
-                isOnramp: isOnramp
+                isOnramp: isOnramp,
+                willOpen: willOpen,
+                opened: opened
             )
         }
     }

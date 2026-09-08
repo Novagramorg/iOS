@@ -16,9 +16,9 @@ import GlassBarButtonComponent
 import ButtonComponent
 import InfoParagraphComponent
 
-private enum WalletInfoLogo: Equatable {
-    case icon(name: String)
-    case animation(name: String)
+private struct WalletInfoLogo: Equatable {
+    let name: String
+    let loop: Bool
 }
 
 private struct WalletInfoItem: Equatable {
@@ -63,7 +63,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: .icon(name: "Wallet/Logo"),
+            logo: WalletInfoLogo(name: "Diamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -119,7 +119,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: .icon(name: "Wallet/Logo"),
+            logo: WalletInfoLogo(name: "Diamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -159,7 +159,7 @@ private func walletInfoContent(
         let buttonTitle = "Show Recovery Phrase"
 
         return WalletInfoContent(
-            logo: .animation(name: "WalletWordList"),
+            logo: WalletInfoLogo(name: "WalletWordList", loop: false),
             title: title,
             text: text,
             items: [
@@ -282,7 +282,6 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
     static var body: Body {
         let closeButton = Child(GlassBarButtonComponent.self)
-        let logo = Child(BundleIconComponent.self)
         let animation = Child(LottieComponent.self)
         let title = Child(BalancedTextComponent.self)
         let text = Child(BalancedTextComponent.self)
@@ -317,41 +316,25 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let spacing: CGFloat = 16.0
             var contentSize = CGSize(width: context.availableSize.width, height: 33.0)
 
-            let logoSize: CGSize
-            switch content.logo {
-            case let .icon(name):
-                let logo = logo.update(
-                    component: BundleIconComponent(
-                        name: name,
-                        tintColor: nil
-                    ),
-                    availableSize: context.availableSize,
-                    transition: context.transition
-                )
-                context.add(logo
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + logo.size.height / 2.0))
-                )
-                logoSize = logo.size
-            case let .animation(name):
-                let animationSize = CGSize(width: 100.0, height: 100.0)
-                let animation = animation.update(
-                    component: LottieComponent(
-                        content: LottieComponent.AppBundleContent(name: name),
-                        startingPosition: .begin,
-                        size: animationSize,
-                        loop: false,
-                        playOnce: state.playRecoveryAnimation
-                    ),
-                    availableSize: animationSize,
-                    transition: context.transition
-                )
-                context.add(animation
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + animation.size.height / 2.0))
-                )
-                logoSize = animation.size
+            let animationSize = CGSize(width: 100.0, height: 100.0)
+            let animation = animation.update(
+                component: LottieComponent(
+                    content: LottieComponent.AppBundleContent(name: content.logo.name),
+                    startingPosition: .begin,
+                    size: animationSize,
+                    loop: content.logo.loop,
+                    playOnce: content.logo.loop ? nil : state.playRecoveryAnimation
+                ),
+                availableSize: animationSize,
+                transition: context.transition
+            )
+            context.add(animation
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + animation.size.height / 2.0))
+            )
+            if !content.logo.loop {
                 state.playRecoveryAnimationIfNeeded()
             }
-            contentSize.height += logoSize.height
+            contentSize.height += animation.size.height
             contentSize.height += 8.0
 
             let title = title.update(

@@ -125,6 +125,47 @@ public struct WalletTransactions: Equatable {
     }
 }
 
+public struct WalletGaslessInfo: Codable, Equatable, Sendable {
+    public let available: Bool
+    public let left: Int32
+    public let resetAt: Int32
+    public let minAmount: Int64
+    public let relayerAddress: String
+
+    public init(available: Bool, left: Int32, resetAt: Int32, minAmount: Int64, relayerAddress: String) {
+        self.available = available
+        self.left = left
+        self.resetAt = resetAt
+        self.minAmount = minAmount
+        self.relayerAddress = relayerAddress
+    }
+}
+
+public struct WalletSentTransfer: Codable, Equatable, Sendable {
+    public let gasless: Bool
+    public let msgHash: String
+    public let gaslessLeft: Int32
+    public let gaslessResetAt: Int32
+
+    public init(gasless: Bool, msgHash: String, gaslessLeft: Int32, gaslessResetAt: Int32) {
+        self.gasless = gasless
+        self.msgHash = msgHash
+        self.gaslessLeft = gaslessLeft
+        self.gaslessResetAt = gaslessResetAt
+    }
+}
+
+public enum WalletGetGaslessInfoError: Error {
+    case generic
+}
+
+public enum WalletSendTransferError: Error, Equatable, Sendable {
+    case invalidData
+    case sendFailed
+    case network
+    case generic
+}
+
 public enum WalletGetStateError: Error {
     case generic
 }
@@ -320,26 +361,96 @@ func _internal_getWalletTransactions(
         return .generic
     }
     |> mapToSignal { result -> Signal<WalletTransactions, WalletGetTransactionsError> in
-        return account.postbox.transaction { transaction -> WalletTransactions in
-            switch result {
-            case let .transactions(transactions):
-                let parsedPeers = AccumulatedPeers(
-                    transaction: transaction,
-                    chats: transactions.chats,
-                    users: transactions.users
-                )
-                updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
-                return WalletTransactions(
-                    balance: transactions.balance,
-                    items: transactions.transactions.map {
-                        return WalletTransaction(apiTransaction: $0, transaction: transaction)
-                    },
-                    nextOffset: transactions.nextOffset
-                )
-            }
-        }
-        |> castError(WalletGetTransactionsError.self)
+        return _internal_walletTransactionsResult(account: account, result: result)
     }
+}
+
+func _internal_getWalletGaslessInfo(account: Account) -> Signal<WalletGaslessInfo, WalletGetGaslessInfoError> {
+    return account.network.request(Api.functions.wallet.getGaslessInfo(), automaticFloodWait: false)
+    |> mapError { _ -> WalletGetGaslessInfoError in .generic }
+    |> map { result in
+        switch result {
+        case let .gaslessInfo(info):
+            return WalletGaslessInfo(
+                available: (info.flags & (1 << 0)) != 0,
+                left: info.left,
+                resetAt: info.resetAt,
+                minAmount: info.minAmount,
+                relayerAddress: info.relayerAddress
+            )
+        }
+    }
+}
+
+func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?) -> Signal<WalletSentTransfer, WalletSendTransferError> {
+    guard !dataNormal.isEmpty, dataNormal.count <= 16 * 1024,
+          (dataGasless?.count ?? 0) <= 16 * 1024 else {
+        return .fail(.invalidData)
+    }
+    return account.network.request(Api.functions.wallet.sendTransfer(
+        flags: dataGasless == nil ? 0 : (1 << 0),
+        dataNormal: Buffer(data: dataNormal),
+        dataGasless: dataGasless.map { Buffer(data: $0) }
+    ), automaticFloodWait: false)
+    |> mapError { error -> WalletSendTransferError in
+        switch error.errorDescription {
+        case "WALLET_TRANSFER_DATA_INVALID":
+            return .invalidData
+        case "WALLET_TRANSFER_SEND_FAILED":
+            return .sendFailed
+        default:
+            return error.errorCode < 0 ? .network : .generic
+        }
+    }
+    |> mapToSignal { result -> Signal<WalletSentTransfer, WalletSendTransferError> in
+        switch result {
+        case let .sentTransfer(transfer):
+            return .single(WalletSentTransfer(
+                gasless: (transfer.flags & (1 << 0)) != 0,
+                msgHash: transfer.msgHash,
+                gaslessLeft: transfer.gaslessLeft,
+                gaslessResetAt: transfer.gaslessResetAt
+            ))
+        }
+    }
+}
+
+func _internal_getWalletTransactionsByIDs(account: Account, ids: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
+    return account.network.request(Api.functions.wallet.getTransactionsByIDs(id: ids), automaticFloodWait: false)
+    |> mapError { _ -> WalletGetTransactionsError in .generic }
+    |> mapToSignal { result in
+        return _internal_walletTransactionsResult(account: account, result: result)
+    }
+}
+
+func _internal_getWalletTransactionsByMsgHash(account: Account, msgHash: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
+    return account.network.request(Api.functions.wallet.getTransactionsByMsgHash(msgHash: msgHash), automaticFloodWait: false)
+    |> mapError { _ -> WalletGetTransactionsError in .generic }
+    |> mapToSignal { result in
+        return _internal_walletTransactionsResult(account: account, result: result)
+    }
+}
+
+func _internal_walletTransactionsResult(account: Account, result: Api.wallet.Transactions) -> Signal<WalletTransactions, WalletGetTransactionsError> {
+    return account.postbox.transaction { transaction -> WalletTransactions in
+        switch result {
+        case let .transactions(transactions):
+            let parsedPeers = AccumulatedPeers(
+                transaction: transaction,
+                chats: transactions.chats,
+                users: transactions.users
+            )
+            updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
+            return WalletTransactions(
+                balance: transactions.balance,
+                items: transactions.transactions.map {
+                    return WalletTransaction(apiTransaction: $0, transaction: transaction)
+                },
+                nextOffset: transactions.nextOffset
+            )
+        }
+    }
+    |> castError(WalletGetTransactionsError.self)
 }
 
 func _internal_getStreamingUrl(account: Account) -> Signal<WalletStreamingUrl, TonApiRequestError> {

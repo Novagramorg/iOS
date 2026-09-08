@@ -99,8 +99,19 @@ actor WalletEngineStorage {
         try self.writeCodable(descriptor, service: self.descriptorService, account: "wallet")
     }
 
-    func removeDescriptor() throws {
-        try self.remove(service: self.descriptorService, account: "wallet")
+    func loadTransferReceipts() throws -> [WalletEngineTransferReceipt] {
+        try self.readCodable(service: self.descriptorService, account: "transfer-receipts") ?? []
+    }
+
+    func saveTransferReceipt(_ receipt: WalletEngineTransferReceipt) throws {
+        // Retain the short-lived UI receipts independently of the engine journal.
+        // Include the pending draft so a crash before the Postbox write can recover it.
+        var receipts = try self.loadTransferReceipts().filter {
+            $0.pendingTransfer.id != receipt.pendingTransfer.id
+                && Int64($0.receivedAt) + Int64(walletPendingTransferUILifetime) > Int64(receipt.receivedAt)
+        }
+        receipts.append(receipt)
+        try self.writeCodable(receipts, service: self.descriptorService, account: "transfer-receipts")
     }
 
     func loadReplacementCandidate() throws -> WalletEngineDescriptorRecord? {
@@ -240,8 +251,6 @@ actor WalletEngineStorage {
               !candidate.isEmpty else {
             throw WalletEngineStorageError.corrupted
         }
-        // The candidate stays separately durable until Telegram confirms that
-        // the encrypted backup has been disabled.
         try self.write(candidate, service: self.secretService, account: record.activeSecretRef)
         if record.phase == .submissionStarted {
             record.phase = .chainApplied
@@ -476,13 +485,13 @@ actor WalletEngineStorage {
 
 actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
-    private let errorLogger: WalletContextErrorLogger
+    private let logger: WalletLogger
     private var captureNextProtectedSecret = false
     private var transientProtectedSecrets: [String: Data] = [:]
 
-    init(storage: WalletEngineStorage, errorLogger: WalletContextErrorLogger) {
+    init(storage: WalletEngineStorage, logger: WalletLogger) {
         self.storage = storage
-        self.errorLogger = errorLogger
+        self.logger = logger
     }
 
     func now() async -> UInt64 {
@@ -521,10 +530,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.readProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
-            self.errorLogger.error("wallet_protected_secret_read_failed", error)
+            self.logger.error("wallet_protected_secret_read_failed", error)
             throw error
         } catch {
-            self.errorLogger.error("wallet_protected_secret_read_failed", error)
+            self.logger.error("wallet_protected_secret_read_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -541,10 +550,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             try await self.storage.storeProtectedSecret(request)
         } catch let error as ProtectedSecretHostError {
-            self.errorLogger.error("wallet_protected_secret_store_failed", error)
+            self.logger.error("wallet_protected_secret_store_failed", error)
             throw error
         } catch {
-            self.errorLogger.error("wallet_protected_secret_store_failed", error)
+            self.logger.error("wallet_protected_secret_store_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -556,7 +565,7 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             try await self.storage.deleteProtectedSecret(secretRef)
         } catch {
-            self.errorLogger.error("wallet_protected_secret_delete_failed", error)
+            self.logger.error("wallet_protected_secret_delete_failed", error)
             throw protectedSecretFailure(.unavailable, String(describing: error))
         }
     }
@@ -565,10 +574,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.loadJournal(key)
         } catch let error as JournalHostError {
-            self.errorLogger.error("wallet_journal_load_failed", error)
+            self.logger.error("wallet_journal_load_failed", error)
             throw error
         } catch {
-            self.errorLogger.error("wallet_journal_load_failed", error)
+            self.logger.error("wallet_journal_load_failed", error)
             throw journalFailure(.unavailable, String(describing: error))
         }
     }
@@ -577,10 +586,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             return try await self.storage.compareExchangeJournal(mutation)
         } catch let error as JournalHostError {
-            self.errorLogger.error("wallet_journal_compare_exchange_failed", error)
+            self.logger.error("wallet_journal_compare_exchange_failed", error)
             throw error
         } catch {
-            self.errorLogger.error("wallet_journal_compare_exchange_failed", error)
+            self.logger.error("wallet_journal_compare_exchange_failed", error)
             throw journalFailure(.unavailable, String(describing: error))
         }
     }

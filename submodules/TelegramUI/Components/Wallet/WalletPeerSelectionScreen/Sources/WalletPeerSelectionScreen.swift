@@ -653,6 +653,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
 
             self.contentListNode?.clearHighlightAnimated(true)
+            if case .transfer = component.mode {
+                self.openSendScreen(peer: peer)
+                return
+            }
             self.resolvingPeerId = peer.id
 
             let addressSignal: Signal<String?, WalletGetUserAddressesError> = component.context.engine.wallet.getUserAddresses(
@@ -682,8 +686,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         WalletContext.ResolvedTransferRecipient(
                             address: address,
                             displayName: peer.compactDisplayTitle
-                        ),
-                        peer: peer
+                        )
                     )
                 } else {
                     self.presentRecipientErrorAlert()
@@ -749,8 +752,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
             let value = clipboardValue.trimmingCharacters(in: .whitespacesAndNewlines)
             let query: String
-            if let address = WalletContext.transferAddress(from: value) {
-                query = address
+            if let recipient = WalletContext.transferRecipient(from: value) {
+                query = recipient.transferInput
             } else {
                 let lowercaseValue = value.lowercased()
                 guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".t.me"))
@@ -784,15 +787,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
             scanner.completion = { [weak self, weak scanner] value in
                 guard let self,
                       let value,
-                      let address = WalletContext.transferAddress(from: value) else {
+                      let recipient = WalletContext.transferRecipient(from: value) else {
                     return
                 }
                 Queue.mainQueue().after(0.15) {
                     scanner?.dismiss()
-                    self.openRecipient(WalletContext.ResolvedTransferRecipient(
-                        address: address,
-                        displayName: nil
-                    ))
+                    self.openRecipient(recipient)
                 }
             }
             controller.push(scanner)
@@ -805,10 +805,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.openRecipient(recipient)
         }
 
-        private func openRecipient(
-            _ recipient: WalletContext.ResolvedTransferRecipient,
-            peer: EnginePeer? = nil
-        ) {
+        private func openSendScreen(peer: EnginePeer? = nil, address: String? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
                   self.resolvingPeerId == nil,
@@ -817,40 +814,55 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
 
             self.searchBarNode?.deactivate(clear: false)
+            let dismissSelectionScreen: () -> Void = { [weak controller] in
+                if let controller {
+                    if let navigationController = controller.navigationController as? NavigationController {
+                        var viewControllers = navigationController.viewControllers
+                        viewControllers.removeAll(where: { $0 === controller })
+                        navigationController.setViewControllers(viewControllers, animated: false)
+                    } else {
+                        controller.dismiss(animated: false)
+                    }
+                }
+                component.dismissSourceScreen()
+            }
+            let sendScreen: WalletSendScreen
+            if let peer {
+                sendScreen = WalletSendScreen(
+                    context: component.context,
+                    peer: peer,
+                    walletContext: component.walletContext,
+                    refreshBalanceOnOpen: false,
+                    completed: dismissSelectionScreen
+                )
+            } else if let address {
+                sendScreen = WalletSendScreen(
+                    context: component.context,
+                    walletContext: component.walletContext,
+                    address: address,
+                    refreshBalanceOnOpen: false,
+                    completed: dismissSelectionScreen
+                )
+            } else {
+                return
+            }
+            sendScreen.navigationPresentation = .modal
+            controller.push(sendScreen)
+        }
+
+        private func openRecipient(_ recipient: WalletContext.ResolvedTransferRecipient) {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  self.resolvingPeerId == nil,
+                  !self.isPreparingTransfer else {
+                return
+            }
+
             switch component.mode {
             case .transfer:
-                let dismissSelectionScreen: () -> Void = { [weak controller] in
-                    if let controller {
-                        if let navigationController = controller.navigationController as? NavigationController {
-                            var viewControllers = navigationController.viewControllers
-                            viewControllers.removeAll(where: { $0 === controller })
-                            navigationController.setViewControllers(viewControllers, animated: false)
-                        } else {
-                            controller.dismiss(animated: false)
-                        }
-                    }
-                    component.dismissSourceScreen()
-                }
-                let sendScreen: WalletSendScreen
-                if let peer {
-                    sendScreen = WalletSendScreen(
-                        context: component.context,
-                        peer: peer,
-                        walletContext: component.walletContext,
-                        address: recipient.address,
-                        completed: dismissSelectionScreen
-                    )
-                } else {
-                    sendScreen = WalletSendScreen(
-                        context: component.context,
-                        walletContext: component.walletContext,
-                        address: recipient.address,
-                        completed: dismissSelectionScreen
-                    )
-                }
-                sendScreen.navigationPresentation = .modal
-                controller.push(sendScreen)
+                self.openSendScreen(address: recipient.transferInput)
             case let .collectible(collectible):
+                self.searchBarNode?.deactivate(clear: false)
                 self.isPreparingTransfer = true
                 self.state?.updated(transition: .easeInOut(duration: 0.2))
                 self.transferDisposable.set((component.walletContext.prepareCollectibleTransfer(
