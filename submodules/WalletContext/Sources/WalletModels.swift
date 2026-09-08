@@ -1,7 +1,7 @@
 import Foundation
 import TelegramCore
 
-let walletPendingTransferUILifetime: Int32 = 60
+let walletPendingTransferUILifetime: Int32 = 90
 
 func walletPendingTransferUIExpirationTimestamp(from timestamp: Int32) -> Int32 {
     return Int32(clamping: Int64(timestamp) + Int64(walletPendingTransferUILifetime))
@@ -627,6 +627,7 @@ public extension WalletContext {
         public let collectibleAddress: String?
         public let normalizedHash: String?
         public let sentTransfer: WalletSentTransfer?
+        public let pendingMessage: WalletPendingTransferMessageReference?
 
         /// Streaming uses the engine's normalized hash, not the server's message hash.
         public var streamingTraceId: String? {
@@ -649,6 +650,7 @@ public extension WalletContext {
             collectibleAddress: String? = nil,
             normalizedHash: String? = nil,
             sentTransfer: WalletSentTransfer? = nil,
+            pendingMessage: WalletPendingTransferMessageReference? = nil,
             fee: Int64? = nil,
             transactionHash: String? = nil,
             transactionLt: String? = nil,
@@ -664,6 +666,7 @@ public extension WalletContext {
             self.collectibleAddress = collectibleAddress
             self.normalizedHash = normalizedHash
             self.sentTransfer = sentTransfer
+            self.pendingMessage = pendingMessage
             self.fee = fee
             self.transactionHash = transactionHash
             self.transactionLt = transactionLt
@@ -683,6 +686,7 @@ public extension WalletContext {
                 collectibleAddress: try container.decodeIfPresent(String.self, forKey: .collectibleAddress),
                 normalizedHash: try container.decodeIfPresent(String.self, forKey: .normalizedHash),
                 sentTransfer: try container.decodeIfPresent(WalletSentTransfer.self, forKey: .sentTransfer),
+                pendingMessage: try container.decodeIfPresent(WalletPendingTransferMessageReference.self, forKey: .pendingMessage),
                 fee: try container.decodeIfPresent(Int64.self, forKey: .fee),
                 transactionHash: try container.decodeIfPresent(String.self, forKey: .transactionHash),
                 transactionLt: try container.decodeIfPresent(String.self, forKey: .transactionLt),

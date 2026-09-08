@@ -1332,6 +1332,7 @@ extension WalletContextImpl {
         self.streamingRefreshTask?.cancel()
         self.streamingRefreshTask = nil
         self.streamingRefreshTaskId = nil
+        self.streamingRefreshScope = []
         self.streamingAddress = nil
         self.streamingGeneration = nil
         self.streamingConnectionState = .inactive
@@ -1343,22 +1344,24 @@ extension WalletContextImpl {
         }
     }
 
-    func retryStreamingSynchronizationIfNeeded() {
-        guard self.streamingRefreshTask == nil,
-              self.streamingConnectionState == .subscribed,
+    func retryStreamingSynchronizationIfNeeded(scope: WalletSynchronizationScope) {
+        guard self.streamingConnectionState == .subscribed,
               let generation = self.streamingGeneration,
-              let rawAddress = self.streamingAddress,
-              self.streamingRefreshTracker.takeRetry() else { return }
-        self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress, delay: 3_000_000_000)
+              let rawAddress = self.streamingAddress else { return }
+        if self.streamingRefreshTask == nil {
+            guard self.streamingRefreshTracker.takeRetry() else { return }
+        }
+        self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress, scope: scope, delay: 3_000_000_000)
     }
 
-    private func scheduleStreamingRefresh(generation: UInt64, rawAddress: String, delay: UInt64 = 1_000_000_000) {
-        guard self.streamingRefreshTask == nil,
-              self.activationGeneration == generation,
+    private func scheduleStreamingRefresh(generation: UInt64, rawAddress: String, scope: WalletSynchronizationScope = [.account, .transactions], delay: UInt64 = 1_000_000_000) {
+        guard self.activationGeneration == generation,
               self.streamingGeneration == generation,
               self.streamingAddress == rawAddress else {
             return
         }
+        self.streamingRefreshScope.formUnion(scope)
+        guard self.streamingRefreshTask == nil else { return }
         let taskId = UUID()
         self.streamingRefreshTaskId = taskId
         self.streamingRefreshTask = Task { [weak self] in
@@ -1376,6 +1379,7 @@ extension WalletContextImpl {
             if self.streamingRefreshTaskId == taskId {
                 self.streamingRefreshTask = nil
                 self.streamingRefreshTaskId = nil
+                self.streamingRefreshScope = []
             }
         }
         do {
@@ -1392,8 +1396,10 @@ extension WalletContextImpl {
               self.walletScreenCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
             return
         }
+        let scope = self.streamingRefreshScope
         self.streamingRefreshTask = nil
         self.streamingRefreshTaskId = nil
-        self.requestSynchronization(scope: [.account, .transactions])
+        self.streamingRefreshScope = []
+        self.requestSynchronization(scope: scope)
     }
 }

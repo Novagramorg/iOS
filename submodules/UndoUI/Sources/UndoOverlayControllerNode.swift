@@ -515,7 +515,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 
                 displayUndo = undo
                 self.originalRemainingSeconds = 5
-            case let .emoji(name, text):
+            case let .emoji(name, text, interactive):
                 self.avatarNode = nil
                 self.iconNode = nil
                 self.iconCheckNode = nil
@@ -525,12 +525,13 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 self.animatedStickerNode?.setup(source: AnimatedStickerNodeLocalFileSource(name: name), width: 100, height: 100, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
                 
                 let body = MarkdownAttributeSet(font: Font.regular(14.0), textColor: .white)
-                let bold = MarkdownAttributeSet(font: Font.semibold(14.0), textColor: .white)
+                let bold = MarkdownAttributeSet(font: Font.semibold(14.0), textColor: interactive ? undoTextColor : .white)
                 let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(body: body, bold: bold, link: body, linkAttribute: { _ in return nil }), textAlignment: .natural)
                 self.textNode.attributedText = attributedText
                 self.textNode.maximumNumberOfLines = 10
                 displayUndo = false
                 self.originalRemainingSeconds = 5
+                isUserInteractionEnabled = interactive
             case let .swipeToReply(title, text):
                 self.avatarNode = nil
                 self.iconNode = nil

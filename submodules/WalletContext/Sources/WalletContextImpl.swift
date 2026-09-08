@@ -124,6 +124,7 @@ actor WalletContextImpl {
     var streamingTask: Task<Void, Never>?
     var streamingRefreshTask: Task<Void, Never>?
     var streamingRefreshTaskId: UUID?
+    var streamingRefreshScope: WalletSynchronizationScope = []
     var streamingAddress: String?
     var streamingGeneration: UInt64?
     var streamingConnectionState: WalletStreamingConnectionState = .inactive
@@ -871,6 +872,7 @@ actor WalletContextImpl {
                 collectibleAddress: current.collectibleAddress,
                 normalizedHash: current.normalizedHash,
                 sentTransfer: current.sentTransfer,
+                pendingMessage: current.pendingMessage,
                 fee: current.fee,
                 transactionHash: send.phase == .confirmed
                     ? (send.resolution?.transactionHash ?? current.transactionHash)
@@ -889,6 +891,9 @@ actor WalletContextImpl {
         case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
             self.logger.log("event=wallet_pending_transfer_terminal_failure phase=\(send.phase)")
             let removed = values.remove(at: index)
+            if let pendingMessage = removed.pendingMessage {
+                let _ = self.engine.wallet.removePendingTransferMessage(pendingMessage).start()
+            }
             self.requestSynchronization(scope: removed.collectibleAddress == nil ? [.account, .transactions] : .all, force: true)
         case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit, .submitting, .handedOff:
             break

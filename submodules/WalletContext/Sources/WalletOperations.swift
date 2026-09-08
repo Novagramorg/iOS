@@ -34,6 +34,7 @@ func acceptedWalletEngineSubmission(
         collectibleAddress: pending.collectibleAddress,
         normalizedHash: messageHash ?? pending.normalizedHash,
         sentTransfer: sentTransfer ?? pending.sentTransfer,
+        pendingMessage: pending.pendingMessage,
         fee: pending.fee,
         transactionHash: pending.transactionHash,
         transactionLt: pending.transactionLt,
@@ -289,9 +290,9 @@ public extension WalletContext {
         }
     }
 
-    func submitTransfer(_ prepared: PreparedTransfer) -> Signal<PendingTransfer, WalletError> {
+    func submitTransfer(_ prepared: PreparedTransfer, recipientPeerId: EnginePeer.Id? = nil) -> Signal<PendingTransfer, WalletError> {
         self.signal(name: "submitting_transfer", cancelOnDispose: false) { impl, operationId in
-            try await impl.submitTransfer(prepared, operationId: operationId)
+            try await impl.submitTransfer(prepared, recipientPeerId: recipientPeerId, operationId: operationId)
         }
     }
 
@@ -1139,6 +1140,7 @@ extension WalletContextImpl {
 
     func submitTransfer(
         _ prepared: PreparedTransfer,
+        recipientPeerId: EnginePeer.Id? = nil,
         operationId: UUID
     ) async throws -> PendingTransfer {
         return try await self.performOperation(.submittingTransfer, operationId: operationId) {
@@ -1164,6 +1166,31 @@ extension WalletContextImpl {
             } else {
                 pendingComment = prepared.comment
             }
+            let activationGenerationBeforeSend = self.activationGeneration
+            let createdAt = currentWalletTimestamp()
+            let pendingMessage: WalletPendingTransferMessageReference?
+            if let recipientPeerId, prepared.collectible == nil, WalletContext.useWalletTransferApi {
+                pendingMessage = try await WalletSignalRequestContext<WalletPendingTransferMessageReference?>().run(
+                    self.engine.wallet.createPendingTransferMessage(
+                        peerId: recipientPeerId,
+                        operationId: prepared.id,
+                        amount: prepared.amount,
+                        address: prepared.recipient,
+                        comment: pendingComment,
+                        commentEncrypted: prepared.commentEncrypted,
+                        timestamp: createdAt
+                    )
+                    |> castError(WalletError.self)
+                )
+            } else {
+                pendingMessage = nil
+            }
+            guard !Task.isCancelled, !self.isShutdown, self.activationGeneration == activationGenerationBeforeSend else {
+                if let pendingMessage {
+                    let _ = self.engine.wallet.removePendingTransferMessage(pendingMessage).start()
+                }
+                throw WalletError.unavailable
+            }
             let pending = PendingTransfer(
                 id: prepared.id,
                 recipient: prepared.recipient,
@@ -1171,8 +1198,9 @@ extension WalletContextImpl {
                 comment: pendingComment,
                 commentEncrypted: prepared.commentEncrypted,
                 collectibleAddress: prepared.collectible?.address,
+                pendingMessage: pendingMessage,
                 fee: prepared.fee,
-                createdAt: currentWalletTimestamp(),
+                createdAt: createdAt,
                 status: .broadcasting
             )
             var values = self.currentState.pendingTransfers.filter { $0.id != pending.id }
@@ -1186,7 +1214,6 @@ extension WalletContextImpl {
             )
             let useWalletTransferApi = WalletContext.useWalletTransferApi
             let clientRevisionBeforeSend = await self.runtime.currentClientRevision()
-            let activationGenerationBeforeSend = self.activationGeneration
 
             let applyAcceptedSubmission: (SendPhase, String?, WalletEngineTransferReceipt?) -> PendingTransfer? = { phase, messageHash, receipt in
                 guard self.activationGeneration == activationGenerationBeforeSend,
@@ -1214,7 +1241,9 @@ extension WalletContextImpl {
                     pendingTransfers: updated,
                     activeOperation: self.currentState.activeOperation
                 )
-                self.requestSynchronization(scope: accepted.collectibleAddress == nil ? [.account, .transactions] : .all, force: true)
+                if phase != .submitted || accepted.collectibleAddress != nil || self.streamingConnectionState != .subscribed {
+                    self.requestSynchronization(scope: accepted.collectibleAddress == nil ? [.account, .transactions] : .all, force: true)
+                }
                 return accepted
             }
 
@@ -1237,6 +1266,9 @@ extension WalletContextImpl {
                 guard let submitted = applyAcceptedSubmission(result.phase, result.messageHash, execution.receipt) else {
                     if walletEngineSendPhaseIsTerminal(result.phase) {
                         self.preparedTransfers[prepared.id] = nil
+                        if let pendingMessage = pending.pendingMessage {
+                            let _ = self.engine.wallet.removePendingTransferMessage(pendingMessage).start()
+                        }
                         throw WalletError.preparedTransferNotFound
                     }
                     throw WalletError.engine("wallet-engine send ended in \(result.phase)")
@@ -1278,6 +1310,9 @@ extension WalletContextImpl {
                     activeOperation: self.currentState.activeOperation
                 )
                 if preparedTransferWasInvalidated {
+                    if let pendingMessage = pending.pendingMessage {
+                        let _ = self.engine.wallet.removePendingTransferMessage(pendingMessage).start()
+                    }
                     throw WalletError.preparedTransferNotFound
                 }
                 throw error

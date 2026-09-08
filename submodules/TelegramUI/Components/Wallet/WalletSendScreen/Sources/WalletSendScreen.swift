@@ -1145,7 +1145,7 @@ private final class WalletSendScreenComponent: Component {
                 self.transferDisposable.set((preparation
                 |> mapToSignal { [weak self] prepared in
                     self?.peerPreparedTransfer = prepared
-                    return component.walletContext.submitTransfer(prepared)
+                    return component.walletContext.submitTransfer(prepared, recipientPeerId: peer.id)
                 }
                 |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
                     guard let self, let controller = self.environment?.controller() else {
@@ -1238,10 +1238,29 @@ private final class WalletSendScreenComponent: Component {
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .emoji(name: "Celebrate", text: text),
+                    content: .emoji(name: "Celebrate", text: text, interactive: true),
                     position: .bottom,
-                    action: { _ in
-                        return false
+                    action: { [weak controller] action in
+                        guard case .info = action,
+                              let navigationController = controller?.navigationController as? NavigationController else {
+                            return false
+                        }
+                        context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                            navigationController: navigationController,
+                            chatController: nil,
+                            context: context,
+                            chatLocation: .peer(peer),
+                            subject: nil,
+                            botStart: nil,
+                            updateTextInputState: nil,
+                            keepStack: .always,
+                            useExisting: true,
+                            purposefulAction: nil,
+                            scrollToEndIfExists: false,
+                            activateMessageSearch: nil,
+                            animated: true
+                        ))
+                        return true
                     }
                 ),
                 in: .current

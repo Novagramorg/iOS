@@ -382,9 +382,14 @@ func _internal_getWalletGaslessInfo(account: Account) -> Signal<WalletGaslessInf
     }
 }
 
-func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?) -> Signal<WalletSentTransfer, WalletSendTransferError> {
+func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSentTransfer, WalletSendTransferError> {
     guard !dataNormal.isEmpty, dataNormal.count <= 16 * 1024,
           (dataGasless?.count ?? 0) <= 16 * 1024 else {
+        if let pendingMessage {
+            return _internal_removePendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage)
+            |> castError(WalletSendTransferError.self)
+            |> mapToSignal { _ in .fail(.invalidData) }
+        }
         return .fail(.invalidData)
     }
     return account.network.request(Api.functions.wallet.sendTransfer(
@@ -405,13 +410,27 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
     |> mapToSignal { result -> Signal<WalletSentTransfer, WalletSendTransferError> in
         switch result {
         case let .sentTransfer(transfer):
-            return .single(WalletSentTransfer(
+            let result = WalletSentTransfer(
                 gasless: (transfer.flags & (1 << 0)) != 0,
                 msgHash: transfer.msgHash,
                 gaslessLeft: transfer.gaslessLeft,
                 gaslessResetAt: transfer.gaslessResetAt
-            ))
+            )
+            if let pendingMessage {
+                return _internal_acceptPendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage, transfer: result, receivedAt: pendingWalletTransferTimestamp())
+                |> castError(WalletSendTransferError.self)
+                |> map { _ in result }
+            }
+            return .single(result)
         }
+    }
+    |> `catch` { error -> Signal<WalletSentTransfer, WalletSendTransferError> in
+        if let pendingMessage, error == .invalidData || error == .sendFailed {
+            return _internal_removePendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage)
+            |> castError(WalletSendTransferError.self)
+            |> mapToSignal { _ in .fail(error) }
+        }
+        return .fail(error)
     }
 }
 

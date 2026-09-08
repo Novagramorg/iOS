@@ -14,8 +14,11 @@ import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
 import TextSelectionNode
 import InvisibleInkDustNode
+import ActivityIndicator
 
 public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleContentNode {
+    private static let pendingIndicatorEnabled = false
+
     private let labelNode: TextNode
     private var labelBackgroundNode: WallpaperBubbleBackgroundNode?
     private let labelBackgroundMaskNode: ASImageNode
@@ -25,6 +28,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let cardNode: ASDisplayNode
     private let cardBackgroundNode: ASImageNode
     private let cardIconNode: ASImageNode
+    private var pendingIndicator: ActivityIndicator?
     private let amountNode: TextNode
     private let nameNode: TextNode
     private let addressNode: TextNode
@@ -230,6 +234,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     })
                 }
                 let isIncoming = engineMessage.effectivelyIncoming(item.context.account.peerId)
+                let displayPendingIndicator = Self.pendingIndicatorEnabled && item.message.attributes.contains(where: { $0 is PendingWalletTransferMessageAttribute })
                 let caption = commentEncrypted ? "" : (comment ?? "")
                 let hasEncryptedCaption = commentEncrypted && comment?.isEmpty == false
 
@@ -488,6 +493,21 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - iconSize.width) * 0.5), y: 20.0),
                             size: iconSize
                         )
+                        self.cardIconNode.isHidden = displayPendingIndicator
+                        if displayPendingIndicator {
+                            let indicator: ActivityIndicator
+                            if let current = self.pendingIndicator {
+                                indicator = current
+                            } else {
+                                indicator = ActivityIndicator(type: .custom(.white, 28.0, 2.0, false))
+                                self.pendingIndicator = indicator
+                                self.cardNode.addSubnode(indicator)
+                            }
+                            indicator.frame = self.cardIconNode.frame.insetBy(dx: 6.0, dy: 6.0)
+                        } else if let indicator = self.pendingIndicator {
+                            indicator.removeFromSupernode()
+                            self.pendingIndicator = nil
+                        }
                         self.amountNode.frame = CGRect(
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - amountLayout.size.width) * 0.5), y: 61.0),
                             size: amountLayout.size

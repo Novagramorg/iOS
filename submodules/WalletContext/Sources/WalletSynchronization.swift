@@ -123,7 +123,7 @@ extension WalletContextImpl {
             self.publishPresentationState()
         }
         if case .stale = balance {
-            self.retryStreamingSynchronizationIfNeeded()
+            self.retryStreamingSynchronizationIfNeeded(scope: .account)
         }
     }
 
@@ -184,7 +184,7 @@ extension WalletContextImpl {
         }
         if transactions.error != nil || self.streamingPresentationOverlay.hasFinalizedTransactions {
             // The history API may index a finalized trace after its streaming event.
-            self.retryStreamingSynchronizationIfNeeded()
+            self.retryStreamingSynchronizationIfNeeded(scope: .transactions)
         }
     }
 

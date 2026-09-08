@@ -24,6 +24,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageItemCommon",
         "//submodules/TextSelectionNode",
         "//submodules/InvisibleInkDustNode",
+        "//submodules/ActivityIndicator",
     ],
     visibility = [
         "//visibility:public",

@@ -96,6 +96,9 @@ extension WalletContextImpl {
             var pending = self.currentState.pendingTransfers
             for receipt in receipts where receipt.recordId == recordId && walletEngineAddressesEqual(receipt.walletAddress, walletAddress) {
                 self.applyGaslessQuota(receipt.transfer, receivedAt: receipt.receivedAt)
+                if let pendingMessage = receipt.pendingTransfer.pendingMessage {
+                    let _ = self.engine.wallet.acceptPendingTransferMessage(pendingMessage, transfer: receipt.transfer, receivedAt: receipt.receivedAt).start()
+                }
                 guard walletPendingTransferUIExpirationTimestamp(from: receipt.receivedAt) > currentWalletTimestamp() else { continue }
                 let existing = pending.first { $0.id == receipt.pendingTransfer.id }
                 guard let recovered = acceptedWalletEngineSubmission(
