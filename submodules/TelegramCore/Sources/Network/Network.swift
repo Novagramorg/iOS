@@ -665,7 +665,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 useExperimentalFeatures = false
             }
             
-            let network = Network(queue: queue, datacenterId: datacenterId, context: context, mtProto: mtProto, requestService: requestService, connectionStatusDelegate: connectionStatusDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension)
+            let network = Network(queue: queue, datacenterId: datacenterId, context: context, mtProto: mtProto, requestService: requestService, connectionStatusDelegate: connectionStatusDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
             
             if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {
                 network.updateNetworkSpeedLimitedEventNotifyInterval(value: notifyInterval)
@@ -827,6 +827,9 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     private let useRequestTimeoutTimers: Bool
     private let baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?
     private let isAppExtension: Bool
+    private let webProxyLeaseToken = UUID()
+    private let webProxyActive: ValuePromise<Bool>
+    private let webProxyCarrierDemandDisposable = MetaDisposable()
     public let useBetaFeatures: Bool
     public let useExperimentalFeatures: Bool
     
@@ -878,7 +881,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         return "Network context: \(self.context)"
     }
     
-    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, mtProto: MTProto, requestService: MTRequestMessageService, connectionStatusDelegate: MTProtoConnectionStatusDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool) {
+    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, mtProto: MTProto, requestService: MTRequestMessageService, connectionStatusDelegate: MTProtoConnectionStatusDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool, initialWebProxyActive: Bool) {
         self.encryptionProvider = encryptionProvider
         
         self.queue = queue
@@ -894,6 +897,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         self.useRequestTimeoutTimers = useRequestTimeoutTimers
         self.baseTcpConnectionInterfaceFactory = baseTcpConnectionInterfaceFactory
         self.isAppExtension = isAppExtension
+        self.webProxyActive = ValuePromise<Bool>(initialWebProxyActive, ignoreRepeated: true)
         self.useBetaFeatures = useBetaFeatures
         self.useExperimentalFeatures = useExperimentalFeatures
         
@@ -987,11 +991,28 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
                 }
             }
         }))
+
+        // The carrier runs exactly while MTProto does. SharedWakeupManager already folds
+        // foreground state, audio sessions, background extensions, processing tasks and the
+        // explicit-extension grace timer into shouldBeServiceTaskMaster, which reaches us as
+        // shouldKeepConnection - so riding it inherits every grace window that machinery
+        // implements, without a background mode or a timer of our own.
+        let webProxyCarrierDemand = combineLatest(queue: queue, self.webProxyActive.get(), self.shouldKeepConnection.get())
+        |> map { active, keepConnection -> Bool in
+            return active && keepConnection
+        }
+        |> distinctUntilChanged
+        let leaseToken = self.webProxyLeaseToken
+        let leaseIsAppExtension = self.isAppExtension
+        self.webProxyCarrierDemandDisposable.set(webProxyCarrierDemand.start(next: { wanted in
+            WebProxyTransport.shared.setCarrierDemand(leaseToken, wanted: wanted && !leaseIsAppExtension)
+        }))
     }
 
     func updateProxySettings(_ activeServer: ProxyServerSettings?) {
         let webConfiguration = activeServer?.webProxyConfiguration
         WebProxyTransport.shared.apply(configuration: self.isAppExtension ? nil : webConfiguration)
+        self.webProxyActive.set(activeServer?.isWebProxy == true)
         if activeServer?.isWebProxy == true {
             self.context.makeTcpConnectionInterface = { delegate, delegateQueue in
                 return WebProxyTransport.shared.makeConnectionInterface(delegate: delegate, delegateQueue: delegateQueue)
@@ -1020,6 +1041,8 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     
     deinit {
         self.shouldKeepConnectionDisposable.dispose()
+        self.webProxyCarrierDemandDisposable.dispose()
+        WebProxyTransport.shared.setCarrierDemand(self.webProxyLeaseToken, wanted: false)
         self.appDataDisposable.dispose()
     }
     

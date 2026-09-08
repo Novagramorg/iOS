@@ -59,6 +59,48 @@ final class ProxySettingsTests: XCTestCase {
         XCTAssertEqual(idna.host, "xn--bcher-kva.example")
     }
 
+    func testWebProxyLinkIsDistinguishableFromAnMtpLink() throws {
+        let secret = "000102030405060708090a0b0c0d0e0f"
+        let web = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=\(secret)"))
+        guard case .web = web.connection else {
+            return XCTFail("expected .web, got \(web.connection)")
+        }
+        // A regular proxy link must never resolve through the WEB parser.
+        XCTAssertNil(parseWebProxySettingsLink("tg://proxy?server=proxy.example.com&port=443&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://t.me/proxy?server=proxy.example.com&port=443&secret=\(secret)"))
+    }
+
+    func testWebProxyLinkAcceptsADdPaddedSecret() throws {
+        let secret = "dd000102030405060708090a0b0c0d0e0f"
+        let web = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=\(secret)"))
+        XCTAssertEqual(web.connection, .web(secret: Data([0xdd] + (0 ..< 16).map(UInt8.init))))
+    }
+
+    /// ANDROID.md: "`host` is accepted as a legacy input alias, but generated links
+    /// always use `server`." Real deployments emit the `host` form.
+    func testWebProxyLinkAcceptsHostAsALegacyAliasForServer() throws {
+        let secret = "dddeb5753b0a4ee7043f5ad53c9da03cee"
+        let viaHost = try XCTUnwrap(parseWebProxySettingsLink("https://t.me/webproxy?host=tproxy.remindbot.ai&secret=\(secret)"))
+        XCTAssertEqual(viaHost.host, "tproxy.remindbot.ai")
+        XCTAssertEqual(viaHost.port, 443)
+        XCTAssertEqual(viaHost.connection, .web(secret: try XCTUnwrap(parseWebProxySecret(secret))))
+        XCTAssertEqual(webProxySecretString(try XCTUnwrap(parseWebProxySecret(secret))), secret)
+
+        let viaServer = try XCTUnwrap(parseWebProxySettingsLink("https://t.me/webproxy?server=tproxy.remindbot.ai&secret=\(secret)"))
+        XCTAssertEqual(viaHost, viaServer)
+
+        // tg:// form too.
+        XCTAssertEqual(parseWebProxySettingsLink("tg://webproxy?host=tproxy.remindbot.ai&secret=\(secret)"), viaHost)
+
+        // Emitted links still use `server`, never `host`.
+        XCTAssertEqual(webProxySettingsLink(viaHost), "https://t.me/webproxy?server=tproxy.remindbot.ai&secret=\(secret)")
+
+        // The alias must not loosen the strictness the other tests pin.
+        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&server=b.example.com&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&host=b.example.com&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&secret=\(secret)&extra=1"))
+    }
+
     private func discriminator(_ connection: ProxyServerConnection) throws -> Int {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(connection)) as? [String: Any])
         return try XCTUnwrap(object["_t"] as? Int)

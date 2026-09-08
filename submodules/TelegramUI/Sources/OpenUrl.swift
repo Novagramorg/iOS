@@ -24,6 +24,11 @@ public struct ParsedSecureIdUrl {
 }
 
 public func parseProxyUrl(sharedContext: SharedAccountContext, url: URL) -> ProxyServerSettings? {
+    // Checked first: a WEB link is a distinct scheme/path and must never be
+    // downgraded into an .mtp entry by the generic proxy parser.
+    if let webSettings = parseWebProxySettingsLink(url.absoluteString) {
+        return webSettings
+    }
     guard let proxy = parseProxyUrl(sharedContext: sharedContext, url: url.absoluteString) else {
         return nil
     }
@@ -470,6 +475,16 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
                             queryItems.append(URLQueryItem(name: "text", value: shareText))
                         }
                         convertedUrl = makeTelegramUrl("/share/url", queryItems: queryItems)
+                    }
+                case "webproxy":
+                    // A WEB relay has no port (always 443) and no user/pass, so it cannot
+                    // reuse the socks/proxy conversion below without being read back as .mtp.
+                    // `host` is a legacy input alias for `server`.
+                    if let server = params["server"] ?? params["host"], !server.isEmpty, let secret = params["secret"], !secret.isEmpty {
+                        convertedUrl = makeTelegramUrl("/webproxy", queryItems: [
+                            URLQueryItem(name: "server", value: server),
+                            URLQueryItem(name: "secret", value: secret)
+                        ])
                     }
                 case "socks", "proxy":
                     let server = params["server"] ?? params["proxy"]

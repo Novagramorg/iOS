@@ -78,12 +78,16 @@ public func parseWebProxySettingsLink(_ value: String) -> ProxyServerSettings? {
         return nil
     }
 
+    // `host` is a legacy input alias for `server` (see the shared protocol notes);
+    // generated links always use `server`. Exactly one of the two may appear.
     let items = components.queryItems ?? []
+    let hostItems = items.filter { $0.name == "server" || $0.name == "host" }
+    let secretItems = items.filter { $0.name == "secret" }
     guard items.count == 2,
-          items.filter({ $0.name == "server" }).count == 1,
-          items.filter({ $0.name == "secret" }).count == 1,
-          let host = items.first(where: { $0.name == "server" })?.value,
-          let secret = items.first(where: { $0.name == "secret" })?.value else {
+          hostItems.count == 1,
+          secretItems.count == 1,
+          let host = hostItems[0].value,
+          let secret = secretItems[0].value else {
         return nil
     }
     return makeWebProxySettings(host: host, secret: secret)

@@ -136,6 +136,7 @@ public enum ParsedInternalUrl {
     case joinCall(String)
     case localization(String)
     case proxy(host: String, port: Int32, username: String?, password: String?, secret: Data?)
+    case webProxy(host: String, secret: Data)
     case internalInstantView(url: String)
     case confirmationCode(Int)
     case cancelAccountReset(phone: String, hash: String)
@@ -211,6 +212,26 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
             }
             if pathComponents.count == 1 {
                 if let queryItems = components.queryItems {
+                    if peerName == "webproxy" {
+                        var server: String?
+                        var secret: String?
+                        for queryItem in queryItems {
+                            if let value = queryItem.value {
+                                // `host` is a legacy input alias for `server`.
+                                if queryItem.name == "server" || queryItem.name == "host" {
+                                    server = value
+                                } else if queryItem.name == "secret" {
+                                    secret = value
+                                }
+                            }
+                        }
+                        if let server, let secret,
+                           let canonicalHost = canonicalWebProxyHost(server),
+                           let secretData = parseWebProxySecret(secret) {
+                            return .webProxy(host: canonicalHost, secret: secretData)
+                        }
+                        return nil
+                    }
                     if peerName == "socks" || peerName == "proxy" {
                         var server: String?
                         var port: String?
@@ -1252,6 +1273,8 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
             return .single(.result(.localization(identifier)))
         case let .proxy(host, port, username, password, secret):
             return .single(.result(.proxy(host: host, port: port, username: username, password: password, secret: secret)))
+        case let .webProxy(host, secret):
+            return .single(.result(.webProxy(host: host, secret: secret)))
         case let .internalInstantView(url):
             return resolveInstantViewUrl(account: context.account, url: url)
             |> map { result in

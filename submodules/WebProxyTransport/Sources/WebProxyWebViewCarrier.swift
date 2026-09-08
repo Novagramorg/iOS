@@ -9,6 +9,11 @@ enum WebProxyPageMessage {
 final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     let nonce: String
 
+    /// The view the transport hands to its `WebProxyCarrierViewHost`.
+    var hostedWebView: WKWebView {
+        return self.webView
+    }
+
     private let configuration: WebProxyConfiguration
     private let generation: UInt64
     private let handlerName: String
@@ -21,6 +26,9 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
     private var pendingSends: [Data] = []
     private var pendingSendBytes = 0
     private var evaluatingSend = false
+    /// The bridge routes the first ArrayBuffer to `createSession`, which must carry
+    /// the lone HELLO frame, so the first message is never batched.
+    private var hasSentFirstMessage = false
 
     init?(
         configuration: WebProxyConfiguration,
@@ -96,6 +104,7 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
         self.pendingSends.removeAll()
         self.pendingSendBytes = 0
         self.evaluatingSend = false
+        self.hasSentFirstMessage = false
     }
 
     func send(data: Data) {
@@ -111,20 +120,26 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
     }
 
     private func flushSendQueue() {
-        guard !self.invalidated, !self.evaluatingSend, let data = self.pendingSends.first else { return }
+        guard !self.invalidated, !self.evaluatingSend, !self.pendingSends.isEmpty else { return }
+        let count = WebProxySendBatcher.batchCount(
+            pending: self.pendingSends,
+            isFirstMessage: !self.hasSentFirstMessage,
+            maximumFrames: WebProxyProtocol.maximumBatchFrames,
+            maximumBytes: WebProxyProtocol.defaultBatchSize
+        )
+        guard count > 0 else { return }
         self.evaluatingSend = true
-        let base64 = data.base64EncodedString()
-        let script = """
-        (() => {
-          const bridge = globalThis.TelegramWebProxy;
-          if (!bridge || typeof bridge.onmessage !== 'function') return false;
-          const raw = atob(\(Self.javaScriptString(base64)));
-          const bytes = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-          bridge.onmessage({data: bytes.buffer});
-          return true;
-        })()
-        """
+
+        // Concatenating here is what makes the batch worth it: the bridge walks frame
+        // boundaries itself, so one message carries many frames and costs one round trip.
+        var batch = Data()
+        var batchBytes = 0
+        for frame in self.pendingSends.prefix(count) {
+            batch.append(frame)
+            batchBytes += frame.count
+        }
+        let base64 = batch.base64EncodedString()
+
         let completion: (Bool?, Error?) -> Void = { [weak self] value, error in
             guard let self, !self.invalidated else { return }
             if error != nil {
@@ -135,13 +150,23 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
                 self.failed(self.generation, .bridgeUnavailable)
                 return
             }
-            let sent = self.pendingSends.removeFirst()
-            self.pendingSendBytes -= sent.count
+            self.pendingSends.removeFirst(count)
+            self.pendingSendBytes -= batchBytes
+            self.hasSentFirstMessage = true
             self.evaluatingSend = false
             self.flushSendQueue()
         }
+
         if #available(macOS 11.0, iOS 14.0, *) {
-            self.webView.evaluateJavaScript(script, in: nil, in: .page) { result in
+            // The payload travels as an argument, not interpolated into source: the
+            // function body is constant so WebKit compiles it once instead of parsing
+            // a fresh multi-kilobyte script per batch, and nothing needs escaping.
+            self.webView.callAsyncJavaScript(
+                Self.deliverFunctionBody,
+                arguments: ["payload": base64],
+                in: nil,
+                in: .page
+            ) { result in
                 switch result {
                 case let .success(value):
                     completion(value as? Bool, nil)
@@ -150,11 +175,35 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
                 }
             }
         } else {
+            let script = """
+            (() => {
+              const payload = \(Self.javaScriptString(base64));
+              \(Self.deliverFunctionBody)
+            })()
+            """
             self.webView.evaluateJavaScript(script) { value, error in
                 completion(value as? Bool, error)
             }
         }
     }
+
+    /// Body of the delivery function. Constant so it compiles once; the batch arrives
+    /// as the `payload` argument.
+    private static let deliverFunctionBody = """
+    const bridge = globalThis.TelegramWebProxy;
+    if (!bridge || typeof bridge.onmessage !== 'function') return false;
+    let bytes;
+    if (typeof Uint8Array.fromBase64 === 'function') {
+      bytes = Uint8Array.fromBase64(payload);
+    } else {
+      const raw = atob(payload);
+      bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    }
+    const buffer = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.slice().buffer;
+    bridge.onmessage({data: buffer});
+    return true;
+    """
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard !self.invalidated,

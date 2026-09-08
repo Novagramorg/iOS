@@ -280,12 +280,16 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
                     }
                     displayStatus = DisplayProxyServerStatus(activity: false, text: text, textActive: true)
             }
+        } else if case .web = server.connection {
+            // ProxyServersStatuses never pings WEB servers, so consulting `status` here
+            // would leave the row reading "checking..." forever.
+            //TODO:localize
+            displayStatus = DisplayProxyServerStatus(activity: false, text: "WEB Proxy, not tested", textActive: false)
         } else {
             var text: String
             switch server.connection {
                 case .socks5:
                     text = strings.ChatSettings_ConnectionType_UseSocks5
-                // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
                 case .mtp, .web:
                     text = strings.SocksProxySetup_ProxyTelegram
             }
@@ -553,10 +557,7 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
                             string += "&user=\((username as NSString).addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")&pass=\((password as NSString).addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")"
                         }
                     case .web:
-                        // No t.me link scheme is defined for a web proxy. Emitting a proxy/socks link
-                        // would hand out one that does not work, so this server is omitted from the share.
-                        // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
-                        string = ""
+                        string = webProxySettingsLink(server) ?? ""
                     }
                     
                     result += string
