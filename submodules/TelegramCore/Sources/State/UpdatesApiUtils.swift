@@ -206,15 +206,16 @@ extension Api.EphemeralMessage {
             if (messageData.flags & (1 << 5)) != 0 {
                 return peerId
             }
-            if let peerId, peerId.namespace != Namespaces.Peer.CloudUser {
+            let receiverPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId))
+            if (messageData.flags & (1 << 0)) != 0 {
+                return peerId ?? receiverPeerId
+            }
+            // Preserve the chat where the bot was invoked. Only a missing peer or
+            // the recipient's own peer identifies an incoming private bot dialog.
+            if let peerId, peerId != receiverPeerId {
                 return peerId
             }
-            // Private ephemeral messages identify the conversation by direction.
-            if (messageData.flags & (1 << 0)) != 0 {
-                return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId))
-            } else {
-                return messageData.fromId.peerId
-            }
+            return messageData.fromId.peerId
         }
     }
 
