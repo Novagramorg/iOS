@@ -78,13 +78,14 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             let mediaType: AVMediaType
             let codecName: String?
             let offset: Double
+            let ignoreEditList: Bool
             
             private(set) var reader: MediaDataReader?
             
             var didBeginReading: Bool = false
             var isFinished: Bool = false
             
-            init(queue: Queue, content: Content, mediaType: AVMediaType, codecName: String?, offset: Double) {
+            init(queue: Queue, content: Content, mediaType: AVMediaType, codecName: String?, offset: Double, ignoreEditList: Bool = false) {
                 assert(queue.isCurrent())
                 
                 self.queue = queue
@@ -92,6 +93,7 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                 self.mediaType = mediaType
                 self.codecName = codecName
                 self.offset = offset
+                self.ignoreEditList = ignoreEditList
             }
             
             deinit {
@@ -106,9 +108,9 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                         reader = AVAssetVideoDataReader(filePath: tempFile.file.path, isVideo: self.mediaType == .video)
                     } else {
                         if params.useV2Reader {
-                            reader = FFMpegMediaDataReaderV2(content: .tempFile(tempFile), isVideo: self.mediaType == .video, codecName: self.codecName)
+                            reader = FFMpegMediaDataReaderV2(content: .tempFile(tempFile), isVideo: self.mediaType == .video, codecName: self.codecName, ignoreEditList: self.ignoreEditList)
                         } else {
-                            reader = FFMpegMediaDataReaderV1(filePath: tempFile.file.path, isVideo: self.mediaType == .video, codecName: self.codecName)
+                            reader = FFMpegMediaDataReaderV1(filePath: tempFile.file.path, isVideo: self.mediaType == .video, codecName: self.codecName, ignoreEditList: self.ignoreEditList)
                         }
                     }
                 case let .directStream(directStream):
@@ -563,6 +565,7 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                 loadedPartsMediaData.ids = loadedParts.map(\.part.id)
                 
                 for part in loadedParts {
+                    let ignoreAudioEditList = part.part.content.ignoreAudioEditList
                     if let loadedPart = loadedPartsMediaData.parts[part.part.id] {
                         if let audio = loadedPart.audio, audio.didBeginReading, !isSoundEnabled {
                             let cleanAudio = LoadedPart.Media(
@@ -570,7 +573,8 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                                 content: .tempFile(part.part.content),
                                 mediaType: .audio,
                                 codecName: part.part.codecName,
-                                offset: part.part.offsetTime
+                                offset: part.part.offsetTime,
+                                ignoreEditList: ignoreAudioEditList
                             )
                             cleanAudio.load(params: mediaDataReaderParams)
                             
@@ -594,7 +598,8 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                             content: .tempFile(part.part.content),
                             mediaType: .audio,
                             codecName: part.part.codecName,
-                            offset: part.part.offsetTime
+                            offset: part.part.offsetTime,
+                            ignoreEditList: ignoreAudioEditList
                         )
                         audio.load(params: mediaDataReaderParams)
                         

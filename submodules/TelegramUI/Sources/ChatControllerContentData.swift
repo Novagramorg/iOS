@@ -2242,7 +2242,7 @@ extension ChatControllerImpl {
                 
                 let premiumGiftOptions: Signal<[CachedPremiumGiftOption], NoError> = .single([])
                 |> then(
-                    context.engine.payments.premiumGiftCodeOptions(peerId: peerId, onlyCached: true)
+                    context.engine.payments.premiumGiftCodeOptions(peerId: nil, onlyCached: true)
                     |> map { options in
                         return options.filter { $0.users == 1 }.map { CachedPremiumGiftOption(months: $0.months, currency: $0.currency, amount: $0.amount, botUrl: "", storeProductId: $0.storeProductId) }
                     }

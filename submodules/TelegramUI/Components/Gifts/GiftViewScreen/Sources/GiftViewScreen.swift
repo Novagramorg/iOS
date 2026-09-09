@@ -3082,9 +3082,11 @@ private final class GiftViewSheetContent: CombinedComponent {
             }
 
             let giftMessagePeer: EnginePeer?
-            if giftMessageText?.isEmpty == false && !giftMessageNameHidden {
+            if giftMessageText?.isEmpty == false {
                 if let messageGiftSenderPeerId = subject.messageGiftSenderPeerId {
                     giftMessagePeer = state.peerMap[messageGiftSenderPeerId]
+                } else if case let .profileGift(_, gift) = subject, let fromPeer = gift.fromPeer {
+                    giftMessagePeer = fromPeer
                 } else if let fromPeerId = subject.arguments?.fromPeerId {
                     giftMessagePeer = state.peerMap[fromPeerId]
                 } else if case let .message(message) = subject, !message.flags.contains(.Incoming) {
@@ -4222,7 +4224,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     context: component.context,
                                     theme: theme,
                                     peer: giftMessagePeer,
-                                    overrideImage: giftMessageNameHidden ? .anonymousSavedMessagesIcon(isColored: true) : nil
+                                    overrideImage: nil
                                 ),
                                 environment: {},
                                 availableSize: avatarSize,

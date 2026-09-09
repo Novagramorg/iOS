@@ -421,13 +421,14 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
 
         let selfFingerprint = ChatMessageMergeFingerprint(message: self.message,
                                                           accountPeerId: self.context.account.peerId)
+        let isWelcomeMessage = Namespaces.Message.allWelcomeMessages.contains(self.message.id.namespace)
 
         var mergedTop: ChatMessageMerge = .none
         var mergedBottom: ChatMessageMerge = .none
         var dateAtBottom = ChatMessageHeaderSpec(hasDate: false, hasTopic: false)
 
         if case let .message(topDateHeaderId, _, topMerge) = top {
-            if topDateHeaderId != self.dateHeader.id {
+            if topDateHeaderId != self.dateHeader.id && !isWelcomeMessage {
                 mergedBottom = .none
             } else {
                 mergedBottom = chatMessageMerge(upper: selfFingerprint, lower: topMerge)
@@ -436,7 +437,7 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
 
         switch bottom {
         case let .message(bottomDateHeaderId, bottomTopicHeaderId, bottomMerge):
-            if bottomDateHeaderId != self.dateHeader.id {
+            if bottomDateHeaderId != self.dateHeader.id && !isWelcomeMessage {
                 mergedTop = .none
                 dateAtBottom.hasDate = true
             }

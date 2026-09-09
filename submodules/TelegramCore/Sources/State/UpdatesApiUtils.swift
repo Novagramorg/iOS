@@ -202,14 +202,26 @@ extension Api.EphemeralMessage {
     var peerId: PeerId? {
         switch self {
         case let .ephemeralMessage(messageData):
-            return messageData.peerId?.peerId
+            let peerId = messageData.peerId?.peerId
+            if (messageData.flags & (1 << 5)) != 0 {
+                return peerId
+            }
+            if let peerId, peerId.namespace != Namespaces.Peer.CloudUser {
+                return peerId
+            }
+            // Private ephemeral messages identify the conversation by direction.
+            if (messageData.flags & (1 << 0)) != 0 {
+                return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId))
+            } else {
+                return messageData.fromId.peerId
+            }
         }
     }
 
     var id: MessageId? {
         switch self {
         case let .ephemeralMessage(messageData):
-            guard let peerId = messageData.peerId?.peerId else {
+            guard let peerId = self.peerId else {
                 return nil
             }
             let namespace: MessageId.Namespace
