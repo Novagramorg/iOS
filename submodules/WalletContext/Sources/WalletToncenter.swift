@@ -103,21 +103,14 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
     private static let maximumEarlyCancellations = 256
 
     private let engine: TelegramEngine
-    private let storage: WalletEngineStorage
     private let logger: WalletLogger
-    private var transferSubmission: WalletEngineTransferSubmission?
     private let requestCoalescer = WalletRequestCoalescer()
     private var tasks: [UInt64: Task<Data, Error>] = [:]
     private var cancelledBeforeStart = Set<UInt64>()
 
-    init(engine: TelegramEngine, storage: WalletEngineStorage, logger: WalletLogger) {
+    init(engine: TelegramEngine, logger: WalletLogger) {
         self.engine = engine
-        self.storage = storage
         self.logger = logger
-    }
-
-    func setTransferSubmission(_ submission: WalletEngineTransferSubmission?) {
-        self.transferSubmission = submission
     }
 
     func executeStatusless(request: HttpRequest) async throws -> Data {
@@ -134,11 +127,9 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         }
 
         let engine = self.engine
-        let storage = self.storage
-        let transferSubmission = self.transferSubmission
         let requestCoalescer = self.requestCoalescer
         let task = Task<Data, Error> {
-            try await Self.perform(request, engine: engine, storage: storage, transferSubmission: transferSubmission, requestCoalescer: requestCoalescer)
+            try await Self.perform(request, engine: engine, requestCoalescer: requestCoalescer)
         }
         self.tasks[id] = task
         defer { self.tasks[id] = nil }
@@ -231,8 +222,6 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
     private static func perform(
         _ request: HttpRequest,
         engine: TelegramEngine,
-        storage: WalletEngineStorage,
-        transferSubmission: WalletEngineTransferSubmission?,
         requestCoalescer: WalletRequestCoalescer
     ) async throws -> Data {
         guard let components = URLComponents(string: request.url),
@@ -258,35 +247,20 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
             timeoutMs: request.timeoutMs
         ) {
             return try await requestCoalescer.execute(key: key) {
-                try await Self.performRelayRequest(request, endpoint: endpoint, query: components.percentEncodedQuery, engine: engine, storage: storage, transferSubmission: transferSubmission)
+                try await Self.performRelayRequest(request, endpoint: endpoint, query: components.percentEncodedQuery, engine: engine)
             }
         }
-        return try await Self.performRelayRequest(request, endpoint: endpoint, query: components.percentEncodedQuery, engine: engine, storage: storage, transferSubmission: transferSubmission)
+        return try await Self.performRelayRequest(request, endpoint: endpoint, query: components.percentEncodedQuery, engine: engine)
     }
 
     private static func performRelayRequest(
         _ request: HttpRequest,
         endpoint: String,
         query: String?,
-        engine: TelegramEngine,
-        storage: WalletEngineStorage,
-        transferSubmission: WalletEngineTransferSubmission?
+        engine: TelegramEngine
     ) async throws -> Data {
         let response: String = try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
-                if let response = try await walletPerformTransferSubmission(
-                    request,
-                    submission: transferSubmission,
-                    send: { data in
-                        try await WalletSignalRequestContext<WalletSentTransfer>().run(
-                            engine.wallet.sendTransfer(dataNormal: data, dataGasless: nil, pendingMessage: transferSubmission?.pendingTransfer.pendingMessage)
-                        )
-                    },
-                    persist: { receipt in try await storage.saveTransferReceipt(receipt) },
-                    now: currentWalletTimestamp
-                ) {
-                    return String(decoding: response, as: UTF8.self)
-                }
                 switch request.method {
                 case .get:
                     return try await WalletSignalRequestContext<String>().run(

@@ -16,12 +16,10 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
 struct WalletEngineSendExecution: @unchecked Sendable {
     let result: SendResult
     let didRecreateClient: Bool
-    let receipt: WalletEngineTransferReceipt?
 
-    init(result: SendResult, didRecreateClient: Bool, receipt: WalletEngineTransferReceipt? = nil) {
+    init(result: SendResult, didRecreateClient: Bool) {
         self.result = result
         self.didRecreateClient = didRecreateClient
-        self.receipt = receipt
     }
 }
 
@@ -75,7 +73,7 @@ actor WalletEngineRuntime {
         self.engine = engine
         self.logger = logger
         self.platformHost = WalletEnginePlatformHost(storage: storage, logger: logger)
-        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, storage: storage, logger: logger)
+        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, logger: logger)
         self.lifecycle = WalletLifecycle(platformHost: self.platformHost)
     }
 
@@ -453,38 +451,27 @@ actor WalletEngineRuntime {
         }
     }
 
-    func send(pendingTransfer: WalletContext.PendingTransfer, intent: SendIntent, useWalletTransferApi: Bool) async throws -> WalletEngineSendExecution {
-        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+    func prepareTransfer(operationId: String, intent: SendIntent) async throws -> (recordId: String, data: WalletEngineFFI.PreparedTransfer) {
+        try await self.withFfi(priority: .userInitiated) {
             try await self.ensureKeyRotationAllowsSigning()
             guard let config = self.clientConfig else {
                 throw WalletContext.WalletError.unavailable
             }
-            let request = SendRequest(
-                operationId: pendingTransfer.id,
-                force: false,
+            let data = try await self.requireClient().prepareTransfer(request: PrepareTransferRequest(
+                operationId: operationId,
                 intent: intent
-            )
-            // Keep the selected route for the entire operation, including client recreation.
-            let submission: WalletEngineTransferSubmission? = useWalletTransferApi ? WalletEngineTransferSubmission(
-                recordId: config.recordId,
-                walletAddress: config.address,
-                pendingTransfer: pendingTransfer
-            ) : nil
-            return try await self.sendRecoveringStuckClient(transferSubmission: submission) { client in
-                try await client.send(request: request)
-            }
+            ))
+            return (config.recordId, data)
         }
     }
 
-    func transferReceipt(operationId: String) async -> WalletEngineTransferReceipt? {
-        guard let recordId = self.clientConfig?.recordId else { return nil }
-        do {
-            return try await self.storage.loadTransferReceipts().last {
-                $0.recordId == recordId && $0.pendingTransfer.id == operationId
+    func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+            try await self.ensureKeyRotationAllowsSigning()
+            let request = SendRequest(operationId: operationId, force: false, intent: intent)
+            return try await self.sendRecoveringStuckClient { client in
+                try await client.send(request: request)
             }
-        } catch {
-            self.logger.error("wallet_transfer_receipt_load_failed", error)
-            return nil
         }
     }
 
@@ -1051,15 +1038,13 @@ actor WalletEngineRuntime {
     }
 
     private func sendRecoveringStuckClient(
-        transferSubmission: WalletEngineTransferSubmission? = nil,
         _ operation: (WalletClient) async throws -> SendResult
     ) async throws -> WalletEngineSendExecution {
         let client = try self.requireClient()
         do {
             return WalletEngineSendExecution(
-                result: try await self.performSend(client, transferSubmission: transferSubmission, operation: operation),
-                didRecreateClient: false,
-                receipt: await self.receiptForSubmission(transferSubmission)
+                result: try await operation(client),
+                didRecreateClient: false
             )
         } catch {
             guard walletEngineIsSendAlreadyInProgress(error) else {
@@ -1074,7 +1059,6 @@ actor WalletEngineRuntime {
             self.client = nil
             let replacementStatuslessHost = WalletEngineStatuslessHost(
                 engine: self.engine,
-                storage: self.storage,
                 logger: self.logger
             )
             let replacement: WalletClient
@@ -1091,33 +1075,10 @@ actor WalletEngineRuntime {
             self.client = replacement
             self.clientRevision &+= 1
             return WalletEngineSendExecution(
-                result: try await self.performSend(replacement, transferSubmission: transferSubmission, operation: operation),
-                didRecreateClient: true,
-                receipt: await self.receiptForSubmission(transferSubmission)
+                result: try await operation(replacement),
+                didRecreateClient: true
             )
         }
-    }
-
-    private func performSend(
-        _ client: WalletClient,
-        transferSubmission: WalletEngineTransferSubmission?,
-        operation: (WalletClient) async throws -> SendResult
-    ) async throws -> SendResult {
-        let host = self.statuslessHost
-        await host.setTransferSubmission(transferSubmission)
-        do {
-            let result = try await operation(client)
-            await host.setTransferSubmission(nil)
-            return result
-        } catch {
-            await host.setTransferSubmission(nil)
-            throw error
-        }
-    }
-
-    private func receiptForSubmission(_ submission: WalletEngineTransferSubmission?) async -> WalletEngineTransferReceipt? {
-        guard let submission else { return nil }
-        return await self.transferReceipt(operationId: submission.pendingTransfer.id)
     }
 
     private func ensureKeyRotationAllowsSigning() async throws {

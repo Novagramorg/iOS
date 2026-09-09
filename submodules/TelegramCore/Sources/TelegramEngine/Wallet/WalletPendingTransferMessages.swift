@@ -18,10 +18,6 @@ public struct WalletPendingTransferMessageReference: Codable, Equatable, Sendabl
     }
 }
 
-func pendingWalletTransferTimestamp() -> Int32 {
-    return Int32(clamping: Int64(Date().timeIntervalSince1970))
-}
-
 private func walletStoreMessage(_ message: Message) -> StoreMessage {
     var forwardInfo: StoreMessageForwardInfo?
     if let current = message.forwardInfo {
@@ -30,16 +26,19 @@ private func walletStoreMessage(_ message: Message) -> StoreMessage {
     return StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: forwardInfo, authorId: message.author?.id, text: message.text, attributes: message.attributes, media: message.media)
 }
 
-private func findWalletMessage(transaction: Transaction, peerId: PeerId, namespace: MessageId.Namespace, afterId: Int32 = 0, matches: (Message) -> Bool) -> Message? {
+private func findWalletMessage(transaction: Transaction, peerId: PeerId, namespace: MessageId.Namespace, afterId: Int32 = 0, unique: Bool = false, matches: (Message) -> Bool) -> Message? {
+    var result: Message?
     var from = MessageIndex.upperBound(peerId: peerId, namespace: namespace)
     let to = MessageIndex.lowerBound(peerId: peerId, namespace: namespace)
     while true {
         let messages = transaction.getMessages(peerId: peerId, namespace: namespace, from: from, includeFrom: false, to: to, limit: 100)
-        if let message = messages.first(where: { $0.id.id > afterId && matches($0) }) {
-            return message
+        for message in messages where message.id.id > afterId && matches(message) {
+            if !unique { return message }
+            guard result == nil else { return nil }
+            result = message
         }
         guard let oldest = messages.min(by: { $0.index < $1.index }), oldest.id.id > afterId else {
-            return nil
+            return result
         }
         from = oldest.index
     }
@@ -68,8 +67,6 @@ func removePendingWalletTransferMessage(transaction: Transaction, id: MessageId)
 }
 
 private func walletTransferTransactionHash(_ transactionId: String) -> Data? {
-    // wallet.Transaction.id is "lt:hash", whereas messageActionGramTransfer carries
-    // only the transaction hash. Preserve the full id in storage for wallet APIs.
     let parts = transactionId.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
     let hash: String
     if parts.count == 2 {
@@ -112,19 +109,27 @@ func walletTransferMessageMatches(_ message: StoreMessage, peerId: PeerId, trans
 @discardableResult
 func replacePendingWalletTransferMessage(transaction: Transaction, localId: MessageId, serverMessage: StoreMessage) -> Bool {
     guard let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: localId) as? PendingWalletTransferMessageAttribute,
-          let transactionId = pending.transactionId,
+          let transactionId = pending.resolvedMessageId,
           walletTransferMessageMatches(serverMessage, peerId: localId.peerId, transactionId: transactionId),
           let localMessage = transaction.getMessage(localId),
           localMessage.attributes.contains(where: { ($0 as? PendingWalletTransferMessageAttribute)?.operationId == pending.operationId }),
           case let .Id(serverId) = serverMessage.id else {
         return false
     }
-    guard pending.expiresAt > pendingWalletTransferTimestamp() else {
+    guard pending.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) else {
         removePendingWalletTransferMessage(transaction: transaction, id: localId)
         return false
     }
-    // The hook runs after insertion, in the same Postbox transaction. Remove the server
-    // copy before changing the local id so Postbox retains the local stable id.
+    let conflictingLocal = findWalletMessage(transaction: transaction, peerId: localId.peerId, namespace: Namespaces.Message.Local, matches: { message in
+        guard message.id != localId,
+              let other = message.attributes.first(where: { $0 is PendingWalletTransferMessageAttribute }) as? PendingWalletTransferMessageAttribute,
+              other.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)),
+              let otherId = other.resolvedMessageId else { return false }
+        return walletTransferMessageMatches(serverMessage, peerId: localId.peerId, transactionId: otherId)
+    })
+    guard conflictingLocal == nil else {
+        return false
+    }
     transaction.setPendingMessageAction(type: .walletTransfer, id: localId, action: nil)
     transaction.deleteMessages([serverId], forEachMedia: nil)
     transaction.updateMessage(localId, update: { _ in
@@ -134,10 +139,10 @@ func replacePendingWalletTransferMessage(transaction: Transaction, localId: Mess
 }
 
 func reconcileStoredWalletTransferMessage(transaction: Transaction, id: MessageId, pending: PendingWalletTransferMessageAttribute) {
-    guard let transactionId = pending.transactionId else {
+    guard let transactionId = pending.resolvedMessageId else {
         return
     }
-    if let message = findWalletMessage(transaction: transaction, peerId: id.peerId, namespace: Namespaces.Message.Cloud, afterId: pending.previousMessageId, matches: {
+    if let message = findWalletMessage(transaction: transaction, peerId: id.peerId, namespace: Namespaces.Message.Cloud, afterId: pending.previousMessageId, unique: true, matches: {
         walletTransferMessageMatches(walletStoreMessage($0), peerId: id.peerId, transactionId: transactionId)
     }) {
         replacePendingWalletTransferMessage(transaction: transaction, localId: id, serverMessage: walletStoreMessage(message))
@@ -183,7 +188,7 @@ func _internal_acceptPendingWalletTransferMessage(postbox: Postbox, reference: W
               pending.operationId == reference.operationId else {
             return
         }
-        guard pending.expiresAt > pendingWalletTransferTimestamp() else {
+        guard pending.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) else {
             removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)
             return
         }
@@ -198,5 +203,65 @@ func _internal_removePendingWalletTransferMessage(postbox: Postbox, reference: W
             return
         }
         removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)
+    }
+}
+
+func _internal_hasUnresolvedPendingWalletTransferMessage(postbox: Postbox, reference: WalletPendingTransferMessageReference) -> Signal<Bool, NoError> {
+    return postbox.transaction { transaction in
+        guard let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: reference.messageId) as? PendingWalletTransferMessageAttribute,
+              pending.operationId == reference.operationId else { return false }
+        return pending.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) && pending.resolvedMessageId == nil
+    }
+}
+
+func _internal_resolvePendingWalletTransferMessage(postbox: Postbox, reference: WalletPendingTransferMessageReference, transactionId: String, failed: Bool) -> Signal<Void, NoError> {
+    return postbox.transaction { transaction in
+        guard !transactionId.isEmpty,
+              let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: reference.messageId) as? PendingWalletTransferMessageAttribute,
+              pending.operationId == reference.operationId else {
+            return
+        }
+        guard pending.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) else {
+            removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)
+            return
+        }
+        guard pending.chainTraceId == nil else {
+            return
+        }
+        if failed {
+            guard pending.transactionId == nil else {
+                return
+            }
+            removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)
+        } else {
+            guard pending.transactionId == nil || pending.transactionId == transactionId else {
+                return
+            }
+            let updated = pending.resolving(transactionId: transactionId)
+            if !updated.isEqual(to: pending) {
+                updatePendingWalletTransferMessage(transaction: transaction, id: reference.messageId, attribute: updated)
+            }
+            reconcileStoredWalletTransferMessage(transaction: transaction, id: reference.messageId, pending: updated)
+        }
+    }
+}
+
+func _internal_resolvePendingWalletTransferMessage(postbox: Postbox, reference: WalletPendingTransferMessageReference, chainTraceId: String) -> Signal<Void, NoError> {
+    return postbox.transaction { transaction in
+        guard chainTraceId.utf8.count == 44, let hash = Data(base64Encoded: chainTraceId), hash.count == 32,
+              let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: reference.messageId) as? PendingWalletTransferMessageAttribute,
+              pending.operationId == reference.operationId,
+              pending.chainTraceId == nil || pending.chainTraceId == chainTraceId else {
+            return
+        }
+        guard pending.expiresAt > Int32(clamping: Int64(Date().timeIntervalSince1970)) else {
+            removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)
+            return
+        }
+        let updated = pending.resolving(chainTraceId: chainTraceId)
+        if !updated.isEqual(to: pending) {
+            updatePendingWalletTransferMessage(transaction: transaction, id: reference.messageId, attribute: updated)
+        }
+        reconcileStoredWalletTransferMessage(transaction: transaction, id: reference.messageId, pending: updated)
     }
 }

@@ -151,7 +151,6 @@ extension WalletContextImpl {
                 previous: transactions
             )
             let reconciliation = self.pendingTransfers(pending, reconcilingWith: transactions.items)
-            // History can resolve an NFT send before WalletEngine observes its confirmation.
             if pending.contains(where: { value in
                 value.collectibleAddress != nil && !reconciliation.pendingTransfers.contains(where: { $0.id == value.id })
             }) {
@@ -182,8 +181,8 @@ extension WalletContextImpl {
         if overlayChanged && previousState == self.currentState {
             self.publishPresentationState()
         }
-        if transactions.error != nil || self.streamingPresentationOverlay.hasFinalizedTransactions {
-            // The history API may index a finalized trace after its streaming event.
+        if transactions.error != nil || self.streamingPresentationOverlay.hasFinalizedTransactions
+            || pending.contains(where: { $0.sentTransfer != nil }) {
             self.retryStreamingSynchronizationIfNeeded(scope: .transactions)
         }
     }

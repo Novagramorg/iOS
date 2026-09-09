@@ -73,7 +73,7 @@ struct WalletScreenDemand: Sendable {
 }
 
 public final class WalletContext {
-    static let useWalletTransferApi = false
+    static let useWalletTransferApi = true
 
     let impl: WalletContextImpl
     let logger: WalletLogger
@@ -222,15 +222,15 @@ public final class WalletContext {
         self.walletConfigurationDisposable.set((engine.data.subscribe(
             TelegramEngine.EngineData.Item.Configuration.App()
         )
-        |> map { WalletConfiguration.with(appConfiguration: $0).transferMinAmount }
-        |> distinctUntilChanged).start(next: { [weak self] transferMinAmount in
+        |> map { WalletConfiguration.with(appConfiguration: $0) }
+        |> distinctUntilChanged).start(next: { [weak self] configuration in
             guard let self else { return }
             let revision = self.walletConfigurationRevision.modify { value in
                 let next = value &+ 1
                 return next
             }
             Task {
-                await impl.updateWalletConfiguration(transferMinAmount: transferMinAmount, revision: revision)
+                await impl.updateWalletConfiguration(configuration, revision: revision)
             }
         }))
 
@@ -375,7 +375,7 @@ public final class WalletContext {
     }
 }
 
-public struct WalletConfiguration {
+public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
         return WalletConfiguration(
             transferMinAmount: 100_000_000,

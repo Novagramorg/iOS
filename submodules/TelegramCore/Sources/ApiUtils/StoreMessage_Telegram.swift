@@ -491,11 +491,10 @@ extension StoreMessage {
     convenience init?(apiEphemeralMessage: Api.EphemeralMessage, namespace: MessageId.Namespace? = nil) {
         switch apiEphemeralMessage {
         case let .ephemeralMessage(messageData):
-            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo, richMessage, anchorMsgId) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo, messageData.richMessage, messageData.anchorMsgId)
-            guard let apiPeerId else {
+            let (flags, id, fromId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo, richMessage, anchorMsgId) = (messageData.flags, messageData.id, messageData.fromId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo, messageData.richMessage, messageData.anchorMsgId)
+            guard let peerId = apiEphemeralMessage.peerId else {
                 return nil
             }
-            let peerId = apiPeerId.peerId
             let isWelcomeTemplate = (flags & (1 << 5)) != 0
             let authorId = isWelcomeTemplate ? peerId : fromId.peerId
             let isForwardingDisabled = (flags & (1 << 12)) != 0

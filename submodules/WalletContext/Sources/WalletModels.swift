@@ -611,6 +611,20 @@ public extension WalletContext {
     }
 
     struct PendingTransfer: Codable, Equatable, Sendable {
+        public struct StreamingData: Codable, Equatable, Sendable {
+            public let normalBodyHash: String?
+            public let gaslessBodyHash: String?
+            public var traceId: String?
+            public var chainTraceId: String?
+
+            public init(normalBodyHash: String?, gaslessBodyHash: String?, traceId: String? = nil, chainTraceId: String? = nil) {
+                self.normalBodyHash = normalBodyHash
+                self.gaslessBodyHash = gaslessBodyHash
+                self.traceId = traceId
+                self.chainTraceId = chainTraceId
+            }
+        }
+
         public enum Status: Int32, Codable, Equatable, Sendable {
             case broadcasting = 0
             case pending = 1
@@ -621,17 +635,16 @@ public extension WalletContext {
         public let id: String
         public let recipient: String
         public let amount: Int64
-        /// Encrypted comments are stored as BOCs, never as the draft plaintext.
         public let comment: String?
         public let commentEncrypted: Bool
         public let collectibleAddress: String?
         public let normalizedHash: String?
         public let sentTransfer: WalletSentTransfer?
         public let pendingMessage: WalletPendingTransferMessageReference?
+        public var streamingData: StreamingData?
 
-        /// Streaming uses the engine's normalized hash, not the server's message hash.
         public var streamingTraceId: String? {
-            return self.normalizedHash
+            return self.streamingData?.traceId ?? (self.sentTransfer?.gasless == true ? nil : self.normalizedHash)
         }
 
         public let fee: Int64?
@@ -651,6 +664,7 @@ public extension WalletContext {
             normalizedHash: String? = nil,
             sentTransfer: WalletSentTransfer? = nil,
             pendingMessage: WalletPendingTransferMessageReference? = nil,
+            streamingData: StreamingData? = nil,
             fee: Int64? = nil,
             transactionHash: String? = nil,
             transactionLt: String? = nil,
@@ -667,6 +681,7 @@ public extension WalletContext {
             self.normalizedHash = normalizedHash
             self.sentTransfer = sentTransfer
             self.pendingMessage = pendingMessage
+            self.streamingData = streamingData
             self.fee = fee
             self.transactionHash = transactionHash
             self.transactionLt = transactionLt
@@ -687,6 +702,7 @@ public extension WalletContext {
                 normalizedHash: try container.decodeIfPresent(String.self, forKey: .normalizedHash),
                 sentTransfer: try container.decodeIfPresent(WalletSentTransfer.self, forKey: .sentTransfer),
                 pendingMessage: try container.decodeIfPresent(WalletPendingTransferMessageReference.self, forKey: .pendingMessage),
+                streamingData: try container.decodeIfPresent(StreamingData.self, forKey: .streamingData),
                 fee: try container.decodeIfPresent(Int64.self, forKey: .fee),
                 transactionHash: try container.decodeIfPresent(String.self, forKey: .transactionHash),
                 transactionLt: try container.decodeIfPresent(String.self, forKey: .transactionLt),

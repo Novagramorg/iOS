@@ -485,6 +485,241 @@ private final class WalletSendAmountField: UIView, UITextFieldDelegate {
     }
 }
 
+@MainActor
+private func walletPresentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
+    //TODO:localize
+    let text = "Grams have been sent to **\(peer.compactDisplayTitle)**."
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    controller.present(
+        UndoOverlayController(
+            presentationData: presentationData,
+            content: .emoji(name: "Celebrate", text: text, interactive: true),
+            position: .bottom,
+            action: { [weak controller] action in
+                guard case .info = action,
+                      let navigationController = controller?.navigationController as? NavigationController else {
+                    return false
+                }
+                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                    navigationController: navigationController,
+                    chatController: nil,
+                    context: context,
+                    chatLocation: .peer(peer),
+                    subject: nil,
+                    botStart: nil,
+                    updateTextInputState: nil,
+                    keepStack: .always,
+                    useExisting: true,
+                    purposefulAction: nil,
+                    scrollToEndIfExists: false,
+                    activateMessageSearch: nil,
+                    animated: true
+                ))
+                return true
+            }
+        ),
+        in: .current
+    )
+}
+
+@MainActor
+private func walletPresentSubmissionUnknown(on controller: ViewController, context: AccountContext) {
+    //TODO:localize
+    let title = "Transfer Pending"
+    //TODO:localize
+    let text = "The transfer may have been sent. Don’t send it again while its status is being checked."
+    //TODO:localize
+    let ok = "OK"
+    controller.present(textAlertController(
+        context: context,
+        title: title,
+        text: text,
+        actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+        })]
+    ), in: .window(.root))
+}
+
+@MainActor
+private func walletPresentTransferError(_ error: WalletContext.WalletError?, on controller: ViewController, context: AccountContext) {
+    //TODO:localize
+    let title: String
+    let text: String
+    switch error {
+    case .commentTooLong:
+        title = "Comment Too Long"
+        text = "The encrypted comment is too long. Shorten it and try again."
+    case .commentEncryptionRecipientUnavailable:
+        title = "Couldn't Encrypt Comment"
+        text = "This user can't receive encrypted messages now."
+    case .commentEncryptionFailed:
+        title = "Couldn't Encrypt Comment"
+        text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
+    default:
+        title = "Transfer Failed"
+        text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+    }
+    //TODO:localize
+    let ok = "OK"
+    controller.present(textAlertController(
+        context: context,
+        title: title,
+        text: text,
+        actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+        })]
+    ), in: .window(.root))
+}
+
+@MainActor
+fileprivate final class WalletPeerTransferSubmission {
+    private let context: AccountContext
+    private let peer: EnginePeer
+    private let displaySuccessToast: Bool
+    private weak var controller: WalletSendScreen?
+    private weak var navigationController: NavigationController?
+    private weak var parentController: ViewController?
+    private let closeForm: () -> Void
+    private let presentErrorOnForm: (WalletContext.WalletError) -> Bool
+    private var closeRequested = false
+    private var isClosingForm = false
+    private var formDisappeared = false
+    private var result: Result<WalletContext.PendingTransfer, WalletContext.WalletError>?
+    private var presentationRequested = false
+
+    init(
+        context: AccountContext,
+        peer: EnginePeer,
+        displaySuccessToast: Bool,
+        controller: WalletSendScreen,
+        closeForm: @escaping () -> Void,
+        presentErrorOnForm: @escaping (WalletContext.WalletError) -> Bool
+    ) {
+        self.context = context
+        self.peer = peer
+        self.displaySuccessToast = displaySuccessToast
+        self.controller = controller
+        self.closeForm = closeForm
+        self.presentErrorOnForm = presentErrorOnForm
+        if let navigationController = controller.navigationController as? NavigationController {
+            self.navigationController = navigationController
+        } else if let parentController = controller.parentController() {
+            self.parentController = parentController
+            self.navigationController = parentController.navigationController as? NavigationController
+        }
+        // Keep a fast result alive until the dismissal has actually completed.
+        controller.peerTransferSubmission = self
+    }
+
+    func start(walletContext: WalletContext, prepared: WalletContext.PreparedTransfer) {
+        // Only preparation belongs to the form. The submission and its result outlive it.
+        let _ = walletContext.submitTransfer(prepared, recipientPeerId: self.peer.id, pendingMessageCreated: { [weak self] in
+            self?.pendingMessageCreated()
+        }).startStandalone(next: { [self] pending in
+            self.finish(.success(pending))
+        }, error: { [self] error in
+            self.finish(.failure(error))
+        })
+    }
+
+    private func withCurrentAccount(_ action: @escaping () -> Void) {
+        let _ = (self.context.sharedContext.activeAccountContexts
+        |> take(1)
+        |> deliverOnMainQueue).startStandalone(next: { [self] primary, _, _ in
+            guard primary?.account.id == self.context.account.id else {
+                self.detachFromForm()
+                return
+            }
+            action()
+        })
+    }
+
+    private func pendingMessageCreated() {
+        self.withCurrentAccount { [self] in
+            guard self.result == nil else { return }
+            self.closeRequested = true
+            self.closeFormIfNeeded()
+        }
+    }
+
+    func formWillDisappear() {
+        self.isClosingForm = true
+    }
+
+    func formDidDisappear() {
+        self.formDisappeared = true
+        self.presentResultIfReady()
+    }
+
+    func formDidAppear() {
+        // An interactive dismissal may have been cancelled.
+        self.isClosingForm = false
+        self.withCurrentAccount { [self] in
+            if self.closeRequested {
+                self.closeFormIfNeeded()
+            }
+            self.presentResultIfReady()
+        }
+    }
+
+    private func closeFormIfNeeded() {
+        guard !self.isClosingForm, !self.formDisappeared else { return }
+        self.isClosingForm = true
+        if self.controller == nil {
+            self.formDisappeared = true
+        } else {
+            self.closeForm()
+        }
+    }
+
+    private func finish(_ result: Result<WalletContext.PendingTransfer, WalletContext.WalletError>) {
+        guard self.result == nil else { return }
+        self.result = result
+        self.withCurrentAccount { [self] in
+            if case .success = result {
+                self.closeRequested = true
+                self.closeFormIfNeeded()
+            }
+            self.presentResultIfReady()
+        }
+    }
+
+    private func presentResultIfReady() {
+        if self.controller == nil {
+            self.formDisappeared = true
+        }
+        guard let result = self.result, !self.presentationRequested,
+              !self.isClosingForm || self.formDisappeared else { return }
+        self.presentationRequested = true
+        self.withCurrentAccount { [self] in
+            self.detachFromForm()
+            if case let .failure(error) = result, !self.formDisappeared,
+               self.presentErrorOnForm(error) {
+                return
+            }
+            let navigationController = self.navigationController
+                ?? self.context.sharedContext.mainWindow?.viewController as? NavigationController
+            guard let presenter = navigationController?.viewControllers.reversed().first(where: {
+                $0 !== self.controller && $0 !== self.parentController
+            }) as? ViewController else { return }
+            switch result {
+            case let .success(pending):
+                if pending.status == .submissionUnknown {
+                    walletPresentSubmissionUnknown(on: presenter, context: self.context)
+                } else if self.displaySuccessToast {
+                    walletPresentTransferSuccess(on: presenter, context: self.context, peer: self.peer)
+                }
+            case let .failure(error):
+                walletPresentTransferError(error, on: presenter, context: self.context)
+            }
+        }
+    }
+
+    private func detachFromForm() {
+        if self.controller?.peerTransferSubmission === self {
+            self.controller?.peerTransferSubmission = nil
+        }
+    }
+}
+
 private final class WalletSendScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -571,6 +806,7 @@ private final class WalletSendScreenComponent: Component {
         private var walletAddress: String?
         private var walletIsLoading = true
         private var isPreparingTransfer = false
+        private var isSubmittingTransfer = false
         private var isResolvingSigningAccess = false
         private var continueSendingAfterSigningAccess = false
         private weak var recoveryPhraseImportController: ViewController?
@@ -651,6 +887,10 @@ private final class WalletSendScreenComponent: Component {
 
         func viewWillDisappear() {
             self.isVisible = false
+            if self.isPreparingTransfer && !self.isSubmittingTransfer {
+                self.transferDisposable.set(nil)
+                self.isPreparingTransfer = false
+            }
         }
 
         private func resolvePeerAddressIfNeeded() {
@@ -1143,49 +1383,38 @@ private final class WalletSendScreenComponent: Component {
                     )
                 }
                 self.transferDisposable.set((preparation
-                |> mapToSignal { [weak self] prepared in
-                    self?.peerPreparedTransfer = prepared
-                    return component.walletContext.submitTransfer(prepared, recipientPeerId: peer.id)
-                }
-                |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
-                    guard let self, let controller = self.environment?.controller() else {
+                |> deliverOnMainQueue).start(next: { [weak self] prepared in
+                    guard let self, self.isVisible,
+                          self.component?.walletContext === component.walletContext,
+                          let controller = self.environment?.controller() as? WalletSendScreen else {
+                        let _ = component.walletContext.discardPreparedTransfer(prepared).startStandalone()
                         return
                     }
                     self.peerPreparedTransfer = nil
-                    self.isPreparingTransfer = false
-                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-
-                    switch pendingTransfer.status {
-                    case .submissionUnknown:
-                        self.presentSubmissionUnknown(on: controller, context: component.context)
-                        component.completed?()
-                        controller.dismiss()
-                    case .broadcasting, .pending, .confirmed:
-                        var navigationController: NavigationController?
-                        var parentController: ViewController?
-                        if let current = controller.navigationController as? NavigationController {
-                            navigationController = current
-                        } else if let current = (controller as? AttachmentContainable)?.parentController() {
-                            parentController = current
-                            navigationController = current.navigationController as? NavigationController
+                    self.isSubmittingTransfer = true
+                    let submission = WalletPeerTransferSubmission(
+                        context: component.context,
+                        peer: peer,
+                        displaySuccessToast: component.displaySuccessToast,
+                        controller: controller,
+                        closeForm: { [weak self, weak controller] in
+                            guard let self, self.isVisible, let controller else { return }
+                            self.isVisible = false
+                            component.completed?()
+                            controller.dismiss()
+                        },
+                        presentErrorOnForm: { [weak self] error in
+                            guard let self, self.isVisible,
+                                  self.component?.walletContext === component.walletContext else { return false }
+                            self.isSubmittingTransfer = false
+                            self.isPreparingTransfer = false
+                            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                            self.presentTransferError(error)
+                            return true
                         }
-                        component.completed?()
-                        controller.dismiss()
-                        if component.displaySuccessToast {
-                            Queue.mainQueue().after(0.4, { [weak navigationController] in
-                                guard let navigationController else {
-                                    return
-                                }
-                                if let controller = navigationController.viewControllers.reversed().first(where: { $0 !== parentController }) as? ViewController {
-                                    self.presentTransferSuccess(on: controller, context: component.context, peer: peer)
-                                }
-                            })
-                        }
-                    }
+                    )
+                    submission.start(walletContext: component.walletContext, prepared: prepared)
                 }, error: { [weak self] error in
-                    if error == .preparedTransferExpired || error == .preparedTransferNotFound {
-                        self?.discardPeerPreparedTransfer()
-                    }
                     self?.isPreparingTransfer = false
                     self?.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     self?.presentTransferError(error)
@@ -1231,88 +1460,11 @@ private final class WalletSendScreenComponent: Component {
             )
         }
 
-        private func presentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
-            //TODO:localize
-            let text = "Grams have been sent to **\(peer.compactDisplayTitle)**."
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            controller.present(
-                UndoOverlayController(
-                    presentationData: presentationData,
-                    content: .emoji(name: "Celebrate", text: text, interactive: true),
-                    position: .bottom,
-                    action: { [weak controller] action in
-                        guard case .info = action,
-                              let navigationController = controller?.navigationController as? NavigationController else {
-                            return false
-                        }
-                        context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                            navigationController: navigationController,
-                            chatController: nil,
-                            context: context,
-                            chatLocation: .peer(peer),
-                            subject: nil,
-                            botStart: nil,
-                            updateTextInputState: nil,
-                            keepStack: .always,
-                            useExisting: true,
-                            purposefulAction: nil,
-                            scrollToEndIfExists: false,
-                            activateMessageSearch: nil,
-                            animated: true
-                        ))
-                        return true
-                    }
-                ),
-                in: .current
-            )
-        }
-
-        private func presentSubmissionUnknown(on controller: ViewController, context: AccountContext) {
-            //TODO:localize
-            let title = "Transfer Pending"
-            //TODO:localize
-            let text = "The transfer may have been sent. Don’t send it again while its status is being checked."
-            //TODO:localize
-            let ok = "OK"
-            controller.present(textAlertController(
-                context: context,
-                title: title,
-                text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
-                })]
-            ), in: .window(.root))
-        }
-
         private func presentTransferError(_ error: WalletContext.WalletError? = nil) {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            //TODO:localize
-            let title: String
-            let text: String
-            switch error {
-            case .commentTooLong:
-                title = "Comment Too Long"
-                text = "The encrypted comment is too long. Shorten it and try again."
-            case .commentEncryptionRecipientUnavailable:
-                title = "Couldn't Encrypt Comment"
-                text = "This user can't receive encrypted messages now."
-            case .commentEncryptionFailed:
-                title = "Couldn't Encrypt Comment"
-                text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
-            default:
-                title = "Transfer Failed"
-                text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
-            }
-            //TODO:localize
-            let ok = "OK"
-            controller.present(textAlertController(
-                context: component.context,
-                title: title,
-                text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
-                })]
-            ), in: .window(.root))
+            walletPresentTransferError(error, on: controller, context: component.context)
         }
 
         func update(
@@ -2038,6 +2190,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     private let walletContext: WalletContext
     private var balanceRefreshDisposable: Disposable?
     private var refreshBalanceOnOpen: Bool
+    fileprivate var peerTransferSubmission: WalletPeerTransferSubmission?
 
     public var requestAttachmentMenuExpansion: () -> Void = {
     }
@@ -2138,6 +2291,10 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
 
+        let peerTransferSubmission = self.peerTransferSubmission
+        self.peerTransferSubmission = nil
+        peerTransferSubmission?.formDidDisappear()
+
         self.balanceRefreshDisposable?.dispose()
         self.balanceRefreshDisposable = nil
     }
@@ -2146,9 +2303,11 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         super.viewDidAppear(animated)
 
         (self.node.hostView.componentView as? WalletSendScreenComponent.View)?.viewDidAppear()
+        self.peerTransferSubmission?.formDidAppear()
     }
 
     override public func viewWillDisappear(_ animated: Bool) {
+        self.peerTransferSubmission?.formWillDisappear()
         (self.node.hostView.componentView as? WalletSendScreenComponent.View)?.viewWillDisappear()
 
         super.viewWillDisappear(animated)

@@ -36,6 +36,18 @@ public extension TelegramEngine {
             return _internal_removePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference)
         }
 
+        public func resolvePendingTransferMessage(_ reference: WalletPendingTransferMessageReference, chainTraceId: String) -> Signal<Void, NoError> {
+            return _internal_resolvePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, chainTraceId: chainTraceId)
+        }
+
+        public func resolvePendingTransferMessage(_ reference: WalletPendingTransferMessageReference, transactionId: String, failed: Bool = false) -> Signal<Void, NoError> {
+            return _internal_resolvePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, transactionId: transactionId, failed: failed)
+        }
+
+        public func hasUnresolvedPendingTransferMessage(_ reference: WalletPendingTransferMessageReference) -> Signal<Bool, NoError> {
+            return _internal_hasUnresolvedPendingWalletTransferMessage(postbox: self.account.postbox, reference: reference)
+        }
+
         public func getTransactionsByIDs(ids: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
             return _internal_getWalletTransactionsByIDs(account: self.account, ids: ids)
         }

@@ -25,6 +25,8 @@ swift_library(
         "//submodules/TextSelectionNode",
         "//submodules/InvisibleInkDustNode",
         "//submodules/ActivityIndicator",
+        "//submodules/ShimmerEffect",
+        "//submodules/WalletContext",
     ],
     visibility = [
         "//visibility:public",

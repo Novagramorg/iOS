@@ -305,21 +305,10 @@ private final class WalletSettingsScreenComponent: Component {
                 let fee = formatTonAmountText(
                     networkFeeNanograms,
                     dateTimeFormat: presentationData.dateTimeFormat,
-                    maxDecimalPositions: 5
+                    maxDecimalPositions: 5,
+                    formatString: presentationData.strings.Currency_Grams
                 )
-                var feeText = "Network fee: \(fee) Grams"
-                if !"".isEmpty, let fiatRate = self.walletState?.fiat.selectedRate {
-                    let fiatCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
-                    let fiatFee = formatTonFiatValue(
-                        networkFeeNanograms,
-                        rate: fiatRate.unitsPerGram,
-                        currencySymbol: fiatCurrency.symbol,
-                        maxDecimalPositions: 2,
-                        dateTimeFormat: presentationData.dateTimeFormat
-                    )
-                    feeText += " (~\(fiatFee))"
-                }
-                text += "\n\n\(feeText)."
+                text += "\n\nNetwork fee: \(fee)."
             }
             controller.present(textAlertController(
                 context: component.context,
@@ -361,24 +350,13 @@ private final class WalletSettingsScreenComponent: Component {
             let amount = formatTonAmountText(
                 required,
                 dateTimeFormat: presentationData.dateTimeFormat,
-                maxDecimalPositions: 5
+                maxDecimalPositions: 5,
+                formatString: presentationData.strings.Currency_Grams
             )
-            var amountText = "\(amount) GRAM"
-            if let fiatRate = self.walletState?.fiat.selectedRate {
-                let fiatCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
-                let fiatAmount = formatTonFiatValue(
-                    required,
-                    rate: fiatRate.unitsPerGram,
-                    currencySymbol: fiatCurrency.symbol,
-                    maxDecimalPositions: 2,
-                    dateTimeFormat: presentationData.dateTimeFormat
-                )
-                amountText += " (~\(fiatAmount))"
-            }
             controller.present(textAlertController(
                 context: component.context,
-                title: "Not enough Gram",
-                text: "You need \(amountText) to update your recovery phrase.",
+                title: "Not enough Grams",
+                text: "You need \(amount) to update your recovery phrase.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Not now", action: {}),
                     TextAlertAction(type: .defaultAction, title: "Top up", action: { [weak self] in

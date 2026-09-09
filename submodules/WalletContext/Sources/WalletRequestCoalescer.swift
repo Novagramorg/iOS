@@ -29,7 +29,6 @@ struct WalletRequestCoalescingKey: Hashable, Sendable {
     }
 }
 
-// Shares only running requests. Every consumer owns its own cancellable wait.
 final class WalletRequestCoalescer: @unchecked Sendable {
     final class Request: @unchecked Sendable {
         private let lock = NSLock()
@@ -41,7 +40,6 @@ final class WalletRequestCoalescer: @unchecked Sendable {
             self.onCancel = onCancel
         }
 
-        // A Request represents one consumer and must be awaited only once.
         var value: Data {
             get async throws {
                 return try await withTaskCancellationHandler(operation: {

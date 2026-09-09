@@ -417,7 +417,7 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
                 gaslessResetAt: transfer.gaslessResetAt
             )
             if let pendingMessage {
-                return _internal_acceptPendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage, transfer: result, receivedAt: pendingWalletTransferTimestamp())
+                return _internal_acceptPendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage, transfer: result, receivedAt: Int32(clamping: Int64(Date().timeIntervalSince1970)))
                 |> castError(WalletSendTransferError.self)
                 |> map { _ in result }
             }
