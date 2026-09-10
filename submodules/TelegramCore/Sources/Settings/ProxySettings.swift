@@ -25,21 +25,34 @@ extension ProxyServerSettings {
                 return MTSocksProxySettings(ip: self.host, port: UInt16(clamping: self.port), username: username, password: password, secret: nil)
             case let .mtp(secret):
                 return MTSocksProxySettings(ip: self.host, port: UInt16(clamping: self.port), username: nil, password: nil, secret: secret)
-            case let .web(secret):
+            case let .web(secret, _):
                 return MTSocksProxySettings(ip: WebProxyConfiguration.canonicalHost(self.host) ?? self.host, port: WebProxyConfiguration.port, username: nil, password: nil, secret: secret, webProxy: true)
         }
     }
 
     var webProxyConfiguration: WebProxyConfiguration? {
-        guard case let .web(secret) = self.connection else {
+        guard case let .web(secret, path) = self.connection else {
             return nil
         }
-        return WebProxyConfiguration(host: self.host, secret: secret)
+        return WebProxyConfiguration(host: self.host, path: path, secret: secret)
+    }
+}
+
+extension ProxyServerSettings {
+    public var webProxyAddress: String? {
+        guard case let .web(_, path) = self.connection else {
+            return nil
+        }
+        return path.isEmpty ? self.host : "\(self.host)/\(path)"
     }
 }
 
 public func canonicalWebProxyHost(_ value: String) -> String? {
     return WebProxyConfiguration.canonicalHost(value)
+}
+
+public func canonicalWebProxyAddress(_ value: String) -> (host: String, path: String)? {
+    return WebProxyConfiguration.canonicalAddress(value)
 }
 
 public func parseWebProxySecret(_ value: String) -> Data? {
@@ -50,11 +63,11 @@ public func webProxySecretString(_ secret: Data) -> String {
     return secret.map { String(format: "%02x", $0) }.joined()
 }
 
-public func makeWebProxySettings(host: String, secret: String) -> ProxyServerSettings? {
-    guard let canonicalHost = canonicalWebProxyHost(host), let data = parseWebProxySecret(secret) else {
+public func makeWebProxySettings(address: String, secret: String) -> ProxyServerSettings? {
+    guard let address = canonicalWebProxyAddress(address), let data = parseWebProxySecret(secret) else {
         return nil
     }
-    return ProxyServerSettings(host: canonicalHost, port: Int32(WebProxyConfiguration.port), connection: .web(secret: data))
+    return ProxyServerSettings(host: address.host, port: Int32(WebProxyConfiguration.port), connection: .web(secret: data, path: address.path))
 }
 
 public func parseWebProxySettingsLink(_ value: String) -> ProxyServerSettings? {
@@ -82,28 +95,33 @@ public func parseWebProxySettingsLink(_ value: String) -> ProxyServerSettings? {
     guard items.count == 2,
           items.filter({ $0.name == "server" }).count == 1,
           items.filter({ $0.name == "secret" }).count == 1,
-          let host = items.first(where: { $0.name == "server" })?.value,
+          let address = items.first(where: { $0.name == "server" })?.value,
           let secret = items.first(where: { $0.name == "secret" })?.value else {
         return nil
     }
-    return makeWebProxySettings(host: host, secret: secret)
+    return makeWebProxySettings(address: address, secret: secret)
 }
 
 public func webProxySettingsLink(_ settings: ProxyServerSettings) -> String? {
-    guard case let .web(secret) = settings.connection,
-          let host = canonicalWebProxyHost(settings.host),
-          WebProxyConfiguration.isValidSecret(secret) else {
+    guard case let .web(secret, path) = settings.connection,
+          let configuration = WebProxyConfiguration(host: settings.host, path: path, secret: secret) else {
         return nil
     }
     var components = URLComponents()
     components.scheme = "https"
     components.host = "t.me"
     components.path = "/webproxy"
-    components.queryItems = [
-        URLQueryItem(name: "server", value: host),
+    components.percentEncodedQueryItems = [
+        URLQueryItem(name: "server", value: webProxyPercentEncodedAddress(configuration.address)),
         URLQueryItem(name: "secret", value: webProxySecretString(secret))
     ]
     return components.string
+}
+
+private func webProxyPercentEncodedAddress(_ value: String) -> String {
+    var allowed = CharacterSet.alphanumerics
+    allowed.insert(charactersIn: "-._~")
+    return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
 }
 
 public func updateProxySettingsInteractively(transaction: AccountManagerModifier<TelegramAccountManagerTypes>, _ f: @escaping (ProxySettings) -> ProxySettings) -> Bool {

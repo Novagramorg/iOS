@@ -269,7 +269,7 @@ func proxyServerSettingsController(sharedContext: SharedAccountContext, context:
             case let .mtp(secret):
                 currentSecret = hexString(secret)
                 currentMode = .mtp
-            case let .web(secret):
+            case let .web(secret, _):
                 // ProxyServerSettingsControllerMode has no .web; a web proxy is secret-based, so it
                 // displays as the MTProto mode. WARNING: saving from this editor therefore REWRITES a
                 // web proxy as an mtp proxy. Adding a real .web mode is the proper fix.

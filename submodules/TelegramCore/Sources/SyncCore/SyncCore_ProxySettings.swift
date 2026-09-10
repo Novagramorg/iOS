@@ -4,7 +4,7 @@ import Postbox
 public enum ProxyServerConnection: Equatable, Hashable, Codable {
     case socks5(username: String?, password: String?)
     case mtp(secret: Data)
-    case web(secret: Data)
+    case web(secret: Data, path: String)
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: StringCodingKey.self)
@@ -15,7 +15,9 @@ public enum ProxyServerConnection: Equatable, Hashable, Codable {
             case 1:
                 self = .mtp(secret: try container.decode(Data.self, forKey: "secret"))
             case 2:
-                self = .web(secret: try container.decode(Data.self, forKey: "secret"))
+                self = .web(secret: try container.decode(Data.self, forKey: "secret"), path: "")
+            case 3:
+                self = .web(secret: try container.decode(Data.self, forKey: "secret"), path: try container.decode(String.self, forKey: "path"))
             default:
                 self = .socks5(username: nil, password: nil)
         }
@@ -32,9 +34,15 @@ public enum ProxyServerConnection: Equatable, Hashable, Codable {
             case let .mtp(secret):
                 try container.encode(1 as Int32, forKey: "_t")
                 try container.encode(secret, forKey: "secret")
-            case let .web(secret):
-                try container.encode(2 as Int32, forKey: "_t")
-                try container.encode(secret, forKey: "secret")
+            case let .web(secret, path):
+                if path.isEmpty {
+                    try container.encode(2 as Int32, forKey: "_t")
+                    try container.encode(secret, forKey: "secret")
+                } else {
+                    try container.encode(3 as Int32, forKey: "_t")
+                    try container.encode(secret, forKey: "secret")
+                    try container.encode(path, forKey: "path")
+                }
         }
     }
 }

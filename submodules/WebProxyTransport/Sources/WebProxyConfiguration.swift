@@ -3,15 +3,18 @@ import Foundation
 
 public struct WebProxyConfiguration: Equatable, Hashable {
     public static let port: UInt16 = 443
+    public static let maximumPathLength = 128
 
     public let host: String
+    public let path: String
     public let secret: Data
 
-    public init?(host: String, secret: Data) {
-        guard let host = Self.canonicalHost(host), Self.isValidSecret(secret) else {
+    public init?(host: String, path: String = "", secret: Data) {
+        guard let host = Self.canonicalHost(host), let path = Self.canonicalPath(path), Self.isValidSecret(secret) else {
             return nil
         }
         self.host = host
+        self.path = path
         self.secret = secret
     }
 
@@ -64,15 +67,76 @@ public struct WebProxyConfiguration: Equatable, Hashable {
         }
         let labels = host.split(separator: ".", omittingEmptySubsequences: false)
         guard labels.count >= 2,
-              !labels.allSatisfy({ label in Int(label) != nil }),
               labels.allSatisfy({ label in
             !label.isEmpty && label.utf8.count <= 63 && label.first != "-" && label.last != "-" && label.allSatisfy { character in
                 character.isASCII && (character.isLetter || character.isNumber || character == "-")
             }
-        }) else {
+        }), !lastLabelIsNumeric(labels) else {
             return nil
         }
         return host
+    }
+
+    public static func canonicalPath(_ value: String) -> String? {
+        var path = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if path.isEmpty {
+            return ""
+        }
+        guard !path.hasPrefix("/") else {
+            return nil
+        }
+        if path.hasSuffix("/") {
+            path.removeLast()
+        }
+        guard !path.isEmpty, path.count <= maximumPathLength else {
+            return nil
+        }
+        let segments = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard segments.allSatisfy({ segment in
+            guard let first = segment.first, first.isASCII, first.isLetter || first.isNumber else {
+                return false
+            }
+            return segment.allSatisfy { character in
+                character.isASCII && (character.isLetter || character.isNumber || character == "-" || character == "_")
+            }
+        }) else {
+            return nil
+        }
+        return path
+    }
+
+    public static func canonicalAddress(_ value: String) -> (host: String, path: String)? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let separator = trimmed.firstIndex(of: "/") else {
+            guard let host = canonicalHost(trimmed) else {
+                return nil
+            }
+            return (host, "")
+        }
+        guard let host = canonicalHost(String(trimmed[trimmed.startIndex ..< separator])),
+              let path = canonicalPath(String(trimmed[trimmed.index(after: separator)...])) else {
+            return nil
+        }
+        return (host, path)
+    }
+
+    private static func lastLabelIsNumeric(_ labels: [Substring]) -> Bool {
+        guard let label = labels.last, !label.isEmpty else {
+            return false
+        }
+        let hexadecimal = label.count >= 2 && label.first == "0" && (label[label.index(after: label.startIndex)] == "x" || label[label.index(after: label.startIndex)] == "X")
+        let digits = hexadecimal ? label.dropFirst(2) : label[...]
+        return digits.allSatisfy { character in
+            character.isASCII && (character.isNumber || (hexadecimal && character.isHexDigit))
+        }
+    }
+
+    public var address: String {
+        return self.path.isEmpty ? self.host : "\(self.host)/\(self.path)"
+    }
+
+    public var base: String {
+        return self.path.isEmpty ? "/" : "/\(self.path)/"
     }
 
     public var secretHex: String {
@@ -80,7 +144,12 @@ public struct WebProxyConfiguration: Equatable, Hashable {
     }
 
     public func bridgeCapability() -> String {
-        let context = Data("tdesktop-web-proxy-bridge-v1\n\(self.host)".utf8)
+        let context: Data
+        if self.path.isEmpty {
+            context = Data("tdesktop-web-proxy-bridge-v1\n\(self.host)".utf8)
+        } else {
+            context = Data("tdesktop-web-proxy-bridge-v2\n\(self.host)\n\(self.path)".utf8)
+        }
         var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
         self.secret.withUnsafeBytes { keyBytes in
             context.withUnsafeBytes { contextBytes in
@@ -97,7 +166,7 @@ public struct WebProxyConfiguration: Equatable, Hashable {
         var components = URLComponents()
         components.scheme = "https"
         components.host = self.host
-        components.path = "/"
+        components.path = self.base
         components.queryItems = [URLQueryItem(name: "bridge", value: self.bridgeCapability())]
         components.fragment = "android=\(nonce)"
         return components.url
