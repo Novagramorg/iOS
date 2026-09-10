@@ -523,20 +523,22 @@ private func walletPresentTransferSuccess(on controller: ViewController, context
 }
 
 @MainActor
-private func walletPresentSubmissionUnknown(on controller: ViewController, context: AccountContext) {
+private func walletPresentSubmissionUnknown(on controller: ViewController, context: AccountContext) -> ViewController {
     //TODO:localize
     let title = "Transfer Pending"
     //TODO:localize
     let text = "The transfer may have been sent. Don’t send it again while its status is being checked."
     //TODO:localize
     let ok = "OK"
-    controller.present(textAlertController(
+    let alert = textAlertController(
         context: context,
         title: title,
         text: text,
         actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
         })]
-    ), in: .window(.root))
+    )
+    controller.present(alert, in: .window(.root))
+    return alert
 }
 
 @MainActor
@@ -577,13 +579,22 @@ fileprivate final class WalletPeerTransferSubmission {
     private weak var controller: WalletSendScreen?
     private weak var navigationController: NavigationController?
     private weak var parentController: ViewController?
+    private weak var walletContext: WalletContext?
+    private weak var submissionUnknownController: ViewController?
+    private var walletAddress: String?
+    private let observationDisposable = MetaDisposable()
+    private var hasObservedTransfer = false
+    private var confirmationObserved = false
+    private var observationStopped = false
+    private var isInvalidated = false
     private let closeForm: () -> Void
     private let presentErrorOnForm: (WalletContext.WalletError) -> Bool
     private var closeRequested = false
     private var isClosingForm = false
     private var formDisappeared = false
     private var result: Result<WalletContext.PendingTransfer, WalletContext.WalletError>?
-    private var presentationRequested = false
+    private var resultPresentationRequested = false
+    private var successPresentationRequested = false
 
     init(
         context: AccountContext,
@@ -605,12 +616,40 @@ fileprivate final class WalletPeerTransferSubmission {
             self.parentController = parentController
             self.navigationController = parentController.navigationController as? NavigationController
         }
-        // Keep a fast result alive until the dismissal has actually completed.
         controller.peerTransferSubmission = self
     }
 
     func start(walletContext: WalletContext, prepared: WalletContext.PreparedTransfer) {
-        // Only preparation belongs to the form. The submission and its result outlive it.
+        self.walletContext = walletContext
+        if case let .wallet(info) = walletContext.stateValue.phase {
+            self.walletAddress = info.address
+        }
+        self.observationDisposable.set((combineLatest(
+            walletContext.state,
+            self.context.sharedContext.activeAccountContexts
+        )
+        |> deliverOnMainQueue).start(next: { [self] state, accounts in
+            guard !self.observationStopped else { return }
+            guard accounts.primary?.account.id == self.context.account.id,
+                  case let .wallet(info) = state.phase,
+                  info.address == self.walletAddress else {
+                self.invalidate()
+                return
+            }
+            let transaction = state.transactions.items.first(where: {
+                $0.presentationId == "pending:\(prepared.id)"
+            })
+            let hasTransfer = transaction != nil || state.pendingTransfers.contains(where: { $0.id == prepared.id })
+            if transaction?.status == .completed {
+                self.confirmationObserved = true
+                self.stopObserving()
+                self.presentResultIfReady()
+            } else if transaction?.status == .failed || (self.hasObservedTransfer && !hasTransfer) {
+                self.stopObserving()
+            }
+            self.hasObservedTransfer = self.hasObservedTransfer || hasTransfer
+        }))
+
         let _ = walletContext.submitTransfer(prepared, recipientPeerId: self.peer.id, pendingMessageCreated: { [weak self] in
             self?.pendingMessageCreated()
         }).startStandalone(next: { [self] pending in
@@ -621,11 +660,16 @@ fileprivate final class WalletPeerTransferSubmission {
     }
 
     private func withCurrentAccount(_ action: @escaping () -> Void) {
+        guard !self.isInvalidated else { return }
         let _ = (self.context.sharedContext.activeAccountContexts
         |> take(1)
         |> deliverOnMainQueue).startStandalone(next: { [self] primary, _, _ in
-            guard primary?.account.id == self.context.account.id else {
-                self.detachFromForm()
+            guard !self.isInvalidated else { return }
+            guard primary?.account.id == self.context.account.id,
+                  let walletContext = self.walletContext,
+                  case let .wallet(info) = walletContext.stateValue.phase,
+                  info.address == self.walletAddress else {
+                self.invalidate()
                 return
             }
             action()
@@ -650,7 +694,6 @@ fileprivate final class WalletPeerTransferSubmission {
     }
 
     func formDidAppear() {
-        // An interactive dismissal may have been cancelled.
         self.isClosingForm = false
         self.withCurrentAccount { [self] in
             if self.closeRequested {
@@ -673,6 +716,9 @@ fileprivate final class WalletPeerTransferSubmission {
     private func finish(_ result: Result<WalletContext.PendingTransfer, WalletContext.WalletError>) {
         guard self.result == nil else { return }
         self.result = result
+        if case .failure = result {
+            self.stopObserving()
+        }
         self.withCurrentAccount { [self] in
             if case .success = result {
                 self.closeRequested = true
@@ -686,31 +732,67 @@ fileprivate final class WalletPeerTransferSubmission {
         if self.controller == nil {
             self.formDisappeared = true
         }
-        guard let result = self.result, !self.presentationRequested,
+        guard !self.isInvalidated,
               !self.isClosingForm || self.formDisappeared else { return }
-        self.presentationRequested = true
+        if self.confirmationObserved {
+            guard self.formDisappeared, !self.successPresentationRequested else { return }
+            self.successPresentationRequested = true
+            self.withCurrentAccount { [self] in
+                self.detachFromForm()
+                self.dismissSubmissionUnknown()
+                if self.displaySuccessToast, let presenter = self.resultPresenter {
+                    walletPresentTransferSuccess(on: presenter, context: self.context, peer: self.peer)
+                }
+            }
+            return
+        }
+        guard let result = self.result, !self.resultPresentationRequested else { return }
+        self.resultPresentationRequested = true
         self.withCurrentAccount { [self] in
+            guard !self.confirmationObserved else {
+                self.presentResultIfReady()
+                return
+            }
             self.detachFromForm()
             if case let .failure(error) = result, !self.formDisappeared,
                self.presentErrorOnForm(error) {
                 return
             }
-            let navigationController = self.navigationController
-                ?? self.context.sharedContext.mainWindow?.viewController as? NavigationController
-            guard let presenter = navigationController?.viewControllers.reversed().first(where: {
-                $0 !== self.controller && $0 !== self.parentController
-            }) as? ViewController else { return }
+            guard let presenter = self.resultPresenter else { return }
             switch result {
             case let .success(pending):
-                if pending.status == .submissionUnknown {
-                    walletPresentSubmissionUnknown(on: presenter, context: self.context)
-                } else if self.displaySuccessToast {
-                    walletPresentTransferSuccess(on: presenter, context: self.context, peer: self.peer)
+                if pending.status == .submissionUnknown, !self.observationStopped {
+                    self.submissionUnknownController = walletPresentSubmissionUnknown(on: presenter, context: self.context)
                 }
             case let .failure(error):
                 walletPresentTransferError(error, on: presenter, context: self.context)
             }
         }
+    }
+
+    private var resultPresenter: ViewController? {
+        let navigationController = self.navigationController
+            ?? self.context.sharedContext.mainWindow?.viewController as? NavigationController
+        return navigationController?.viewControllers.reversed().first(where: {
+            $0 !== self.controller && $0 !== self.parentController
+        }) as? ViewController
+    }
+
+    private func stopObserving() {
+        self.observationStopped = true
+        self.observationDisposable.dispose()
+    }
+
+    private func dismissSubmissionUnknown() {
+        self.submissionUnknownController?.dismiss()
+        self.submissionUnknownController = nil
+    }
+
+    private func invalidate() {
+        self.isInvalidated = true
+        self.stopObserving()
+        self.dismissSubmissionUnknown()
+        self.detachFromForm()
     }
 
     private func detachFromForm() {

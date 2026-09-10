@@ -25,6 +25,7 @@ import DCTMultiAnimationRendererImpl
 import AppBundle
 import DirectMediaImageCache
 import WalletContext
+import WalletConnectScreen
 import AlertUI
 
 private final class DeviceSpecificContactImportContext {
@@ -140,6 +141,13 @@ public final class AccountContextImpl: AccountContext {
     private let tonConnectOperationDisposable = MetaDisposable()
     private weak var tonConnectController: ViewController?
     private var tonConnectRequestId: String?
+    private var tonConnectCompletion: ((Result<Void, WalletContext.WalletError>) -> Void)?
+    private var tonConnectDiagnosticId: UUID?
+    private var tonConnectClosing = false
+    private var tonConnectCancelled = false
+    private var tonConnectAcknowledgingId: String?
+    private var tonConnectLatestState: WalletContext.TonConnectState?
+    private let tonConnectCloseDisposable = MetaDisposable()
     
     public let peerChannelMemberCategoriesContextsManager = PeerChannelMemberCategoriesContextsManager()
     
@@ -625,113 +633,154 @@ public final class AccountContextImpl: AccountContext {
         )
 
         if let walletContext = self.walletContext {
-            self.tonConnectPresentationDisposable = (walletContext.tonConnectPresentations
+            self.tonConnectPresentationDisposable = (walletContext.tonConnectState
             |> deliverOnMainQueue).start(next: { [weak self, weak walletContext] presentation in
                 guard let self, let walletContext else {
                     return
                 }
-                self.handleTonConnectPresentation(presentation, walletContext: walletContext)
+                self.handleTonConnectState(presentation, walletContext: walletContext)
             })
         }
     }
 
-    private func handleTonConnectPresentation(_ presentation: WalletContext.TonConnectPresentation, walletContext: WalletContext) {
-        switch presentation {
-        case let .request(request):
-            guard self.tonConnectController == nil else {
-                return
+    private func handleTonConnectState(_ state: WalletContext.TonConnectState, walletContext: WalletContext) {
+        self.tonConnectLatestState = state
+        if state.presentationEnabled, let diagnostic = state.diagnostic, self.tonConnectDiagnosticId != diagnostic.id {
+            self.tonConnectDiagnosticId = diagnostic.id
+            self.presentTonConnectError(diagnostic.failure.message)
+        }
+        guard state.presentationEnabled, let active = state.active else {
+            self.dismissTonConnectController(walletContext: walletContext)
+            return
+        }
+        if self.tonConnectClosing { return }
+        if let previousId = self.tonConnectRequestId, previousId != active.id {
+            self.dismissTonConnectController(walletContext: walletContext)
+            return
+        }
+        switch active.status {
+        case .ready:
+            guard self.tonConnectController == nil else { return }
+            self.tonConnectRequestId = active.id
+            self.tonConnectCancelled = false
+            let cancelled: () -> Void = { [weak self] in
+                guard let self, self.tonConnectRequestId == active.id else { return }
+                self.tonConnectCancelled = true
             }
-            self.tonConnectRequestId = request.id
-            let controller = self.sharedContext.makeWalletConnectScreen(
-                context: self,
-                walletContext: walletContext,
-                request: request,
-                cancelled: { [weak self, weak walletContext] in
-                    guard let self else {
-                        return
-                    }
-                    self.tonConnectController = nil
-                    self.tonConnectRequestId = nil
-                    guard let walletContext else {
-                        return
-                    }
-                    self.tonConnectOperationDisposable.set(walletContext.rejectTonConnectRequest(id: request.id).start())
-                },
-                connect: { [weak self, weak walletContext] completion in
-                    guard let self, let walletContext else {
-                        completion(.failure(.unavailable))
-                        return
-                    }
-                    self.tonConnectOperationDisposable.set((walletContext.approveTonConnectRequest(id: request.id)
-                    |> deliverOnMainQueue).start(next: { [weak self] in
-                        self?.tonConnectController = nil
-                        self?.tonConnectRequestId = nil
-                        completion(.success(Void()))
-                    }, error: { error in
-                        completion(.failure(error))
-                    }))
+            let action: (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void = { [weak self, weak walletContext] completion in
+                guard let self, let walletContext, self.tonConnectRequestId == active.id else {
+                    completion(.failure(.unavailable))
+                    return
                 }
-            )
+                self.tonConnectCompletion = completion
+                let signal: Signal<Void, WalletContext.WalletError>
+                switch active.content {
+                case .connect: signal = walletContext.approveTonConnectRequest(id: active.id)
+                case .operation: signal = walletContext.approveTonConnectOperation(id: active.id)
+                }
+                self.tonConnectOperationDisposable.set((signal |> deliverOnMainQueue).start(error: { [weak self] error in
+                    guard let self, self.tonConnectRequestId == active.id else { return }
+                    let completion = self.tonConnectCompletion
+                    self.tonConnectCompletion = nil
+                    completion?(.failure(error))
+                }))
+            }
+            let closed: () -> Void = { [weak self, weak walletContext] in
+                guard let self, let walletContext else { return }
+                self.tonConnectControllerClosed(id: active.id, walletContext: walletContext)
+            }
+            let controller: ViewController
+            switch active.content {
+            case let .connect(request):
+                let screen = self.sharedContext.makeWalletConnectScreen(context: self, walletContext: walletContext,
+                    request: request, cancelled: cancelled, connect: action)
+                (screen as? WalletConnectScreen)?.tonConnectClosed = closed
+                controller = screen
+            case let .operation(request):
+                let screen = self.sharedContext.makeWalletTransferScreen(context: self, walletContext: walletContext,
+                    request: request, cancelled: cancelled, confirm: action)
+                (screen as? WalletTransferScreen)?.tonConnectClosed = closed
+                controller = screen
+            }
             self.tonConnectController = controller
             self.sharedContext.presentGlobalController(controller, nil)
-        case let .operation(request):
-            guard self.tonConnectController == nil else {
+        case .processing:
+            break
+        case let .completed(result):
+            guard self.tonConnectRequestId == active.id else {
+                guard self.tonConnectAcknowledgingId != active.id else { return }
+                self.tonConnectCloseDisposable.set(walletContext.tonConnectPresentationClosed(id: active.id, rejectIfPending: false).start())
                 return
             }
-            self.tonConnectRequestId = request.id
-            let controller = self.sharedContext.makeWalletTransferScreen(
-                context: self,
-                walletContext: walletContext,
-                request: request,
-                cancelled: { [weak self, weak walletContext] in
-                    guard let self else {
-                        return
-                    }
-                    self.tonConnectController = nil
-                    self.tonConnectRequestId = nil
-                    guard let walletContext else {
-                        return
-                    }
-                    self.tonConnectOperationDisposable.set(walletContext.rejectTonConnectRequest(id: request.id).start())
-                },
-                confirm: { [weak self, weak walletContext] completion in
-                    guard let self, let walletContext else {
-                        completion(.failure(.unavailable))
-                        return
-                    }
-                    self.tonConnectOperationDisposable.set((walletContext.approveTonConnectOperation(id: request.id)
-                    |> deliverOnMainQueue).start(next: { [weak self] in
-                        self?.tonConnectController = nil
-                        self?.tonConnectRequestId = nil
-                        completion(.success(Void()))
-                    }, error: { error in
-                        completion(.failure(error))
-                    }))
-                }
-            )
-            self.tonConnectController = controller
-            self.sharedContext.presentGlobalController(controller, nil)
-        case let .dismiss(requestId):
-            guard self.tonConnectRequestId == requestId else {
-                return
+            if let failure = result.failure {
+                self.presentTonConnectError(failure.message)
+                self.dismissTonConnectController(walletContext: walletContext)
+            } else if result.approved, let completion = self.tonConnectCompletion {
+                self.tonConnectCompletion = nil
+                self.tonConnectClosing = true
+                completion(.success(Void()))
+            } else {
+                self.dismissTonConnectController(walletContext: walletContext)
             }
-            let controller = self.tonConnectController
-            self.tonConnectController = nil
-            self.tonConnectRequestId = nil
-            self.tonConnectOperationDisposable.set(nil)
-            controller?.dismiss(animated: false, completion: nil)
-        case let .error(text):
-            //TODO:localize
-            let okTitle = "OK"
-            self.sharedContext.presentGlobalController(textAlertController(
-                context: self,
-                title: nil,
-                text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: okTitle, action: {})]
-            ), nil)
+        case .invalidated:
+            if self.tonConnectRequestId == active.id {
+                self.dismissTonConnectController(walletContext: walletContext)
+            } else {
+                guard self.tonConnectAcknowledgingId != active.id else { return }
+                self.tonConnectCloseDisposable.set(walletContext.tonConnectPresentationClosed(id: active.id, rejectIfPending: false).start())
+            }
         }
     }
-    
+
+    private func dismissTonConnectController(walletContext: WalletContext) {
+        guard !self.tonConnectClosing, let id = self.tonConnectRequestId else { return }
+        self.tonConnectClosing = true
+        self.tonConnectCompletion = nil
+        self.tonConnectOperationDisposable.set(nil)
+        if let controller = self.tonConnectController {
+            controller.dismiss(animated: false, completion: { [weak self, weak walletContext] in
+                guard let self, let walletContext else { return }
+                self.tonConnectControllerClosed(id: id, walletContext: walletContext)
+            })
+        } else {
+            self.tonConnectControllerClosed(id: id, walletContext: walletContext)
+        }
+    }
+
+    private func tonConnectControllerClosed(id: String, walletContext: WalletContext) {
+        guard self.tonConnectRequestId == id else { return }
+        let rejected = self.tonConnectCancelled
+        self.tonConnectController = nil
+        self.tonConnectRequestId = nil
+        self.tonConnectCompletion = nil
+        self.tonConnectClosing = false
+        self.tonConnectCancelled = false
+        self.tonConnectAcknowledgingId = id
+        self.tonConnectOperationDisposable.set(nil)
+        if let latest = self.tonConnectLatestState, let active = latest.active, active.id != id {
+            self.handleTonConnectState(latest, walletContext: walletContext)
+        }
+        self.tonConnectCloseDisposable.set((walletContext.tonConnectPresentationClosed(id: id, rejectIfPending: rejected)
+        |> deliverOnMainQueue).start(next: { [weak self] target in
+            guard let self else { return }
+            if self.tonConnectAcknowledgingId == id { self.tonConnectAcknowledgingId = nil }
+            guard self.tonConnectRequestId == nil, let target else { return }
+            switch target {
+            case let .url(url):
+                self.sharedContext.openExternalUrl(context: self, urlContext: .generic, url: url, forceExternal: true,
+                    presentationData: self.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
+            case .back, .none:
+                // Without a known source navigation context iOS supplies no public "go back to app" API.
+                break
+            }
+        }))
+    }
+
+    private func presentTonConnectError(_ text: String) {
+        self.sharedContext.presentGlobalController(textAlertController(context: self, title: nil, text: text,
+            actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]), nil)
+    }
+
     deinit {
         self.limitsConfigurationDisposable?.dispose()
         self.managedAppSpecificContactsDisposable?.dispose()
@@ -747,6 +796,7 @@ public final class AccountContextImpl: AccountContext {
         self.isFrozenDisposable?.dispose()
         self.tonConnectPresentationDisposable?.dispose()
         self.tonConnectOperationDisposable.dispose()
+        self.tonConnectCloseDisposable.dispose()
     }
     
     public func storeSecureIdPassword(password: String) {

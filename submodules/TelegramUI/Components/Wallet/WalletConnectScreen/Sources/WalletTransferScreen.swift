@@ -178,14 +178,24 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += domainSize.height
             contentHeight += 20.0
 
+            let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
+            let fiatCurrency = component.walletState?.fiat.selectedCurrency ?? .usd
+            let fiatRate = component.walletState?.fiat.selectedRate
+            let amountNanograms = presentation.amountNanograms
+            let amount = amountNanograms.flatMap { Int64($0) }
             let cardWidth = min(361.0, max(1.0, safeContentWidth - 42.0))
             self.card.parentState = state
             let cardSize = self.card.update(
                 transition: transition,
-                component: AnyComponent(WalletTonConnectMessagesComponent(
-                    request: component.request,
-                    theme: theme,
-                    compact: true
+                component: AnyComponent(WalletTransferCardComponent(
+                    amount: amount ?? 0,
+                    recipient: presentation.recipient,
+                    fiatCurrency: fiatCurrency,
+                    fiatRate: fiatRate,
+                    dateTimeFormat: environment.dateTimeFormat,
+                    amountText: amount == nil ? formatTonConnectNanograms(amountNanograms ?? "", dateTimeFormat: environment.dateTimeFormat) : nil,
+                    recipientTitle: presentation.recipientTitle,
+                    infoPressed: component.infoPressed
                 )),
                 environment: {},
                 containerSize: CGSize(width: cardWidth, height: availableSize.height)
@@ -206,12 +216,7 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += cardSize.height
             contentHeight += 18.0
 
-            let feeText: String
-            if let fee = component.request.feeNanograms {
-                feeText = "Network fee: \(formatTonConnectNanograms(fee)) Grams."
-            } else {
-                feeText = "Network fee is paid by the relayer. Telegram will not broadcast this message."
-            }
+            let feeText = presentation.feeText(dateTimeFormat: environment.dateTimeFormat, compact: true)
             self.fee.parentState = state
             let feeSize = self.fee.update(
                 transition: .immediate,
@@ -723,6 +728,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
 
 public final class WalletTransferScreen: ViewControllerComponentContainer {
     private let cancelled: () -> Void
+    public var tonConnectClosed: (() -> Void)?
     private var finishResult: WalletTransferFinishResult?
 
     public init(
@@ -748,7 +754,7 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
         )
 
         self.navigationPresentation = .flatModal
-        
+
         self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
     }
 
@@ -784,7 +790,10 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
                 callback()
                 return
             }
-            self.dismiss(completion: callback)
+            self.dismiss(completion: {
+                callback()
+                self.tonConnectClosed?()
+            })
         }
         if animated, let animateOut {
             animateOut.invoke(Action { _ in
@@ -793,8 +802,10 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
         } else if animated {
             dismissController()
         } else {
-            self.dismiss(animated: false, completion: nil)
-            callback()
+            self.dismiss(animated: false, completion: {
+                callback()
+                self.tonConnectClosed?()
+            })
         }
     }
 

@@ -5,6 +5,23 @@ import WalletEngineFFI
 
 private let walletOwnershipProofDomain = "telegram.org"
 
+func walletPreviewNeedsSeqnoRetry(_ error: Error) -> Bool {
+    guard let error = error as? WalletClientError else {
+        return false
+    }
+    let diagnostic: String
+    switch error {
+    case let .EmulationFailed(value), let .EmulationMessageNotAccepted(value):
+        diagnostic = value
+    default:
+        return false
+    }
+    return diagnostic.range(
+        of: #"\bEmulationExternalNotAccepted:\s*133\b(?!\.[0-9])"#,
+        options: .regularExpression
+    ) != nil
+}
+
 func acceptedWalletTransferSubmission(
     pending: WalletContext.PendingTransfer,
     messageHash: String?,
@@ -98,21 +115,7 @@ func stageRecoveryPhraseImport(
 
 public extension WalletContext {
     static func isTonConnectUrl(_ value: String) -> Bool {
-        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let components = URLComponents(string: value),
-              let scheme = components.scheme?.lowercased() else {
-            return false
-        }
-        let isUniversalLink = scheme == "https"
-            && components.path.lowercased().split(separator: "/").last == "ton-connect"
-        guard scheme == "tg" || scheme == "tc" || isUniversalLink else { return false }
-        let parameters = Dictionary(
-            (components.queryItems ?? []).compactMap { item in item.value.map { (item.name, $0) } },
-            uniquingKeysWith: { current, _ in current }
-        )
-        return parameters["v"] == "2"
-            && parameters["id"]?.isEmpty == false
-            && parameters["r"]?.isEmpty == false
+        (try? TonConnectLink(value)) != nil
     }
 
     static func transferAddress(from value: String) -> String? {
@@ -162,13 +165,13 @@ public extension WalletContext {
     }
 
     func approveTonConnectRequest(id: String) -> Signal<Void, WalletError> {
-        self.signal(name: "approve_ton_connect_request") { impl, _ in
+        self.signal(name: "approve_ton_connect_request", cancelOnDispose: false) { impl, _ in
             try await impl.approveTonConnectRequest(id: id)
         }
     }
 
     func approveTonConnectOperation(id: String) -> Signal<Void, WalletError> {
-        self.signal(name: "approve_ton_connect_operation") { impl, _ in
+        self.signal(name: "approve_ton_connect_operation", cancelOnDispose: false) { impl, _ in
             try await impl.approveTonConnectOperation(id: id)
         }
     }
@@ -177,6 +180,21 @@ public extension WalletContext {
         self.noErrorSignal { impl in
             await impl.rejectTonConnectRequest(id: id)
         }
+    }
+
+    func tonConnectPresentationClosed(id: String, rejectIfPending: Bool) -> Signal<TonConnectReturn?, NoError> {
+        self.signal(name: "ton_connect_presentation_closed", cancelOnDispose: false) { impl, _ in
+            await impl.tonConnectCoordinator?.presentationClosed(id: id, rejectIfPending: rejectIfPending)
+        }
+        |> `catch` { _ in .single(nil) }
+    }
+
+    func disconnectTonConnectSession(id: String) -> Signal<Void, NoError> {
+        self.noErrorSignal { impl in await impl.tonConnectCoordinator?.disconnect(id: id) }
+    }
+
+    func disconnectAllTonConnectSessions() -> Signal<Void, NoError> {
+        self.noErrorSignal { impl in await impl.tonConnectCoordinator?.disconnect(id: nil) }
     }
 
     func setFiatCurrency(_ currency: FiatCurrency) {
@@ -373,19 +391,23 @@ extension WalletContextImpl {
     }
 
     func processTonConnectUrl(_ value: String) async {
-        guard !self.isShutdown,
-              case let .wallet(info) = self.currentState.phase,
-              info.canSign,
+        guard !self.isShutdown else { return }
+        guard case let .wallet(info) = self.currentState.phase, info.canSign,
               let coordinator = self.tonConnectCoordinator else {
+            switch self.currentState.phase {
+            case .restoring, .creating:
+                if self.pendingTonConnectLinks.count < 32 {
+                    if !self.pendingTonConnectLinks.contains(value) { self.pendingTonConnectLinks.append(value) }
+                } else { self.reportTonConnectFailure(.capacityExceeded) }
+            default: self.reportTonConnectFailure(.unavailable)
+            }
             return
         }
         do {
             try await coordinator.start(link: value)
         } catch {
             self.logger.error("wallet_ton_connect_start_failed", error)
-            self.output.publish(presentation: .error(
-                sanitizedWalletEngineDiagnostic(String(describing: error))
-            ))
+            self.reportTonConnectFailure(error as? TonConnectFailure ?? .unavailable)
         }
     }
 
@@ -406,10 +428,8 @@ extension WalletContextImpl {
               let coordinator = self.tonConnectCoordinator else {
             throw WalletError.unavailable
         }
-        let method = try await coordinator.approveOperation(id: id)
-        if method == .sendTransaction {
-            self.requestSynchronization(scope: .all, force: true)
-        }
+        try await coordinator.approveOperation(id: id)
+        self.requestSynchronization(scope: .all, force: true)
     }
 
     func rejectTonConnectRequest(id: String) async {
@@ -1016,9 +1036,23 @@ extension WalletContextImpl {
                     stateInit: nil
                 )]
             )
-            let preview = try await self.runtime.previewSend(intent: intent)
             try Task.checkCancellation()
-            guard self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+            guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+            let preview: SendPreview
+            do {
+                preview = try await self.runtime.previewSend(intent: intent)
+            } catch {
+                try Task.checkCancellation()
+                guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+                guard walletPreviewNeedsSeqnoRetry(error) else { throw error }
+                self.logger.log("event=wallet_preview_seqno_retry operation_id=\(operationId.uuidString.lowercased()) error_code=133 retry_delay_ms=1000")
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                try Task.checkCancellation()
+                guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+                preview = try await self.runtime.previewSend(intent: intent)
+            }
+            try Task.checkCancellation()
+            guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
             guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
             guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
             let effectiveAmount: Int64
@@ -1596,6 +1630,8 @@ extension WalletContextImpl {
         self.deferredSynchronizationScope = []
         let coordinator = self.tonConnectCoordinator
         self.tonConnectCoordinator = nil
+        self.currentTonConnectState = .empty
+        self.output.publish(tonConnect: .empty)
         await coordinator?.shutdown()
         return generation
     }
@@ -1645,12 +1681,12 @@ extension WalletContextImpl {
                 storage: self.storage,
                 logger: self.logger,
                 recordId: activation.snapshot.recordId,
-                event: { [weak self] event in
-                    await self?.handleTonConnectEvent(event)
+                event: { [weak self] event, revision in
+                    await self?.handleTonConnectState(event, generation: generation, revision: revision)
                 }
             )
             self.tonConnectCoordinator = coordinator
-            Task { await coordinator.restore() }
+            Task { [weak self] in await self?.restoreTonConnect(coordinator, generation: generation) }
         }
         if !preserveCurrentWalletState {
             self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)

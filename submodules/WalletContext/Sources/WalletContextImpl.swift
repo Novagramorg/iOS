@@ -14,7 +14,6 @@ actor WalletContextImpl {
     typealias TonConnectPermission = WalletContext.TonConnectPermission
     typealias TonConnectRequest = WalletContext.TonConnectRequest
     typealias TonConnectOperationRequest = WalletContext.TonConnectOperationRequest
-    typealias TonConnectPresentation = WalletContext.TonConnectPresentation
     typealias FatalStorageError = WalletContext.FatalStorageError
     typealias SynchronizationError = WalletContext.SynchronizationError
     typealias Resource<Value: Equatable & Sendable> = WalletContext.Resource<Value>
@@ -78,6 +77,9 @@ actor WalletContextImpl {
     var deferredSynchronizationScope: WalletSynchronizationScope = []
     var preparedRecoveryPhraseImportRecordId: String?
     var tonConnectCoordinator: WalletTonConnectCoordinator?
+    var pendingTonConnectLinks: [String] = []
+    var currentTonConnectState: WalletContext.TonConnectState = .empty
+    var latestTonConnectStateRevision: (generation: UInt64, revision: UInt64)?
     var peerByWalletAddress: [String: EnginePeer] = [:]
     var outgoingTransactionPresentationIdentities: [String: OutgoingTransactionPresentationIdentity] = [:]
 
@@ -211,6 +213,15 @@ actor WalletContextImpl {
         self.isApplicationInForeground = foreground
         self.isAccountCurrent = accountIsCurrent
         self.isNetworkAvailable = networkAvailable
+        if let coordinator = self.tonConnectCoordinator {
+            Task { await coordinator.setEnvironment(presentationEnabled: foreground && accountIsCurrent,
+                networkEnabled: foreground && accountIsCurrent && networkAvailable, revision: revision) }
+        } else {
+            self.currentTonConnectState = WalletContext.TonConnectState(sessions: self.currentTonConnectState.sessions,
+                active: self.currentTonConnectState.active, presentationEnabled: foreground && accountIsCurrent,
+                diagnostic: self.currentTonConnectState.diagnostic)
+            self.output.publish(tonConnect: self.currentTonConnectState)
+        }
         if becameForeground {
             self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)
         }
@@ -581,6 +592,8 @@ actor WalletContextImpl {
             self.transactionHistory.reset()
             let previousCoordinator = self.tonConnectCoordinator
             self.tonConnectCoordinator = nil
+            self.currentTonConnectState = .empty
+            self.output.publish(tonConnect: .empty)
             self.activationTask = Task { [runtime = self.runtime] in
                 guard !Task.isCancelled else { return }
                 await previousCoordinator?.shutdown()
@@ -603,6 +616,8 @@ actor WalletContextImpl {
             let previousBalance = isSameCachedIdentity ? self.currentState.balance.currentValue : nil
             let previousCoordinator = self.tonConnectCoordinator
             self.tonConnectCoordinator = nil
+            self.currentTonConnectState = .empty
+            self.output.publish(tonConnect: .empty)
             self.observationTask?.cancel()
             self.observationTask = nil
             self.cancelSynchronization()
@@ -744,12 +759,12 @@ actor WalletContextImpl {
                     storage: self.storage,
                     logger: self.logger,
                     recordId: activation.snapshot.recordId,
-                    event: { [weak self] event in
-                        await self?.handleTonConnectEvent(event)
+                    event: { [weak self] event, revision in
+                        await self?.handleTonConnectState(event, generation: generation, revision: revision)
                     }
                 )
                 self.tonConnectCoordinator = coordinator
-                Task { await coordinator.restore() }
+                Task { [weak self] in await self?.restoreTonConnect(coordinator, generation: generation) }
             }
             self.resumeDeferredSynchronizationIfNeeded()
             if self.hasActiveWalletRefreshDemand {
@@ -1466,12 +1481,34 @@ actor WalletContextImpl {
         self.walletStateFallbackRefreshTaskId = nil
     }
 
-    func handleTonConnectEvent(_ event: WalletTonConnectEvent) {
-        switch event {
-        case let .connect(value): self.output.publish(presentation: .request(value))
-        case let .operation(value): self.output.publish(presentation: .operation(value))
-        case let .dismiss(id): self.output.publish(presentation: .dismiss(requestId: id))
-        case let .error(value): self.output.publish(presentation: .error(value))
+    func handleTonConnectState(_ state: WalletContext.TonConnectState, generation: UInt64, revision: UInt64) {
+        guard !self.isShutdown, self.activationGeneration == generation else { return }
+        if let previous = self.latestTonConnectStateRevision, previous.generation == generation, previous.revision >= revision { return }
+        self.latestTonConnectStateRevision = (generation, revision)
+        self.currentTonConnectState = state
+        self.output.publish(tonConnect: state)
+    }
+
+    func reportTonConnectFailure(_ failure: TonConnectFailure) {
+        let state = WalletContext.TonConnectState(sessions: self.currentTonConnectState.sessions,
+            active: self.currentTonConnectState.active,
+            presentationEnabled: self.isApplicationInForeground && self.isAccountCurrent,
+            diagnostic: TonConnectDiagnostic(id: UUID(), failure: failure))
+        self.currentTonConnectState = state
+        self.output.publish(tonConnect: state)
+    }
+
+    func restoreTonConnect(_ coordinator: WalletTonConnectCoordinator, generation: UInt64) async {
+        await coordinator.setEnvironment(presentationEnabled: self.isApplicationInForeground && self.isAccountCurrent,
+            networkEnabled: self.isApplicationInForeground && self.isAccountCurrent && self.isNetworkAvailable,
+            revision: self.latestEnvironmentRevision)
+        await coordinator.restore()
+        guard !self.isShutdown, self.activationGeneration == generation else { return }
+        let links = self.pendingTonConnectLinks
+        self.pendingTonConnectLinks = []
+        for link in links {
+            guard self.activationGeneration == generation else { return }
+            await self.processTonConnectUrl(link)
         }
     }
 

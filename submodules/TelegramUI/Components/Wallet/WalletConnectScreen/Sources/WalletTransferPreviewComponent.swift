@@ -4,28 +4,14 @@ import Display
 import AccountContext
 import ComponentFlow
 import ViewControllerComponent
+import BundleIconComponent
+import ListActionItemComponent
+import ListSectionComponent
+import MultilineTextComponent
 import TelegramPresentationData
+import TelegramStringFormatting
 import WalletContext
-
-func formatTonConnectNanograms(_ value: String) -> String {
-    guard value != "all" else { return "Complete balance" }
-    guard !value.isEmpty, value.allSatisfy(\.isNumber) else { return value }
-    let normalized = String(value.drop(while: { $0 == "0" }))
-    let digits = normalized.isEmpty ? "0" : normalized
-    if digits.count <= 9 {
-        let fraction = String(repeating: "0", count: 9 - digits.count) + digits
-        let trimmed = fraction.replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
-        return trimmed.isEmpty ? "0" : "0.\(trimmed)"
-    }
-    let index = digits.index(digits.endIndex, offsetBy: -9)
-    let integer = digits[..<index]
-    let fraction = digits[index...].replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
-    return fraction.isEmpty ? String(integer) : "\(integer).\(fraction)"
-}
-
-private func compactTonConnectValue(_ value: String) -> String {
-    value.count > 30 ? "\(value.prefix(14))…\(value.suffix(10))" : value
-}
+import WalletTransactionItemComponent
 
 final class WalletTransferNavigationAppIconComponent: Component {
     let applicationName: String
@@ -37,164 +23,325 @@ final class WalletTransferNavigationAppIconComponent: Component {
     }
 
     static func ==(lhs: WalletTransferNavigationAppIconComponent, rhs: WalletTransferNavigationAppIconComponent) -> Bool {
-        lhs.applicationName == rhs.applicationName && lhs.iconUrl == rhs.iconUrl
+        return lhs.applicationName == rhs.applicationName && lhs.iconUrl == rhs.iconUrl
     }
 
     final class View: UIView {
         private let icon = ComponentView<Empty>()
-        func update(component: WalletTransferNavigationAppIconComponent, state: EmptyComponentState, transition: ComponentTransition) -> CGSize {
-            let size = CGSize(width: 44, height: 44)
+
+        func update(
+            component: WalletTransferNavigationAppIconComponent,
+            state: EmptyComponentState,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let size = CGSize(width: 44.0, height: 44.0)
             self.icon.parentState = state
-            _ = self.icon.update(
+            let _ = self.icon.update(
                 transition: transition,
-                component: AnyComponent(WalletConnectAppIconComponent(applicationName: component.applicationName, url: component.iconUrl)),
+                component: AnyComponent(WalletConnectAppIconComponent(
+                    applicationName: component.applicationName,
+                    url: component.iconUrl
+                )),
                 environment: {},
                 containerSize: size
             )
-            if let view = self.icon.view {
-                if view.superview == nil { self.addSubview(view) }
-                view.clipsToBounds = true
-                view.layer.borderWidth = 3
-                view.layer.borderColor = UIColor.white.cgColor
-                transition.setCornerRadius(layer: view.layer, cornerRadius: 22)
-                transition.setFrame(view: view, frame: CGRect(origin: .zero, size: size))
+            if let iconView = self.icon.view {
+                if iconView.superview == nil {
+                    self.addSubview(iconView)
+                }
+                iconView.clipsToBounds = true
+                iconView.layer.borderWidth = 3.0
+                iconView.layer.borderColor = UIColor.white.cgColor
+                transition.setCornerRadius(layer: iconView.layer, cornerRadius: size.width * 0.5)
+                transition.setFrame(view: iconView, frame: CGRect(origin: .zero, size: size))
             }
             return size
         }
     }
 
-    func makeView() -> View { View(frame: .zero) }
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        view.update(component: self, state: state, transition: transition)
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, state: state, transition: transition)
     }
 }
 
-final class WalletTonConnectMessagesComponent: Component {
-    let request: WalletContext.TonConnectOperationRequest
-    let theme: PresentationTheme
-    let compact: Bool
-
-    init(request: WalletContext.TonConnectOperationRequest, theme: PresentationTheme, compact: Bool) {
-        self.request = request
-        self.theme = theme
-        self.compact = compact
+private final class WalletTransferPreviewIconComponent: Component {
+    enum Kind: Equatable {
+        case transfer
+        case outgoing
+        case incoming
+        case contract
     }
 
-    static func ==(lhs: WalletTonConnectMessagesComponent, rhs: WalletTonConnectMessagesComponent) -> Bool {
-        lhs.request == rhs.request && lhs.theme == rhs.theme && lhs.compact == rhs.compact
+    let kind: Kind
+
+    init(kind: Kind) {
+        self.kind = kind
+    }
+
+    static func ==(lhs: WalletTransferPreviewIconComponent, rhs: WalletTransferPreviewIconComponent) -> Bool {
+        return lhs.kind == rhs.kind
     }
 
     final class View: UIView {
-        private var labels: [UILabel] = []
+        private let backgroundView = UIImageView()
+        private let iconView = UIImageView()
 
-        private func label(text: String, font: UIFont, color: UIColor, lines: Int = 0) -> UILabel {
-            let label = UILabel()
-            label.text = text
-            label.font = font
-            label.textColor = color
-            label.numberOfLines = lines
-            self.addSubview(label)
-            self.labels.append(label)
-            return label
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.iconView.contentMode = .scaleAspectFit
+            self.addSubview(self.backgroundView)
+            self.addSubview(self.iconView)
         }
 
-        func update(component: WalletTonConnectMessagesComponent, availableSize: CGSize) -> CGSize {
-            self.labels.forEach { $0.removeFromSuperview() }
-            self.labels.removeAll()
-            let primary = component.theme.list.itemPrimaryTextColor
-            let secondary = component.theme.list.itemSecondaryTextColor
-            let warning = component.theme.list.itemDestructiveColor
-            let width = max(1, availableSize.width)
-            let inset: CGFloat = component.compact ? 14 : 16
-            let textWidth = max(1, width - inset * 2)
-            var y: CGFloat = inset
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
 
-            let title = component.request.method == .signMessage
-                ? "Sign \(component.request.messages.count) message\(component.request.messages.count == 1 ? "" : "s")"
-                : "Send \(component.request.messages.count) message\(component.request.messages.count == 1 ? "" : "s")"
-            let titleLabel = self.label(text: title, font: Font.semibold(17), color: primary)
-            let titleSize = titleLabel.sizeThatFits(CGSize(width: textWidth, height: 1000))
-            titleLabel.frame = CGRect(x: inset, y: y, width: textWidth, height: titleSize.height)
-            y += titleSize.height + 12
-
-            for (index, message) in component.request.messages.enumerated() {
-                let payload: String
-                switch message.payload {
-                case .empty: payload = "Empty body"
-                case let .comment(text): payload = text.isEmpty ? "Empty comment" : "Comment: \(text)"
-                case let .raw(value): payload = "Raw payload: \(value)"
-                }
-                let details = [
-                    "Message \(index + 1) of \(component.request.messages.count)",
-                    "\(formatTonConnectNanograms(message.amountNanograms)) Gram",
-                    "To \(compactTonConnectValue(message.destination))",
-                    payload,
-                    message.stateInit.map { "StateInit: \($0)" }
-                ].compactMap { $0 }.joined(separator: "\n")
-                let label = self.label(text: details, font: Font.regular(15), color: primary)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 14
+        func update(component: WalletTransferPreviewIconComponent) -> CGSize {
+            let size = CGSize(width: 48.0, height: 48.0)
+            let colors: [CGColor]
+            let iconName: String
+            let iconInset: CGFloat
+            let rotation: CGFloat
+            switch component.kind {
+            case .transfer:
+                colors = [UIColor(rgb: 0x2a9ef1).cgColor, UIColor(rgb: 0x72d5fd).cgColor]
+                iconName = "Wallet/CardGram"
+                iconInset = 4.0
+                rotation = 0.0
+            case .incoming:
+                colors = [UIColor(rgb: 0x32b83b).cgColor, UIColor(rgb: 0x87d93b).cgColor]
+                iconName = "Wallet/TransactionArrow"
+                iconInset = 8.0
+                rotation = .pi
+            case .outgoing:
+                colors = [UIColor(rgb: 0x2a9ef1).cgColor, UIColor(rgb: 0x72d5fd).cgColor]
+                iconName = "Wallet/TransactionArrow"
+                iconInset = 8.0
+                rotation = 0.0
+            case .contract:
+                colors = [UIColor(rgb: 0x9aa0ac).cgColor, UIColor(rgb: 0xb8bdc7).cgColor]
+                iconName = "Chat List/Tabs/IconSettings"
+                iconInset = 8.0
+                rotation = 0.0
             }
 
-            if let fee = component.request.feeNanograms {
-                let label = self.label(text: "Network fee: \(formatTonConnectNanograms(fee)) Gram", font: Font.regular(14), color: secondary)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 8
-            } else if component.request.relayerWillSubmit {
-                let label = self.label(text: "Network fee is paid by the relayer. Telegram will not broadcast this message.", font: Font.regular(14), color: secondary)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 8
-            }
-            if let validUntil = component.request.validUntil {
-                let label = self.label(text: "Valid until: \(Date(timeIntervalSince1970: TimeInterval(validUntil)).description)", font: Font.regular(13), color: secondary)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 8
-            }
-            if component.request.needsWalletStateInit {
-                let label = self.label(text: "Wallet StateInit will be included", font: Font.regular(14), color: secondary)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 8
-            }
-            for value in component.request.warnings {
-                let label = self.label(text: "⚠︎ \(value)", font: Font.regular(14), color: warning)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 8
-            }
-            if !component.request.actions.isEmpty {
-                let actions = component.request.actions.map { action in
-                    let accounts = action.accounts.map(compactTonConnectValue).joined(separator: ", ")
-                    let suffix = accounts.isEmpty ? "" : " — \(accounts)"
-                    return "\(action.succeeded ? "✓" : "⚠︎") \(action.kind.replacingOccurrences(of: "_", with: " "))\(suffix)"
-                }.joined(separator: "\n")
-                let label = self.label(text: actions, font: Font.regular(14), color: secondary)
-                let size = label.sizeThatFits(CGSize(width: textWidth, height: 1000))
-                label.frame = CGRect(x: inset, y: y, width: textWidth, height: size.height)
-                y += size.height + 8
-            }
-            return CGSize(width: width, height: y + inset)
+            self.backgroundView.image = generateGradientFilledCircleImage(
+                diameter: size.width,
+                colors: colors as NSArray,
+                direction: .vertical
+            )
+            self.iconView.image = generateTintedImage(
+                image: UIImage(bundleImageName: iconName),
+                color: .white
+            )
+            self.iconView.transform = CGAffineTransform(rotationAngle: rotation)
+            self.backgroundView.frame = CGRect(origin: .zero, size: size)
+            self.iconView.frame = CGRect(origin: .zero, size: size).insetBy(dx: iconInset, dy: iconInset)
+            return size
         }
     }
 
-    func makeView() -> View { View(frame: .zero) }
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        view.update(component: self, availableSize: availableSize)
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self)
+    }
+}
+
+private final class WalletTransferPreviewCommentComponent: Component {
+    let text: String
+    let presentationData: PresentationData
+    let incoming: Bool
+    let fillColor: UIColor
+    let textColor: UIColor
+
+    init(
+        text: String,
+        presentationData: PresentationData,
+        incoming: Bool,
+        fillColor: UIColor,
+        textColor: UIColor
+    ) {
+        self.text = text
+        self.presentationData = presentationData
+        self.incoming = incoming
+        self.fillColor = fillColor
+        self.textColor = textColor
+    }
+
+    static func ==(lhs: WalletTransferPreviewCommentComponent, rhs: WalletTransferPreviewCommentComponent) -> Bool {
+        return lhs.text == rhs.text
+            && lhs.presentationData == rhs.presentationData
+            && lhs.incoming == rhs.incoming
+            && lhs.fillColor == rhs.fillColor
+            && lhs.textColor == rhs.textColor
+    }
+
+    final class View: UIView {
+        private let backgroundView = UIImageView()
+        private let text = ComponentView<Empty>()
+
+        private var cachedBubbleImage: (
+            presentationData: PresentationData,
+            incoming: Bool,
+            fillColor: UIColor,
+            image: UIImage
+        )?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.backgroundView.isUserInteractionEnabled = false
+            self.backgroundView.contentMode = .scaleToFill
+            self.addSubview(self.backgroundView)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func bubbleImage(
+            presentationData: PresentationData,
+            incoming: Bool,
+            fillColor: UIColor
+        ) -> UIImage {
+            if let cachedBubbleImage = self.cachedBubbleImage,
+               cachedBubbleImage.presentationData == presentationData,
+               cachedBubbleImage.incoming == incoming,
+               cachedBubbleImage.fillColor == fillColor {
+                return cachedBubbleImage.image
+            }
+            let image = messageBubbleImage(
+                maxCornerRadius: presentationData.chatBubbleCorners.mainRadius,
+                minCornerRadius: presentationData.chatBubbleCorners.auxiliaryRadius,
+                incoming: incoming,
+                fillColor: fillColor,
+                strokeColor: .clear,
+                neighbors: .none,
+                shadow: nil,
+                wallpaper: presentationData.chatWallpaper,
+                knockout: false
+            )
+            self.cachedBubbleImage = (presentationData, incoming, fillColor, image)
+            return image
+        }
+
+        func update(
+            component: WalletTransferPreviewCommentComponent,
+            state: EmptyComponentState,
+            availableSize: CGSize,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let horizontalInset: CGFloat = 17.0
+            let verticalInset: CGFloat = 7.0
+            let bubbleImage = self.bubbleImage(
+                presentationData: component.presentationData,
+                incoming: component.incoming,
+                fillColor: component.fillColor
+            )
+            self.text.parentState = state
+            let textSize = self.text.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: component.text,
+                        font: Font.regular(15.0),
+                        textColor: component.textColor
+                    )),
+                    maximumNumberOfLines: 0
+                )),
+                environment: {},
+                containerSize: CGSize(
+                    width: max(0.0, availableSize.width - horizontalInset * 2.0),
+                    height: 1000.0
+                )
+            )
+            let size = CGSize(
+                width: min(availableSize.width, textSize.width + horizontalInset * 2.0),
+                height: max(textSize.height + verticalInset * 2.0, bubbleImage.size.height)
+            )
+            self.backgroundView.image = bubbleImage
+            transition.setFrame(
+                view: self.backgroundView,
+                frame: CGRect(
+                    x: component.incoming ? -3.0 : 3.0,
+                    y: 0.0,
+                    width: size.width,
+                    height: size.height
+                )
+            )
+            if let textView = self.text.view {
+                if textView.superview == nil {
+                    self.addSubview(textView)
+                }
+                transition.setFrame(
+                    view: textView,
+                    frame: CGRect(
+                        x: floorToScreenPixels((size.width - textSize.width) * 0.5),
+                        y: floorToScreenPixels((size.height - textSize.height) * 0.5),
+                        width: textSize.width,
+                        height: textSize.height
+                    )
+                )
+            }
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            state: state,
+            availableSize: availableSize,
+            transition: transition
+        )
     }
 }
 
 final class WalletTransferPreviewComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
     let context: AccountContext
     let request: WalletContext.TonConnectOperationRequest
     let walletState: WalletContext.State?
     let bottomInset: CGFloat
 
-    init(context: AccountContext, request: WalletContext.TonConnectOperationRequest, walletState: WalletContext.State?, bottomInset: CGFloat) {
+    init(
+        context: AccountContext,
+        request: WalletContext.TonConnectOperationRequest,
+        walletState: WalletContext.State?,
+        bottomInset: CGFloat
+    ) {
         self.context = context
         self.request = request
         self.walletState = walletState
@@ -202,35 +349,334 @@ final class WalletTransferPreviewComponent: Component {
     }
 
     static func ==(lhs: WalletTransferPreviewComponent, rhs: WalletTransferPreviewComponent) -> Bool {
-        lhs.context === rhs.context && lhs.request == rhs.request && lhs.walletState == rhs.walletState && lhs.bottomInset == rhs.bottomInset
+        return lhs.context === rhs.context
+            && lhs.request == rhs.request
+            && lhs.walletState == rhs.walletState
+            && lhs.bottomInset == rhs.bottomInset
     }
 
     final class View: UIView {
-        private let content = ComponentView<Empty>()
-        func update(component: WalletTransferPreviewComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
-            let environment = environment[EnvironmentType.self].value
-            transition.setBackgroundColor(view: self, color: environment.theme.list.modalBlocksBackgroundColor)
-            let width = min(382, max(1, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 48))
-            self.content.parentState = state
-            let size = self.content.update(
-                transition: transition,
-                component: AnyComponent(WalletTonConnectMessagesComponent(request: component.request, theme: environment.theme.withModalBlocksBackground(), compact: false)),
-                environment: {},
-                containerSize: CGSize(width: width, height: 2000)
-            )
-            if let view = self.content.view {
-                if view.superview == nil { self.addSubview(view) }
-                view.layer.cornerRadius = 14
-                view.clipsToBounds = true
-                view.backgroundColor = environment.theme.list.itemBlocksBackgroundColor
-                transition.setFrame(view: view, frame: CGRect(x: floor((availableSize.width - width) / 2), y: 72, width: width, height: size.height))
+        private let transferSection = ComponentView<Empty>()
+        private let previewSection = ComponentView<Empty>()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func text(
+            _ value: String,
+            font: UIFont,
+            color: UIColor,
+            maximumNumberOfLines: Int = 1
+        ) -> AnyComponent<Empty> {
+            return AnyComponent(MultilineTextComponent(
+                text: .plain(NSAttributedString(string: value, font: font, textColor: color)),
+                maximumNumberOfLines: maximumNumberOfLines
+            ))
+        }
+
+        private func trailingContent(
+            item: WalletTransferPresentation.PreviewItem,
+            theme: PresentationTheme,
+            dateTimeFormat: PresentationDateTimeFormat
+        ) -> AnyComponent<Empty>? {
+            guard let amount = item.amount, let direction = item.direction else {
+                return nil
             }
-            return CGSize(width: availableSize.width, height: 72 + size.height + component.bottomInset)
+            let prefix: String
+            let color: UIColor
+            switch direction {
+            case .incoming:
+                prefix = "+"
+                color = theme.list.itemDisclosureActions.constructive.fillColor
+            case .outgoing:
+                prefix = "−"
+                color = theme.list.itemPrimaryTextColor
+            }
+            let amountText = prefix + formatTonConnectNanograms(amount, dateTimeFormat: dateTimeFormat)
+            return AnyComponent(HStack<Empty>([
+                AnyComponentWithIdentity(
+                    id: "amount",
+                    component: self.text(amountText, font: Font.semibold(15.0), color: color)
+                ),
+                AnyComponentWithIdentity(
+                    id: "icon",
+                    component: AnyComponent(BundleIconComponent(
+                        name: "Wallet/TransactionGram",
+                        tintColor: nil,
+                        maxSize: CGSize(width: 18.0, height: 18.0)
+                    ))
+                )
+            ], spacing: 2.0))
+        }
+
+        private func itemContent(
+            component: WalletTransferPreviewComponent,
+            item: WalletTransferPresentation.PreviewItem,
+            theme: PresentationTheme,
+            environment: EnvironmentType
+        ) -> WalletTransactionItemComponent.Content {
+            let title: String
+            var subtitle: String?
+            let iconKind: WalletTransferPreviewIconComponent.Kind
+            switch item.kind {
+            case .transfer:
+                switch item.direction {
+                case .some(.outgoing):
+                    title = walletTransferShortAddress(item.address ?? component.request.messages.first?.destination ?? "")
+                    //TODO:localize
+                    subtitle = "Withdraw"
+                    iconKind = .outgoing
+                case .some(.incoming):
+                    title = item.address.map(walletTransferShortAddress) ?? "Transfer"
+                    //TODO:localize
+                    subtitle = "Deposit"
+                    iconKind = .incoming
+                case nil:
+                    //TODO:localize
+                    title = "Transfer"
+                    subtitle = item.address.map(walletTransferShortAddress)
+                    iconKind = .transfer
+                }
+            case .callContract:
+                //TODO:localize
+                title = "Call Contract"
+                subtitle = nil
+                iconKind = .contract
+            case .deployContract:
+                //TODO:localize
+                title = "Deploy Contract"
+                subtitle = nil
+                iconKind = .contract
+            case .excess:
+                //TODO:localize
+                title = "Excess"
+                subtitle = nil
+                iconKind = .incoming
+            case .unknown:
+                //TODO:localize
+                title = "Unknown Operation"
+                subtitle = nil
+                iconKind = .contract
+            }
+
+            if !item.succeeded {
+                subtitle = subtitle.map { "\($0) · Failed" } ?? "Failed"
+            }
+
+            let comment = item.comment?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let additionalContent: AnyComponent<Empty>?
+            if let comment, !comment.isEmpty {
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                additionalContent = AnyComponent(WalletTransferPreviewCommentComponent(
+                    text: comment,
+                    presentationData: presentationData,
+                    incoming: item.direction == .incoming,
+                    fillColor: theme.list.itemInputField.backgroundColor,
+                    textColor: theme.actionSheet.primaryTextColor
+                ))
+            } else {
+                additionalContent = nil
+            }
+
+            return WalletTransactionItemComponent.Content(
+                avatar: AnyComponent(WalletTransferPreviewIconComponent(kind: iconKind)),
+                title: self.text(title, font: Font.semibold(17.0), color: theme.list.itemPrimaryTextColor),
+                subtitle: subtitle.map {
+                    self.text($0, font: Font.regular(15.0), color: item.succeeded ? theme.list.itemPrimaryTextColor : theme.list.itemDestructiveColor)
+                },
+                trailingContent: self.trailingContent(
+                    item: item,
+                    theme: theme,
+                    dateTimeFormat: environment.dateTimeFormat
+                ),
+                additionalContent: additionalContent,
+                minimumHeight: 68.0,
+                insets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0),
+                spacing: 12.0
+            )
+        }
+
+        private func listItem(
+            component: WalletTransferPreviewComponent,
+            content: WalletTransactionItemComponent.Content,
+            theme: PresentationTheme,
+            environment: EnvironmentType
+        ) -> AnyComponent<Empty> {
+            return AnyComponent(ListActionItemComponent(
+                theme: theme,
+                style: .glass,
+                title: AnyComponent(WalletTransactionItemComponent(
+                    context: component.context,
+                    theme: theme,
+                    strings: environment.strings,
+                    dateTimeFormat: environment.dateTimeFormat,
+                    content: content
+                )),
+                contentInsets: .zero,
+                separatorInset: 76.0,
+                accessory: nil,
+                action: nil,
+                highlighting: .disabled
+            ))
+        }
+
+        func update(
+            component: WalletTransferPreviewComponent,
+            availableSize: CGSize,
+            state: EmptyComponentState,
+            environment: Environment<EnvironmentType>,
+            transition: ComponentTransition
+        ) -> CGSize {
+            let environment = environment[EnvironmentType.self].value
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let theme = environment.theme.withModalBlocksBackground()
+            transition.setBackgroundColor(view: self, color: environment.theme.list.modalBlocksBackgroundColor)
+            let safeWidth = max(
+                0.0,
+                availableSize.width - environment.safeInsets.left - environment.safeInsets.right
+            )
+            let contentWidth = min(382.0, max(1.0, safeWidth - 48.0))
+            let contentX = environment.safeInsets.left + floor((safeWidth - contentWidth) * 0.5)
+            let sectionTitleColor = theme.list.itemSecondaryTextColor
+
+            let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
+            var contentHeight: CGFloat = 94.0
+            let transfers = component.request.messages.map { message in
+                let formattedAmount = formatTonConnectNanograms(message.amountNanograms, dateTimeFormat: environment.dateTimeFormat)
+                let amountTitle = message.amountNanograms == "all" ? formattedAmount : "\(formattedAmount) Grams"
+                let transferContent = WalletTransactionItemComponent.Content(
+                    avatar: AnyComponent(WalletTransferPreviewIconComponent(kind: .transfer)),
+                    title: self.text(amountTitle, font: Font.semibold(17.0), color: theme.list.itemPrimaryTextColor, maximumNumberOfLines: 0),
+                    subtitle: self.text(
+                        "to \(walletTransferShortAddress(WalletContext.transferAddress(from: message.destination) ?? message.destination))",
+                        font: Font.regular(15.0),
+                        color: theme.list.itemPrimaryTextColor
+                    ),
+                    minimumHeight: 68.0,
+                    insets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0),
+                    spacing: 12.0
+                )
+                return AnyComponentWithIdentity<Empty>(
+                    id: message.id,
+                    component: self.listItem(component: component, content: transferContent, theme: theme, environment: environment)
+                )
+            }
+            self.transferSection.parentState = state
+            let transferSectionSize = self.transferSection.update(
+                transition: transition,
+                component: AnyComponent(ListSectionComponent(
+                    theme: theme,
+                    style: .glass,
+                    header: self.text(component.request.messages.count == 1 ? "TRANSFER" : "TRANSFERS", font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize), color: sectionTitleColor),
+                    footer: nil,
+                    items: transfers
+                )),
+                environment: {},
+                containerSize: CGSize(width: contentWidth, height: 1000.0)
+            )
+            if let transferSectionView = self.transferSection.view {
+                if transferSectionView.superview == nil {
+                    self.addSubview(transferSectionView)
+                }
+                transition.setFrame(
+                    view: transferSectionView,
+                    frame: CGRect(
+                        x: contentX,
+                        y: contentHeight,
+                        width: transferSectionSize.width,
+                        height: transferSectionSize.height
+                    )
+                )
+            }
+            contentHeight += transferSectionSize.height + 28.0
+
+            let displayItems = presentation.previewItems
+            let feeText = presentation.feeText(dateTimeFormat: environment.dateTimeFormat, compact: false)
+
+            let previewItems = displayItems.map { item in
+                return AnyComponentWithIdentity<Empty>(
+                    id: item.id,
+                    component: self.listItem(
+                        component: component,
+                        content: self.itemContent(
+                            component: component,
+                            item: item,
+                            theme: theme,
+                            environment: environment
+                        ),
+                        theme: theme,
+                        environment: environment
+                    )
+                )
+            }
+            self.previewSection.parentState = state
+            let previewSectionSize = self.previewSection.update(
+                transition: transition,
+                component: AnyComponent(ListSectionComponent(
+                    theme: theme,
+                    style: .glass,
+                    header: self.text(component.request.method == .signMessage ? "DETAILS" : "PREVIEW", font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize), color: sectionTitleColor),
+                    footer: self.text(
+                        feeText,
+                        font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                        color: theme.list.itemSecondaryTextColor,
+                        maximumNumberOfLines: 0
+                    ),
+                    items: previewItems
+                )),
+                environment: {},
+                containerSize: CGSize(width: contentWidth, height: 1000.0)
+            )
+            if let previewSectionView = self.previewSection.view {
+                if previewSectionView.superview == nil {
+                    self.addSubview(previewSectionView)
+                }
+                transition.setFrame(
+                    view: previewSectionView,
+                    frame: CGRect(
+                        x: contentX,
+                        y: contentHeight,
+                        width: previewSectionSize.width,
+                        height: previewSectionSize.height
+                    )
+                )
+            }
+            contentHeight += previewSectionSize.height + 8.0 + component.bottomInset
+
+            return CGSize(width: availableSize.width, height: contentHeight)
         }
     }
 
-    func makeView() -> View { View(frame: .zero) }
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
-        view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    func makeView() -> View {
+        return View(frame: .zero)
     }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<EnvironmentType>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(
+            component: self,
+            availableSize: availableSize,
+            state: state,
+            environment: environment,
+            transition: transition
+        )
+    }
+}
+
+private func walletTransferShortAddress(_ address: String) -> String {
+    let edgeLength = 4
+    guard address.count > edgeLength * 2 else {
+        return address
+    }
+    return "\(address.prefix(edgeLength))...\(address.suffix(edgeLength))"
 }

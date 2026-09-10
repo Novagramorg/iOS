@@ -543,24 +543,21 @@ private final class WalletNavigationBalanceComponent: Component {
         func updateTransitionFrames(
             primaryFrame: CGRect?,
             secondaryFrame: CGRect?,
-            isCollapsed: Bool,
-            transition: ComponentTransition
+            collapseFraction: CGFloat
         ) {
             self.updateTransitionContainer(
                 self.primaryCollapseContainerView,
                 self.primaryContainerView,
                 targetFrame: self.primaryTargetFrame,
                 currentFrame: primaryFrame,
-                isCollapsed: isCollapsed,
-                transition: transition
+                collapseFraction: collapseFraction
             )
             self.updateTransitionContainer(
                 self.secondaryCollapseContainerView,
                 self.secondaryContainerView,
                 targetFrame: self.secondaryTargetFrame,
                 currentFrame: secondaryFrame,
-                isCollapsed: isCollapsed,
-                transition: transition
+                collapseFraction: collapseFraction
             )
         }
 
@@ -569,8 +566,7 @@ private final class WalletNavigationBalanceComponent: Component {
             _ containerView: UIView,
             targetFrame: CGRect,
             currentFrame: CGRect?,
-            isCollapsed: Bool,
-            transition: ComponentTransition
+            collapseFraction: CGFloat
         ) {
             guard !targetFrame.isEmpty,
                   let currentFrame,
@@ -579,7 +575,7 @@ private final class WalletNavigationBalanceComponent: Component {
                   currentFrame.height.isFinite else {
                 ComponentTransition.immediate.setPosition(view: containerView, position: targetFrame.center)
                 ComponentTransition.immediate.setTransform(view: containerView, transform: CATransform3DIdentity)
-                transition.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
+                ComponentTransition.immediate.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
                 return
             }
 
@@ -590,23 +586,24 @@ private final class WalletNavigationBalanceComponent: Component {
                 view: containerView,
                 transform: CATransform3DMakeScale(scaleX, scaleY, 1.0)
             )
-            transition.setTransform(
+            ComponentTransition.immediate.setTransform(
                 view: collapseContainerView,
-                transform: isCollapsed ? self.collapseTransform(
+                transform: self.collapseTransform(
                     in: collapseContainerView,
                     from: currentFrame,
-                    to: targetFrame
-                ) : CATransform3DIdentity
+                    to: targetFrame,
+                    fraction: collapseFraction
+                )
             )
         }
 
-        private func collapseTransform(in containerView: UIView, from sourceFrame: CGRect, to targetFrame: CGRect) -> CATransform3D {
+        private func collapseTransform(in containerView: UIView, from sourceFrame: CGRect, to targetFrame: CGRect, fraction: CGFloat) -> CATransform3D {
             let scaleX = targetFrame.width / sourceFrame.width
             let scaleY = targetFrame.height / sourceFrame.height
             let anchor = CGPoint(x: containerView.bounds.midX, y: containerView.bounds.midY)
-            var transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
-            transform.m41 = targetFrame.midX - anchor.x - (sourceFrame.midX - anchor.x) * scaleX
-            transform.m42 = targetFrame.midY - anchor.y - (sourceFrame.midY - anchor.y) * scaleY
+            var transform = CATransform3DMakeScale(1.0 + (scaleX - 1.0) * fraction, 1.0 + (scaleY - 1.0) * fraction, 1.0)
+            transform.m41 = (targetFrame.midX - anchor.x - (sourceFrame.midX - anchor.x) * scaleX) * fraction
+            transform.m42 = (targetFrame.midY - anchor.y - (sourceFrame.midY - anchor.y) * scaleY) * fraction
             return transform
         }
     }
@@ -664,7 +661,10 @@ private final class WalletScreenComponent: Component {
 
         private let cardCollapseThreshold: CGFloat = 44.0
         private let cardCollapsedScale: CGFloat = 0.22
-        private let cardMinimumScrollScale: CGFloat = 0.9
+        private let cardCollapsedPitch: CGFloat = .pi / 4.0
+        private let cardMaximumScrollPitch: CGFloat = .pi / 12.0
+        private let cardMinimumScrollScale: CGFloat = 0.96
+        private let balanceAdditionalScrollOffset: CGFloat = 8.0
 
         private let scrollView: ScrollView
         private let topEdgeEffectView: EdgeEffectView
@@ -719,6 +719,11 @@ private final class WalletScreenComponent: Component {
         private var isResolvingSigningAccess = false
         private var selectedSection: SelectedSection = .transactions
         private var isCardCollapsed = false
+        private var cardCollapseFraction: CGFloat = 0.0
+        private var cardScaleCollapseFraction: CGFloat = 0.0
+        private var cardCollapseAnimator: DisplayLinkAnimator?
+        private var balanceCollapseFraction: CGFloat = 0.0
+        private var balanceCollapseAnimator: DisplayLinkAnimator?
         private var cardExpandedFrame: CGRect?
 
         override init(frame: CGRect) {
@@ -750,8 +755,8 @@ private final class WalletScreenComponent: Component {
             self.topEdgeEffectView.isUserInteractionEnabled = false
 
             self.cardContainerView.addSubview(self.cardScrollContainerView)
-            self.cardScrollContainerView.addSubview(self.cardBalanceCoordinateView)
             self.cardScrollContainerView.addSubview(self.cardVisualContainerView)
+            self.cardScrollContainerView.addSubview(self.cardBalanceCoordinateView)
             self.addSubview(self.scrollView)
             self.addSubview(self.topEdgeEffectView)
             self.insertSubview(self.cardContainerView, aboveSubview: self.topEdgeEffectView)
@@ -765,6 +770,15 @@ private final class WalletScreenComponent: Component {
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+
+            if self.window == nil {
+                self.finishCardCollapseAnimation()
+                self.finishBalanceCollapseAnimation()
+            }
         }
 
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -786,6 +800,9 @@ private final class WalletScreenComponent: Component {
         }
 
         deinit {
+            self.cardCollapseAnimator?.invalidate()
+            self.balanceCollapseAnimator?.invalidate()
+            (self.card.view as? WalletCardComponent.View)?.setBalanceTransitionContainer(nil)
             self.walletStateDisposable?.dispose()
             self.accountPeerDisposable?.dispose()
             self.twoStepAuthDataDisposable?.dispose()
@@ -877,7 +894,99 @@ private final class WalletScreenComponent: Component {
                 return
             }
             self.isCardCollapsed = isCollapsed
-            self.componentState?.updated(transition: .spring(duration: 0.35))
+            let transition = ComponentTransition.spring(duration: 0.35)
+            self.updateCardCollapseAnimation(transition: transition)
+            self.updateBalanceCollapseAnimation(transition: .spring(duration: 0.45))
+            self.componentState?.updated(transition: transition)
+        }
+
+        private func updateCardCollapseAnimation(transition: ComponentTransition) {
+            self.cardCollapseAnimator?.invalidate()
+            self.cardCollapseAnimator = nil
+
+            let fromFraction = self.cardCollapseFraction
+            let fromScaleFraction = self.cardScaleCollapseFraction
+            let toFraction: CGFloat = self.isCardCollapsed ? 1.0 : 0.0
+            guard fromFraction != toFraction || fromScaleFraction != toFraction,
+                  self.window != nil,
+                  self.environment?.isVisible == true,
+                  case let .curve(duration, curve) = transition.animation,
+                  duration * UIView.animationDurationFactor > 0.0 else {
+                self.cardCollapseFraction = toFraction
+                self.cardScaleCollapseFraction = toFraction
+                return
+            }
+
+            self.cardCollapseAnimator = DisplayLinkAnimator(
+                duration: duration * UIView.animationDurationFactor,
+                from: 0.0,
+                to: 1.0,
+                update: { [weak self] progress in
+                    guard let self else {
+                        return
+                    }
+                    let easedProgress = curve.solve(at: progress)
+                    self.cardCollapseFraction = fromFraction + (toFraction - fromFraction) * easedProgress
+
+                    let scaleProgress = toFraction == 0.0 ? easedProgress * easedProgress : easedProgress
+                    self.cardScaleCollapseFraction = fromScaleFraction + (toFraction - fromScaleFraction) * scaleProgress
+                    self.updateCardTransform()
+                },
+                completion: { [weak self] in
+                    self?.finishCardCollapseAnimation()
+                }
+            )
+        }
+
+        private func finishCardCollapseAnimation() {
+            self.cardCollapseAnimator?.invalidate()
+            self.cardCollapseAnimator = nil
+            self.cardCollapseFraction = self.isCardCollapsed ? 1.0 : 0.0
+            self.cardScaleCollapseFraction = self.cardCollapseFraction
+            if !self.isUpdating {
+                self.updateCardTransform()
+            }
+        }
+
+        private func updateBalanceCollapseAnimation(transition: ComponentTransition) {
+            self.balanceCollapseAnimator?.invalidate()
+            self.balanceCollapseAnimator = nil
+
+            let fromFraction = self.balanceCollapseFraction
+            let toFraction: CGFloat = self.isCardCollapsed ? 1.0 : 0.0
+            guard fromFraction != toFraction,
+                  self.window != nil,
+                  self.environment?.isVisible == true,
+                  case let .curve(duration, curve) = transition.animation,
+                  duration * UIView.animationDurationFactor > 0.0 else {
+                self.balanceCollapseFraction = toFraction
+                return
+            }
+
+            self.balanceCollapseAnimator = DisplayLinkAnimator(
+                duration: duration * UIView.animationDurationFactor,
+                from: 0.0,
+                to: 1.0,
+                update: { [weak self] progress in
+                    guard let self else {
+                        return
+                    }
+                    self.balanceCollapseFraction = fromFraction + (toFraction - fromFraction) * curve.solve(at: progress)
+                    self.updateBalanceTransition(transition: .immediate)
+                },
+                completion: { [weak self] in
+                    self?.finishBalanceCollapseAnimation()
+                }
+            )
+        }
+
+        private func finishBalanceCollapseAnimation() {
+            self.balanceCollapseAnimator?.invalidate()
+            self.balanceCollapseAnimator = nil
+            self.balanceCollapseFraction = self.isCardCollapsed ? 1.0 : 0.0
+            if !self.isUpdating {
+                self.updateBalanceTransition(transition: .immediate)
+            }
         }
 
         private func visibleBounds(for sectionFrame: CGRect, viewportSize: CGSize) -> CGRect {
@@ -1251,36 +1360,56 @@ private final class WalletScreenComponent: Component {
                 let cardScrollFraction = max(0.0, min(1.0, self.scrollView.contentOffset.y / self.cardCollapseThreshold))
                 let cardScrollScale = 1.0 - (1.0 - self.cardMinimumScrollScale) * cardScrollFraction
                 let cardScrollOffset = cardExpandedFrame.height * (1.0 - cardScrollScale) * 0.5
-                var cardScrollTransform = CATransform3DMakeScale(
-                    cardScrollScale,
-                    cardScrollScale,
-                    1.0
-                )
+                var cardScrollTransform = CATransform3DMakeScale(cardScrollScale, cardScrollScale, 1.0)
                 cardScrollTransform.m42 = cardScrollOffset
-                self.cardScrollContainerView.layer.removeAnimation(forKey: "sublayerTransform")
-                ComponentTransition.immediate.setSublayerTransform(
-                    view: self.cardScrollContainerView,
-                    transform: cardScrollTransform
-                )
+                ComponentTransition.immediate.setSublayerTransform(view: self.cardScrollContainerView, transform: cardScrollTransform)
             }
-            self.updateBalanceTransition(fraction: headerTransitionFraction, transition: transition)
+            if let cardView = self.card.view as? WalletCardComponent.View {
+                cardView.updateOverscroll(distance: max(0.0, -self.scrollView.contentOffset.y))
+            }
+            self.updateCardTransform()
+            self.updateBalanceTransition(transition: transition)
         }
 
-        private func updateBalanceTransition(fraction: CGFloat, transition: ComponentTransition) {
+        private func updateCardTransform() {
+            let scrollFraction = max(0.0, min(1.0, self.scrollView.contentOffset.y / self.cardCollapseThreshold))
+            ComponentTransition.immediate.setSublayerTransform(
+                view: self.cardVisualContainerView,
+                transform: self.makeCardTransform(
+                    scrollFraction: scrollFraction,
+                    collapseFraction: self.cardCollapseFraction,
+                    scale: 1.0 + (self.cardCollapsedScale - 1.0) * self.cardScaleCollapseFraction
+                )
+            )
+        }
+
+        private func makeCardTransform(scrollFraction: CGFloat, collapseFraction: CGFloat, scale: CGFloat = 1.0) -> CATransform3D {
+            var transform = CATransform3DIdentity
+            if !UIAccessibility.isReduceMotionEnabled {
+                let scrollPitch = self.cardMaximumScrollPitch * scrollFraction
+                let pitch = scrollPitch + (self.cardCollapsedPitch - scrollPitch) * collapseFraction
+                transform.m34 = -(scrollFraction + (1.0 - scrollFraction) * collapseFraction) / 650.0
+                transform = CATransform3DRotate(transform, pitch, 1.0, 0.0, 0.0)
+            }
+            transform = CATransform3DScale(transform, scale, scale, 1.0)
+            return transform
+        }
+
+        private func updateBalanceTransition(transition: ComponentTransition) {
             guard let cardView = self.card.view as? WalletCardComponent.View,
                   let navigationBalanceView = self.navigationBalance.view as? WalletNavigationBalanceComponent.View,
                   let cardExpandedFrame = self.cardExpandedFrame else {
                 return
             }
 
-            if self.scrollView.contentOffset.y <= 0.0 {
-                let primaryFrame = cardView.convert(cardView.primaryBalanceSourceFrame, to: self)
-                let secondaryFrame = cardView.convert(cardView.secondaryBalanceSourceFrame, to: self)
+            let fraction = max(0.0, min(1.0, self.scrollView.contentOffset.y / self.cardCollapseThreshold))
+            if self.scrollView.contentOffset.y <= 0.0 && self.balanceCollapseFraction == 0.0 {
+                let primaryFrame = self.cardBalanceCoordinateView.convert(cardView.primaryBalanceSourceFrame, to: self)
+                let secondaryFrame = self.cardBalanceCoordinateView.convert(cardView.secondaryBalanceSourceFrame, to: self)
                 navigationBalanceView.updateTransitionFrames(
                     primaryFrame: navigationBalanceView.convert(primaryFrame, from: self),
                     secondaryFrame: navigationBalanceView.convert(secondaryFrame, from: self),
-                    isCollapsed: false,
-                    transition: transition
+                    collapseFraction: 0.0
                 )
                 cardView.updateBalanceTransition(
                     primaryFrame: nil,
@@ -1288,19 +1417,20 @@ private final class WalletScreenComponent: Component {
                     primaryCollapsedFrame: nil,
                     secondaryCollapsedFrame: nil,
                     fraction: 0.0,
-                    isCollapsed: false,
+                    collapseFraction: 0.0,
                     transition: transition
                 )
                 return
             }
 
+            let sourceOriginY = cardExpandedFrame.minY - min(0.0, self.scrollView.contentOffset.y)
             let primarySourceFrame = cardView.primaryBalanceSourceFrame.offsetBy(
                 dx: cardExpandedFrame.minX,
-                dy: cardExpandedFrame.minY
+                dy: sourceOriginY
             )
             let secondarySourceFrame = cardView.secondaryBalanceSourceFrame.offsetBy(
                 dx: cardExpandedFrame.minX,
-                dy: cardExpandedFrame.minY
+                dy: sourceOriginY
             )
             let primaryTargetFrame = navigationBalanceView.convert(navigationBalanceView.primaryTargetFrame, to: self)
             let secondaryTargetFrame = navigationBalanceView.convert(navigationBalanceView.secondaryTargetFrame, to: self)
@@ -1312,8 +1442,7 @@ private final class WalletScreenComponent: Component {
                 navigationBalanceView.updateTransitionFrames(
                     primaryFrame: nil,
                     secondaryFrame: nil,
-                    isCollapsed: self.isCardCollapsed,
-                    transition: transition
+                    collapseFraction: self.balanceCollapseFraction
                 )
                 cardView.updateBalanceTransition(
                     primaryFrame: nil,
@@ -1321,30 +1450,29 @@ private final class WalletScreenComponent: Component {
                     primaryCollapsedFrame: nil,
                     secondaryCollapsedFrame: nil,
                     fraction: fraction,
-                    isCollapsed: self.isCardCollapsed,
+                    collapseFraction: self.balanceCollapseFraction,
+                    scrollTransform: self.makeCardTransform(scrollFraction: fraction, collapseFraction: 0.0),
                     transition: transition
                 )
                 return
             }
 
-            // The inner containers follow scrolling through only this initial part
-            // of the path. Separate outer containers cover the rest with a spring.
             let preCollapseFraction = 0.16 * fraction
+            let balanceScrollOffset = -self.balanceAdditionalScrollOffset * fraction
             let primaryFrame = self.interpolateFrame(
                 from: primarySourceFrame,
                 to: primaryTargetFrame,
                 fraction: preCollapseFraction
-            )
+            ).offsetBy(dx: 0.0, dy: balanceScrollOffset)
             let secondaryFrame = self.interpolateFrame(
                 from: secondarySourceFrame,
                 to: secondaryTargetFrame,
                 fraction: preCollapseFraction
-            )
+            ).offsetBy(dx: 0.0, dy: balanceScrollOffset)
             navigationBalanceView.updateTransitionFrames(
                 primaryFrame: navigationBalanceView.convert(primaryFrame, from: self),
                 secondaryFrame: navigationBalanceView.convert(secondaryFrame, from: self),
-                isCollapsed: self.isCardCollapsed,
-                transition: transition
+                collapseFraction: self.balanceCollapseFraction
             )
             cardView.updateBalanceTransition(
                 primaryFrame: self.cardBalanceCoordinateView.convert(primaryFrame, from: self),
@@ -1352,7 +1480,8 @@ private final class WalletScreenComponent: Component {
                 primaryCollapsedFrame: self.cardBalanceCoordinateView.convert(primaryTargetFrame, from: self),
                 secondaryCollapsedFrame: self.cardBalanceCoordinateView.convert(secondaryTargetFrame, from: self),
                 fraction: fraction,
-                isCollapsed: self.isCardCollapsed,
+                collapseFraction: self.balanceCollapseFraction,
+                scrollTransform: self.makeCardTransform(scrollFraction: fraction, collapseFraction: 0.0),
                 transition: transition
             )
         }
@@ -1990,6 +2119,11 @@ private final class WalletScreenComponent: Component {
             self.environment = environment
             self.componentState = state
 
+            if !environment.isVisible {
+                self.finishCardCollapseAnimation()
+                self.finishBalanceCollapseAnimation()
+            }
+
             if self.walletContext !== component.walletContext {
                 self.walletStateDisposable?.dispose()
                 self.loadMoreRequestId = nil
@@ -2072,7 +2206,11 @@ private final class WalletScreenComponent: Component {
             }
             let hasEmptyTransactions = self.selectedSection == .transactions && transactions.isEmpty
             if hasEmptyTransactions {
-                self.isCardCollapsed = false
+                if self.isCardCollapsed {
+                    self.isCardCollapsed = false
+                    self.updateCardCollapseAnimation(transition: transition)
+                    self.updateBalanceCollapseAnimation(transition: transition)
+                }
                 if self.scrollView.contentOffset != CGPoint() {
                     self.scrollView.setContentOffset(CGPoint(), animated: false)
                 }
@@ -2139,15 +2277,23 @@ private final class WalletScreenComponent: Component {
                     size: cardSize
                 )
             )
-            transition.setAlpha(view: self.cardVisualContainerView, alpha: self.isCardCollapsed ? 0.0 : 1.0)
-            transition.setSublayerTransform(
-                view: self.cardVisualContainerView,
-                transform: CATransform3DMakeScale(
-                    self.isCardCollapsed ? self.cardCollapsedScale : 1.0,
-                    self.isCardCollapsed ? self.cardCollapsedScale : 1.0,
-                    1.0
+            let hasTopCutout: Bool
+            switch environment.deviceMetrics {
+            case .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax:
+                hasTopCutout = true
+            default:
+                hasTopCutout = environment.deviceMetrics.hasTopNotch || environment.deviceMetrics.hasDynamicIsland
+            }
+            if hasTopCutout, case let .curve(duration, _) = transition.animation {
+                ComponentTransition.easeInOut(duration: duration * 0.25).setAlpha(
+                    view: self.cardVisualContainerView,
+                    alpha: self.isCardCollapsed ? 0.0 : 1.0,
+                    delay: duration * (self.isCardCollapsed ? 0.15 : 0.05)
                 )
-            )
+            } else {
+                transition.setAlpha(view: self.cardVisualContainerView, alpha: self.isCardCollapsed ? 0.0 : 1.0)
+            }
+            transition.setAlpha(view: self.cardBalanceCoordinateView, alpha: self.isCardCollapsed ? 0.0 : 1.0)
             self.cardContainerView.isUserInteractionEnabled = !self.isCardCollapsed
             if let cardView = self.card.view {
                 if cardView.superview !== self.cardVisualContainerView {
@@ -2161,6 +2307,7 @@ private final class WalletScreenComponent: Component {
                     )
                 )
                 if let cardView = cardView as? WalletCardComponent.View {
+                    cardView.setBalanceTransitionContainer(self.cardBalanceCoordinateView)
                     cardView.balanceGeometryUpdated = { [weak self, weak cardView] in
                         guard let self,
                               let cardView,

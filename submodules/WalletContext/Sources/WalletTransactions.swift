@@ -194,9 +194,7 @@ func walletPendingTransferTransaction(
     }
     let status: WalletContext.Transaction.Status
     switch pending.status {
-    case .broadcasting:
-        return nil
-    case .pending, .submissionUnknown:
+    case .broadcasting, .pending, .submissionUnknown:
         status = .pending
     case .confirmed:
         status = .completed

@@ -6,7 +6,7 @@ import TelegramUIPreferences
 final class WalletContextOutput {
     private let stateValue: Atomic<WalletContext.State>
     let statePromise: ValuePromise<WalletContext.State>
-    let tonConnectPresentationPipe = ValuePipe<WalletContext.TonConnectPresentation>()
+    let tonConnectState = ValuePromise<WalletContext.TonConnectState>(.empty, ignoreRepeated: true)
     private let cancelOperationImpl: (UUID) -> Void
 
     init(initialState: WalletContext.State, cancelOperation: @escaping (UUID) -> Void) {
@@ -24,8 +24,8 @@ final class WalletContextOutput {
         self.stateValue.with { $0 }
     }
 
-    func publish(presentation: WalletContext.TonConnectPresentation) {
-        self.tonConnectPresentationPipe.putNext(presentation)
+    func publish(tonConnect: WalletContext.TonConnectState) {
+        self.tonConnectState.set(tonConnect)
     }
 
     func cancelOperation(id: UUID) {
@@ -130,8 +130,8 @@ public final class WalletContext {
         self.output.currentState()
     }
 
-    public var tonConnectPresentations: Signal<TonConnectPresentation, NoError> {
-        self.output.tonConnectPresentationPipe.signal()
+    public var tonConnectState: Signal<TonConnectState, NoError> {
+        self.output.tonConnectState.get()
         |> deliverOnMainQueue
     }
 

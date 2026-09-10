@@ -67,6 +67,8 @@ public final class WalletCardComponent: Component {
 
     public final class View: UIView {
         private static let maxPitch = 0.14
+        private static let maxOverscrollPitch = 12.0 * Double.pi / 180.0
+        private static let maxOverscrollScale = 1.05
         private static let maxYaw = 0.21
         private static let gyroGain = 0.9
         private static let highlightIdleGain = 1.75
@@ -76,6 +78,8 @@ public final class WalletCardComponent: Component {
         private let shadowView = UIView()
         private let backgroundView = WalletCardBackgroundView()
         private let foregroundView = UIControl()
+        private let balanceTransitionView = UIView()
+        private weak var balanceTransitionContainer: UIView?
 
         private let primaryBalanceCollapseContainerView = UIView()
         private let secondaryBalanceCollapseContainerView = UIView()
@@ -91,6 +95,8 @@ public final class WalletCardComponent: Component {
         private var primaryBalanceBaseFrame: CGRect = .zero
         private var secondaryBalanceBaseFrame: CGRect = .zero
         private var balanceTransitionFraction: CGFloat = 0.0
+        private var balanceCollapseFraction: CGFloat = 0.0
+        private var balanceScrollTransform = CATransform3DIdentity
 
         private let integralBalance = ComponentView<Empty>()
         private let fractionalBalance = ComponentView<Empty>()
@@ -108,6 +114,7 @@ public final class WalletCardComponent: Component {
         private var gyroRoll = 0.0
         private var panPitch = 0.0
         private var panRoll = 0.0
+        private var overscrollPitch = 0.0
         private var isPanning = false
         private var baseAttitude: simd_quatd?
 
@@ -115,8 +122,8 @@ public final class WalletCardComponent: Component {
         private var currentCardY = 0.0
         private var currentDepthX = 0.0
         private var currentDepthY = 0.0
-        private var currentHighlightX = UIAccessibility.isReduceMotionEnabled ? 0.0 : 0.10
-        private var currentHighlightY = UIAccessibility.isReduceMotionEnabled ? 0.0 : -0.45
+        private var currentHighlightX = 0.10
+        private var currentHighlightY = -0.45
         private var currentScale = 1.0
         private var targetScale = 1.0
         private var idleTiltX = 0.0
@@ -146,6 +153,11 @@ public final class WalletCardComponent: Component {
             self.foregroundView.layer.allowsEdgeAntialiasing = true
             self.addSubview(self.foregroundView)
 
+            self.balanceTransitionView.isUserInteractionEnabled = false
+            self.balanceTransitionView.clipsToBounds = false
+            self.balanceTransitionView.layer.allowsEdgeAntialiasing = true
+            self.balanceTransitionView.layer.zPosition = Self.foregroundZPosition
+
             self.primaryBalanceCollapseContainerView.clipsToBounds = false
             self.secondaryBalanceCollapseContainerView.clipsToBounds = false
             self.primaryBalanceContainerView.clipsToBounds = false
@@ -157,8 +169,6 @@ public final class WalletCardComponent: Component {
 
             self.shadowView.layer.zPosition = -Self.foregroundZPosition
             self.backgroundView.layer.zPosition = 0.0
-            // The Metal quad is projected in the shader but remains a flat CA
-            // layer. Keep the rotated foreground plane entirely in front of it.
             self.foregroundView.layer.zPosition = Self.foregroundZPosition
 
             self.backgroundColor = .clear
@@ -184,12 +194,6 @@ public final class WalletCardComponent: Component {
                 name: UIApplication.willResignActiveNotification,
                 object: nil
             )
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(self.reduceMotionStatusDidChange),
-                name: UIAccessibility.reduceMotionStatusDidChangeNotification,
-                object: nil
-            )
         }
 
         required public init?(coder: NSCoder) {
@@ -197,6 +201,7 @@ public final class WalletCardComponent: Component {
         }
 
         deinit {
+            self.balanceTransitionView.removeFromSuperview()
             self.displayLink?.invalidate()
             self.motionManager.stopDeviceMotionUpdates()
             NotificationCenter.default.removeObserver(self)
@@ -206,6 +211,13 @@ public final class WalletCardComponent: Component {
             super.didMoveToWindow()
 
             self.updateAnimationState()
+        }
+
+        override public func willMove(toSuperview newSuperview: UIView?) {
+            if newSuperview == nil {
+                self.setBalanceTransitionContainer(nil)
+            }
+            super.willMove(toSuperview: newSuperview)
         }
 
         func update(
@@ -620,10 +632,8 @@ public final class WalletCardComponent: Component {
                 self.panRoll *= decay
             }
 
-            let reduceMotion = UIAccessibility.isReduceMotionEnabled
-            let idleMultiplier = reduceMotion ? 0.0 : 1.0
-            let idleX = 0.013 * sin(self.elapsedTime * 0.50) * idleMultiplier
-            let idleY = 0.022 * sin(self.elapsedTime * 0.37 + 1.6) * idleMultiplier
+            let idleX = 0.013 * sin(self.elapsedTime * 0.50)
+            let idleY = 0.022 * sin(self.elapsedTime * 0.37 + 1.6)
             self.idleTiltX = idleX
             self.idleTiltY = idleY
 
@@ -685,7 +695,6 @@ public final class WalletCardComponent: Component {
         private func startMotionIfPossible() {
             guard
                 self.displayLink != nil,
-                !UIAccessibility.isReduceMotionEnabled,
                 self.motionManager.isDeviceMotionAvailable,
                 !self.motionManager.isDeviceMotionActive
             else {
@@ -741,17 +750,87 @@ public final class WalletCardComponent: Component {
             }
         }
 
+        public func updateOverscroll(distance: CGFloat) {
+            let pitch = -Self.maxOverscrollPitch * Double(min(1.0, max(0.0, distance) / 120.0))
+            guard self.overscrollPitch != pitch else {
+                return
+            }
+            self.overscrollPitch = pitch
+            self.renderCurrentFrame()
+        }
+
+        public func setBalanceTransitionContainer(_ container: UIView?) {
+            let foregroundView: UIView = container == nil ? self.foregroundView : self.balanceTransitionView
+            guard self.balanceTransitionContainer !== container || self.primaryBalanceCollapseContainerView.superview !== foregroundView else {
+                return
+            }
+            self.balanceTransitionContainer = container
+            if let container {
+                container.addSubview(self.balanceTransitionView)
+            }
+            foregroundView.addSubview(self.primaryBalanceCollapseContainerView)
+            foregroundView.addSubview(self.secondaryBalanceCollapseContainerView)
+            if container == nil {
+                self.balanceTransitionView.removeFromSuperview()
+                self.updateBalanceTransition(
+                    primaryFrame: nil,
+                    secondaryFrame: nil,
+                    primaryCollapsedFrame: nil,
+                    secondaryCollapsedFrame: nil,
+                    fraction: 0.0,
+                    collapseFraction: 0.0,
+                    transition: .immediate
+                )
+            } else {
+                self.updateBalanceTransitionGeometry()
+                self.updateProjectedBalanceFrames()
+            }
+        }
+
+        private func updateBalanceTransitionGeometry() {
+            guard self.balanceTransitionContainer != nil else {
+                return
+            }
+
+            ComponentTransition.immediate.setBounds(view: self.balanceTransitionView, bounds: self.foregroundView.bounds)
+            ComponentTransition.immediate.setPosition(view: self.balanceTransitionView, position: self.foregroundView.layer.position)
+
+            let fraction = 1.0 - max(0.0, min(1.0, self.balanceCollapseFraction))
+            var transform = CATransform3DConcat(self.foregroundView.layer.transform, self.balanceScrollTransform)
+            transform.m11 = 1.0 + (transform.m11 - 1.0) * fraction
+            transform.m12 *= fraction
+            transform.m13 *= fraction
+            transform.m14 *= fraction
+            transform.m21 *= fraction
+            transform.m22 = 1.0 + (transform.m22 - 1.0) * fraction
+            transform.m23 *= fraction
+            transform.m24 *= fraction
+            transform.m31 *= fraction
+            transform.m32 *= fraction
+            transform.m33 = 1.0 + (transform.m33 - 1.0) * fraction
+            transform.m34 *= fraction
+            transform.m41 *= fraction
+            transform.m42 *= fraction
+            transform.m43 *= fraction
+            transform.m44 = 1.0 + (transform.m44 - 1.0) * fraction
+            ComponentTransition.immediate.setTransform(view: self.balanceTransitionView, transform: transform)
+        }
+
         public func updateBalanceTransition(
             primaryFrame: CGRect?,
             secondaryFrame: CGRect?,
             primaryCollapsedFrame: CGRect?,
             secondaryCollapsedFrame: CGRect?,
             fraction: CGFloat,
-            isCollapsed: Bool,
+            collapseFraction: CGFloat,
+            scrollTransform: CATransform3D = CATransform3DIdentity,
             transition: ComponentTransition
         ) {
             let fraction = max(0.0, min(1.0, fraction))
             self.balanceTransitionFraction = fraction
+            self.balanceCollapseFraction = collapseFraction
+            self.balanceScrollTransform = scrollTransform
+            self.updateBalanceTransitionGeometry()
 
             self.updateBalanceContainer(
                 self.primaryBalanceCollapseContainerView,
@@ -759,8 +838,7 @@ public final class WalletCardComponent: Component {
                 baseFrame: self.primaryBalanceBaseFrame,
                 targetFrame: primaryFrame,
                 collapsedFrame: primaryCollapsedFrame,
-                isCollapsed: isCollapsed,
-                transition: transition
+                collapseFraction: collapseFraction
             )
             self.updateBalanceContainer(
                 self.secondaryBalanceCollapseContainerView,
@@ -768,8 +846,7 @@ public final class WalletCardComponent: Component {
                 baseFrame: self.secondaryBalanceBaseFrame,
                 targetFrame: secondaryFrame,
                 collapsedFrame: secondaryCollapsedFrame,
-                isCollapsed: isCollapsed,
-                transition: transition
+                collapseFraction: collapseFraction
             )
             if let currencyView = self.currency.view {
                 transition.setAlpha(view: currencyView, alpha: 1.0 - fraction)
@@ -783,8 +860,7 @@ public final class WalletCardComponent: Component {
             baseFrame: CGRect,
             targetFrame: CGRect?,
             collapsedFrame: CGRect?,
-            isCollapsed: Bool,
-            transition: ComponentTransition
+            collapseFraction: CGFloat
         ) {
             guard !baseFrame.isEmpty,
                   let targetFrame,
@@ -793,11 +869,20 @@ public final class WalletCardComponent: Component {
                   targetFrame.height.isFinite else {
                 ComponentTransition.immediate.setPosition(view: containerView, position: baseFrame.center)
                 ComponentTransition.immediate.setTransform(view: containerView, transform: CATransform3DIdentity)
-                transition.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
+                ComponentTransition.immediate.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
                 return
             }
 
-            let targetFrameInForeground = self.foregroundView.convert(targetFrame, from: self)
+            let foregroundView: UIView
+            let coordinateView: UIView
+            if let balanceTransitionContainer = self.balanceTransitionContainer {
+                foregroundView = self.balanceTransitionView
+                coordinateView = balanceTransitionContainer
+            } else {
+                foregroundView = self.foregroundView
+                coordinateView = self
+            }
+            let targetFrameInForeground = foregroundView.convert(targetFrame, from: coordinateView)
             let scaleX = targetFrameInForeground.width / baseFrame.width
             let scaleY = targetFrameInForeground.height / baseFrame.height
             ComponentTransition.immediate.setPosition(
@@ -810,29 +895,29 @@ public final class WalletCardComponent: Component {
             )
 
             let collapseTransform: CATransform3D
-            if isCollapsed,
-               let collapsedFrame,
+            if let collapsedFrame,
                !collapsedFrame.isEmpty,
                collapsedFrame.width.isFinite,
                collapsedFrame.height.isFinite {
                 collapseTransform = self.collapseTransform(
                     in: collapseContainerView,
                     from: targetFrameInForeground,
-                    to: self.foregroundView.convert(collapsedFrame, from: self)
+                    to: foregroundView.convert(collapsedFrame, from: coordinateView),
+                    fraction: collapseFraction
                 )
             } else {
                 collapseTransform = CATransform3DIdentity
             }
-            transition.setTransform(view: collapseContainerView, transform: collapseTransform)
+            ComponentTransition.immediate.setTransform(view: collapseContainerView, transform: collapseTransform)
         }
 
-        private func collapseTransform(in containerView: UIView, from sourceFrame: CGRect, to targetFrame: CGRect) -> CATransform3D {
+        private func collapseTransform(in containerView: UIView, from sourceFrame: CGRect, to targetFrame: CGRect, fraction: CGFloat) -> CATransform3D {
             let scaleX = targetFrame.width / sourceFrame.width
             let scaleY = targetFrame.height / sourceFrame.height
             let anchor = CGPoint(x: containerView.bounds.midX, y: containerView.bounds.midY)
-            var transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
-            transform.m41 = targetFrame.midX - anchor.x - (sourceFrame.midX - anchor.x) * scaleX
-            transform.m42 = targetFrame.midY - anchor.y - (sourceFrame.midY - anchor.y) * scaleY
+            var transform = CATransform3DMakeScale(1.0 + (scaleX - 1.0) * fraction, 1.0 + (scaleY - 1.0) * fraction, 1.0)
+            transform.m41 = (targetFrame.midX - anchor.x - (sourceFrame.midX - anchor.x) * scaleX) * fraction
+            transform.m42 = (targetFrame.midY - anchor.y - (sourceFrame.midY - anchor.y) * scaleY) * fraction
             return transform
         }
 
@@ -863,11 +948,7 @@ public final class WalletCardComponent: Component {
             }
         }
 
-        private func renderCurrentFrame() {
-            guard self.currentSize.width > 0.0, self.currentSize.height > 0.0 else {
-                return
-            }
-
+        private func makePerspectiveTransform(pitch: Double, scale: Double) -> CATransform3D {
             var perspectiveTransform = CATransform3DIdentity
             perspectiveTransform.m34 = -1.0 / 650.0
             perspectiveTransform = CATransform3DTranslate(
@@ -878,13 +959,13 @@ public final class WalletCardComponent: Component {
             )
             perspectiveTransform = CATransform3DScale(
                 perspectiveTransform,
-                CGFloat(self.currentScale),
-                CGFloat(self.currentScale),
+                CGFloat(scale),
+                CGFloat(scale),
                 1.0
             )
             perspectiveTransform = CATransform3DRotate(
                 perspectiveTransform,
-                CGFloat(self.currentCardX),
+                CGFloat(pitch),
                 1.0,
                 0.0,
                 0.0
@@ -904,6 +985,35 @@ public final class WalletCardComponent: Component {
                 1.0
             )
 
+            return perspectiveTransform
+        }
+
+        private func renderCurrentFrame() {
+            guard self.currentSize.width > 0.0, self.currentSize.height > 0.0 else {
+                return
+            }
+
+            let maxPitch = max(Self.maxPitch, Self.maxOverscrollPitch)
+            let cardPitch = Self.clamp(self.currentCardX + self.overscrollPitch, maxPitch)
+            let overscrollFraction = -self.overscrollPitch / Self.maxOverscrollPitch
+            let overscrollScale = 1.0 + (Self.maxOverscrollScale - 1.0) * overscrollFraction
+            var perspectiveTransform = self.makePerspectiveTransform(pitch: cardPitch, scale: self.currentScale * overscrollScale)
+            if self.overscrollPitch != 0.0 {
+                func projectedBottomY(_ transform: CATransform3D) -> CGFloat {
+                    let y = self.currentSize.height * 0.5
+                    let w = y * transform.m24 + transform.m44
+                    let safeW = abs(w) < 0.0001 ? 0.0001 : w
+                    return (y * transform.m22 + transform.m42) / safeW
+                }
+
+                let baseTransform = self.makePerspectiveTransform(pitch: self.currentCardX, scale: self.currentScale)
+                let bottomOffset = projectedBottomY(baseTransform) - projectedBottomY(perspectiveTransform)
+                perspectiveTransform = CATransform3DConcat(
+                    perspectiveTransform,
+                    CATransform3DMakeTranslation(0.0, bottomOffset, 0.0)
+                )
+            }
+
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             self.shadowView.layer.transform = perspectiveTransform
@@ -912,6 +1022,7 @@ public final class WalletCardComponent: Component {
             let easedLiftProgress = liftProgress * liftProgress * (3.0 - 2.0 * liftProgress)
             self.shadowView.layer.shadowOpacity = Self.maximumLiftShadowOpacity * Float(easedLiftProgress)
             CATransaction.commit()
+            self.updateBalanceTransitionGeometry()
             self.backgroundView.updateFallbackTransform(perspectiveTransform)
 
             let projectedQuad = self.projectedQuad(for: perspectiveTransform)
@@ -921,9 +1032,9 @@ public final class WalletCardComponent: Component {
             let additionalIdleGain = Self.highlightIdleGain - 1.0
             self.backgroundView.render(
                 time: self.elapsedTime,
-                highlightTiltX: self.currentHighlightX + self.idleTiltX * additionalIdleGain,
+                highlightTiltX: Self.clamp(self.currentHighlightX + self.overscrollPitch, maxPitch + 0.03) + self.idleTiltX * additionalIdleGain,
                 highlightTiltY: self.currentHighlightY + self.idleTiltY * additionalIdleGain,
-                surfaceTiltX: self.currentDepthX,
+                surfaceTiltX: Self.clamp(self.currentDepthX + self.overscrollPitch, maxPitch + 0.03),
                 surfaceTiltY: self.currentDepthY,
                 quad: projectedQuad
             )
@@ -1009,21 +1120,6 @@ public final class WalletCardComponent: Component {
 
         @objc private func applicationWillResignActive() {
             self.stopAnimation()
-        }
-
-        @objc private func reduceMotionStatusDidChange() {
-            self.baseAttitude = nil
-            self.gyroPitch = 0.0
-            self.gyroRoll = 0.0
-            self.currentDepthX = self.currentCardX
-            self.currentDepthY = self.currentCardY
-            self.idleTiltX = 0.0
-            self.idleTiltY = 0.0
-            if UIAccessibility.isReduceMotionEnabled {
-                self.motionManager.stopDeviceMotionUpdates()
-            } else {
-                self.startMotionIfPossible()
-            }
         }
 
         private static func clamp(_ value: Double, _ limit: Double) -> Double {

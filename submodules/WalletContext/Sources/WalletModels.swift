@@ -241,12 +241,14 @@ public extension WalletContext {
             public let kind: String
             public let succeeded: Bool
             public let accounts: [String]
+            public let detailsJson: String
 
-            public init(id: String, kind: String, succeeded: Bool, accounts: [String]) {
+            public init(id: String, kind: String, succeeded: Bool, accounts: [String], detailsJson: String = "{}") {
                 self.id = id
                 self.kind = kind
                 self.succeeded = succeeded
                 self.accounts = accounts
+                self.detailsJson = detailsJson
             }
         }
 
@@ -292,11 +294,31 @@ public extension WalletContext {
         }
     }
 
-    enum TonConnectPresentation: Sendable {
-        case request(TonConnectRequest)
-        case operation(TonConnectOperationRequest)
-        case dismiss(requestId: String)
-        case error(String)
+    typealias TonConnectSession = TonConnectSessionInfo
+    typealias TonConnectDecisionResult = TonConnectDecision
+    typealias TonConnectReturn = TonConnectReturnTarget
+
+    struct TonConnectActiveRequest: Equatable, Sendable {
+        public enum Content: Equatable, Sendable {
+            case connect(TonConnectRequest)
+            case operation(TonConnectOperationRequest)
+        }
+        public let content: Content
+        public let status: TonConnectActiveInteraction.Status
+        public var id: String {
+            switch self.content {
+            case let .connect(value): return value.id
+            case let .operation(value): return value.id
+            }
+        }
+    }
+
+    struct TonConnectState: Equatable, Sendable {
+        public let sessions: [TonConnectSession]
+        public let active: TonConnectActiveRequest?
+        public let presentationEnabled: Bool
+        public let diagnostic: TonConnectDiagnostic?
+        static let empty = TonConnectState(sessions: [], active: nil, presentationEnabled: false, diagnostic: nil)
     }
 
     enum FatalStorageError: Error, Equatable, Sendable {
