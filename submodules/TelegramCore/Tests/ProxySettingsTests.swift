@@ -160,6 +160,33 @@ final class ProxySettingsTests: XCTestCase {
         )
     }
 
+    /// Regression: `UrlHandling` had its own laxer loop, so a link carrying both `server`
+    /// and `host` was rejected by the proxy editor and accepted from a chat, resolving to
+    /// whichever came last. Both now share `parseWebProxyLinkQueryItems`.
+    func testTheQueryRuleIsStrictForEveryEntryPoint() throws {
+        let secret = "000102030405060708090a0b0c0d0e0f"
+        let accepted = try XCTUnwrap(parseWebProxyLinkQueryItems([
+            URLQueryItem(name: "server", value: "proxy.example.com"),
+            URLQueryItem(name: "secret", value: secret)
+        ]))
+        XCTAssertEqual(accepted.host, "proxy.example.com")
+        XCTAssertEqual(parseWebProxyLinkQueryItems([
+            URLQueryItem(name: "host", value: "proxy.example.com"),
+            URLQueryItem(name: "secret", value: secret)
+        ])?.host, "proxy.example.com")
+
+        for items in [
+            [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret), URLQueryItem(name: "host", value: "evil.example.com")],
+            [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "server", value: "evil.example.com"), URLQueryItem(name: "secret", value: secret)],
+            [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret), URLQueryItem(name: "extra", value: "1")],
+            [URLQueryItem(name: "server", value: "a.example.com")],
+            [URLQueryItem(name: "secret", value: secret)],
+            []
+        ] {
+            XCTAssertNil(parseWebProxyLinkQueryItems(items), "\(items)")
+        }
+    }
+
     /// The exact derivation `deploy/install.sh` performs, pinned by BASE_PATH.md §3.
     func testMarkedSecretVector() throws {
         let settings = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=example.com%2Fphcf2vfe7zgbrslg&secret=cIVhlEBk_HMMv6RHNWLY7Fk"))

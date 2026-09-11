@@ -22,6 +22,13 @@ final class WebProxyCarrierWindowHost: WebProxyCarrierViewHost {
         }
         webView.frame = CGRect(x: 0.0, y: 0.0, width: 1.0, height: 1.0)
         webView.isUserInteractionEnabled = false
+        // Accessibility traversal does NOT follow `isUserInteractionEnabled`, so without
+        // this the provider's DOM is reachable text inside Telegram's own window: VoiceOver
+        // would happily focus and read out whatever the relay operator put there. The view
+        // has no content anyone should reach, so hide the whole subtree.
+        webView.isAccessibilityElement = false
+        webView.accessibilityElementsHidden = true
+        webView.allowsLinkPreview = false
         webView.isOpaque = false
         webView.backgroundColor = .clear
         // Deliberately not zero: a fully transparent view may still be treated as

@@ -17,6 +17,7 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
     private let configuration: WebProxyConfiguration
     private let generation: UInt64
     private let handlerName: String
+    private let hardeningFlag: String
     private let bridgeURL: URL
     private let received: (UInt64, WebProxyPageMessage) -> Void
     private let failed: (UInt64, WebProxyCarrierFailure) -> Void
@@ -44,39 +45,55 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
         let nonce = nonceData.webProxyBase64Url
         guard let bridgeURL = configuration.bridgeURL(nonce: nonce) else { return nil }
 
+        let suffix = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         self.configuration = configuration
         self.generation = generation
-        self.handlerName = "telegramWebProxy_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        self.handlerName = "telegramWebProxy_\(suffix)"
+        self.hardeningFlag = "telegramWebProxyPolicy_\(suffix)"
         self.nonce = nonce
         self.bridgeURL = bridgeURL
         self.received = received
         self.failed = failed
 
+        // Both scripts run at document start in the page world, in this order: the
+        // execution profile must be in place before the bridge shim and before any
+        // provider JavaScript. They carry no reference to `self`, so they are installed
+        // before the web view copies the configuration.
+        //
+        // The profile runs in EVERY frame; the shim only in the main one. A subframe is a
+        // separate realm with its own pristine `navigator` and `window`, and a src-less
+        // `about:blank` child inherits the CSP but NOT a main-frame-only user script - and
+        // `frame-src 'none'` does not stop it, because the initial about:blank is not a
+        // fetch. Measured, not assumed: see WebProxyFrameIsolationTests. The shim stays
+        // main-frame-only because it is the half that can reach native, which is also why
+        // the message handler re-checks `frameInfo.isMainFrame`.
+        let hardeningSource = WebProxyWebViewHardening.script(host: configuration.host, flag: self.hardeningFlag)
+        let shimSource = Self.injectionScript(handlerName: self.handlerName, nonce: nonce, hardeningFlag: self.hardeningFlag)
         let contentController = WKUserContentController()
+        if #available(macOS 11.0, iOS 14.0, *) {
+            contentController.addUserScript(WKUserScript(source: hardeningSource, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
+            contentController.addUserScript(WKUserScript(source: shimSource, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        } else {
+            contentController.addUserScript(WKUserScript(source: hardeningSource, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+            contentController.addUserScript(WKUserScript(source: shimSource, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+
         let webConfiguration = WKWebViewConfiguration()
-        webConfiguration.websiteDataStore = .nonPersistent()
         webConfiguration.userContentController = contentController
-        webConfiguration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        WebProxyWebViewHardening.apply(to: webConfiguration)
 
         self.webView = WKWebView(frame: .zero, configuration: webConfiguration)
         super.init()
 
+        // Fail closed before navigation: a carrier that could not install the
+        // document-start policy must never load the bridge.
+        guard contentController.userScripts.count == 2 else {
+            return nil
+        }
+
         if #available(macOS 11.0, iOS 14.0, *) {
-            let script = WKUserScript(
-                source: Self.injectionScript(handlerName: self.handlerName, nonce: nonce),
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true,
-                in: .page
-            )
-            contentController.addUserScript(script)
             contentController.add(self, contentWorld: .page, name: self.handlerName)
         } else {
-            let script = WKUserScript(
-                source: Self.injectionScript(handlerName: self.handlerName, nonce: nonce),
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true
-            )
-            contentController.addUserScript(script)
             contentController.add(self, name: self.handlerName)
         }
         self.webView.navigationDelegate = self
@@ -207,6 +224,7 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard !self.invalidated,
+              message.webView === self.webView,
               message.name == self.handlerName,
               message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.protocol == "https",
@@ -224,14 +242,24 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
             self.received(self.generation, .binary(data))
         } else if kind == "control", value.utf8.count <= 4096 {
             self.received(self.generation, .control(value))
+        } else if kind == "hardening" {
+            self.failed(self.generation, .hardeningUnavailable)
         } else {
             self.failed(self.generation, .bridgeMessageRejected)
         }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        // Only the first canonical main-frame navigation is allowed. Everything else -
+        // redirects, new windows, subframes, downloads, other schemes or hosts - is a
+        // carrier failure rather than a quietly cancelled navigation.
+        var performsDownload = false
+        if #available(macOS 11.3, iOS 14.5, *) {
+            performsDownload = navigationAction.shouldPerformDownload
+        }
         guard !self.invalidated,
               navigationAction.targetFrame?.isMainFrame == true,
+              !performsDownload,
               self.initialNavigation,
               self.isAllowed(url: navigationAction.request.url) else {
             decisionHandler(.cancel)
@@ -286,8 +314,88 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
         if !self.invalidated { self.failed(self.generation, .webContentProcessTerminated) }
     }
 
+    func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+        // `decidePolicyFor` already cancels a redirect, since only the first navigation is
+        // allowed. Reaching here at all means the redirect was followed; fail the carrier.
+        if !self.invalidated {
+            self.failed(self.generation, .navigationRejected)
+        }
+    }
+
+    func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // Normal system TLS validation, never a trust exception. Any other method - basic,
+        // digest, a client certificate - is cancelled rather than prompted or answered.
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
+            completionHandler(.performDefaultHandling, nil)
+        } else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+    }
+
+    @available(macOS 11.3, iOS 14.5, *)
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.cancel(nil)
+        if !self.invalidated {
+            self.failed(self.generation, .navigationRejected)
+        }
+    }
+
+    @available(macOS 11.3, iOS 14.5, *)
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.cancel(nil)
+        if !self.invalidated {
+            self.failed(self.generation, .responseRejected)
+        }
+    }
+
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         return nil
+    }
+
+    // MARK: - Refused prompts and permissions
+    //
+    // The hidden carrier must never present UI. The document-start shims answer the same
+    // calls in-page so a provider document does not block on one; these are the boundary.
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        completionHandler()
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        completionHandler(false)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        completionHandler(nil)
+    }
+
+    @available(macOS 12.0, iOS 15.0, *)
+    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        decisionHandler(.deny)
+    }
+
+    #if os(iOS)
+    @available(iOS 15.0, *)
+    func webView(_ webView: WKWebView, requestDeviceOrientationAndMotionPermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        decisionHandler(.deny)
+    }
+    #endif
+
+    /// Geolocation. Public from iOS 27 / macOS 27; below that WebKit decides without
+    /// asking the app, and `navigator.geolocation` being shimmed away is what stops the
+    /// page from reaching it.
+    @available(macOS 27.0, iOS 27.0, *)
+    func webView(_ webView: WKWebView, requestGeolocationPermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        decisionHandler(.deny)
+    }
+
+    /// Not macOS-only, and not optional: from iOS 18.4 this delegate exists on iOS too, and
+    /// WebKit documents that NOT implementing it there makes the view "match the file upload
+    /// behavior of Safari" - i.e. present a picker. Returning no URLs is the documented way
+    /// to act as if the user cancelled.
+    @available(macOS 10.12, iOS 18.4, *)
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        completionHandler(nil)
     }
 
     private func isAllowed(url: URL?) -> Bool {
@@ -300,12 +408,19 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
         return true
     }
 
-    private static func injectionScript(handlerName: String, nonce: String) -> String {
+    private static func injectionScript(handlerName: String, nonce: String, hardeningFlag: String) -> String {
         return """
         (() => {
           'use strict';
           const native = globalThis.webkit.messageHandlers[\(javaScriptString(handlerName))];
           const nonce = \(javaScriptString(nonce));
+          // The document-start policy runs first and records whether it is in place. If it
+          // is not, the page never sees TelegramWebProxy and the carrier is failed now
+          // rather than after the handshake deadline.
+          if (globalThis[\(javaScriptString(hardeningFlag))] !== true) {
+            native.postMessage({kind: 'hardening', nonce, data: 'failed'});
+            return;
+          }
           const bridge = {onmessage: null};
           Object.defineProperty(bridge, 'postMessage', {value: value => {
             if (typeof value === 'string') {
@@ -330,8 +445,6 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
     }
 
     private static func javaScriptString(_ value: String) -> String {
-        let data = try! JSONSerialization.data(withJSONObject: [value])
-        let array = String(data: data, encoding: .utf8)!
-        return String(array.dropFirst().dropLast())
+        return WebProxyWebViewHardening.javaScriptString(value)
     }
 }

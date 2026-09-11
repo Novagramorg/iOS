@@ -994,11 +994,41 @@ struct ctr_state {
     {
         if (_socket == nil)
         {
+            // The injected interface must be paired with `_isWebProxy`, because the WEB
+            // carrier ignores the address it is handed. Derived contexts copy the factory
+            // while deliberately carrying DIFFERENT proxy settings - MTBackupAddressSignals
+            // nils them to fetch a backup address off-proxy, MTProxyConnectivity swaps in
+            // the server it is pinging - so an ungated factory silently routes those through
+            // the carrier to the relay's own backend instead of the address they asked for.
+            id<MTTcpConnectionInterface> injected = nil;
             if (_makeTcpConnectionInterface) {
-                _socket = _makeTcpConnectionInterface(self, [[MTTcpConnection tcpQueue] nativeQueue]);
+                injected = _makeTcpConnectionInterface(self, [[MTTcpConnection tcpQueue] nativeQueue]);
             }
-            if (_socket == nil) {
-                _socket = [[MTGcdAsyncSocketTcpConnectionInterface alloc] initWithDelegate:self delegateQueue:[[MTTcpConnection tcpQueue] nativeQueue]];
+            bool injectedIsWebProxyCarrier = injected != nil
+                && [injected respondsToSelector:@selector(isWebProxyCarrier)]
+                && [injected isWebProxyCarrier];
+
+            if (_isWebProxy) {
+                if (!injectedIsWebProxyCarrier) {
+                    // Fail closed. There is no local endpoint to dial - the carrier is not a
+                    // loopback listener - and falling back to a socket would reach the
+                    // destination directly, defeating the proxy the user chose. This is the
+                    // state an app extension is in: it shares the settings but never runs a
+                    // carrier.
+                    if (MTLogEnabled()) {
+                        MTLog(@"[MTTcpConnection#%" PRIxPTR " no WEB proxy carrier; failing]", (intptr_t)self);
+                    }
+                    [injected resetDelegate];
+                    [self closeAndNotifyWithError:true];
+                    return;
+                }
+                _socket = injected;
+            } else {
+                _socket = injectedIsWebProxyCarrier ? nil : injected;
+                if (_socket == nil) {
+                    [injected resetDelegate];
+                    _socket = [[MTGcdAsyncSocketTcpConnectionInterface alloc] initWithDelegate:self delegateQueue:[[MTTcpConnection tcpQueue] nativeQueue]];
+                }
             }
             
             [_socket setGetLogPrefix:_getLogPrefix];
@@ -1008,7 +1038,16 @@ struct ctr_state {
             MTSignal *resolveSignal = [MTSignal single:[[MTTcpConnectionData alloc] initWithIp:addressIp port:_scheme.address.port isSocks:false]];
             
             if (_isWebProxy) {
-                resolveSignal = [MTSignal single:[[MTTcpConnectionData alloc] initWithIp:@"127.0.0.1" port:443 isSocks:false]];
+                // Resolve NOTHING, and keep the default signal above. This branch is
+                // load-bearing even though the carrier ignores whatever address it is
+                // handed: `_socksIp` is nil for a WEB proxy and `_mtpIp` is the relay
+                // HOSTNAME, so falling through would reach `MTDNS resolveHostnameUniversal`
+                // below - a direct, unproxied `https://google.com/resolve?name=<relay host>`
+                // that leaks the hostname off the very proxy the user chose, on exactly the
+                // networks a WEB proxy exists for, stalls up to 10s when that lookup is
+                // blocked, and then has its answer discarded. It previously substituted a
+                // `127.0.0.1:443` endpoint, which read as though the app ran a local
+                // listener and hid why the branch had to exist at all.
             } else if (_socksIp != nil) {
                 bool isHostname = true;
                 struct in_addr ip4;

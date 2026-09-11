@@ -11,6 +11,7 @@ enum WebProxyCarrierFailure: String {
     case bridgeMessageRejected = "bridge-message-rejected"
     case bridgeEvaluationFailed = "bridge-evaluation-failed"
     case bridgeUnavailable = "bridge-unavailable"
+    case hardeningUnavailable = "hardening-unavailable"
     case invalidControlMessage = "invalid-control-message"
     case invalidInitialization = "invalid-initialization"
     case remoteClose = "remote-close"

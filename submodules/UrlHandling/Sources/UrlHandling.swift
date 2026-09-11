@@ -213,20 +213,10 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
             if pathComponents.count == 1 {
                 if let queryItems = components.queryItems {
                     if peerName == "webproxy" {
-                        var server: String?
-                        var secret: String?
-                        for queryItem in queryItems {
-                            if let value = queryItem.value {
-                                // `host` is a legacy input alias for `server`.
-                                if queryItem.name == "server" || queryItem.name == "host" {
-                                    server = value
-                                } else if queryItem.name == "secret" {
-                                    secret = value
-                                }
-                            }
-                        }
-                        if let server, let secret,
-                           let link = parseWebProxyLinkComponents(address: server, secret: secret) {
+                        // Deliberately the same strict rule the proxy editor applies, not a
+                        // looser local loop: a link must resolve identically however the user
+                        // reached it.
+                        if let link = parseWebProxyLinkQueryItems(queryItems) {
                             return .webProxy(host: link.host, path: link.path, secret: link.secret)
                         }
                         return nil

@@ -654,8 +654,7 @@ private func dataAndStorageControllerEntries(context: AccountContext, state: Dat
             case .mtp:
                 proxyValue = presentationData.strings.SocksProxySetup_ProxyTelegram
             case .web:
-                //TODO:localize
-                proxyValue = "WEB Proxy"
+                proxyValue = presentationData.strings.SocksProxySetup_ProxyWeb
         }
     } else {
         proxyValue = presentationData.strings.GroupInfo_SharedMediaNone

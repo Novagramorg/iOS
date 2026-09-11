@@ -55,6 +55,21 @@ final class ProxyServerSettingsControllerTests: XCTestCase {
         XCTAssertEqual(saved.webProxyAddress, "proxy.example.com/My-App")
     }
 
+    /// Regression: switching a base-path WEB server to another mode used to save a SOCKS5
+    /// or MTProxy entry whose host still contained the `/base-path`.
+    func testSwitchingAwayFromWebDropsTheBasePath() throws {
+        let web = ProxyServerSettingsControllerState(mode: .web, host: "proxy.example.com/My-App", port: "443", username: "", password: "", secret: self.secretHex)
+        for mode in [ProxyServerSettingsControllerMode.socks5, .mtp] {
+            let switched = web.withMode(mode)
+            XCTAssertEqual(switched.host, "proxy.example.com", "\(mode)")
+            XCTAssertFalse(switched.host.contains("/"), "\(mode)")
+        }
+        // Staying on .web keeps it, and a bare host is untouched either way.
+        XCTAssertEqual(web.withMode(.web).host, "proxy.example.com/My-App")
+        let plain = ProxyServerSettingsControllerState(mode: .socks5, host: "proxy.example.com", port: "1080", username: "u", password: "p", secret: "")
+        XCTAssertEqual(plain.withMode(.mtp).host, "proxy.example.com")
+    }
+
     func testWebModeIgnoresPortAndPinsIt() throws {
         let state = ProxyServerSettingsControllerState(mode: .web, host: "proxy.example.com", port: "", username: "", password: "", secret: self.secretHex)
         XCTAssertTrue(state.isComplete)

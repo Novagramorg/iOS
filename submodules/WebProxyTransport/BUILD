@@ -31,10 +31,15 @@ swift_library(
     ],
 )
 
+# 27.0, not 26.5: the carrier's geolocation and file-panel refusals are gated on
+# `@available(iOS 27.0)` / `@available(iOS 18.4)`, and WebProxyCarrierDelegateTests can
+# only check a binding the runtime actually exposes. On 26.5 the geolocation assertion
+# silently does not run - verified by misspelling the selector and watching the suite
+# still pass. Everything else here is OS-agnostic.
 ios_test_runner(
     name = "WebProxyTransportTestRunner",
     device_type = "iPhone 17",
-    os_version = "26.5",
+    os_version = "27.0",
 )
 
 ios_unit_test(

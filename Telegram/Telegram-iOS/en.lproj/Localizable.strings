@@ -3291,10 +3291,12 @@ Unused sets are archived when you add more.";
 "SocksProxySetup.ProxyStatusUnavailable" = "unavailable";
 "SocksProxySetup.ProxyStatusConnecting" = "connecting";
 "SocksProxySetup.ProxyStatusConnected" = "connected";
+"SocksProxySetup.ProxyStatusNotTested" = "not tested";
 
 "SocksProxySetup.ProxyType" = "TYPE";
 "SocksProxySetup.ProxySocks5" = "SOCKS5";
 "SocksProxySetup.ProxyTelegram" = "MTProto";
+"SocksProxySetup.ProxyWeb" = "WEB";
 "SocksProxySetup.HostnamePlaceholder" = "Server";
 "SocksProxySetup.PortPlaceholder" = "Port";
 "SocksProxySetup.UsernamePlaceholder" = "Username";

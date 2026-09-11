@@ -164,8 +164,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
                 case .mtp:
                     proxyType = presentationData.strings.SocksProxySetup_ProxyTelegram
                 case .web:
-                    //TODO:localize
-                    proxyType = "WEB Proxy"
+                    proxyType = presentationData.strings.SocksProxySetup_ProxyWeb
                 case .socks5:
                     proxyType = presentationData.strings.SocksProxySetup_ProxySocks5
                 }

@@ -78,6 +78,25 @@ public func makeWebProxySettings(address: String, secret: String) -> ProxyServer
 /// `host/path` to an empty host and offer to connect to a pathless proxy. Hand entry in the
 /// editor is not bound by it - the hazard is specific to a shared link - so
 /// `makeWebProxySettings(address:secret:)` stays lenient.
+/// The strict `webproxy` query rule, so that every entry point accepts exactly the same
+/// set of links. `host` is a legacy input alias for `server` (ANDROID.md); generated links
+/// always use `server`, and exactly one of the two may appear alongside exactly one
+/// `secret` and nothing else. Keeping this in one place matters: when `UrlHandling` had its
+/// own laxer loop, a link with both `server` and `host` was rejected in the proxy editor and
+/// accepted from a chat, resolving to whichever came last.
+public func parseWebProxyLinkQueryItems(_ items: [URLQueryItem]) -> (host: String, path: String, secret: Data)? {
+    let hostItems = items.filter { $0.name == "server" || $0.name == "host" }
+    let secretItems = items.filter { $0.name == "secret" }
+    guard items.count == 2,
+          hostItems.count == 1,
+          secretItems.count == 1,
+          let address = hostItems[0].value,
+          let secret = secretItems[0].value else {
+        return nil
+    }
+    return parseWebProxyLinkComponents(address: address, secret: secret)
+}
+
 public func parseWebProxyLinkComponents(address: String, secret: String) -> (host: String, path: String, secret: Data)? {
     guard let address = canonicalWebProxyAddress(address),
           let decoded = WebProxyConfiguration.parseMarkedSecret(secret),
@@ -108,19 +127,7 @@ public func parseWebProxySettingsLink(_ value: String) -> ProxyServerSettings? {
         return nil
     }
 
-    // `host` is a legacy input alias for `server` (see the shared protocol notes);
-    // generated links always use `server`. Exactly one of the two may appear.
-    let items = components.queryItems ?? []
-    let hostItems = items.filter { $0.name == "server" || $0.name == "host" }
-    let secretItems = items.filter { $0.name == "secret" }
-    guard items.count == 2,
-          hostItems.count == 1,
-          secretItems.count == 1,
-          let address = hostItems[0].value,
-          let secret = secretItems[0].value else {
-        return nil
-    }
-    guard let link = parseWebProxyLinkComponents(address: address, secret: secret) else {
+    guard let link = parseWebProxyLinkQueryItems(components.queryItems ?? []) else {
         return nil
     }
     return ProxyServerSettings(host: link.host, port: Int32(WebProxyConfiguration.port), connection: .web(secret: link.secret, path: link.path))

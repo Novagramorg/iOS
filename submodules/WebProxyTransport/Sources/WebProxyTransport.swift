@@ -519,6 +519,13 @@ public final class WebProxyConnectionInterface: NSObject, MTTcpConnectionInterfa
         self.delegateQueue = delegateQueue
     }
 
+    /// Marks this as the WEB carrier so `MTTcpConnection` can pair it with
+    /// `MTSocksProxySettings.webProxy`. `connect(toHost:onPort:...)` below ignores both,
+    /// which is exactly why a connection with a real address to reach must not get one.
+    @objc public func isWebProxyCarrier() -> Bool {
+        return true
+    }
+
     public func setGetLogPrefix(_ getLogPrefix: (() -> String)?) {
     }
 

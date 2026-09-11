@@ -113,25 +113,19 @@ private enum ProxySettingsEntry: ItemListNodeEntry {
             case let .modeSocks5(_, text, value):
                 return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: text, style: .left, checked: value, zeroSeparatorInsets: false, sectionId: self.section, action: {
                     arguments.updateState { state in
-                        var state = state
-                        state.mode = .socks5
-                        return state
+                        return state.withMode(.socks5)
                     }
                 })
             case let .modeMtp(_, text, value):
                 return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: text, style: .left, checked: value, zeroSeparatorInsets: false, sectionId: self.section, action: {
                     arguments.updateState { state in
-                        var state = state
-                        state.mode = .mtp
-                        return state
+                        return state.withMode(.mtp)
                     }
                 })
             case let .modeWeb(_, text, value):
                 return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: text, style: .left, checked: value, zeroSeparatorInsets: false, sectionId: self.section, action: {
                     arguments.updateState { state in
-                        var state = state
-                        state.mode = .web
-                        return state
+                        return state.withMode(.web)
                     }
                 })
             case let .connectionHeader(_, text):
@@ -213,6 +207,20 @@ struct ProxyServerSettingsControllerState: Equatable {
     var password: String
     var secret: String
     
+    /// Switching away from `.web` must drop the base path from the shared server field.
+    /// Only a WEB address is `host/base-path`; SOCKS5 and MTProxy take a bare host, and
+    /// leaving the path in place saves a server whose host contains a slash and can never
+    /// resolve. Trimmed rather than canonicalized, so the user's own casing survives.
+    func withMode(_ mode: ProxyServerSettingsControllerMode) -> ProxyServerSettingsControllerState {
+        var state = self
+        state.mode = mode
+        if case .web = mode {
+        } else if let separator = state.host.firstIndex(of: "/") {
+            state.host = String(state.host[state.host.startIndex ..< separator])
+        }
+        return state
+    }
+
     var isComplete: Bool {
         if self.host.isEmpty {
             return false
@@ -253,8 +261,7 @@ private func proxyServerSettingsControllerEntries(presentationData: Presentation
     
     entries.append(.modeSocks5(presentationData.theme, presentationData.strings.SocksProxySetup_ProxySocks5, state.mode == .socks5))
     entries.append(.modeMtp(presentationData.theme, presentationData.strings.SocksProxySetup_ProxyTelegram, state.mode == .mtp))
-    //TODO:localize
-    entries.append(.modeWeb(presentationData.theme, "WEB Proxy", state.mode == .web))
+    entries.append(.modeWeb(presentationData.theme, presentationData.strings.SocksProxySetup_ProxyWeb, state.mode == .web))
     
     entries.append(.connectionHeader(presentationData.theme, presentationData.strings.SocksProxySetup_Connection.uppercased()))
     entries.append(.connectionServer(presentationData.theme, presentationData.strings, presentationData.strings.SocksProxySetup_Hostname, state.host))
