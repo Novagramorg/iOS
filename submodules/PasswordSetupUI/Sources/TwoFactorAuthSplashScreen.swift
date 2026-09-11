@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -160,7 +161,7 @@ private final class TwoFactorAuthSplashScreenNode: ViewControllerTracingNode {
         self.presentationData = presentationData
         self.mode = mode
         
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
         
         let title: String
         let texts: [NSAttributedString]

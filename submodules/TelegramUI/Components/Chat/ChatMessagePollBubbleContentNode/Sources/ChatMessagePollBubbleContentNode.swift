@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Crc32
@@ -1558,7 +1559,11 @@ private final class ChatMessagePollAddOptionNode: ASDisplayNode {
     private static let minHeight: CGFloat = 52.0
     private static let attachmentInset: CGFloat = 52.0
     
-    override init() {
+    private let lottieSettings: LottieRenderingSettings
+
+    init(lottieSettings: LottieRenderingSettings) {
+        self.lottieSettings = lottieSettings
+
         self.leftAccessoryButton = HighlightableButtonNode()
         
         self.addIconNode = ASImageNode()
@@ -1741,7 +1746,7 @@ private final class ChatMessagePollAddOptionNode: ASDisplayNode {
                 let metrics = ChatMessagePollAddOptionNode.layoutMetrics(measureTextNode: currentMeasureTextNode, constrainedWidth: width, text: text, font: font)
                 let size = CGSize(width: width, height: metrics.contentHeight)
                 return (size, { _, _ in
-                    let node = maybeNode ?? ChatMessagePollAddOptionNode()
+                    let node = maybeNode ?? ChatMessagePollAddOptionNode(lottieSettings: context.lottieRenderingSettings)
                     
                     node.currentFont = font
                     node.currentTextColor = textColor
@@ -1889,7 +1894,8 @@ private final class ChatMessagePollAddOptionNode: ASDisplayNode {
                     content: AnyComponent(LottieComponent(
                         content: LottieComponent.AppBundleContent(name: animationName),
                         color: secondaryTextColor,
-                        size: modeSelectorSize
+                        size: modeSelectorSize,
+                        lottieSettings: self.lottieSettings
                     )),
                     effectAlignment: .center,
                     action: { [weak self] in
@@ -2271,7 +2277,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
         }
     }
 
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.textNode = TextNodeWithEntities()
         self.textNode.textNode.isUserInteractionEnabled = false
         self.textNode.textNode.contentMode = .topLeft
@@ -2327,7 +2333,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
 
         self.statusNode = ChatMessageDateAndStatusNode()
 
-        super.init()
+        super.init(lottieSettings: lottieSettings)
 
         self.addSubnode(self.textNode.textNode)
         self.addSubnode(self.typeNode)

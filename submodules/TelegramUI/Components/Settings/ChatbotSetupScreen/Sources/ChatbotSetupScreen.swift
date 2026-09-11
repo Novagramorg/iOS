@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Photos
 import Display
@@ -710,7 +711,8 @@ final class ChatbotSetupScreenComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(LottieComponent(
                     content: LottieComponent.AppBundleContent(name: "ChatAutomation"),
-                    loop: false
+                    loop: false,
+                    lottieSettings: component.context.lottieRenderingSettings
                 )),
                 environment: {},
                 containerSize: CGSize(width: 140.0, height: 140.0)

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Postbox
@@ -2120,7 +2121,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                                         allowSticker = true
                                     }
                                     
-                                    let animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                                    let animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: context.lottieRenderingSettings)
                                     animatedStickerNode.isUserInteractionEnabled = false
                                     animatedStickerNode.started = {
                                         guard let strongSelf = self else {

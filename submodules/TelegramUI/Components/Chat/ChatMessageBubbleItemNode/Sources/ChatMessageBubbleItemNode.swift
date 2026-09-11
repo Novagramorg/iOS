@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -2053,7 +2054,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
             }
             if !found {
-                let contentNode = (contentNodeItem.type as! ChatMessageBubbleContentNode.Type).init()                
+                let contentNode = (contentNodeItem.type as! ChatMessageBubbleContentNode.Type).init(lottieSettings: item.context.lottieRenderingSettings)                
                 contentNode.index = contentNodeItem.bubbleAttributes.index
                 contentPropertiesAndPrepareLayouts.append((contentNodeItem.message, contentNode.supportsMosaic, contentNodeItem.attributes, contentNodeItem.bubbleAttributes, contentNode.asyncLayoutContent()))
                 if addedContentNodes == nil {

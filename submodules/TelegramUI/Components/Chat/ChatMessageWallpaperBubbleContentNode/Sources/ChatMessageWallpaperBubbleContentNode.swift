@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -42,7 +43,7 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
     private let fetchDisposable = MetaDisposable()
     private let statusDisposable = MetaDisposable()
             
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.mediaBackgroundNode = NavigationBackgroundNode(color: .clear)
         self.mediaBackgroundNode.clipsToBounds = true
         self.mediaBackgroundNode.cornerRadius = 24.0
@@ -75,7 +76,7 @@ public class ChatMessageWallpaperBubbleContentNode: ChatMessageBubbleContentNode
         self.statusNode = RadialStatusNode(backgroundNodeColor: UIColor(rgb: 0x000000, alpha: 0.6))
         self.statusNode.isUserInteractionEnabled = false
         
-        super.init()
+        super.init(lottieSettings: lottieSettings)
 
         self.addSubnode(self.mediaBackgroundNode)
         self.addSubnode(self.subtitleNode)

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AccountContext
@@ -106,7 +107,8 @@ private final class WalletWordsScreenComponent: Component {
                     startingPosition: .begin,
                     size: animationSize,
                     loop: false,
-                    playOnce: self.playAnimation
+                    playOnce: self.playAnimation,
+                    lottieSettings: component.context.lottieRenderingSettings
                 )),
                 environment: {},
                 containerSize: animationSize

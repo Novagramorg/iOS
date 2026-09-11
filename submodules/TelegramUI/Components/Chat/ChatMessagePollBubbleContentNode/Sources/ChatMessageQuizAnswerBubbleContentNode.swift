@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -22,10 +23,10 @@ public final class ChatMessageQuizAnswerBubbleContentNode: ChatMessageBubbleCont
         }
     }
     
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.contentNode = ChatMessageAttachedContentNode()
         
-        super.init()
+        super.init(lottieSettings: lottieSettings)
         
         self.clipsToBounds = true
         

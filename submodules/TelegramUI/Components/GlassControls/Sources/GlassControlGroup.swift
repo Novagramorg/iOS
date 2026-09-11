@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import TelegramPresentationData
@@ -218,7 +219,8 @@ public final class GlassControlGroupComponent: Component {
                         content: LottieComponent.AppBundleContent(name: name),
                         color: foregroundColor,
                         size: CGSize(width: 32.0, height: 32.0),
-                        playOnce: playOnce
+                        playOnce: playOnce,
+                        lottieSettings: .noAccountFallback
                     ))
                 case let .customIcon(_, customIcon, insets):
                     content = customIcon

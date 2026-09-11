@@ -947,6 +947,7 @@ final class QuickReplySetupScreenComponent: Component {
                 let _ = emptyState.update(
                     transition: emptyStateTransition,
                     component: AnyComponent(QuickReplyEmptyStateComponent(
+                        context: component.context,
                         theme: environment.theme,
                         strings: environment.strings,
                         insets: UIEdgeInsets(top: environment.navigationHeight, left: environment.safeInsets.left, bottom: environment.safeInsets.bottom + environment.additionalInsets.bottom, right: environment.safeInsets.right),

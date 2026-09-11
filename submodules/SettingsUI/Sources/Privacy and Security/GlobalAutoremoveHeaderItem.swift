@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -23,7 +24,7 @@ class GlobalAutoremoveHeaderItem: ListViewItem, ItemListItem {
     
     func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
-            let node = GlobalAutoremoveHeaderItemNode()
+            let node = GlobalAutoremoveHeaderItemNode(lottieSettings: self.context.lottieRenderingSettings)
             let (layout, apply) = node.asyncLayout()(self, params, itemListNeighbors(item: self, topFacet: neighbors.previous?.base(ItemListNeighborFacet.self), bottomFacet: neighbors.next?.base(ItemListNeighborFacet.self)))
             
             node.contentSize = layout.contentSize
@@ -65,8 +66,11 @@ class GlobalAutoremoveHeaderItemNode: ListViewItemNode {
     
     private var item: GlobalAutoremoveHeaderItem?
     
-    init() {
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+    private let lottieSettings: LottieRenderingSettings
+
+    init(lottieSettings: LottieRenderingSettings) {
+        self.lottieSettings = lottieSettings
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: lottieSettings)
                 
         super.init(layerBacked: false)
         

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -426,7 +427,8 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
             transition: .immediate,
             component: AnyComponent(LottieComponent(
                 content: LottieComponent.AppBundleContent(name: animationName),
-                color: animationTintColor
+                color: animationTintColor,
+                lottieSettings: self.context.lottieRenderingSettings
             )),
             environment: {},
             containerSize: animationFrame.size

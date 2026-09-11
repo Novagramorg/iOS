@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -79,11 +80,11 @@ public class ChatMessageInstantVideoBubbleContentNode: ChatMessageBubbleContentN
         return isVisible
     }
     
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.interactiveFileNode = ChatMessageInteractiveFileNode()
         self.interactiveVideoNode = ChatMessageInteractiveInstantVideoNode()
                 
-        super.init()
+        super.init(lottieSettings: lottieSettings)
         
         self.maskForeground.backgroundColor = UIColor.white.cgColor
         self.maskForeground.masksToBounds = true

@@ -78,6 +78,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
     public var debugRipple: Bool
     public var forceNewTextInput: Bool
     public var coreListChatBackend: Bool
+    public var forceRLottieBackend: Bool
 
     public static var defaultSettings: ExperimentalUISettings {
         return ExperimentalUISettings(
@@ -130,7 +131,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
             forceClearGlass: false,
             debugRipple: false,
             forceNewTextInput: false,
-            coreListChatBackend: false
+            coreListChatBackend: false,
+            forceRLottieBackend: false
         )
     }
     
@@ -184,7 +186,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         forceClearGlass: Bool,
         debugRipple: Bool,
         forceNewTextInput: Bool,
-        coreListChatBackend: Bool
+        coreListChatBackend: Bool,
+        forceRLottieBackend: Bool
     ) {
         self.keepChatNavigationStack = keepChatNavigationStack
         self.skipReadHistory = skipReadHistory
@@ -236,6 +239,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.debugRipple = debugRipple
         self.forceNewTextInput = forceNewTextInput
         self.coreListChatBackend = coreListChatBackend
+        self.forceRLottieBackend = forceRLottieBackend
     }
     
     public init(from decoder: Decoder) throws {
@@ -291,6 +295,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.debugRipple = try container.decodeIfPresent(Bool.self, forKey: "debugRipple") ?? false
         self.forceNewTextInput = try container.decodeIfPresent(Bool.self, forKey: "forceNewTextInput") ?? false
         self.coreListChatBackend = try container.decodeIfPresent(Bool.self, forKey: "coreListChatBackend") ?? false
+        self.forceRLottieBackend = try container.decodeIfPresent(Bool.self, forKey: "forceRLottieBackend") ?? false
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -346,6 +351,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         try container.encodeIfPresent(self.debugRipple, forKey: "debugRipple")
         try container.encodeIfPresent(self.forceNewTextInput, forKey: "forceNewTextInput")
         try container.encodeIfPresent(self.coreListChatBackend, forKey: "coreListChatBackend")
+        try container.encodeIfPresent(self.forceRLottieBackend, forKey: "forceRLottieBackend")
     }
 }
 

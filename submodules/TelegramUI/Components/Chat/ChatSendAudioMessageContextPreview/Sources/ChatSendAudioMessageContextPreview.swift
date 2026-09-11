@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import TelegramPresentationData
@@ -572,7 +573,7 @@ public final class ChatSendGroupMediaMessageContextPreview: UIView, ChatSendMess
             if let current = self.messageNodes[items[0].message.id] {
                 messageNode = current
             } else {
-                messageNode = ChatMessageMediaBubbleContentNode()
+                messageNode = ChatMessageMediaBubbleContentNode(lottieSettings: self.context.lottieRenderingSettings)
                 self.messageNodes[items[0].message.id] = messageNode
                 self.messagesContainer.addSubview(messageNode.view)
             }
@@ -642,7 +643,7 @@ public final class ChatSendGroupMediaMessageContextPreview: UIView, ChatSendMess
                 if let current = self.messageNodes[items[i].message.id] {
                     messageNode = current
                 } else {
-                    messageNode = ChatMessageMediaBubbleContentNode()
+                    messageNode = ChatMessageMediaBubbleContentNode(lottieSettings: self.context.lottieRenderingSettings)
                     self.messageNodes[items[i].message.id] = messageNode
                     self.messagesContainer.addSubview(messageNode.view)
                 }

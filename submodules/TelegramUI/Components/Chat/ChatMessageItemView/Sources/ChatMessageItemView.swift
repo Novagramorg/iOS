@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -1032,10 +1033,10 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
             let additionalAnimationNode: AnimatedStickerNode
             var effectiveScale: CGFloat = 1.0
             #if targetEnvironment(simulator)
-            additionalAnimationNode = DirectAnimatedStickerNode()
+            additionalAnimationNode = DirectAnimatedStickerNode(lottieSettings: item.context.lottieRenderingSettings)
             effectiveScale = 1.4
             #else
-            additionalAnimationNode = DirectAnimatedStickerNode()
+            additionalAnimationNode = DirectAnimatedStickerNode(lottieSettings: item.context.lottieRenderingSettings)
             effectiveScale = 1.4
             #endif
             additionalAnimationNode.updateLayout(size: animationSize)

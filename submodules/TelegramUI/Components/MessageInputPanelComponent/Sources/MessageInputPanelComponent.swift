@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -2008,7 +2009,8 @@ public final class MessageInputPanelComponent: Component {
                         content: AnyComponent(LottieComponent(
                             content: LottieComponent.AppBundleContent(name: "BinBlue"),
                             color: .white,
-                            startingPosition: .begin
+                            startingPosition: .begin,
+                            lottieSettings: component.context.lottieRenderingSettings
                         )),
                         action: { [weak self] in
                             guard let self, let component = self.component else {
@@ -2414,7 +2416,8 @@ public final class MessageInputPanelComponent: Component {
                 component: AnyComponent(Button(
                     content: AnyComponent(LottieComponent(
                         content: LottieComponent.AppBundleContent(name: animationName),
-                        color: stickerButtonColor
+                        color: stickerButtonColor,
+                        lottieSettings: component.context.lottieRenderingSettings
                     )),
                     action: { [weak self] in
                         guard let self else {

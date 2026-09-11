@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -185,7 +186,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
     }
 
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.labelNode = TextNode()
         self.labelNode.isUserInteractionEnabled = false
         self.labelNode.displaysAsynchronously = false
@@ -250,7 +251,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.ribbonTextMaskNode.displayWithoutProcessing = true
         self.ribbonTextMaskNode.image = UIImage(bundleImageName: "Chat/Message/GiftRibbon")
 
-        super.init()
+        super.init(lottieSettings: lottieSettings)
 
         self.cardNode.addSubnode(self.cardBackgroundNode)
         self.cardNode.addSubnode(self.cardIconNode)

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -10,6 +11,7 @@ import AnimatedStickerNode
 import TelegramAnimatedStickerNode
 
 class ChatListEmptyInfoItem: ListViewItem {
+    let lottieSettings: LottieRenderingSettings
     var neighborDescriptor: AnyEquatable {
         return AnyEquatable.noNeighborInfluence
     }
@@ -19,14 +21,15 @@ class ChatListEmptyInfoItem: ListViewItem {
     
     let selectable: Bool = false
     
-    init(theme: PresentationTheme, strings: PresentationStrings) {
+    init(theme: PresentationTheme, strings: PresentationStrings, lottieSettings: LottieRenderingSettings) {
+        self.lottieSettings = lottieSettings
         self.theme = theme
         self.strings = strings
     }
     
     func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
-            let node = ChatListEmptyInfoItemNode()
+            let node = ChatListEmptyInfoItemNode(lottieSettings: self.lottieSettings)
             
             let (nodeLayout, apply) = node.asyncLayout()(self, params, false)
             
@@ -92,8 +95,8 @@ class ChatListEmptyInfoItemNode: ListViewItemNode {
         }
     }
     
-    required init() {
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+    init(lottieSettings: LottieRenderingSettings) {
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: lottieSettings)
         self.textNode = TextNode()
         
         super.init(layerBacked: false)

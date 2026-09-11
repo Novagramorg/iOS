@@ -12,7 +12,7 @@ objc_library(
         "rlottie/src/vector/stb/**/*",
         "rlottie/src/lottie/rapidjson/msinttypes/**/*",
     ]) + [
-        "LottieInstance.mm",
+        "RLottieInstance.mm",
         "config.h",
     ],
     hdrs = glob([

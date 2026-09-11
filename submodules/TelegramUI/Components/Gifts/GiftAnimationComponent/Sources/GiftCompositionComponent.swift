@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import SwiftSignalKit
@@ -230,7 +231,7 @@ public final class GiftCompositionComponent: Component {
                 return
             }
 
-            let node = DefaultAnimatedStickerNodeImpl()
+            let node = DefaultAnimatedStickerNodeImpl(lottieSettings: self.component!.context.lottieRenderingSettings)
             node.isUserInteractionEnabled = false
             let pathPrefix = self.component!.context.engine.resources.shortLivedResourceCachePathPrefix(id: EngineMediaResource.Id(file.resource.id))
             node.setup(
@@ -349,7 +350,7 @@ public final class GiftCompositionComponent: Component {
             for (i, attribute) in tail.reversed().enumerated() {
                 guard case let .model(_, file, _, _) = attribute else { continue }
 
-                let node = DefaultAnimatedStickerNodeImpl()
+                let node = DefaultAnimatedStickerNodeImpl(lottieSettings: self.component!.context.lottieRenderingSettings)
                 node.isUserInteractionEnabled = false
                 let pathPrefix = self.component!.context.engine.resources.shortLivedResourceCachePathPrefix(id: EngineMediaResource.Id(file.resource.id))
                 node.setup(
@@ -962,7 +963,7 @@ public final class GiftCompositionComponent: Component {
             
             if let file = animationFile, self.animationNode == nil {
                 animationTransition = .immediate
-                let node = DefaultAnimatedStickerNodeImpl()
+                let node = DefaultAnimatedStickerNodeImpl(lottieSettings: component.context.lottieRenderingSettings)
                 node.isUserInteractionEnabled = false
                 self.animationNode = node
                 self.addSubview(node.view)

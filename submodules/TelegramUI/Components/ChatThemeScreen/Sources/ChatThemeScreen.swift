@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -500,7 +501,7 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
                         if let current = strongSelf.animatedStickerNode {
                             animatedStickerNode = current
                         } else {
-                            animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                            animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: item.context.lottieRenderingSettings)
                             animatedStickerNode.started = { [weak self] in
                                 self?.emojiImageNode.isHidden = true
                             }
@@ -1623,7 +1624,8 @@ private final class ChatThemeSheetContentComponent: Component {
                             color: component.presentationData.theme.chat.inputPanel.panelControlColor,
                             startingPosition: .end,
                             size: CGSize(width: 28.0, height: 28.0),
-                            playOnce: self.switchThemePlayOnce
+                            playOnce: self.switchThemePlayOnce,
+                            lottieSettings: component.context.lottieRenderingSettings
                         )
                     )),
                     action: { [weak self] _ in

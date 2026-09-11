@@ -8,7 +8,8 @@ import CoreVideo
 import Metal
 import Display
 import TelegramCore
-import RLottieBinding
+import LottieBinding
+import LottieSettings
 import GZip
 import AppBundle
 
@@ -143,7 +144,9 @@ final class CameraRoundVideoFilter {
         if let path = getAppBundle().path(forResource: "PlaneLogoPlain", ofType: "tgs"), var data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
             if let unpackedData = TGGUnzipData(data, 5 * 1024 * 1024) {
                 data = unpackedData
-                self.animation = LottieInstance(data: data, fitzModifier: .none, colorReplacements: [:], cacheKey: "")
+                // The legacy round-video filter is prepared from a bundled
+                // animation with no account in scope.
+                self.animation = makeLottieInstance(data: data, fitzModifier: .none, colorReplacements: [:], cacheKey: "", settings: .noAccountFallback)
             }
         }
         

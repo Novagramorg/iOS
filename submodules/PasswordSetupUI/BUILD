@@ -41,7 +41,8 @@ swift_library(
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/AppBundle:AppBundle",
         "//submodules/OverlayStatusController:OverlayStatusController",
-        "//submodules/rlottie:RLottieBinding",
+        "//submodules/LottieBinding:LottieBinding",
+        "//submodules/LottieSettings:LottieSettings",
         "//submodules/ManagedAnimationNode:ManagedAnimationNode",
     ],
     visibility = [

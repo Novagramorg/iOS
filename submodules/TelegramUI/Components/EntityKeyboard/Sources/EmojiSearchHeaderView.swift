@@ -471,6 +471,7 @@ public final class EmojiSearchHeaderView: UIView, UITextFieldDelegate {
         let _ = self.statusIcon.update(
             transition: transition,
             component: AnyComponent(EmojiSearchStatusComponent(
+                context: context,
                 theme: theme,
                 forceNeedsVibrancy: forceNeedsVibrancy,
                 strings: strings,

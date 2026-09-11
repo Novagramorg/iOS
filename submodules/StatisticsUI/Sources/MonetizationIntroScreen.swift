@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -313,7 +314,8 @@ private final class SheetContent: CombinedComponent {
                 color: theme.list.itemCheckColors.foregroundColor,
                 startingPosition: .begin,
                 size: CGSize(width: 28.0, height: 28.0),
-                playOnce: state.playOnce
+                playOnce: state.playOnce,
+                lottieSettings: component.context.lottieRenderingSettings
             ))))
             buttonTitle.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(ButtonTextContentComponent(
                 text: strings.Monetization_Intro_Understood,

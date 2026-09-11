@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 @preconcurrency import WebKit
 import Display
@@ -3771,7 +3772,8 @@ public final class WebAppController: ViewController, AttachmentContainable {
                             ),
                             color: self.presentationData.theme.chat.inputPanel.panelControlColor,
                             size: CGSize(width: 34.0, height: 34.0),
-                            playOnce: self.moreButtonPlayOnce
+                            playOnce: self.moreButtonPlayOnce,
+                            lottieSettings: self.context.lottieRenderingSettings
                         )
                     )),
                     action: { [weak self] view in

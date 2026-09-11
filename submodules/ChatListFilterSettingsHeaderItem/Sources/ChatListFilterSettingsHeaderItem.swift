@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -35,7 +36,7 @@ public class ChatListFilterSettingsHeaderItem: ListViewItem, ItemListItem {
     
     public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
-            let node = ChatListFilterSettingsHeaderItemNode()
+            let node = ChatListFilterSettingsHeaderItemNode(lottieSettings: self.context.lottieRenderingSettings)
             let (layout, apply) = node.asyncLayout()(self, params, itemListNeighbors(item: self, topFacet: neighbors.previous?.base(ItemListNeighborFacet.self), bottomFacet: neighbors.next?.base(ItemListNeighborFacet.self)))
             
             node.contentSize = layout.contentSize
@@ -78,13 +79,16 @@ class ChatListFilterSettingsHeaderItemNode: ListViewItemNode {
     
     private var item: ChatListFilterSettingsHeaderItem?
     
-    init() {
+    private let lottieSettings: LottieRenderingSettings
+
+    init(lottieSettings: LottieRenderingSettings) {
+        self.lottieSettings = lottieSettings
         self.titleNode = TextNode()
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.contentMode = .left
         self.titleNode.contentsScale = UIScreen.main.scale
         
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: lottieSettings)
         
         super.init(layerBacked: false)
         

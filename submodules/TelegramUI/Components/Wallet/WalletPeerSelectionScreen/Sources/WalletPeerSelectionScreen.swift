@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AppBundle
 import Display
@@ -1468,7 +1469,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 let emptyResultsAnimationSize = self.emptyResultsAnimation.update(
                     transition: .immediate,
                     component: AnyComponent(LottieComponent(
-                        content: LottieComponent.AppBundleContent(name: "ChatListNoResults")
+                        content: LottieComponent.AppBundleContent(name: "ChatListNoResults"),
+                        lottieSettings: component.context.lottieRenderingSettings
                     )),
                     environment: {},
                     containerSize: CGSize(width: animationHeight, height: animationHeight)

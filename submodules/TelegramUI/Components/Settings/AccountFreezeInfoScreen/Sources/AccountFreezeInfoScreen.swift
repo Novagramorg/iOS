@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -99,7 +100,8 @@ private final class SheetContent: CombinedComponent {
                 component: LottieComponent(
                     content: LottieComponent.AppBundleContent(name: "Banned"),
                     startingPosition: .begin,
-                    playOnce: state.playOnce
+                    playOnce: state.playOnce,
+                    lottieSettings: component.context.lottieRenderingSettings
                 ),
                 environment: {},
                 availableSize: CGSize(width: animationHeight, height: animationHeight),

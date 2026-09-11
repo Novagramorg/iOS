@@ -23,6 +23,7 @@ import MultiAnimationRenderer
 import DCTAnimationCacheImpl
 import DCTMultiAnimationRendererImpl
 import AppBundle
+import LottieSettings
 import DirectMediaImageCache
 import WalletContext
 import WalletConnectScreen
@@ -165,6 +166,14 @@ public final class AccountContextImpl: AccountContext {
     
     public var currentAppConfiguration: Atomic<AppConfiguration>
     private let _appConfiguration = Promise<AppConfiguration>()
+
+    /// Resolved once and refreshed from the two subscriptions that feed it,
+    /// rather than recomputed per read: this is consulted on every animated
+    /// sticker and on every LottieComponent construction, and resolving it
+    /// copies the whole ExperimentalUISettings struct (retaining its string and
+    /// array fields) and hashes a dictionary key — far too much work to repeat
+    /// per playback.
+    private let cachedLottieRenderingSettings: Atomic<LottieRenderingSettings>
     public var appConfiguration: Signal<AppConfiguration, NoError> {
         return self._appConfiguration.get()
     }
@@ -417,12 +426,22 @@ public final class AccountContextImpl: AccountContext {
         
         let updatedAppConfiguration = getAppConfiguration(engine: self.engine)
         self.currentAppConfiguration = Atomic(value: appConfiguration)
+        self.cachedLottieRenderingSettings = Atomic(value: AccountContextImpl.resolveLottieRenderingSettings(
+            appConfiguration: appConfiguration,
+            experimentalSettings: sharedContext.immediateExperimentalUISettings
+        ))
         self._appConfiguration.set(.single(appConfiguration) |> then(updatedAppConfiguration))
                 
         let currentAppConfiguration = self.currentAppConfiguration
+        let cachedLottieRenderingSettings = self.cachedLottieRenderingSettings
+        let lottieSharedContext = sharedContext
         self.appConfigurationDisposable = (self._appConfiguration.get()
         |> deliverOnMainQueue).start(next: { value in
             let _ = currentAppConfiguration.swap(value)
+            let _ = cachedLottieRenderingSettings.swap(AccountContextImpl.resolveLottieRenderingSettings(
+                appConfiguration: value,
+                experimentalSettings: lottieSharedContext.immediateExperimentalUISettings
+            ))
             
             guard let data = appConfiguration.data else {
                 return
@@ -619,6 +638,11 @@ public final class AccountContextImpl: AccountContext {
                 return
             }
             (self.animationRenderer as? DCTMultiAnimationRendererImpl)?.useYuvA = settings.compressedEmojiCache
+
+            let _ = self.cachedLottieRenderingSettings.swap(AccountContextImpl.resolveLottieRenderingSettings(
+                appConfiguration: self.currentAppConfiguration.with { $0 },
+                experimentalSettings: settings
+            ))
         })
 
         self.twoStepAuthData.set(
@@ -1176,6 +1200,24 @@ public final class AccountContextImpl: AccountContext {
             return value
         }
         return nil
+    }
+
+    public var lottieRenderingSettings: LottieRenderingSettings {
+        return self.cachedLottieRenderingSettings.with { $0 }
+    }
+
+    fileprivate static func resolveLottieRenderingSettings(appConfiguration: AppConfiguration, experimentalSettings: ExperimentalUISettings) -> LottieRenderingSettings {
+        // Default on; the server can roll it back and outranks the debug switch,
+        // because the point of a killswitch is that setting it guarantees no
+        // tlottie in the field. The device-local opt-out is the switch itself.
+        var backend: LottieBackend = .tlottie
+        if experimentalSettings.forceRLottieBackend {
+            backend = .rlottie
+        }
+        if let data = appConfiguration.data, data["ios_killswitch_disable_tlottie"] != nil {
+            backend = .rlottie
+        }
+        return LottieRenderingSettings(backend: backend)
     }
 }
 

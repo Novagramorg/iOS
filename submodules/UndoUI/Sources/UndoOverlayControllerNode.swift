@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -520,7 +521,12 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 self.iconNode = nil
                 self.iconCheckNode = nil
                 self.animationNode = nil
-                self.animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                // The .emoji and .mediaSaved cases carry no AccountContext (several other
+                // UndoOverlayContent cases do), and neither UndoOverlayControllerNode.init
+                // nor UndoOverlayController.init takes one — threading it would reach every
+                // toast call site in the app. These are bundled local animations in a
+                // transient toast, so this surface stays on rlottie.
+                self.animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
                 self.animatedStickerNode?.visibility = true
                 self.animatedStickerNode?.setup(source: AnimatedStickerNodeLocalFileSource(name: name), width: 100, height: 100, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
                 
@@ -632,7 +638,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                     case .still:
                         break
                     case let .animated(resource, _, isVideo):
-                        let animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                        let animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: context.lottieRenderingSettings)
                         self.animatedStickerNode = animatedStickerNode
                         animatedStickerNode.setup(source: AnimatedStickerResourceSource(account: context.account, resource: resource._asResource(), isVideo: isVideo), width: 80, height: 80, mode: .direct(cachePathPrefix: nil))
                     }
@@ -675,7 +681,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 }
                 
                 if dice.emoji == "🎰" {
-                    let slotMachineNode = SlotMachineAnimationNode(account: context.account, size: CGSize(width: 42.0, height: 42.0))
+                    let slotMachineNode = SlotMachineAnimationNode(account: context.account, size: CGSize(width: 42.0, height: 42.0), lottieSettings: context.lottieRenderingSettings)
                     self.slotMachineNode = slotMachineNode
                     
                     slotMachineNode.setState(.rolling)
@@ -683,7 +689,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                         slotMachineNode.setState(.value(value, true))
                     }
                 } else {
-                    let animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                    let animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: context.lottieRenderingSettings)
                     self.animatedStickerNode = animatedStickerNode
                     
                     let _ = (context.engine.stickers.loadedStickerPack(reference: .dice(dice.emoji), forceActualized: false)
@@ -966,7 +972,7 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                     case .still:
                         break
                     case let .animated(resource):
-                        let animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                        let animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: context.lottieRenderingSettings)
                         self.animatedStickerNode = animatedStickerNode
                         animatedStickerNode.setup(source: AnimatedStickerResourceSource(account: context.account, resource: resource._asResource(), isVideo: file.isVideoSticker), width: 80, height: 80, playbackMode: loop ? .loop : .once, mode: .cached)
                     }
@@ -1051,7 +1057,12 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 self.iconCheckNode = nil
                 self.animationNode = nil
                 
-                let animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+                // The .emoji and .mediaSaved cases carry no AccountContext (several other
+                // UndoOverlayContent cases do), and neither UndoOverlayControllerNode.init
+                // nor UndoOverlayController.init takes one — threading it would reach every
+                // toast call site in the app. These are bundled local animations in a
+                // transient toast, so this surface stays on rlottie.
+                let animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
                 self.animatedStickerNode = animatedStickerNode
                 
                 animatedStickerNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "anim_savemedia"), width: 80, height: 80, playbackMode: .once, mode: .direct(cachePathPrefix: nil))

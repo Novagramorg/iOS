@@ -1,40 +1,40 @@
-#import <RLottieBinding/LottieInstance.h>
+#import <RLottieBinding/RLottieInstance.h>
 
 #include "rlottie.h"
 
-@interface LottieInstance () {
+@interface RLottieInstance () {
     std::unique_ptr<rlottie::Animation> _animation;
 }
 
 @end
 
-@implementation LottieInstance
+@implementation RLottieInstance
 
-- (instancetype _Nullable)initWithData:(NSData * _Nonnull)data fitzModifier:(LottieFitzModifier)fitzModifier colorReplacements:(NSDictionary * _Nullable)colorReplacements cacheKey:(NSString * _Nonnull)cacheKey {
+- (instancetype _Nullable)initWithData:(NSData * _Nonnull)data fitzModifier:(RLottieFitzModifier)fitzModifier colorReplacements:(NSDictionary * _Nullable)colorReplacements cacheKey:(NSString * _Nonnull)cacheKey {
     self = [super init];
     if (self != nil) {
         rlottie::FitzModifier modifier;
         switch(fitzModifier) {
-            case LottieFitzModifierNone:
+            case RLottieFitzModifierNone:
                 modifier = rlottie::FitzModifier::None;
                 break;
-            case LottieFitzModifierType12:
+            case RLottieFitzModifierType12:
                 modifier = rlottie::FitzModifier::Type12;
                 break;
-            case LottieFitzModifierType3:
+            case RLottieFitzModifierType3:
                 modifier = rlottie::FitzModifier::Type3;
                 break;
-            case LottieFitzModifierType4:
+            case RLottieFitzModifierType4:
                 modifier = rlottie::FitzModifier::Type4;
                 break;
-            case LottieFitzModifierType5:
+            case RLottieFitzModifierType5:
                 modifier = rlottie::FitzModifier::Type5;
                 break;
-            case LottieFitzModifierType6:
+            case RLottieFitzModifierType6:
                 modifier = rlottie::FitzModifier::Type6;
                 break;
         }
-        
+
         std::vector<std::pair<std::uint32_t, std::uint32_t>> colorsVector;
         if (colorReplacements != nil) {
             for (NSNumber *color in colorReplacements.allKeys) {
@@ -42,33 +42,30 @@
                 colorsVector.push_back({ color.unsignedIntValue, replacement.unsignedIntValue });
             }
         }
-        
+
         _animation = rlottie::Animation::loadFromData(std::string(reinterpret_cast<const char *>(data.bytes), data.length), std::string([cacheKey UTF8String]), "", cacheKey.length != 0, colorsVector, modifier);
         if (_animation == nullptr) {
             return nil;
         }
-        
+
         _frameCount = (int32_t)_animation->totalFrame();
         _frameCount = MAX(1, _frameCount);
         _frameRate = (int32_t)_animation->frameRate();
         _frameRate = MAX(1, _frameRate);
-        
+
+        // Reported rather than derived from frameCount / frameRate: rlottie
+        // computes it from the unclamped, possibly fractional frame rate, and
+        // makeLottieInstance's 9-second limit is applied to this value.
+        _duration = _animation->duration();
+
         size_t width = 0;
         size_t height = 0;
         _animation->size(width, height);
-        
-        if (width > 1536 || height > 1536) {
-            return nil;
-        }
-        
+
         width = MAX(1, width);
         height = MAX(1, height);
-        
+
         _dimensions = CGSizeMake(width, height);
-        
-        if ((_frameRate > 360) || _animation->duration() > 9.0) {
-            return nil;
-        }
     }
     return self;
 }

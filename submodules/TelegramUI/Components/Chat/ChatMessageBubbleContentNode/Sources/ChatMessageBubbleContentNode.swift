@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -240,7 +241,18 @@ open class ChatMessageBubbleContentNode: ASDisplayNode {
         return false
     }
     
-    required public override init() {
+    /// Which Lottie rasterizer this node's animations should use.
+    ///
+    /// Carried on every content node rather than only the three that animate
+    /// today: content nodes are built through a metatype in
+    /// ChatMessageBubbleItemNode, before their item exists, so a node that
+    /// later adds an animation has no other way to reach an AccountContext at
+    /// construction time.
+    public let lottieSettings: LottieRenderingSettings
+
+    required public init(lottieSettings: LottieRenderingSettings) {
+        self.lottieSettings = lottieSettings
+
         super.init()
     }
     

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -2254,7 +2255,8 @@ private final class InteractiveStickerButtonContent: Component {
                                 content: LottieComponent.ResourceContent(context: component.context, file: iconFile, attemptSynchronously: true, providesPlaceholder: true),
                                 color: nil,
                                 placeholderColor: UIColor(rgb: 0xffffff, alpha: 0.4),
-                                loop: !["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"].contains(component.iconName ?? "")
+                                loop: !["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"].contains(component.iconName ?? ""),
+                                lottieSettings: component.context.lottieRenderingSettings
                             )
                         ),
                         environment: {},

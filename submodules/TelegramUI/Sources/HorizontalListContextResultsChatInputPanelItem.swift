@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -378,7 +379,7 @@ final class HorizontalListContextResultsChatInputPanelItemNode: ListViewItemNode
                             if let currentAnimationNode = strongSelf.animationNode {
                                 animationNode = currentAnimationNode
                             } else {
-                                animationNode = DefaultAnimatedStickerNodeImpl()
+                                animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: item.context.lottieRenderingSettings)
                                 animationNode.transform = CATransform3DMakeRotation(CGFloat.pi / 2.0, 0.0, 0.0, 1.0)
                                 animationNode.visibility = true
                                 if let placeholderNode = strongSelf.placeholderNode {
